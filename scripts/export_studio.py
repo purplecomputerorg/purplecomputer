@@ -19,15 +19,15 @@ sys.path.insert(0, str(ROOT))
 from purple_tui import synth  # noqa: E402
 from purple_tui.art_config import CANVAS_HEIGHT, CANVAS_WIDTH  # noqa: E402
 from purple_tui.constants import VIEWPORT_HEIGHT, VIEWPORT_WIDTH  # noqa: E402
+from purple_tui.content import PACK_FORMAT  # noqa: E402
 from purple_tui.music_constants import (  # noqa: E402
-    DEFAULT_ROOT_INDEX, FRIENDLY_KEYS, GRID_KEYS, INSTRUMENTS, pitch_filename, pitch_for,
+    DEFAULT_ROOT_INDEX, FRIENDLY_KEYS, GRID_KEYS, INSTRUMENTS, pitch_filename, pitch_for, reachable_pitches,
 )
 from purple_tui.rooms.art_room import (  # noqa: E402
     APP_BG_DARK, DEFAULT_BG_DARK, DEFAULT_BG_LIGHT, GUTTER_BG_DARK_A, GUTTER_BG_DARK_B, KEY_COLORS,
 )
 from purple_tui.rooms.music_room import _SPEAKABLE_KEYS  # noqa: E402
 from purple_tui.tts import voice_clip_filename  # noqa: E402
-from scripts.generate_sounds import reachable_pitches  # noqa: E402
 from tools.photo_to_art import CELL_ASPECT, fit_to_canvas  # noqa: E402
 
 EXPORT_PATH = ROOT / "studio" / "src" / "purple" / "export.json"
@@ -60,6 +60,7 @@ def build_export() -> dict:
     }
     return {
         "generated_by": "scripts/export_studio.py; do not edit",
+        "pack_format": PACK_FORMAT,
         "art": {
             "viewport": [VIEWPORT_WIDTH, VIEWPORT_HEIGHT],
             "canvas": [CANVAS_WIDTH, CANVAS_HEIGHT],

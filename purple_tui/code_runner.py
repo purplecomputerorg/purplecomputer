@@ -256,22 +256,23 @@ class MusicCodeRunner:
         """Resolve instrument name (exact, alias, prefix, or fuzzy). Returns resolved name or None."""
         if not name:
             return None
-        from .music_constants import INSTRUMENTS, INSTRUMENT_ALIASES
+        from .music_constants import instruments, INSTRUMENT_ALIASES
+        available = instruments()
         name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
         # Exact match
-        for inst_id, inst_name in INSTRUMENTS:
+        for inst_id, inst_name in available:
             if inst_name.lower() == name_lower or inst_id.lower() == name_lower:
                 return inst_name
         # Prefix match
-        for inst_id, inst_name in INSTRUMENTS:
+        for inst_id, inst_name in available:
             if inst_name.lower().startswith(name_lower) or inst_id.lower().startswith(name_lower):
                 return inst_name
         # Fuzzy match
         from .fuzzy import fuzzy_match_small
-        all_names = [n for _, n in INSTRUMENTS] + list(INSTRUMENT_ALIASES.keys())
+        all_names = [n for _, n in available] + list(INSTRUMENT_ALIASES.keys())
         if match := fuzzy_match_small(name_lower, [n.lower() for n in all_names], cutoff=0.6):
             resolved = INSTRUMENT_ALIASES.get(match, match)
-            for inst_id, inst_name in INSTRUMENTS:
+            for inst_id, inst_name in available:
                 if inst_name.lower() == resolved or inst_id.lower() == resolved:
                     return inst_name
         return None

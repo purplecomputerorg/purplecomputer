@@ -728,6 +728,14 @@ JOURNAL
     cp /purple-src/scripts/purple-audio-probe.sh "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
 
+    # Family packs from a USB stick labeled PURPLE_UPDATE: udev starts the
+    # templated unit, which mounts the stick read-only and runs
+    # purple_tui.usb_updater. Any other stick is untouched. See
+    # studio/PACK_FORMAT.md, "Where packs live".
+    mkdir -p "$MOUNT_DIR/etc/udev/rules.d"
+    cp /purple-src/config/udev/99-purple-update.rules "$MOUNT_DIR/etc/udev/rules.d/"
+    cp /purple-src/config/systemd/purple-usb-update@.service "$MOUNT_DIR/etc/systemd/system/"
+
     # PulseAudio: enable per-user socket activation so Pulse comes up when the
     # purple user's logind session starts (purple-x11.service uses PAMName=login).
     # Without this, pygame/SDL (set to SDL_AUDIODRIVER=pulseaudio via the service

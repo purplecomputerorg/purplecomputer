@@ -1,6 +1,7 @@
 import { encodeWav } from "./audio";
 import { previewPng } from "./photo";
 import { generateRowGradient, ASDF_ROW, QWERTY_ROW, ZXCV_ROW } from "./purple/art";
+import exported from "./purple/export.json";
 import { SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
 import { SYNTH_RATE, renderNote } from "./purple/synth";
 import { draft, packId, type Draft } from "./state";
@@ -10,13 +11,14 @@ const enc = new TextEncoder();
 const text = (path: string, body: string): TarEntry => ({ path, data: enc.encode(body) });
 const json = (path: string, value: unknown) => text(path, JSON.stringify(value, null, 2) + "\n");
 
-// The real, loader-read part of the pack: manifest plus the emoji type's three files.
+// Manifest as purple_tui.pack_manager validates it; `format` is the layout version this pack targets.
 export function manifest(d: Draft = draft) {
   return {
     id: packId(d),
     name: d.familyName ? `${d.familyName}${/s$/i.test(d.familyName) ? "'" : "'s"} Purple` : "Our Purple",
     version: "1.0.0",
     type: "emoji",
+    format: exported.pack_format,
     description: "Made with Purple Studio.",
   };
 }

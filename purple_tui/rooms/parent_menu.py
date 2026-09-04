@@ -510,6 +510,18 @@ class SecretMenuScreen(PickerModal):
         self.dismiss(value)
 
 
+class PicturesScreen(PickerModal):
+    """Pictures from installed packs, painted onto the Art room canvas."""
+
+    TITLE = "Pictures"
+    DESCRIPTION = "Paint one onto the Art room"
+    escape_value = None
+
+    def __init__(self, names: list[str], **kwargs):
+        super().__init__(**kwargs)
+        self.OPTIONS = [(n, n.replace("-", " ").replace("_", " ").title()) for n in names] + [(None, "Close")]
+
+
 
 
 class ParentVolumeModal(PurpleModal):
@@ -1017,7 +1029,10 @@ def _get_menu_items() -> list:
         items.append(("menu-display", "Display"))
 
     items.append(("sec-advanced", "Advanced"))
+    from ..content import get_content
     from ..settings import get_secret_unlocked
+    if get_content().pictures:
+        items.append(("menu-pictures", "Pictures"))
     if get_secret_unlocked():
         items.append(("menu-secret", "Secret Menu"))
     pin_label = "Parent PIN: On" if get_parent_pin() else "Parent PIN: Off"
@@ -2162,6 +2177,8 @@ class ParentMenu(PurpleModal):
             self._open_all_caps()
         elif item_id == "menu-secret":
             self._open_secret_menu()
+        elif item_id == "menu-pictures":
+            self._open_pictures()
         elif item_id == "menu-parent-pin":
             self._open_parent_pin()
         elif item_id == "menu-display":
@@ -2351,6 +2368,17 @@ class ParentMenu(PurpleModal):
                 self.app.call_later(painter, self.app)
 
         self.app.push_screen(SecretMenuScreen(), callback=on_result)
+
+    def _open_pictures(self) -> None:
+        from ..content import get_content
+
+        def on_result(name):
+            if name:
+                from ..secret_doodle import paint_picture
+                self.dismiss()
+                self.app.call_later(paint_picture, self.app, name)
+
+        self.app.push_screen(PicturesScreen([p.name for p in get_content().pictures]), callback=on_result)
 
     def _open_parent_pin(self) -> None:
         from ..settings import get_parent_pin

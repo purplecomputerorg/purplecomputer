@@ -16,6 +16,45 @@ from pathlib import Path
 from typing import Optional
 
 
+# Newest manifest "format" this loader reads. A pack declaring a higher one is
+# skipped whole rather than half-loaded. Format 1 is described in
+# studio/PACK_FORMAT.md.
+PACK_FORMAT = 1
+
+
+@dataclass
+class Instrument:
+    """An instrument from a pack: content/instruments/<id>.json plus the
+    sample directory content/<id>/ it describes."""
+    id: str
+    name: str
+    path: Path
+
+
+@dataclass
+class Picture:
+    """A pack picture: content/pictures/<name>.json, paint ops for the Art canvas."""
+    name: str
+    ops: list[tuple[int, int, str]]
+
+
+def display_name(slug: str) -> str:
+    return slug.replace("-", " ").replace("_", " ").strip().title()[:24]
+
+
+def read_manifest(pack_dir: Path) -> dict | None:
+    """The pack's manifest, or None when it is missing, unreadable, or newer
+    than this loader knows how to read."""
+    try:
+        with open(pack_dir / "manifest.json") as f:
+            manifest = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(manifest, dict) or manifest.get("format", 1) > PACK_FORMAT:
+        return None
+    return manifest
+
+
 @dataclass
 class Resolution:
     """Result of resolving a bare word: an emoji glyph or a color hex, or nothing.
@@ -100,6 +139,10 @@ class ContentManager:
         self.emojis: dict[str, str] = {}           # word -> emoji
         self.colors: dict[str, str] = {}           # color name -> hex code
         self.sounds: dict[str, Path] = {}          # sound_id -> file path
+        # content/ dirs of user packs, load order; later packs win lookups
+        self.user_content: list[Path] = []
+        self.instruments: list[Instrument] = []
+        self.pictures: list[Picture] = []
         self._loaded = False
         # Unified prefix index: prefix -> [(word, color_hex|None, emoji|None), ...]
         # Ranked by kid-likelihood from rankings.txt
@@ -122,16 +165,12 @@ class ContentManager:
 
         # Load from source-relative packs dir (works in dev and production)
         source_packs = Path(__file__).parent.parent / "packs"
-        if source_packs.exists():
-            for pack_dir in source_packs.iterdir():
-                if pack_dir.is_dir():
-                    self._load_pack(pack_dir)
+        for pack_dir in _pack_dirs(source_packs):
+            self._load_pack(pack_dir)
 
         # Then load from user-installed packs (can override/extend)
-        if self.packs_dir.exists():
-            for pack_dir in self.packs_dir.iterdir():
-                if pack_dir.is_dir():
-                    self._load_pack(pack_dir)
+        for pack_dir in _pack_dirs(self.packs_dir):
+            self._load_pack(pack_dir, user=True)
 
         self._loaded = True
         self._build_prefix_indexes()
@@ -245,16 +284,10 @@ class ContentManager:
             "heather": "#B7A2C7",
         }
 
-    def _load_pack(self, pack_dir: Path) -> None:
+    def _load_pack(self, pack_dir: Path, user: bool = False) -> None:
         """Load content from a single pack directory"""
-        manifest_path = pack_dir / "manifest.json"
-        if not manifest_path.exists():
-            return
-
-        try:
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-        except (json.JSONDecodeError, OSError):
+        manifest = read_manifest(pack_dir)
+        if manifest is None:
             return
 
         pack_type = manifest.get("type", "")
@@ -264,6 +297,34 @@ class ContentManager:
             self._load_emoji_pack(content_dir)
         elif pack_type == "sounds":
             self._load_sounds_pack(content_dir, pack_dir)
+        if user:
+            self.user_content.append(content_dir)
+            self._load_instruments(content_dir)
+            self._load_pictures(content_dir)
+
+    def _load_instruments(self, content_dir: Path) -> None:
+        for spec in sorted((content_dir / "instruments").glob("*.json")):
+            samples = content_dir / spec.stem
+            if not samples.is_dir():
+                continue
+            data = _read_json(spec)
+            name = data.get("name") if isinstance(data, dict) else None
+            self.instruments.append(Instrument(spec.stem, display_name(name if isinstance(name, str) and name else spec.stem), samples))
+
+    def _load_pictures(self, content_dir: Path) -> None:
+        for spec in sorted((content_dir / "pictures").glob("*.json")):
+            data = _read_json(spec)
+            ops = data.get("ops") if isinstance(data, dict) else None
+            if isinstance(ops, list) and all(_is_paint_op(op) for op in ops):
+                self.pictures.append(Picture(spec.stem, [(x, y, c) for x, y, c in ops]))
+
+    def pack_dirs(self, sub: str) -> list[Path]:
+        """content/<sub>/ in every user pack that has one, last installed first,
+        for callers that search a list of directories and take the first hit."""
+        return [d / sub for d in reversed(self.user_content) if (d / sub).is_dir()]
+
+    def instrument_dir(self, instrument_id: str) -> Path | None:
+        return next((i.path for i in reversed(self.instruments) if i.id == instrument_id), None)
 
     def _load_emoji_pack(self, content_dir: Path) -> None:
         """Load emoji pack: primary emoji and synonyms"""
@@ -418,9 +479,7 @@ class ContentManager:
         rank = 0
         # Check source-relative packs first, then user packs
         for packs_dir in [Path(__file__).parent.parent / "packs", self.packs_dir]:
-            if not packs_dir.exists():
-                continue
-            for pack_dir in packs_dir.iterdir():
+            for pack_dir in _pack_dirs(packs_dir):
                 rankings_file = pack_dir / "content" / "rankings.txt"
                 if not rankings_file.exists():
                     continue
@@ -630,6 +689,26 @@ class ContentManager:
         """Exact emoji or color word, singular or plural. Fuzzy matches don't
         count: a typo must stay correctable to a command or operator."""
         return bool(self.exact_emoji(word) or self.exact_color(word))
+
+
+def _pack_dirs(packs_dir: Path) -> list[Path]:
+    if not packs_dir.exists():
+        return []
+    return sorted(p for p in packs_dir.iterdir() if p.is_dir() and not p.name.startswith("."))
+
+
+def _read_json(path: Path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _is_paint_op(op) -> bool:
+    return (isinstance(op, list) and len(op) == 3
+            and isinstance(op[0], int) and isinstance(op[1], int)
+            and isinstance(op[2], str) and op[2].startswith("#") and len(op[2]) == 7)
 
 
 # Global content manager instance

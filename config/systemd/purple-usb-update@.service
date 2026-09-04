@@ -1,19 +1,23 @@
 [Unit]
 Description=Purple Computer USB Update (%i)
 After=local-fs.target
+# A stick present at boot is installed before Purple starts, so the packs are
+# there on the first screen. A stick plugged in later waits for a restart.
+Before=purple-x11.service
 
 [Service]
 Type=oneshot
 TimeoutStartSec=120
 
-# Mount USB read-only, run updater, unmount
+# Mount the stick read-only with nothing on it runnable, install its packs
+# into the purple user's ~/.purple/packs, unmount.
 ExecStartPre=/bin/mkdir -p /mnt/purple-update
-ExecStartPre=/bin/mount -o ro /dev/%i /mnt/purple-update
+ExecStartPre=/bin/mount -o ro,nosuid,nodev,noexec /dev/%i /mnt/purple-update
 ExecStart=/usr/bin/python3 -m purple_tui.usb_updater /mnt/purple-update
 ExecStopPost=/bin/umount /mnt/purple-update
 ExecStopPost=/bin/rmdir /mnt/purple-update
 
-# Run as root (needed to write to /opt/purple/)
+# Root: the mount, plus chowning the installed packs to the purple user.
 User=root
 
 # Set PYTHONPATH so the module can be found

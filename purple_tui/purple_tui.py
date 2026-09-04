@@ -1771,24 +1771,22 @@ class PurpleApp(App):
                     music._play_key(key, m)
 
                 def set_inst(name):
-                    from .music_constants import INSTRUMENTS, INSTRUMENT_ALIASES
+                    from .music_constants import instruments, INSTRUMENT_ALIASES
                     name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
-                    for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
-                        if inst_name.lower() == name_lower or inst_id.lower() == name_lower:
-                            music._instrument_index = i
-                            if music.grid:
-                                music.grid.set_instrument(i)
-                            if music._header:
-                                music._header.update_instrument(inst_name)
-                            return
-                    for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
-                        if inst_name.lower().startswith(name_lower) or inst_id.lower().startswith(name_lower):
-                            music._instrument_index = i
-                            if music.grid:
-                                music.grid.set_instrument(i)
-                            if music._header:
-                                music._header.update_instrument(inst_name)
-                            return
+                    available = instruments()
+                    matchers = (
+                        lambda a, b: a == name_lower or b == name_lower,
+                        lambda a, b: a.startswith(name_lower) or b.startswith(name_lower),
+                    )
+                    for matches in matchers:
+                        for i, (inst_id, inst_name) in enumerate(available):
+                            if matches(inst_name.lower(), inst_id.lower()):
+                                music._instrument_index = i
+                                if music.grid:
+                                    music.grid.set_instrument(i)
+                                if music._header:
+                                    music._header.update_instrument(inst_name)
+                                return
 
                 def set_letters(on):
                     music._letters_mode = on
@@ -1979,13 +1977,13 @@ class PurpleApp(App):
             pass
         try:
             from .rooms.music_room import MusicGrid, MusicRoomHeader
-            from .music_constants import INSTRUMENTS
+            from .music_constants import instruments
             content_area = self.query_one("#content-area")
             music = content_area.query_one("#room-music")
             grid = music.query_one(MusicGrid)
             # Sync instrument: code may have changed it via "choose"
             music._instrument_index = grid._instrument_index
-            music.query_one(MusicRoomHeader).update_instrument(INSTRUMENTS[grid._instrument_index][1])
+            music.query_one(MusicRoomHeader).update_instrument(instruments()[grid._instrument_index][1])
             self._set_room_bottom_pinned("music", music, False)
         except Exception:
             pass

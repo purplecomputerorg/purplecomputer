@@ -39,7 +39,7 @@ function chooser(): View {
   return {
     title: "Instruments",
     path: "content/<name>/c1.wav … d7.wav",
-    tag: "proposed",
+    tag: "real",
     editor: h(
       "section",
       {},
@@ -47,7 +47,7 @@ function chooser(): View {
       h("div", { class: "card" }, field("What to call it", nameIn), status, h("div", { class: "bases" }, ...BASE_NAMES.map((b) =>
         h("button", { class: "base", onclick: () => start(b) }, h("b", {}, `Start from ${BASES[b].label}`), h("span", {}, BASES[b].blurb))))),
       draft.instruments.length ? h("p", { class: "dim small" }, "Yours so far: ", ...draft.instruments.flatMap((i, n) => [n ? ", " : "", h("a", { href: `#instruments/${encodeURIComponent(i.name)}` }, i.name)])) : null,
-      h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), `it plays each instrument from a folder of pre-rendered notes, ${SAMPLE_PITCHES.length} files each, made by the same math offline. Studio renders your version into that exact folder layout, and saves the numbers you chose next to it, so Purple could one day re-render them itself. Nothing on Purple reads either yet.`),
+      h("div", { class: "note" }, h("strong", {}, "What Purple does with this: "), `the Music room adds it after Purple's four, so Enter cycles to it and the code panel can choose it by name. Studio renders it into ${SAMPLE_PITCHES.length} note files, one per pitch the grid can reach, using the same math Purple's own instruments were made with, and saves your slider numbers next to them so Purple can re-render it itself.`),
     ),
     stage: () => musicFrame({ instrument: "Marimba" }),
     stageTitle: "What your kid hears",
@@ -130,7 +130,7 @@ function editor(inst: Instrument): View {
   return {
     title: inst.name,
     path: `content/${inst.name}/c1.wav … d7.wav  ·  content/instruments/${inst.name}.json`,
-    tag: "proposed",
+    tag: "real",
     editor: h(
       "section",
       {},

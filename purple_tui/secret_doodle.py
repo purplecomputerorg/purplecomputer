@@ -142,3 +142,12 @@ def paint_doodle(app) -> None:
 def paint_photo(app) -> None:
     from .secret_photo import OPS
     paint_ops(app, OPS)
+
+
+def paint_picture(app, name: str) -> None:
+    """Paint a pack picture (content/pictures/<name>.json) by name."""
+    from .content import get_content
+    for picture in get_content().pictures:
+        if picture.name == name:
+            paint_ops(app, picture.ops)
+            return

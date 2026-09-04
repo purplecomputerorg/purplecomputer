@@ -324,9 +324,10 @@ def _get_voice_clip(text: str) -> Path | None:
     # Path.exists() raise ENAMETOOLONG (filesystem cap is 255 bytes)
     if len(filename.encode()) > 255:
         return None
-    clip_path = VOICE_CLIPS_DIR / filename
-    if clip_path.exists():
-        return clip_path
+    from .content import get_content
+    for clips_dir in get_content().pack_dirs("voice") + [VOICE_CLIPS_DIR]:
+        if (clips_dir / filename).exists():
+            return clips_dir / filename
     return None
 
 def _get_voice_search_paths() -> list[Path]:

@@ -9,7 +9,7 @@ const base: Draft = { familyName: "", pictures: [], letters: {}, phrases: [], wo
 describe("pack assembly", () => {
   it("names the pack after the family and keeps the manifest loader-shaped", () => {
     expect(manifest({ ...base, familyName: "The Nathansons" })).toEqual({
-      id: "the-nathansons-pack", name: "The Nathansons' Purple", version: "1.0.0", type: "emoji", description: "Made with Purple Studio.",
+      id: "the-nathansons-pack", name: "The Nathansons' Purple", version: "1.0.0", type: "emoji", format: 1, description: "Made with Purple Studio.",
     });
     expect(manifest(base).id).toBe("our-family-pack");
   });

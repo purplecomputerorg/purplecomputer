@@ -23,30 +23,13 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 SOUNDS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.music_constants import (
-    CHROMATIC_NOTE_NAMES, FRIENDLY_KEYS, pitch_filename, pitch_for,
+from purple_tui.music_constants import (  # noqa: F401  reachable_pitches re-exported for older scripts
+    note_frequency, pitch_filename, reachable_pitches,
 )
 from purple_tui.synth import (  # noqa: F401  re-exported for the clip analysis scripts
     finalize_samples, generate_accordion, generate_glockenspiel, generate_marimba, generate_ukulele,
     loudness_compensated_peak, low_freq_partial_boost,
 )
-
-
-def reachable_pitches() -> list[tuple[str, int]]:
-    """Every (note_name, octave) the grid can actually play.
-
-    Enumerates all (row, col, root, octave_shift) cells and unions the
-    pitch_for outputs. The 5 FRIENDLY_KEYS × major scale geometry covers
-    11 of 12 chromatic notes; the missing one depends on which roots are
-    in the cycle.
-    """
-    seen = set()
-    for row in (0, 1, 2):
-        for col in range(10):
-            for root in FRIENDLY_KEYS:
-                for shift in (-1, 0, 1):
-                    seen.add(pitch_for(row, col, root, shift))
-    return sorted(seen, key=lambda p: (p[1], CHROMATIC_NOTE_NAMES.index(p[0])))
 
 
 def write_sound(filename: str, samples: list[int], sample_rate: int = 44100,
@@ -391,12 +374,7 @@ def main():
             for old in inst_path.glob("*.ogg"):
                 old.unlink()
         for note_name, octave in reachable_pitches():
-            # MIDI: C0=12, so semitone = 12*(octave+1) + note_idx
-            # We use scientific pitch (A4=440) → freq = 440 * 2^((midi-69)/12)
-            note_idx = CHROMATIC_NOTE_NAMES.index(note_name)
-            midi = 12 * (octave + 1) + note_idx
-            freq = 440.0 * (2 ** ((midi - 69) / 12))
-            samples = generator(freq)
+            samples = generator(note_frequency(note_name, octave))
             fname = pitch_filename(note_name, octave) + ".wav"
             write_sound(fname, samples, subdir=inst_dir)
         print()

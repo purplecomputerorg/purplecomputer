@@ -111,6 +111,31 @@ def pitch_for(row: int, col: int, root: int, octave_shift: int) -> tuple[str, in
     return CHROMATIC_NOTE_NAMES[abs_st % 12], abs_st // 12
 
 
+def reachable_pitches() -> list[tuple[str, int]]:
+    """Every (note_name, octave) the grid can play across the friendly keys
+    and octave shifts; the set of samples an instrument needs."""
+    seen = {
+        pitch_for(row, col, root, shift)
+        for row in (0, 1, 2) for col in range(10)
+        for root in FRIENDLY_KEYS for shift in (-1, 0, 1)
+    }
+    return sorted(seen, key=lambda p: (p[1], CHROMATIC_NOTE_NAMES.index(p[0])))
+
+
+def note_frequency(note_name: str, octave: int) -> float:
+    """Equal temperament, A4 = 440 Hz."""
+    midi = 12 * (octave + 1) + CHROMATIC_NOTE_NAMES.index(note_name)
+    return 440.0 * (2 ** ((midi - 69) / 12))
+
+
+def instruments() -> list[tuple[str, str]]:
+    """Built-in instruments plus those from installed packs, as (id, display
+    name). A pack instrument with a built-in id replaces it, like emoji do."""
+    from .content import get_content
+    extra = {i.id: (i.id, i.name) for i in get_content().instruments}
+    return [extra.pop(i, (i, n)) for i, n in INSTRUMENTS] + list(extra.values())
+
+
 # Percussion display names for number row cells
 PERCUSSION_NAMES = {
     '1': 'kick', '2': 'snare', '3': 'hat', '4': 'clap', '5': 'bell',

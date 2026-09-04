@@ -62,7 +62,7 @@ export function voiceView(): View {
   return {
     title: "Voice",
     path: "content/letters/<key>.wav  ·  content/voice/<phrase>.wav",
-    tag: "proposed",
+    tag: "real",
     editor: h(
       "section",
       {},
@@ -74,7 +74,7 @@ export function voiceView(): View {
       h("p", { class: "dim small" }, "When a kid types exactly this phrase in Play, Purple plays your recording instead of speaking it. Capitals and spacing do not matter."),
       h("div", { class: "card" }, field("The phrase, exactly as your kid would type it", phraseIn), h("p", { class: "dim small" }, "Saved as ", phraseName), recordControl(onPhrase), phraseStatus),
       phrases,
-      h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), "the Music room and the reader only look in Purple's own sound pack for these files. This pack puts yours in the same layout, one WAV per key at the same sample rate, so the change on Purple's side is to look in your pack too."),
+      h("div", { class: "note" }, h("strong", {}, "What Purple does with this: "), "the Music room's Say Letters mode plays your clip for any key you recorded and Purple's own clip for the rest. A phrase you record is what Purple says instead of its built-in voice whenever it would say exactly those words."),
     ),
     stage: () => (lastPhrase ? playFrame([{ ask: lastPhrase, answer: `♪ ${lastPhrase}` }]) : musicFrame({ instrument: "Marimba", sayLetters: true, activeKey: current })),
     stageTitle: "What your kid hears",

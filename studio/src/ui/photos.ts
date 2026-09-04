@@ -40,7 +40,7 @@ function dropZone(): HTMLElement {
   return h("div", {}, drop, status);
 }
 
-const note = () => h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), "nothing yet. The Art room can only show a picture that was built into Purple itself. The pack carries your photo as a paint list in the layout the loader would read once it learns to look there.");
+const note = () => h("div", { class: "note" }, h("strong", {}, "What Purple does with this: "), "the parent menu gets a Pictures entry listing each one. Choosing a picture paints it onto the Art room canvas, where the kid can draw over it or clear it, the same as any drawing.");
 
 export function photosView(item: string | null): View {
   const pic = item ? draft.pictures.find((p) => p.name === item) : null;
@@ -49,7 +49,7 @@ export function photosView(item: string | null): View {
     return {
       title: "Photos",
       path: "content/pictures/<name>.json",
-      tag: "proposed",
+      tag: "real",
       editor: h(
         "section",
         {},
@@ -69,7 +69,7 @@ export function photosView(item: string | null): View {
   return {
     title: pic.name,
     path: `content/pictures/${pic.name}.json  ·  ${pic.name}.png`,
-    tag: "proposed",
+    tag: "real",
     editor: h(
       "section",
       {},

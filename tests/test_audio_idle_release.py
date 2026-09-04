@@ -76,6 +76,7 @@ def _release_and_wait(quiet=0.0):
     deadline = time.monotonic() + 2
     while music_room._IDLE_RELEASED is not True and time.monotonic() < deadline:
         time.sleep(0.01)
+    assert music_room._IDLE_RELEASED is True, "idle release never completed"
 
 
 def test_release_quits_after_quiet_period(monkeypatch):

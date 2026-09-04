@@ -1,5 +1,5 @@
 import type { Clip } from "../audio";
-import { LETTER_KEYS, voiceClipFilename } from "../purple/sounds";
+import { LETTER_KEYS, voiceClipFilename } from "@sdk/purple/sounds";
 import { changed, draft } from "../state";
 import { clear, field, h } from "./dom";
 import { musicFrame, playFrame } from "./facsimile";

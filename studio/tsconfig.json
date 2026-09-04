@@ -11,7 +11,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": { "@sdk": ["sdk/src/index.ts"], "@sdk/*": ["sdk/src/*"] }
   },
-  "include": ["src", "tests"]
+  "include": ["src", "sdk", "tests"]
 }

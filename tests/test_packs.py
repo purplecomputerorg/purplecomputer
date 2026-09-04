@@ -46,6 +46,9 @@ def make_pack(root: Path, pack_id: str = "the-tests-pack", fmt: int | None = 1, 
     write_wav(c / "voice" / "hi_there.wav")
     (c / "pictures").mkdir()
     (c / "pictures" / "palm.json").write_text(json.dumps({"name": "palm", "ops": [[43, 0, "#ffffff"], [44, 1, "#fefefe"]]}))
+    (c / "rooms").mkdir()
+    (c / "rooms" / "farm.json").write_text(json.dumps({"name": "farm", "title": "Farm", "rules": [
+        {"when": {"event": "key", "key": "c"}, "do": [{"do": "show", "text": "🐄"}, {"do": "say", "text": "cow"}]}]}))
     if instrument:
         (c / "instruments").mkdir()
         (c / "instruments" / f"{instrument}.json").write_text(json.dumps(
@@ -75,6 +78,17 @@ class TestLoader:
         assert packs.instrument_dir("kitchen") == c / "kitchen"
         assert packs.instrument_dir("marimba") is None
         assert [(p.name, p.ops) for p in packs.pictures] == [("palm", [(43, 0, "#ffffff"), (44, 1, "#fefefe")])]
+        assert [r["title"] for r in packs.rooms] == ["Farm"]
+        assert packs.room("farm")["rules"][0]["when"] == {"event": "key", "key": "c"}
+        assert packs.room("barn") is None
+
+    def test_broken_room_is_skipped_by_the_loader_and_refused_by_the_installer(self, tmp_path):
+        d = make_pack(tmp_path)
+        (d / "content" / "rooms" / "bad.json").write_text(json.dumps({"name": "bad", "rules": [{"when": {"event": "jump"}, "do": []}]}))
+        cm = ContentManager(packs_dir=tmp_path)
+        cm.load_all()
+        assert [r["name"] for r in cm.rooms] == ["farm"]
+        assert any("rooms/bad.json" in p and "event must be" in p for p in check_pack(d))
 
     def test_pack_instruments_follow_the_built_ins(self, packs):
         assert instruments() == INSTRUMENTS + [("kitchen", "Kitchen")]

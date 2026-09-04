@@ -1,16 +1,17 @@
 import { paintCells } from "../photo";
-import { APP_BG_DARK, CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_BG_DARK, GUTTER_BG_DARK, VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from "../purple/art";
-import { GRID_ROWS, PERCUSSION_ROW } from "../purple/sounds";
+import { APP_BG_DARK, CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_BG_DARK, GUTTER_BG_DARK, VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from "@sdk/purple/art";
+import { GRID_ROWS, PERCUSSION_ROW } from "@sdk/purple/sounds";
 import { h } from "./dom";
 
 export interface FrameColors { background: string; surface: string }
 export const DEFAULT_COLORS: FrameColors = { background: APP_BG_DARK, surface: DEFAULT_BG_DARK };
-const PRIMARY = "#9b7bc4";
-const MUTED = "#8a78a8";
-const WHITE = "#f4eefc";
+export const PRIMARY = "#9b7bc4";
+export const MUTED = "#8a78a8";
+export const WHITE = "#f4eefc";
+export { VIEWPORT_HEIGHT, VIEWPORT_WIDTH };
 const PAD = 1;
 
-interface Pen {
+export interface Pen {
   cell: (x: number, y: number, color: string, w?: number, hgt?: number) => void;
   text: (t: string, x: number, y: number, color: string, bold?: boolean) => void;
   ctx: CanvasRenderingContext2D;
@@ -20,7 +21,7 @@ interface Pen {
 
 // The shared viewport: app background, heavy border, then whatever the room draws inside.
 // Cells are `cellPx` wide and twice as tall, the same shape as the terminal's.
-function frame(colors: FrameColors, draw: (pen: Pen) => void, cellPx = 5): HTMLCanvasElement {
+export function frame(colors: FrameColors, draw: (pen: Pen) => void, cellPx = 5): HTMLCanvasElement {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const cols = VIEWPORT_WIDTH + 2 * PAD;
   const rows = VIEWPORT_HEIGHT + 2 * PAD;

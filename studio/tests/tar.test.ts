@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gzip, tar } from "../src/tar";
+import { gzip, tar } from "../sdk/src/tar";
 
 const dec = new TextDecoder();
 const field = (block: Uint8Array, offset: number, len: number) => dec.decode(block.subarray(offset, offset + len)).replace(/\0.*$/s, "");

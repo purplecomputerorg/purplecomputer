@@ -1,4 +1,4 @@
-import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, generateRowGradient } from "../purple/art";
+import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, generateRowGradient } from "@sdk/purple/art";
 import { DEFAULT_THEME, changed, draft } from "../state";
 import { clear, h } from "./dom";
 import { artFrame } from "./facsimile";

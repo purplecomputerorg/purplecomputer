@@ -74,7 +74,7 @@ export const BASE_NAMES = Object.keys(BASES) as BaseName[];
 export const defaults = (base: BaseName): Params => ({ ...(exported.synth.defaults as Record<BaseName, Params>)[base] });
 
 // synth.noise: mulberry32, same stream as the Python for the same seed.
-function noise(seed: number) {
+export function noise(seed: number) {
   let a = Math.trunc(seed) >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;

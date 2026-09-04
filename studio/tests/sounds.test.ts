@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import exported from "../src/purple/export.json";
-import { GRID_ROWS, LETTER_KEYS, SAMPLE_PITCHES, noteFrequency, pitchFilename, pitchFor, voiceClipFilename } from "../src/purple/sounds";
+import exported from "../sdk/src/purple/export.json";
+import { GRID_ROWS, LETTER_KEYS, SAMPLE_PITCHES, noteFrequency, pitchFilename, pitchFor, voiceClipFilename } from "../sdk/src/purple/sounds";
 
 describe("sound naming matches purple_tui", () => {
   it("voice clip filename matches tts.voice_clip_filename on the exported examples", () => {

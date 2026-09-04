@@ -17,7 +17,7 @@ export function downloadView(): View {
     for (const p of list) summary.append(h("li", {}, h("span", {}, p.label), h("span", { class: "n" }, String(p.count))));
     if (!list.length) summary.append(h("li", { class: "dim" }, "Nothing in the pack yet. Every part is optional, but an empty pack changes nothing."));
     button.disabled = !list.length;
-    idLine.replaceChildren("Saved as ", h("span", { class: "mono" }, packFilename()), ". Purple will list it as ", h("strong", {}, manifest().name), " and keep it at ", h("span", { class: "mono" }, `~/.purple/packs/${packId()}/`), ".");
+    idLine.replaceChildren("Saved as ", h("span", { class: "mono" }, packFilename()), ". Purple will list it as ", h("strong", {}, manifest(draft).name), " and keep it at ", h("span", { class: "mono" }, `~/.purple/packs/${packId()}/`), ".");
   }
   nameIn.oninput = () => {
     draft.familyName = nameIn.value;

@@ -1,7 +1,7 @@
 import { play } from "../audio";
-import { KEY_COLORS } from "../purple/art";
-import { GRID_ROWS, INSTRUMENTS, PERCUSSION_ROW, SAMPLE_PITCHES, noteFrequency, pitchFor } from "../purple/sounds";
-import { BASES, BASE_NAMES, SYNTH_RATE, defaults, renderNote, type BaseName } from "../purple/synth";
+import { KEY_COLORS } from "@sdk/purple/art";
+import { GRID_ROWS, INSTRUMENTS, PERCUSSION_ROW, SAMPLE_PITCHES, noteFrequency, pitchFor } from "@sdk/purple/sounds";
+import { BASES, BASE_NAMES, SYNTH_RATE, defaults, renderNote, type BaseName } from "@sdk/purple/synth";
 import { changed, draft, slug, type Instrument } from "../state";
 import { field, h } from "./dom";
 import { musicFrame } from "./facsimile";

@@ -4,7 +4,7 @@ this test fails when Purple has changed and the files were not regenerated."""
 
 import json
 
-from scripts.export_studio import EXPORT_PATH, GOLDEN_PATH, build_export, build_golden
+from scripts.export_studio import EXPORT_PATH, GOLDEN_PATH, ROOM_GOLDEN_PATH, build_export, build_golden, build_room_golden
 
 STALE = "Purple changed under Studio: run `just studio-fixtures` and commit the result."
 
@@ -15,3 +15,7 @@ def test_export_is_current():
 
 def test_golden_renders_are_current():
     assert json.loads(GOLDEN_PATH.read_text()) == build_golden(), STALE
+
+
+def test_room_trace_is_current():
+    assert json.loads(ROOM_GOLDEN_PATH.read_text()) == build_room_golden(), STALE

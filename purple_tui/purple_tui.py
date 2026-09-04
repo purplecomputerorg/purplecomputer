@@ -1679,7 +1679,8 @@ class PurpleApp(App):
         if self._keyboard_state_machine.check_escape_hold():
             self._escape_triggered_long_hold = True  # Prevent picker open/close on release
             self._cancel_escape_hold_timer()
-            if len(self.screen_stack) > 1 and isinstance(self.screen, RoomPickerScreen):
+            from .rooms.pack_room import PackRoomScreen
+            if len(self.screen_stack) > 1 and isinstance(self.screen, (RoomPickerScreen, PackRoomScreen)):
                 self.screen.dismiss(None)
             self.action_parent_menu()
 
@@ -1706,7 +1707,14 @@ class PurpleApp(App):
         By switching the room content before dismissing, we avoid a flicker
         frame where the old room is visible behind the picker.
         """
-        room_name = event.result.get("room")
+        room_name = event.result.get("room", "")
+        if room_name.startswith("pack:"):
+            # A family room runs as a screen over the current room. It is
+            # pushed from the picker's dismiss callback, once the picker is
+            # gone, so Esc from the room lands back where the kid was.
+            if len(self.screen_stack) > 1:
+                self.screen.dismiss({"pack_room": room_name[5:]})
+            return
         if room_name == "play":
             self.action_switch_room(ROOM_PLAY[0])
         elif room_name == "music":
@@ -1717,9 +1725,20 @@ class PurpleApp(App):
         if len(self.screen_stack) > 1:
             self.screen.dismiss(None)
 
+    def _open_pack_room(self, name: str) -> None:
+        from .content import get_content
+        from .rooms.pack_room import PackRoomScreen
+        program = get_content().room(name)
+        if program is not None:
+            self.push_screen(PackRoomScreen(program))
+
     def _on_room_picked(self, result: dict | None) -> None:
         """Handle mode picker dismiss for non-room actions."""
         if result is None:
+            return
+
+        if result.get("pack_room"):
+            self._open_pack_room(result["pack_room"])
             return
 
         # Toggle code panel

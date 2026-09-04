@@ -136,6 +136,21 @@ def check_pack(pack_dir: Path) -> list[str]:
     problems += _check_clips(content / 'voice')
     problems += _check_instruments(content)
     problems += _check_pictures(content)
+    problems += _check_rooms(content)
+    return problems
+
+
+def _check_rooms(content: Path) -> list[str]:
+    from .content import room_specs
+    from .room_program import RoomError, parse
+    problems = []
+    for spec in room_specs(content):
+        try:
+            program = parse(_json_object(spec))
+            if program["name"] != spec.stem:
+                problems.append(f"content/rooms/{spec.name}: name must match the filename ({spec.stem})")
+        except RoomError as e:
+            problems.append(f"content/rooms/{spec.name}: {e}")
     return problems
 
 

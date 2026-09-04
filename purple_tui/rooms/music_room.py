@@ -460,6 +460,57 @@ _KEY_TO_RC: dict[str, tuple[int, int]] = {
     if not GRID_KEYS[r][c].isdigit()
 }
 
+def sounds_root() -> Path:
+    """The core sound pack's content directory."""
+    paths = [
+        Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
+        Path.home() / ".purple" / "packs" / "core-sounds" / "content",
+    ]
+    return next((p for p in paths if p.exists()), paths[0])
+
+
+def find_sound(base: Path, name: str) -> Path | None:
+    """Find a sound file, preferring .ogg over .wav."""
+    for ext in ('.ogg', '.wav'):
+        p = base / f"{name}{ext}"
+        if p.exists():
+            return p
+    return None
+
+
+def _load_sound(path: Path) -> "pygame.mixer.Sound | None":
+    try:
+        sound = pygame.mixer.Sound(str(path))
+        sound.set_volume(0.4)
+        return sound
+    except pygame.error:
+        return None
+
+
+def load_instrument_sounds(instrument_id: str) -> dict:
+    """Every pitch-named .wav and .ogg in the instrument's directory, keyed by
+    stem ('c4', 'cs5'), .ogg winning a stem both have. A pack instrument's
+    directory replaces the core one. Empty when the mixer is not ready."""
+    from ..content import get_content
+    if not mixer_ready_for_play():
+        return {}
+    inst_path = get_content().instrument_dir(instrument_id) or sounds_root() / instrument_id
+    if not inst_path.exists():
+        return {}
+    loaded = ((p.stem, _load_sound(p)) for p in sorted(inst_path.glob("*.wav")) + sorted(inst_path.glob("*.ogg")))
+    return {stem: sound for stem, sound in loaded if sound is not None}
+
+
+def load_percussion_sounds() -> dict:
+    """The number-row percussion, keyed by digit. Empty when the mixer is not ready."""
+    if not mixer_ready_for_play():
+        return {}
+    root = sounds_root()
+    found = ((key, find_sound(root, key)) for key in ALL_KEYS if key.isdigit())
+    loaded = ((key, _load_sound(path)) for key, path in found if path)
+    return {key: sound for key, sound in loaded if sound is not None}
+
+
 class MusicRoomHeader(Static):
     """Shows current mode with both options visible, current highlighted.
 
@@ -619,24 +670,11 @@ class MusicGrid(Widget):
         self.refresh()
 
     def _get_sounds_path(self) -> Path:
-        """Find the sounds directory."""
-        paths = [
-            Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
-            Path.home() / ".purple" / "packs" / "core-sounds" / "content",
-        ]
-        for p in paths:
-            if p.exists():
-                return p
-        return paths[0]
+        return sounds_root()
 
     @staticmethod
     def _find_sound(base: Path, name: str) -> Path | None:
-        """Find a sound file, preferring .ogg over .wav."""
-        for ext in ('.ogg', '.wav'):
-            p = base / f"{name}{ext}"
-            if p.exists():
-                return p
-        return None
+        return find_sound(base, name)
 
     def _drop_stale_sounds(self) -> None:
         if self._sounds_generation != mixer_generation():
@@ -651,46 +689,18 @@ class MusicGrid(Widget):
         self._letter_sounds_loaded = False
 
     def _ensure_instrument_loaded(self, instrument_id: str) -> None:
-        """Load instrument sounds if not already cached.
-
-        Loads every pitch-named .wav and .ogg in the instrument directory
-        (e.g. 'c4.ogg', 'cs5.wav') keyed by the filename stem, .ogg winning
-        a stem both have. A pack instrument's directory replaces the core
-        one. Lookup at play time uses pitch_for(...) to compute the stem.
-        """
-        from ..content import get_content
+        """Cache an instrument's sounds once per mixer generation."""
         self._drop_stale_sounds()
         if instrument_id in self._instrument_sounds or not mixer_ready_for_play():
             return
-        inst_path = get_content().instrument_dir(instrument_id) or self._get_sounds_path() / instrument_id
-        cache: dict[str, pygame.mixer.Sound] = {}
-        if inst_path.exists():
-            for path in sorted(inst_path.glob("*.wav")) + sorted(inst_path.glob("*.ogg")):
-                try:
-                    sound = pygame.mixer.Sound(str(path))
-                    sound.set_volume(0.4)
-                    cache[path.stem] = sound
-                except pygame.error:
-                    pass
-        self._instrument_sounds[instrument_id] = cache
+        self._instrument_sounds[instrument_id] = load_instrument_sounds(instrument_id)
 
     def _ensure_percussion_loaded(self) -> None:
         """Load percussion sounds (shared across all instruments)."""
         self._drop_stale_sounds()
         if self._percussion_loaded or not mixer_ready_for_play():
             return
-        sounds_path = self._get_sounds_path()
-        for key in ALL_KEYS:
-            if not key.isdigit():
-                continue
-            path = self._find_sound(sounds_path, key)
-            if path:
-                try:
-                    sound = pygame.mixer.Sound(str(path))
-                    sound.set_volume(0.4)
-                    self._percussion_sounds[key] = sound
-                except pygame.error:
-                    pass
+        self._percussion_sounds = load_percussion_sounds()
         self._percussion_loaded = True
 
     def _pitch_stem_for_key(self, key: str) -> str | None:

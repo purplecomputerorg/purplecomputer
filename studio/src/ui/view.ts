@@ -1,11 +1,13 @@
-// What every editor hands the shell: the editor pane, and a stage renderer the shell re-runs on change.
 export interface View {
   title: string;
   path?: string;
+  // "real": Purple reads this today. "proposed": written into the pack, read by nothing yet.
   tag?: "real" | "proposed";
   editor: HTMLElement;
-  stage: () => Node | null;
+  stage: () => HTMLElement | null;
   stageTitle?: string;
   caption?: string;
+  // Called once the editor is in the document, for things that need a laid-out element (Blockly).
+  mounted?: () => void;
   cleanup?: () => void;
 }

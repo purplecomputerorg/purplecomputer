@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import exported from "../src/purple/export.json";
-import { ASDF_ROW, KEY_COLORS, QWERTY_ROW, ROW_HUES, ZXCV_ROW, cellsToOps, fitToCanvas, generateRowGradient } from "../src/purple/art";
+import exported from "../sdk/src/purple/export.json";
+import { ASDF_ROW, KEY_COLORS, QWERTY_ROW, ROW_HUES, ZXCV_ROW, cellsToOps, fitToCanvas, generateRowGradient } from "../sdk/src/purple/art";
 
 // Constants are imported from export.json; these check the two ported functions against it.
 describe("art port matches purple_tui", () => {

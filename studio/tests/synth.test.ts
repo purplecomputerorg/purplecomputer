@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import golden from "./golden.json";
-import exported from "../src/purple/export.json";
-import { BASES, BASE_NAMES, SYNTH_RATE, defaults, renderNote, type BaseName, type Params } from "../src/purple/synth";
+import exported from "../sdk/src/purple/export.json";
+import { BASES, BASE_NAMES, SYNTH_RATE, defaults, renderNote, type BaseName, type Params } from "../sdk/src/purple/synth";
 
 // golden.json is rendered by purple_tui/synth.py (scripts/export_studio.py). One LSB of slack covers
 // the last-bit differences between libm and V8 before int() truncation; nothing else may differ.

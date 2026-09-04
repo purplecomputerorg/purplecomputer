@@ -1,5 +1,5 @@
 import { pictureFromFile } from "../photo";
-import { CANVAS_HEIGHT, CANVAS_WIDTH } from "../purple/art";
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from "@sdk/purple/art";
 import { changed, draft, DEFAULT_THEME } from "../state";
 import { h } from "./dom";
 import { artFrame } from "./facsimile";

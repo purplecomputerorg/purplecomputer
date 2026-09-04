@@ -1,7 +1,8 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear +
+Shows 3 rooms (Play, Music, Art) at the top, a row of family rooms from
+installed packs when there are any (keys 4 to 7), then Volume + Clear +
 Time Travel side by side. Arrow keys navigate, number keys 1-3 for direct
 room selection, V opens volume, C clears a room, T starts Time Travel,
 Enter selects, Escape cancels. Any unrecognized key dismisses gracefully.
@@ -37,6 +38,12 @@ NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
 ROW_ROOMS = 0
 ROW_EXTRAS = 1
 ROW_CODE = 2
+ROW_PACK = 3  # family rooms from packs, between the rooms and the extras
+
+# Pack rooms take the number keys after the three rooms; the picker shows
+# at most this many (one row of boxes fits the dialog).
+PACK_ROOM_KEYS = "4567"
+ICON_PACK_ROOM = "✦"
 
 # Extras columns: 0 = volume, 1 = clear room, 2 = time travel
 COL_VOLUME = 0
@@ -167,7 +174,7 @@ class RoomPickerScreen(PurpleModal):
         margin-bottom: 1;
     }
 
-    #picker-extras {
+    #picker-extras, #picker-pack {
         width: 100%;
         height: auto;
         align: center middle;
@@ -220,6 +227,9 @@ class RoomPickerScreen(PurpleModal):
         self._active_row = ROW_ROOMS
         self._room_index = self._get_initial_room_index()
         self._extra_index = COL_VOLUME
+        from .content import get_content
+        self._pack_rooms = [(r["name"], r.get("title", r["name"])) for r in get_content().rooms][:len(PACK_ROOM_KEYS)]
+        self._pack_index = 0
 
     def _get_initial_room_index(self) -> int:
         for i, (opt_id, _, _, _) in enumerate(ROOM_OPTIONS):
@@ -234,6 +244,11 @@ class RoomPickerScreen(PurpleModal):
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
+
+            if self._pack_rooms:
+                with Horizontal(id="picker-pack"):
+                    for i, (_, title) in enumerate(self._pack_rooms):
+                        yield ExtraOption(ICON_PACK_ROOM, title, PACK_ROOM_KEYS[i], id=f"opt-pack-{i}")
 
             with Horizontal(id="picker-extras"):
                 if getattr(self.app, "volume_disabled", False):
@@ -271,6 +286,12 @@ class RoomPickerScreen(PurpleModal):
             except Exception:
                 pass
 
+        for i in range(len(self._pack_rooms)):
+            try:
+                self.query_one(f"#opt-pack-{i}", ExtraOption).set_class(self._active_row == ROW_PACK and i == self._pack_index, "selected")
+            except Exception:
+                pass
+
         # Extras row
         extra_ids = ["#opt-volume", "#opt-clear-rooms", "#opt-time-travel"]
         for i, eid in enumerate(extra_ids):
@@ -299,43 +320,65 @@ class RoomPickerScreen(PurpleModal):
             _, _, _, result = ROOM_OPTIONS[index]
             self.post_message(self.RoomSelected(result))
 
+    def _select_pack_room(self, index: int) -> None:
+        if 0 <= index < len(self._pack_rooms):
+            self.post_message(self.RoomSelected({"room": f"pack:{self._pack_rooms[index][0]}"}))
+
+    def _move_sideways(self, step: int) -> None:
+        if self._active_row == ROW_ROOMS:
+            self._room_index = min(len(ROOM_OPTIONS) - 1, max(0, self._room_index + step))
+        elif self._active_row == ROW_EXTRAS:
+            self._extra_index = min(NUM_EXTRA_COLS - 1, max(0, self._extra_index + step))
+        elif self._active_row == ROW_PACK:
+            self._pack_index = min(len(self._pack_rooms) - 1, max(0, self._pack_index + step))
+
+    def _move_up(self) -> None:
+        """Rows top to bottom: rooms, pack rooms (when any), extras, code.
+        Rooms and extras are both 3 columns, so the column carries over."""
+        if self._active_row == ROW_CODE:
+            self._active_row = ROW_EXTRAS
+        elif self._active_row == ROW_EXTRAS and self._pack_rooms:
+            self._active_row = ROW_PACK
+            self._pack_index = min(self._extra_index, len(self._pack_rooms) - 1)
+        elif self._active_row == ROW_EXTRAS:
+            self._active_row = ROW_ROOMS
+            self._room_index = self._extra_index
+        elif self._active_row == ROW_PACK:
+            self._active_row = ROW_ROOMS
+            self._room_index = min(self._pack_index, len(ROOM_OPTIONS) - 1)
+
+    def _move_down(self) -> None:
+        if self._active_row == ROW_ROOMS and self._pack_rooms:
+            self._active_row = ROW_PACK
+            self._pack_index = min(self._room_index, len(self._pack_rooms) - 1)
+        elif self._active_row == ROW_ROOMS:
+            self._active_row = ROW_EXTRAS
+            self._extra_index = self._room_index
+        elif self._active_row == ROW_PACK:
+            self._active_row = ROW_EXTRAS
+            self._extra_index = min(self._pack_index, NUM_EXTRA_COLS - 1)
+        elif self._active_row == ROW_EXTRAS and self._show_code_row:
+            self._active_row = ROW_CODE
+
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard navigation from evdev."""
         if isinstance(action, NavigationAction):
             if action.direction == 'left':
-                if self._active_row == ROW_ROOMS:
-                    self._room_index = max(0, self._room_index - 1)
-                elif self._active_row == ROW_EXTRAS:
-                    self._extra_index = max(0, self._extra_index - 1)
-                self._update_selection()
+                self._move_sideways(-1)
             elif action.direction == 'right':
-                if self._active_row == ROW_ROOMS:
-                    self._room_index = min(len(ROOM_OPTIONS) - 1, self._room_index + 1)
-                elif self._active_row == ROW_EXTRAS:
-                    self._extra_index = min(NUM_EXTRA_COLS - 1, self._extra_index + 1)
-                self._update_selection()
+                self._move_sideways(1)
             elif action.direction == 'up':
-                if self._active_row == ROW_CODE:
-                    self._active_row = ROW_EXTRAS
-                    self._update_selection()
-                elif self._active_row == ROW_EXTRAS:
-                    self._active_row = ROW_ROOMS
-                    # Rooms and extras are both 3 columns: keep the column
-                    self._room_index = self._extra_index
-                    self._update_selection()
+                self._move_up()
             elif action.direction == 'down':
-                if self._active_row == ROW_ROOMS:
-                    self._active_row = ROW_EXTRAS
-                    self._extra_index = self._room_index
-                    self._update_selection()
-                elif self._active_row == ROW_EXTRAS and self._show_code_row:
-                    self._active_row = ROW_CODE
-                    self._update_selection()
+                self._move_down()
+            self._update_selection()
             return
 
         if isinstance(action, CharacterAction) and not action.is_repeat:
             if action.char in NUMBER_KEY_ROOMS:
                 self._select_room(NUMBER_KEY_ROOMS[action.char])
+            elif action.char in PACK_ROOM_KEYS and PACK_ROOM_KEYS.index(action.char) < len(self._pack_rooms):
+                self._select_pack_room(PACK_ROOM_KEYS.index(action.char))
             elif action.char.lower() == 'v':
                 # Jump to volume and activate
                 self._active_row = ROW_EXTRAS
@@ -370,6 +413,8 @@ class RoomPickerScreen(PurpleModal):
             if action.action == 'enter':
                 if self._active_row == ROW_ROOMS:
                     self._select_room(self._room_index)
+                elif self._active_row == ROW_PACK:
+                    self._select_pack_room(self._pack_index)
                 elif self._active_row == ROW_EXTRAS:
                     if self._extra_index == COL_VOLUME:
                         self._open_volume()

@@ -1,4 +1,4 @@
-import { CORE_EMOJI, CORE_SYNONYMS, isCoreRanked, isCoreWord } from "../purple/core";
+import { CORE_EMOJI, CORE_SYNONYMS, isCoreRanked, isCoreWord } from "@sdk/purple/core";
 import { changed, draft } from "../state";
 import { clear, h } from "./dom";
 import { playFrame, type PlayLine } from "./facsimile";

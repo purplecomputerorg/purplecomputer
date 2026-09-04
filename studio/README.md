@@ -14,7 +14,7 @@ just studio-fixtures   # regenerate export.json and golden.json from Purple's Py
 
 Or from `studio/`: `npm install`, `npm run dev`, `npm test`, `npm run build` (static output in `studio/dist/`, deployable anywhere that serves files).
 
-Stack: Vite, TypeScript, vanilla DOM, no runtime dependencies, no backend. Tar and gzip, WAV encoding, resampling, the synth port, and the room facsimiles are all in `src/`.
+Stack: Vite, TypeScript, vanilla DOM, no backend. Two runtime dependencies: Blockly for the room editor and Pyodide for the Python page, both loaded only on those pages. Everything pure (tar and gzip, WAV encoding, the synth port, the room interpreter, the pack builder) is in `sdk/src/`; the app in `src/` is the UI over it.
 
 ## The shape
 
@@ -32,8 +32,15 @@ A small, calm editor in three panes:
 | Your own voice | Record or upload a clip per key (A to Z, 0 to 9) and per phrase; 22050 Hz mono 16-bit WAV, trimmed and faded like Purple's own clips. | Say Letters plays the family's clip for any key recorded and Purple's for the rest; a recorded phrase is played instead of the synthesized voice whenever Purple would say those exact words. |
 | Your own photos | Drop a photo, see it painted on the Art room canvas at the real 132 by 25 cell size. | The parent menu gains a Pictures entry; choosing one paints it onto the Art canvas. |
 | Your own instrument sounds | Start from any of Purple's four instruments and move the numbers behind its sound with sliders while a Music room keyboard plays it. The full sample set, one note per pitch the grid can reach, is rendered from the same equations. | The Music room lists it after the built-in four; Enter cycles to it and the code panel can choose it by name. The slider numbers ship beside the samples so Purple's own synth can re-render it. |
+| Your own rooms | A block editor (Blockly) for a small rule language: when a key is pressed, show, say, play, wait, count, branch. The stage on the right runs the room live with the same interpreter. | The room picker gains a row of family rooms; each runs from its JSON file. Purple interprets the file with the same rules, held to Studio's interpreter by a shared trace. |
 | Your own colors | Background, canvas, and a hue per letter row, previewed on the Art frame. | Nothing yet. Emitted as a proposed `theme.json`. |
-| Your own rooms or games | Out of scope. | |
+
+Two more ways in, for parents who would rather write than click:
+
+- **Python.** A console over the pack: `pack.word(...)`, `pack.instrument(...)`, `pack.room(...)` with small helpers for rules. Pyodide runs it in the browser; every room goes through the same check Purple applies. `tests/python.test.ts` runs the same prelude under Pyodide in Node.
+- **Helper.** With a parent's own Claude API key, drafts a word list or a whole room from a sentence, straight from the browser to the API, one request per button press. Purple never touches this; the key is optional and the rest of Studio never needs it.
+
+And underneath, `sdk/`: the pack builder, the synth port, the room interpreter, the tar and WAV writers, and Purple's exported constants as a plain TypeScript library with no DOM and no dependencies, so someone can build a different Studio. See `sdk/README.md`.
 
 `PACK_FORMAT.md` is the contract: every file, what reads it, what the installer refuses, and the command-line tool for people who would rather write a pack by hand.
 
@@ -45,8 +52,9 @@ A USB stick labeled `PURPLE_UPDATE` with the `.purplepack` on it, plugged in bef
 
 Studio is JavaScript all the way, and Purple is Python. Nothing is hand-copied between them; Python is the source and the JSON it exports is what the browser uses.
 
-- **`src/purple/export.json`** is written by `scripts/export_studio.py` from `purple_tui` itself: the pack format version, viewport and canvas size, key colors, the pitch set the Music grid can reach, grid-to-pitch mapping, letter keys, the voice clip sample rate, example clip filenames, and the synth parameter defaults. The app imports it directly.
+- **`sdk/src/purple/export.json`** is written by `scripts/export_studio.py` from `purple_tui` itself: the pack format version, viewport and canvas size, key colors, the pitch set the Music grid can reach, grid-to-pitch mapping, letter keys, the voice clip sample rate, example clip filenames, the synth parameter defaults, and the room language's events, actions, drums, and limits. The app imports it directly.
 - **`tests/golden.json`** is written by the same script: reference renders from `purple_tui/synth.py` at two pitches per instrument at the defaults plus one varied parameter set each.
+- **`tests/room-golden.json`** is written by the same script too: a sample room run through a scripted sequence of key presses by `purple_tui/room_program.py`, with the shared mulberry32 noise as its random source. `tests/room.test.ts` runs the TypeScript interpreter on the same program and events and requires the same trace.
 - **The core emoji pack** is imported straight from `../packs/core-emoji`.
 - **On the Python side**, `tests/test_studio_export.py` rebuilds both files in memory on every `just test` and fails if the checked-in ones differ, with the message to run `just studio-fixtures`. So a change to `art_room.py`, `music_constants.py`, `tts.py`, `synth.py`, or the pack format cannot land without the export moving with it.
 - **On the TypeScript side**, `tests/art.test.ts` and `tests/sounds.test.ts` check the few functions that must run live (canvas fitting, the row gradient, pitch naming, grid pitches, clip filenames) against the export, and `tests/synth.test.ts` holds every generator to within one sample of the golden renders. One sample of slack is the last-bit difference between libm and V8 before `int()` truncation; nothing else may differ.
@@ -80,6 +88,7 @@ Sliding a control re-renders and replays the last key within a frame or two; all
 ## Not done, on purpose
 
 - **Theme.** `theme.json` is written and not read. The letter-row colors are shared truth with the printed keycap stickers, so changing them per family is a product decision first.
-- **Rooms.** A family's own rooms or games would need a room format that survives the move off the Textual TUI: a small declarative file (keys, what each shows, says, and plays) that Purple interprets, rather than a script Purple runs. Packs stay data. Nothing here is stubbed.
+- **Rooms are a rule language, not a general one.** No sprites, no positions, no loops that run forever, no reading required. That is the point: a room stays calm under a mashed keyboard, and Purple can refuse anything it does not understand. Timers (`every`) are the only thing that happens without a key.
+- **The stage's voice is the browser's**, not Piper's. The words are the same; the voice is not.
 - **A running app noticing a new pack.** Cheap to add as a stat on the packs directory at room switch; left out until the boot-time path has been seen on hardware.
 - **Regenerating the shipped OGGs** from the parameterized synth, which needs ffmpeg and a listen.

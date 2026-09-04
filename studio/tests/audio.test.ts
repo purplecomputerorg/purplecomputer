@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { encodeWav, tidy } from "../src/audio";
-import { CLIP_SAMPLE_RATE } from "../src/purple/sounds";
+import { CLIP_SAMPLE_RATE } from "../sdk/src/purple/sounds";
 
 const sine = (freq: number, seconds: number, rate = CLIP_SAMPLE_RATE) =>
   Float32Array.from({ length: Math.floor(rate * seconds) }, (_, i) => 0.5 * Math.sin((2 * Math.PI * freq * i) / rate));

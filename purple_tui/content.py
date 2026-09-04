@@ -143,6 +143,7 @@ class ContentManager:
         self.user_content: list[Path] = []
         self.instruments: list[Instrument] = []
         self.pictures: list[Picture] = []
+        self.rooms: list[dict] = []                # parsed room programs, see room_program.py
         self._loaded = False
         # Unified prefix index: prefix -> [(word, color_hex|None, emoji|None), ...]
         # Ranked by kid-likelihood from rankings.txt
@@ -301,6 +302,19 @@ class ContentManager:
             self.user_content.append(content_dir)
             self._load_instruments(content_dir)
             self._load_pictures(content_dir)
+            self._load_rooms(content_dir)
+
+    def _load_rooms(self, content_dir: Path) -> None:
+        from .room_program import RoomError, parse
+        for spec in room_specs(content_dir):
+            try:
+                program = parse(_read_json(spec))
+            except RoomError:
+                continue
+            self.rooms = [r for r in self.rooms if r["name"] != program["name"]] + [program]
+
+    def room(self, name: str) -> dict | None:
+        return next((r for r in self.rooms if r["name"] == name), None)
 
     def _load_instruments(self, content_dir: Path) -> None:
         for spec in sorted((content_dir / "instruments").glob("*.json")):
@@ -689,6 +703,11 @@ class ContentManager:
         """Exact emoji or color word, singular or plural. Fuzzy matches don't
         count: a typo must stay correctable to a command or operator."""
         return bool(self.exact_emoji(word) or self.exact_color(word))
+
+
+def room_specs(content_dir: Path) -> list[Path]:
+    """content/rooms/<name>.json, leaving out the <name>.blocks.json editor files Studio saves beside them."""
+    return sorted(p for p in (content_dir / "rooms").glob("*.json") if not p.name.endswith(".blocks.json"))
 
 
 def _pack_dirs(packs_dir: Path) -> list[Path]:

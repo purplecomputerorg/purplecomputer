@@ -1,4 +1,4 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_BG_DARK, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "./purple/art";
+import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_BG_DARK, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "@sdk/purple/art";
 
 export interface Picture { name: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string }
 

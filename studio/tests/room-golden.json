@@ -1,0 +1,331 @@
+{
+ "program": {
+  "name": "sample",
+  "title": "Sample",
+  "background": "#1e1033",
+  "rules": [
+   {
+    "when": {
+     "event": "start"
+    },
+    "do": [
+     {
+      "do": "set",
+      "var": "count",
+      "value": 0
+     },
+     {
+      "do": "show",
+      "text": "Press a key"
+     }
+    ]
+   },
+   {
+    "when": {
+     "event": "key",
+     "key": "c"
+    },
+    "do": [
+     {
+      "do": "show",
+      "text": "🐄"
+     },
+     {
+      "do": "say",
+      "text": {
+       "join": [
+        "cow number ",
+        {
+         "var": "count"
+        }
+       ]
+      }
+     },
+     {
+      "do": "play",
+      "note": "C4",
+      "instrument": "marimba"
+     },
+     {
+      "do": "play",
+      "note": {
+       "pick": [
+        "E4",
+        "G4"
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "when": {
+     "event": "key",
+     "key": "space"
+    },
+    "do": [
+     {
+      "do": "clear"
+     },
+     {
+      "do": "background",
+      "color": "#2a1845"
+     }
+    ]
+   },
+   {
+    "when": {
+     "event": "any_key"
+    },
+    "do": [
+     {
+      "do": "change",
+      "var": "count",
+      "by": 1
+     },
+     {
+      "do": "add",
+      "text": {
+       "key": true
+      }
+     },
+     {
+      "do": "if",
+      "test": {
+       "compare": ">",
+       "a": {
+        "var": "count"
+       },
+       "b": 2
+      },
+      "then": [
+       {
+        "do": "drum",
+        "name": "kick"
+       },
+       {
+        "do": "wait",
+        "seconds": {
+         "math": "/",
+         "a": {
+          "var": "count"
+         },
+         "b": 4
+        }
+       }
+      ],
+      "else": [
+       {
+        "do": "repeat",
+        "times": {
+         "random": {
+          "from": 1,
+          "to": 3
+         }
+        },
+        "body": [
+         {
+          "do": "drum",
+          "name": "hi-hat"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "do": "if",
+      "test": {
+       "and": [
+        {
+         "compare": "=",
+         "a": {
+          "key": true
+         },
+         "b": "x"
+        },
+        {
+         "not": {
+          "compare": "<",
+          "a": {
+           "var": "count"
+          },
+          "b": 0
+         }
+        }
+       ]
+      },
+      "then": [
+       {
+        "do": "show",
+        "text": {
+         "math": "*",
+         "a": {
+          "var": "count"
+         },
+         "b": 2.5
+        }
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "when": {
+     "event": "every",
+     "seconds": 2
+    },
+    "do": [
+     {
+      "do": "add",
+      "text": "·"
+     }
+    ]
+   }
+  ]
+ },
+ "events": [
+  [
+   "start"
+  ],
+  [
+   "key",
+   "c"
+  ],
+  [
+   "key",
+   "x"
+  ],
+  [
+   "key",
+   "c"
+  ],
+  [
+   "key",
+   "space"
+  ],
+  [
+   "key",
+   "x"
+  ]
+ ],
+ "seed": 7,
+ "trace": [
+  [
+   "show",
+   "Press a key"
+  ],
+  [
+   "show",
+   "🐄"
+  ],
+  [
+   "say",
+   "cow number 0"
+  ],
+  [
+   "play",
+   "C4",
+   "marimba"
+  ],
+  [
+   "play",
+   "E4",
+   "marimba"
+  ],
+  [
+   "add",
+   "c"
+  ],
+  [
+   "drum",
+   "hi-hat"
+  ],
+  [
+   "add",
+   "x"
+  ],
+  [
+   "drum",
+   "hi-hat"
+  ],
+  [
+   "drum",
+   "hi-hat"
+  ],
+  [
+   "drum",
+   "hi-hat"
+  ],
+  [
+   "show",
+   "5"
+  ],
+  [
+   "show",
+   "🐄"
+  ],
+  [
+   "say",
+   "cow number 2"
+  ],
+  [
+   "play",
+   "C4",
+   "marimba"
+  ],
+  [
+   "play",
+   "G4",
+   "marimba"
+  ],
+  [
+   "add",
+   "c"
+  ],
+  [
+   "drum",
+   "kick"
+  ],
+  [
+   "wait",
+   0.75
+  ],
+  [
+   "clear"
+  ],
+  [
+   "background",
+   "#2a1845"
+  ],
+  [
+   "add",
+   "space"
+  ],
+  [
+   "drum",
+   "kick"
+  ],
+  [
+   "wait",
+   1.0
+  ],
+  [
+   "add",
+   "x"
+  ],
+  [
+   "drum",
+   "kick"
+  ],
+  [
+   "wait",
+   1.25
+  ],
+  [
+   "show",
+   "12.5"
+  ]
+ ],
+ "vars": {
+  "count": 5.0
+ }
+}

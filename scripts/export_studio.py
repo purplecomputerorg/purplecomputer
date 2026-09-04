@@ -16,12 +16,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from purple_tui import synth  # noqa: E402
+from purple_tui import room_program, synth  # noqa: E402
 from purple_tui.art_config import CANVAS_HEIGHT, CANVAS_WIDTH  # noqa: E402
 from purple_tui.constants import VIEWPORT_HEIGHT, VIEWPORT_WIDTH  # noqa: E402
 from purple_tui.content import PACK_FORMAT  # noqa: E402
 from purple_tui.music_constants import (  # noqa: E402
-    DEFAULT_ROOT_INDEX, FRIENDLY_KEYS, GRID_KEYS, INSTRUMENTS, pitch_filename, pitch_for, reachable_pitches,
+    DEFAULT_ROOT_INDEX, FRIENDLY_KEYS, GRID_KEYS, INSTRUMENTS, PERCUSSION, pitch_filename, pitch_for, reachable_pitches,
 )
 from purple_tui.rooms.art_room import (  # noqa: E402
     APP_BG_DARK, DEFAULT_BG_DARK, DEFAULT_BG_LIGHT, GUTTER_BG_DARK_A, GUTTER_BG_DARK_B, KEY_COLORS,
@@ -30,8 +30,35 @@ from purple_tui.rooms.music_room import _SPEAKABLE_KEYS  # noqa: E402
 from purple_tui.tts import voice_clip_filename  # noqa: E402
 from tools.photo_to_art import CELL_ASPECT, fit_to_canvas  # noqa: E402
 
-EXPORT_PATH = ROOT / "studio" / "src" / "purple" / "export.json"
+EXPORT_PATH = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
 GOLDEN_PATH = ROOT / "studio" / "tests" / "golden.json"
+ROOM_GOLDEN_PATH = ROOT / "studio" / "tests" / "room-golden.json"
+
+# A room that touches every part of the language, run through a scripted
+# sequence of events with a fixed random source. The TypeScript interpreter
+# must produce the same trace.
+ROOM_SAMPLE = {
+    "name": "sample", "title": "Sample", "background": "#1e1033",
+    "rules": [
+        {"when": {"event": "start"}, "do": [{"do": "set", "var": "count", "value": 0}, {"do": "show", "text": "Press a key"}]},
+        {"when": {"event": "key", "key": "c"}, "do": [
+            {"do": "show", "text": "🐄"}, {"do": "say", "text": {"join": ["cow number ", {"var": "count"}]}},
+            {"do": "play", "note": "C4", "instrument": "marimba"}, {"do": "play", "note": {"pick": ["E4", "G4"]}},
+        ]},
+        {"when": {"event": "key", "key": "space"}, "do": [{"do": "clear"}, {"do": "background", "color": "#2a1845"}]},
+        {"when": {"event": "any_key"}, "do": [
+            {"do": "change", "var": "count", "by": 1}, {"do": "add", "text": {"key": True}},
+            {"do": "if", "test": {"compare": ">", "a": {"var": "count"}, "b": 2},
+             "then": [{"do": "drum", "name": "kick"}, {"do": "wait", "seconds": {"math": "/", "a": {"var": "count"}, "b": 4}}],
+             "else": [{"do": "repeat", "times": {"random": {"from": 1, "to": 3}}, "body": [{"do": "drum", "name": "hi-hat"}]}]},
+            {"do": "if", "test": {"and": [{"compare": "=", "a": {"key": True}, "b": "x"}, {"not": {"compare": "<", "a": {"var": "count"}, "b": 0}}]},
+             "then": [{"do": "show", "text": {"math": "*", "a": {"var": "count"}, "b": 2.5}}]},
+        ]},
+        {"when": {"event": "every", "seconds": 2}, "do": [{"do": "add", "text": "·"}]},
+    ],
+}
+ROOM_EVENTS = [["start"], ["key", "c"], ["key", "x"], ["key", "c"], ["key", "space"], ["key", "x"]]
+ROOM_SEED = 7
 
 FIT_SIZES = [(4032, 3024), (3024, 4032), (1000, 1000), (1920, 1080), (100, 2000), (2000, 100), (1, 1), (132, 50), (264, 50), (50, 25)]
 CLIP_EXAMPLES = ["  Hello There ", "It's Purple Computer", "hi", "5 times 5 ducks equals 25 ducks"]
@@ -86,7 +113,32 @@ def build_export() -> dict:
             "clip_filenames": {text: voice_clip_filename(text) for text in CLIP_EXAMPLES},
         },
         "synth": {"sample_rate": synth.SAMPLE_RATE, "defaults": synth.DEFAULTS},
+        "room": {
+            "format": room_program.ROOM_FORMAT,
+            "events": list(room_program.EVENTS),
+            "actions": list(room_program.ACTIONS),
+            "math_ops": list(room_program.MATH_OPS),
+            "compare_ops": list(room_program.COMPARE_OPS),
+            "special_keys": list(room_program.SPECIAL_KEYS),
+            "drums": sorted(set(PERCUSSION.values())),
+            "drum_keys": PERCUSSION,
+            "limits": room_program.LIMITS,
+        },
     }
+
+
+def build_room_golden() -> dict:
+    """ROOM_SAMPLE run through ROOM_EVENTS with mulberry32 noise as the random source."""
+    import asyncio
+    unit = synth.noise(ROOM_SEED)
+    host = room_program.TraceHost()
+    runner = room_program.Runner(room_program.parse(ROOM_SAMPLE), host, rng=lambda: (next(unit) + 1) / 2)
+
+    async def go():
+        for event in ROOM_EVENTS:
+            await runner.fire(*event)
+    asyncio.run(go())
+    return {"program": ROOM_SAMPLE, "events": ROOM_EVENTS, "seed": ROOM_SEED, "trace": host.trace, "vars": runner.vars}
 
 
 def build_golden() -> list[dict]:
@@ -109,7 +161,8 @@ def dumps(value) -> str:
 def main() -> None:
     EXPORT_PATH.write_text(dumps(build_export()))
     GOLDEN_PATH.write_text(dumps(build_golden()))
-    print(f"wrote {EXPORT_PATH.relative_to(ROOT)} and {GOLDEN_PATH.relative_to(ROOT)}")
+    ROOM_GOLDEN_PATH.write_text(dumps(build_room_golden()))
+    print(f"wrote {EXPORT_PATH.relative_to(ROOT)}, {GOLDEN_PATH.relative_to(ROOT)}, and {ROOM_GOLDEN_PATH.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

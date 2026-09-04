@@ -118,11 +118,11 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 
 label.field { display: block; margin: 10px 0; }
 label.field > span { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 5px; }
-input[type="text"], select, textarea {
+input[type="text"], input[type="password"], select, textarea {
   font: inherit; color: var(--text); background: #fff; border: 1.5px solid var(--line); border-radius: 12px;
   padding: 9px 14px; width: 100%; outline: none;
 }
-input[type="text"]:focus, select:focus { border-color: var(--border); box-shadow: 0 0 0 4px var(--fill); }
+input[type="text"]:focus, input[type="password"]:focus, select:focus, textarea:focus { border-color: var(--border); box-shadow: 0 0 0 4px var(--fill); }
 input.inline, select.inline { width: auto; }
 input.emoji-input { font-size: 22px; width: 64px; text-align: center; padding: 4px; }
 input[type="color"] { width: 40px; height: 32px; border: none; background: none; padding: 0; cursor: pointer; }
@@ -181,3 +181,19 @@ hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 ol.plain { padding-left: 22px; } ol.plain li { margin-bottom: 8px; }
 pre { background: #2a1845; color: #e8daf0; padding: 14px 18px; border-radius: 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
 pre code { background: none; color: inherit; padding: 0; }
+
+/* Rooms: the block editor and the live room */
+.blockly { height: 560px; border-radius: 16px; border: 1px solid var(--line); overflow: hidden; background: #fbfaf8; }
+.blocklyToolboxDiv { border-right: 1px solid var(--line); }
+.roomstage { outline: none; border-radius: 12px; cursor: pointer; }
+.roomstage:focus { box-shadow: 0 0 0 4px var(--fill), 0 0 0 6px var(--magenta); }
+.stage .roomstage canvas { display: block; }
+
+/* Python console and helper */
+textarea { resize: vertical; line-height: 1.5; }
+textarea.code { font-family: var(--mono); font-size: 13px; background: #2a1845; color: #e8daf0; border-color: #2a1845; border-radius: 14px; }
+textarea.code:focus { border-color: var(--magenta); box-shadow: none; }
+pre.console { min-height: 40px; margin: 12px 0 0; white-space: pre-wrap; }
+pre.console:empty { display: none; }
+.emoji-big { font-size: 22px; vertical-align: middle; }
+label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; height: 16px; }

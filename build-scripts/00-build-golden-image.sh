@@ -663,13 +663,11 @@ TIMEOUTS
     cp /purple-src/scripts/purple-wait-display.sh "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     cp /purple-src/scripts/purple-x11-failed.sh "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     cp /purple-src/scripts/purple-start-compositor.sh "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
-    cp /purple-src/scripts/purple-gl-probe.sh "$MOUNT_DIR/usr/local/bin/purple-gl-probe"
     cp /purple-src/scripts/purple-boot-timing.sh "$MOUNT_DIR/usr/local/bin/purple-boot-timing"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-boot-timing"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
-    chmod +x "$MOUNT_DIR/usr/local/bin/purple-gl-probe"
     # Tear-free compositor config (modesetting has no TearFree option of its own)
     mkdir -p "$MOUNT_DIR/etc/purple"
     cp /purple-src/config/picom/picom.conf "$MOUNT_DIR/etc/purple/picom.conf"

@@ -84,6 +84,26 @@ skip_if_already_built() {
     exit 0
 }
 
+# Say up front exactly what is about to be built, and settle the version the
+# image gets stamped with. Resolved on the host where git works (the container
+# hits safe.directory errors).
+resolve_and_log_source() {
+    local git_hash dirty=""
+    git_hash=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    PURPLE_COMMIT="${PURPLE_COMMIT:-$git_hash}"
+    if [ -z "${PURPLE_VERSION:-}" ]; then
+        PURPLE_VERSION="build-${git_hash}-$(date +%Y%m%d)"
+    fi
+    if [ -n "$BUILD_REF" ]; then
+        log_info "Ref: $BUILD_REF (built in isolation)"
+    else
+        [ -z "$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null)" ] || dirty=" + uncommitted changes"
+        log_info "Branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")$dirty"
+    fi
+    log_info "Commit: $(git -C "$PROJECT_DIR" log -1 --format='%h %s' 2>/dev/null || echo "$git_hash")"
+    log_info "Version: $PURPLE_VERSION"
+}
+
 main() {
     cd "$SCRIPT_DIR"
 
@@ -93,6 +113,7 @@ main() {
     if [ -n "$BUILD_REF" ]; then
         setup_ref_build
     fi
+    resolve_and_log_source
     skip_if_already_built
 
     if [ "$START_STEP" -ge 1 ]; then
@@ -113,14 +134,6 @@ main() {
     log_info "  - We download official Ubuntu Server ISO"
     log_info "  - We inject a hook script into the initramfs"
     log_info "  - Squashfs and boot stack remain untouched"
-
-    # Resolve version on the host where git works (container hits safe.directory errors)
-    local git_hash
-    git_hash=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    PURPLE_COMMIT="${PURPLE_COMMIT:-$git_hash}"
-    if [ -z "${PURPLE_VERSION:-}" ]; then
-        PURPLE_VERSION="build-${git_hash}-$(date +%Y%m%d)"
-    fi
 
     docker run --rm --privileged \
         -v "$BUILD_CTX:/build" \

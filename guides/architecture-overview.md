@@ -51,7 +51,7 @@ Parent plugs in USB, presses boot key
     │     ↓                                                   │
     │ systemd starts → getty@tty1 auto-login as 'purple'      │
     │     ↓                                                   │
-    │ purple-x11.service → Alacritty → Purple TUI            │
+    │ purple-x11.service → xinitrc → Purple (pygame window)   │
     │     ↓                                                   │
     │ Child plays. Internal disk never touched.               │
     └─────────────────────────────────────────────────────────┘
@@ -174,7 +174,7 @@ debootstrap → full Purple root filesystem
 
 1. Create disk image, partition (GPT: ESP + root)
 2. Debootstrap Ubuntu 24.04 minimal
-3. Install packages (X11, Alacritty, Python, Purple TUI, etc.)
+3. Install packages (X11, Python, SDL2, Purple app, etc.)
 4. Configure system (auto-login, power management, etc.)
 5. Create squashfs from the mounted root (`mksquashfs`)
 6. Unmount, compress disk image (`zstd`)
@@ -215,7 +215,7 @@ Internal disk contains:
 ├── Standard Ubuntu 24.04 LTS
 ├── Linux kernel (Ubuntu's linux-image-generic)
 ├── GRUB bootloader
-├── X11 + Alacritty terminal
+├── X11 + the Purple window (see guides/canvas-architecture.md)
 ├── Purple TUI application
 └── Everything needed to run Purple Computer
 ```

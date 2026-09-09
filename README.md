@@ -52,7 +52,8 @@ Purple Computer requires Linux with evdev for keyboard input. macOS is not suppo
 git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
 just setup    # Creates venv, installs deps, downloads TTS voice, installs fonts
-just run      # Launches in Alacritty with Purple theme
+just run      # Opens Purple in a window (SDL keyboard, no evdev needed)
+PURPLE_UX=tui just run   # The Textual UI the current release ships, in Alacritty
 ```
 
 Inside Purple Computer, try:
@@ -159,7 +160,7 @@ Kids can type capital letters without holding two keys at once!
 
 **Purple Computer requires Linux with evdev.** macOS is not supported.
 
-Keyboard input is read directly from evdev, bypassing the terminal. The terminal (Alacritty) is display-only. This gives us:
+Keyboard input is read directly from evdev; the screen is a pygame canvas the app paints itself. This gives us:
 - True key down/up events for reliable timing
 - Space-hold detection for paint mode
 - All keycodes (terminals drop some F-keys)
@@ -186,8 +187,9 @@ Purple Computer displays a **134×29 character viewport** (plus header and foote
 
 ```
 purplecomputer/
-├── purple_tui/           # Main Textual TUI application
-│   ├── rooms/            # Play, Music, Art rooms (+ parent menu, sleep screen)
+├── purple_tui/           # The app: engine modules plus two UIs (see CLAUDE.md, Two UIs)
+│   ├── canvas/           # The pygame canvas UI (default): rooms, drawing, headless harness
+│   ├── rooms/            # The Textual UI's rooms (frozen: what release/1.x ships; PURPLE_UX=tui)
 │   ├── demo/             # Demo recording and playback system
 │   ├── content.py        # Content API for packs
 │   ├── keyboard.py       # Keyboard state machine
@@ -218,7 +220,7 @@ purplecomputer/
 │   ├── art_ai.py                  # Generates Art room demo drawings for videos
 │   └── music_ai.py                # Generates Music room demo compositions for videos
 │
-├── config/               # System configs (Alacritty, X11, fonts)
+├── config/               # System configs (X11, keyd, picom, systemd)
 ├── tests/                # Test suite
 └── guides/               # Technical references
 ```
@@ -226,9 +228,9 @@ purplecomputer/
 What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies into `/opt/purple`: `purple_tui/`, `packs/`, and two named scripts. `tools/` and `scripts/ai_ux_*` stay on the developer's machine, as does the demo tooling in `recording-setup/`.
 
 **Stack:**
-- **Target System:** Ubuntu 24.04 LTS minimal + X11 + Alacritty + Textual TUI
+- **Target System:** Ubuntu 24.04 LTS minimal + X11 + a fullscreen pygame window (software rendering, no GL)
 - **Installer:** Remastered Ubuntu Server ISO with initramfs hook, Secure Boot support
-- **Application:** Python + Textual + Piper TTS + Pygame
+- **Application:** Python + Pygame (SDL2) + Piper TTS
 
 **How Installation Works:**
 

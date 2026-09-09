@@ -11,7 +11,7 @@ import re
 
 from .content import get_content
 from .fuzzy import fuzzy_match_small
-from .rooms.art_room import get_key_color
+from .palette import get_key_color
 
 log = logging.getLogger(__name__)
 

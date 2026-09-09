@@ -21,7 +21,7 @@ Until the next major release, `main` and the shipping branch are separate:
 Day to day:
 
 ```bash
-just release-status          # what ships vs what waits (= on release/1.x, + main only)
+just release-status          # what ships vs what waits (= on release/1.x, + main only, ~ canvas only)
 just release-pick <sha>...   # cherry-pick onto release/1.x, run its tests, show status
 purple-build --release       # build the release worktree (includes the with-backup ISO)
 just flash-all               # flash customer USBs from that build (prefers with-backup)
@@ -30,6 +30,8 @@ just release-check <sha>     # confirm the public download is that commit
 ```
 
 A commit that is both fix and feature belongs with the feature. The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
+
+A commit whose changed paths all fall under `purple_tui/canvas/` or `tests/canvas/` is marked `~`: canvas UI only, which never ships from 1.x and waits for the next major release. That keeps the `+` list to commits that still need a fix-or-feature decision. A fix that touches both UIs shows as two commits by design (the TUI-only one first, see CLAUDE.md, Two UIs): pick the `+` one, the `~` one stays.
 
 When a pick needs hand-edits to fit the release branch (usually because it touches a feature that stays on main), log what changed in [release-pick-adaptations.md](release-pick-adaptations.md).
 

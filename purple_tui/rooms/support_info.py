@@ -12,8 +12,7 @@ from textual.app import ComposeResult
 from textual.containers import Vertical, ScrollableContainer
 from textual.widgets import Static
 
-from ..audio import volume_badge
-from ..constants import SUPPORT_EMAIL, VOLUME_DEFAULT
+from ..constants import SUPPORT_EMAIL
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..modal import PurpleModal
 from ..scrolling import scroll_widget
@@ -92,16 +91,7 @@ class AudioInfoScreen(_ScrollablePage):
         return diagnostics.collect_audio_info(getattr(self.app, "audio_ok", None))
 
 
-def sound_check_report(result, takes: list[str]) -> str:
-    """What a parent reads after the chime: a plain verdict, then the readings support wants."""
-    from .. import sound_check
-    if result.note:
-        return f"Couldn't run the check: {result.note}."
-    heard = "heard" if result.heard else "did not hear"
-    level = sound_check.default_volume(result) or VOLUME_DEFAULT
-    verdict = (f"The microphone {heard} the chime.\n"
-               f"Until someone picks a volume, this computer starts at volume {volume_badge(level)[2]}.")
-    return "\n".join([verdict, "", "Readings:", f"  {result.summary()}", *takes])
+from ..sound_check import report as sound_check_report  # noqa: F401
 
 
 class SoundCheckScreen(_ScrollablePage):

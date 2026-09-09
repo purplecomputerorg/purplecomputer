@@ -202,12 +202,9 @@ SOURCES
         xserver-xorg-input-libinput \
         xkb-data xauth \
         libgl1-mesa-dri \
-        mesa-utils \
         matchbox-window-manager \
-        alacritty \
         picom \
-        ncurses-term \
-        libxkbcommon-x11-0 \
+        xterm \
         fontconfig \
         fonts-noto-color-emoji \
         xkbset \
@@ -239,7 +236,7 @@ SOURCES
     MISSING=""
     # glxinfo: not boot tooling, but if it vanishes the GL probe silently
     # falls back to software rendering on every machine. Fail loudly instead.
-    for cmd in grub-install efibootmgr pv glxinfo; do
+    for cmd in grub-install efibootmgr pv; do
         chroot "$MOUNT_DIR" bash -c "command -v $cmd >/dev/null" || MISSING="$MISSING $cmd"
     done
     chroot "$MOUNT_DIR" test -d /usr/lib/grub/i386-pc || MISSING="$MISSING /usr/lib/grub/i386-pc"
@@ -360,22 +357,9 @@ LEANINITRD
     fi
     log_info "Sound modules verified"
 
-    # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
-    # Noto Color Emoji (installed via apt above) provides Unicode emoji
-    # Download from host (curl available in Docker container, not in chroot)
-    log_info "Installing JetBrainsMono Nerd Font..."
-    FONT_DIR="$MOUNT_DIR/usr/share/fonts/truetype/jetbrains-mono-nerd"
-    mkdir -p "$FONT_DIR"
-    curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/JetBrainsMono.zip -o /tmp/JetBrainsMono.zip
-    # Install only the 4 weights Alacritty uses (Regular, Bold, Italic, Bold Italic).
-    # The full zip has 40+ files (Thin, Light, Medium, SemiBold, ExtraBold, etc.)
-    unzip -o /tmp/JetBrainsMono.zip \
-        "JetBrainsMonoNerdFont-Regular.ttf" \
-        "JetBrainsMonoNerdFont-Bold.ttf" \
-        "JetBrainsMonoNerdFont-Italic.ttf" \
-        "JetBrainsMonoNerdFont-BoldItalic.ttf" \
-        -d "$FONT_DIR"
-    rm /tmp/JetBrainsMono.zip
+    # UI fonts ship inside purple_tui/canvas/fonts; Noto Color Emoji comes from apt above.
+    # The parent-menu xterm resolves IBM Plex Mono from that bundled dir via
+    # XDG_DATA_HOME (see rooms/parent_menu.py), so no system font install here.
 
     # Install fontconfig rule to prioritize Noto Color Emoji
     # Without this, some emoji render as monochrome outlines instead of color
@@ -397,8 +381,8 @@ TMPFILES
     cp -r /purple-src/purple_tui "$MOUNT_DIR/opt/purple/"
     cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
-    cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
+    cp /purple-src/scripts/parent-shell-rc.sh "$MOUNT_DIR/opt/purple/"
 
     # Copy on-device scripts (everything in scripts/on-device/)
     # These are available on the image for debugging from the parent menu terminal
@@ -485,36 +469,27 @@ TMPFILES
     # launcher, the python interpreter startup, or purple_tui's imports.
     cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
 #!/bin/bash
-# Silence this script's own stderr for the duration of shell work below.
-# The launcher runs inside alacritty on tty1 before Textual takes over, so
-# any shell error message would be user-visible. Per-command `2>/dev/null`
-# is NOT sufficient: bash reports redirection-setup failures ("no such file
-# or directory" when a log dir is missing) BEFORE applying the per-command
-# stderr redirect, so the error leaks. A script-level `exec 2>` silences
-# all of it. Stderr is explicitly restored to /dev/tty before exec'ing
-# python so Textual's UI (which writes to stderr) renders correctly.
-exec 2>/dev/null
-
+# Launches the Purple app (an SDL window on the X session xinitrc started).
+# Nothing here is user-visible: the app paints its own screen, so stderr can
+# stay on the xinitrc log where SDL and Python diagnostics belong.
 cd /opt/purple
 
 BOOT_LOG_TMP=/tmp/purple-boot.log
 BOOT_LOG_PERSIST=/var/log/purple/boot.log
 _log() {
     local msg="[$(date '+%H:%M:%S.%3N')] [launcher] $1"
-    echo "$msg" >> "$BOOT_LOG_TMP" || true
-    echo "$msg" >> "$BOOT_LOG_PERSIST" || true
-    logger -t purple-boot -- "$msg" || true
+    echo "$msg" >> "$BOOT_LOG_TMP" 2>/dev/null || true
+    echo "$msg" >> "$BOOT_LOG_PERSIST" 2>/dev/null || true
+    logger -t purple-boot -- "$msg" 2>/dev/null || true
 }
 
 _log "launcher entered pid=$$"
 
 export PYTHONUNBUFFERED=1
 export PYTHONFAULTHANDLER=1
+export PYGAME_HIDE_SUPPORT_PROMPT=1
 
 _log "exec python3 -m purple_tui"
-# Restore stderr to tty before exec'ing python so Textual's UI renders
-# correctly -- Textual writes its screen to stderr.
-exec 2>/dev/tty
 exec python3 -m purple_tui "$@"
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"
@@ -688,13 +663,11 @@ TIMEOUTS
     cp /purple-src/scripts/purple-wait-display.sh "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     cp /purple-src/scripts/purple-x11-failed.sh "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     cp /purple-src/scripts/purple-start-compositor.sh "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
-    cp /purple-src/scripts/purple-gl-probe.sh "$MOUNT_DIR/usr/local/bin/purple-gl-probe"
     cp /purple-src/scripts/purple-boot-timing.sh "$MOUNT_DIR/usr/local/bin/purple-boot-timing"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-boot-timing"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
-    chmod +x "$MOUNT_DIR/usr/local/bin/purple-gl-probe"
     # Tear-free compositor config (modesetting has no TearFree option of its own)
     mkdir -p "$MOUNT_DIR/etc/purple"
     cp /purple-src/config/picom/picom.conf "$MOUNT_DIR/etc/purple/picom.conf"
@@ -790,9 +763,7 @@ JOURNAL
     cp /purple-src/config/keyd/default.conf "$MOUNT_DIR/etc/keyd/default.conf"
     chroot "$MOUNT_DIR" systemctl enable keyd.service
 
-    # Copy Alacritty config from project config (shared with dev environment)
     mkdir -p "$MOUNT_DIR/etc/purple"
-    cp /purple-src/config/alacritty/alacritty.toml "$MOUNT_DIR/etc/purple/alacritty.toml"
 
     # Store canonical copies of dotfiles in /etc/purple/ (casper can't shadow these).
     # The casper live boot hook copies them back to /home/purple/ after casper's

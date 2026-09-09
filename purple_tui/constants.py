@@ -48,6 +48,12 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 #   - Code panel: CODE_PANEL_MIN_HEIGHT rows (flexible via 1fr, no top border)
 #   - Compact indicator: 1 row (no margin)
 
+# The canvas viewport is this many square units on every machine, sized to fit.
+# The Art grid is the same units (minus its header and hint rows), so no
+# computer gets a wider picture than another.
+CANVAS_COLS = 48
+CANVAS_ROWS = 27
+
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 29          # Viewport widget height (CSS)
 REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2 + 5 + 5  # Full UI width (+ border + spacer + legend)
@@ -110,6 +116,11 @@ ICON_TAB = "󰌒"                # nf-md-keyboard_tab
 ICON_BROOM = "󰃢"              # nf-md-broom (start fresh / clear)
 ICON_ROBOT = "󰚩"              # nf-md-robot (same as ICON_CODE, for code space toggle)
 ICON_TIME_TRAVEL = "󰕍"        # nf-md-restore (Time Travel scrubbing)
+ICON_COMPUTER = "\U000F0379"  # nf-md-monitor (this computer, title bar)
+ICON_LAPTOP = "\U000F0322"    # nf-md-laptop (lid status lines)
+ICON_PLUG = "\U000F06A5"      # nf-md-power_plug (plugged in)
+ICON_HOURGLASS = "\U000F051F" # nf-md-timer_sand (countdowns)
+ICON_SPARK = "\U000F0674"     # nf-md-creation (the 'Try:' suggestion line)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)

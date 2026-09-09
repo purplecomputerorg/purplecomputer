@@ -28,7 +28,7 @@ def _gate(audio_ok, *, live=False, marker=None, reason="no-card"):
     with patch("purple_tui.rooms.sleep_screen.is_live_boot", return_value=live), \
          patch("purple_tui.rooms.sleep_screen.LIVE_AUDIO_MARKER",
                str(marker) if marker else "/nonexistent/marker"), \
-         patch("purple_tui.rooms.music_room._silence_reason", return_value=reason):
+         patch("purple_tui.mixer._silence_reason", return_value=reason):
         return first_boot_power_cycle_needed(audio_ok)
 
 
@@ -88,7 +88,7 @@ def _app_check(tmp_path, audio_ok, reason="no-card"):
         with patch("purple_tui.constants.LIVE_AUDIO_MARKER", str(marker)), \
              patch("purple_tui.rooms.sleep_screen.LIVE_AUDIO_MARKER", str(marker)), \
              patch("purple_tui.rooms.sleep_screen.is_live_boot", return_value=False), \
-             patch("purple_tui.rooms.music_room._silence_reason", return_value=reason):
+             patch("purple_tui.mixer._silence_reason", return_value=reason):
             async with app.run_test(size=(146, REQUIRED_TERMINAL_ROWS)) as pilot:
                 await pilot.pause()
                 app.audio_ok = audio_ok

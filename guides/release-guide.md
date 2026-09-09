@@ -21,7 +21,7 @@ Until the next major release, `main` and the shipping branch are separate:
 Day to day:
 
 ```bash
-just release-status          # what ships vs what waits (= on release/1.x, + main only, ~ canvas only)
+just release-status          # what customers have, what ships next, what on main needs a pick decision (--all for everything)
 just release-pick <sha>...   # cherry-pick onto release/1.x, run its tests, show status
 purple-build --release       # build the release worktree (includes the with-backup ISO)
 just flash-all               # flash customer USBs from that build (prefers with-backup)
@@ -31,7 +31,9 @@ just release-check <sha>     # confirm the public download is that commit
 
 A commit that is both fix and feature belongs with the feature. The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
 
-A commit whose changed paths all fall under `purple_tui/canvas/` or `tests/canvas/` is marked `~`: canvas UI only, which never ships from 1.x and waits for the next major release. That keeps the `+` list to commits that still need a fix-or-feature decision. A fix that touches both UIs shows as two commits by design (the TUI-only one first, see CLAUDE.md, Two UIs): pick the `+` one, the `~` one stays.
+`release-status` reads the shipped commit from the public download's `latest.json` (the newest tag on `release/1.x` when offline), lists what sits on `release/1.x` above it, and then only the main commits that still need a fix-or-wait decision: unpicked, and touching a path the image build copies in (`purple_tui/` outside `canvas/`, `config/`, `packs/`, the on-device scripts, the build scripts). Everything else is hidden with a count, and `--all` lists it with a marker: `.` docs and tooling that never reach an ISO, `~` canvas UI only (`purple_tui/canvas/`, `tests/canvas/`), `w` decided to wait, `=` already picked. A fix that touches both UIs shows as two commits by design (the TUI-only one first, see CLAUDE.md, Two UIs): pick that one, the `~` one stays.
+
+A commit that should stay on main for good (a feature for the next major release that touches shared paths) goes in `build-scripts/release-waits`, one line of `<sha> <why>`, and drops out of the decision list.
 
 When a pick needs hand-edits to fit the release branch (usually because it touches a feature that stays on main), log what changed in [release-pick-adaptations.md](release-pick-adaptations.md).
 

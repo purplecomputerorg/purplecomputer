@@ -250,8 +250,8 @@ release *args:
 release_dir := env_var("HOME") / "purplecomputer-release"
 
 # Show what ships vs what waits (= on release/1.x, + main only)
-release-status:
-    @./build-scripts/release-status.sh
+release-status *args:
+    @./build-scripts/release-status.sh {{args}}
 
 # Cherry-pick fixes from main onto release/1.x, run its tests, show what ships
 release-pick +shas:

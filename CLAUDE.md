@@ -31,7 +31,7 @@ Never run `git commit` directly. Always commit via `/checkpoint <msg>` (you supp
 
 Commit messages: **one line, max two short sentences.** No bullet-list body. No `Co-Authored-By` trailer. No `lane(...)` prefix — the script handles whatever prefixing is needed. Never use the default verbose Claude Code commit format.
 
-Commit messages and `docs/UX_LOG.md` are public and customer-readable: describe what changed, never the messaging strategy or tone intent behind it (no "warmer", "apologetic", "less blame-y").
+Commit messages are public and customer-readable, and they are the record of UX changes (`docs/UX_LOG.md` is frozen): describe what changed, never the messaging strategy or tone intent behind it (no "warmer", "apologetic", "less blame-y").
 
 If you're unsure what message to use, propose one and ask the user to confirm before committing.
 
@@ -84,8 +84,6 @@ Boot hang diagnostics: see `guides/boot-hang-debugging.md`. `purple_tui/boot_log
 User-facing messages: simple, friendly, no jargon. Clear next steps, not error explanations. Add `(Technical: ...)` for known root causes. Use `SUPPORT_EMAIL` from `purple_tui/constants.py`.
 
 **Writing style:** No em-dashes or spaced dashes. Use colons, commas, or periods instead.
-
-**UX changes:** Add a one-line description to `docs/UX_LOG.md`.
 
 ---
 

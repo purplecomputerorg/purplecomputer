@@ -1,6 +1,6 @@
 # UX Change Log
 
-Brief descriptions of user experience changes, newest first.
+Frozen in September 2026: from here on the commit messages are the record (`git log -- purple_tui config packs`). Entries below are newest first.
 
 - **The canvas screen catches up with the shipping screen on sound**: volume as a number with a limit, the first-boot chime that picks a starting volume, the Sound check in Support info, and settings that carry over when installing.
 - **Play answers behave**: A long row of pictures (say, 100 bananas) now wraps into neat rows instead of running off the screen edge. Wordy answers come back at a calm reading size in Purple's own monospace; only a small picture answer shows big. The typing box also sits a clear step after the "Ask" arrow instead of touching it.

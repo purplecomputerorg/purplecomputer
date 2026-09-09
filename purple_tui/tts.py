@@ -39,8 +39,9 @@ _DEBUG_LOG = "/tmp/purple-tts-debug.log"
 
 def _dbg(msg: str) -> None:
     try:
+        now = time.time()
         with open(_DEBUG_LOG, "a") as f:
-            f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+            f.write(f"{time.strftime('%H:%M:%S', time.localtime(now))}.{int(now * 1000) % 1000:03d} {msg}\n")
     except Exception:
         pass
 
@@ -449,7 +450,11 @@ def preload() -> threading.Thread | None:
 
 def _worker_synthesize(prepared_text: str, wav_path: str) -> bool | None:
     """ok/fail from the worker, or None when there is no usable worker."""
-    if _worker is None or not _worker_ready.wait(timeout=_WORKER_READY_TIMEOUT):
+    if _worker is None:
+        return None
+    if not _worker_ready.is_set():
+        _dbg("piper worker: waiting for ready")
+    if not _worker_ready.wait(timeout=_WORKER_READY_TIMEOUT):
         return None
     proc = _worker
     if proc is None:
@@ -528,10 +533,14 @@ def _synthesize_to_cache(prepared_text: str) -> Path | None:
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             wav_path = f.name
 
+        t0 = time.monotonic()
         ok = _worker_synthesize(prepared_text, wav_path)
+        source = "worker"
         if ok is None:
+            source = "in-process"
             voice = _get_piper_voice()
             ok = voice is not None and synthesize_to_file(voice, prepared_text, wav_path)
+        _dbg(f"synth via {source}: {time.monotonic() - t0:.2f}s ok={ok}")
         if not ok:
             Path(wav_path).unlink(missing_ok=True)
             return None

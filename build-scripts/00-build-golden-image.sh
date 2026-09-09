@@ -727,6 +727,9 @@ JOURNAL
     # Hands-on loudness probe, run by a person from the parent-menu terminal.
     cp /purple-src/scripts/purple-audio-probe.sh "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
+    # Speech speed probe: CPU SIMD flags, clock, worker state, per-stage synthesis timings.
+    cp /purple-src/scripts/purple-speech-probe.py "$MOUNT_DIR/usr/local/bin/purple-speech-probe"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-speech-probe"
 
     # PulseAudio: enable per-user socket activation so Pulse comes up when the
     # purple user's logind session starts (purple-x11.service uses PAMName=login).

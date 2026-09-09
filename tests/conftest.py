@@ -1,6 +1,11 @@
+import os
 import threading
 
 import pytest
+
+# A mounted app must not probe real audio: the probe subprocess, hotplug
+# listener and retry poll outlive their test and rewrite the mixer flags.
+os.environ.setdefault("PURPLE_NO_AUDIO", "1")
 
 
 @pytest.fixture(autouse=True)

@@ -45,4 +45,4 @@ Review done, nothing blocking. Run:
   just ship                   # upload the downloads and tag
 ```
 
-Steps they've already done can be skipped: if the release commit is already built, `purple-build --release` no-ops, and `just ship` releases the existing build. If they later report a failure, help debug from the output they paste; do not attempt the build yourself.
+Steps they've already done can be skipped: if the release commit is already built, `purple-build --release` no-ops, and `just ship` releases the existing build. If picks landed on `release/1.x` after the build that was flashed and validated, `just ship --commit <sha>` releases that earlier commit's build and the newer picks wait for the next one. If they later report a failure, help debug from the output they paste; do not attempt the build yourself.

@@ -219,17 +219,6 @@ boot_settle_max_jobs() {
     echo "$cap"
 }
 
-# Count PIDs still running. Unreaped children sit as zombies until the parent
-# waits, so plain kill -0 would never see a slot free up.
-count_running() {
-    local n=0 pid state
-    for pid in "$@"; do
-        state=$(ps -o state= -p "$pid" 2>/dev/null | tr -d ' ') || true
-        [[ -z "$state" || "$state" == Z* ]] || n=$((n + 1))
-    done
-    echo "$n"
-}
-
 # Boot a freshly flashed drive once in QEMU so its controller pays the
 # one-time post-write cost here instead of on a parent's first boot, and so
 # casper does its one-time persistence setup (GPT relocation plus mkfs of the
@@ -526,17 +515,24 @@ slot_release() { eval "exec $1>&-"; }
 # for it to appear (a power-cycled drive takes a few seconds to re-enumerate,
 # and can come back under a different letter).
 dev_for_serial() {
-    local serial="$1" timeout="${2:-30}" waited=0 name
+    local serial="$1" timeout="${2:-30}" waited=0 dev
     while (( waited < timeout )); do
-        name="$(lsblk -d -n -o NAME,SERIAL 2>/dev/null | awk -v s="$serial" '$2 == s {print $1; exit}')"
-        if [[ -n "$name" && -b "/dev/$name" ]]; then
-            echo "/dev/$name"
+        dev="$(dev_of_serial "$serial")"
+        if [[ -n "$dev" ]]; then
+            echo "$dev"
             return 0
         fi
         sleep 2
         waited=$((waited + 2))
     done
     return 1
+}
+
+# Block device holding a serial right now, else empty.
+dev_of_serial() {
+    local name
+    name="$(lsblk -d -n -o NAME,SERIAL 2>/dev/null | awk -v s="$1" '$2 == s {print $1; exit}')"
+    [[ -n "$name" && -b "/dev/$name" ]] && echo "/dev/$name" || true
 }
 
 # Power-cycle a hub port and return the device node the drive comes back on,

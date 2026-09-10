@@ -94,11 +94,29 @@ trap cleanup_build EXIT
 install_pinned_deb() {
     local url="$1" sha="$2" name
     name="$(basename "$url")"
-    [ -f "$BUILD_DIR/$name" ] || curl -fsSL "$url" -o "$BUILD_DIR/$name"
-    echo "$sha  $BUILD_DIR/$name" | sha256sum -c --quiet
+    # Cached only once the hash matches, so a dropped transfer never wedges later builds
+    if ! echo "$sha  $BUILD_DIR/$name" | sha256sum -c --quiet 2>/dev/null; then
+        curl -fsSL "$url" -o "$BUILD_DIR/$name.part"
+        echo "$sha  $BUILD_DIR/$name.part" | sha256sum -c --quiet
+        mv "$BUILD_DIR/$name.part" "$BUILD_DIR/$name"
+    fi
     cp "$BUILD_DIR/$name" "$MOUNT_DIR/tmp/$name"
     chroot "$MOUNT_DIR" dpkg -i "/tmp/$name"
     rm -f "$MOUNT_DIR/tmp/$name"
+}
+
+# Verify the lean hook actually ran, against the artifact: the first version
+# of this hook shipped as a silent no-op because it targeted content the initrd
+# never had. Check for what we KNOW rides along when the hook is broken, and
+# log the size so build logs show drift.
+verify_lean_initrd() {
+    local kver="$1"
+    if chroot "$MOUNT_DIR" lsinitramfs "/boot/initrd.img-$kver" \
+        | grep -qE 'kernel/drivers/net/|kernel/drivers/gpu/|firmware/nvidia/|firmware/mellanox/'; then
+        echo "ERROR: initrd.img-$kver still contains net/gpu modules or their firmware (lean-initrd hook did not run)"
+        exit 1
+    fi
+    log_info "Initrd size ($kver): $(du -h "$MOUNT_DIR/boot/initrd.img-$kver" | cut -f1) (net + gpu modules and unreferenced firmware excluded)"
 }
 
 # shim (Microsoft-signed) -> GRUB (Canonical-signed) -> kernel (Canonical-signed).
@@ -432,17 +450,7 @@ LEANINITRD
 
     # Rebuild initrd to include casper scripts (installed above, casper-stop neutered)
     chroot "$MOUNT_DIR" update-initramfs -u -k "$KVER"
-
-    # Verify the lean hook actually ran, against the artifact: the first
-    # version of this hook shipped as a silent no-op because it targeted
-    # content the initrd never had. Check for what we now KNOW rides along
-    # when the hook is broken, and log the size so build logs show drift.
-    if chroot "$MOUNT_DIR" lsinitramfs "/boot/initrd.img-$KVER" \
-        | grep -qE 'kernel/drivers/net/|kernel/drivers/gpu/|firmware/nvidia/|firmware/mellanox/'; then
-        echo "ERROR: initrd still contains net/gpu modules or their firmware (lean-initrd hook did not run)"
-        exit 1
-    fi
-    log_info "Initrd size: $(du -h "$MOUNT_DIR/boot/initrd.img-$KVER" | cut -f1) (net + gpu modules and unreferenced firmware excluded)"
+    verify_lean_initrd "$KVER"
 
     if [ "$PURPLE_ARCH" = "i386" ]; then
         # Installer initrd pieces: the hook only fires for the ISO's installer
@@ -456,6 +464,7 @@ LEANINITRD
         install_pinned_deb "$T2_AUDIO_URL" "$T2_AUDIO_SHA256"
         T2_KVER=$(ls "$MOUNT_DIR/lib/modules/" | grep -- -t2)
         [ -f "$MOUNT_DIR/boot/initrd.img-$T2_KVER" ] || chroot "$MOUNT_DIR" update-initramfs -c -k "$T2_KVER"
+        verify_lean_initrd "$T2_KVER"
         ln -sf "vmlinuz-$T2_KVER" "$MOUNT_DIR/boot/vmlinuz-t2"
         ln -sf "initrd.img-$T2_KVER" "$MOUNT_DIR/boot/initrd.img-t2"
         log_info "T2 kernel: $T2_KVER"
@@ -970,14 +979,11 @@ menuentry "PurpleOS (recovery mode)" {
 }
 EOF
 
-    # Create symlinks to actual kernel/initrd (Ubuntu installs versioned files)
-    # This makes our grub.cfg work regardless of kernel version
-    KERNEL_VERSION=$(ls -v "$MOUNT_DIR/boot/" | grep "vmlinuz-" | grep -v -- -t2 | tail -1 | sed 's/vmlinuz-//')
-    if [ -n "$KERNEL_VERSION" ]; then
-        ln -sf "vmlinuz-$KERNEL_VERSION" "$MOUNT_DIR/boot/vmlinuz"
-        ln -sf "initrd.img-$KERNEL_VERSION" "$MOUNT_DIR/boot/initrd.img"
-        log_info "  Kernel version: $KERNEL_VERSION"
-    fi
+    # Unversioned names for grub.cfg. $KVER is the stock kernel; the T2 kernel has its own -t2 links.
+    ln -sf "vmlinuz-$KVER" "$MOUNT_DIR/boot/vmlinuz"
+    ln -sf "initrd.img-$KVER" "$MOUNT_DIR/boot/initrd.img"
+    log_info "  Kernel version: $KVER"
+
 
     # Set up Secure Boot compatible UEFI boot chain
     # shim (Microsoft-signed) → GRUB (Canonical-signed) → kernel (Canonical-signed)

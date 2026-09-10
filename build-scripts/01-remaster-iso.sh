@@ -141,7 +141,7 @@ prepend_router() {
 source $prefix/purple-router.cfg
 set purple_boot=casper
 if [ "$purple_variant" = "-i386" ]; then
-    set purple_boot=purple-install
+    set purple_boot=purple-live
     if [ ! -f /casper/vmlinuz-i386 ]; then
         clear
         echo ""
@@ -416,11 +416,12 @@ SOURCES_EOF
     # with PURPLE_ARCH=i386). Optional: fast builds skip it, and the router
     # then shows the "too old" screen on those machines.
     if [ -f "$BUILD_DIR/i386/purple-os.img.zst" ]; then
-        log_info "Adding i386 installer payload..."
+        log_info "Adding i386 payload (live squashfs + install image)..."
         cp "$BUILD_DIR/i386/vmlinuz" "$WORK_DIR/iso-new/casper/vmlinuz-i386"
         cp "$BUILD_DIR/i386/initrd" "$WORK_DIR/iso-new/casper/initrd-i386"
         mkdir -p "$WORK_DIR/iso-new/purple32"
-        cp "$BUILD_DIR/i386/purple-os.img.zst" "$BUILD_DIR/i386/purple-os.img.zst.size" "$WORK_DIR/iso-new/purple32/"
+        cp "$BUILD_DIR/i386/filesystem.squashfs" "$BUILD_DIR/i386/purple-os.img.zst" "$BUILD_DIR/i386/purple-os.img.zst.size" "$WORK_DIR/iso-new/purple32/"
+
         I386_COMMIT=$(cat "$BUILD_DIR/i386/purple-os.img.zst.commit" 2>/dev/null || echo unknown)
         if [ "$I386_COMMIT" != "$BUILD_COMMIT" ]; then
             if [ "${FAST_BUILD:-0}" = "1" ]; then

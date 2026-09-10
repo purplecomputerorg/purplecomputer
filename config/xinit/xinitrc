@@ -106,7 +106,11 @@ xsetroot -solid "#2d1b4e"
 # Falls back to page cache warmup if RAM is too low for the copy.
 # The TUI shows a blinking USB icon until this finishes, then an eject symbol.
 SQUASHFS="/cdrom/casper/filesystem.squashfs"
+if [ -f /run/purple-live.conf ]; then
+    . /run/purple-live.conf  # the 32-bit Key keeps its squashfs elsewhere; casper never writes this
+fi
 USB_CACHE_MARKER="/tmp/purple-usb-cached"
+
 if [ -f "$SQUASHFS" ] && [ ! -f "$USB_CACHE_MARKER" ]; then
     xlog "Caching squashfs for USB safety..."
     (

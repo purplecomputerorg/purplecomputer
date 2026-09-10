@@ -1,0 +1,85 @@
+# initramfs-tools boot script (boot=purple-live): the 32-bit Key's stand-in
+# for casper. Mounts the Purple Key, lays a RAM overlay over its squashfs and
+# hands that to systemd as the root, so the parent menu installs from a live
+# session exactly as on 64-bit. Machines without the RAM for that (or booted
+# with purple.installonly=1) get a plain install prompt instead. Installed as
+# /etc/initramfs-tools/scripts/purple-live; init calls mountroot().
+# See guides/hardware-coverage-plan.md.
+
+LIVE_MIN_KB=700000  # MemTotal below this: the overlay plus Purple won't fit, so install straight away
+KEY=/cdrom          # where casper mounts the stick, so the app's paths hold on both
+SQUASHFS=$KEY/purple32/filesystem.squashfs
+
+say() { printf '\n   %s\n' "$@"; }
+
+stop() {
+    say "$@" "Email support@purplecomputer.org and we will help." "It is safe to turn this computer off now."
+    while :; do sleep 86400; done
+}
+
+mount_key() {
+    modprobe isofs; modprobe vfat
+    for i in $(seq 60); do
+        STICK=$(ls /dev/disk/by-label/PURPLE_INSTALLER /dev/disk/by-label/PURPLE_DEBUG 2>/dev/null | head -1)
+        [ -n "$STICK" ] && break
+        sleep 1
+    done
+    mkdir -p "$KEY"
+    mount -o ro "$STICK" "$KEY"
+}
+
+live_session() {
+    modprobe loop; modprobe squashfs; modprobe overlay
+    mkdir -p /run/purple-live/ro /run/purple-live/rw
+    mount -t squashfs -o ro,loop "$SQUASHFS" /run/purple-live/ro || stop "Could not read Purple from the Key."
+    mount -t tmpfs tmpfs /run/purple-live/rw
+    mkdir -p /run/purple-live/rw/upper /run/purple-live/rw/work
+    mount -t overlay overlay \
+        -o lowerdir=/run/purple-live/ro,upperdir=/run/purple-live/rw/upper,workdir=/run/purple-live/rw/work \
+        "$rootmnt" || stop "Could not start Purple from the Key."
+    mkdir -p "$rootmnt$KEY"
+    mount --move "$KEY" "$rootmnt$KEY"
+    # The image's fstab names the installed disk; the overlay is already the root.
+    printf 'overlay / overlay defaults 0 0\ntmpfs /tmp tmpfs defaults,nosuid,nodev 0 0\n' > "$rootmnt/etc/fstab"
+    # Read by constants.py and xinitrc. casper never writes it, so the 64-bit stick is untouched.
+    printf 'SQUASHFS=%s\nPURPLE_PAYLOAD_DIR=%s/purple32\n' "$SQUASHFS" "$KEY" > /run/purple-live.conf
+    if grep -q "purple.debug=1" /proc/cmdline; then
+        touch "$rootmnt/opt/purple/debug"
+        printf 'kernel.printk = 7 4 1 7\nkernel.sysrq = 1\n' > "$rootmnt/etc/sysctl.d/99-purple-zzz-debug.conf"
+    fi
+    printf '\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1
+}
+
+install_now() {
+    exec </dev/tty1
+    say "This computer is an older 32-bit model, so Purple installs straight onto it." \
+        "That erases everything on this computer. It takes about 15 minutes." \
+        "Type YES and press Enter to install, or just turn the computer off."
+    printf '   > '
+    read answer
+    [ "$answer" = "YES" ] || stop "Okay, nothing was changed."
+    # install.sh's [PURPLE-PV] percent lines feed the TUI on a live session;
+    # here they become one updating line instead of a 15-minute scroll.
+    { PURPLE_PAYLOAD_DIR=$KEY/purple32 bash $KEY/purple/install.sh; echo $? > /tmp/rc; } 2>&1 \
+        | awk '/^\[PURPLE-PV/ { printf "\r   %s%% done   ", $2; fflush(); next } { print }'
+    if [ "$(cat /tmp/rc)" = 0 ]; then
+        say "All done! Unplug the Purple Key, then press Enter to start Purple."
+        read answer
+        reboot -f
+    fi
+    stop "Something went wrong while installing."
+}
+
+mountroot() {
+    exec >/dev/tty1 2>&1
+    [ -e /dev/fd ] || ln -s /proc/self/fd /dev/fd
+    printf '\033]P02d1b4e\033[H\033[2J\033[97m'
+    say "Welcome to Purple Computer!" "Looking for the Purple Key..."
+    mount_key || stop "Could not read the Purple Key."
+    mem_kb=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
+    if [ -f "$SQUASHFS" ] && [ "$mem_kb" -ge "$LIVE_MIN_KB" ] && ! grep -q "purple.installonly=1" /proc/cmdline; then
+        live_session
+    else
+        install_now
+    fi
+}

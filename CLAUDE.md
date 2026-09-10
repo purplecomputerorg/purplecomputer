@@ -151,7 +151,8 @@ Input is read from evdev (`/dev/input/event*`), never from the terminal or the w
 
 Both ISOs boot via Casper (Ubuntu's live boot framework). The normal ISO hides the GRUB menu and auto-boots. The debug ISO shows a GRUB menu with verbose boot options.
 
-GRUB picks the kernel per machine via `config/grub/purple-router.cfg`: signed stock, `-t2` (t2linux kernel, by SMBIOS model) or `-i386` (Debian image, install-only, no live session). Same snippet on installed systems. Verify with `scripts/test-grub-router.sh`. Design: `guides/hardware-coverage-plan.md`.
+GRUB picks the kernel per machine via `config/grub/purple-router.cfg`: signed stock, `-t2` (t2linux kernel, by SMBIOS model) or `-i386` (Debian image; `build-scripts/initramfs/purple-live` stands in for casper there). Same snippet on installed systems.
+ Verify with `scripts/test-grub-router.sh`. Design: `guides/hardware-coverage-plan.md`.
 
 Installation is triggered through the live boot, not a GRUB menu entry. The install flow is:
 1. Live boot starts Purple Computer normally

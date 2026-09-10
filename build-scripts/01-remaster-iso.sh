@@ -423,8 +423,15 @@ SOURCES_EOF
         cp "$BUILD_DIR/i386/purple-os.img.zst" "$BUILD_DIR/i386/purple-os.img.zst.size" "$WORK_DIR/iso-new/purple32/"
         I386_COMMIT=$(cat "$BUILD_DIR/i386/purple-os.img.zst.commit" 2>/dev/null || echo unknown)
         if [ "$I386_COMMIT" != "$BUILD_COMMIT" ]; then
-            log_info "WARNING: i386 payload is from commit $I386_COMMIT, amd64 from $BUILD_COMMIT (fast builds reuse the last i386 image)"
+            if [ "${FAST_BUILD:-0}" = "1" ]; then
+                log_info "WARNING: i386 payload is from commit $I386_COMMIT, amd64 from $BUILD_COMMIT (fast builds reuse the last i386 image)"
+            else
+                echo "ERROR: i386 payload is from commit $I386_COMMIT but the amd64 image is from $BUILD_COMMIT."
+                echo "  Its installer initrd may lack a tool this install.sh needs. Run a full build (step 0), or FAST_BUILD=1 to accept it."
+                exit 1
+            fi
         fi
+
     fi
 
 

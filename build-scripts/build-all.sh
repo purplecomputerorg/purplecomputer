@@ -45,6 +45,12 @@ main() {
         log_step "0/1: Building root filesystem, squashfs, and golden image..."
         ./00-build-golden-image.sh
         echo
+        # 32-bit CPU payload (Debian i386, install-only). Skipped on fast builds.
+        if [ "${FAST_BUILD:-0}" != "1" ]; then
+            log_step "0b/1: Building i386 golden image..."
+            PURPLE_ARCH=i386 ./00-build-golden-image.sh
+            echo
+        fi
     fi
 
     if [ "$START_STEP" -le 1 ]; then

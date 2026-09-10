@@ -169,6 +169,8 @@ Physical Keyboard → keyd (EVIOCGRAB + uinput) → keyd virtual keyboard
 
 Both ISOs boot via Casper (Ubuntu's live boot framework). The normal ISO hides the GRUB menu and auto-boots. The debug ISO shows a GRUB menu with verbose boot options.
 
+GRUB picks the kernel per machine via `config/grub/purple-router.cfg`: signed stock, `-t2` (t2linux kernel, by SMBIOS model) or `-i386` (Debian image, install-only, no live session). Same snippet on installed systems. Verify with `scripts/test-grub-router.sh`. Design: `guides/hardware-coverage-plan.md`.
+
 Installation is triggered through the live boot, not a GRUB menu entry. The install flow is:
 1. Live boot starts Purple Computer normally
 2. Parent menu → Install option → user confirms

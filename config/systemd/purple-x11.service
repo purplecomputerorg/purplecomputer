@@ -22,6 +22,10 @@ ConditionKernelCommandLine=!purple.install=1
 # screen.
 StartLimitIntervalSec=60
 StartLimitBurst=3
+# The failure screen is its own unit, started only when the restart limit is
+# hit (a unit with Restart= enters 'failed' just once, after the burst). As an
+# ExecStopPost it was killed by TimeoutStopSec while waiting for Enter.
+OnFailure=purple-x11-failed.service
 
 [Service]
 # Route pygame/SDL audio through PulseAudio instead of direct ALSA.
@@ -56,8 +60,6 @@ TimeoutStopSec=10
 # Restart on failure (replaces manual fail counter). Rate limit is in [Unit].
 Restart=on-failure
 RestartSec=2
-# Show error on tty1 if we hit the restart limit (or any failure)
-ExecStopPost=-/usr/local/bin/purple-x11-failed
 
 [Install]
 WantedBy=graphical.target

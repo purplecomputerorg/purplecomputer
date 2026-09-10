@@ -19,7 +19,7 @@ from ... import palette as P
 from ..gfx import FONT_DIR
 from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
-from ...constants import SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
+from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
 from .sleep_screen import FullScreen
@@ -698,7 +698,7 @@ class InstallProgressScreen(FullScreen):
         from ...settings import SETTINGS_FILE
         proc = subprocess.Popen(
             ["sudo", "-E", "bash", "/cdrom/purple/install.sh"], stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
-            env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple", "PURPLE_COMPUTER_NAME": self._computer_name,
+            env={**os.environ, "PURPLE_PAYLOAD_DIR": PAYLOAD_DIR, "PURPLE_COMPUTER_NAME": self._computer_name,
                  "PURPLE_LIVE_AUDIO_OK": "1" if self.app.audio_ok is True else "0",
                  "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE)})  # copied into the installed system
         buf = b""
@@ -811,7 +811,8 @@ class InstallProgressScreen(FullScreen):
         except Exception:
             lines.append("  (device info failed)")
         section("USB / source media")
-        file_info("Golden image", "/cdrom/purple/purple-os.img.zst")
+        file_info("Golden image", f"{PAYLOAD_DIR}/purple-os.img.zst")
+
         file_info("Install script", "/cdrom/purple/install.sh")
         file_info("/cdrom mount", "/cdrom")
         cmd("cdrom contents", "ls /cdrom/purple/ 2>&1", 10)

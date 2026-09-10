@@ -8,7 +8,7 @@ import pygame
 
 from ... import palette as P
 from ...code_runner import ArtCodeRunner
-from ...constants import CANVAS_COLS, CANVAS_ROWS, ICON_ROBOT
+from ...constants import ICON_ROBOT
 from ...color_mixing import mix_colors_paint
 from ..gfx import rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
@@ -16,10 +16,7 @@ from ...palette import contrast_text, luminance, DEFAULT_BRUSH_COLOR, GRAYSCALE,
 from ..panels import CodePanel, SpaceHold
 from ..ui import draw_keycap, draw_label
 
-HEAD_UNITS = FOOT_UNITS = 1.5       # mode switch above the grid, hint below, in cell units
-GRID_INSET_EM = 1.0                 # breathing room between the stage border and the grid
-CELL_SCALE = 0.9                    # cells stop short of filling the inset stage
-COLS, ROWS = CANVAS_COLS, CANVAS_ROWS - 3
+COLS, ROWS = 56, 24
 BRUSH_CHAR = "█"
 ARROW_HOLD_REPEAT_THRESHOLD = 8
 HOLD_ACCEL_MULTIPLIER = 6
@@ -473,23 +470,24 @@ class ArtRoom:
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g, rect):
-        """Cells are the viewport unit: the grid plus its header and hint rows
-        fill the viewport exactly. A bottom panel takes those rows instead."""
-        reserve = 0 if self.app._panel is not None else HEAD_UNITS + FOOT_UNITS
-        inset = g.em(GRID_INSET_EM)
-        rect = rect.inflate(-2 * inset, -2 * inset)
-        c = self._cell = max(3, int(min(rect.w / COLS, rect.h / (ROWS + reserve)) * CELL_SCALE))
-        head_h = round(c * HEAD_UNITS) if reserve else 0
-        ox = rect.x + (rect.w - c * COLS) // 2
-        oy = rect.y + head_h + (rect.h - round(c * reserve) - c * ROWS) // 2
+        """The mode switch hugs the top edge and the hint the bottom, a touch in
+        from the border; the grid fills what is left. A bottom panel takes the
+        hint row instead."""
+        pad, gap = g.em(0.7), g.em(0.5)
+        inner = rect.inflate(-2 * pad, -2 * pad)
+        chrome_h = 0 if self.app._panel is not None else g.line_height(g.vh(1.9), "mono") + g.em(0.4)
+        area = inner.inflate(0, -2 * (chrome_h + gap))
+        c = self._cell = max(3, min(area.w // COLS, area.h // ROWS))
+        ox = area.x + (area.w - c * COLS) // 2
+        oy = area.y + (area.h - c * ROWS) // 2
         self._origin = (ox, oy)
-        if reserve:
-            self._draw_header(g, pygame.Rect(ox, oy - head_h, c * COLS, head_h))
+        if chrome_h:
+            self._draw_header(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h))
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
         self._draw_letters(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
-        if reserve:
-            foot = pygame.Rect(ox, oy + c * ROWS, c * COLS, round(c * FOOT_UNITS))
+        if chrome_h:
+            foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             key = "littles" if self.app._littles_mode else ("pen" if self._paint_mode and self._pen_down else "paint" if self._paint_mode else "write")
             g.draw_text(HINTS[key], g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
             if self.app._code_panel_enabled and not self.app._littles_mode:

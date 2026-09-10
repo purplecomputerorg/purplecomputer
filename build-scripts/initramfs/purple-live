@@ -52,7 +52,7 @@ live_session() {
 
 install_now() {
     exec </dev/tty1
-    say "This computer is an older 32-bit model, so Purple installs straight onto it." \
+    say "$1" \
         "That erases everything on this computer. It takes about 15 minutes." \
         "Type YES and press Enter to install, or just turn the computer off."
     printf '   > '
@@ -77,9 +77,11 @@ mountroot() {
     say "Welcome to Purple Computer!" "Looking for the Purple Key..."
     mount_key || stop "Could not read the Purple Key."
     mem_kb=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
-    if [ -f "$SQUASHFS" ] && [ "$mem_kb" -ge "$LIVE_MIN_KB" ] && ! grep -q "purple.installonly=1" /proc/cmdline; then
-        live_session
+    if [ ! -f "$SQUASHFS" ] || grep -q "purple.installonly=1" /proc/cmdline; then
+        install_now "This computer is an older 32-bit model, so Purple installs straight onto it."
+    elif [ "$mem_kb" -lt "$LIVE_MIN_KB" ]; then
+        install_now "Purple needs about 1GB of memory to try it out from the Key first. This computer has $((mem_kb / 1024))MB, so Purple installs straight onto it."
     else
-        install_now
+        live_session
     fi
 }

@@ -47,8 +47,8 @@ def _dbg(msg: str) -> None:
 
 
 # Voice model configuration
-VOICE_MODEL = "en_US-libritts-high"
-VOICE_SPEAKER = 166  # p6006
+VOICE_MODEL = "en_US-libritts_r-medium"
+VOICE_SPEAKER = 166  # speaker 6006
 
 # Deterministic synthesis parameters (no randomness between runs)
 # Parameter names vary across piper-tts versions, so we try all known variants.

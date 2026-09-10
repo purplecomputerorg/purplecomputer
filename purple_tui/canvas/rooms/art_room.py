@@ -17,6 +17,8 @@ from ..panels import CodePanel, SpaceHold
 from ..ui import draw_keycap, draw_label
 
 HEAD_UNITS = FOOT_UNITS = 1.5       # mode switch above the grid, hint below, in cell units
+GRID_INSET_EM = 1.0                 # breathing room between the stage border and the grid
+CELL_SCALE = 0.9                    # cells stop short of filling the inset stage
 COLS, ROWS = CANVAS_COLS, CANVAS_ROWS - 3
 BRUSH_CHAR = "█"
 ARROW_HOLD_REPEAT_THRESHOLD = 8
@@ -474,7 +476,9 @@ class ArtRoom:
         """Cells are the viewport unit: the grid plus its header and hint rows
         fill the viewport exactly. A bottom panel takes those rows instead."""
         reserve = 0 if self.app._panel is not None else HEAD_UNITS + FOOT_UNITS
-        c = self._cell = max(3, min(rect.w // COLS, int(rect.h / (ROWS + reserve))))
+        inset = g.em(GRID_INSET_EM)
+        rect = rect.inflate(-2 * inset, -2 * inset)
+        c = self._cell = max(3, int(min(rect.w / COLS, rect.h / (ROWS + reserve)) * CELL_SCALE))
         head_h = round(c * HEAD_UNITS) if reserve else 0
         ox = rect.x + (rect.w - c * COLS) // 2
         oy = rect.y + head_h + (rect.h - round(c * reserve) - c * ROWS) // 2

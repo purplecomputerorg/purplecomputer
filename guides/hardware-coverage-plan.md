@@ -167,7 +167,8 @@ Without the cleanup: 6.9GB / 10.6GB, which rules out 8GB sticks and squeezes 16G
 - **Base: Debian 12 bookworm i386.** Same systemd, so `purple-x11.service`, the boot-log heartbeat, and the shutdown watchdog port nearly unchanged. Debian 13 dropped i386 kernels; bookworm is supported to June 2028 with no successor. Alpine keeps x86 longer but is musl plus OpenRC, and every unit file and binary wheel diverges. Not worth it.
 - **Python 3.11.** bookworm ships 3.11.2; `pyproject.toml` targets py312. Run the test suite under 3.11 once before committing; any 3.12-only syntax has to go.
 - **Wheels.** pygame has i686 wheels, evdev compiles, textual/rich/wcwidth are pure Python. numpy has no cp311 i686 wheel: use Debian's `python3-numpy` (1.24, inside the `<2` pin). onnxruntime has never shipped i686, so Piper is out.
-- **Voice.** `tts.py` needs an espeak-ng backend. Today `_get_piper_voice()` failing means silence with no fallback, so this is also the missing amd64 fallback.
+- **Voice.** `tts.py` speaks through flite (the parent menu's Quick voice) whenever Piper cannot, so the i386 image only needs the `flite` package and `/opt/purple/flite-voices/cmu_us_lnh.flitevox`, the same two the amd64 build installs. Landed on main; the branch's earlier espeak-ng fallback in `tts.py` is superseded and should be dropped on rebase.
+
 - **Screen.** `REQUIRED_TERMINAL_COLS` (146) × 37 rows fits 1024x600 at 11pt; `font_sizer.py` auto-shrinks to `MIN_FONT = 8.0` at runtime. Only `scripts/calc_font_size.py` has the 12pt floor. Legibility question, not a layout rewrite.
 - **GL.** `purple-gl-probe` already falls back to software GL (6-7% of a core on an HP Stream), so GMA950-class GPUs are covered.
 - **Arch branches live in the build scripts only**, plus TTS engine selection. No arch conditionals in the app.

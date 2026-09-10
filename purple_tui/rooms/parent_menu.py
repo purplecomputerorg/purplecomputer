@@ -29,6 +29,7 @@ import re
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
 from ..audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
+from ..tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from .. import diagnostics
 
 
@@ -371,6 +372,31 @@ _MUSIC_KEY_SWITCHING_CANCELLED = object()
 
 # AllCapsScreen dismiss value
 _ALL_CAPS_CANCELLED = object()
+
+# VoiceScreen dismiss value
+_VOICE_CANCELLED = object()
+
+
+class VoiceScreen(PickerModal):
+    """Pick the synthesizer: Piper (Natural) or flite (Quick)."""
+
+    TITLE = "Voice"
+    DESCRIPTION = "The voice Purple speaks with"
+    OPTIONS = [
+        (VOICE_NATURAL, "Natural", "Smoother, but slower on older laptops"),
+        (VOICE_QUICK, "Quick", "Simpler, and never keeps a kid waiting"),
+    ]
+    escape_value = _VOICE_CANCELLED
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_voice
+        self._selected = next((i for i, opt in enumerate(self.OPTIONS) if opt[0] == get_voice()), 0)
+
+
+def _voice_menu_label(pref: str) -> str:
+    return f"Voice: {VOICE_NAMES.get(pref, VOICE_NAMES[VOICE_NATURAL])}"
+
 
 # KidLettersScreen dismiss value
 _KID_LETTERS_CANCELLED = object()
@@ -981,7 +1007,8 @@ def _get_menu_items() -> list:
     Items whose id starts with `sec-` are section headers: visual-only,
     skipped by keyboard navigation, no action when activated.
     """
-    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps, get_volume_lock, get_parent_pin
+    from ..settings import (get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps,
+                            get_volume_lock, get_parent_pin, get_voice)
 
     items = []
 
@@ -1013,6 +1040,7 @@ def _get_menu_items() -> list:
 
     items.append(("sec-av", "Sound & Display"))
     items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
+    items.append(("menu-voice", _voice_menu_label(get_voice())))
     if display_control_available():
         items.append(("menu-display", "Display"))
 
@@ -2160,6 +2188,8 @@ class ParentMenu(PurpleModal):
             self._open_music_key_switching()
         elif item_id == "menu-all-caps":
             self._open_all_caps()
+        elif item_id == "menu-voice":
+            self._open_voice()
         elif item_id == "menu-secret":
             self._open_secret_menu()
         elif item_id == "menu-parent-pin":
@@ -2341,6 +2371,19 @@ class ParentMenu(PurpleModal):
             widget.update(label)
         except Exception:
             pass
+
+    def _open_voice(self) -> None:
+        def on_result(result):
+            if result is _VOICE_CANCELLED:
+                return
+            from .. import tts
+            tts.set_voice(result)
+            try:
+                self.query_one("#menu-voice", ParentMenuItem).update(_voice_menu_label(result))
+            except Exception:
+                pass
+        self.app.push_screen(VoiceScreen(), callback=on_result)
+
 
     def _open_secret_menu(self) -> None:
         def on_result(result):
@@ -2565,4 +2608,3 @@ class ParentMenu(PurpleModal):
         self.dismiss()
         # Tell the app to start demo after modal is closed
         self.app.call_later(self.app.start_demo)
-

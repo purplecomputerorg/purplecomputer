@@ -197,6 +197,7 @@ SOURCES
         python3-pip \
         libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 \
         alsa-utils pulseaudio pulseaudio-utils \
+        flite \
         xinit x11-xserver-utils \
         xserver-xorg-core \
         xserver-xorg-input-libinput \
@@ -462,6 +463,14 @@ TMPFILES
     mkdir -p "$VOICE_DIR"
     curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
     curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
+
+    # The Quick voice (flite cmu_us_lnh). Festvox serves it over plain http only, so pin the hash.
+    log_info "Downloading flite voice..."
+    FLITE_VOICE_DIR="$MOUNT_DIR/opt/purple/flite-voices"
+    mkdir -p "$FLITE_VOICE_DIR"
+    curl -fsSL "http://festvox.org/flite/packed/flite-2.3/voices/cmu_us_lnh.flitevox" -o "$FLITE_VOICE_DIR/cmu_us_lnh.flitevox"
+    echo "d3fb6b1c4f781fc5c9b1ea5efdc8c46c1ce5e74cf349cd78c1fae3c0e19d7c9f  $FLITE_VOICE_DIR/cmu_us_lnh.flitevox" | sha256sum -c --quiet -
+
 
     # Create launcher script
     # NOTE: Do NOT redirect stderr - Textual writes its UI to stderr!

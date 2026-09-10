@@ -68,9 +68,16 @@ def test_text_default_symbols_are_emoji_only_with_vs16():
     assert split_runs("☀") == [("☀", False)]
 
 
-def test_spaces_inside_a_colored_span_are_padding_not_swatches(g):
+def test_colored_letters_are_contiguous_square_tiles(g):
     (_, _, pieces), = g.layout("[#000000 on #ffcc00] f [/][#000000 on #ff8888] w [/]", 20)
-    assert [bg for _, _, bg in pieces] == ["#ffcc00"] * 3 + ["#ff8888"] * 3
-    xs = [x for _, x, _ in pieces]
-    widths = [s.get_width() for s, _, _ in pieces]
-    assert all(xs[i] + widths[i] == xs[i + 1] for i in range(len(xs) - 1))  # one contiguous tile per letter
+    assert [bg for _, _, bg in pieces] == ["#ffcc00", "#ff8888"]
+    (s1, x1, _), (s2, x2, _) = pieces
+    assert s1.get_width() == s1.get_height() == s2.get_width() and x1 + s1.get_width() == x2
+
+
+def test_wrapped_letter_tiles_stay_whole_and_aligned(g):
+    letters = "".join(f"[#000000 on #ffcc00] {c} [/]" for c in "abcdefgh")
+    side = g.layout("[#000000 on #ffcc00] a [/]", 20)[0][2][0][0].get_width()
+    lines = g.layout(letters, 20, max_width=side * 3 + 1)
+    assert [len(p) for _, _, p in lines] == [3, 3, 2]
+    assert all(x == i * side for _, _, pieces in lines for i, (_, x, _) in enumerate(pieces))

@@ -341,8 +341,10 @@ class Gfx:
         """Markup -> lines of placed pieces, word-wrapped to max_width and
         broken at newlines. Each line is (width, height, [(surface, x, bg)]).
         A whitespace-only span with a background is a color swatch and is
-        kept even at the start of a line. dim_to is the background dim text
-        fades toward."""
+        kept even at the start of a line; a colored span never breaks across
+        lines, and one holding a single letter or emoji is a square tile, so
+        letter blocks line up in columns when they wrap. dim_to is the
+        background dim text fades toward."""
         pieces = []
         for chunk, style in parse_markup(markup):
             fg = style.get("fg", color)
@@ -355,9 +357,9 @@ class Gfx:
             for part in re.split(r"(\n)", chunk):
                 if part == "\n":
                     pieces.append(None)
-                elif bg and part.isspace():
-                    pieces.append((part, f, fg, bg, True))
-                else:  # spaces inside a colored span are padding, not swatches
+                elif bg:
+                    pieces.append((part, f, fg, bg, part.isspace()))
+                else:
                     pieces.extend((w, f, fg, bg, False) for w in re.split(r"(\s+)", part) if w)
         lines, cur, cur_w = [], [], 0
         line_h = self.line_height(px, face)
@@ -378,6 +380,13 @@ class Gfx:
                 cur.append((s, cur_w, bg))
                 cur_w += line_h + px // 6
                 continue
+            if bg and len(list(_units(word.strip()))) == 1:
+                s = self._tile(word.strip(), px, f, fg, line_h)
+                if max_width and cur and cur_w + s.get_width() > max_width:
+                    flush()
+                cur.append((s, cur_w, bg))
+                cur_w += s.get_width()
+                continue
             for part in self._split_to_fit(word, px, f, fg, max_width):
                 s = self.text(part, px, f, fg)
                 if max_width and cur and cur_w + s.get_width() > max_width and not (part.isspace() and not bg):
@@ -389,6 +398,13 @@ class Gfx:
         if cur or not lines:
             flush()
         return lines
+
+    def _tile(self, ch, px, face, color, side):
+        s = self.text(ch, px, face, color)
+        side = max(side, s.get_width())
+        tile = pygame.Surface((side, side), pygame.SRCALPHA)
+        tile.blit(s, ((side - s.get_width()) // 2, (side - s.get_height()) // 2))
+        return tile
 
     def _split_to_fit(self, word, px, face, color, max_width):
         if not max_width or self.text(word, px, face, color).get_width() <= max_width:
@@ -419,9 +435,9 @@ class Gfx:
             y += h + line_gap
         return y - top
 
-    def markup_size(self, markup, px, face="sans", max_width=None) -> tuple:
+    def markup_size(self, markup, px, face="sans", max_width=None, line_gap=0) -> tuple:
         lines = self.layout(markup, px, face, "#ffffff", max_width)
-        return (max((w for w, _, _ in lines), default=0), sum(h for _, h, _ in lines))
+        return (max((w for w, _, _ in lines), default=0), sum(h for _, h, _ in lines) + line_gap * (len(lines) - 1))
 
     # ----- frame -----
     def present(self):

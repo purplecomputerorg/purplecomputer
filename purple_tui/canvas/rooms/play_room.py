@@ -303,7 +303,7 @@ class PlayRoom:
             if y + h < top_limit:
                 break
             self._draw_entry(g, e, x, y, width)
-            y -= em(0.3) if e.kind == "answer" else em(0.1)
+            y -= em(0.35) if e.kind == "answer" else self._row_gap(g)
         g.surface.set_clip(None)
 
     def _answer_px(self, g, e) -> int:
@@ -314,10 +314,18 @@ class PlayRoom:
             return g.em(2.0)
         return g.em(1.3)
 
+    def _row_gap(self, g) -> int:
+        """The hairline between rows, so wrapped letter blocks never fuse."""
+        return g.em(0.2)
+
+    def _answer_indent(self, g, e) -> int:
+        icon = SPEECH_ICONS.get(e.speech, "")
+        return g.em(0.1) + (g.measure(icon, g.em(1.05), "mono-bold")[0] + g.em(0.5) if icon else 0)
+
     def _entry_height(self, g, e, width) -> int:
         if e.kind == "ask":
             return g.line_height(g.em(1.05), "mono")
-        return g.markup_size(e.markup, self._answer_px(g, e), max_width=width - g.em(0.1))[1]
+        return g.markup_size(e.markup, self._answer_px(g, e), "mono-bold", width - self._answer_indent(g, e), self._row_gap(g))[1]
 
     def _draw_entry(self, g, e, x, y, width):
         if e.kind == "ask":
@@ -325,8 +333,9 @@ class PlayRoom:
             r = g.draw_text("Ask → ", px, x, y, "mono-bold", P.MUTED)
             g.draw_text(e.markup, px, r.right, y, "mono", P.MUTED)
             return
-        ax = x + g.em(0.1)
         icon = SPEECH_ICONS.get(e.speech, "")
         if icon:
-            ax = g.draw_text(icon, g.em(1.05), ax, y, "mono-bold", P.TEXT).right + g.em(0.5)
-        g.draw_markup(e.markup, self._answer_px(g, e), ax, y, "mono-bold", P.TEXT, width - (ax - x), dim_to=P.SURFACE)
+            g.draw_text(icon, g.em(1.05), x + g.em(0.1), y, "mono-bold", P.TEXT)
+        indent = self._answer_indent(g, e)
+        g.draw_markup(e.markup, self._answer_px(g, e), x + indent, y, "mono-bold", P.TEXT, width - indent,
+                      dim_to=P.SURFACE, line_gap=self._row_gap(g))

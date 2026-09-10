@@ -162,6 +162,8 @@ UI_READY_MARKER=/tmp/purple-ui-ready
         [ -f "$UI_READY_MARKER" ] && break
         sleep 0.25
     done
+    # Sizes the live session's RAM floor (LIVE_MIN_KB in the 32-bit Key's boot script).
+    xlog "memory at UI ready: $(awk '/^(MemTotal|MemAvailable):/ {printf "%s %dMB  ", $1, $2 / 1024}' /proc/meminfo)"
     xlog "compositor: $(purple-start-compositor 2>&1)"
 ) &
 

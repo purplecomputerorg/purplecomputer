@@ -618,11 +618,11 @@ class MusicRoom:
         g.draw_text(f"Key of {FRIENDLY_KEY_NAMES[root]}", px, r.right, cy, "mono", P.DIM, anchor="midright")
 
     def _draw_grid(self, g, r):
-        size = min(r.w / 10.9, r.h / 4.3)
-        gap = size * 0.1
-        radius = round(size * 0.076)
-        x0 = r.centerx - (10 * size + 9 * gap) / 2
-        y0 = r.centery - (4 * size + 3 * gap) / 2
+        """Ten by four gapless square blocks: a quiet key is just its letter,
+        a sounding key fills its whole block with color."""
+        size = min(r.w / 10, r.h / 4)
+        x0 = r.centerx - 10 * size / 2
+        y0 = r.centery - 4 * size / 2
         letter_px = g.em(1.05)
         label_px = max(10, int(size * 0.15))
         for row_idx, row in enumerate(GRID_KEYS):
@@ -635,12 +635,11 @@ class MusicRoom:
                     note, _ = pitch_for(row_idx - 1, col_idx, FRIENDLY_KEYS[root_idx], 0)
                     if at_front:
                         bg = WAVEFRONT_COLOR
-                tile = pygame.Rect(int(x0 + col_idx * (size + gap)), int(y0 + row_idx * (size + gap)), int(size), int(size))
+                tile = pygame.Rect(int(x0 + col_idx * size), int(y0 + row_idx * size), int(size), int(size))
                 quiet = bg == P.TILE
-                g.rect(bg, tile, radius=radius)
-                if quiet:
-                    g.rect(P.TILE_LINE, tile, width=1, radius=radius)
-                fg = P.DIM if quiet else text_color_for(bg)
+                if not quiet:
+                    g.rect(bg, tile)
+                fg = P.MUTED if quiet else text_color_for(bg)
                 g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono" if quiet else "mono-bold", fg, anchor="center")
                 show = key in self._note_labels or (melodic and (self._transition is not None or self.show_labels))

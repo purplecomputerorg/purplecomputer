@@ -32,10 +32,10 @@ def test_travel_accelerates_past_threshold():
         async with _art_canvas() as canvas:
             canvas._cursor_x, canvas._cursor_y = 5, 2
             canvas._pen_down = False
-            await _hold_past_accel_threshold(canvas, direction='down')
-            y_before = canvas._cursor_y
-            await canvas.handle(NavigationAction(direction='down', is_repeat=True))
-            assert canvas._cursor_y - y_before == HOLD_ACCEL_MULTIPLIER
+            await _hold_past_accel_threshold(canvas, direction='right')
+            x_before = canvas._cursor_x
+            await canvas.handle(NavigationAction(direction='right', is_repeat=True))
+            assert canvas._cursor_x - x_before == HOLD_ACCEL_MULTIPLIER
     _run(_test())
 
 

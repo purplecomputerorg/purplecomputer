@@ -43,8 +43,9 @@ ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  �
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
-TITLE_STRIP_VH = 6.8          # air above the stage, matched to the mock's osbar
-STATUS_STRIP_VH = 6.8         # air below the stage, matched to the mock's osfoot
+SIDE_MARGIN_VW = 6            # air beside the frame; the sticker legend sits in the right one
+TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
+STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
 TIMELINE_DEBOUNCE_S = 3.0
 TIMELINE_MAX_WAIT_S = 15.0
 
@@ -1109,13 +1110,15 @@ class PurpleApp:
     # ------------------------------------------------------------------ drawing
     def _viewport_rect(self) -> pygame.Rect:
         """The room area: CANVAS_COLS x CANVAS_ROWS square units, as large as
-        fit between the title and status strips, so every machine shows the
-        same shape and the Art grid fills it edge to edge."""
+        fit inside the side margins and between the title and status strips,
+        so every machine shows the same shape and the Art grid fills it edge
+        to edge."""
         g = self.g
-        pad, title_h, status_h, legend_w = g.vh(1.2 + FRAME_GAP_VH), g.vh(TITLE_STRIP_VH), g.vh(STATUS_STRIP_VH), g.vw(3)
-        unit = max(4, min((g.w - 2 * pad - legend_w) // CANVAS_COLS, (g.h - 2 * pad - title_h - status_h) // CANVAS_ROWS))
+        gap, title_h, status_h = g.vh(FRAME_GAP_VH), g.vh(TITLE_STRIP_VH), g.vh(STATUS_STRIP_VH)
+        unit = max(4, min((g.w - 2 * (g.vw(SIDE_MARGIN_VW) + gap)) // CANVAS_COLS,
+                          (g.h - title_h - status_h - 2 * gap) // CANVAS_ROWS))
         vp = pygame.Rect(0, 0, unit * CANVAS_COLS, unit * CANVAS_ROWS)
-        vp.center = ((g.w - legend_w) // 2, (title_h - status_h + g.h) // 2)
+        vp.center = (g.w // 2, (title_h - status_h + g.h) // 2)
         return vp
 
     @property

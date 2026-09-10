@@ -41,7 +41,6 @@ def contrast_text(bg) -> str:
 BG = "#1d1234"          # app ground (--device)
 SURFACE = "#251845"     # stage (--stage)
 TILE = "#30244E"        # music keys, panels: white at 5% over SURFACE
-TILE_LINE = "#332651"   # the keys' hairline border: white at 6% over SURFACE
 FIELD = "#362A54"       # the Play input's fill: white at 8% over SURFACE
 HAIR = "#2c2148"        # subtle borders: cards, the Esc pill (--hair)
 LINE = "#7a5aa6"        # the stage border, the input border (--border)

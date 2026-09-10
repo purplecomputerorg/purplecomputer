@@ -79,10 +79,11 @@ a 1440x900 MacBook get the same proportions. Chrome (bars, menus, pills, the
 Music keys, the Play input) is sized in `g.em(n)`, 1.3% of screen width: the
 same unit the HTML design mock used, so its paddings, gaps and radii port
 verbatim. The viewport itself is a fixed
-`CANVAS_COLS x CANVAS_ROWS` (48x27) grid of square units, as large as fits
-between the title and status strips and centered, so every machine shows the
-same shape; wide screens get margins at the sides, 4:3 screens above and
-below. The Art grid is those units: 48x24 cells under a 1.5 unit mode switch
+`CANVAS_COLS x CANVAS_ROWS` (48x24) grid of square units, the 2:1 frame of
+the terminal UI, as large as fits inside the side margins and between the
+title and status strips, centered, so every machine shows the same shape and
+the same air around it; 4:3 screens get extra air above and below. The Art
+grid is those units: 48x21 cells under a 1.5 unit mode switch
 and over a 1.5 unit hint row, edge to edge with no leftover space. The code
 line is 3 units tall and takes those two rows, so the picture keeps its size
 while coding. Unpainted cells alternate two near-identical purples so the

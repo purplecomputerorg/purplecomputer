@@ -22,7 +22,8 @@ Day to day:
 
 ```bash
 just release-status          # what customers have, what ships next, what on main needs a pick decision (--all for everything)
-just release-pick <sha>...   # cherry-pick onto release/1.x, run its tests, show status
+just release-pick <sha>...   # cherry-pick onto release/1.x, show status
+just release-test            # lint and test release/1.x, once per batch of picks, before building
 purple-build --release       # build the release worktree (includes the with-backup ISO)
 just flash-all               # flash customer USBs from that build (prefers with-backup)
 just ship                    # confirm, upload, tag (just ship --commit <sha> for an earlier built commit)

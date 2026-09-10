@@ -253,11 +253,15 @@ release_dir := env_var("HOME") / "purplecomputer-release"
 release-status *args:
     @./build-scripts/release-status.sh {{args}}
 
-# Cherry-pick fixes from main onto release/1.x, run its tests, show what ships
+# Cherry-pick fixes from main onto release/1.x and show what ships (run just release-test before building)
 release-pick +shas:
     git -C {{release_dir}} cherry-pick -x {{shas}}
-    cd {{release_dir}} && just test
     @echo && ./build-scripts/release-status.sh
+    @echo && echo "Run 'just release-test' before purple-build --release."
+
+# Lint and test release/1.x in its worktree; run once after a batch of picks, before building
+release-test:
+    cd {{release_dir}} && just test
 
 # Publish the already-built release: picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases.
 # Build first with purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.

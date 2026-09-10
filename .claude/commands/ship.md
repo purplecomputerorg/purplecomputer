@@ -12,6 +12,7 @@ Run these read-only checks first:
 - `git -C ~/purplecomputer-release status --short --branch` (must be on `release/1.x` and clean)
 - `git status --short` in the main checkout (uncommitted work worth mentioning, not a blocker)
 - `git -C ~/purplecomputer-release log --oneline -5` to see what the shipped ISO will actually contain
+- `just release-test` (lint and tests on release/1.x; picks no longer run tests, so a failure here is a blocker to raise, not a nit)
 
 ## 2. Review the contents
 
@@ -27,7 +28,7 @@ Go through the release-status output commit by commit and flag anything that war
 Summarize your review: what ships, what waits, and each concern with a one-line reason. Then use AskUserQuestion to confirm:
 
 - Ship as-is
-- Run proposed release-picks first (then re-run `just release-status`, re-review, and confirm again)
+- Run proposed release-picks first (then re-run `just release-status` and `just release-test`, re-review, and confirm again)
 - Abort
 
 If no version was passed as an argument, also ask whether this is a semver release (version stamped at build time) or an auto date-stamped release.

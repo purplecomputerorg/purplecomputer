@@ -48,6 +48,14 @@ def _play_autocomplete(last_word: str, full_text: str = "") -> list:
     return [(w, c, e) for w, c, e in content.search_words(last_word)]
 
 
+def scroll_thumb(track, viewport: int, total: int, hidden: int, min_h: int) -> pygame.Rect:
+    """Where the thumb sits on the track: content is `total` tall, the window
+    shows `viewport` of it ending `hidden` px above the bottom."""
+    h = min(track.h, max(min_h, round(track.h * viewport / total)))
+    y = track.y + round(track.h * max(0, total - hidden - viewport) / total)
+    return pygame.Rect(track.x, min(y, track.bottom - h), track.w, h)
+
+
 class Entry:
     """One history line: what was asked, or an answer in markup."""
 
@@ -296,15 +304,24 @@ class PlayRoom:
         self.field.draw(g, x, box.centery - line_h // 2, box.right - x, line_px, label_px=em(1.2), gap=gap)
         top_limit = rect.y + em(1)
         y = box.y - em(1)
+        viewport = y - top_limit
+        rows = [(e, self._entry_height(g, e, width), self._gap_above(g, e)) for e in self.history]
+        shown = rows[:len(rows) - self.scroll]
         g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, y - rect.y + em(0.5)))
-        for e in reversed(self.history[:len(self.history) - self.scroll] if self.scroll else self.history):
-            h = self._entry_height(g, e, width)
+        for e, h, gap in reversed(shown):
             y -= h
             if y + h < top_limit:
                 break
             self._draw_entry(g, e, x, y, width)
-            y -= em(0.35) if e.kind == "answer" else self._row_gap(g)
+            y -= gap
         g.surface.set_clip(None)
+        total = sum(h + gap for _, h, gap in rows)
+        if total > viewport:
+            hidden = sum(h + gap for _, h, gap in rows[len(shown):])
+            w = em(0.5)
+            track = pygame.Rect(rect.right - em(1.0) - w, top_limit, w, viewport)
+            g.rect(P.BG, track, radius=w // 2)
+            g.rect(P.FIELD, scroll_thumb(track, viewport, total, hidden, em(1.5)), radius=w // 2)
 
     def _answer_px(self, g, e) -> int:
         """Only a small all-emoji answer earns the big size; text stays a
@@ -317,6 +334,9 @@ class PlayRoom:
     def _row_gap(self, g) -> int:
         """The hairline between rows, so wrapped letter blocks never fuse."""
         return g.em(0.2)
+
+    def _gap_above(self, g, e) -> int:
+        return g.em(0.35) if e.kind == "answer" else self._row_gap(g)
 
     def _answer_indent(self, g, e) -> int:
         icon = SPEECH_ICONS.get(e.speech, "")

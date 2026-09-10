@@ -10,7 +10,8 @@ How spoken text gets fast, and why the cache stores raw WAV.
 2. **Disk cache** (`~/.purple/cache/tts/*.wav`): anything Piper has synthesized before on this machine. Instant on repeat.
 3. **Piper synthesis**: everything else. Takes a moment; the UI shows a pending indicator (··) until playback starts.
 
-The cache is keyed on normalized text (punctuation and case stripped), so "hello!" and "Hello" share an entry. Capped at 50MB with LRU eviction by access time.
+The cache is keyed on normalized text (punctuation and case stripped) plus the engine that spoke it (Natural is Piper, Quick is flite), so "hello!" and "Hello" share an entry and switching voices never replays the other voice's clips. Capped at 50MB with LRU eviction by access time.
+
 
 ## Why raw WAV, not OGG
 

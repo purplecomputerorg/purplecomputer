@@ -62,3 +62,7 @@ PYTHONPATH=/opt/purple python3 /mnt/purple-speech-probe.py /mnt/*.onnx
 - Word timings much larger in the app's speech log than in the probe: the
   app is contending for the CPU (look at what else runs) or waiting on the
   mixer, not on the model.
+- Still too slow after all of the above: Parent Menu, Sound & Display, Voice,
+  pick Quick. That swaps Piper for flite (`cmu_us_lnh`, no ML runtime), about
+  0.1 s per phrase on any of these machines. The speech log then says
+  `synth via quick`.

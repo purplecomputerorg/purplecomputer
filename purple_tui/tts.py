@@ -1,8 +1,8 @@
 """
-Text-to-Speech module using Piper TTS
+Text-to-Speech module: Piper (the Natural voice) or flite (the Quick voice).
 
-Piper is a fast, local, neural TTS system.
-https://github.com/rhasspy/piper
+Piper is a fast, local, neural TTS system: https://github.com/rhasspy/piper
+flite is CMU's small synthesizer, no ML runtime: http://cmuflite.org
 
 Deterministic synthesis: fixed _SYNTH_PARAMS, so identical input produces identical WAV output.
 """
@@ -49,6 +49,14 @@ def _dbg(msg: str) -> None:
 # Voice model configuration
 VOICE_MODEL = "en_US-libritts_r-medium"
 VOICE_SPEAKER = 166  # speaker 6006
+
+# The Quick voice is what the parent menu can pick, and what speaks when Piper
+# is absent (32-bit builds have no onnxruntime).
+VOICE_NATURAL, VOICE_QUICK = "natural", "quick"
+VOICE_NAMES = {VOICE_NATURAL: "Natural", VOICE_QUICK: "Quick"}
+FLITE_VOICE = "cmu_us_lnh"
+_FLITE = "flite"
+_FLITE_STRETCH = 1.15  # same slowdown as length_scale below, so both voices pace alike
 
 # Deterministic synthesis parameters (no randomness between runs)
 # Parameter names vary across piper-tts versions, so we try all known variants.
@@ -234,18 +242,21 @@ _MAX_CACHE_TEXT_LEN = 500
 _MAX_CACHE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
-_SYNTH_SIGNATURE = repr((VOICE_MODEL, VOICE_SPEAKER, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB))
+_SYNTH_SIGNATURES = {
+    VOICE_NATURAL: repr((VOICE_MODEL, VOICE_SPEAKER, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB)),
+    VOICE_QUICK: repr((FLITE_VOICE, _FLITE_STRETCH, SPEECH_RMS_DB, SPEECH_CEILING_DB)),
+}
 
 
-def _cache_path(prepared_text: str) -> Path:
+def _cache_path(prepared_text: str, engine: str) -> Path:
     """Keyed on text plus synthesis settings, so a voice or leveling change never replays stale WAVs."""
-    key = f"{_SYNTH_SIGNATURE}\n{prepared_text}".encode('utf-8')
+    key = f"{_SYNTH_SIGNATURES[engine]}\n{prepared_text}".encode('utf-8')
     return _CACHE_DIR / f"{hashlib.sha256(key).hexdigest()[:16]}.wav"
 
 
-def _get_cached(prepared_text: str) -> Path | None:
+def _get_cached(prepared_text: str, engine: str) -> Path | None:
     """Return cached WAV path if it exists."""
-    cache_path = _cache_path(prepared_text)
+    cache_path = _cache_path(prepared_text, engine)
     if cache_path.exists():
         try:
             cache_path.touch()
@@ -255,7 +266,7 @@ def _get_cached(prepared_text: str) -> Path | None:
     return None
 
 
-def _store_cache(prepared_text: str, wav_path: str) -> Path | None:
+def _store_cache(prepared_text: str, wav_path: str, engine: str) -> Path | None:
     """Move the WAV into the cache. Returns cache path, or None on failure
     (the temp file survives so the caller can still play it)."""
     if len(prepared_text) > _MAX_CACHE_TEXT_LEN:
@@ -263,7 +274,7 @@ def _store_cache(prepared_text: str, wav_path: str) -> Path | None:
 
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_path = _cache_path(prepared_text)
+        cache_path = _cache_path(prepared_text, engine)
         shutil.move(wav_path, cache_path)
         _enforce_cache_limit()
         return cache_path
@@ -330,27 +341,62 @@ def _get_voice_clip(text: str) -> Path | None:
         return clip_path
     return None
 
-def _get_voice_search_paths() -> list[Path]:
-    """Get list of paths to search for voice model."""
-    paths = [
-        Path.home() / ".local" / "share" / "piper-voices",
-        Path.home() / ".cache" / "piper",
-        Path("/opt/purple/piper-voices"),  # USB/installed system
-        Path("/opt/piper"),
-    ]
-    # On macOS/Linux, also check the actual user home (in case HOME is overridden)
+def _get_voice_search_paths(kind: str = "piper") -> list[Path]:
+    """Where a voice of this kind may live: real and overridden $HOME, then the image path."""
+    homes = [Path.home()]
     try:
         import pwd
-        real_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
-        paths.insert(0, real_home / ".local" / "share" / "piper-voices")
+        homes.insert(0, Path(pwd.getpwuid(os.getuid()).pw_dir))
     except (ImportError, KeyError):
         pass
+    paths = [h / ".local" / "share" / f"{kind}-voices" for h in homes] + [Path("/opt/purple") / f"{kind}-voices"]
+    if kind == "piper":
+        paths += [Path.home() / ".cache" / "piper", Path("/opt/piper")]
     return paths
 
 
+def _find_voice(kind: str, filename: str) -> Path | None:
+    return next((c for c in (p / filename for p in _get_voice_search_paths(kind)) if c.exists()), None)
+
+
 def find_voice_model() -> Path | None:
-    candidates = (p / f"{VOICE_MODEL}.onnx" for p in _get_voice_search_paths())
-    return next((c for c in candidates if c.exists()), None)
+    return _find_voice("piper", f"{VOICE_MODEL}.onnx")
+
+
+def find_flite_voice() -> Path | None:
+    return _find_voice("flite", f"{FLITE_VOICE}.flitevox")
+
+
+def _flite_ready() -> bool:
+    return shutil.which(_FLITE) is not None and find_flite_voice() is not None
+
+
+_voice_pref = None  # the parent's "voice" setting, read once; set_voice() keeps it current
+
+
+def voice_preference() -> str:
+    global _voice_pref
+    if _voice_pref is None:
+        from .settings import get_voice
+        _voice_pref = get_voice()
+    return _voice_pref
+
+
+def set_voice(pref: str) -> None:
+    """Parent menu switch: persists, and loads Piper if Natural is picked after boot skipped it."""
+    global _voice_pref
+    from .settings import set_voice as save
+    save(pref)
+    _voice_pref = pref
+    if pref == VOICE_NATURAL:
+        preload()
+
+
+def _engine() -> str:
+    """Piper unless the parent picked Quick or Piper cannot speak on this machine."""
+    if voice_preference() == VOICE_QUICK or _piper_available is False or find_voice_model() is None:
+        return VOICE_QUICK
+    return VOICE_NATURAL
 
 
 def load_voice():
@@ -418,7 +464,7 @@ def preload() -> threading.Thread | None:
     """Start the speech worker once per session. The model loads in its own
     process, so typing never stalls and the first word isn't cancelled mid-load."""
     global _preload_started, _worker
-    if _preload_started or os.environ.get("PURPLE_DEMO_AUTOSTART") or find_voice_model() is None:
+    if _preload_started or os.environ.get("PURPLE_DEMO_AUTOSTART") or _engine() != VOICE_NATURAL:
         return None
     _preload_started = True
     try:
@@ -506,6 +552,14 @@ def _make_synth_config():
     return SynthesisConfig(**kwargs)
 
 
+def _write_wav(wav_path: str, samples: array.array, sample_rate: int, channels: int = 1, width: int = 2) -> None:
+    with wave.open(wav_path, 'wb') as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(width)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(samples.tobytes())
+
+
 def synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
     """Shared by runtime speech and the clip scripts so the two can't drift. Serialized: espeak's phonemizer is not thread-safe."""
     config = _make_synth_config()
@@ -517,36 +571,56 @@ def synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
     samples = array.array('h')
     samples.frombytes(b''.join(chunk.audio_int16_bytes for chunk in audio_chunks))
     samples = postprocess_samples(samples, first.sample_rate)
-    with wave.open(wav_path, 'wb') as wav_file:
-        wav_file.setnchannels(first.sample_channels)
-        wav_file.setsampwidth(first.sample_width)
-        wav_file.setframerate(first.sample_rate)
-        wav_file.writeframes(samples.tobytes())
+    _write_wav(wav_path, samples, first.sample_rate, first.sample_channels, first.sample_width)
     return True
 
 
-def _synthesize_to_cache(prepared_text: str) -> Path | None:
-    """Synthesize prepared text (worker first, in-process if there is none),
-    post-process, and store in cache. Returns the path to play, or None."""
+def synthesize_with_flite(prepared_text: str, wav_path: str) -> bool:
+    """The Quick voice: one flite process per utterance, then the same trim and leveling as Piper."""
+    voice = find_flite_voice()
+    if voice is None or shutil.which(_FLITE) is None:
+        return False
+    subprocess.run([_FLITE, "-voice", str(voice), "--setf", f"duration_stretch={_FLITE_STRETCH}",
+                    "-t", prepared_text, "-o", wav_path],
+                   check=True, timeout=_WORKER_REPLY_TIMEOUT, stdout=subprocess.DEVNULL, stderr=_worker_stderr())
+    with wave.open(wav_path) as wav_file:
+        sample_rate = wav_file.getframerate()
+        samples = array.array('h')
+        samples.frombytes(wav_file.readframes(wav_file.getnframes()))
+    _write_wav(wav_path, postprocess_samples(samples, sample_rate), sample_rate)
+    return True
+
+
+def _synthesize_piper(prepared_text: str, wav_path: str) -> bool:
+    """Worker first, in-process if there is none."""
+    ok = _worker_synthesize(prepared_text, wav_path)
+    if ok is not None:
+        return ok
+    voice = _get_piper_voice()
+    return voice is not None and synthesize_to_file(voice, prepared_text, wav_path)
+
+
+def _synthesize_to_cache(prepared_text: str, engine: str) -> Path | None:
+    """Synthesize prepared text with the engine, post-process, and store in
+    cache. A Piper failure falls through to flite rather than silence.
+    Returns the path to play, or None."""
     wav_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             wav_path = f.name
 
         t0 = time.monotonic()
-        ok = _worker_synthesize(prepared_text, wav_path)
-        source = "worker"
-        if ok is None:
-            source = "in-process"
-            voice = _get_piper_voice()
-            ok = voice is not None and synthesize_to_file(voice, prepared_text, wav_path)
-        _dbg(f"synth via {source}: {time.monotonic() - t0:.2f}s ok={ok}")
+        ok = engine == VOICE_NATURAL and _synthesize_piper(prepared_text, wav_path)
+        if not ok and _flite_ready():
+            engine = VOICE_QUICK
+            ok = synthesize_with_flite(prepared_text, wav_path)
+        _dbg(f"synth via {engine}: {time.monotonic() - t0:.2f}s ok={ok}")
         if not ok:
             Path(wav_path).unlink(missing_ok=True)
             return None
 
         # Try to cache (best effort, don't lose audio if caching fails)
-        cache_path = _store_cache(prepared_text, wav_path)
+        cache_path = _store_cache(prepared_text, wav_path, engine)
         if cache_path:
             return cache_path
 
@@ -698,15 +772,16 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None) -> bool:
 
     # Prepare text (letter expansion, pronunciation, padding)
     prepared = _prepare_text(text)
+    engine = _engine()
 
     # Check cache
-    cached_path = _get_cached(prepared)
+    cached_path = _get_cached(prepared, engine)
     if cached_path:
         _dbg("speak_sync: cache hit")
         return _play_clip(cached_path, speech_id, on_playing)
 
-    _dbg(f"speak_sync: synthesizing len={len(prepared)}")
-    result_path = _synthesize_to_cache(prepared)
+    _dbg(f"speak_sync: synthesizing len={len(prepared)} engine={engine}")
+    result_path = _synthesize_to_cache(prepared, engine)
     if result_path is None:
         _dbg("speak_sync: synthesis FAILED")
         return False
@@ -770,4 +845,6 @@ def _play_clip(clip_path: Path, speech_id: int, on_playing: callable = None) -> 
 
 def is_available() -> bool:
     """Check if TTS is available"""
-    return _get_piper_voice() is not None
+    if _engine() == VOICE_NATURAL:
+        return _get_piper_voice() is not None
+    return _flite_ready()

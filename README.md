@@ -18,10 +18,10 @@ They explore, create, and put it down on their own.
 > are always welcome via email. See [LICENSE](LICENSE) and
 > [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-> **Which branch?** `release/1.x` is the code on a Purple Key today and the
-> default branch: clone it to run what customers run. `main` is the next version
-> in development (a new canvas UI replacing the Textual one) and may be broken
-> or half-migrated at any time.
+> **Which branch?** `release/1.x` is the default branch and the code on a Purple
+> Key: clone it to run what is currently being shipped in boxes. `main` is the
+> next version in development (a new canvas UI replacing the Textual one) and
+> may be broken or half-migrated at any time.
 
 ---
 

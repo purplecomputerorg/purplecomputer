@@ -641,7 +641,7 @@ class MusicRoom:
                     g.rect(bg, tile)
                 fg = P.MUTED if quiet else text_color_for(bg)
                 g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery,
-                            "sans-bold" if quiet else "sans-heavy", fg, anchor="center")
+                            "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 show = key in self._note_labels or (melodic and (self._transition is not None or self.show_labels))
                 label = PERCUSSION_NAMES.get(key, "") if key.isdigit() else (note or "")
                 if show and label:

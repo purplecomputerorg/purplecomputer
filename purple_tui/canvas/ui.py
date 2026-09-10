@@ -216,7 +216,7 @@ class TextField:
         label_px lets the label sit a step larger than the typed text; gap
         sets the space between label and text (a boxed field needs more)."""
         mid = y + g.line_height(px, "mono") // 2
-        g.draw_text(f"{label} →", label_px or px, x, mid, "mono-heavy", P.ACCENT, anchor="midleft")
+        g.draw_text(f"{label} →", label_px or px, x, mid, "mono-bold", P.ACCENT, anchor="midleft")
         tx = self.text_x(g, x, px, label, label_px, gap)
         shown, start = self._visible_slice(g, px, width - (tx - x) - px)
         before = shown[:self.cursor - start]
@@ -319,8 +319,8 @@ class Dialog(Overlay):
     body_lines: list = []   # markup lines when draw_body isn't overridden
 
     def body_height(self, g: Gfx) -> int:
-        px = g.vh(2.4)
-        return sum(g.markup_size(line or " ", px, max_width=self.box_width(g) - 2 * g.vw(3))[1] for line in self.body_lines)
+        px = g.em(0.98)
+        return sum(g.markup_size(line or " ", px, "mono", self.box_width(g) - 2 * g.vw(3))[1] for line in self.body_lines)
 
     def box_width(self, g: Gfx) -> int:
         return g.vw(self.width_pct)
@@ -328,8 +328,8 @@ class Dialog(Overlay):
     def draw(self, g: Gfx):
         if self.scrim:
             draw_scrim(g)
-        pad = g.vh(3)
-        hint_h = g.line_height(g.vh(2.0), "mono") if self.hint else 0
+        pad = g.em(1.2)
+        hint_h = g.line_height(g.em(0.85), "mono") if self.hint else 0
         body_h = self.body_height(g)
         w = self.box_width(g)
         h = window_title_height(g, self.title) + pad + body_h + (pad // 2 if self.hint else 0) + hint_h + pad
@@ -339,11 +339,11 @@ class Dialog(Overlay):
         inner = pygame.Rect(box.x + g.vw(3), y, w - 2 * g.vw(3), body_h)
         self.draw_body(g, inner)
         if self.hint:
-            g.draw_markup(self.hint, g.vh(2.0), inner.x, box.bottom - pad - hint_h, "mono", P.MUTED, inner.w, "center", P.SURFACE)
+            g.draw_markup(self.hint, g.em(0.85), inner.x, box.bottom - pad - hint_h, "mono", P.MUTED, inner.w, "center", P.SURFACE)
         self.box = box
 
     def draw_body(self, g: Gfx, rect: pygame.Rect):
-        px = g.vh(2.4)
+        px = g.em(0.98)
         y = rect.y
         for line in self.body_lines:
             y += g.draw_markup(line or " ", px, rect.x, y, "mono", P.TEXT, rect.w, "center", P.SURFACE)
@@ -366,29 +366,32 @@ class Picker(Dialog):
         self.selected = self.default_selected
 
     def option_height(self, g: Gfx) -> int:
-        return g.vh(7.5)
+        return g.em(3.2) if any(len(o) == 3 for o in self.options) else g.em(1.9)
 
     def body_height(self, g: Gfx) -> int:
-        desc = g.markup_size(self.DESCRIPTION, g.vh(2.2), max_width=self.box_width(g))[1] + g.vh(1) if self.DESCRIPTION else 0
-        return desc + len(self.options) * (self.option_height(g) + g.vh(1))
+        desc = g.markup_size(self.DESCRIPTION, g.em(0.92), "mono", self.box_width(g))[1] + g.em(0.8) if self.DESCRIPTION else 0
+        return desc + len(self.options) * (self.option_height(g) + g.em(0.3))
 
     def draw_body(self, g: Gfx, rect: pygame.Rect):
+        """Rows in the Parent Menu's idiom: plain mono, the chosen one on
+        the selection plate."""
         y = rect.y
+        px = g.em(0.98)
         if self.DESCRIPTION:
-            y += g.draw_markup(self.DESCRIPTION, g.vh(2.2), rect.x, y, "mono", P.MUTED, rect.w, "center", P.SURFACE) + g.vh(1)
+            y += g.draw_markup(self.DESCRIPTION, g.em(0.92), rect.x, y, "mono", P.MUTED, rect.w, "center", P.SURFACE) + g.em(0.8)
         oh = self.option_height(g)
         for i, opt in enumerate(self.options):
             box = pygame.Rect(rect.x, y, rect.w, oh)
             on = i == self.selected
-            g.rect(P.PRIMARY if on else P.TILE, box, radius=g.em(0.35))
-            label = opt[1]
+            if on:
+                g.rect(P.PRIMARY, box, radius=g.em(0.35))
             color = P.ON_PRIMARY if on else P.TEXT
             if len(opt) == 3:
-                g.draw_text(label, g.vh(2.6), box.centerx, box.centery - g.vh(1.2), "mono-heavy" if on else "mono-bold", color, anchor="center")
-                g.draw_text(opt[2], g.vh(1.9), box.centerx, box.centery + g.vh(1.4), "mono", color if on else P.MUTED, anchor="center")
+                g.draw_text(opt[1], px, box.centerx, box.centery - g.em(0.6), "mono-bold" if on else "mono", color, anchor="center")
+                g.draw_text(opt[2], g.em(0.85), box.centerx, box.centery + g.em(0.65), "mono", color if on else P.MUTED, anchor="center")
             else:
-                g.draw_text(label, g.vh(2.6), box.centerx, box.centery, "mono-heavy" if on else "mono-bold", color, anchor="center")
-            y += oh + g.vh(1)
+                g.draw_text(opt[1], px, box.centerx, box.centery, "mono-bold" if on else "mono", color, anchor="center")
+            y += oh + g.em(0.3)
 
     def selected_item_label(self):
         return self.options[self.selected][1] if self.options else None
@@ -441,22 +444,20 @@ def draw_scrim(g: Gfx, alpha: int = 225):
 
 
 def window_title_height(g: Gfx, title: str) -> int:
-    return g.vh(4.4) if title else 0
+    return g.em(3.0) if title else 0
 
 
 def draw_window(g: Gfx, box: pygame.Rect, title: str = "") -> int:
-    """A dialog box: rounded frame and a title strip across the top.
-    Returns the y where the body starts."""
+    """A dialog box: rounded frame with the title inside it, in the accent,
+    the way the Parent Menu is headed. Returns the y where the body starts."""
     radius = g.em(0.6)
     g.rect(P.SURFACE, box, radius=radius)
     g.rect(P.LINE, box, width=1, radius=radius)
     if not title:
         return box.y
-    strip = pygame.Rect(box.x, box.y, box.w, window_title_height(g, title))
-    pygame.draw.rect(g.surface, rgb(P.TILE), strip, border_top_left_radius=radius, border_top_right_radius=radius)
-    g.rect(P.HAIR, (box.x, strip.bottom - 1, box.w, 1))
-    g.draw_text(title, g.vh(2.0), strip.centerx, strip.centery, "mono-bold", P.TEXT, anchor="center")
-    return strip.bottom
+    head = window_title_height(g, title)
+    g.draw_text(title, g.em(1.05), box.centerx, box.y + head // 2 + g.em(0.3), "mono-bold", P.ACCENT, anchor="center", track=0.1)
+    return box.y + head
 
 
 def draw_label(g: Gfx, text: str, px: int, x: int, y: int, color=P.MUTED, anchor="midleft", on=False) -> pygame.Rect:

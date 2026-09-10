@@ -21,7 +21,7 @@ from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window
+from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
 from .sleep_screen import FullScreen
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
@@ -138,7 +138,7 @@ class DisplaySettingsScreen(Dialog):
     def draw_body(self, g, rect):
         rows = [("Brightness", self._brightness, BRIGHTNESS_MIN, BRIGHTNESS_MAX, BRIGHTNESS_STEP, BRIGHTNESS_MAX),
                 ("Contrast", self._contrast, CONTRAST_MIN, CONTRAST_MAX, CONTRAST_STEP, 1.0)]
-        px = g.vh(2.4)
+        px = g.em(0.98)
         for i, (label, value, lo, hi, step, normal) in enumerate(rows):
             y = rect.y + i * g.vh(7) + g.vh(2)
             on = i == self._focus
@@ -353,7 +353,7 @@ class ParentVolumeModal(Dialog):
         return self.app.volume_level if lock is None else lock
 
     def draw_body(self, g, rect):
-        px = g.vh(2.4)
+        px = g.em(0.98)
         level = self._slider_level()
         y = rect.y + g.vh(2)
         on = self._focus == "volume"
@@ -370,7 +370,7 @@ class ParentVolumeModal(Dialog):
         limited = self.app._volume_lock is not None
         g.draw_text(("▶ " if on else "") + ("On" if limited else "Off"), px, bx, y, "mono-bold", P.PRIMARY if on else P.MUTED, anchor="midleft")
         note = "The kid can't go louder than this. 0 is silent." if limited else "Turn on to cap how loud the kid can turn it up."
-        g.draw_text(note, g.vh(2), rect.x, y + g.vh(4.5), "mono", P.MUTED, anchor="midleft")
+        g.draw_text(note, g.em(0.85), rect.x, y + g.vh(4.5), "mono", P.MUTED, anchor="midleft")
 
     async def handle(self, action):
         if isinstance(action, NavigationAction):
@@ -468,8 +468,8 @@ class _Entry(Dialog):
 
     def draw_body(self, g, rect):
         desc = self._error or self._description
-        g.draw_markup(desc, g.vh(2.2), rect.x, rect.y, "mono", P.DANGER if self._error else P.MUTED, rect.w, "center", P.SURFACE, g.vh(0.4))
-        g.draw_markup(self.field_text(), g.vh(3.4), rect.x, rect.y + g.vh(8), "mono-bold", P.TEXT, rect.w, "center", P.SURFACE)
+        g.draw_markup(desc, g.em(0.92), rect.x, rect.y, "mono", P.DANGER if self._error else P.MUTED, rect.w, "center", P.SURFACE, g.vh(0.4))
+        g.draw_markup(self.field_text(), g.em(1.3), rect.x, rect.y + g.vh(8), "mono-bold", P.TEXT, rect.w, "center", P.SURFACE)
 
 
 class PinEntry(_Entry):
@@ -1329,18 +1329,15 @@ class ParentMenu(Overlay):
         em = g.em
         live_h = g.vh(9) if is_live_boot() else 0
         n_gaps = sum(1 for i in range(len(self.items)) if self._is_section(i)) + 1
-        pad, head_h, foot_h = em(1.0), em(2.8), em(6.0)
+        pad, head_h, foot_h = em(1.0), window_title_height(g, "Parent Menu"), em(6.0)
         avail = g.h - g.vh(4) - 2 * pad - head_h - live_h - foot_h
         row_h = min(em(1.9), int(avail / (len(self.items) + n_gaps * 0.8)))
         gap_h = int(row_h * 0.8)
         col_w = em(24)
         box = pygame.Rect(0, 0, col_w + em(5), 2 * pad + head_h + live_h + len(self.items) * row_h + n_gaps * gap_h + foot_h)
         box.center = (g.w // 2, g.h // 2)
-        draw_window(g, box)
         x0 = box.centerx - col_w // 2
-        y = box.y + pad
-        g.draw_text("Parent Menu", em(1.05), box.centerx, y + head_h // 2, "mono-bold", P.ACCENT, anchor="center", track=0.1)
-        y += head_h
+        y = draw_window(g, box, "Parent Menu") + pad
         if live_h:
             g.draw_markup(_boot_mode_hint(), g.vh(1.9), box.x + em(1), y, "mono", P.MUTED, box.w - em(2), "center", P.SURFACE)
             y += live_h

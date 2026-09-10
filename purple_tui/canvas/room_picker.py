@@ -149,7 +149,7 @@ class VolumeModal(Dialog):
 
     def draw_body(self, g, rect):
         icon, bars, label = self.app._volume_badge()
-        g.draw_text(f"{icon}  {bars}  {label}", g.vh(3), rect.centerx, rect.centery, "mono-bold", P.TEXT, anchor="center")
+        g.draw_text(f"{icon}  {bars}  {label}", g.em(1.3), rect.centerx, rect.centery, "mono-bold", P.TEXT, anchor="center")
 
     async def handle(self, action):
         if isinstance(action, NavigationAction):

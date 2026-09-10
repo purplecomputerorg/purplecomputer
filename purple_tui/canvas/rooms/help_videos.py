@@ -23,7 +23,7 @@ class HelpVideosScreen(Dialog):
         return g.vh(52)
 
     def draw_body(self, g, rect):
-        g.draw_text("Scan for videos and other help:", g.vh(2.2), rect.centerx, rect.y, "mono", P.MUTED, anchor="midtop")
+        g.draw_text("Scan for videos and other help:", g.em(0.92), rect.centerx, rect.y, "mono", P.MUTED, anchor="midtop")
         n = len(HELP_QR_MATRIX)
         module = max(2, g.vh(40) // n)
         size = module * n
@@ -33,7 +33,7 @@ class HelpVideosScreen(Dialog):
             for c, bit in enumerate(row):
                 if bit == "1":
                     g.rect(_QR_DARK, (x0 + c * module, y0 + r * module, module, module))
-        g.draw_text(HELP_QR_URL.split("://", 1)[-1], g.vh(2.4), rect.centerx, y0 + size + g.vh(2), "mono-heavy", P.TEXT, anchor="midtop")
+        g.draw_text(HELP_QR_URL.split("://", 1)[-1], g.em(0.98), rect.centerx, y0 + size + g.vh(2), "mono-heavy", P.TEXT, anchor="midtop")
 
     async def handle(self, action):
         if isinstance(action, ControlAction) and action.is_down and action.action == "escape":

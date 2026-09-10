@@ -142,19 +142,34 @@ source $prefix/purple-router.cfg
 set purple_boot=casper
 if [ "$purple_variant" = "-i386" ]; then
     set purple_boot=purple-install
+    if [ ! -f /casper/vmlinuz-i386 ]; then
+        clear
+        echo ""
+        echo "    So sorry! Purple does not support this computer."
+        echo ""
+        echo "    This machine uses an older kind of chip that Purple"
+        echo "    cannot run on. Most laptops made in the last 15 years"
+        echo "    or so will work."
+        echo "    (Technical: this is a 32-bit CPU. Purple needs 64-bit.)"
+        echo ""
+        echo "    Email support@purplecomputer.org for a full refund,"
+        echo "    or just to talk through options. Happy to help!"
+        echo ""
+        echo "    It is safe to turn this computer off now."
+        echo ""
+        sleep --interruptible 86400
+        halt
+    fi
 fi
 if [ ! -f /casper/vmlinuz$purple_variant ]; then
     clear
     echo ""
-    echo "    So sorry! Purple does not support this computer."
+    echo "    So sorry! This Purple USB stick is missing a file"
+    echo "    it needs for this computer, so Purple cannot start."
+    echo "    (Technical: /casper/vmlinuz$purple_variant is not on the stick.)"
     echo ""
-    echo "    This machine uses an older kind of chip that Purple"
-    echo "    cannot run on. Most laptops made in the last 15 years"
-    echo "    or so will work."
-    echo "    (Technical: this is a 32-bit CPU. Purple needs 64-bit.)"
-    echo ""
-    echo "    Email support@purplecomputer.org for a full refund,"
-    echo "    or just to talk through options. Happy to help!"
+    echo "    Email support@purplecomputer.org and we will send"
+    echo "    a replacement. Happy to help!"
     echo ""
     echo "    It is safe to turn this computer off now."
     echo ""
@@ -163,6 +178,7 @@ if [ ! -f /casper/vmlinuz$purple_variant ]; then
 fi
 
 ROUTER
+
     cat "$cfg" >> "$tmp"
     mv "$tmp" "$cfg"
 }

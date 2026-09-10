@@ -8,7 +8,7 @@ from ..constants import (
     ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
 )
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from .ui import Dialog, Overlay, Picker, draw_scrim
+from .ui import Dialog, Overlay, Picker
 
 ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art")]
 NUMBER_KEY_ROOMS = {"1": "play", "2": "music", "3": "art"}
@@ -91,7 +91,7 @@ class RoomPicker(Overlay):
     def draw(self, g):
         """Centered card grid inside the frame, spaced in the mock's ems:
         glyph above name, the key beneath, one line of guidance."""
-        draw_scrim(g, 240)
+        g.fill(P.BG)
         g.rect(P.LINE, self.app._frame_rect(self.app._viewport_rect()), width=1, radius=g.em(0.6))
         em = g.em
         tw, th, gap = em(10.6), em(7.6), em(1.1)

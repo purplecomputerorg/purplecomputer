@@ -526,13 +526,17 @@ main() {
     # filesystem inside is still at image size. resize2fs
     # extends it to fill the partition. e2fsck -fy is required by resize2fs
     # before an offline grow; -y is safe because we just verified the dd
-    # write byte-for-byte.
+    # write byte-for-byte. resize2fs -f skips its own "checked since last
+    # mount" test: e2fsck stamps the check with the machine's clock, and a
+    # clock behind the image build date (dead CMOS battery) makes that
+    # stamp older than the build's mount, so resize2fs refused and the
+    # install silently kept the 8GB image size.
     # ======================================================================
     ROOT_PART_TMP="${PART_PREFIX}2"
     log "Checking root filesystem..."
     e2fsck -fy "$ROOT_PART_TMP" || warn "e2fsck reported issues (continuing)"
     log "Growing root filesystem to fill disk..."
-    resize2fs "$ROOT_PART_TMP" || warn "resize2fs failed (install will use golden-image size)"
+    resize2fs -f "$ROOT_PART_TMP" || warn "resize2fs failed (install will use golden-image size)"
 
     # ==========================================================================
     # HYBRID BOOT SETUP (UEFI + BIOS) - See guides/nvram-boot-entry.md

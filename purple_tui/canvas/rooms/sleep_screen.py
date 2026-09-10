@@ -42,13 +42,13 @@ class FullScreen(Overlay):
             g.draw_text(line or " ", g.vh(4), g.w // 2, y, "mono-bold", P.PRIMARY, anchor="midtop")
             y += g.vh(5)
         if self.message:
-            y += g.draw_markup(self.message, g.vh(2.8), g.vw(10), y, "sans-bold", P.PRIMARY, g.vw(80), "center", self.bg, g.vh(0.6))
+            y += g.draw_markup(self.message, g.vh(2.8), g.vw(10), y, "mono-bold", P.PRIMARY, g.vw(80), "center", self.bg, g.vh(0.6))
         if self.hint:
             y += g.vh(3)
-            y += g.draw_markup(self.hint, g.vh(2.4), g.vw(10), y, "sans", P.MUTED, g.vw(80), "center", self.bg)
+            y += g.draw_markup(self.hint, g.vh(2.4), g.vw(10), y, "mono", P.MUTED, g.vw(80), "center", self.bg)
         if self.status:
             y += g.vh(2)
-            g.draw_markup(self.status, g.vh(2.2), g.vw(10), y, "sans", P.MUTED, g.vw(80), "center", self.bg, g.vh(0.4))
+            g.draw_markup(self.status, g.vh(2.2), g.vw(10), y, "mono", P.MUTED, g.vw(80), "center", self.bg, g.vh(0.4))
 
 
 class SleepScreen(FullScreen):

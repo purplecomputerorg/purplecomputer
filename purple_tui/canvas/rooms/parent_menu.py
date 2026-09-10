@@ -19,9 +19,9 @@ from ... import palette as P
 from ..gfx import FONT_DIR
 from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
-from ...constants import ICON_COMPUTER, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
+from ...constants import SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar
+from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window
 from .sleep_screen import FullScreen
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
@@ -142,15 +142,15 @@ class DisplaySettingsScreen(Dialog):
         for i, (label, value, lo, hi, step, normal) in enumerate(rows):
             y = rect.y + i * g.vh(7) + g.vh(2)
             on = i == self._focus
-            g.draw_text(f"{label}:", px, rect.x, y, "sans-bold", P.TEXT if on else P.MUTED, anchor="midleft")
+            g.draw_text(f"{label}:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")
             bx = rect.x + g.vw(11)
             bw = rect.w - g.vw(20)
             if on:
-                g.draw_text("◀", px, bx - g.vw(1.2), y, "sans-bold", P.PRIMARY, anchor="midright")
-                g.draw_text("▶", px, bx + bw + g.vw(1.2), y, "sans-bold", P.PRIMARY, anchor="midleft")
+                g.draw_text("◀", px, bx - g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midright")
+                g.draw_text("▶", px, bx + bw + g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midleft")
             draw_bar(g, bx, y - g.vh(0.7), bw, g.vh(1.4), (value - lo) / (hi - lo), P.PRIMARY if on else P.MUTED)
             offset = round((value - normal) / step)
-            g.draw_text("Normal" if offset == 0 else f"{offset:+d}", px, rect.right, y, "sans-bold", P.MUTED, anchor="midright")
+            g.draw_text("Normal" if offset == 0 else f"{offset:+d}", px, rect.right, y, "mono-bold", P.MUTED, anchor="midright")
 
     def _save_and_apply(self):
         apply_display_settings(self._brightness, self._contrast)
@@ -357,20 +357,20 @@ class ParentVolumeModal(Dialog):
         level = self._slider_level()
         y = rect.y + g.vh(2)
         on = self._focus == "volume"
-        g.draw_text("Volume:", px, rect.x, y, "sans-bold", P.TEXT if on else P.MUTED, anchor="midleft")
+        g.draw_text("Volume:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")
         bx, bw = rect.x + g.vw(9), rect.w - g.vw(24)
         if on:
-            g.draw_text("◀", px, bx - g.vw(1.2), y, "sans-bold", P.PRIMARY, anchor="midright")
-            g.draw_text("▶", px, bx + bw + g.vw(1.2), y, "sans-bold", P.PRIMARY, anchor="midleft")
+            g.draw_text("◀", px, bx - g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midright")
+            g.draw_text("▶", px, bx + bw + g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midleft")
         draw_bar(g, bx, y - g.vh(0.7), bw, g.vh(1.4), level / 100, P.PRIMARY if on else P.MUTED)
-        g.draw_text("Silent Mode" if level == 0 else volume_badge(level)[2], px, rect.right, y, "sans-bold", P.MUTED, anchor="midright")
+        g.draw_text("Silent Mode" if level == 0 else volume_badge(level)[2], px, rect.right, y, "mono-bold", P.MUTED, anchor="midright")
         y += g.vh(7)
         on = self._focus == "lock"
-        g.draw_text("Limit:", px, rect.x, y, "sans-bold", P.TEXT if on else P.MUTED, anchor="midleft")
+        g.draw_text("Limit:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")
         limited = self.app._volume_lock is not None
-        g.draw_text(("▶ " if on else "") + ("On" if limited else "Off"), px, bx, y, "sans-bold", P.PRIMARY if on else P.MUTED, anchor="midleft")
+        g.draw_text(("▶ " if on else "") + ("On" if limited else "Off"), px, bx, y, "mono-bold", P.PRIMARY if on else P.MUTED, anchor="midleft")
         note = "The kid can't go louder than this. 0 is silent." if limited else "Turn on to cap how loud the kid can turn it up."
-        g.draw_text(note, g.vh(2), rect.x, y + g.vh(4.5), "sans", P.MUTED, anchor="midleft")
+        g.draw_text(note, g.vh(2), rect.x, y + g.vh(4.5), "mono", P.MUTED, anchor="midleft")
 
     async def handle(self, action):
         if isinstance(action, NavigationAction):
@@ -468,7 +468,7 @@ class _Entry(Dialog):
 
     def draw_body(self, g, rect):
         desc = self._error or self._description
-        g.draw_markup(desc, g.vh(2.2), rect.x, rect.y, "sans", P.DANGER if self._error else P.MUTED, rect.w, "center", P.SURFACE, g.vh(0.4))
+        g.draw_markup(desc, g.vh(2.2), rect.x, rect.y, "mono", P.DANGER if self._error else P.MUTED, rect.w, "center", P.SURFACE, g.vh(0.4))
         g.draw_markup(self.field_text(), g.vh(3.4), rect.x, rect.y + g.vh(8), "mono-bold", P.TEXT, rect.w, "center", P.SURFACE)
 
 
@@ -886,7 +886,7 @@ class InstallProgressScreen(FullScreen):
         g.fill(P.BG)
         if self._phase == "error" and (self._scrolling or self._diag_lines):
             g.draw_markup(f"Please record this with your phone and send to {SUPPORT_EMAIL}\nEsc: go back   Enter: replay",
-                          g.vh(2.4), g.vw(4), g.vh(3), "sans-bold", P.PRIMARY, g.vw(92), "left", P.BG)
+                          g.vh(2.4), g.vw(4), g.vh(3), "mono-bold", P.PRIMARY, g.vw(92), "left", P.BG)
             end = self._diag_scroll_pos if self._scrolling else len(self._diag_lines)
             visible = self._diag_lines[max(0, end - self._SCROLL_VISIBLE):end]
             y = g.vh(11)
@@ -896,23 +896,23 @@ class InstallProgressScreen(FullScreen):
             return
         cx = g.w // 2
         if self._phase == "error":
-            g.draw_text("Setup did not finish.", g.vh(4), cx, g.vh(22), "sans-heavy", P.PRIMARY, anchor="center")
+            g.draw_text("Setup did not finish.", g.vh(4), cx, g.vh(22), "mono-heavy", P.PRIMARY, anchor="center")
             if self._corrupt_key:
                 summary = ("It looks like the installation data on\nthis Purple Key got damaged. This computer\n"
                            "is fine, and Purple still works from the\nUSB without installing.\n\n"
                            f"Email us for a replacement Key:\n{SUPPORT_EMAIL}")
             else:
                 summary = f"{self._get_error_summary()}\n\nIf this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
-            g.draw_markup(summary, g.vh(2.6), g.vw(10), g.vh(30), "sans", P.TEXT, g.vw(80), "center", P.BG, g.vh(0.6))
+            g.draw_markup(summary, g.vh(2.6), g.vw(10), g.vh(30), "mono", P.TEXT, g.vw(80), "center", P.BG, g.vh(0.6))
             g.draw_markup("Press Enter for technical details.\nEsc to go back. Power button to turn off.", g.vh(2.2),
-                          g.vw(10), g.vh(78), "sans-bold", P.MUTED, g.vw(80), "center", P.BG)
+                          g.vw(10), g.vh(78), "mono-bold", P.MUTED, g.vw(80), "center", P.BG)
             return
-        g.draw_text("Installing Purple Computer", g.vh(4), cx, g.vh(30), "sans-heavy", P.PRIMARY, anchor="center")
-        g.draw_text(self._status, g.vh(2.8), cx, g.vh(42), "sans-bold", P.TEXT, anchor="center")
+        g.draw_text("Installing Purple Computer", g.vh(4), cx, g.vh(30), "mono-heavy", P.PRIMARY, anchor="center")
+        g.draw_text(self._status, g.vh(2.8), cx, g.vh(42), "mono-bold", P.TEXT, anchor="center")
         bw = g.vw(50)
         draw_bar(g, cx - bw // 2, g.vh(50), bw, g.vh(2.4), self._progress / 100)
         g.draw_text(f"{self._progress:>3d}%", g.vh(2.6), cx + bw // 2 + g.vw(2), g.vh(51.2), "mono-bold", P.TEXT, anchor="midleft")
-        g.draw_text(self._eta_hint(), g.vh(2.4), cx, g.vh(60), "sans", P.MUTED, anchor="center")
+        g.draw_text(self._eta_hint(), g.vh(2.4), cx, g.vh(60), "mono", P.MUTED, anchor="center")
 
 
 class InstallDoneScreen(FullScreen):
@@ -1323,37 +1323,34 @@ class ParentMenu(Overlay):
 
     # --- drawing ---
     def draw(self, g):
-        """The saok look: the whole stage, one centered column, italic dim
-        section headers, values in the accent color."""
-        app = self.app
-        g.fill(P.BG)
-        frame = app._frame_rect(app._viewport_rect())
-        app._draw_title(frame, title=f"{ICON_COMPUTER} Parent Menu")
-        g.rect(P.SURFACE, frame, radius=g.em(0.6))
-        g.rect(P.LINE, frame, width=1, radius=g.em(0.6))
-        app._draw_status(frame, left="Grown-ups only", right=diagnostics.get_version_label() or "", tabs=False)
+        """A centered modal over the room, like the terminal UI's: one column
+        with air before each section, the hints and the version at the foot."""
+        draw_scrim(g)
         em = g.em
         live_h = g.vh(9) if is_live_boot() else 0
-        head_h, foot_h = em(3.0), em(3.4)
-        n_rows = sum(1 for i in range(len(self.items)) if not self._is_section(i))
-        n_secs = len(self.items) - n_rows
-        avail = frame.h - head_h - live_h - foot_h - em(1.4)
-        row_h = min(em(1.9), int(avail / (n_rows + n_secs * 0.85)))
-        sec_h = int(row_h * 0.85)
-        rows_h = n_rows * row_h + n_secs * sec_h
-        col_w = em(26)
-        x0 = frame.centerx - col_w // 2
-        g.draw_text("Parent Menu", em(1.05), frame.centerx, frame.y + em(1.0) + head_h // 2,
-                    "mono-bold", P.ACCENT, anchor="center", track=0.1)
-        y = frame.y + em(1.0) + head_h + max(0, (avail - rows_h) // 2)
+        n_gaps = sum(1 for i in range(len(self.items)) if self._is_section(i)) + 1
+        pad, head_h, foot_h = em(1.0), em(2.8), em(6.0)
+        avail = g.h - g.vh(4) - 2 * pad - head_h - live_h - foot_h
+        row_h = min(em(1.9), int(avail / (len(self.items) + n_gaps * 0.8)))
+        gap_h = int(row_h * 0.8)
+        col_w = em(24)
+        box = pygame.Rect(0, 0, col_w + em(5), 2 * pad + head_h + live_h + len(self.items) * row_h + n_gaps * gap_h + foot_h)
+        box.center = (g.w // 2, g.h // 2)
+        draw_window(g, box)
+        x0 = box.centerx - col_w // 2
+        y = box.y + pad
+        g.draw_text("Parent Menu", em(1.05), box.centerx, y + head_h // 2, "mono-bold", P.ACCENT, anchor="center", track=0.1)
+        y += head_h
         if live_h:
-            g.draw_markup(_boot_mode_hint(), g.vh(1.9), frame.x + g.vw(2), y, "sans", P.MUTED, frame.w - g.vw(4), "center", P.SURFACE)
+            g.draw_markup(_boot_mode_hint(), g.vh(1.9), box.x + em(1), y, "mono", P.MUTED, box.w - em(2), "center", P.SURFACE)
             y += live_h
-        px = min(em(0.98), int(row_h * 0.62))
+        px = min(em(0.98), int(row_h * 0.68))
         for i, (item_id, label) in enumerate(self.items):
+            if self._is_section(i) or item_id == "menu-shutdown":
+                y += gap_h
             if self._is_section(i):
-                g.draw_text(label, em(0.93), x0, y + sec_h - em(0.12), "mono-italic", P.DIM, anchor="bottomleft")
-                y += sec_h
+                g.draw_text(label, px, x0, y + row_h // 2, "mono-italic", P.DIM, anchor="midleft")
+                y += row_h
                 continue
             if item_id in ("menu-support", "menu-volume") and self.app.audio_ok is False:
                 label = f"{label}   (audio not working)"
@@ -1369,11 +1366,11 @@ class ParentMenu(Overlay):
                 g.draw_text(value, px, drawn.right, r.centery, "mono",
                             P.ON_PRIMARY if on else (P.DIM if disabled else P.ACCENT), anchor="midleft")
             y += row_h
-        g.draw_text("▲ ▼   Enter   Esc", em(0.92), frame.centerx, frame.bottom - em(2.4), "mono", P.MUTED,
-                    anchor="center", track=0.08)
-        g.draw_text("Purple is keyboard only, on purpose. Kids explore by typing.",
-                    em(0.92), frame.centerx, frame.bottom - em(1.1), "mono", P.DIM, anchor="center")
-
+        foot = box.bottom - pad - foot_h
+        g.draw_text("▲ ▼   Enter   Esc", em(0.92), box.centerx, foot + em(1.3), "mono", P.MUTED, anchor="center", track=0.08)
+        g.draw_markup("Purple is keyboard only, on purpose.\nKids explore by typing.", em(0.85), box.x, foot + em(2.3),
+                      "mono", P.DIM, box.w, "center", P.SURFACE)
+        g.draw_text(diagnostics.get_version_label() or "", em(0.8), box.centerx, foot + em(5.3), "mono", P.DIM, anchor="center")
 
 def write_computer_name(name: str):
     path = Path.home() / ".purple" / "computer_name.txt"

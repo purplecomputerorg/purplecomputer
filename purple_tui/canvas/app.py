@@ -46,6 +46,7 @@ FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame lin
 SIDE_MARGIN_VW = 6            # air beside the frame; the sticker legend sits in the right one
 TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
 STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
+STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the TUI's room bar
 TIMELINE_DEBOUNCE_S = 3.0
 TIMELINE_MAX_WAIT_S = 15.0
 
@@ -1197,7 +1198,7 @@ class PurpleApp:
         names (active one in inverse video), arrow hint. The Parent Menu
         reuses it with its own corners and no room tabs."""
         g = self.g
-        y = frame.bottom + g.vh(STATUS_STRIP_VH) // 2
+        y = g.h - g.vh(STATUS_TEXT_VH)
         px = g.em(0.92)
         if self._littles_mode:
             g.draw_text("Littles Mode · Hold Esc to exit", px, frame.centerx, y, "mono", P.MUTED, anchor="center")

@@ -621,9 +621,9 @@ class MusicRoom:
         """Ten by four gapless square blocks: a quiet key is just its letter,
         a sounding key fills its whole block with color."""
         size = min(r.w / 10, r.h / 4)
-        x0 = r.centerx - 10 * size / 2
-        y0 = r.centery - 4 * size / 2
-        letter_px = g.em(1.05)
+        xs = [round(r.centerx - 5 * size + i * size) for i in range(11)]
+        ys = [round(r.centery - 2 * size + i * size) for i in range(5)]
+        letter_px = max(12, int(size * 0.3))
         label_px = max(10, int(size * 0.15))
         for row_idx, row in enumerate(GRID_KEYS):
             melodic = row_idx >= 1
@@ -635,21 +635,21 @@ class MusicRoom:
                     note, _ = pitch_for(row_idx - 1, col_idx, FRIENDLY_KEYS[root_idx], 0)
                     if at_front:
                         bg = WAVEFRONT_COLOR
-                tile = pygame.Rect(int(x0 + col_idx * size), int(y0 + row_idx * size), int(size), int(size))
+                tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
                 quiet = bg == P.TILE
                 if not quiet:
                     g.rect(bg, tile)
                 fg = P.MUTED if quiet else text_color_for(bg)
                 g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery,
-                            "mono" if quiet else "mono-bold", fg, anchor="center")
+                            "sans-bold" if quiet else "sans-heavy", fg, anchor="center")
                 show = key in self._note_labels or (melodic and (self._transition is not None or self.show_labels))
                 label = PERCUSSION_NAMES.get(key, "") if key.isdigit() else (note or "")
                 if show and label:
                     muted = "#6a5a7a" if fg == "#000000" else "#a898c0"
-                    g.draw_text(f"♪ {label} ♪", label_px, tile.centerx, tile.y + label_px, "sans-bold", muted, anchor="center")
+                    g.draw_text(f"♪ {label} ♪", label_px, tile.centerx, tile.y + label_px, "mono-bold", muted, anchor="center")
 
     def _draw_noscreen(self, g, rect):
         cy = rect.centery
         if self._noscreen_dot:
             g.draw_text("●", g.vh(6), rect.centerx, cy - g.vh(10), "sans-heavy", self._noscreen_dot, anchor="center")
-        g.draw_markup(NOSCREEN_TEXT, g.vh(2.8), rect.x, cy - g.vh(4), "sans-bold", P.MUTED, rect.w, "center", P.SURFACE, g.vh(0.6))
+        g.draw_markup(NOSCREEN_TEXT, g.vh(2.8), rect.x, cy - g.vh(4), "mono-bold", P.MUTED, rect.w, "center", P.SURFACE, g.vh(0.6))

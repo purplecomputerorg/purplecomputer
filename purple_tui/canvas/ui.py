@@ -346,7 +346,7 @@ class Dialog(Overlay):
         px = g.vh(2.4)
         y = rect.y
         for line in self.body_lines:
-            y += g.draw_markup(line or " ", px, rect.x, y, "sans", P.TEXT, rect.w, "center", P.SURFACE)
+            y += g.draw_markup(line or " ", px, rect.x, y, "mono", P.TEXT, rect.w, "center", P.SURFACE)
 
 
 class Picker(Dialog):
@@ -375,7 +375,7 @@ class Picker(Dialog):
     def draw_body(self, g: Gfx, rect: pygame.Rect):
         y = rect.y
         if self.DESCRIPTION:
-            y += g.draw_markup(self.DESCRIPTION, g.vh(2.2), rect.x, y, "sans", P.MUTED, rect.w, "center", P.SURFACE) + g.vh(1)
+            y += g.draw_markup(self.DESCRIPTION, g.vh(2.2), rect.x, y, "mono", P.MUTED, rect.w, "center", P.SURFACE) + g.vh(1)
         oh = self.option_height(g)
         for i, opt in enumerate(self.options):
             box = pygame.Rect(rect.x, y, rect.w, oh)
@@ -385,7 +385,7 @@ class Picker(Dialog):
             color = P.ON_PRIMARY if on else P.TEXT
             if len(opt) == 3:
                 g.draw_text(label, g.vh(2.6), box.centerx, box.centery - g.vh(1.2), "mono-heavy" if on else "mono-bold", color, anchor="center")
-                g.draw_text(opt[2], g.vh(1.9), box.centerx, box.centery + g.vh(1.4), "sans", color if on else P.MUTED, anchor="center")
+                g.draw_text(opt[2], g.vh(1.9), box.centerx, box.centery + g.vh(1.4), "mono", color if on else P.MUTED, anchor="center")
             else:
                 g.draw_text(label, g.vh(2.6), box.centerx, box.centery, "mono-heavy" if on else "mono-bold", color, anchor="center")
             y += oh + g.vh(1)

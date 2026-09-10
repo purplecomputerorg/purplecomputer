@@ -27,8 +27,9 @@ Design rules, in priority order:
    are IBM Plex Mono in mixed case (the ALL CAPS parent setting is the one
    exception, applied inside `Gfx.text`), with the active thing in inverse
    video: one selection idiom everywhere. Parent Menu section headers are
-   Plex Mono Italic, dim. Reading text (replies, and descriptive dialog
-   bodies like a confirm's explanation) is IBM Plex Sans. UI icons are
+   Plex Mono Italic, dim. Dialog bodies, panels and system screens are mono
+   too, so the whole screen reads as one terminal. The only sans on screen
+   is IBM Plex Sans for the Music key letters. UI icons are
    mono-tinted Nerd Font glyphs (`ICON_*`) that take the text color; full
    color is reserved for the kid's own output.
 5. Corners are gently rounded, sized in `g.em` straight from the design

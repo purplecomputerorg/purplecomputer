@@ -210,7 +210,7 @@ class LoopPanel:
             action = "Play on top    Esc: exit"
         else:
             return
-        g.draw_text(head, g.vh(2.6), cx, y, "sans-heavy", P.DANGER, anchor="midtop")
+        g.draw_text(head, g.vh(2.6), cx, y, "mono-heavy", P.DANGER, anchor="midtop")
         bw = rect.w // 2
         by = y + g.vh(4)
         if st == RECORDING:
@@ -247,9 +247,9 @@ class TimeTravelBar:
 
     def draw(self, g, rect):
         cx = rect.centerx
-        g.draw_text(f"{ICON_TIME_TRAVEL} Time Travel", g.vh(2.6), cx, rect.y + g.vh(1.5), "sans-heavy", P.TEXT, anchor="midtop")
+        g.draw_text(f"{ICON_TIME_TRAVEL} Time Travel", g.vh(2.6), cx, rect.y + g.vh(1.5), "mono-heavy", P.TEXT, anchor="midtop")
         px = g.vh(2.4)
         markup = self.dots_markup()
         w = g.markup_size(markup, px)[0]
-        g.draw_markup(markup, px, cx - w // 2, rect.y + g.vh(5.5), "sans-bold", P.PRIMARY, dim_to=P.SURFACE)
+        g.draw_markup(markup, px, cx - w // 2, rect.y + g.vh(5.5), "mono-bold", P.PRIMARY, dim_to=P.SURFACE)
         g.draw_text("Enter: keep this    Esc: never mind", g.vh(1.9), cx, rect.bottom - g.vh(1.4), "mono", P.MUTED, anchor="midbottom")

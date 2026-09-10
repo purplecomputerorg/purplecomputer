@@ -176,7 +176,7 @@ Without the cleanup: 6.9GB / 10.6GB, which rules out 8GB sticks and squeezes 16G
 
 ## Sequencing
 
-1. **Zero free blocks, drop `/pool`.** Half a day. Every later build, flash, and test gets faster; report before/after sizes.
+1. **Zero free blocks, drop `/pool`.** Landed on main September 2026 (`00-build-golden-image.sh` zero-fills the root filesystem after the squashfs, `01-remaster-iso.sh` excludes `pool` and `dists` from the ISO copy). Every later build, flash, and test gets faster.
 2. **Router + BOOTIA32.** A couple of days, QEMU-verifiable. Harmless with one kernel (always picks `stock`). Unlocks 2006-2008 Macs and Bay Trail.
 3. **T2.** Gated on bench hardware.
 4. **32-bit payload.** No hardware dependency, can run alongside T2.

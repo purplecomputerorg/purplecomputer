@@ -1099,7 +1099,16 @@ EOF
     log_info "  Squashfs: $(du -h "$SQUASHFS_OUT" | cut -f1)"
     log_info "  Uncompressed: $(cat "${BUILD_DIR}/filesystem.size") bytes"
 
+    # Zero freed blocks. Every purge above (linux-firmware, gcc, pip caches)
+    # leaves its bytes in unallocated blocks, and zstd compresses that garbage
+    # faithfully: 2.8GB of a 3.7GB image. See guides/hardware-coverage-plan.md.
+    log_info "Zeroing free space..."
+    dd if=/dev/zero of="$MOUNT_DIR/.zero-fill" bs=1M status=none 2>/dev/null || true
+    sync
+    rm -f "$MOUNT_DIR/.zero-fill"
+
     # Unmount and detach (the EXIT trap also calls cleanup_build as a safety net)
+
     log_info "Cleaning up mounts..."
     cleanup_build
 

@@ -470,13 +470,14 @@ TMPFILES
 
     chroot "$MOUNT_DIR" apt-get remove --purge -y --no-auto-remove gcc make linux-libc-dev python3-dev 2>/dev/null || true
 
-    # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
+    # Download Piper TTS voice model (LibriTTS-R medium - American English, speaker 6006)
+    # Medium is ~4.5x faster than high on CPUs without AVX (Celeron N3060/N4000).
     log_info "Downloading Piper TTS voice model..."
-    VOICE_MODEL="en_US-libritts-high"
+    VOICE_MODEL="en_US-libritts_r-medium"
     VOICE_DIR="$MOUNT_DIR/opt/purple/piper-voices"
     mkdir -p "$VOICE_DIR"
-    curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
-    curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
+    curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
+    curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
 
     # Create launcher script
     # NOTE: Do NOT redirect stderr - Textual writes its UI to stderr!

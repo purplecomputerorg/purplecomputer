@@ -18,6 +18,7 @@ from ... import diagnostics
 from ... import palette as P
 from ..gfx import FONT_DIR
 from ...audio import adjacent_volume, lock_badge, volume_badge
+from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import ICON_COMPUTER, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar
@@ -271,6 +272,24 @@ class KidLettersScreen(_YesNo):
         set_kid_letters(value)
         self.app.rooms["music"].reset_letter_sounds()
         self.close(value)
+
+
+class VoiceScreen(Picker):
+    """Pick the synthesizer: Piper (Natural) or flite (Quick)."""
+    title = "Voice"
+    DESCRIPTION = "The voice Purple speaks with"
+    OPTIONS = [(VOICE_NATURAL, "Natural", "Smoother, but slower on older laptops"),
+               (VOICE_QUICK, "Quick", "Simpler, and never keeps a kid waiting")]
+    escape_value = CANCELLED
+
+    def __init__(self, app):
+        super().__init__(app)
+        from ...settings import get_voice
+        self.selected = next((i for i, opt in enumerate(self.OPTIONS) if opt[0] == get_voice()), 0)
+
+
+def _voice_menu_label(pref: str) -> str:
+    return f"Voice: {VOICE_NAMES.get(pref, VOICE_NAMES[VOICE_NATURAL])}"
 
 
 class SecretMenuScreen(Picker):
@@ -1041,7 +1060,7 @@ def _is_dev_environment() -> bool:
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
     from ...settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching, get_music_looping,
-                            get_parent_pin, get_secret_unlocked, get_volume_lock)
+                            get_parent_pin, get_secret_unlocked, get_voice, get_volume_lock)
     items = [("menu-help", "Help & Videos")]
     if is_live_boot():
         items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
@@ -1058,6 +1077,7 @@ def _get_menu_items(app) -> list:
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
     items.append(("sec-av", "Sound & Display"))
     items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
+    items.append(("menu-voice", _voice_menu_label(get_voice())))
     if display_control_available():
         items.append(("menu-display", "Display"))
     items.append(("sec-advanced", "Advanced"))
@@ -1166,7 +1186,8 @@ class ParentMenu(Overlay):
             "menu-music-looping": self._open_music_looping, "menu-music-key-switching": self._open_music_key_switching,
             "menu-all-caps": self._open_all_caps, "menu-secret": self._open_secret_menu,
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),
-            "menu-volume": self._open_volume, "menu-install": self._install_to_disk, "menu-rename": self._rename_computer,
+            "menu-volume": self._open_volume, "menu-voice": self._open_voice,
+            "menu-install": self._install_to_disk, "menu-rename": self._rename_computer,
             "menu-shell": lambda: (self.close(), self.app.push(TerminalScreen(self.app))),
             "menu-demo": lambda: (self.close(), self.app.start_demo()),
             "menu-bash": lambda: (self.close(), self.app.exit()), "menu-system": lambda: (self.close(), self.app.exit()),
@@ -1264,6 +1285,16 @@ class ParentMenu(Overlay):
 
     def _open_volume(self):
         self.app.push(ParentVolumeModal(self.app), on_close=lambda _: self._relabel("menu-volume", _volume_menu_label(self.app._volume_lock)))
+
+    def _open_voice(self):
+        def apply(v):
+            if v is CANCELLED:
+                return
+            from ... import tts
+            tts.set_voice(v)
+            self._relabel("menu-voice", _voice_menu_label(v))
+        self.app.push(VoiceScreen(self.app), on_close=apply)
+
 
     def _install_to_disk(self):
         def on_name(name):

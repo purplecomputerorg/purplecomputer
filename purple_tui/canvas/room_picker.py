@@ -8,7 +8,7 @@ from ..constants import (
     ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
 )
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from .ui import Dialog, Overlay, Picker
+from .ui import Dialog, Overlay, Picker, draw_keycap, draw_scrim
 
 ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art")]
 NUMBER_KEY_ROOMS = {"1": "play", "2": "music", "3": "art"}
@@ -89,19 +89,25 @@ class RoomPicker(Overlay):
         self.app.push(ConfirmFresh(self.app, self.app.active_room), on_close=lambda r: r and self.close({"clear_room": r}))
 
     def draw(self, g):
-        """Centered card grid inside the frame, spaced in the mock's ems:
-        glyph above name, the key beneath, one line of guidance."""
-        g.fill(P.BG)
-        g.rect(P.LINE, self.app._frame_rect(self.app._viewport_rect()), width=1, radius=g.em(0.6))
+        """A wide card grid in a modal over the dimmed room: glyph above name,
+        the key beneath ("or Enter" on the picked one), a line of guidance and
+        the arrow cluster at the foot."""
+        draw_scrim(g)
         em = g.em
-        tw, th, gap = em(10.6), em(7.6), em(1.1)
+        tw, th, gap, pad = em(10.6), em(7.8), em(1.1), em(2.0)
         code_h = em(4.6) if self.code_row else 0
         head_h = g.line_height(em(1.15), "mono-bold")
         foot_h = g.line_height(em(0.92), "mono")
-        total = head_h + em(1.5) + 2 * th + gap + (gap + code_h if self.code_row else 0) + em(1.5) + foot_h
-        y = (g.h - total) // 2
-        x0 = g.w // 2 - (3 * tw + 2 * gap) // 2
-        g.draw_text("Pick a room", em(1.15), g.w // 2, y, "mono-bold", P.TEXT, anchor="midtop", track=0.06)
+        arrows_h = em(3.6)
+        grid_h = 2 * th + gap + (gap + code_h if self.code_row else 0)
+        box = pygame.Rect(0, 0, 3 * tw + 2 * gap + 2 * pad,
+                          pad + head_h + em(1.5) + grid_h + em(1.5) + foot_h + em(0.9) + arrows_h + pad)
+        box.center = (g.w // 2, g.h // 2)
+        g.rect(P.SURFACE, box, radius=em(1.0))
+        g.rect(P.LINE, box, width=1, radius=em(1.0))
+        y = box.y + pad
+        x0 = box.x + pad
+        g.draw_text("Pick a room", em(1.15), box.centerx, y, "mono-bold", P.TEXT, anchor="midtop", track=0.06)
         y += head_h + em(1.5)
         locked = self._disabled_volume()
         cards = [(ROWS, i, icon, label, str(i + 1), False) for i, (_, icon, label) in enumerate(ROOM_OPTIONS)]
@@ -113,13 +119,14 @@ class RoomPicker(Overlay):
             on = (self.row, self.col) == (row, col)
             self._card(g, r, on)
             fg = P.ON_PRIMARY if on else (P.DIM if disabled else P.TEXT)
-            g.draw_text(icon, em(1.75), r.centerx, r.y + em(2.1), "nerd",
+            g.draw_text(icon, em(1.75), r.centerx, r.y + em(2.0), "nerd",
                         fg if (on or disabled) else P.ACCENT, anchor="center")
-            g.draw_text(label, em(1.0), r.centerx, r.y + em(4.35), "mono-bold", fg, anchor="center")
+            g.draw_text(label, em(1.0), r.centerx, r.y + em(4.1), "mono-bold", fg, anchor="center")
             if key:
-                g.draw_text(key, em(0.9), r.centerx, r.y + em(5.95), "mono",
-                            fg if on else P.DIM, anchor="center")
-        y += 2 * th + gap
+                g.draw_text(f"Press {key}", em(0.9), r.centerx, r.y + em(5.6), "mono", fg if on else P.DIM, anchor="center")
+            if key and on:
+                g.draw_text("or Enter", em(0.9), r.centerx, r.y + em(6.7), "mono", fg, anchor="center")
+        y += grid_h - (code_h + gap if self.code_row else 0)
         if self.code_row:
             y += gap
             r = pygame.Rect(x0, y, 3 * tw + 2 * gap, code_h)
@@ -128,9 +135,25 @@ class RoomPicker(Overlay):
             label = "Close Code" if self.app._code_panel_active else "Open Code"
             fg = P.ON_PRIMARY if on else P.TEXT
             g.draw_text(f"{ICON_ROBOT}  {label}", em(1.0), r.centerx, r.centery - em(0.65), "mono-bold", fg, anchor="center")
-            g.draw_text("Space", em(0.9), r.centerx, r.centery + em(0.95), "mono", fg if on else P.DIM, anchor="center")
+            g.draw_text("Press Space or Enter" if on else "Press Space", em(0.9), r.centerx, r.centery + em(0.95),
+                        "mono", fg if on else P.DIM, anchor="center")
             y += code_h
-        g.draw_text("Enter to pick   ·   Hold Esc for grown-ups", em(0.92), g.w // 2, y + em(1.5), "mono", P.DIM, anchor="midtop")
+        y += em(1.5)
+        g.draw_text("Enter to pick   ·   Hold Esc for grown-ups", em(0.92), box.centerx, y, "mono", P.DIM, anchor="midtop")
+        self._draw_arrow_cluster(g, box.centerx, y + foot_h + em(0.9) + arrows_h - em(0.9))
+
+    def _draw_arrow_cluster(self, g, cx, y):
+        """Inverted-T keycaps beside their label, [↑] floating over [↓]."""
+        px, space = g.em(0.9), g.em(0.35)
+        key_w = g.measure("↓", px, "mono")[0] + round(px * 1.4)
+        label_w = g.measure("Arrows move", px, "mono")[0]
+        x = cx - (label_w + g.em(0.9) + 3 * key_w + 2 * space) // 2
+        x = g.draw_text("Arrows move", px, x, y, "mono", P.MUTED, anchor="midleft").right + g.em(0.9)
+        boxes = []
+        for glyph in "←↓→":
+            boxes.append(draw_keycap(g, glyph, px, x, y, color=P.ACCENT))
+            x = boxes[-1].right + space
+        draw_keycap(g, "↑", px, boxes[1].centerx, y - boxes[1].h - space, anchor="center", color=P.ACCENT)
 
     def _card(self, g, r, on):
         if on:

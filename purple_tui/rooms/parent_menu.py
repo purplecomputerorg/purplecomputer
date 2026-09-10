@@ -27,7 +27,7 @@ from pathlib import Path
 import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
-from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
+from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, PAYLOAD_DIR, SUPPORT_EMAIL
 from ..audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
 from ..tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from .. import diagnostics
@@ -1599,7 +1599,7 @@ class InstallProgressScreen(PurpleModal):
             stdout=subprocess.DEVNULL,
             env={
                 **os.environ,
-                "PURPLE_PAYLOAD_DIR": "/cdrom/purple",
+                "PURPLE_PAYLOAD_DIR": PAYLOAD_DIR,
                 "PURPLE_COMPUTER_NAME": self._computer_name,
                 # Lets the installed system's first boot tell "audio worked
                 # minutes ago, silent now" apart from never-had-sound.
@@ -1781,7 +1781,8 @@ class InstallProgressScreen(PurpleModal):
 
         # USB / source media state
         section("USB / source media")
-        file_info("Golden image", "/cdrom/purple/purple-os.img.zst")
+        file_info("Golden image", f"{PAYLOAD_DIR}/purple-os.img.zst")
+
         file_info("Install script", "/cdrom/purple/install.sh")
         file_info("/cdrom mount", "/cdrom")
         cmd("cdrom contents", "ls /cdrom/purple/ 2>&1", max_lines=10)

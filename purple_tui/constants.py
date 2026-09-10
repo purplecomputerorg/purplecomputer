@@ -141,8 +141,22 @@ def display_len(text: str) -> int:
     return len(text) + extra
 
 
-# Live boot squashfs caching
-SQUASHFS_PATH = "/cdrom/casper/filesystem.squashfs"
+# Where the live stick keeps its squashfs and install payload: casper's paths,
+# unless the 32-bit Key's boot script recorded its own (initramfs/purple-live).
+LIVE_CONF_PATH = "/run/purple-live.conf"
+
+
+def _live_conf() -> dict:
+    try:
+        with open(LIVE_CONF_PATH) as f:
+            return dict(line.rstrip("\n").split("=", 1) for line in f if "=" in line)
+    except OSError:
+        return {}
+
+
+_LIVE_CONF = _live_conf()
+SQUASHFS_PATH = _LIVE_CONF.get("SQUASHFS", "/cdrom/casper/filesystem.squashfs")
+PAYLOAD_DIR = _LIVE_CONF.get("PURPLE_PAYLOAD_DIR", "/cdrom/purple")
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"
 
 # Touched after the first frame paints. xinitrc waits for this before starting
@@ -162,7 +176,7 @@ _FAKE_USB = os.environ.get("PURPLE_FAKE_USB", "")
 
 
 def is_live_boot() -> bool:
-    """Check if running from a casper live boot (USB or otherwise).
+    """Check if running from a live boot: casper, or the 32-bit Key's purple-live.
 
     Reads /proc/cmdline once and caches the result (doesn't change at runtime).
     Set PURPLE_FAKE_USB=caching|cached|removed to simulate in dev/test.
@@ -173,7 +187,9 @@ def is_live_boot() -> bool:
         else:
             try:
                 from pathlib import Path
-                is_live_boot._cached = "boot=casper" in Path("/proc/cmdline").read_text()
+                cmdline = Path("/proc/cmdline").read_text()
+                is_live_boot._cached = any(f"boot={mode}" in cmdline for mode in ("casper", "purple-live"))
+
             except Exception:
                 is_live_boot._cached = False
     return is_live_boot._cached

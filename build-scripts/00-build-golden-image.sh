@@ -456,11 +456,11 @@ LEANINITRD
     verify_lean_initrd "$KVER"
 
     if [ "$PURPLE_ARCH" = "i386" ]; then
-        # Installer initrd pieces: the hook only fires for the ISO's installer
-        # initrd (PURPLE_INSTALLER_INITRD=1), the boot script is inert otherwise.
-        cp /purple-src/build-scripts/initramfs/purple-install-hook "$MOUNT_DIR/etc/initramfs-tools/hooks/purple-install"
-        cp /purple-src/build-scripts/initramfs/purple-install "$MOUNT_DIR/etc/initramfs-tools/scripts/purple-install"
-        chmod +x "$MOUNT_DIR/etc/initramfs-tools/hooks/purple-install"
+        # The Key's boot script (casper's stand-in) and its hook: the hook only
+        # fires for the Key's initrd (PURPLE_KEY_INITRD=1), the script is inert otherwise.
+        cp /purple-src/build-scripts/initramfs/purple-live-hook "$MOUNT_DIR/etc/initramfs-tools/hooks/purple-live"
+        cp /purple-src/build-scripts/initramfs/purple-live "$MOUNT_DIR/etc/initramfs-tools/scripts/purple-live"
+        chmod +x "$MOUNT_DIR/etc/initramfs-tools/hooks/purple-live"
     else
         # dpkg's postinst builds the T2 initrd through the lean hook above
         install_pinned_deb "$T2_KERNEL_URL" "$T2_KERNEL_SHA256"
@@ -1207,31 +1207,32 @@ EOF
     mkdir -p "$MOUNT_DIR/dev" "$MOUNT_DIR/proc" "$MOUNT_DIR/sys"
 
     if [ "$PURPLE_ARCH" = "i386" ]; then
-        # No live session on 32-bit: the ISO boots this kernel with an initrd
-        # that carries install.sh's tools and installs the image directly.
-        log_info "Building installer initrd..."
-        chroot "$MOUNT_DIR" env PURPLE_INSTALLER_INITRD=1 mkinitramfs -o /tmp/initrd "$KVER"
+        # The 32-bit Key has no casper: this kernel and initrd boot the squashfs
+        # below as a live session (or install the image directly on low RAM).
+        log_info "Building the Key's initrd..."
+        chroot "$MOUNT_DIR" env PURPLE_KEY_INITRD=1 mkinitramfs -o /tmp/initrd "$KVER"
         mv "$MOUNT_DIR/tmp/initrd" "$BUILD_DIR/initrd"
         cp -L "$MOUNT_DIR/boot/vmlinuz" "$BUILD_DIR/vmlinuz"
-        log_info "  Installer initrd: $(du -h "$BUILD_DIR/initrd" | cut -f1)"
-    else
-        # Create squashfs for live boot (same root filesystem, different packaging)
-        log_info "Creating live boot squashfs..."
-        SQUASHFS_OUT="${BUILD_DIR}/filesystem.squashfs"
-        rm -f "$SQUASHFS_OUT"
-        mksquashfs "$MOUNT_DIR" "$SQUASHFS_OUT" \
-            -comp zstd \
-            -Xcompression-level $SQUASHFS_LEVEL \
-            -noappend \
-            -wildcards \
-            -e 'boot/efi' 'proc/*' 'sys/*' 'dev/*'
-
-        # Record uncompressed size (required by casper)
-        du -sx --block-size=1 "$MOUNT_DIR" | cut -f1 > "${BUILD_DIR}/filesystem.size"
-
-        log_info "  Squashfs: $(du -h "$SQUASHFS_OUT" | cut -f1)"
-        log_info "  Uncompressed: $(cat "${BUILD_DIR}/filesystem.size") bytes"
+        log_info "  Key initrd: $(du -h "$BUILD_DIR/initrd" | cut -f1)"
     fi
+
+    # Create squashfs for live boot (same root filesystem, different packaging)
+    log_info "Creating live boot squashfs..."
+    SQUASHFS_OUT="${BUILD_DIR}/filesystem.squashfs"
+    rm -f "$SQUASHFS_OUT"
+    mksquashfs "$MOUNT_DIR" "$SQUASHFS_OUT" \
+        -comp zstd \
+        -Xcompression-level $SQUASHFS_LEVEL \
+        -noappend \
+        -wildcards \
+        -e 'boot/efi' 'proc/*' 'sys/*' 'dev/*'
+
+    # Record uncompressed size (required by casper)
+    du -sx --block-size=1 "$MOUNT_DIR" | cut -f1 > "${BUILD_DIR}/filesystem.size"
+
+    log_info "  Squashfs: $(du -h "$SQUASHFS_OUT" | cut -f1)"
+    log_info "  Uncompressed: $(cat "${BUILD_DIR}/filesystem.size") bytes"
+
 
     # Zero freed blocks. Every purge above (linux-firmware, gcc, pip caches)
     # leaves its bytes in unallocated blocks, and zstd compresses that garbage

@@ -215,7 +215,10 @@ main() {
     mount -o loop,ro "$UBUNTU_ISO" "$WORK_DIR/iso-mount"
 
     # Copy everything from ISO
-    rsync -a --info=progress2 "$WORK_DIR/iso-mount/" "$WORK_DIR/iso-new/"
+    # pool/dists: Ubuntu Server's 1.5GB apt repo, read only by the subiquity
+    # installer we replaced
+    rsync -a --info=progress2 --exclude=pool --exclude=dists "$WORK_DIR/iso-mount/" "$WORK_DIR/iso-new/"
+
 
     # Step 4: Replace squashfs with Purple Computer
     log_step "4/11: Replacing squashfs with Purple Computer..."

@@ -74,7 +74,7 @@ class PlayRoom:
         self.field = TextField(_play_autocomplete, validator=_play_validator)
         self.hints = HintRotator(PLAY_HINTS)
         self.history: list = []
-        self.scroll = 0                  # entries hidden below the bottom (scrolled up)
+        self.scroll = 0                  # px of history hidden below the bottom (scrolled up)
         self._timeline_entries: list = []
         self._timeline_seq = 0
         self.code_panel = None
@@ -242,9 +242,9 @@ class PlayRoom:
         f = self.field
         if isinstance(action, NavigationAction):
             if action.direction == "up":
-                self.scroll = min(self.scroll + 1, max(0, len(self.history) - 1))
+                self.scroll += self.app.g.em(1.5)  # the next draw clamps it to the history's top
             elif action.direction == "down":
-                self.scroll = max(0, self.scroll - 1)
+                self.scroll = max(0, self.scroll - self.app.g.em(1.5))
             elif action.direction == "left":
                 f.move(-1)
             elif action.direction == "right":
@@ -303,25 +303,27 @@ class PlayRoom:
         line_h = g.line_height(line_px, "mono")
         self.field.draw(g, x, box.centery - line_h // 2, box.right - x, line_px, label_px=em(1.2), gap=gap)
         top_limit = rect.y + em(1)
-        y = box.y - em(1)
-        viewport = y - top_limit
+        base = box.y - em(1)
+        viewport = base - top_limit
         rows = [(e, self._entry_height(g, e, width), self._gap_above(g, e)) for e in self.history]
-        shown = rows[:len(rows) - self.scroll]
-        g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, y - rect.y + em(0.5)))
-        for e, h, gap in reversed(shown):
+        total = sum(h + gap for _, h, gap in rows)
+        self.scroll = min(self.scroll, max(0, total - viewport))
+        clip_bottom = base + em(0.5)
+        y = base + self.scroll
+        g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, clip_bottom - rect.y))
+        for e, h, gap in reversed(rows):
             y -= h
             if y + h < top_limit:
                 break
-            self._draw_entry(g, e, x, y, width)
+            if y < clip_bottom:
+                self._draw_entry(g, e, x, y, width)
             y -= gap
         g.surface.set_clip(None)
-        total = sum(h + gap for _, h, gap in rows)
         if total > viewport:
-            hidden = sum(h + gap for _, h, gap in rows[len(shown):])
-            w = em(0.5)
-            track = pygame.Rect(rect.right - em(1.0) - w, top_limit, w, viewport)
+            w = em(0.7)
+            track = pygame.Rect(rect.right - em(0.5) - w, top_limit, w, viewport)
             g.rect(P.BG, track, radius=w // 2)
-            g.rect(P.FIELD, scroll_thumb(track, viewport, total, hidden, em(1.5)), radius=w // 2)
+            g.rect(P.FIELD, scroll_thumb(track, viewport, total, self.scroll, em(1.5)), radius=w // 2)
 
     def _answer_px(self, g, e) -> int:
         """Only a small all-emoji answer earns the big size; text stays a

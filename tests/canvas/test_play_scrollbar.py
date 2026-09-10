@@ -1,5 +1,6 @@
 """The Play room's scrollbar: absent until history overflows, thumb at the
-bottom while following new answers, climbing as the kid scrolls up."""
+bottom while following new answers, climbing as the kid scrolls up and
+stopping once the oldest line reaches the top."""
 
 import pygame
 
@@ -30,7 +31,7 @@ def test_scrollbar_only_when_history_overflows():
         room = app.room
         g = app.g
         content = app.content_rect(app._viewport_rect())
-        probe = lambda: g.surface.get_at((content.right - g.em(1.25), content.centery))[:3]
+        probe = lambda: g.surface.get_at((content.right - g.em(0.85), content.centery))[:3]
         await type_text(app, "cat", enter=True)
         app._draw()
         before = probe()
@@ -40,5 +41,17 @@ def test_scrollbar_only_when_history_overflows():
         assert probe() != before
         await press(app, "up")
         app._draw()
-        assert room.scroll == 1
+        one_step = room.scroll
+        assert one_step > 0
+        for _ in range(500):
+            await press(app, "up")
+        app._draw()
+        top = room.scroll
+        assert top > one_step
+        await press(app, "up")
+        app._draw()
+        assert room.scroll == top
+        await press(app, "down")
+        app._draw()
+        assert room.scroll == top - one_step
     run(go())

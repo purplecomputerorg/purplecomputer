@@ -317,6 +317,7 @@ SOURCES
         xserver-xorg-core \
         xserver-xorg-input-libinput \
         xkb-data xauth \
+        dbus libpam-systemd procps \
         libgl1-mesa-dri \
         matchbox-window-manager \
         picom \
@@ -340,31 +341,31 @@ SOURCES
     # guidance depends on seeing the device).
     chroot "$MOUNT_DIR" apt-get install -y usbutils
 
-    # Verify the boot-setup tools install.sh Layer 4/6 depend on actually landed.
-    # On Noble: `grub-install` ships in `grub2-common` (NOT `grub-common` — that's
-    # a different, transitional package that does not provide grub-install).
-    # `grub-pc-bin` provides the i386-pc modules. With APT::Install-Recommends=0
-    # a Recommends-only relationship can silently leave tools absent, producing
-    # a blinking-cursor Legacy boot. Fail the build loudly if anything is off.
-    log_info "Verifying boot tooling is present in the golden image..."
+    # Verify everything the boot, install and X session shell out to actually
+    # landed. With APT::Install-Recommends=0 a Recommends-only relationship
+    # silently leaves tools absent, and Ubuntu's base set carries packages
+    # implicitly that Debian's does not: the i386 image shipped without dbus
+    # and libpam-systemd, so rootless X could never open the GPU. On Noble
+    # `grub-install` ships in `grub2-common` (NOT `grub-common`, a transitional
+    # package without it) and `grub-pc-bin` provides the i386-pc modules.
+    log_info "Verifying runtime tooling is present in the golden image..."
     MISSING=""
-    # glxinfo: not boot tooling, but if it vanishes the GL probe silently
-    # falls back to software rendering on every machine. Fail loudly instead.
-    for cmd in grub-install efibootmgr pv; do
+    for cmd in grub-install efibootmgr pv dbus-daemon pgrep startx xset xsetroot xrandr \
+               xkbset unclutter matchbox-window-manager picom pactl paplay amixer \
+               lsblk udevadm dmidecode flite logger; do
         chroot "$MOUNT_DIR" bash -c "command -v $cmd >/dev/null" || MISSING="$MISSING $cmd"
     done
-    chroot "$MOUNT_DIR" test -d /usr/lib/grub/i386-pc || MISSING="$MISSING /usr/lib/grub/i386-pc"
+    for path in /usr/lib/grub/i386-pc /usr/lib/systemd/system/dbus.socket "/usr/lib/*/security/pam_systemd.so"; do
+        chroot "$MOUNT_DIR" bash -c "compgen -G '$path' >/dev/null" || MISSING="$MISSING $path"
+    done
     if [ -n "$MISSING" ]; then
-        echo "ERROR: required boot tooling missing from golden image:$MISSING"
+        echo "ERROR: required runtime tooling missing from golden image:$MISSING"
         echo ""
-        echo "Diagnostic dump:"
-        echo "--- installed grub/efibootmgr packages ---"
-        chroot "$MOUNT_DIR" dpkg -l 2>/dev/null | grep -iE 'grub|efibootmgr' || echo "(none)"
-        echo "--- binaries matching grub* or efibootmgr (anywhere under /) ---"
-        chroot "$MOUNT_DIR" bash -c 'find / -xdev \( -name "grub*" -o -name "efibootmgr" \) -type f 2>/dev/null | head -40' || true
+        echo "--- installed packages that might be involved ---"
+        chroot "$MOUNT_DIR" dpkg -l 2>/dev/null | grep -iE 'grub|efibootmgr|dbus|pam|procps|xserver|pulseaudio' || echo "(none)"
         exit 1
     fi
-    log_info "  grub-install, efibootmgr, and i386-pc modules all present"
+    log_info "  boot, X session and audio tooling all present"
 
     # If apt upgraded the kernel (noble-updates has newer versions), install
     # modules-extra for the new version too, then rebuild initrd.
@@ -795,6 +796,7 @@ TIMEOUTS
 
     # Purple X11 service: systemd-managed, waits for GPU readiness before starting X
     cp /purple-src/config/systemd/purple-x11.service "$MOUNT_DIR/etc/systemd/system/"
+    cp /purple-src/config/systemd/purple-x11-failed.service "$MOUNT_DIR/etc/systemd/system/"
     cp /purple-src/scripts/purple-wait-display.sh "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     cp /purple-src/scripts/purple-x11-failed.sh "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     cp /purple-src/scripts/purple-start-compositor.sh "$MOUNT_DIR/usr/local/bin/purple-start-compositor"

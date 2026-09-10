@@ -1,23 +1,10 @@
 #!/bin/sh
-# Shown on tty1 when X11 fails to start after multiple attempts.
-# Called as ExecStopPost by purple-x11.service.
-# Only shows the error screen on the final failure, not during restarts.
-
-# Don't show error on clean stop (e.g. system shutdown)
-[ "$SERVICE_RESULT" = "success" ] && exit 0
+# Shown on tty1 when X11 fails to start after multiple attempts. Runs as
+# purple-x11-failed.service, which purple-x11.service's OnFailure= starts once
+# the restart limit is hit, so this only ever runs on the final failure.
 
 TTY=/dev/tty1
 DIAG=/tmp/purple-diag.txt
-FAIL_COUNT_FILE=/tmp/purple-x11-fail-count
-
-# Track failures. The service restarts up to StartLimitBurst times (3).
-# Only show the error screen on the final failure.
-count=$(cat "$FAIL_COUNT_FILE" 2>/dev/null || echo 0)
-count=$((count + 1))
-echo "$count" > "$FAIL_COUNT_FILE"
-if [ "$count" -lt 3 ]; then
-    exit 0
-fi
 
 # Paint tty1 purple background
 printf '\033]P02d1b4e\033[H\033[2J' > "$TTY" 2>/dev/null
@@ -64,7 +51,7 @@ show_diagnostics() {
         cat /tmp/purple-boot.log 2>/dev/null | sed 's/^/    /' || echo "    (no boot log)"
         echo ""
         echo "  === purple-x11 journal (last 30 lines) ==="
-        sudo journalctl -u purple-x11 -b --no-pager -n 30 2>/dev/null | sed 's/^/    /' \
+        journalctl -u purple-x11 -b --no-pager -n 30 2>/dev/null | sed 's/^/    /' \
             || echo "    (no journal entries)"
         echo ""
         echo "  === Done ==="

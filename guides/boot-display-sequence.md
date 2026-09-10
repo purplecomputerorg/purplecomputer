@@ -71,7 +71,7 @@ Once a display is found (or 15s timeout), X11 starts. xinit guarantees the X ser
 
 ### 6. If X11 Fails
 
-`purple-x11-failed` (`ExecStopPost`) paints tty1 purple and shows either a kid-friendly message ("Please turn off and on again") or debug details (log paths, tty2 shell hint). Restart is attempted 3 times within 60s.
+Restart is attempted 3 times within 60s. When that limit is hit, `OnFailure=` starts `purple-x11-failed.service`, which paints tty1 purple and shows a kid-friendly message ("Please turn off and on again") and, on Enter, scrolls the diagnostics. It is a separate unit rather than an `ExecStopPost` because `TimeoutStopSec` killed the stop-post script while it waited for Enter.
 
 ---
 

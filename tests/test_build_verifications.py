@@ -125,6 +125,40 @@ def test_x11_service_start_limit_keys_are_in_unit_section():
             f"{key} still under [Service]"
 
 
+def test_x11_failure_screen_is_an_onfailure_unit():
+    """As an ExecStopPost the failure screen was killed by TimeoutStopSec=10
+    while it waited for Enter, so 'press Enter to show details' did nothing.
+    OnFailure= fires once, after the restart burst, with no stop timeout."""
+    unit = (ROOT / "config" / "systemd" / "purple-x11.service").read_text()
+    assert re.search(r"^OnFailure=purple-x11-failed\.service$", unit.split("[Service]", 1)[0], re.M), \
+        "purple-x11.service does not trigger purple-x11-failed.service on failure"
+    assert "ExecStopPost=" not in unit, "failure screen is still an ExecStopPost"
+    failed = (ROOT / "config" / "systemd" / "purple-x11-failed.service").read_text()
+    assert re.search(r"^ExecStart=/usr/local/bin/purple-x11-failed$", failed, re.M)
+    assert re.search(r"^TTYPath=/dev/tty1$", failed, re.M), "failure screen does not own tty1"
+    assert re.search(r'cp /purple-src/config/systemd/purple-x11-failed\.service ', _build_source()), \
+        "purple-x11-failed.service not copied into the image"
+    script = (ROOT / "scripts" / "purple-x11-failed.sh").read_text()
+    assert "SERVICE_RESULT" not in script and "FAIL_COUNT_FILE" not in script, \
+        "failure script still carries ExecStopPost bookkeeping"
+
+
+def test_runtime_deps_ubuntu_carries_implicitly_are_explicit():
+    """Debian only Recommends a system bus and the login PAM module; Ubuntu's
+    base set installs them. The i386 image shipped without either, so rootless
+    X had no logind session and 'open /dev/dri/card0: Permission denied'.
+    Each must be both installed and verified at build time."""
+    src = _build_source()
+    for pkg in ("dbus", "libpam-systemd", "procps"):
+        assert re.search(rf"^\s+[\w\- ]*\b{pkg}\b[\w\- ]*\\$", src, re.M), f"{pkg} not in apt install list"
+    check = re.search(r'for cmd in (.*?); do\n\s+chroot "\$MOUNT_DIR" bash -c "command -v \$cmd', src, re.DOTALL)
+    assert check, "runtime tooling verification loop missing"
+    for cmd in ("dbus-daemon", "pgrep", "startx", "xset", "xrandr", "pactl", "lsblk", "udevadm"):
+        assert re.search(rf"\b{cmd}\b", check.group(1)), f"{cmd} not verified at build time"
+    assert "pam_systemd.so" in src and "dbus.socket" in src, \
+        "logind PAM module and dbus socket unit not verified at build time"
+
+
 def test_boot_timing_tool_ships():
     """The pre-kernel boot investigation depends on this being on the image;
     it is the only way to measure seek latency and file fragmentation on a

@@ -174,6 +174,17 @@ def test_runtime_deps_ubuntu_carries_implicitly_are_explicit():
         "logind PAM module and dbus socket unit not verified at build time"
 
 
+def test_i386_image_disables_glamor():
+    """Intel 945 (the Atom netbook GPU) reports 64 shader instructions, glamor
+    needs 128, and modesetting fails X outright rather than falling back."""
+    src = _build_source()
+    m = re.search(r'\[ "\$PURPLE_ARCH" = "amd64" \] \|\| sed -i \'(.*?)\'', src)
+    assert m, "i386 AccelMethod override missing"
+    assert 'Option     "AccelMethod" "none"' in m.group(1)
+    conf = (ROOT / "config" / "xorg" / "10-modesetting.conf").read_text()
+    assert "AccelMethod" not in conf, "amd64 keeps glamor for picom's glx backend"
+
+
 def test_boot_timing_tool_ships():
     """The pre-kernel boot investigation depends on this being on the image;
     it is the only way to measure seek latency and file fragmentation on a

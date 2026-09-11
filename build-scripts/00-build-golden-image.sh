@@ -818,6 +818,12 @@ TIMEOUTS
     mkdir -p "$MOUNT_DIR/usr/share/X11/xorg.conf.d"
     # Forces modesetting driver, avoids I/O port issues
     cp /purple-src/config/xorg/10-modesetting.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
+    # The 32-bit machines' GPUs (Intel 915/945: Atom netbooks, Core Duo) report 64
+    # shader instructions; glamor needs 128 and modesetting treats that as fatal at
+    # ScreenInit ("AddScreen/ScreenInit failed"). Kept on amd64: picom's glx vsync
+    # path (guides/intel-display-tuning.md) rides on glamor's DRI3.
+    [ "$PURPLE_ARCH" = "amd64" ] || sed -i '/Driver     "modesetting"/a\    Option     "AccelMethod" "none"' \
+        "$MOUNT_DIR/usr/share/X11/xorg.conf.d/10-modesetting.conf"
     # Disable mouse/trackpad - kids use keyboard only
     cp /purple-src/config/xorg/40-disable-pointer.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
 

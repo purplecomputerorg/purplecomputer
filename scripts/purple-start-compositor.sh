@@ -12,6 +12,10 @@ LOG=/tmp/purple-picom.log
 CONF=/etc/purple/picom.conf
 
 command -v picom >/dev/null 2>&1 || { echo "picom not installed; continuing uncomposited"; exit 0; }
+# The 32-bit image runs Xorg without glamor (Intel 945 can't, see the golden
+# image build), so there is no hardware GL here: picom could only composite
+# through llvmpipe on an Atom, all CPU cost and no vsync to gain from it.
+case "$(uname -m)" in i?86) echo "32-bit image has no hardware GL; continuing uncomposited"; exit 0;; esac
 [ -f "$CONF" ] || CONF=/dev/null
 
 # Idempotent: a Purple restart re-execs xinitrc, but picom survives (it's

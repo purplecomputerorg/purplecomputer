@@ -170,6 +170,13 @@ def test_i386_image_disables_glamor():
     assert "AccelMethod" not in conf, "amd64 keeps glamor for picom's glx backend"
 
 
+def test_compositor_skips_the_32bit_image():
+    """Without glamor there is no hardware GL, so picom on the Atom would be
+    llvmpipe compositing every frame for nothing."""
+    launcher = (ROOT / "scripts" / "purple-start-compositor.sh").read_text()
+    assert re.search(r'case "\$\(uname -m\)" in i\?86\).*exit 0', launcher)
+
+
 def test_boot_timing_tool_ships():
     """The pre-kernel boot investigation depends on this being on the image;
     it is the only way to measure seek latency and file fragmentation on a

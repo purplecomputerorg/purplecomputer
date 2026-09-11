@@ -47,7 +47,8 @@ live_session() {
         touch "$rootmnt/opt/purple/debug"
         printf 'kernel.printk = 7 4 1 7\nkernel.sysrq = 1\n' > "$rootmnt/etc/sysctl.d/99-purple-zzz-debug.conf"
     fi
-    printf '\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1
+    # Same screen casper's hook leaves on the 64-bit Key, replacing the search messages above.
+    printf '\033[H\033[2J\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1
 }
 
 install_now() {

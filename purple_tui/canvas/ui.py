@@ -205,12 +205,12 @@ class TextField:
         return "   ".join(parts) + "   [dim]⇥ Tab[/]"
 
     # --- drawing ---
-    def text_x(self, g: Gfx, x: int, px: int, label: str = "Ask", label_px: int | None = None,
+    def text_x(self, g: Gfx, x: int, px: int, label: str = "Type", label_px: int | None = None,
                gap: int | None = None) -> int:
         """Where typed text starts, so hints under the field can line up with it."""
         return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + (gap if gap is not None else px // 2)
 
-    def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Ask", label_px: int | None = None,
+    def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Type", label_px: int | None = None,
              gap: int | None = None) -> pygame.Rect:
         """'Label →  text▌' in the mono face; returns the rect used.
         label_px lets the label sit a step larger than the typed text; gap

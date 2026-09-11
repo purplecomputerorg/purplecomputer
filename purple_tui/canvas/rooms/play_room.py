@@ -4,7 +4,7 @@ scrolls up; the line you're typing sits above the rotating 'Try:' hint."""
 import pygame
 
 from ... import palette as P
-from ...constants import ICON_SPARK, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
+from ...constants import ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ...content import get_content
 from ..gfx import is_emoji, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
@@ -287,7 +287,7 @@ class PlayRoom:
         width = rect.w - 2 * pad
         line_px = em(1.05)
         bottom = rect.bottom - em(1.4)
-        g.draw_text(f"{ICON_SPARK}  {self.hints.current}", em(0.95), x, bottom, "mono", P.DIM, anchor="bottomleft")
+        g.draw_text(self.hints.current, em(0.95), x, bottom, "mono", P.DIM, anchor="bottomleft")
         bottom -= g.line_height(em(0.95), "mono") + em(1.1)
         sub = self.field.autocomplete_markup or \
             f"[dim]{self.field.recall_text() or 'Type a word, then press Enter'}[/]"
@@ -338,7 +338,8 @@ class PlayRoom:
         return g.em(0.2)
 
     def _gap_above(self, g, e) -> int:
-        return g.em(0.35) if e.kind == "answer" else self._row_gap(g)
+        """An answer hugs its ask; each new ask stands clear of the pair above."""
+        return g.em(0.35) if e.kind == "answer" else g.em(1.0)
 
     def _answer_indent(self, g, e) -> int:
         icon = SPEECH_ICONS.get(e.speech, "")
@@ -352,7 +353,7 @@ class PlayRoom:
     def _draw_entry(self, g, e, x, y, width):
         if e.kind == "ask":
             px = g.em(1.05)
-            r = g.draw_text("Ask → ", px, x, y, "mono-bold", P.MUTED)
+            r = g.draw_text("Type → ", px, x, y, "mono-bold", P.MUTED)
             g.draw_text(e.markup, px, r.right, y, "mono", P.MUTED)
             return
         icon = SPEECH_ICONS.get(e.speech, "")

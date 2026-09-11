@@ -169,7 +169,7 @@ def test_none_of_something_still_counts_beside_the_rest(evaluator, text, answer)
 
 @pytest.mark.parametrize("text", KID_INPUT)
 def test_the_ask_line_echoes_what_was_typed(text):
-    """The Ask line is the kid's own words: never reordered, dropped, or escaped."""
+    """The Type line is the kid's own words: never reordered, dropped, or escaped."""
     from purple_tui.canvas.harness import make_app, press, run, type_text
     from purple_tui.play_eval import parse_speech_trigger
 

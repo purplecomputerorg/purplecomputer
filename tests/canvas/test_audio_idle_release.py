@@ -374,3 +374,15 @@ def test_audio_idle_timer_rearm_respects_audio_ok():
     app._audio_idle_timer = None
     PurpleApp._arm_audio_idle_timer(app)
     assert app._audio_idle_timer is None  # no polling on audio-less machines
+
+
+def test_keypress_cancels_lid_countdown(monkeypatch):
+    """Some firmware reports the lid closed at boot and never sends the open
+    event; typing proves it is open, so the 10 min shutdown must stop."""
+    from purple_tui import power_manager
+    lines = []
+    monkeypatch.setattr(power_manager, "_power_log", lines.append)
+    app = SimpleNamespace(_lid_close_time=time.time(), _arm_audio_idle_timer=lambda: None)
+    PurpleApp._record_user_activity(app)
+    assert app._lid_close_time is None
+    assert any("LID COUNTDOWN cancelled" in line for line in lines)

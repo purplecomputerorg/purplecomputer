@@ -195,7 +195,7 @@ class PurpleApp:
     async def _start_readers(self):
         if os.environ.get("PURPLE_NO_EVDEV") == "1":
             return
-        from ..power_manager import POWER_HOLD_SHUTDOWN, _power_diag
+        from ..power_manager import POWER_HOLD_SHUTDOWN, _power_log
         self._evdev_reader = EvdevReader(callback=self._handle_raw_key_event, grab=not is_debug())
         await self._evdev_reader.start()
         try:
@@ -203,9 +203,9 @@ class PurpleApp:
                                                           hold_seconds=POWER_HOLD_SHUTDOWN)
             await self._power_button_reader.start()
             for dev in self._power_button_reader._devices:
-                _power_diag(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
+                _power_log(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
         except Exception as e:
-            _power_diag(f"POWER BUTTON INIT: start failed: {e}")
+            _power_log(f"POWER BUTTON INIT: start failed: {e}")
             self._power_button_reader = None
         try:
             self._lid_switch_reader = LidSwitchReader(callback=self._handle_lid_switch_event)
@@ -785,6 +785,12 @@ class PurpleApp:
         self._idle_inhibitors.discard(reason)
 
     def _record_user_activity(self):
+        if self._lid_close_time is not None:
+            # Typing proves the lid is open: some firmware reports it closed at
+            # boot and never sends the open event, which would power off mid-use.
+            from ..power_manager import _power_log
+            _power_log("LID COUNTDOWN cancelled: key pressed")
+            self._lid_close_time = None
         try:
             from ..power_manager import get_power_manager
             get_power_manager().record_activity()

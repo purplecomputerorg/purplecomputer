@@ -5,6 +5,11 @@ These are places where the release branch intentionally differs from the origina
 commit, usually because the pick depends on a feature that stays on main.
 If a later pick conflicts weirdly in one of these spots, look here first.
 
+## 2026-09-13
+
+- `759ebad` (CLAUDE.md: logging defaults to always-on) → release `1dc2b39`
+  - `CLAUDE.md`: the new paragraph sits right above the Non-visual bullet, which main rewrote for the canvas UI (stderr goes to the xinitrc log there). Kept release's Textual-only bullet, inserted the paragraph above it.
+
 ## 2026-09-02
 
 The two-UI consolidation, four picks that move code out of Textual files into shared modules the canvas already used (`08850dc3` mixer, `b812e028` Play evaluator, `fe451910` sticker palette, `c5766086` sound check report). Each shared module was new to release, so every pick needed its file added by hand (`git checkout <sha> -- <file>`), and two needed more:

@@ -199,11 +199,12 @@ else
     fi
 fi
 SLOTS=()
+for i in "${!ENTRIES[@]}"; do SLOTS+=("$(slot_name "$i")"); done
+# Slot order, not /dev order: a power-cycled stick comes back under a later letter.
 for i in "${!ENTRIES[@]}"; do
     IFS='|' read -r dev size model serial <<< "${ENTRIES[$i]}"
-    SLOTS+=("$(slot_name "$i")")
     printf "  %-16s %-10s %-8s %-22s %-16s %s\n" "${SLOTS[$i]}" "$dev" "$size" "$model" "$serial" "${SCENS[$i]:+-> ${SCENS[$i]}}"
-done
+done | sort -V
 echo -e "  ${BOLD}Slots:${NC} $(printf '%s\n' "${SLOTS[@]}" | sort -V | paste -sd, | sed 's/,/, /g')"
 echo -e "  ${RED}${BOLD}ALL DATA ON THESE DRIVES WILL BE DESTROYED${NC}"
 echo

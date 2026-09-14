@@ -645,21 +645,24 @@ wait_for_unplug() {
 # bus to confirm the stick that comes out is that one. Failed sticks only: a
 # blink is a power cycle, which is fine on a drive whose contents are already
 # worthless. Good sticks are already powered off, so pulling one by mistake
-# shows as nothing happening. 'just blink' does the blink standalone.
+# shows as nothing happening. 'just blink' does the blink standalone. Returns 1
+# when the user types q to stop blinking.
 confirm_pulled() {
     local i="$1" serial="${ST_SER[$1]}" slot
     slot="$(slot_name "$i")"
     while true; do
-        blink_port_until_enter "${ST_PORT[$i]}" "Blinking $slot... press Enter once you've spotted it: "
+        blink_port_until_enter "${ST_PORT[$i]}" "Blinking $slot... Enter once you've spotted it, q+Enter to stop blinking: "
+        [[ "$REPLY" == q ]] && return 1
         if ! dev_for_serial "$serial" 20 >/dev/null; then
             log_warn "$serial did not come back after blinking, so I can't watch for its unplug. Pull the stick that was blinking."
             return 0
         fi
-        echo -n "Now pull $slot out. If nothing happens, you pulled a good stick: put it back and press Enter to blink again: "
+        echo -n "Now pull $slot out. If nothing happens, you pulled a good stick: put it back and press Enter to blink again (q+Enter to stop): "
         if wait_for_unplug "$serial"; then
             echo -e "${GREEN}✓ That was ${BOLD}$slot${NC}${GREEN} ($serial), the failed stick. Set it aside.${NC}"
             return 0
         fi
+        [[ "$REPLY" == q ]] && return 1
     done
 }
 
@@ -668,9 +671,10 @@ if [[ -t 0 ]]; then
         [[ "${ST_OK[$i]}" == true ]] && continue
         [[ -n "${ST_PORT[$i]}" ]] || continue
         echo
-        read -r -p "Blink the socket holding ${ST_SER[$i]}? [Y/n] " ans
+        read -r -p "Blink the socket holding ${ST_SER[$i]}? [Y/n, q stops blinking] " ans
+        [[ "$ans" == [qQ]* ]] && break
         [[ "$ans" == [nN]* ]] && continue
-        confirm_pulled "$i"
+        confirm_pulled "$i" || break
     done
 fi
 # A batch that shipped anything is a success; the failed drives are reported above.

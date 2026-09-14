@@ -454,11 +454,13 @@ describe_port() {
 
 # Repeat a pulse command in the background until the user presses Enter.
 # $1 is the prompt, the rest the command to run once per pulse. The user's
-# reply is left in REPLY for callers that offer choices.
+# reply is left in REPLY for callers that offer choices. The loop stops on its
+# own once the script is gone, so a hard exit can't leave a socket blinking,
+# and finishes its current step when killed so a restore can't race it.
 pulse_until_enter() {
     local prompt="$1" pid
     shift
-    ( while true; do "$@"; sleep 0.7; done ) &
+    ( trap exit TERM; while kill -0 $$ 2>/dev/null; do "$@"; sleep 0.7; done ) &
     pid=$!
     read -r -p "$prompt"
     kill "$pid" 2>/dev/null || true

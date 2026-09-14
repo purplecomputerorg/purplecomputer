@@ -1079,7 +1079,7 @@ class PurpleApp(App):
 
         # Start power button reader (separate device from keyboard)
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
-            from .power_manager import POWER_HOLD_SHUTDOWN, _power_diag
+            from .power_manager import POWER_HOLD_SHUTDOWN, _power_log
             self._power_button_reader = PowerButtonReader(
                 callback=self._handle_power_button_event,
                 hold_seconds=POWER_HOLD_SHUTDOWN,
@@ -1087,12 +1087,12 @@ class PurpleApp(App):
             try:
                 await self._power_button_reader.start()
                 if not self._power_button_reader._devices:
-                    _power_diag("POWER BUTTON INIT: no device found, watcher will adopt one")
+                    _power_log("POWER BUTTON INIT: no device found, watcher will adopt one")
                 else:
                     for dev in self._power_button_reader._devices:
-                        _power_diag(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
+                        _power_log(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
             except Exception as e:
-                _power_diag(f"POWER BUTTON INIT: start failed: {e}")
+                _power_log(f"POWER BUTTON INIT: start failed: {e}")
                 self._power_button_reader = None
 
         # Start lid switch reader (instant lid open/close detection via evdev)
@@ -2235,6 +2235,12 @@ class PurpleApp(App):
 
     def _record_user_activity(self) -> None:
         """Record that user is active. Resets idle timer."""
+        if self._lid_close_time is not None:
+            # Typing proves the lid is open: some firmware reports it closed at
+            # boot and never sends the open event, which would power off mid-use.
+            from .power_manager import _power_log
+            _power_log("LID COUNTDOWN cancelled: key pressed")
+            self._lid_close_time = None
         try:
             pm = get_power_manager()
             pm.record_activity()

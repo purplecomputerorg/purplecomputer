@@ -446,6 +446,44 @@ if HAS_PYTEST:
 
 
 # =============================================================================
+# Lid countdown vs. keypresses
+# =============================================================================
+
+class _FakeAppForActivity:
+    """Drives PurpleApp._record_user_activity in isolation."""
+    from purple_tui.purple_tui import PurpleApp
+    _record_user_activity = PurpleApp._record_user_activity
+
+    def __init__(self, lid_close_time):
+        self._lid_close_time = lid_close_time
+        self._armed = 0
+
+    def _arm_audio_idle_timer(self):
+        self._armed += 1
+
+
+def test_keypress_cancels_lid_countdown(monkeypatch):
+    """Some firmware reports the lid closed at boot and never sends the open
+    event; typing proves it is open, so the 10 min shutdown must stop."""
+    from purple_tui import power_manager
+    lines = []
+    monkeypatch.setattr(power_manager, "_power_log", lines.append)
+    app = _FakeAppForActivity(lid_close_time=time.time())
+    app._record_user_activity()
+    assert app._lid_close_time is None
+    assert app._armed == 1
+    assert any("LID COUNTDOWN cancelled" in line for line in lines)
+
+
+def test_keypress_without_countdown_logs_nothing(monkeypatch):
+    from purple_tui import power_manager
+    lines = []
+    monkeypatch.setattr(power_manager, "_power_log", lines.append)
+    _FakeAppForActivity(lid_close_time=None)._record_user_activity()
+    assert lines == []
+
+
+# =============================================================================
 # Standalone runner
 # =============================================================================
 

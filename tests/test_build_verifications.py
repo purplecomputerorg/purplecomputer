@@ -266,3 +266,12 @@ def test_installed_grub_pins_root_with_search_fallback():
             "menuentry still searches unconditionally"
     assert cfg.count("search --no-floppy --label PURPLE_ROOT") == 1, \
         "search should appear exactly once: as the fallback inside purple_set_root"
+
+
+def test_i386_kernel_reports_lid_open_at_boot():
+    """The Atom netbooks' firmware can report the lid closed until it is moved,
+    which starts the 10 min lid shutdown right after boot."""
+    cfg = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
+    i386_branch = re.search(r"set purple_variant=-i386\n(.*?)\n\s*fi", cfg, re.DOTALL)
+    assert i386_branch, "i386 branch missing"
+    assert 'set purple_args="button.lid_init_state=open"' in i386_branch.group(1)

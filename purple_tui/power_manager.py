@@ -14,9 +14,8 @@ Timing varies by charger and lid state:
   Lid closed (any):      immediate sleep face, 10 min -> shutdown
 
 Demo mode: Set PURPLE_SLEEP_DEMO=1 to use accelerated timings for testing.
-Diagnostic logging: rare events (shutdowns, power button scans) always log to
-/tmp/purple-power.log + /var/log/purple/power.log. Verbose power decisions log
-only on the debug ISO (when /opt/purple/debug exists) or with PURPLE_POWER_LOG=1.
+Every power decision logs to /tmp/purple-power.log + /var/log/purple/power.log
+on every ISO: a few lines per event, bounded ticks only while asleep or lid-closed.
 """
 
 import os
@@ -29,11 +28,10 @@ from typing import Optional
 # /var/log/purple survives reboot on installed systems and the debug ISO
 # (same convention as boot_log.py); rotated per boot by purple-wait-display.sh.
 _LOG_PATHS = ("/tmp/purple-power.log", "/var/log/purple/power.log")
-_log_enabled: Optional[bool] = None
 _header_written = False
 
 
-def _append(msg: str) -> None:
+def _power_log(msg: str) -> None:
     """Timestamped append to tmpfs + persistent log. Never raises."""
     global _header_written
     ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -49,25 +47,6 @@ def _append(msg: str) -> None:
                 f.write(text)
         except Exception:
             pass
-
-
-def _power_diag(msg: str) -> None:
-    """Always-on log for rare, high-value events (shutdowns, power button
-    scans and adoption). Chatty streams belong in _power_log instead."""
-    _append(msg)
-
-
-def _power_log(msg: str) -> None:
-    """Log a power management event with timestamp.
-
-    Auto-enabled on debug ISO. Can also be forced with PURPLE_POWER_LOG=1.
-    """
-    global _log_enabled
-    if _log_enabled is None:
-        from .constants import is_debug
-        _log_enabled = is_debug() or os.environ.get("PURPLE_POWER_LOG") == "1"
-    if _log_enabled:
-        _append(msg)
 
 
 def _get_timing(normal: int, demo: int) -> int:
@@ -325,7 +304,7 @@ class PowerManager:
         """Call this on any user input to reset idle timer."""
         idle_was = self.get_idle_seconds()
         self._last_activity = time.time()
-        if idle_was > 5:
+        if idle_was > 60:  # a real pause, not typing rhythm
             _power_log(f"ACTIVITY: idle reset (was {idle_was:.1f}s idle)")
 
     def get_idle_seconds(self) -> float:
@@ -413,7 +392,7 @@ class PowerManager:
         In demo mode (PURPLE_SLEEP_DEMO=1), just prints a message instead.
         """
         # Always log shutdown attempts (not just on debug ISO) for diagnostics.
-        _power_diag(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
+        _power_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
                       f"charger={self._charger_state}")
         _power_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
                    f"charger={self._charger_state}")

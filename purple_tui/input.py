@@ -964,7 +964,6 @@ class PowerButtonReader:
         self._devices: list = []  # All power button evdev devices
         self._running = False
         self._tasks: list[asyncio.Task] = []
-        self._heartbeat_task: Optional[asyncio.Task] = None
         self._watcher_task: Optional[asyncio.Task] = None
         self._known_device_paths: set = set()
         self._rescan_wanted = False  # Consumed by _watch_devices
@@ -978,10 +977,10 @@ class PowerButtonReader:
         """Log identical diag lines once. The log is always-on to disk and a
         flapping node re-runs scans every couple of seconds, so repeats would
         grow it unbounded for as long as the hardware is bad."""
-        from .power_manager import _power_diag
+        from .power_manager import _power_log
         if msg not in self._logged_once:
             self._logged_once.add(msg)
-            _power_diag(msg)
+            _power_log(msg)
 
     @property
     def _device(self):
@@ -1007,7 +1006,6 @@ class PowerButtonReader:
         for dev in self._devices:
             self._tasks.append(asyncio.create_task(self._read_loop(dev)))
         self._watcher_task = asyncio.create_task(self._watch_devices())
-        self._heartbeat_task = asyncio.create_task(self._heartbeat())
 
     async def stop(self) -> None:
         """Stop reading and release all devices."""
@@ -1021,10 +1019,6 @@ class PowerButtonReader:
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
             self._watcher_task = None
-
-        if self._heartbeat_task:
-            self._heartbeat_task.cancel()
-            self._heartbeat_task = None
 
         # Close all devices first to unblock async_read_loop()
         for dev in self._devices:
@@ -1043,23 +1037,6 @@ class PowerButtonReader:
         self._tasks = []
 
         logger.info("PowerButtonReader: stopped")
-
-    async def _heartbeat(self) -> None:
-        """Periodic check that read loop tasks are still alive (debug only)."""
-        from .power_manager import _power_log
-        try:
-            await asyncio.sleep(30)
-            while self._running:
-                for i, task in enumerate(self._tasks):
-                    state = "alive" if not task.done() else "DEAD"
-                    if task.done():
-                        exc = task.exception() if not task.cancelled() else "cancelled"
-                        state = f"DEAD ({exc})"
-                    dev_path = self._devices[i].path if i < len(self._devices) else "?"
-                    _power_log(f"POWER HEARTBEAT: task[{i}]={state} dev={dev_path}")
-                await asyncio.sleep(60)
-        except asyncio.CancelledError:
-            pass
 
     async def _watch_devices(self) -> None:
         """Adopt power buttons that appear after startup.
@@ -1142,7 +1119,7 @@ class PowerButtonReader:
 
     async def _read_loop(self, device) -> None:
         """Main event reading loop for one power button device."""
-        from .power_manager import _power_diag
+        from .power_manager import _power_log
         self._diag_once(f"POWER READ LOOP: starting on {device.path} ({device.name})")
         event_count = 0
         try:
@@ -1154,11 +1131,11 @@ class PowerButtonReader:
                 event_count += 1
                 # Log first few events to confirm device is alive
                 if event_count <= 5:
-                    _power_diag(f"POWER READ LOOP: event #{event_count} type={event.type} "
+                    _power_log(f"POWER READ LOOP: event #{event_count} type={event.type} "
                                f"code={event.code} value={event.value}")
 
                 if event.type == EV_KEY and event.code == KeyCode.KEY_POWER:
-                    _power_diag(f"POWER KEY: value={event.value} (1=press, 0=release)")
+                    _power_log(f"POWER KEY: value={event.value} (1=press, 0=release)")
                     if event.value == 1:  # press
                         self._press_time = event.timestamp()
                         self._cancel_hold_task()

@@ -429,13 +429,17 @@ save_port_label() {
     mv "$tmp" "$(port_labels_path)"
 }
 
-# Full port name for a socket key on the fastest bus whose hub exposes that
-# socket right now (1.4 -> 4-1.4). Full names pass through; an unresolvable
-# key is echoed as is, so callers can always print it and port_control_path
-# fails cleanly on it.
+# Full port name for a socket key or label on the fastest bus whose hub exposes
+# that socket right now (1.4 or its label -> 4-1.4). Full names pass through;
+# an unresolvable key is echoed as is, so callers can always print it and
+# port_control_path fails cleanly on it.
 resolve_port_name() {
-    local key="$1" bus n speed best="$1" best_speed=0
+    local key="$1" bus n speed best="$1" best_speed=0 k
     [[ "$key" == *-* ]] && { echo "$key"; return; }
+    load_port_labels
+    for k in "${!PORT_LABELS[@]}"; do
+        [[ "${PORT_LABELS[$k]}" == "$key" ]] && { key="$k"; best="$k"; break; }
+    done
     for bus in /sys/bus/usb/devices/usb*; do
         n="${bus##*/usb}"
         speed="$(cat "$bus/speed" 2>/dev/null || echo 0)"

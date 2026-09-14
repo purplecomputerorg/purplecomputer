@@ -67,6 +67,8 @@ Purple Computer runs on kids' laptops. Never make changes that could cause issue
 
 **Instrumentation can ship in the standard (+debug) ISO only if it's non-visual, non-expensive, and non-interfering.** Otherwise it's debug-only (gated on `/opt/purple/debug`).
 
+**Default to always-on.** The debug ISO is rarely the one booted on real hardware, so a log line that only exists there is usually missing when a bug is reported. Any logging that meets the three rules above belongs in the standard ISO; reserve the debug flag for behavior that has to be tested separately (no evdev grab so kernel VT switching works, parent-menu extras, verbose kernel output, sysrq), not for ordinary log lines. Chatty streams are fine as long as their volume is bounded (a heartbeat a minute, a tick every 30s); log identical lines once when hardware can flap.
+
 - **Non-visual** = file descriptors only. Never write to stdout/stderr: under the canvas UI they land in the xinitrc log (fine for diagnostics, wrong for per-keystroke chatter); under the Textual UI, Textual owns stderr and any stray write corrupts the screen (`stderr_guard.hide_native_stderr()` points fd 2 at `/tmp/purple-stderr.log` for C-level noise). Use `boot_log`, `_power_log`, or `tts._dbg`.
 - **Non-expensive** = cheap appends, no subprocess spawns at runtime, no fsync/flush cascades.
 - **Non-interfering** = no EVIOCGRAB, no terminal mode changes, no signal handlers that paint.

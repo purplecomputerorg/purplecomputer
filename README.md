@@ -233,7 +233,7 @@ purplecomputer/
 What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies into `/opt/purple`: `purple_tui/`, `packs/`, and two named scripts. `tools/` and `scripts/ai_ux_*` stay on the developer's machine, as does the demo tooling in `recording-setup/`.
 
 **Stack:**
-- **Target System:** Ubuntu 24.04 LTS minimal + X11 + a fullscreen pygame window (software rendering, no GL)
+- **Target System:** Ubuntu 24.04 LTS minimal + X11 + a fullscreen pygame window (software rendering, no GL). Machines with 32-bit CPUs get a Debian trixie i386 image instead; GRUB picks it per machine (see `guides/hardware-coverage-plan.md`)
 - **Installer:** Remastered Ubuntu Server ISO with initramfs hook, Secure Boot support
 - **Application:** Python + Pygame (SDL2) + Piper TTS
 
@@ -243,7 +243,7 @@ There are **two separate systems** involved:
 
 1. **USB (live boot)** (temporary): A remastered Ubuntu Server ISO that boots straight into Purple. Ubuntu's boot stack (shim, GRUB, kernel) is untouched; we swap in our own squashfs. Installation is optional and is started from the parent menu inside the running TUI, not from GRUB.
 
-2. **Installed System** (permanent): A pre-built Ubuntu 24.04 image created with debootstrap. This is what kids use once a parent installs to disk.
+2. **Installed System** (permanent): A pre-built Ubuntu 24.04 image created with debootstrap (Debian i386 for 32-bit CPUs). This is what kids use once a parent installs to disk.
 
 When a parent chooses "Install on this Computer" from the (PIN-gated) parent menu and confirms the data-loss warning, `install.sh` copies the pre-built image to the internal disk. After reboot, the USB is no longer needed.
 

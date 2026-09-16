@@ -467,7 +467,7 @@ SOURCES_EOF
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
     if [ -f "$GRUB_CFG" ]; then
         log_info "Replacing GRUB config with Purple boot menu..."
-        cp /purple-src/config/grub/purple-router.cfg "$WORK_DIR/iso-new/boot/grub/"
+        cp /purple-src/config/grub/purple-router.cfg /purple-src/config/grub/purple-variants.cfg "$WORK_DIR/iso-new/boot/grub/"
 
         # Backup original
         cp "$GRUB_CFG" "${GRUB_CFG}.orig"
@@ -558,11 +558,16 @@ GRUB_PURPLE
     cp "$SIGNED_EFI"/* "$EFI_MNT/EFI/BOOT/"
 
     # Signed GRUB has prefix=/EFI/ubuntu compiled in. Also add /boot/grub/ as fallback.
-    # Both chain to the ISO filesystem's real config.
+    # Both chain to the ISO filesystem's real config. The hints name the device
+    # GRUB was loaded from (this EFI image is on the same stick as the ISO), so
+    # the usual case skips the scan of every internal disk and card reader;
+    # a miss falls through to the same full search as before.
     mkdir -p "$EFI_MNT/EFI/ubuntu" "$EFI_MNT/boot/grub"
     for cfg in "$EFI_MNT/EFI/ubuntu/grub.cfg" "$EFI_MNT/boot/grub/grub.cfg"; do
         cat > "$cfg" << 'EFI_GRUB_EOF'
-search --file --set=root /.disk/info
+insmod regexp
+regexp --set=1:purple_disk '^([^,]+)' "$root"
+search --file --set=root /.disk/info --hint=$purple_disk --hint=$purple_disk,gpt1 --hint=$purple_disk,msdos1
 set prefix=($root)/boot/grub
 source $prefix/grub.cfg
 EFI_GRUB_EOF

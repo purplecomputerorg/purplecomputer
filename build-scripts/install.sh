@@ -156,6 +156,45 @@ get_disk_size() {
     echo "${size_gb}GB"
 }
 
+# root= for the installed kernel command line, shared by GRUB and the UKI.
+root_arg() {
+    if [ -n "$ROOT_UUID" ]; then echo "root=UUID=$ROOT_UUID"; else echo "root=LABEL=PURPLE_ROOT"; fi
+}
+
+# Layer 7 is for Macs: no Secure Boot to satisfy, and Apple's EFI reads the
+# kernel through GRUB at well under 1 MB/s on 2009-2010 models while loading
+# a PE itself is fast (it is how macOS boots). Everything else keeps shim +
+# GRUB. See docs/PLAN-macbook5-slow-boot.md.
+uki_wanted() {
+    grep -qi '^Apple' /sys/class/dmi/id/sys_vendor 2>/dev/null || return 1
+    [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = "64" ] || return 1
+    local sb=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+    if [ -f "$sb" ] && [ "$(od -An -tu1 -j4 -N1 "$sb" 2>/dev/null | tr -d ' ')" = "1" ]; then
+        return 1
+    fi
+    command -v ukify >/dev/null 2>&1
+}
+
+# Kernel, initrd and command line in one EFI binary the firmware loads itself.
+# Same kernel choice as purple-router.cfg: both read purple-variants.cfg.
+build_uki() {
+    local out="$1" variant="" args=""
+    eval "$(sed -n 's/^set \(purple_[a-z0-9_]*=\)/\1/p' /boot/grub/purple-variants.cfg /boot/grub/purple-cmdline.cfg)"
+    if [[ "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" =~ $purple_t2_models ]] && [ -f /boot/vmlinuz-t2 ]; then
+        variant=-t2
+        args="$purple_t2_args"
+    fi
+    ukify build --stub /usr/lib/systemd/boot/efi/linuxx64.efi.stub \
+        --linux "/boot/vmlinuz$variant" --initrd "/boot/initrd.img$variant" \
+        --cmdline "${args:+$args }$(root_arg) $purple_cmdline" --output "$out" >/tmp/purple-uki.log 2>&1
+}
+
+# NVRAM entry LABEL -> LOADER on the target's ESP; prints its Boot#### number.
+nvram_entry() {
+    efibootmgr -c -d "/dev/$TARGET" -p 1 -L "$1" -l "$2" >/dev/null 2>&1 || return 1
+    efibootmgr 2>/dev/null | grep -E "^Boot[0-9A-Fa-f]{4}\*? $1([[:space:]]|\$)" | head -1 | cut -c5-8
+}
+
 # Main installation routine
 main() {
     show_splash
@@ -548,9 +587,11 @@ main() {
     # 1. /EFI/BOOT/BOOTX64.EFI (shim) + grubx64.efi - UEFI spec fallback
     # 2. /EFI/Microsoft/Boot/bootmgfw.efi (shim) + grubx64.efi - Surface, HP
     # 3. /EFI/purple/shimx64.efi + grubx64.efi - vendor path for NVRAM entry
-    # 4. NVRAM Boot#### entry - bonus for compliant firmware
-    # 5. grub.cfg UUID rewrite for deterministic boot (both EFI and root copies)
+    # 4. NVRAM Boot#### entries - bonus for compliant firmware
+    # 5. purple-cmdline.cfg root=UUID rewrite (sourced by both grub.cfg copies)
     # 6. BIOS MBR + core.img in bios_grub partition - legacy/CSM firmware path
+    # 7. Macs: UKI at /EFI/purple/purple.efi booted directly by the firmware
+    #    (first NVRAM entry); shim + GRUB stays as the fallback entry
     # ==========================================================================
 
     log "Setting up boot (UEFI + BIOS)..."
@@ -613,36 +654,44 @@ main() {
                 fi
             fi
 
-            # Layer 4: NVRAM entry (bonus, not required)
-            # Points to shim, which chain-loads grubx64.efi
-            if [ "$HAVE_X64" -eq 1 ] && command -v efibootmgr >/dev/null 2>&1; then
-
-                # Remove existing PurpleOS entries
-                for bootnum in $(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | sed 's/Boot//' || true); do
-                    efibootmgr -b "$bootnum" -B 2>/dev/null || true
-                done
-
-                if efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\purple\shimx64.efi' 2>/dev/null; then
-                    log "  Layer 4: NVRAM entry created"
-                    # Set boot order
-                    PURPLE_BOOTNUM=$(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | head -1 | sed 's/Boot//')
-                    if [ -n "$PURPLE_BOOTNUM" ]; then
-                        CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep "BootOrder:" | sed 's/BootOrder: //')
-                        NEW_ORDER="$PURPLE_BOOTNUM"
-                        for entry in $(echo "$CURRENT_ORDER" | tr ',' ' '); do
-                            [ "$entry" != "$PURPLE_BOOTNUM" ] && NEW_ORDER="$NEW_ORDER,$entry"
-                        done
-                        efibootmgr -o "$NEW_ORDER" 2>/dev/null || true
-                    fi
+            # Layer 7: Macs boot the kernel directly; a failed build just
+            # leaves the GRUB path.
+            UKI_LOADER=""
+            if [ "$HAVE_X64" -eq 1 ] && uki_wanted; then
+                if build_uki /mnt/efi/EFI/purple/purple.efi; then
+                    UKI_LOADER='\EFI\purple\purple.efi'
+                    log "  Layer 7: UKI built ($(stat -c%s /mnt/efi/EFI/purple/purple.efi) bytes)"
                 else
-                    log "  Layer 4: NVRAM entry failed (fallback paths will work)"
+                    warn "  Layer 7: UKI build failed (GRUB path still boots):"
+                    while IFS= read -r ln; do warn "    $ln"; done < /tmp/purple-uki.log
+                    rm -f /mnt/efi/EFI/purple/purple.efi
                 fi
             fi
 
-            # Layer 5 (EFI part): Update search config with UUID
-            if [ -n "$ROOT_UUID" ] && [ -f /mnt/efi/EFI/ubuntu/grub.cfg ]; then
-                sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/efi/EFI/ubuntu/grub.cfg
-                log "  Layer 5: Updated EFI search config with UUID"
+            # Layer 4: NVRAM entries, UKI first when there is one, then shim.
+            # efibootmgr -c already prepends to BootOrder; re-asserting the
+            # order covers firmware that appends instead.
+            if [ "$HAVE_X64" -eq 1 ] && command -v efibootmgr >/dev/null 2>&1; then
+                for bootnum in $(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | sed 's/Boot//' || true); do
+                    efibootmgr -b "$bootnum" -B 2>/dev/null || true
+                done
+                PURPLE_NUMS=()
+                GRUB_LABEL="PurpleOS"
+                if [ -n "$UKI_LOADER" ]; then
+                    num=$(nvram_entry "PurpleOS" "$UKI_LOADER") && PURPLE_NUMS+=("$num")
+                    GRUB_LABEL="PurpleOS Fallback"
+                fi
+                num=$(nvram_entry "$GRUB_LABEL" '\EFI\purple\shimx64.efi') && PURPLE_NUMS+=("$num")
+                if [ "${#PURPLE_NUMS[@]}" -gt 0 ]; then
+                    NEW_ORDER=$(IFS=,; echo "${PURPLE_NUMS[*]}")
+                    for entry in $(efibootmgr 2>/dev/null | sed -n 's/^BootOrder: //p' | tr ',' ' '); do
+                        case ",$NEW_ORDER," in *",$entry,"*) ;; *) NEW_ORDER="$NEW_ORDER,$entry" ;; esac
+                    done
+                    efibootmgr -o "$NEW_ORDER" 2>/dev/null || true
+                    log "  Layer 4: NVRAM boot order $NEW_ORDER${UKI_LOADER:+ (UKI first)}"
+                else
+                    log "  Layer 4: NVRAM entry failed (fallback paths will work)"
+                fi
             fi
 
             umount /mnt/efi 2>/dev/null || true
@@ -693,11 +742,10 @@ main() {
                 fi
             fi
 
-            # Layer 5 (root part): Update grub.cfg with UUID for deterministic boot
-            if [ -n "$ROOT_UUID" ] && [ -f /mnt/root/boot/grub/grub.cfg ]; then
-                sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
-                sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
-                log "  Layer 5: Updated root grub.cfg with UUID"
+            # Layer 5: pin the kernel command line to this partition's UUID
+            if [ -f /mnt/root/boot/grub/purple-cmdline.cfg ]; then
+                sed -i "s|root=LABEL=PURPLE_ROOT|$(root_arg)|" /mnt/root/boot/grub/purple-cmdline.cfg
+                log "  Layer 5: kernel command line uses $(root_arg)"
             fi
 
             # Layer 6: BIOS boot (MBR + core.img in the bios_grub partition).

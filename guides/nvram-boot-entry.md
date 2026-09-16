@@ -9,7 +9,7 @@ Firmware behavior at cold boot is wildly inconsistent:
 - **Modern UEFI PCs** (Lenovo/HP/Surface/newer Dell, 2015+) auto-scan the ESP for `/EFI/BOOT/BOOTX64.EFI` and boot it. UEFI path is sufficient.
 - **Strict older UEFI PCs** (Dell Latitude E6420-era, 2011-2013) only honor NVRAM `BootOrder`. Without a NVRAM entry they cold-boot to a blinking cursor. UEFI path alone is insufficient.
 - **Legacy/CSM-mode firmwares** (those older Dells often default to Legacy-first; some budget laptops are Legacy-only) never enter UEFI mode on internal HDD attempts. They read MBR and jump to BIOS boot code. **Only the BIOS path works here.**
-- **Pre-T2 Intel Macs** (2006-2017) ignore foreign NVRAM entries but fall through to `/EFI/BOOT/BOOTX64.EFI` when no macOS is blessed. UEFI fallback path works.
+- **Pre-T2 Intel Macs** (2006-2017) honor our NVRAM entry on the units tested (a 2010 Air boots `Boot0000 PurpleOS`, `BootCurrent` confirms it) and fall through to `/EFI/BOOT/BOOTX64.EFI` when they don't.
 
 Covering all of these requires both a UEFI bootloader on the ESP and a BIOS bootloader in MBR + `bios_grub` partition.
 
@@ -35,9 +35,18 @@ p3  bios_grub  (unformatted) last 2MiB                   (empty on disk; filled 
 | 1 | `/EFI/BOOT/BOOTX64.EFI` + `grubx64.efi` | UEFI spec removable-media fallback (from golden image) |
 | 2 | `/EFI/purple/shimx64.efi` + grub + mmx64 | Vendor path targeted by the NVRAM entry |
 | 3 | `/EFI/Microsoft/Boot/bootmgfw.efi` + grub | Windows-path hijack (HP, Surface, some older Dells) |
-| 4 | NVRAM `Boot####` entry "PurpleOS" → `\EFI\purple\shimx64.efi`, prepended to `BootOrder` | Primary UEFI boot for compliant firmware |
-| 5 | `/boot/grub/grub.cfg` UUID rewrite (both EFI and root copies) | Deterministic boot on multi-disk systems |
+| 4 | NVRAM `Boot####` entries: "PurpleOS" first, then "PurpleOS Fallback" → `\EFI\purple\shimx64.efi` on Macs (a single "PurpleOS" → shim elsewhere), prepended to `BootOrder` | Primary UEFI boot for compliant firmware |
+| 5 | `/boot/grub/purple-cmdline.cfg` `root=` rewrite to the partition UUID | One file, sourced by both grub.cfg copies and read by the UKI build |
 | 6 | MBR `boot.img` + `core.img` in `bios_grub` partition | Legacy BIOS / CSM path |
+| 7 | Macs only: `ukify` builds `\EFI\purple\purple.efi` (kernel + initrd + command line in one EFI binary); the "PurpleOS" NVRAM entry points at it | Firmware loads the kernel itself, skipping shim and GRUB |
+
+## How GRUB finds the root partition
+
+One `grub.cfg`, byte-identical on the ESP (`/EFI/ubuntu/`, the signed GRUB's compiled-in prefix) and in `/boot/grub/` (BIOS path). It never scans: `$root` is the partition GRUB was loaded from (the ESP under UEFI, root under BIOS), the layout is fixed, so root is `gpt2` of that same disk. `search --file /boot/vmlinuz` runs only if that assumption fails. The earlier design pinned `(hd0,gpt2)` and fell back to `search`; on 13" MacBook Airs the media-less SD card reader is hd0, so the pin missed on every boot, GRUB printed an error, paused 10 seconds, then scanned every device including that reader. `scripts/test-grub-installed-cfg.sh` runs the config under real GRUB in QEMU for the UEFI, BIOS and fallback cases.
+
+## Why Macs get a UKI (Layer 7)
+
+Apple's EFI on 2009-2010 machines reads files through GRUB's small block reads at well under 1 MB/s, so 50MB of kernel and initrd took minutes (`docs/PLAN-macbook5-slow-boot.md`), while the same firmware loads a PE binary itself quickly (that is how macOS boots). Intel Macs have no Secure Boot to satisfy, so the firmware can load our unsigned image directly. `install.sh` gates on `sys_vendor` Apple, 64-bit UEFI and Secure Boot off, builds the UKI from the same kernel choice as `purple-router.cfg` (both read `purple-variants.cfg`) and the same command line as GRUB (`purple-cmdline.cfg`), and keeps shim + GRUB as the second NVRAM entry and the `/EFI/BOOT/BOOTX64.EFI` fallback. If the UKI fails to load or the NVRAM entry is lost, the machine boots the slower GRUB path, never nothing. `purple-boot-timing` reports which path booted.
 
 Layer 4 requires `efibootmgr` in the live environment — added to the golden image package list.
 Layer 6 requires `grub-pc-bin` (provides `grub-install --target=i386-pc` and `/usr/lib/grub/i386-pc/*.mod`) — also added to the golden image.
@@ -77,7 +86,8 @@ One known failure mode not fixed by the installer: a machine whose NVRAM is alre
 ## Verification after an install
 
 ```
-sudo efibootmgr -v                    # UEFI path: expect PurpleOS first in BootOrder
+sudo efibootmgr -v                    # UEFI path: expect PurpleOS first in BootOrder (purple.efi on Macs)
+sudo purple-boot-timing               # first section says UKI, UEFI shim+GRUB, or BIOS
 sudo parted /dev/$TARGET print        # expect 3 partitions, last one with bios_grub flag
 sudo dd if=/dev/$TARGET bs=446 count=1 2>/dev/null | xxd | head -2   # MBR should contain GRUB boot.img (non-zero)
 ```

@@ -11,6 +11,7 @@ done
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/boot/grub"
+cp "$REPO/config/grub/purple-variants.cfg" "$WORK/boot/grub/"
 {
     echo 'serial; terminal_output serial'
     cat "$REPO/config/grub/purple-router.cfg"

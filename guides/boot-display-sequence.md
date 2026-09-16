@@ -167,6 +167,10 @@ dd if=/path/to/iso of=efi.img bs=512 skip=$((LBA * 4)) count=SECTORS
 ### On the live machine
 
 ```bash
+# One screen, fits a photo: stick link speed, systemd's view, the startup
+# timeline as seconds since the kernel started, memory, stick read speed
+sudo purple-boot-timing
+
 # Check what GRUB config is active
 cat /cdrom/boot/grub/grub.cfg
 

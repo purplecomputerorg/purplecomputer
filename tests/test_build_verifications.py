@@ -205,6 +205,37 @@ def test_boot_timing_tool_ships():
         "smartmontools not in apt install list (SMART check silently skips)"
 
 
+def test_boot_timing_timeline_is_seconds_since_boot(tmp_path):
+    """On a live USB the report has to fit one photo, so the boot log's
+    wall-clock stamps come out as offsets from kernel start, only the lines
+    that bound a startup phase, and without the per-line prefixes."""
+    import os
+    import subprocess
+    from datetime import datetime, timedelta
+    boot = datetime.now() - timedelta(seconds=float(Path("/proc/uptime").read_text().split()[0]))
+    stamp = lambda offset: (boot + timedelta(seconds=offset)).strftime("%H:%M:%S.%f")[:-3]
+    log = tmp_path / "boot.log"
+    log.write_text(
+        f"[{stamp(9)}] [wait-display] === purple-wait-display started === kernel=6.8\n"
+        f"[{stamp(9.5)}] [wait-display]   connector at start: card0-eDP-1 = connected\n"
+        f"[{stamp(12)}] [xinitrc] === xinitrc started ===  debug_flag=no\n"
+        f"[{stamp(13)}] [xinitrc] Caching squashfs for USB safety...\n"
+        f"[{stamp(14)}] [launcher] exec python3 -m purple_tui\n"
+        f"[{stamp(14.2)}] [+ 0.010s] [python] watchdog armed\n"
+        f"[{stamp(95)}] [+80.810s] [python] PurpleApp.__init__ begin\n"
+        f"[{stamp(100)}] [+85.810s] [python] first render reached; watchdog disarmed\n"
+    )
+    out = subprocess.run(["bash", str(ROOT / "scripts" / "purple-boot-timing.sh"), "--timeline"],
+                         env={**os.environ, "PURPLE_BOOT_LOG": str(log)},
+                         capture_output=True, text=True, check=True).stdout
+    lines = out.splitlines()
+    assert "connector at start" not in out
+    offsets = [float(re.match(r"\s*(-?\d+\.\d)s  ", line).group(1)) for line in lines]
+    for got, want in zip(offsets, [9, 12, 13, 14, 14.2, 95, 100], strict=True):
+        assert abs(got - want) <= 2, (got, want, out)
+    assert lines[-1].endswith("s  [python] first render reached; watchdog disarmed")
+
+
 def test_audio_probe_tool_ships():
     """purple-audio-probe is the hands-on loudness diagnostic (mic loopback at
     three steps, speech-model timing); it only helps if it is on the image."""

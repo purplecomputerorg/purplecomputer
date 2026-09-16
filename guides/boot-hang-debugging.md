@@ -18,6 +18,8 @@ See also: `guides/boot-display-sequence.md` (normal boot path), `purple_tui/boot
 
 On xinitrc entry, `boot.log` is rotated to `boot.log.prev` — so after a hang + power cycle + boot, the previous boot's full trace lives at `/var/log/purple/boot.log.prev`.
 
+For a slow (not hung) boot, `sudo purple-boot-timing` prints the lines that bound each phase as seconds since the kernel started, next to `systemd-analyze`, so the gap shows up without reading the raw log. `--timeline` prints just that part.
+
 **Writers (in order of appearance in a normal boot):**
 
 1. `purple-wait-display.sh` — logs `[wait-display]` lines from systemd's `purple-x11.service` ExecStartPre. Connector states at start and timeout.

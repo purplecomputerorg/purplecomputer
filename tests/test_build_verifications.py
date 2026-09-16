@@ -258,29 +258,112 @@ def test_initrd_lean_hook_prunes_modules_and_firmware():
         "no fail-loudly artifact check that the initrd is actually lean"
 
 
-def test_installed_grub_pins_root_with_search_fallback():
-    """`search --label` probes every block device; an empty optical drive under
-    Apple EFI made that cost 47s per boot. The installed grub.cfg must pin
-    root to the fixed layout (p2) and keep `search` ONLY as the fallback for
-    wrong hd numbering: a pin without fallback is an unbootable machine, a
-    fallback without pin is the 47s again."""
+def test_installed_grub_derives_root_from_the_boot_device():
+    """`search` probes every block device; an empty optical drive under Apple
+    EFI made that cost 47s per boot, and a fixed (hd0,gpt2) pin missed on 13"
+    MacBook Airs, where a media-less SD reader takes hd0 (the miss printed an
+    error and paused GRUB 10s). The config must derive the root partition from
+    the device GRUB itself was loaded from and keep `search` ONLY as the
+    fallback, with no error-printing test in a menuentry."""
     cfg = _installed_grub_cfg_block()
-    fn = re.search(r"function purple_set_root \{\n(.*?)\n\}", cfg, re.DOTALL)
-    assert fn, "purple_set_root function missing from installed grub.cfg"
-    body = fn.group(1)
-    assert re.search(r"set root=\(hd0,gpt2\)", body), "root not pinned to (hd0,gpt2)"
+    head = cfg.split("menuentry", 1)[0]
+    assert re.search(r'regexp --set=1:purple_disk \'\^\(\[\^,\]\+\)\' "\$root"', head), \
+        "root disk not derived from $root"
+    assert "set root=($purple_disk,gpt2)" in head, "root not set to gpt2 of the boot disk"
     assert re.search(
-        r"if \[ ! -f /boot/vmlinuz \]; then\s*\n\s*search --no-floppy --label PURPLE_ROOT --set=root",
-        body), "fallback search missing or not guarded by the pin check"
-    # Both menuentries use the function; no entry searches unconditionally.
+        r"if \[ ! -f /boot/vmlinuz \]; then\s*\n\s*search --no-floppy --file /boot/vmlinuz --set=root",
+        head), "fallback search missing or unguarded"
+    assert "--label" not in cfg and "fs-uuid" not in cfg, "config still searches by label/uuid"
+    assert "source /boot/grub/purple-cmdline.cfg" in head and "source /boot/grub/purple-router.cfg" in head
     entries = re.findall(r'menuentry [^\n]*\{\n(.*?)\n\}', cfg, re.DOTALL)
     assert len(entries) == 2, f"expected 2 menuentries, found {len(entries)}"
     for entry in entries:
-        assert "purple_set_root" in entry, "menuentry does not call purple_set_root"
-        assert "search --no-floppy" not in entry, \
-            "menuentry still searches unconditionally"
-    assert cfg.count("search --no-floppy --label PURPLE_ROOT") == 1, \
-        "search should appear exactly once: as the fallback inside purple_set_root"
+        assert "search" not in entry and "[ " not in entry, \
+            "menuentry runs a command that can print an error (10s pause before boot)"
+        assert "$purple_root_arg" in entry, "menuentry does not use the shared root= argument"
+    assert "echo \"Starting Purple Computer...\"" in entries[0], "no on-screen sign of life before the slow reads"
+    assert "$purple_cmdline" in entries[0]
+
+
+def test_grub_config_is_one_file_for_esp_and_bios():
+    """UEFI reads /EFI/ubuntu/grub.cfg (signed GRUB's prefix), BIOS reads
+    /boot/grub/grub.cfg. They must be byte-identical copies of one heredoc:
+    a second hand-written ESP config is how the label search survived."""
+    src = _build_source()
+    assert re.search(r'cp "\$MOUNT_DIR/boot/grub/grub\.cfg" "\$MOUNT_DIR/boot/efi/EFI/ubuntu/grub\.cfg"', src), \
+        "ESP grub.cfg is not a copy of the root one"
+    assert src.count('cat > "$MOUNT_DIR/boot/efi/EFI/ubuntu/grub.cfg"') == 0, \
+        "a separate ESP grub.cfg heredoc is back"
+    cmdline = re.search(
+        r'cat > "\$MOUNT_DIR/boot/grub/purple-cmdline\.cfg" <<\'EOF\'\n(.*?)\nEOF\n', src, re.DOTALL)
+    assert cmdline, "purple-cmdline.cfg heredoc missing"
+    body = cmdline.group(1)
+    assert 'set purple_root_arg="root=LABEL=PURPLE_ROOT"' in body
+    assert re.search(r'^set purple_cmdline="ro loglevel=3 .*console=tty2 .*vt\.default_blu=', body, re.M), \
+        "kernel command line lost its console/colour settings"
+    assert re.search(r"cp /purple-src/config/grub/purple-router\.cfg /purple-src/config/grub/purple-variants\.cfg", src), \
+        "router or variants file not copied into /boot/grub"
+
+
+def _install_source() -> str:
+    return (ROOT / "build-scripts" / "install.sh").read_text()
+
+
+def test_install_rewrites_root_arg_in_the_shared_cmdline_file():
+    """Layer 5 used to sed two grub.cfg copies for two patterns each; the
+    root= argument now has exactly one home, sourced by both copies and read
+    by the UKI build."""
+    src = _install_source()
+    assert re.search(r'sed -i "s\|root=LABEL=PURPLE_ROOT\|\$\(root_arg\)\|" /mnt/root/boot/grub/purple-cmdline\.cfg', src), \
+        "root= rewrite does not target purple-cmdline.cfg"
+    assert "search --no-floppy --label" not in src, "install.sh still rewrites a label search"
+    assert "root=LABEL=PURPLE_ROOT|root=UUID" not in src, "old grub.cfg sed is back"
+
+
+def test_install_builds_a_uki_for_macs_with_grub_as_fallback():
+    """Macs boot a unified kernel image the firmware loads itself (Layer 7):
+    Apple EFI reads files through GRUB at well under 1 MB/s on 2009-2010
+    models. Gated on Apple + 64-bit UEFI + Secure Boot off, built from the same
+    kernel choice and command line as GRUB, and shim stays the next NVRAM entry."""
+    src = _install_source()
+    gate = re.search(r"uki_wanted\(\) \{\n(.*?)\n\}", src, re.DOTALL)
+    assert gate, "uki_wanted missing"
+    g = gate.group(1)
+    assert "/sys/class/dmi/id/sys_vendor" in g and "'^Apple'" in g
+    assert "fw_platform_size" in g and '"64"' in g
+    assert "SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c" in g
+    build = re.search(r"build_uki\(\) \{\n(.*?)\n\}", src, re.DOTALL)
+    assert build, "build_uki missing"
+    b = build.group(1)
+    assert "/boot/grub/purple-variants.cfg" in b and "/boot/grub/purple-cmdline.cfg" in b, \
+        "UKI does not share the router data and command line"
+    assert "=~ $purple_t2_models" in b and 'args="$purple_t2_args"' in b
+    assert re.search(r'--cmdline "\$\{args:\+\$args \}\$\(root_arg\) \$purple_cmdline"', b)
+    assert "linuxx64.efi.stub" in b
+    assert "build_uki /mnt/efi/EFI/purple/purple.efi" in src
+    assert re.search(r"nvram_entry \"PurpleOS\" \"\$UKI_LOADER\"", src), "UKI is not the primary NVRAM entry"
+    assert re.search(r"nvram_entry \"\$GRUB_LABEL\" '\\EFI\\purple\\shimx64\.efi'", src), \
+        "shim entry no longer created"
+    build_src = _build_source()
+    assert re.search(r'ARCH_PKGS="casper systemd-hwe-hwdb systemd-ukify systemd-boot-efi"', build_src), \
+        "ukify and the systemd-boot stub are not in the image"
+    assert "UKI_CMDS=ukify" in build_src and "linuxx64.efi.stub" in build_src, \
+        "build does not verify ukify and the stub landed"
+
+
+def test_variants_file_is_the_single_source_for_router_and_installer():
+    variants = (ROOT / "config" / "grub" / "purple-variants.cfg").read_text()
+    for line in variants.splitlines():
+        if line and not line.startswith("#"):
+            assert re.match(r"^set purple_[a-z0-9_]+=", line), f"not eval-safe for bash: {line}"
+    assert "set purple_t2_models=" in variants and "set purple_t2_args=" in variants
+    router = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
+    assert "source /boot/grub/purple-variants.cfg" in router
+    assert 'regexp "$purple_t2_models" "$product"' in router
+    assert 'set purple_args="$purple_t2_args"' in router
+    assert "MacBookPro1[56]" not in router, "T2 model list duplicated in the router"
+    for path in ("scripts/test-grub-router.sh", "build-scripts/01-remaster-iso.sh"):
+        assert "purple-variants.cfg" in (ROOT / path).read_text(), f"{path} does not ship the variants file"
 
 
 def test_i386_kernel_reports_lid_open_at_boot():
@@ -289,4 +372,6 @@ def test_i386_kernel_reports_lid_open_at_boot():
     cfg = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
     i386_branch = re.search(r"set purple_variant=-i386\n(.*?)\n\s*fi", cfg, re.DOTALL)
     assert i386_branch, "i386 branch missing"
-    assert 'set purple_args="button.lid_init_state=open"' in i386_branch.group(1)
+    assert 'set purple_args="$purple_i386_args"' in i386_branch.group(1)
+    variants = (ROOT / "config" / "grub" / "purple-variants.cfg").read_text()
+    assert 'set purple_i386_args="button.lid_init_state=open"' in variants

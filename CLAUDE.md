@@ -172,7 +172,7 @@ Physical Keyboard → keyd (EVIOCGRAB + uinput) → keyd virtual keyboard
 Both ISOs boot via Casper (Ubuntu's live boot framework). The normal ISO hides the GRUB menu and auto-boots. The debug ISO shows a GRUB menu with verbose boot options.
 
 GRUB picks the kernel per machine via `config/grub/purple-router.cfg`: signed stock, `-t2` (t2linux kernel, by SMBIOS model) or `-i386` (Debian image; `build-scripts/initramfs/purple-live` stands in for casper there). Same snippet on installed systems.
- Verify with `scripts/test-grub-router.sh`. Design: `guides/hardware-coverage-plan.md`.
+ Verify with `scripts/test-grub-router.sh`; `scripts/test-grub-installed-cfg.sh` runs the installed grub.cfg in QEMU. Design: `guides/hardware-coverage-plan.md`.
 
 Installation is triggered through the live boot, not a GRUB menu entry. The install flow is:
 1. Live boot starts Purple Computer normally
@@ -190,7 +190,9 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 ### UEFI Boot (Installed System)
 
 Boot must work on diverse hardware (ThinkPads, Dells, Surface, etc.):
-- **UUID over labels** for root partition
+- **UUID over labels** for root partition (`purple-cmdline.cfg`, one file for GRUB and the UKI)
+- **GRUB never scans for root:** it is gpt2 of the disk GRUB was loaded from; `search` is only the fallback (hd numbering shifts on Macs with card readers)
+- **Macs boot a UKI directly** (`install.sh` Layer 7, `ukify`); shim → GRUB stays as the fallback entry. `guides/nvram-boot-entry.md`
 - **Signed boot chain:** shim → GRUB → kernel (+ mmx64.efi MOK Manager alongside shim)
 - **Multiple EFI paths:** `/EFI/BOOT/`, `/EFI/Microsoft/Boot/`, `/EFI/purple/`
 - **NVRAM entries are bonus:** create but don't depend on them

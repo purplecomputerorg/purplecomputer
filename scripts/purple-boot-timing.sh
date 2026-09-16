@@ -17,32 +17,52 @@
 
 set -u
 
-GRUB_CFG=/boot/grub/grub.cfg
+# The same config lives in both places: UEFI reads the ESP copy, BIOS the root one.
+GRUB_CFGS="/boot/grub/grub.cfg /boot/efi/EFI/ubuntu/grub.cfg"
+STUB_INFO=/sys/firmware/efi/efivars/StubInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+UKI=/boot/efi/EFI/purple/purple.efi
 
 section() { printf '\n=== %s ===\n' "$1"; }
 
 grub_menu() {
-    [ -w "$GRUB_CFG" ] || { echo "need root: sudo purple-boot-timing --menu $1"; exit 1; }
+    [ -w /boot/grub/grub.cfg ] || { echo "need root: sudo purple-boot-timing --menu $1"; exit 1; }
+    for cfg in $GRUB_CFGS; do
+        [ -f "$cfg" ] || continue
+        case "$1" in
+            on)
+                sed -i -e 's/^set timeout=.*/set timeout=10/' \
+                       -e '/^set timeout_style=/d' \
+                       -e '/^set timeout=/a set timeout_style=menu' "$cfg"
+                ;;
+            off)
+                sed -i -e 's/^set timeout=.*/set timeout=0/' \
+                       -e '/^set timeout_style=/d' "$cfg"
+                ;;
+            *) echo "usage: purple-boot-timing --menu on|off"; exit 1 ;;
+        esac
+        printf '%s: ' "$cfg"; grep -E '^set timeout' "$cfg" | tr '\n' ' '; echo
+    done
     case "$1" in
         on)
-            sed -i -e 's/^set timeout=.*/set timeout=10/' \
-                   -e '/^set timeout_style=/d' \
-                   -e '/^set timeout=/a set timeout_style=menu' "$GRUB_CFG"
             echo "GRUB menu on (10s). Reboot and watch which side of the menu the wait is on:"
             echo "  menu appears fast, then a long wait  -> GRUB/stub reading the disk"
             echo "  long wait before the menu appears    -> Apple firmware, before GRUB"
+            [ -e "$STUB_INFO" ] && echo "this Mac boots the UKI, not GRUB: hold Option at power-on and pick EFI Boot to see the menu"
             ;;
-        off)
-            sed -i -e 's/^set timeout=.*/set timeout=0/' \
-                   -e '/^set timeout_style=/d' "$GRUB_CFG"
-            echo "GRUB menu off (timeout=0)."
-            ;;
-        *) echo "usage: purple-boot-timing --menu on|off"; exit 1 ;;
+        off) echo "GRUB menu off (timeout=0)." ;;
     esac
-    grep -E '^set timeout' "$GRUB_CFG"
 }
 
 if [ "${1:-}" = "--menu" ]; then grub_menu "${2:-}"; exit 0; fi
+
+section "Boot path"
+if [ -e "$STUB_INFO" ]; then
+    echo "UKI: the firmware loaded $UKI itself (no shim, no GRUB)"
+elif [ -d /sys/firmware/efi ]; then
+    echo "UEFI: shim -> GRUB -> kernel"
+else
+    echo "BIOS: MBR -> GRUB -> kernel"
+fi
 
 section "Boot phases (what Linux can see)"
 systemd-analyze 2>&1 | head -3
@@ -71,6 +91,7 @@ if [ -n "$KERNEL" ] && [ -n "$INITRD" ]; then
 else
     echo "no kernel/initrd found under /boot"
 fi
+[ -f "$UKI" ] && ls -lL "$UKI"
 BOOT_DEV=$(findmnt -no SOURCE /boot 2>/dev/null || findmnt -no SOURCE / 2>/dev/null)
 echo "read from: $BOOT_DEV ($(findmnt -no FSTYPE /boot 2>/dev/null || findmnt -no FSTYPE / 2>/dev/null))"
 if ! command -v filefrag >/dev/null 2>&1; then

@@ -28,7 +28,9 @@ else
     COMPONENTS="main universe"
     KERNEL_PKG=linux-image-generic
     FIRMWARE_PKGS="linux-firmware firmware-sof-signed"
-    ARCH_PKGS="casper systemd-hwe-hwdb"  # hwe-hwdb: udev quirks for newer laptop keyboards
+    # hwe-hwdb: udev quirks for newer laptop keyboards. ukify + the systemd-boot
+    # stub build the Mac UKI at install time (install.sh Layer 7).
+    ARCH_PKGS="casper systemd-hwe-hwdb systemd-ukify systemd-boot-efi"
     SETARCH=""
 fi
 
@@ -353,14 +355,20 @@ SOURCES
     # package without it) and `grub-pc-bin` provides the i386-pc modules.
     log_info "Verifying runtime tooling is present in the golden image..."
     MISSING=""
+    UKI_CMDS=""
+    UKI_PATHS=""
+    if [ "$PURPLE_ARCH" != "i386" ]; then
+        UKI_CMDS=ukify
+        UKI_PATHS=/usr/lib/systemd/boot/efi/linuxx64.efi.stub
+    fi
     # glxinfo: not boot tooling, but if it vanishes the GL probe silently
     # falls back to software rendering on every machine. Fail loudly instead.
     for cmd in grub-install efibootmgr pv glxinfo dbus-daemon pgrep startx xset xsetroot xrandr \
                xkbset unclutter matchbox-window-manager picom pactl paplay amixer \
-               lsblk udevadm dmidecode flite logger; do
+               lsblk udevadm dmidecode flite logger $UKI_CMDS; do
         chroot "$MOUNT_DIR" bash -c "command -v $cmd >/dev/null" || MISSING="$MISSING $cmd"
     done
-    for path in /usr/lib/grub/i386-pc /usr/lib/systemd/system/dbus.socket "/usr/lib/*/security/pam_systemd.so"; do
+    for path in /usr/lib/grub/i386-pc /usr/lib/systemd/system/dbus.socket "/usr/lib/*/security/pam_systemd.so" $UKI_PATHS; do
         chroot "$MOUNT_DIR" bash -c "compgen -G '$path' >/dev/null" || MISSING="$MISSING $path"
     done
     if [ -n "$MISSING" ]; then
@@ -976,44 +984,69 @@ AUTOLOGIN
     # We download the signed binaries and set them up manually, rather than running
     # grub-install which doesn't work in a container/chroot build environment.
 
-    # Create minimal grub.cfg for the installed system
-    # This is what gets loaded when the EFI search config calls configfile
-    log_info "Creating minimal GRUB configuration..."
+    # One GRUB config for the installed system, copied to the ESP (/EFI/ubuntu,
+    # the signed GRUB's prefix) and kept in /boot/grub for the BIOS path. It
+    # never scans for the root partition: $root is the partition GRUB was
+    # loaded from (the ESP under UEFI, root under BIOS) and the layout is
+    # fixed (p1 ESP, p2 root), so root is gpt2 of that same disk whatever
+    # number the firmware gave it (a media-less SD reader takes hd0 on 13"
+    # MacBook Airs, and every `search` probed it). The kernel command line
+    # lives in purple-cmdline.cfg so install.sh can hand the same line to the
+    # Mac UKI (see install.sh Layer 7). See docs/PLAN-macbook5-slow-boot.md.
+    log_info "Creating GRUB configuration..."
     mkdir -p "$MOUNT_DIR/boot/grub"
-    cp /purple-src/config/grub/purple-router.cfg "$MOUNT_DIR/boot/grub/"
+    cp /purple-src/config/grub/purple-router.cfg /purple-src/config/grub/purple-variants.cfg "$MOUNT_DIR/boot/grub/"
+    cat > "$MOUNT_DIR/boot/grub/purple-cmdline.cfg" <<'EOF'
+# Kernel command line shared by grub.cfg (source) and the Mac UKI (install.sh).
+# root= is rewritten to the partition UUID at install time.
+set purple_root_arg="root=LABEL=PURPLE_ROOT"
+set purple_cmdline="ro loglevel=3 systemd.show_status=true vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff"
+EOF
     cat > "$MOUNT_DIR/boot/grub/grub.cfg" <<'EOF'
-# PurpleOS minimal GRUB configuration
+# PurpleOS GRUB configuration (same file on the ESP and in /boot/grub)
 set timeout=0
 set default=0
+
+# Root is gpt2 of the disk GRUB was loaded from; `search` only if that
+# layout assumption fails (it scans every device, slowly on Apple EFI).
+insmod regexp
+regexp --set=1:purple_disk '^([^,]+)' "$root"
+set root=($purple_disk,gpt2)
+if [ ! -f /boot/vmlinuz ]; then
+    search --no-floppy --file /boot/vmlinuz --set=root
+fi
+if [ ! -f /boot/vmlinuz ]; then
+    echo ""
+    echo "Purple Computer could not start."
+    echo ""
+    echo "The boot files were not found."
+    echo "This usually means installation"
+    echo "did not complete successfully."
+    echo ""
+    echo "Please reinstall or contact support."
+    echo ""
+    echo "(Technical: root partition not found)"
+    echo ""
+    sleep 10
+fi
+
+source /boot/grub/purple-cmdline.cfg
+source /boot/grub/purple-router.cfg
 # Installed kernels are always the right arch, so a variant this image lacks
 # (the i386 image has no vmlinuz-i386) means the stock kernel
-source $prefix/purple-router.cfg
 if [ ! -f /boot/vmlinuz$purple_variant ]; then
     set purple_variant=""
     set purple_args=""
 fi
 
-# Pin root to the fixed partition layout (p2 = PURPLE_ROOT) and only fall
-# back to a device scan when the pin is wrong (extra disks can shift hd
-# numbering). `search` probes every block device, and an empty optical
-# drive under Apple EFI answers slowly: the probe alone cost 47s on a
-# MacBook5,2. See docs/PLAN-macbook5-slow-boot.md.
-function purple_set_root {
-    set root=(hd0,gpt2)
-    if [ ! -f /boot/vmlinuz ]; then
-        search --no-floppy --label PURPLE_ROOT --set=root
-    fi
-}
-
 menuentry "PurpleOS" {
-    purple_set_root
-    linux /boot/vmlinuz$purple_variant $purple_args root=LABEL=PURPLE_ROOT ro loglevel=3 systemd.show_status=true vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff
+    echo "Starting Purple Computer..."
+    linux /boot/vmlinuz$purple_variant $purple_args $purple_root_arg $purple_cmdline
     initrd /boot/initrd.img$purple_variant
 }
 
 menuentry "PurpleOS (recovery mode)" {
-    purple_set_root
-    linux /boot/vmlinuz$purple_variant $purple_args root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8
+    linux /boot/vmlinuz$purple_variant $purple_args $purple_root_arg ro single console=tty0 console=ttyS0,115200n8
     initrd /boot/initrd.img$purple_variant
 }
 EOF
@@ -1043,63 +1076,10 @@ EOF
         fat ext2 iso9660 regexp cpuid smbios test echo sleep halt true minicmd efifwsetup all_video efi_gop efi_uga gfxterm
     cp "$BUILD_DIR/signed-efi/BOOTIA32.EFI" "$MOUNT_DIR/boot/efi/EFI/BOOT/"
 
-    # Create EFI search config at /EFI/ubuntu/ (where Ubuntu's signed GRUB expects it).
-    # The signed GRUB binary has prefix=/EFI/ubuntu compiled in, so it loads
-    # /EFI/ubuntu/grub.cfg regardless of which directory shim loaded it from.
-    # This config searches for the root partition and loads the full /boot/grub/grub.cfg.
+    # The signed GRUB (and BOOTIA32.EFI) has prefix=/EFI/ubuntu compiled in and
+    # sources grub.cfg from there, whichever directory shim loaded it from.
     mkdir -p "$MOUNT_DIR/boot/efi/EFI/ubuntu"
-    cat > "$MOUNT_DIR/boot/efi/EFI/ubuntu/grub.cfg" <<'EOF'
-# PurpleOS EFI search config
-# Finds root partition using multiple fallback methods, then loads full config.
-# IMPORTANT: call configfile exactly once to avoid "recursion depth exceeded".
-
-# Method 1: Label search (most reliable on fresh installs)
-search --no-floppy --label PURPLE_ROOT --set=root
-
-# Method 2: File search (works if label is missing/changed)
-if [ -z "$root" ]; then
-    search --no-floppy --file /boot/grub/grub.cfg --set=root
-fi
-
-# Method 3: SATA/SAS device probe
-if [ -z "$root" ]; then
-    for dev in hd0,gpt2 hd1,gpt2 hd2,gpt2; do
-        if [ -f ($dev)/boot/grub/grub.cfg ]; then
-            set root=$dev
-            break
-        fi
-    done
-fi
-
-# Method 4: NVMe device probe
-if [ -z "$root" ]; then
-    for dev in nvme0n1,gpt2 nvme1n1,gpt2; do
-        if [ -f ($dev)/boot/grub/grub.cfg ]; then
-            set root=$dev
-            break
-        fi
-    done
-fi
-
-# Load full config from root partition (exactly once)
-if [ -n "$root" ]; then
-    set prefix=($root)/boot/grub
-    configfile ($root)/boot/grub/grub.cfg
-fi
-
-echo ""
-echo "Purple Computer could not start."
-echo ""
-echo "The boot files were not found."
-echo "This usually means installation"
-echo "did not complete successfully."
-echo ""
-echo "Please reinstall or contact support."
-echo ""
-echo "(Technical: root partition not found)"
-echo ""
-sleep 10
-EOF
+    cp "$MOUNT_DIR/boot/grub/grub.cfg" "$MOUNT_DIR/boot/efi/EFI/ubuntu/grub.cfg"
 
     # =========================================================================
     # SIZE REDUCTION: strip everything not needed for an offline kids' appliance

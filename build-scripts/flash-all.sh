@@ -182,10 +182,14 @@ else
         UNSHIPPABLE="this ISO has no .commit sidecar, so its source commit is unknown"
     elif [[ -z "$RELEASE_HEAD" ]]; then
         UNSHIPPABLE="release/1.x was not found locally to compare against"
-    elif [[ "$RELEASE_HEAD" != "$ISO_SRC_COMMIT"* ]]; then
-        if git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" release/1.x 2>/dev/null; then
-            ISO_LINE="an older release build"
-        elif git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" main 2>/dev/null; then
+    elif [[ "$RELEASE_HEAD" == "$ISO_SRC_COMMIT"* ]]; then
+        echo -e "  ${GREEN}Newest release build: commit ${ISO_SRC_COMMIT} is the tip of release/1.x.${NC}"
+    elif git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" release/1.x 2>/dev/null; then
+        BEHIND="$(git -C "$PROJECT_DIR" rev-list --count "${ISO_SRC_COMMIT}..release/1.x" 2>/dev/null || echo '?')"
+        echo -e "  ${GREEN}Release build${NC} (commit ${ISO_SRC_COMMIT}), ${BEHIND} commit(s) behind the tip of release/1.x (${RELEASE_HEAD:0:7})."
+        echo -e "  Shippable; make sure the older release is what you meant to flash."
+    else
+        if git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" main 2>/dev/null; then
             ISO_LINE="a main build, not a release build"
         else
             ISO_LINE="from a commit on neither main nor release/1.x"
@@ -193,10 +197,8 @@ else
         UNSHIPPABLE="this ISO is $ISO_LINE (commit $ISO_SRC_COMMIT), release/1.x is at ${RELEASE_HEAD:0:7}"
     fi
     if [[ -n "$UNSHIPPABLE" ]]; then
-        echo -e "  ${YELLOW}${BOLD}Not confirmed as the current release build:${NC}${YELLOW} ${UNSHIPPABLE}.${NC}"
+        echo -e "  ${YELLOW}${BOLD}Not a release build:${NC}${YELLOW} ${UNSHIPPABLE}.${NC}"
         echo -e "  ${YELLOW}Fine for dev sticks; do not ship these drives to customers.${NC}"
-    else
-        echo -e "  ${GREEN}Current release build: commit ${ISO_SRC_COMMIT} matches release/1.x.${NC}"
     fi
 fi
 SLOTS=()

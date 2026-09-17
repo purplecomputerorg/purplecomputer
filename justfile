@@ -300,7 +300,7 @@ build *args:
     ./build-scripts/build-in-docker.sh {{args}}
 
 # Flash ISO to USB drive (asks which of the newest build's ISOs to use).
-# just flash --ref <commit> flashes from that commit's archived build (see just build --ref)
+# just flash --ref <commit> flashes that commit's build: archived (see just build --ref) or still in the output dir
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 

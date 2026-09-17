@@ -15,7 +15,8 @@ UBUNTU_ISO_NAME="ubuntu-24.04.1-live-server-amd64.iso"
 
 # Where 'just build --ref <commit>' keeps an old commit's build state (its own
 # golden image and output dir), so it never clobbers the current build. Flash
-# from it with 'just flash --ref <commit>'.
+# from it with 'just flash --ref <commit>' (which also finds an ordinary build
+# of that commit still in the output dir).
 archive_dir_for_ref() {
     local hash
     hash="$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." rev-parse --short "$1")" || return 1

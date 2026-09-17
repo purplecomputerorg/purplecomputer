@@ -44,8 +44,8 @@ if [ ! -d "$OUTPUT_DIR" ]; then
 fi
 
 # An ISO and its sidecars are always cleaned together, so every pass matches
-# the same three name patterns.
-ISO_FILES=(-name "*.iso" -o -name "*.iso.sha256" -o -name "*.iso.version")
+# the same name patterns.
+ISO_FILES=(-name "*.iso" -o -name "*.iso.sha256" -o -name "*.iso.version" -o -name "*.iso.commit")
 
 # Newest builds first, collapsing each build's variants to a single stem.
 mapfile -t KEEP_STEMS < <(list_build_isos \

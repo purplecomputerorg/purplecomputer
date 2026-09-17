@@ -619,10 +619,53 @@ eject_drive() {
 # the edge. Every helper succeeds with empty output when nothing matches, so
 # callers under set -e get their friendly no-ISO errors instead of a die.
 
-# All build ISOs, newest first. The one place corrupt-test ISOs (deliberately
-# damaged test artifacts) are excluded from auto-picking.
+# The source commit baked into an ISO: the .commit sidecar, or for older
+# builds the hash inside a build-* version stamp.
+iso_commit() {
+    local c v
+    c="$(tr -d '[:space:]' 2>/dev/null < "$1.commit" || true)"
+    v="$(tr -d '[:space:]' 2>/dev/null < "$1.version" || true)"
+    if [[ -z "$c" || "$c" == unknown ]]; then
+        [[ "$v" =~ ^build-([0-9a-f]+)- ]] && c="${BASH_REMATCH[1]}" || c=""
+    fi
+    echo "$c"
+}
+
+# stdin: ISO paths; keeps the ones built from commit $1 (all of them when $1
+# is empty). Sidecars hold short hashes, so a full hash matches by prefix.
+built_from_commit() {
+    local iso c
+    while read -r iso; do
+        c="$(iso_commit "$iso")"
+        [[ -z "$1" || ( -n "$c" && "$1" == "$c"* ) ]] && echo "$iso"
+    done
+    true
+}
+
+# use_build_of_ref <commit-ish>: point every ISO helper at that commit's build.
+# 'just build --ref' archives under its own dir; a build made on the normal
+# path is found by the commit stamped in its sidecars. Fails on an unknown ref.
+BUILD_COMMIT_FILTER=""
+use_build_of_ref() {
+    local archive
+    archive="$(archive_dir_for_ref "$1")/output" || return 1
+    if ls "$archive"/purple-*.iso >/dev/null 2>&1; then
+        OUTPUT_DIR="$archive"
+    else
+        BUILD_COMMIT_FILTER="$(git -C "$PROJECT_DIR" rev-parse "$1^{commit}")"
+    fi
+}
+
+# All build ISOs, newest first, of the --ref commit when one was given. The one
+# place corrupt-test ISOs (deliberately damaged test artifacts) are excluded
+# from auto-picking.
 list_build_isos() {
-    ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v corrupt-test || true
+    ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v corrupt-test | built_from_commit "$BUILD_COMMIT_FILTER"
+}
+
+# Where the ISOs being looked for live, for error messages.
+build_source_label() {
+    [[ -n "$BUILD_COMMIT_FILTER" ]] && echo "built from commit ${BUILD_COMMIT_FILTER:0:7} in $OUTPUT_DIR" || echo "in $OUTPUT_DIR"
 }
 
 # stdin: ISO paths; keeps only the given variant (default: standard).

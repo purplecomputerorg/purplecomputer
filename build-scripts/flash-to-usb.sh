@@ -33,8 +33,8 @@ usage() {
     echo "                   a positional scenario name (primary|backup|both|merge) picks that scenario's ISO"
     echo "  --yes            Skip all prompts (default ISO: newest build, with-backup"
     echo "                   if present, else standard)"
-    echo "  --ref <commit>   Flash from an old commit's archived build (made by"
-    echo "                   'just build --ref <commit>') instead of the current output dir"
+    echo "  --ref <commit>   Flash that commit's build: its archive from 'just build"
+    echo "                   --ref <commit>', or the build of it still in the output dir"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
     echo "  --no-settle      Skip the post-flash QEMU boot-settle (first real boot will be slow)"
     echo "  --settle-only    Skip flashing; just boot-settle and eject an already-flashed drive"
@@ -159,8 +159,8 @@ select_drive() {
 }
 
 die_no_iso() {
-    log_error "No $1 found in $OUTPUT_DIR."
-    if [[ "$OUTPUT_DIR" == */archive/* ]]; then
+    log_error "No $1 found $(build_source_label)."
+    if [[ -n "$BUILD_COMMIT_FILTER" ]]; then
         echo "Build it first with 'just build --ref <commit>'."
     else
         echo "Run 'just build' first, or pass a path to an ISO."
@@ -567,7 +567,7 @@ main() {
                 shift
                 ;;
             --ref)
-                OUTPUT_DIR="$(archive_dir_for_ref "$2")/output" || { log_error "Cannot resolve git commit '$2'"; exit 1; }
+                use_build_of_ref "$2" || { log_error "Cannot resolve git commit '$2'"; exit 1; }
                 shift 2
                 ;;
             --device)

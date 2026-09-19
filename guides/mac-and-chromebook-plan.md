@@ -6,7 +6,7 @@ One place for the machines our USB stick can't boot as-is: Apple Silicon Macs (M
 
 The premise throughout: the kid owns the machine. Purple owns the whole visible surface. What Apple or Google keep underneath is our concern, never the kid's.
 
-Companion guides with background detail: `t2-mac-support.md`, `apple-silicon-support.md`, `chromebook-support.md`. Where they disagree with this one, this one is newer. The x86 kernel plan (T2 kernel, 32-bit EFI, 32-bit CPUs) is in `hardware-coverage-plan.md`.
+Companion guides with background detail: `t2-mac-support.md`, `apple-silicon-support.md`, `chromebook-support.md`. **For Chromebooks, `chromebook-dev-mode-plan.md` (Sept 2026) supersedes the ordering below: third-slot boot on Google's kernel ranks above RW_LEGACY.** Where they disagree with this one, this one is newer. The x86 kernel plan (T2 kernel, 32-bit EFI, 32-bit CPUs) is in `hardware-coverage-plan.md`.
 
 ---
 

@@ -254,7 +254,10 @@ Everything in this section is **unverified** until the run notes say otherwise.
   counterpart: `flite` plus its voice (Quick voice says nothing), `keyd`, `xrandr` and `xterm`
   (both already gated), pactl/paplay/parecord (first-boot sound check skips itself). `install.sh`
   now ends with a dependency check that logs each of these.
-- Not done: a static `flite` for the Quick voice, keyd (grave and RightAlt remaps), brightness (the parent menu uses xrandr), the
+- Quick voice: `build-bundle.sh` builds `flite` static (through `nix-shell -p glibc.static` where
+  nix exists) and ships the golden image's `cmu_us_lnh` voice; the launcher puts `bin/` on PATH.
+  Synthesis checked on the build machine only.
+- Not done: keyd (grave and RightAlt remaps), brightness (the parent menu uses xrandr), the
   same-screen terminal, shill off, full lockdown. onnxruntime 1.30 tries to reach a Microsoft
   telemetry host at import; moot with no network, but worth pinning down before anything ships.
 

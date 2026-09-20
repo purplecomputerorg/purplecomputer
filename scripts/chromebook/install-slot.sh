@@ -58,7 +58,7 @@ check_machine() {
         grep -A1 '^start on' "/etc/init/$job.conf" | tail -1 | grep -qE '^\s+(and|or|\()' \
             && die "$job.conf: start on spans lines"
     done
-    for file in purple-app.tar.gz python-x86_64.tar.gz NotoColorEmoji.ttf purple-run.sh libf128shim.so; do
+    for file in purple-app.tar.gz python-x86_64.tar.gz NotoColorEmoji.ttf purple-run.sh libf128shim.so flite; do
         [ -s "$SRC/$file" ] || die "bundle is missing $file"
     done
 }

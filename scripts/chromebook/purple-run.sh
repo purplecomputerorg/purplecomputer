@@ -32,7 +32,7 @@ back_to_chromeos() {
 run_purple() {
     echo "=== starting $(date) ==="
     export HOME="$DEST/home" PURPLE_DISPLAY=kms SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=alsa
-    export PURPLE_DEBUG_FLAG="$DEST/debug" PYGAME_HIDE_SUPPORT_PROMPT=1
+    export PURPLE_DEBUG_FLAG="$DEST/debug" PYGAME_HIDE_SUPPORT_PROMPT=1 PATH="$DEST/bin:$PATH"
     # ChromeOS's glibc lacks strfromf128, which onnxruntime (piper) references.
     export LD_PRELOAD="$DEST/libf128shim.so"
     [ -w "$HOME" ] || echo "WARNING: $HOME is not writable, settings will not save"

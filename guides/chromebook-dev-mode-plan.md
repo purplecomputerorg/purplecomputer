@@ -5,8 +5,12 @@
 > tested. This supersedes the Chromebook ordering in `mac-and-chromebook-plan.md` (which ranks
 > RW_LEGACY first) and `chromebook-support.md` (which assumes MrChromebox firmware).
 
-**Status: probe in progress.** Inventory done on one Braswell Chromebook, stick bundle downloaded,
-probe script not yet written. Pick up at "Where things stand".
+**This is research, not a compatibility promise.** Nothing here ships, and Purple does not claim
+Chromebook support anywhere. One machine has been probed.
+
+**Status: probe passed on one Braswell Chromebook** (display, audio, speech, keyboard; four runs
+logged under "Where things stand"). Next: the same probe unchanged on a different board, then the
+KERN-C/ROOT-C installer plan.
 
 ---
 
@@ -54,12 +58,17 @@ live stick (the kernel is per-board), and no Ubuntu on Chromebooks.
   ChromeOS kernels have no initramfs and boot `root=` directly, so no initramfs work.
 - **Space:** shrink the stateful partition with `cgpt` to grow ROOT-C (the chrx trick). Either our
   script formats the new stateful or ChromeOS rebuilds it on next boot (a second ~5 min wait).
-- **Display:** pygame on SDL2's KMSDRM backend, no X11. ChromeOS ships Mesa (EGL, GLESv2), libdrm
-  and minigbm. Chrome never starts: an upstart `.override` file containing `manual` for the `ui`
-  job. Purple runs as its own upstart job with `respawn`.
-- **Audio:** either stop CRAS and drive ALSA directly after applying the board's UCM verb with
-  `alsaucm` (Google's UCM files are in `/usr/share/alsa/ucm`), or keep CRAS and use its ALSA
-  plugin. Decide from the probe.
+- **Portability rule:** depend only on interfaces that are identical on every Chromebook (kernel
+  KMS, evdev, CRAS, upstart, `cgpt`/`futility`). Anything tied to a board's userland (minigbm,
+  Mesa, UCM layout, DSP topology) is off limits. An `if board ==` anywhere means the premise failed.
+- **Display:** pygame renders offscreen (`SDL_VIDEODRIVER=dummy`) and a small libdrm layer copies
+  each frame into a KMS dumb buffer. No GBM, EGL or Mesa. SDL's KMSDRM backend is dropped: it
+  reported "kmsdrm not available" on the reks (see probe run 1). Chrome never starts: an upstart
+  `.override` file containing `manual` for the `ui` job. Purple runs as its own upstart job with
+  `respawn`.
+- **Audio:** keep CRAS running and play through it (SDL's ALSA `default` device). CRAS is Google's
+  per-board abstraction, and on smart-amp boards it carries the speaker protection, so bypassing it
+  is a hardware-safety risk. Raw ALSA + `alsaucm` works on the reks but is the per-board path.
 - **Input:** evdev as root with EVIOCGRAB, exactly as today. The grab also keeps Ctrl+Alt+F2 from
   reaching frecon (ChromeOS's console), so the VT2 root shell stays out of reach. keyd as a static
   binary through `/dev/uinput` for the grave/RightAlt remaps.
@@ -128,21 +137,17 @@ machine you are on):
 
 - `python-x86_64.tar.gz`: python-build-standalone cpython 3.12.x, x86_64 linux-gnu,
   install_only_stripped (glibc 2.17 floor). 3.12.14+20260901 was the latest on 2026-09-19.
-- `wheels/`: pygame 2.6.1, numpy 1.26.4, piper-tts 1.3.0, onnxruntime 1.30.0, protobuf,
+- `wheels/`: pygame-ce 2.5.8 (not pygame, see below), numpy 1.26.4, piper-tts 1.3.0, onnxruntime 1.30.0, protobuf,
   flatbuffers, packaging. All manylinux x86_64 cp312.
 - `voice/`: `en_US-libritts_r-medium.onnx` + `.json` (matches `VOICE_MODEL` in the golden image).
 
-Build it with (also fetch the `.onnx.json` next to the `.onnx`):
+Build it with `scripts/chromebook-probe/build-bundle.sh [dest]` (default
+`~/purple-chromebook-probe`), which also compiles the glibc shim, then copy the folder to a FAT32
+stick. On the Chromebook: `sudo bash`, mount the stick, `bash <stick>/purple-chromebook-probe/probe.sh`,
+and press Ctrl+Alt+Back when told. Always `sync` and `umount` before pulling the stick.
 
-```
-just python -m pip download --only-binary=:all: --platform manylinux2014_x86_64 \
-  --platform manylinux_2_17_x86_64 --platform manylinux_2_28_x86_64 --python-version 3.12 \
-  --implementation cp --abi cp312 --abi none -d wheels "pygame==2.6.1" "numpy<2" "piper-tts==1.3.0"
-gh api repos/astral-sh/python-build-standalone/releases/latest --jq '.assets[].name' | grep 3.12 | grep x86_64-unknown-linux-gnu
-curl -fsSL -o voice/en_US-libritts_r-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx
-```
-
-**Not done:** `probe.sh` and `probe.py`. Design:
+**Probe:** `scripts/chromebook-probe/` (`probe.sh`, `probe.py`, `f128shim.c`). The original v1
+design, kept for the reasoning; the run notes below say what changed and why:
 
 - Stick is FAT/exFAT (no exec bits, no symlinks), so `probe.sh` copies the bundle to
   `/usr/local/purple-probe`, untars Python there, then
@@ -163,13 +168,62 @@ curl -fsSL -o voice/en_US-libritts_r-medium.onnx https://huggingface.co/rhasspy/
   for ~30 s while the user presses Ctrl+Alt+Back (frecon should release master on its VT1). If it
   still fails, kill frecon and retry; the log on the stick is then the only output and a reboot
   brings the terminal back. Whether frecon releases master this way is **unverified**.
-- pygame's manylinux wheel is believed to bundle SDL2 with KMSDRM enabled (works on Raspberry Pi
-  via pip); the probe logs `pygame.display.get_driver()` and the error text if not.
+- pygame 2.6.1's manylinux x86_64 wheel bundles SDL 2.28.4 built without KMSDRM (checked with
+  `strings` on its libSDL2). pygame-ce 2.5.8 bundles SDL 2.32.10 with KMSDRM, which dlopens the
+  system `libgbm.so.1` and `libdrm.so.2`. The probe installs pygame-ce (same `import pygame`);
+  the Chromebook tarball would too. Pin versions in `just` recipes: `"numpy<2"` is eaten as a
+  shell redirect.
 - piper 1.3.0 API used by `tts.py`: `PiperVoice.load(path)`; the production path runs a worker
   subprocess reading `wav_path\ttext` lines.
 
-**Open questions, in order:** (1) pygame on KMSDRM against this Mesa/minigbm and a 4.19 kernel;
-(2) which audio path; (3) whether KERN-C priority survives leaving and re-entering dev mode;
+**Probe run 1 (reks, 2026-09-19, probe v1 = SDL KMSDRM, raw ALSA):**
+
+- Display failed: `kmsdrm not available` on both device indexes, instantly, before and after
+  killing frecon, so not a DRM-master problem. `libgbm.so.1` (minigbm), `libdrm.so.2`, libEGL and
+  libGLESv2 are all present, and `gbm_surface_create` / `gbm_surface_lock_front_buffer` exist.
+  Cause unknown; v2 logs any missing symbol for the record and does not pursue it.
+- `card0` is i915, `card1` is vgem. KERN-C/ROOT-C are 1-sector placeholders. Keyboard is `event3`.
+- Raw ALSA: `stop cras`, `alsaucm -c chtrt5650 set _verb HiFi set _enadev Speaker` and
+  `aplay -D plughw:1,0` all returned 0, but a 1 s tone took 8 s. Whether it was audible: not noted.
+- pygame.mixer on ALSA `default` with CRAS stopped hung the probe (default routes to CRAS), and
+  with frecon killed the machine looked dead. The forced power-off corrupted the FAT stick.
+  Lessons in v2: CRAS stays up, every command has a timeout, mixer runs in a child process, a
+  300 s watchdog, frecon is killed only as a last resort and then the script reboots.
+
+**Probe run 2 (reks, 2026-09-19, probe v2):** display OK through KMS dumb buffers; audio OK
+through CRAS with `ui` stopped (aplay and pygame.mixer on ALSA `default`), raw ALSA also OK, all
+four tones audible; keyboard grab OK with runtime detection. Speech failed at import:
+`onnxruntime_pybind11_state...so: undefined symbol: strfromf128, version GLIBC_2.26`. ChromeOS's
+glibc 2.32 is built without the `_Float128` API; onnxruntime 1.30's bundled libstdc++ references
+that one symbol (every other glibc symbol it needs is <= 2.28). This is a ChromeOS-wide x86_64
+trait, not a reks one, and aarch64 has no f128 variants. Fix under test: a 5-line `LD_PRELOAD`
+shim (`f128shim.c` in the bundle) around the piper worker process.
+
+**Probe run 3 (reks, 2026-09-20, v2 + shim):** speech OK with the shim: piper load 5.8 s (once,
+the worker keeps it loaded), synth 1.0 s for "Hello from Purple Computer." on the Celeron N3060,
+played through CRAS. Full-screen 1366x768 redraw through the dumb buffer: 7.4 ms/frame including
+the copy. SDL's KMSDRM refusal explained: minigbm lacks `gbm_bo_write` (SDL's cursor path), libdrm
+is complete; stays dropped. CRAS with `ui` stopped still selects the internal speaker node (volume
+75) by itself. `/etc/asound.conf` routes ALSA `default` to CRAS. frecon kept DRM master for the
+full 30 s with no VT switch, so the probe killed it (frecon respawns with a login prompt); whether
+Ctrl+Alt+Back releases master is still **unverified**, and irrelevant once Purple is the boot job.
+
+**Probe run 4 (reks, 2026-09-20):** all stages OK, keyboard grab saw 91 presses. The piper line
+in run 3 was inaudible because it played right after `stop cras; start cras`. The dumps explain
+it: a CRAS that Chrome set up marks the internal speaker active (`2*Speaker`); a CRAS started
+with Chrome never running lists the node but marks nothing active (`2 Speaker`), so streams play
+into nothing while every command returns 0. `cras_test_client --select_output <node>` (node found
+by type `INTERNAL_SPEAKER`, not by id) makes it active again. Purple boots into exactly that fresh
+state, so its startup must select the output node, unmute and set volume itself, and redo it on
+headphone plug events (Chrome normally does this). Confirmed by ear: speech and tones 1 to 4
+heard, tone 5 (fresh CRAS, untouched) silent, tone 6 (after select_output) heard.
+
+**Probe v2** (dumb buffers, CRAS first, runtime discovery of DRM device, connector, sound card and
+keyboards) is what `scripts/chromebook-probe/` holds now. After the reks, run it unchanged on a newer Intel
+(SOF audio, 5.x kernel), an ARM board (needs the arm64 bundle) and ideally an AMD board.
+
+**Open questions, in order:** (1) dumb-buffer display, and whether frecon releases DRM master on
+Ctrl+Alt+Back; (2) audio through CRAS with `ui` stopped; (3) whether KERN-C priority survives leaving and re-entering dev mode;
 (4) keyd static build over uinput; (5) minimum kernel version to support; (6) arm64 tarball
 (pygame, numpy, python-build-standalone have aarch64 builds; piper needs checking).
 

@@ -36,7 +36,7 @@ NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to 
 
 
 def _sounds_path() -> Path:
-    paths = [Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
+    paths = [Path(__file__).parents[3] / "packs" / "core-sounds" / "content",
              Path.home() / ".purple" / "packs" / "core-sounds" / "content"]
     return next((p for p in paths if p.exists()), paths[0])
 

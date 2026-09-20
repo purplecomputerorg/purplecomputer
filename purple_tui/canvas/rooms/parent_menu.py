@@ -423,7 +423,8 @@ class ParentVolumeModal(Dialog):
             from ...mixer import warm_mixer
             if not warm_mixer():
                 return
-            path = Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content" / "glockenspiel" / "c5.ogg"
+            from .music_room import _sounds_path
+            path = _sounds_path() / "glockenspiel" / "c5.ogg"
             if path.exists():
                 sound = pygame.mixer.Sound(str(path))
                 sound.set_volume(level / 100)
@@ -940,7 +941,7 @@ def _term_rc() -> str:
     installed = Path("/opt/purple/parent-shell-rc.sh")
     if installed.exists():
         return str(installed)
-    return str(Path(__file__).resolve().parents[2] / "scripts" / "parent-shell-rc.sh")
+    return str(Path(__file__).resolve().parents[3] / "scripts" / "parent-shell-rc.sh")
 
 
 def _xterm_cmd() -> list:
@@ -1055,7 +1056,7 @@ def _is_usb_payload_available() -> bool:
 
 
 def _is_dev_environment() -> bool:
-    return bool(os.environ.get("PURPLE_TEST_BATTERY")) or (Path(__file__).parent.parent.parent / ".git").is_dir()
+    return bool(os.environ.get("PURPLE_TEST_BATTERY")) or (Path(__file__).parents[3] / ".git").is_dir()
 
 
 def _get_menu_items(app) -> list:

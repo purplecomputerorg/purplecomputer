@@ -24,7 +24,8 @@ back_to_chromeos() {
     save_logs
     start frecon
     start ui
-    echo "=== finished $(date) ==="
+    sleep 5
+    echo "=== finished $(date), consoles: $(pgrep -a frecon | tr '\n' ';') ==="
     # No console to come back to: a reboot restores it.
     pgrep -x frecon >/dev/null || reboot
 }

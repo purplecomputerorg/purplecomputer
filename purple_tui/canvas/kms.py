@@ -2,7 +2,7 @@
 
 Used where there is no display server (PURPLE_DISPLAY=kms). Only libdrm and
 kernel ioctls, no GBM/EGL/Mesa: guides/chromebook-dev-mode-plan.md. Stands
-alone (no package imports) so scripts/chromebook-probe/probe.py can load it.
+alone (no package imports) so scripts/chromebook/probe.py can load it.
 """
 
 import ctypes
@@ -18,7 +18,7 @@ DRM_IOCTL_MODE_CREATE_DUMB = 0xC02064B2
 DRM_IOCTL_MODE_MAP_DUMB = 0xC01064B3
 DRM_MODE_CONNECTED = 1
 XRGB_MASKS = (0xFF0000, 0xFF00, 0xFF, 0)
-MASTER_WAIT_SECONDS = 3
+MASTER_WAIT_SECONDS = 1  # a console that holds master keeps it; this only covers one that is just leaving
 EVICT_RETRY_SECONDS = 5
 # Whoever holds DRM master when we start (ChromeOS's console) has to let go.
 EVICT_COMMANDS = (["stop", "frecon"], ["pkill", "-9", "frecon"])
@@ -129,10 +129,10 @@ class DumbDisplay:
         for cmd in EVICT_COMMANDS:
             self.log(f"kms: no DRM master after {master_wait}s: {' '.join(cmd)}")
             try:
-                subprocess.run(cmd, capture_output=True, timeout=10)
+                evicted = subprocess.run(cmd, capture_output=True, timeout=10).returncode == 0
             except (OSError, subprocess.TimeoutExpired):
                 continue
-            if self._master_within(EVICT_RETRY_SECONDS):
+            if evicted and self._master_within(EVICT_RETRY_SECONDS):
                 return True
         raise OSError("could not get DRM master")
 
@@ -148,15 +148,15 @@ class DumbDisplay:
         offset = struct.unpack("IIQ", request)[2]
         return mmap.mmap(self.fd, length, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=offset)
 
-    def present(self, frame):
-        """frame: a 32-bit pygame Surface of self.size made with XRGB_MASKS."""
-        raw = frame.get_buffer().raw
-        stride = frame.get_pitch()
-        if stride == self.pitch:
-            self.pixels[:len(raw)] = raw
-            return
-        for y in range(self.size[1]):
-            self.pixels[y * self.pitch:y * self.pitch + stride] = raw[y * stride:(y + 1) * stride]
+    def make_surface(self, pygame):
+        """The surface to draw on. It is a window onto a parent as wide as the
+        buffer's pitch, so present() is one copy even when the pitch has padding."""
+        self._frame = pygame.Surface((self.pitch // 4, self.size[1]), 0, 32, XRGB_MASKS)
+        return self._frame.subsurface((0, 0, *self.size))
+
+    def present(self):
+        raw = self._frame.get_buffer().raw
+        self.pixels[:len(raw)] = raw
 
 
 def open_display(log=print, master_wait=MASTER_WAIT_SECONDS):

@@ -175,7 +175,7 @@ class Gfx:
             from . import kms
             from .. import boot_log
             self._kms = kms.open_display(log=boot_log.heartbeat)
-            self.surface = pygame.Surface(self._kms.size, 0, 32, kms.XRGB_MASKS)
+            self.surface = self._kms.make_surface(pygame)
         else:
             self._flags = 0 if windowed else pygame.FULLSCREEN
             self.surface = pygame.display.set_mode(size or (0, 0), self._flags)
@@ -448,7 +448,7 @@ class Gfx:
     # ----- frame -----
     def present(self):
         if self._kms:
-            self._kms.present(self.surface)
+            self._kms.present()
         elif not self.headless:
             pygame.display.flip()
         self.dirty = False

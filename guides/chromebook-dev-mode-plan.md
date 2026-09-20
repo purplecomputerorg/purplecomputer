@@ -283,6 +283,16 @@ reboots if no console came back. `PURPLE_MAX_SECONDS=120` is a safety net for fi
    never reaches the UI should not be tried again, so the machine falls back to ChromeOS.
    `install-slot.sh --chromeos` sets slot C's priority to 0.
 
+**Stage 1 run (reks, 2026-09-20):** Purple ran from `/usr/local/purple`: display, typing, CRAS
+output selection (node 9:0), mixer, piper (worker ready in 6.7 s) and the Quick voice (flite
+synth 0.4 s) all worked, and the dependency check listed only keyd as absent. Two silent
+failures surfaced first, both missing pieces of the bundle (`rich`, `flite`), which prompted the
+audit above. M96 has no upstart job named `frecon`, so `stop frecon` fails and `pkill -9 frecon`
+is what frees DRM master; on exit the console does not come back, so the launcher reboots. The
+dumb buffer's pitch is 5504 for a 1366-wide mode, so the draw surface is now a window onto a
+pitch-wide parent and each present is a single copy. Not yet checked on the device: headphone
+switching, powerd activity reports, lid close and resume.
+
 **Open questions, in order:** (1) dumb-buffer display, and whether frecon releases DRM master on
 Ctrl+Alt+Back; (2) audio through CRAS with `ui` stopped; (3) whether KERN-C priority survives leaving and re-entering dev mode;
 (4) keyd static build over uinput; (5) minimum kernel version to support; (6) arm64 tarball

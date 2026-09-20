@@ -111,7 +111,7 @@ def draw(*lines):
     surface.fill((60, 20, 90))
     for i, line in enumerate(lines):
         surface.blit(font.render(line, True, (255, 255, 255)), (60, 60 + i * 70))
-    screen.present(surface)
+    screen.present()
 
 
 def display():
@@ -125,7 +125,7 @@ def display():
         open(FRECON_KILLED_FLAG, "w").close()
     pygame.font.init()
     font = pygame.font.Font(None, 64)
-    surface = pygame.Surface(screen.size, 0, 32, kms.XRGB_MASKS)
+    surface = screen.make_surface(pygame)
     frames = 60
     start = time.time()
     for i in range(frames):

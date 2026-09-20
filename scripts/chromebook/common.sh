@@ -28,7 +28,8 @@ inventory() {
     show cgpt show "$(rootdev -s -d)"
     show df -h /usr/local
     show free -m
-    show sh -c 'initctl list | grep -E "^(ui|cras|frecon|powerd|shill) "'
+    show sh -c 'initctl list | grep -E "^(ui|cras|frecon|powerd|shill|boot-splash) "'
+    show sh -c 'ps -eo pid,ppid,args | grep -i [f]recon; grep -l -i frecon /etc/init/*.conf'
 }
 
 # The stick is FAT (no exec bits, no symlinks), so Python runs from /usr/local.

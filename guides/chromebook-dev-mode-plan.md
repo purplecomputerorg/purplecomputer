@@ -28,7 +28,7 @@ Run Purple on Google's kernel, in Developer Mode, from the unused third kernel/r
 (KERN-C / ROOT-C). ChromeOS in slots A and B stays untouched and Google-signed. No firmware
 flashing, no write-protect change, no case opening.
 
-Why this beats everything else considered:
+Why the other routes considered were set aside:
 
 | Route | Why not |
 |---|---|
@@ -38,9 +38,11 @@ Why this beats everything else considered:
 | Purple Web (Pyodide) | Needs a rewrite of the render path, no piper, and only lockable via Admin-console kiosk enrollment. |
 | Purple in Crostini | Runs the real app, but needs a Google account, one VM download, and is escapable. Fallback idea, not the plan. |
 
-What the third-slot route gives: Google's own kernel, firmware blobs and ALSA UCM profiles on the
-exact board, so audio, touchpad, display and sleep work everywhere without per-board work; x86 and
-ARM Chromebooks alike; auto-update-expired boards included; zero brick risk.
+The hypothesis behind the third-slot route: it reuses Google's own kernel, firmware blobs and
+audio stack on the exact board, so audio, touchpad, display and sleep should need no per-board
+work, on x86 and ARM, including auto-update-expired boards. Tested on one x86 board so far; ARM
+is untested. Slots A and B and the firmware are never written, so a failed install should fall
+back to stock ChromeOS (**unverified**).
 
 What it costs: the Developer Mode warning screen at every cold boot (see below), no universal
 live stick (the kernel is per-board), and no Ubuntu on Chromebooks.
@@ -58,7 +60,7 @@ live stick (the kernel is per-board), and no Ubuntu on Chromebooks.
   ChromeOS kernels have no initramfs and boot `root=` directly, so no initramfs work.
 - **Space:** shrink the stateful partition with `cgpt` to grow ROOT-C (the chrx trick). Either our
   script formats the new stateful or ChromeOS rebuilds it on next boot (a second ~5 min wait).
-- **Portability rule:** depend only on interfaces that are identical on every Chromebook (kernel
+- **Portability rule:** depend only on interfaces expected to be the same on every Chromebook (kernel
   KMS, evdev, CRAS, upstart, `cgpt`/`futility`). Anything tied to a board's userland (minigbm,
   Mesa, UCM layout, DSP topology) is off limits. An `if board ==` anywhere means the premise failed.
 - **Display:** pygame renders offscreen (`SDL_VIDEODRIVER=dummy`) and a small libdrm layer copies
@@ -69,8 +71,9 @@ live stick (the kernel is per-board), and no Ubuntu on Chromebooks.
 - **Audio:** keep CRAS running and play through it (SDL's ALSA `default` device). CRAS is Google's
   per-board abstraction, and on smart-amp boards it carries the speaker protection, so bypassing it
   is a hardware-safety risk. Raw ALSA + `alsaucm` works on the reks but is the per-board path.
-- **Input:** evdev as root with EVIOCGRAB, exactly as today. The grab also keeps Ctrl+Alt+F2 from
-  reaching frecon (ChromeOS's console), so the VT2 root shell stays out of reach. keyd as a static
+- **Input:** evdev as root with EVIOCGRAB, exactly as today. The grab should also keep Ctrl+Alt+F2
+  from reaching frecon (ChromeOS's console), so the VT2 root shell stays out of reach
+  (**unverified**). keyd as a static
   binary through `/dev/uinput` for the grave/RightAlt remaps.
 - **Networking:** `shill` and `wpasupplicant` overridden to `manual` in ROOT-C. `update-engine`
   too, though it is moot with no network and A/B untouched.

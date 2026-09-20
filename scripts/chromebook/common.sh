@@ -53,4 +53,26 @@ install_app() {
     step cp "$SRC/purple-run.sh" "$DEST/"
     step touch "$DEST/debug"
     step "$PY" -m compileall -q "$DEST/app"
+    check_deps
+}
+
+# Everything Purple reaches outside its own tree, from an audit of purple_tui (imports incl. lazy
+# ones, subprocess calls, shutil.which). A miss is logged, not fatal: most features degrade alone.
+PY_MODULES="pygame numpy evdev rich piper onnxruntime"
+TOOLS_NEEDED="cras_test_client dbus-send dbus-monitor udevadm poweroff sudo timeout setsid pgrep initctl cgpt rootdev"
+TOOLS_OPTIONAL="flite keyd"   # Quick voice; grave-to-Escape and RightAlt-to-F2 remaps
+check_deps() {
+    local name
+    log "=== dependency check ==="
+    for name in $PY_MODULES; do
+        LD_PRELOAD="$DEST/libf128shim.so" "$PY" -c "import $name" 2>/dev/null \
+            && log "ok       python: $name" || log "MISSING  python: $name"
+    done
+    for name in $TOOLS_NEEDED; do
+        command -v "$name" >/dev/null && log "ok       tool: $name" || log "MISSING  tool: $name"
+    done
+    for name in $TOOLS_OPTIONAL; do
+        command -v "$name" >/dev/null || [ -x "$DEST/bin/$name" ] \
+            && log "ok       optional: $name" || log "absent   optional: $name"
+    done
 }

@@ -246,7 +246,15 @@ Everything in this section is **unverified** until the run notes say otherwise.
   emergency combo (Ctrl+\ held 3 s, or Ctrl+Alt+F2) exits Purple on a debug install.
 - python-evdev comes from the `evdev-binary` wheel (needs only glibc 2.2.5). The canvas UI needs
   no Textual or rich. `LD_PRELOAD` of the f128 shim is set for the whole process tree.
-- Not done: keyd (grave and RightAlt remaps), brightness (the parent menu uses xrandr), the
+- Dependency audit (2026-09-20, after `rich` and `flite` each surfaced as a silent failure on the
+  device): a scan of every import (lazy ones too), subprocess call, `shutil.which` and absolute
+  path outside the frozen TUI files. Python: pygame, evdev, piper (numpy, onnxruntime) and `rich`
+  (`play_eval` validates markup with it inside a catch-all, so without it every Play answer fell
+  back to letter blocks). Data: only `purple_tui/` and `packs/`. Tools with no ChromeOS
+  counterpart: `flite` plus its voice (Quick voice says nothing), `keyd`, `xrandr` and `xterm`
+  (both already gated), pactl/paplay/parecord (first-boot sound check skips itself). `install.sh`
+  now ends with a dependency check that logs each of these.
+- Not done: a static `flite` for the Quick voice, keyd (grave and RightAlt remaps), brightness (the parent menu uses xrandr), the
   same-screen terminal, shill off, full lockdown. onnxruntime 1.30 tries to reach a Microsoft
   telemetry host at import; moot with no network, but worth pinning down before anything ships.
 

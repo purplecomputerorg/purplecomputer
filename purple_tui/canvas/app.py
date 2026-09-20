@@ -907,7 +907,9 @@ class PurpleApp:
         import threading
 
         def _warm():
+            from .. import cras
             from ..mixer import _reset_mixer_state, warm_mixer
+            cras.start()
             ok = False
             try:
                 if warm_mixer():

@@ -19,6 +19,7 @@ on every ISO: a few lines per event, bounded ticks only while asleep or lid-clos
 """
 
 import os
+import shutil
 import subprocess
 import time
 from datetime import datetime
@@ -75,6 +76,11 @@ LID_SHUTDOWN_DELAY = _get_timing(10 * 60, 8)    # 10 min / 8 sec: shutdown after
 POWER_HOLD_SHUTDOWN = _get_timing(3, 2)          # 3 sec / 2 sec: hold power to shut down
 
 LOGIND_CONF_PATH = "/etc/systemd/logind.conf.d/purple-power.conf"
+
+_POWERD = shutil.which("powerd") is not None
+POWERD_ACTIVITY_SECONDS = 20
+_POWERD_ACTIVITY = ["dbus-send", "--system", "--type=method_call", "--dest=org.chromium.PowerManager",
+                    "/org/chromium/PowerManager", "org.chromium.PowerManager.HandleUserActivity", "int32:0"]
 
 # Number of consecutive reads before changing charger state (smoothing)
 _CHARGER_SMOOTH_COUNT = 2
@@ -148,6 +154,7 @@ class PowerManager:
 
     def __init__(self):
         self._last_activity = time.time()
+        self._powerd_told = 0.0
         self._lid_path: Optional[str] = None
         self._mains_path: Optional[str] = None
         self._battery_path: Optional[str] = None
@@ -212,7 +219,6 @@ class PowerManager:
                     f"initial_charger={self._charger_state}")
 
         # Check if systemctl exists. Use shutil.which (no subprocess, can't hang).
-        import shutil
         self._poweroff_available = shutil.which("systemctl") is not None
         if not self._poweroff_available:
             # Also check for plain poweroff as fallback
@@ -304,8 +310,20 @@ class PowerManager:
         """Call this on any user input to reset idle timer."""
         idle_was = self.get_idle_seconds()
         self._last_activity = time.time()
+        self._tell_powerd()
         if idle_was > 60:  # a real pause, not typing rhythm
             _power_log(f"ACTIVITY: idle reset (was {idle_was:.1f}s idle)")
+
+    def _tell_powerd(self) -> None:
+        """ChromeOS: powerd dims and suspends on idle unless something reports
+        activity. Chrome does that normally; with Chrome stopped it falls to us."""
+        if not _POWERD or time.time() - self._powerd_told < POWERD_ACTIVITY_SECONDS:
+            return
+        self._powerd_told = time.time()
+        try:
+            subprocess.Popen(_POWERD_ACTIVITY, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
 
     def get_idle_seconds(self) -> float:
         """Get seconds since last activity."""
@@ -437,6 +455,8 @@ class PowerManager:
             ["sudo", "systemctl", "poweroff", "--force"],
             ["sudo", "poweroff", "-f"],
         ]
+        # sudo always spawns, so a missing systemctl (ChromeOS: upstart) would look like success
+        commands = [c for c in commands if shutil.which(c[1])] or commands
 
         for cmd in commands:
             try:

@@ -9,7 +9,6 @@ import ctypes
 import fcntl
 import glob
 import math
-import mmap
 import os
 import re
 import select
@@ -26,6 +25,8 @@ os.environ["SDL_AUDIODRIVER"] = "alsa"
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame  # noqa: E402
 
+import kms  # noqa: E402  purple_tui/canvas/kms.py, copied next to this file by build-bundle.sh
+
 WATCHDOG_SECONDS = 300
 MASTER_WAIT_SECONDS = 30
 KEY_SECONDS = 10
@@ -35,9 +36,6 @@ EVIOCGRAB = 0x40044590
 INPUT_EVENT = struct.Struct("llHHi")
 EV_KEY = 1
 KEY_Q = 16
-DRM_IOCTL_MODE_CREATE_DUMB = 0xC02064B2
-DRM_IOCTL_MODE_MAP_DUMB = 0xC01064B3
-DRM_MODE_CONNECTED = 1
 # Every symbol pygame-ce 2.5.8's SDL resolves before it will offer kmsdrm.
 SDL_KMSDRM_SYMBOLS = {
     "libdrm.so.2": "drmAuthMagic drmDropMaster drmGetCap drmHandleEvent drmModeAddFB drmModeAddFB2"
@@ -57,49 +55,11 @@ SDL_KMSDRM_SYMBOLS = {
     " gbm_surface_lock_front_buffer gbm_surface_release_buffer",
 }
 
-U32P = ctypes.POINTER(ctypes.c_uint32)
-
-
-class ModeInfo(ctypes.Structure):
-    _fields_ = [("clock", ctypes.c_uint32)] + [
-        (name, ctypes.c_uint16) for name in (
-            "hdisplay", "hsync_start", "hsync_end", "htotal", "hskew",
-            "vdisplay", "vsync_start", "vsync_end", "vtotal", "vscan")
-    ] + [("vrefresh", ctypes.c_uint32), ("flags", ctypes.c_uint32),
-         ("type", ctypes.c_uint32), ("name", ctypes.c_char * 32)]
-
-
-class Resources(ctypes.Structure):
-    _fields_ = [("count_fbs", ctypes.c_int), ("fbs", U32P),
-                ("count_crtcs", ctypes.c_int), ("crtcs", U32P),
-                ("count_connectors", ctypes.c_int), ("connectors", U32P),
-                ("count_encoders", ctypes.c_int), ("encoders", U32P),
-                ("min_width", ctypes.c_uint32), ("max_width", ctypes.c_uint32),
-                ("min_height", ctypes.c_uint32), ("max_height", ctypes.c_uint32)]
-
-
-class Connector(ctypes.Structure):
-    _fields_ = [("connector_id", ctypes.c_uint32), ("encoder_id", ctypes.c_uint32),
-                ("connector_type", ctypes.c_uint32), ("connector_type_id", ctypes.c_uint32),
-                ("connection", ctypes.c_int),
-                ("mm_width", ctypes.c_uint32), ("mm_height", ctypes.c_uint32),
-                ("subpixel", ctypes.c_int),
-                ("count_modes", ctypes.c_int), ("modes", ctypes.POINTER(ModeInfo)),
-                ("count_props", ctypes.c_int), ("props", U32P),
-                ("prop_values", ctypes.POINTER(ctypes.c_uint64)),
-                ("count_encoders", ctypes.c_int), ("encoders", U32P)]
-
-
-class Encoder(ctypes.Structure):
-    _fields_ = [(name, ctypes.c_uint32) for name in (
-        "encoder_id", "encoder_type", "crtc_id", "possible_crtcs", "possible_clones")]
-
-
 DEST = os.path.dirname(os.path.abspath(__file__))
 TONE_WAV = f"{DEST}/tone.wav"
 SPEECH_WAV = f"{DEST}/speech.wav"
 FRECON_KILLED_FLAG = f"{DEST}/frecon_killed"
-F128_SHIM = f"{DEST}/libf128shim.so"
+F128_SHIM = f"{os.path.dirname(DEST)}/libf128shim.so"
 
 screen = None
 surface = None
@@ -144,94 +104,6 @@ def sdl_symbols():
     return complete
 
 
-class DumbDisplay:
-    """One XRGB8888 dumb buffer scanned out on the first connected connector."""
-
-    def __init__(self, path, drm):
-        self.drm = drm
-        self.fd = os.open(path, os.O_RDWR | os.O_CLOEXEC)
-        connector_id, self.mode, crtc_id = self._pick_output()
-        self.size = (self.mode.hdisplay, self.mode.vdisplay)
-        self._wait_for_master()
-        handle, self.pitch, length = self._create_dumb()
-        fb_id = ctypes.c_uint32()
-        self._check("drmModeAddFB", drm.drmModeAddFB(
-            self.fd, *self.size, 24, 32, self.pitch, handle, ctypes.byref(fb_id)))
-        self.pixels = self._map(handle, length)
-        connector = ctypes.c_uint32(connector_id)
-        self._check("drmModeSetCrtc", drm.drmModeSetCrtc(
-            self.fd, crtc_id, fb_id, 0, 0, ctypes.byref(connector), 1, ctypes.byref(self.mode)))
-        log(f"{path}: {self.size} '{self.mode.name.decode()}' crtc {crtc_id} pitch {self.pitch}")
-
-    def _check(self, what, rc):
-        if rc:
-            raise OSError(f"{what} failed: rc={rc} errno={ctypes.get_errno()}")
-
-    def _pick_output(self):
-        drm = self.drm
-        res_p = drm.drmModeGetResources(self.fd)
-        if not res_p:
-            raise OSError("no KMS resources (not a display device)")
-        res = res_p.contents
-        for i in range(res.count_connectors):
-            conn = drm.drmModeGetConnector(self.fd, res.connectors[i]).contents
-            log(f"connector {conn.connector_id}: type {conn.connector_type}"
-                f" connection {conn.connection} modes {conn.count_modes}")
-            if conn.connection != DRM_MODE_CONNECTED or not conn.count_modes:
-                continue
-            mode = ModeInfo.from_buffer_copy(conn.modes[0])
-            encoder_ids = [conn.encoder_id] if conn.encoder_id else conn.encoders[:conn.count_encoders]
-            for encoder_id in encoder_ids:
-                enc = drm.drmModeGetEncoder(self.fd, encoder_id).contents
-                crtc_id = enc.crtc_id or next(
-                    (res.crtcs[c] for c in range(res.count_crtcs) if enc.possible_crtcs >> c & 1), 0)
-                if crtc_id:
-                    return conn.connector_id, mode, crtc_id
-        raise OSError("no connected connector with a usable crtc")
-
-    def _wait_for_master(self):
-        deadline = time.time() + MASTER_WAIT_SECONDS
-        while self.drm.drmSetMaster(self.fd):
-            if time.time() > deadline:
-                log("still no DRM master: killing frecon (probe.sh reboots at the end)")
-                open(FRECON_KILLED_FLAG, "w").close()
-                run("pkill", "-9", "frecon")
-                time.sleep(1)
-                self._check("drmSetMaster after frecon kill", self.drm.drmSetMaster(self.fd))
-                return
-            time.sleep(0.5)
-        log("got DRM master")
-
-    def _create_dumb(self):
-        request = bytearray(struct.pack("IIIIIIQ", self.size[1], self.size[0], 32, 0, 0, 0, 0))
-        fcntl.ioctl(self.fd, DRM_IOCTL_MODE_CREATE_DUMB, request)
-        _, _, _, _, handle, pitch, length = struct.unpack("IIIIIIQ", request)
-        return handle, pitch, length
-
-    def _map(self, handle, length):
-        request = bytearray(struct.pack("IIQ", handle, 0, 0))
-        fcntl.ioctl(self.fd, DRM_IOCTL_MODE_MAP_DUMB, request)
-        offset = struct.unpack("IIQ", request)[2]
-        return mmap.mmap(self.fd, length, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=offset)
-
-    def present(self, frame):
-        raw = frame.get_buffer().raw
-        stride = frame.get_pitch()
-        if stride == self.pitch:
-            self.pixels[:len(raw)] = raw
-            return
-        for y in range(self.size[1]):
-            self.pixels[y * self.pitch:y * self.pitch + stride] = raw[y * stride:(y + 1) * stride]
-
-
-def load_drm():
-    drm = ctypes.CDLL("libdrm.so.2", use_errno=True)
-    drm.drmModeGetResources.restype = ctypes.POINTER(Resources)
-    drm.drmModeGetConnector.restype = ctypes.POINTER(Connector)
-    drm.drmModeGetEncoder.restype = ctypes.POINTER(Encoder)
-    return drm
-
-
 def draw(*lines):
     log("SCREEN:", " | ".join(lines))
     if not screen:
@@ -244,18 +116,16 @@ def draw(*lines):
 
 def display():
     global screen, surface, font
-    drm = load_drm()
-    for path in sorted(glob.glob("/dev/dri/card*")):
-        try:
-            screen = DumbDisplay(path, drm)
-            break
-        except OSError as err:
-            log(f"{path}: {err}")
-    if not screen:
+    try:
+        screen = kms.open_display(log=log, master_wait=MASTER_WAIT_SECONDS)
+    except OSError as err:
+        log(f"no display: {err}")
         return False
+    if screen.evicted_console:
+        open(FRECON_KILLED_FLAG, "w").close()
     pygame.font.init()
     font = pygame.font.Font(None, 64)
-    surface = pygame.Surface(screen.size, 0, 32, (0xFF0000, 0xFF00, 0xFF, 0))
+    surface = pygame.Surface(screen.size, 0, 32, kms.XRGB_MASKS)
     frames = 60
     start = time.time()
     for i in range(frames):

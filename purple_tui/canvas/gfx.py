@@ -168,14 +168,20 @@ class Gfx:
     def __init__(self, size=None, headless=False, windowed=False):
         pygame.display.init()
         pygame.font.init()
+        self._kms = None
         if headless:
             self.surface = pygame.Surface(size or (1366, 768))
+        elif os.environ.get("PURPLE_DISPLAY") == "kms":
+            from . import kms
+            from .. import boot_log
+            self._kms = kms.open_display(log=boot_log.heartbeat)
+            self.surface = pygame.Surface(self._kms.size, 0, 32, kms.XRGB_MASKS)
         else:
             self._flags = 0 if windowed else pygame.FULLSCREEN
             self.surface = pygame.display.set_mode(size or (0, 0), self._flags)
             pygame.display.set_caption("Purple")
             pygame.mouse.set_visible(False)
-        self.headless = headless
+        self.headless = headless or self._kms is not None  # no SDL window either way
         self.w, self.h = self.surface.get_size()
         self.all_caps = False
         self.dirty = True
@@ -441,7 +447,9 @@ class Gfx:
 
     # ----- frame -----
     def present(self):
-        if not self.headless:
+        if self._kms:
+            self._kms.present(self.surface)
+        elif not self.headless:
             pygame.display.flip()
         self.dirty = False
 

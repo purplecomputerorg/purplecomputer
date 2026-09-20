@@ -14,13 +14,16 @@ See guides/keyboard-architecture.md for details.
 
 import asyncio
 import logging
+import os
+import shutil
+import signal
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional, Awaitable
 
-from .constants import SUPPORT_EMAIL
+from .constants import SUPPORT_EMAIL, is_debug
 
 logger = logging.getLogger(__name__)
 
@@ -471,7 +474,14 @@ class EvdevReader:
         The image runs an autologin agetty on tty2 from sysinit.target. Spawning
         a second login here (openvt -f) left two processes reading one tty, so
         each got a fraction of the keystrokes and neither shell was usable.
+
+        ChromeOS has no chvt: on a debug install, leaving Purple is the way
+        to a shell (the launcher brings the console back).
         """
+        if shutil.which("chvt") is None:
+            if is_debug():
+                os.kill(os.getpid(), signal.SIGTERM)
+            return
         subprocess.Popen(["sudo", "chvt", "2"])
 
     def release_grab(self) -> None:

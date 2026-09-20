@@ -9,8 +9,9 @@
 Chromebook support anywhere. One machine has been probed.
 
 **Status: probe passed on one Braswell Chromebook** (display, audio, speech, keyboard; four runs
-logged under "Where things stand"). Next: the same probe unchanged on a different board, then the
-KERN-C/ROOT-C installer plan.
+logged under "Where things stand"). The app adapters and both install stages are written but have
+not run on a device yet (see "Implementation"). Still owed: the same probe unchanged on a
+different board.
 
 ---
 
@@ -144,12 +145,12 @@ machine you are on):
   flatbuffers, packaging. All manylinux x86_64 cp312.
 - `voice/`: `en_US-libritts_r-medium.onnx` + `.json` (matches `VOICE_MODEL` in the golden image).
 
-Build it with `scripts/chromebook-probe/build-bundle.sh [dest]` (default
-`~/purple-chromebook-probe`), which also compiles the glibc shim, then copy the folder to a FAT32
-stick. On the Chromebook: `sudo bash`, mount the stick, `bash <stick>/purple-chromebook-probe/probe.sh`,
-and press Ctrl+Alt+Back when told. Always `sync` and `umount` before pulling the stick.
+Build it with `scripts/chromebook/build-bundle.sh [dest]` (default `~/purple-chromebook`), which
+also compiles the glibc shim and packs the app, then copy the folder to a FAT32 stick. On the
+Chromebook: `sudo bash`, mount the stick, `bash <stick>/purple-chromebook/probe.sh`, and press
+Ctrl+Alt+Back when told. Always `sync` and `umount` before pulling the stick.
 
-**Probe:** `scripts/chromebook-probe/` (`probe.sh`, `probe.py`, `f128shim.c`). The original v1
+**Probe:** `scripts/chromebook/` (`probe.sh`, `probe.py`, `f128shim.c`). The original v1
 design, kept for the reasoning; the run notes below say what changed and why:
 
 - Stick is FAT/exFAT (no exec bits, no symlinks), so `probe.sh` copies the bundle to
@@ -222,8 +223,54 @@ headphone plug events (Chrome normally does this). Confirmed by ear: speech and 
 heard, tone 5 (fresh CRAS, untouched) silent, tone 6 (after select_output) heard.
 
 **Probe v2** (dumb buffers, CRAS first, runtime discovery of DRM device, connector, sound card and
-keyboards) is what `scripts/chromebook-probe/` holds now. After the reks, run it unchanged on a newer Intel
+keyboards) is what `scripts/chromebook/` holds now. After the reks, run it unchanged on a newer Intel
 (SOF audio, 5.x kernel), an ARM board (needs the arm64 bundle) and ideally an AMD board.
+
+## Implementation (written 2026-09-20, nothing below has run on a device yet)
+
+Everything in this section is **unverified** until the run notes say otherwise.
+
+**App adapters** (all no-ops off ChromeOS):
+
+- `purple_tui/canvas/kms.py`: the probe's dumb-buffer scanout, shared with `probe.py`.
+  `PURPLE_DISPLAY=kms` makes `Gfx` draw to an offscreen XRGB surface and copy it out per dirty
+  frame. If DRM master is not free after 3 s it runs `stop frecon`, then `pkill -9 frecon`.
+- `purple_tui/cras.py`: picks the output node (plugged headphones, else internal speaker) at
+  mixer warm-up and on CRAS's `NodesChanged` D-Bus signal (through `dbus-monitor`, reusing the
+  `audio_hotplug` listener). Volume backend `cras`: CRAS steps are 0.5 dB, so the pactl-style
+  cubic percent maps to `100 + 120*log10(level/100)`.
+- `power_manager.py`: the poweroff command list drops commands that do not exist (no systemctl
+  on upstart), and activity is reported to powerd every 20 s of use, since powerd otherwise dims
+  and suspends on its idle timers with Chrome gone.
+- `PURPLE_DEBUG_FLAG` moves the debug flag off the read-only `/opt`. Where `chvt` is missing, the
+  emergency combo (Ctrl+\ held 3 s, or Ctrl+Alt+F2) exits Purple on a debug install.
+- python-evdev comes from the `evdev-binary` wheel (needs only glibc 2.2.5). The canvas UI needs
+  no Textual or rich. `LD_PRELOAD` of the f128 shim is set for the whole process tree.
+- Not done: keyd (grave and RightAlt remaps), brightness (the parent menu uses xrandr), the
+  same-screen terminal, shill off, full lockdown. onnxruntime 1.30 tries to reach a Microsoft
+  telemetry host at import; moot with no network, but worth pinning down before anything ships.
+
+**Stage 1, `install.sh` + `purple-run.sh`:** installs under `/usr/local/purple` only (Python, the
+app, voice, emoji font, a debug flag). `purple-run.sh` detaches, runs `stop ui`, starts Purple, and
+on any exit copies logs to `logs/` (and the stick if mounted), then `start frecon; start ui`, and
+reboots if no console came back. `PURPLE_MAX_SECONDS=120` is a safety net for first runs.
+
+**Stage 2, `install-slot.sh`:** read-only `--check` by default; `--write` does the next phase.
+
+1. Phase 1 shrinks the STATE entry with `cgpt` and places ROOT-C (rootfs size + 1 GiB) and KERN-C
+   at the end of the disk, then reboots. ChromeOS is expected to find stateful too small, wipe it
+   and set itself up again (the chrx precedent). This is the one step with real risk: a bad
+   partition table needs a recovery stick. Make one first.
+2. Phase 2 copies the running kernel and rootfs into slot C, runs Google's own
+   `make_dev_ssd.sh --remove_rootfs_verification --partitions 6` on the copy (it repacks the
+   kernel, and `PARTUUID=%U/PARTNROFF=1` in the command line should make KERN-C find ROOT-C with
+   no editing), grows the filesystem, installs Purple to `/opt/purple`, comments out `start on`
+   in `ui.conf` and `update-engine.conf`, and adds `purple.conf` with ui's start and stop
+   conditions. KERN-C gets the top priority with one try and successful=0.
+3. `purple-run.sh --job` marks the slot good only once the UI has drawn, then emits
+   `login-prompt-visible` (Chrome's job normally) so the rest of the boot completes. A slot that
+   never reaches the UI should not be tried again, so the machine falls back to ChromeOS.
+   `install-slot.sh --chromeos` sets slot C's priority to 0.
 
 **Open questions, in order:** (1) dumb-buffer display, and whether frecon releases DRM master on
 Ctrl+Alt+Back; (2) audio through CRAS with `ui` stopped; (3) whether KERN-C priority survives leaving and re-entering dev mode;

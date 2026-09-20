@@ -7,7 +7,7 @@ leaves sound silently broken until Purple is restarted.
 
 System volume goes through `set_system_volume`: pactl when present (percent
 maps onto perceived loudness and follows the default sink across hotplug),
-`amixer -M` otherwise. Design and history: docs/PLAN-audio-volume.md.
+CRAS on ChromeOS, `amixer -M` otherwise. Design and history: docs/PLAN-audio-volume.md.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ import threading
 import time
 from typing import Any, Optional
 
+from . import cras
 from .constants import VOLUME_ICONS, VOLUME_LEVELS
 
 _last_play = 0.0
@@ -37,7 +38,7 @@ def _log(line: str) -> None:
 
 @functools.cache
 def volume_backend() -> str:
-    backend = "pactl" if shutil.which("pactl") else "amixer"
+    backend = "pactl" if shutil.which("pactl") else "cras" if cras.available() else "amixer"
     _log(f"volume backend: {backend}")
     return backend
 
@@ -49,6 +50,8 @@ def system_volume_argv(level: int) -> list[list[str]]:
             ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0" if level else "1"],
             ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{level}%"],
         ]
+    if volume_backend() == "cras":
+        return cras.volume_argv(level)
     return [["amixer", "-M", "sset", "Master", f"{level}%", "unmute" if level else "mute"]]
 
 

@@ -35,8 +35,8 @@ inventory() {
 install_python() {
     step cp "$SRC/libf128shim.so" "$DEST/"
     [ -x "$PY" ] || step tar -xzf "$SRC/python-x86_64.tar.gz" -C "$DEST"
-    "$PY" -c "import pygame, piper, evdev" 2>/dev/null && return
-    step "$PY" -m pip install --no-index --find-links "$SRC/wheels" pygame-ce numpy piper-tts evdev-binary
+    "$PY" -c "import pygame, piper, evdev, rich" 2>/dev/null && return
+    step "$PY" -m pip install --no-index --find-links "$SRC/wheels" pygame-ce numpy piper-tts evdev-binary rich
 }
 
 # Purple itself, laid out the same in both stages: the launcher finds everything beside itself.

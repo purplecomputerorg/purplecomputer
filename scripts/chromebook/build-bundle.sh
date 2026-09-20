@@ -22,10 +22,11 @@ tar -czf "$DEST/purple-app.tar.gz" -C "$REPO" --exclude=__pycache__ --exclude='*
 
 # pygame-ce, not pygame: see the guide. Versions are pinned because `just` eats "numpy<2" as a redirect.
 # evdev-binary is python-evdev prebuilt (evdev itself is sdist only); it needs glibc 2.2.5.
+# rich: play_eval validates its markup with it, and without it every answer falls back to letter blocks.
 (cd "$REPO" && just python -m pip download --only-binary=:all: \
     --platform manylinux2014_x86_64 --platform manylinux_2_17_x86_64 --platform manylinux_2_28_x86_64 \
     --platform manylinux1_x86_64 --python-version 3.12 --implementation cp --abi cp312 --abi none \
-    -d "$DEST/wheels" pygame-ce==2.5.8 numpy==1.26.4 piper-tts==1.3.0 evdev-binary==2.0.0)
+    -d "$DEST/wheels" pygame-ce==2.5.8 numpy==1.26.4 piper-tts==1.3.0 evdev-binary==2.0.0 rich==14.2.0)
 
 if [ ! -s "$DEST/python-x86_64.tar.gz" ]; then
     python_url=$(gh api repos/astral-sh/python-build-standalone/releases/latest \

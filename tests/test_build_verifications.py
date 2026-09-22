@@ -391,3 +391,26 @@ def test_i386_kernel_reports_lid_open_at_boot():
     assert 'set purple_args="$purple_i386_args"' in i386_branch.group(1)
     variants = (ROOT / "config" / "grub" / "purple-variants.cfg").read_text()
     assert 'set purple_i386_args="button.lid_init_state=open"' in variants
+
+
+def test_diag_dump_and_purpleusb_partition():
+    """Every live boot rewrites PURPLE-LOG.TXT on the stick's third partition.
+    That partition must be basic-data FAT (Windows and macOS hide the EFI
+    partition), it carries the turn-it-off-first note for people who plug the
+    stick into a running computer, and the post-settle recheck must not compare
+    it. Installed systems never run the dump."""
+    src = _build_source()
+    assert 'cp /purple-src/scripts/purple-diag-dump.sh "$MOUNT_DIR/usr/local/bin/purple-diag-dump"' in src
+    assert "systemctl enable purple-diag-dump.service" in src
+    unit = (ROOT / "config" / "systemd" / "purple-diag-dump.service").read_text()
+    assert "ConditionPathIsMountPoint=/cdrom" in unit
+    assert "ConditionKernelCommandLine=!purple.install=1" in unit
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    assert 'mkfs.vfat -F 16 -n PURPLEUSB "$LOG_IMG"' in remaster
+    assert '-append_partition 3 EBD0A0A2-B9E5-4433-87C0-68B6B72699C7 "$LOG_IMG"' in remaster, \
+        "PURPLEUSB must be a Microsoft basic data partition or desktops hide it"
+    assert 'label=Start Purple Computer' in remaster
+    assert '"$LOG_MNT/HOW TO START PURPLE.txt"' in remaster
+    assert "blkid -L PURPLEUSB" in (ROOT / "scripts" / "purple-diag-dump.sh").read_text()
+    flash = (ROOT / "build-scripts" / "flash-lib.sh").read_text()
+    assert "awk '$1 ~ /[^0-9][12]$/ {print $2}'" in flash, "settle recheck must stop at the EFI partition"

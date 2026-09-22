@@ -573,13 +573,15 @@ device_sha256() {
 # drive against the ISO after settling.
 GPT_SKIP_BYTES=1048576
 
-# Bytes of the ISO covered by its partitions. Past them the file holds only
-# a backup GPT the settle boot supersedes and xorriso padding, and casper puts
-# the writable partition on the next 2MiB boundary after the last partition,
-# which can land inside that padding: its mkfs then looks like decay.
+# Bytes of the ISO covered by its read-only partitions (1: ISO9660, 2: EFI).
+# Partition 3 (PURPLEUSB) is where purple-diag-dump writes on the debug stick,
+# settle boot included, so it is not compared. Past the partitions the file
+# holds only a backup GPT the settle boot supersedes and xorriso padding, and
+# casper puts the writable partition on the next 2MiB boundary after the last
+# partition, which can land inside that padding: its mkfs then looks like decay.
 iso_partitioned_bytes() {
     local end
-    end=$(sfdisk -l -q -o end "$1" 2>/dev/null | tail -n +2 | sort -n | tail -n1)
+    end=$(sfdisk -l -q -o device,end "$1" 2>/dev/null | awk '$1 ~ /[^0-9][12]$/ {print $2}' | sort -n | tail -n1)
     if [[ -n "$end" ]]; then echo $(( (end + 1) * 512 )); else stat -c %s "$1"; fi
 }
 

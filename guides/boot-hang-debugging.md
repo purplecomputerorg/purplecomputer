@@ -65,6 +65,22 @@ If the log ends abruptly, **the last phase line is where the hang happened.** Th
 
 ---
 
+## Customer path: every stick writes its own report
+
+A customer cannot read tty2 or photograph a scrolling log, so a hang report from the field used to mean days of back and forth. Two mechanisms now cover both failure shapes in one round trip.
+
+**`PURPLE-LOG.TXT` on the stick, every live boot.** `purple-diag-dump.service` (`scripts/purple-diag-dump.sh`, live boots only) rewrites that file on the stick's third partition every 5s for the first five minutes of uptime, then once a minute: machine model and BIOS, cmdline, DRM connector state, PCI devices and drivers, failed units and pending jobs, `purple-x11` status, a process list with `wchan`, the boot, xinitrc, Xorg and power logs, and the journal and dmesg tails. The partition is mounted only for each write, so pulling power leaves it clean. The same text also lands at `/var/log/purple/diag.txt`. So the standard stick a customer already has holds the report of its last boot: no second stick needed for anything that got as far as systemd.
+
+**The debug ISO for kernel-level hangs.** Its GRUB entry drops `quiet` and `console=tty63`, so if the kernel wedges before systemd, the last line on screen says where and a phone photo captures it. Its menu auto-continues after 5s.
+
+**The `PURPLEUSB` partition** (`01-remaster-iso.sh`) is a 16MB FAT volume typed as Microsoft basic data. That type is the point: Windows and macOS hide EFI System Partitions, so the report could not live on partition 2. Both desktops mount `PURPLEUSB` like a thumb drive. Since it is also what a parent sees when they plug the stick into a running computer, it carries `HOW TO START PURPLE.txt` (shut down, leave it in, turn on, F12 or Option) and an `autorun.inf` whose label makes Explorer show the drive as "Start Purple Computer". `flash-lib.sh`'s post-settle recheck compares only partitions 1 and 2, since the settle boot writes here too.
+
+What to tell the customer: after it gets stuck, wait two minutes, hold the power button until it turns off, plug the stick into your usual computer, open the drive named `PURPLEUSB`, and email `PURPLE-LOG.TXT`. Warn them about the other partitions: Windows may ask to format a disk and a Mac may say a disk is not readable; answer Cancel or Ignore, never Format or Initialize. If the file is missing, the kernel never reached systemd: send the debug stick and ask for a photo of the screen.
+
+Confirm the layout on a fresh ISO with `xorriso -indev <iso> -report_system_area plain`: partition 3 must show type GUID `a2a0d0eb...` (basic data).
+
+---
+
 ## The startup watchdog
 
 A daemon thread started in `boot_log.py` at module import time. It sleeps in 1-second increments, checking a `_first_render_done` flag. At deadlines **10s, 20s, 40s, 80s** from process start, if first render hasn't happened, the watchdog calls `faulthandler.dump_traceback(all_threads=True)` against the boot log file.

@@ -178,11 +178,14 @@ uki_wanted() {
 # Kernel, initrd and command line in one EFI binary the firmware loads itself.
 # Same kernel choice as purple-router.cfg: both read purple-variants.cfg.
 build_uki() {
-    local out="$1" variant="" args=""
+    local out="$1" variant="" args="" product
     eval "$(sed -n 's/^set \(purple_[a-z0-9_]*=\)/\1/p' /boot/grub/purple-variants.cfg /boot/grub/purple-cmdline.cfg)"
-    if [[ "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" =~ $purple_t2_models ]] && [ -f /boot/vmlinuz-t2 ]; then
+    product=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
+    if [[ "$product" =~ $purple_t2_models ]] && [ -f /boot/vmlinuz-t2 ]; then
         variant=-t2
         args="$purple_t2_args"
+    elif [[ "$product" =~ $purple_c2mac_models ]]; then
+        args="$purple_c2mac_args"
     fi
     ukify build --stub /usr/lib/systemd/boot/efi/linuxx64.efi.stub \
         --linux "/boot/vmlinuz$variant" --initrd "/boot/initrd.img$variant" \

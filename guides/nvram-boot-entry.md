@@ -94,5 +94,5 @@ sudo dd if=/dev/$TARGET bs=446 count=1 2>/dev/null | xxd | head -2   # MBR shoul
 
 ## Future work
 
-- **Auto-boot Purple on Mac dual-boot installs** (macOS kept alongside Purple): needs `bless --setBoot` (macOS-only) or rEFInd. `efibootmgr` doesn't solve this because Apple EFI ignores standard NVRAM entries. Out of scope — wiped-internal Mac installs already cold-boot Purple via ESP fallback.
+- **Auto-boot Purple on Mac dual-boot installs** (macOS kept alongside Purple): needs `bless --setBoot` (macOS-only) or rEFInd. Whether `efibootmgr` entries win over a blessed macOS volume is untested; on wiped-disk installs Apple EFI does honor them (`BootCurrent: 0000` = our entry on MacBook5,2 and MacBookAir3,2). Out of scope — wiped-internal Mac installs already cold-boot Purple via ESP fallback.
 - **Conservative NVRAM cleanup** (delete stale `Boot####` entries pointing to removed disks, delete `dump-type0-*` efivars): considered and deferred. Low payoff for the E6420 (its issue is legacy-mode firmware, not NVRAM clutter) and adds brick risk.

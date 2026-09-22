@@ -577,6 +577,42 @@ EFI_GRUB_EOF
     rmdir "$EFI_MNT"
     log_info "Built fresh EFI image (${EFI_SIZE_KB}KB) with latest signed binaries"
 
+    # Third partition: a plain FAT "basic data" volume named PURPLEUSB, which
+    # Windows and macOS mount like any thumb drive (they hide the EFI partition).
+    # It is what a parent sees when they plug the stick into a running computer,
+    # so it carries the "turn it off first" instructions, and purple-diag-dump
+    # writes PURPLE-LOG.TXT here during live boots. autorun.inf no longer runs
+    # anything on modern Windows, but Explorer still shows its label.
+    LOG_IMG="$WORK_DIR/purpleusb.img"
+    dd if=/dev/zero of="$LOG_IMG" bs=1M count=16 2>/dev/null
+    mkfs.vfat -F 16 -n PURPLEUSB "$LOG_IMG" >/dev/null
+    LOG_MNT="$WORK_DIR/purpleusb-mount"
+    mkdir -p "$LOG_MNT"
+    mount -o loop "$LOG_IMG" "$LOG_MNT"
+    printf '[autorun]\r\nlabel=Start Purple Computer\r\n' > "$LOG_MNT/autorun.inf"
+    sed 's/$/\r/' > "$LOG_MNT/HOW TO START PURPLE.txt" << 'README_EOF'
+Hi! This is your Purple Computer USB stick.
+
+Purple does not run inside Windows or macOS. It starts instead of them,
+while the computer is starting up. So:
+
+  1. Turn the computer off completely (shut down, not sleep).
+  2. Leave this USB stick plugged in.
+  3. Turn the computer on.
+
+If the computer starts normally instead of Purple, it needs a nudge:
+on most PCs, tap F12 as soon as it turns on and pick the USB stick.
+On a Mac, hold the Option key while it turns on and pick "EFI Boot".
+
+Stuck? Email support@purplecomputer.org and we will help.
+
+(Technical: Purple also writes a file called PURPLE-LOG.TXT here while
+it starts up. Support may ask you to email it. Nothing on this drive
+needs changing, and please don't format it.)
+README_EOF
+    umount "$LOG_MNT"
+    rmdir "$LOG_MNT"
+
     # Step 9: Build normal ISO
     log_step "9/11: Building normal ISO..."
 
@@ -594,7 +630,8 @@ EFI_GRUB_EOF
             -volid "$volid" \
             -update_r "$WORK_DIR/iso-new" / \
             -boot_image any replay \
-            -append_partition 2 0xEF "$EFI_IMG"
+            -append_partition 2 0xEF "$EFI_IMG" \
+            -append_partition 3 EBD0A0A2-B9E5-4433-87C0-68B6B72699C7 "$LOG_IMG"
         sha256sum "$out" > "${out}.sha256"
         echo "$BUILD_VERSION" > "${out}.version"
         echo "$BUILD_COMMIT" > "${out}.commit"

@@ -1,0 +1,16 @@
+[Unit]
+Description=Purple Computer boot diagnostic dump to the USB stick
+# Live boots only: the stick is the only place the report can go, and an
+# installed system has the persistent journal instead.
+ConditionPathIsMountPoint=/cdrom
+ConditionKernelCommandLine=!purple.install=1
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/purple-diag-dump
+Nice=10
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

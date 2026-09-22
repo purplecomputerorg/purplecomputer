@@ -397,6 +397,21 @@ def test_variants_file_is_the_single_source_for_router_and_installer():
         assert "purple-variants.cfg" in (ROOT / path).read_text(), f"{path} does not ship the variants file"
 
 
+def test_core2_nvidia_macs_boot_without_the_lapic_timer():
+    """MacBookAir3,2 lost 2m44s of every boot asleep with no timer to wake it;
+    GRUB and the UKI must both pass the flag, and only to those models."""
+    variants = (ROOT / "config" / "grub" / "purple-variants.cfg").read_text()
+    models = re.search(r"set purple_c2mac_models='(.*)'", variants).group(1)
+    assert re.search(models, "MacBookAir3,2") and re.search(models, "MacBook5,2")
+    assert not re.search(models, "MacBookAir4,2") and not re.search(models, "MacBook5,1")
+    assert 'set purple_c2mac_args="nolapic_timer"' in variants
+    router = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
+    assert 'regexp "$purple_c2mac_models" "$product"' in router
+    assert 'set purple_args="$purple_c2mac_args"' in router
+    build = re.search(r"build_uki\(\) \{\n(.*?)\n\}", _install_source(), re.DOTALL).group(1)
+    assert "=~ $purple_c2mac_models" in build and 'args="$purple_c2mac_args"' in build
+
+
 def test_i386_kernel_reports_lid_open_at_boot():
     """The Atom netbooks' firmware can report the lid closed until it is moved,
     which starts the 10 min lid shutdown right after boot."""

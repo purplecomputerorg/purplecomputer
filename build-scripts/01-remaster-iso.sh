@@ -740,7 +740,7 @@ menuentry "Purple Computer (DEBUG)" {
 # stick mid-boot, and purple.toram reads the system into RAM in one pass so
 # the stick is not read again. log_buf_len keeps the whole kernel log for
 # the PURPLE-LOG.TXT report.
-menuentry "Purple Computer (DEBUG, try everything: no IOMMU, USB 32-bit DMA, no USB/PCIe power saving, system in RAM)" {
+menuentry "Purple Computer (DEBUG, try everything)" {
     set gfxpayload=keep
     linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off xhci_hcd.quirks=0x800000 usbcore.autosuspend=-1 pcie_aspm=off purple.toram=1 log_buf_len=8M ---
     initrd /casper/initrd$purple_variant

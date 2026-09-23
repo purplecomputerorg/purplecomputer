@@ -4,6 +4,10 @@ Description=Purple Computer boot diagnostic dump to the USB stick
 # installed system has the persistent journal instead.
 ConditionPathIsMountPoint=/cdrom
 ConditionKernelCommandLine=!purple.install=1
+# Starts as soon as udev has run, not at multi-user: a stick that stops
+# reading a minute into boot still gets the reports written before it did.
+DefaultDependencies=no
+After=systemd-udev-trigger.service
 
 [Service]
 Type=simple
@@ -13,4 +17,4 @@ Restart=on-failure
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=sysinit.target

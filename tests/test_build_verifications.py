@@ -444,3 +444,19 @@ def test_diag_dump_and_purpleusb_partition():
     assert "blkid -L PURPLEUSB" in (ROOT / "scripts" / "purple-diag-dump.sh").read_text()
     flash = (ROOT / "build-scripts" / "flash-lib.sh").read_text()
     assert "awk '$1 ~ /[^0-9][12]$/ {print $2}'" in flash, "settle recheck must stop at the EFI partition"
+    assert "WantedBy=sysinit.target" in unit, "dump must start before a flaky stick dies mid-boot"
+
+
+def test_debug_menu_try_everything_entry():
+    """The debug ISO's second entry stacks every USB read-error workaround so a
+    customer needs one boot, and purple.toram is wired into casper before the
+    squashfs is mounted."""
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    entries = re.findall(r'menuentry "([^"]+)"', remaster.split("GRUB_DEBUG")[1])
+    assert entries[0] == "Purple Computer (DEBUG)"
+    assert entries[1].startswith("Purple Computer (DEBUG, try everything")
+    for flag in ("intel_iommu=off", "xhci_hcd.quirks=0x800000", "usbcore.autosuspend=-1",
+                 "pcie_aspm=off", "purple.toram=1", "log_buf_len=8M"):
+        assert flag in remaster
+    assert 'add_purple_toram "$MAIN_DIR"' in remaster
+    assert "purple_squashfs_to_ram" in remaster

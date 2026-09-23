@@ -68,7 +68,7 @@ collect() {
     journalctl -b --no-pager -n 800 2>&1
 
     section "dmesg (tail)"
-    dmesg 2>&1 | tail -n 1500
+    dmesg 2>&1 | tail -n 4000
 
     section "end"
 }

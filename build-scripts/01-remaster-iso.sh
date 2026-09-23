@@ -648,15 +648,38 @@ set timeout=5
 set timeout_style=menu
 set default=0
 
+set purple_debug_args="i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1"
+
 menuentry "Purple Computer (DEBUG)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 ---
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args ---
+    initrd /casper/initrd$purple_variant
+}
+
+# Firmware workarounds for USB read errors (-5) on old laptops: the 24.04
+# kernel turns the Intel IOMMU on by default, and some xHCI controllers
+# mishandle DMA above 4GB (quirks bit 23 = XHCI_NO_64BIT_SUPPORT).
+menuentry "Purple Computer (DEBUG, no IOMMU)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off ---
+    initrd /casper/initrd$purple_variant
+}
+
+menuentry "Purple Computer (DEBUG, USB 32-bit DMA)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args xhci_hcd.quirks=0x800000 ---
+    initrd /casper/initrd$purple_variant
+}
+
+menuentry "Purple Computer (DEBUG, no IOMMU + USB 32-bit DMA)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off xhci_hcd.quirks=0x800000 ---
     initrd /casper/initrd$purple_variant
 }
 
 menuentry "Purple Computer (DEBUG, input test)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.inputtest=1 ---
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.inputtest=1 ---
     initrd /casper/initrd$purple_variant
 }
 
@@ -668,13 +691,13 @@ menuentry "Purple Computer (DEBUG, recovery shell)" {
 
 menuentry "Purple Computer (DEBUG, test error screen)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.failx11=1 ---
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.failx11=1 ---
     initrd /casper/initrd$purple_variant
 }
 
 menuentry "Purple Computer (DEBUG, test install failure)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.failinstall=1 ---
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.failinstall=1 ---
     initrd /casper/initrd$purple_variant
 }
 

@@ -278,9 +278,10 @@ release-check *commit:
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 
-# Host one ISO for a single customer at files.purplecomputer.org/oneoff/<name>.iso, outside the release paths
-ship-oneoff iso name:
-    ./build-scripts/upload-oneoff.sh {{iso}} {{name}}
+# Host a built commit's ISO for one customer at files.purplecomputer.org/oneoff/<name>.iso, outside the release paths.
+# just ship-oneoff <commit> [name] [--debug|--standard|--backup]; asks for the name when omitted, debug ISO by default
+ship-oneoff commit *args:
+    ./build-scripts/upload-oneoff.sh {{commit}} {{args}}
 
 # Prep the postcard PDF for print, writing the -installation / -guide halves alongside.
 #   just print-card                -> purple-pad.pdf, 4x6 with safety margin (FedEx upload)

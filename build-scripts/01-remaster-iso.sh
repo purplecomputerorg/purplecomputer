@@ -183,6 +183,44 @@ ROUTER
     mv "$tmp" "$cfg"
 }
 
+# purple.toram=1 (debug menu): copy the live squashfs into RAM in one
+# sequential pass before casper mounts it, so a stick the laptop cannot read
+# reliably is never read again for the system. A failed copy says where the
+# stick broke (bytes copied) and the boot continues from the stick so the
+# usual errors still show. Needs the squashfs plus 768M free; skips otherwise.
+add_purple_toram() {
+    local casper="$1/scripts/casper" line
+    line='    mount_images_in_directory "${livefs_root}" "${rootmnt}"'
+    grep -qxF "$line" "$casper" || { echo "ERROR: casper script changed, cannot add purple.toram hook"; exit 1; }
+    cat > "$1/scripts/purple-toram" << 'TORAM_EOF'
+purple_squashfs_to_ram() {
+    grep -qw purple.toram=1 /proc/cmdline || return 0
+    local src="$1/$LIVE_MEDIA_PATH" ram=/purple-ram need free t0 f
+    need=$(( $(stat -c %s "$src/filesystem.squashfs") / 1024 + 65536 ))
+    free=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
+    if [ "$free" -lt $(( need + 786432 )) ]; then
+        echo "Purple: not enough memory to copy the system into RAM (${free}k free, need ${need}k + 768M), reading from the stick instead"
+        return 0
+    fi
+    mkdir -p "$ram" && mount -t tmpfs -o size=${need}k tmpfs "$ram" || return 0
+    echo "Purple: copying the system ($(( need / 1024 )) MB) from the USB stick into memory..."
+    t0=$(cut -d. -f1 /proc/uptime)
+    if dd if="$src/filesystem.squashfs" of="$ram/filesystem.squashfs" bs=1048576; then
+        for f in "$src"/*; do
+            case "$f" in */filesystem.squashfs|*/vmlinuz*|*/initrd*) ;; *) cp -a "$f" "$ram/" ;; esac
+        done
+        mount -o bind "$ram" "$src"
+        echo "Purple: copy done in $(( $(cut -d. -f1 /proc/uptime) - t0 ))s, the stick is no longer read for the system"
+    else
+        echo "Purple: THE USB STICK COULD NOT BE READ after $(stat -c %s "$ram/filesystem.squashfs") bytes of the system image, continuing from the stick"
+        umount "$ram"
+    fi
+}
+TORAM_EOF
+    sed -i "s|^$line\$|    . /scripts/purple-toram; purple_squashfs_to_ram \"\${livefs_root}\"\n&|" "$casper"
+    log_info "Added purple.toram hook to casper"
+}
+
 # Inject the Purple hooks into a casper initrd (boot splash, dotfiles,
 # debug mode, no swap activation) and repack it in place.
 patch_casper_initrd() {
@@ -265,6 +303,8 @@ SPLASH_EOF
         log_info "Removing default-layer.conf (disabling multi-layer squashfs)..."
         rm "$MAIN_DIR/conf/conf.d/default-layer.conf"
     fi
+
+    add_purple_toram "$MAIN_DIR"
 
     neuter_casper_swap "$MAIN_DIR"
 
@@ -693,9 +733,19 @@ menuentry "Purple Computer (DEBUG)" {
     initrd /casper/initrd$purple_variant
 }
 
-# Firmware workarounds for USB read errors (-5) on old laptops: the 24.04
-# kernel turns the Intel IOMMU on by default, and some xHCI controllers
-# mishandle DMA above 4GB (quirks bit 23 = XHCI_NO_64BIT_SUPPORT).
+# Workarounds for USB read errors (-5) on old laptops, one entry with all of
+# them and one per suspect: the 24.04 kernel turns the Intel IOMMU on by
+# default, some xHCI controllers mishandle DMA above 4GB (quirks bit 23 =
+# XHCI_NO_64BIT_SUPPORT), USB autosuspend and PCIe power saving can drop a
+# stick mid-boot, and purple.toram reads the system into RAM in one pass so
+# the stick is not read again. log_buf_len keeps the whole kernel log for
+# the PURPLE-LOG.TXT report.
+menuentry "Purple Computer (DEBUG, try everything: no IOMMU, USB 32-bit DMA, no USB/PCIe power saving, system in RAM)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off xhci_hcd.quirks=0x800000 usbcore.autosuspend=-1 pcie_aspm=off purple.toram=1 log_buf_len=8M ---
+    initrd /casper/initrd$purple_variant
+}
+
 menuentry "Purple Computer (DEBUG, no IOMMU)" {
     set gfxpayload=keep
     linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off ---

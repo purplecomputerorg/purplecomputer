@@ -55,6 +55,10 @@ collect() {
     section "processes (wchan shows what a stuck process waits on)"
     ps -eo pid,ppid,stat,etimes,wchan:28,args --sort=pid 2>&1
 
+    section "casper log (initramfs stdout: medium scan, RAM copy, casper-bottom)"
+    cat /var/log/casper.log 2>/dev/null
+    section "initramfs trace (only with the debug kernel option)"
+    tail -n 400 /run/initramfs/initramfs.debug 2>/dev/null
     section "boot log"
     cat /tmp/purple-boot.log 2>/dev/null
     section "xinitrc log"

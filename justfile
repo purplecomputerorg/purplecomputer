@@ -372,3 +372,28 @@ python *args:
 # Run Python from stdin (e.g., echo 'print("hi")' | just pystdin)
 pystdin:
     @{{venv}}/bin/python -
+
+# Pretend laptop in QEMU with a build plugged in as a USB stick: UEFI firmware (Esc at power-on), persistent blank disk, screen in a browser.
+# just vm [commit|--release] [--debug|--backup] [--cd] [--legacy] [--empty] [--fresh]; default is the newest build's standard ISO
+vm *args:
+    @./scripts/vm.sh start {{args}}
+
+# Swap the USB stick (or with --cd, the disc) in the running VM: just vm-insert [commit|--release] [--debug|--backup] [--cd]
+vm-insert *args:
+    @./scripts/vm.sh insert {{args}}
+
+# Pull out the USB stick and disc
+vm-eject:
+    @./scripts/vm.sh eject
+
+# Power off the VM (the disk and firmware settings are kept; just vm --fresh wipes them)
+vm-stop:
+    @./scripts/vm.sh stop
+
+# Press keys in the VM (QEMU names: esc, ret, f12, ctrl-alt-delete, ...)
+vm-key +keys:
+    @./scripts/vm.sh key {{keys}}
+
+# Screenshot the VM to /tmp/screenshots
+vm-shot:
+    @./scripts/vm.sh shot

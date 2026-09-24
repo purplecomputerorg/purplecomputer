@@ -7,7 +7,9 @@
 # own computer and emails the file. The FAT partition is mounted only for the
 # duration of each write so a power cut between writes leaves it clean.
 #
-# Read-only apart from that one file. Runs as root (dmesg, journal).
+# Read-only apart from that one file. Runs as root (dmesg, journal). The
+# initramfs writes an early PURPLE-LOG.TXT that this one replaces, and
+# purple-kmsg-stream keeps PURPLE-KMSG.TXT current between snapshots.
 set +e
 
 INTERVAL_FAST=5

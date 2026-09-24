@@ -101,6 +101,8 @@ fi
 # \033]P0 redefines VT palette color 0 (black) to our purple (#2d1b4e).
 printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
 
+. /scripts/purple-initramfs && purple_stick_report "casper-bottom done, starting the system" || true
+
 log_end_msg
 exit 0
 HOOK_EOF
@@ -188,13 +190,32 @@ ROUTER
 # reliably is never read again for the system. A failed copy says where the
 # stick broke (bytes copied) and the boot continues from the stick so the
 # usual errors still show. Needs the squashfs plus 768M free; skips otherwise.
-add_purple_toram() {
+add_purple_initramfs_hooks() {
     local casper="$1/scripts/casper" line
     line='    mount_images_in_directory "${livefs_root}" "${rootmnt}"'
-    grep -qxF "$line" "$casper" || { echo "ERROR: casper script changed, cannot add purple.toram hook"; exit 1; }
-    cat > "$1/scripts/purple-toram" << 'TORAM_EOF'
+    grep -qxF "$line" "$casper" || { echo "ERROR: casper script changed, cannot add the Purple initramfs hooks"; exit 1; }
+    cat > "$1/scripts/purple-initramfs" << 'HOOKS_EOF'
 # Console for the video, /dev/kmsg for dmesg and the PURPLE-LOG.TXT report.
-purple_say() { echo "Purple: $1"; echo "purple-toram: $1" > /dev/kmsg 2>/dev/null; }
+purple_say() { echo "Purple: $1"; echo "purple-initramfs: $1" > /dev/kmsg 2>/dev/null; }
+
+# PURPLE-LOG.TXT written from inside the initramfs: casper's log and dmesg so
+# far. purple-diag-dump replaces it seconds after systemd starts, so this copy
+# is what a customer finds when boot never got that far. Mounted per write.
+purple_stick_report() {
+    local part mnt=/purple-stick
+    part=$(blkid -L PURPLEUSB 2>/dev/null) || return 0
+    mkdir -p "$mnt" && mount -t vfat -o rw,noatime "$part" "$mnt" 2>/dev/null || return 0
+    {
+        echo "purple-initramfs: $1 (uptime $(cut -d' ' -f1 /proc/uptime)s)"
+        echo "Written before Purple's own services started. If this text is still here,"
+        echo "boot never got past mounting the system from the stick."
+        echo "cmdline: $(cat /proc/cmdline)"
+        echo; echo "===== casper log ====="; cat /casper.log 2>/dev/null
+        echo; echo "===== dmesg ====="; dmesg 2>/dev/null
+        echo; echo "===== end ====="
+    } > "$mnt/PURPLE-LOG.TXT.tmp" 2>&1 && mv -f "$mnt/PURPLE-LOG.TXT.tmp" "$mnt/PURPLE-LOG.TXT"
+    umount "$mnt" 2>/dev/null
+}
 
 purple_squashfs_to_ram() {
     grep -qw purple.toram=1 /proc/cmdline || return 0
@@ -219,9 +240,9 @@ purple_squashfs_to_ram() {
         umount "$ram"
     fi
 }
-TORAM_EOF
-    sed -i "s|^$line\$|    . /scripts/purple-toram; purple_squashfs_to_ram \"\${livefs_root}\"\n&|" "$casper"
-    log_info "Added purple.toram hook to casper"
+HOOKS_EOF
+    sed -i "s|^$line\$|    . /scripts/purple-initramfs; purple_stick_report \"system image found on the stick\"; purple_squashfs_to_ram \"\${livefs_root}\"; purple_stick_report \"about to mount the system\"\n&|" "$casper"
+    log_info "Added the Purple initramfs hooks to casper (stick report, purple.toram)"
 }
 
 # Inject the Purple hooks into a casper initrd (boot splash, dotfiles,
@@ -307,7 +328,7 @@ SPLASH_EOF
         rm "$MAIN_DIR/conf/conf.d/default-layer.conf"
     fi
 
-    add_purple_toram "$MAIN_DIR"
+    add_purple_initramfs_hooks "$MAIN_DIR"
 
     neuter_casper_swap "$MAIN_DIR"
 
@@ -673,6 +694,10 @@ Not working? Email support@purplecomputer.org and we will help.
 starts up. Support may ask you to email it. Nothing on this drive needs
 changing, and please don't format it.)
 README_EOF
+    # PURPLE-KMSG.TXT: a preallocated 4MB text file that purple-kmsg-stream
+    # fills with kernel lines by writing straight into its sectors, so nothing
+    # stays mounted and no FAT metadata changes while Purple runs.
+    head -c 4194304 /dev/zero | tr '\0' ' ' > "$LOG_MNT/PURPLE-KMSG.TXT"
     umount "$LOG_MNT"
     rmdir "$LOG_MNT"
 

@@ -1184,3 +1184,25 @@ class TestSilentKeyboardRecovery:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_keys_held_now_unions_every_keyboard_and_skips_unreadable_ones(monkeypatch):
+    import types
+    from purple_tui import input as input_mod
+
+    class Dev:
+        def __init__(self, path):
+            if path == "/dev/input/event9":
+                raise OSError("busy")
+            self.path = path
+        def active_keys(self):
+            return {"/dev/input/event0": [42], "/dev/input/event1": [113]}[self.path]
+        def close(self):
+            pass
+
+    monkeypatch.setitem(sys.modules, "evdev", types.SimpleNamespace(InputDevice=Dev))
+    monkeypatch.setattr(input_mod, "_list_input_paths", lambda: {"/dev/input/event0", "/dev/input/event1", "/dev/input/event9"})
+    assert input_mod.keys_held_now() == {42, 113}
+    assert input_mod.chime_skip_key_held() is True
+    monkeypatch.setattr(input_mod, "_list_input_paths", lambda: {"/dev/input/event0"})
+    assert input_mod.chime_skip_key_held() is False

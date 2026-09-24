@@ -634,24 +634,44 @@ EFI_GRUB_EOF
     mount -o loop "$LOG_IMG" "$LOG_MNT"
     printf '[autorun]\r\nlabel=Start Purple Computer\r\n' > "$LOG_MNT/autorun.inf"
     sed 's/$/\r/' > "$LOG_MNT/HOW TO START PURPLE.txt" << 'README_EOF'
-Hi! This is your Purple Computer USB stick.
+HOW TO START PURPLE
+Videos and help at purplecomputer.org/help
 
-Purple does not run inside Windows or macOS. It starts instead of them,
-while the computer is starting up. So:
+Purple does not open inside Windows or macOS. It starts instead of them,
+while the computer is starting up. Don't worry: these steps do not change
+your laptop permanently. Restart and it will be back to normal.
 
-  1. Turn the computer off completely (shut down, not sleep).
-  2. Leave this USB stick plugged in.
-  3. Turn the computer on.
+  1. Turn off the laptop.
+  2. Plug in the Purple Key USB drive.
+  3. Mac: hold Option and press Power. Keep Option held. Pick the USB
+     or the orange icon.
 
-If the computer starts normally instead of Purple, it needs a nudge:
-on most PCs, tap F12 as soon as it turns on and pick the USB stick.
-On a Mac, hold the Option key while it turns on and pick "EFI Boot".
+     PC: don't turn it on yet! Get ready. Press Power and let go, then
+     mash F12 and Esc like crazy. Keep going until a menu appears, then
+     pick the USB drive from the menu.
 
-Stuck? Email support@purplecomputer.org and we will help.
+     Surface: hold Volume Down and press Power. No key mashing or menus.
+     Keep Volume Down pressed.
 
-(Technical: Purple also writes a file called PURPLE-LOG.TXT here while
-it starts up. Support may ask you to email it. Nothing on this drive
-needs changing, and please don't format it.)
+Which keys to mash? F12 and Esc are the most common. By brand:
+  Dell, Lenovo, Acer: F12
+  HP: Esc, then F9 when the menu appears
+  ASUS: Esc
+  Samsung, LG: F10
+  Sony: F11
+
+Another way, from inside Windows: Start Menu, click the Power icon, hold
+Shift and click Restart. In the menu that appears: Troubleshoot, Advanced
+Options, Use a device, then pick the USB drive.
+
+Once Purple is running, use the Parent Menu (see the Quick Start Guide) to
+install it permanently. It's easy!
+
+Not working? Email support@purplecomputer.org and we will help.
+
+(Technical: Purple also writes a file called PURPLE-LOG.TXT here while it
+starts up. Support may ask you to email it. Nothing on this drive needs
+changing, and please don't format it.)
 README_EOF
     umount "$LOG_MNT"
     rmdir "$LOG_MNT"

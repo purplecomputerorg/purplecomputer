@@ -263,6 +263,11 @@ release-pick +shas:
 release-test:
     cd {{release_dir}} && just test
 
+# Push release/1.x to GitHub (main is pushed separately via /push)
+release-push:
+    @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
+    git -C {{release_dir}} push origin release/1.x
+
 # Publish the already-built release: picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases.
 # Build first with purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.
 # just ship --commit <hash> releases an earlier release/1.x commit whose build is still in the output directory.

@@ -884,6 +884,13 @@ JOURNAL
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-diag-dump"
     cp /purple-src/config/systemd/purple-diag-dump.service "$MOUNT_DIR/etc/systemd/system/"
     chroot "$MOUNT_DIR" systemctl enable purple-diag-dump.service
+    # Live kernel log: streams /dev/kmsg into the stick's preallocated
+    # PURPLE-KMSG.TXT by raw sector writes, so the seconds between two
+    # PURPLE-LOG.TXT snapshots are never lost.
+    cp /purple-src/scripts/purple-kmsg-stream.py "$MOUNT_DIR/usr/local/bin/purple-kmsg-stream"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-kmsg-stream"
+    cp /purple-src/config/systemd/purple-kmsg-stream.service "$MOUNT_DIR/etc/systemd/system/"
+    chroot "$MOUNT_DIR" systemctl enable purple-kmsg-stream.service
     # Hands-on loudness probe, run by a person from the parent-menu terminal.
     cp /purple-src/scripts/purple-audio-probe.sh "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-probe"

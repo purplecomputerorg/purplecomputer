@@ -455,6 +455,28 @@ def test_diag_dump_and_purpleusb_partition():
     assert "WantedBy=sysinit.target" in unit, "dump must start before a flaky stick dies mid-boot"
 
 
+def test_stick_log_covers_the_initramfs_and_the_gaps_between_snapshots():
+    """Two gaps in the PURPLE-LOG.TXT snapshot are closed: the initramfs writes
+    an early report before and after mounting the system (and at the end of
+    casper-bottom), and purple-kmsg-stream writes kernel lines straight into
+    the sectors of a preallocated PURPLE-KMSG.TXT, never keeping FAT mounted."""
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
+    assert "purple_stick_report() {" in hook
+    assert "blkid -L PURPLEUSB" in hook and "cat /casper.log" in hook and "dmesg" in hook
+    assert r'purple_stick_report \"system image found on the stick\"' in remaster
+    assert r'purple_stick_report \"about to mount the system\"' in remaster
+    assert 'purple_stick_report "casper-bottom done, starting the system" || true' in remaster
+    assert '"$LOG_MNT/PURPLE-KMSG.TXT"' in remaster
+    src = _build_source()
+    assert 'cp /purple-src/scripts/purple-kmsg-stream.py "$MOUNT_DIR/usr/local/bin/purple-kmsg-stream"' in src
+    assert "systemctl enable purple-kmsg-stream.service" in src
+    unit = (ROOT / "config" / "systemd" / "purple-kmsg-stream.service").read_text()
+    for line in ("ConditionPathIsMountPoint=/cdrom", "ConditionKernelCommandLine=!purple.install=1",
+                 "DefaultDependencies=no", "WantedBy=sysinit.target"):
+        assert line in unit
+
+
 def test_debug_menu_try_everything_entry():
     """The debug ISO's second entry stacks every USB read-error workaround so a
     customer needs one boot, and purple.toram is wired into casper before the
@@ -466,5 +488,5 @@ def test_debug_menu_try_everything_entry():
     for flag in ("intel_iommu=off", "xhci_hcd.quirks=0x800000", "usbcore.autosuspend=-1",
                  "pcie_aspm=off", "purple.toram=1", "log_buf_len=8M"):
         assert flag in remaster
-    assert 'add_purple_toram "$MAIN_DIR"' in remaster
+    assert 'add_purple_initramfs_hooks "$MAIN_DIR"' in remaster
     assert "purple_squashfs_to_ram" in remaster

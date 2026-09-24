@@ -30,10 +30,13 @@ fi
 
 # Hardware GL for the compositor regardless of the session's Alacritty GL
 # mode (purple-gl-probe decides that separately). glx gives reliable vsync;
-# xrender is the no-GL fallback for VMs and machines where hardware GL is
-# unavailable. If neither stays up, we fall through and leave the screen
-# uncomposited.
-for backend in glx xrender; do
+# xrender is the no-GL fallback. Without a GPU render node (plain VM VGA, a
+# GPU with no driver) glx lands on llvmpipe, where picom stays up but stops
+# presenting frames and the screen freezes, so skip straight to xrender. If
+# neither stays up, we fall through and leave the screen uncomposited.
+backends="glx xrender"
+compgen -G "/dev/dri/renderD*" >/dev/null || backends="xrender"
+for backend in $backends; do
     LIBGL_ALWAYS_SOFTWARE=0 picom --config "$CONF" --backend "$backend" \
         --log-file "$LOG" >/dev/null 2>&1 &
     pid=$!

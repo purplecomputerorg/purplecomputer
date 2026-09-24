@@ -549,6 +549,11 @@ TMPFILES
     chroot "$MOUNT_DIR" gcc -static -o /opt/purple/bin/purple-reboot /tmp/purple-reboot.c
     rm -f "$MOUNT_DIR/tmp/purple-reboot.c"
     log_info "Compiled static reboot binary: $(chroot "$MOUNT_DIR" file /opt/purple/bin/purple-reboot)"
+    # Static held-key check for the initramfs ("hold P while turning it on"),
+    # copied into the casper initrd by 01-remaster-iso.sh.
+    cp /purple-src/tools/purple-keyheld.c "$MOUNT_DIR/tmp/purple-keyheld.c"
+    chroot "$MOUNT_DIR" gcc -static -O2 -o /opt/purple/bin/purple-keyheld /tmp/purple-keyheld.c
+    rm -f "$MOUNT_DIR/tmp/purple-keyheld.c"
 
     # Build keyd from source. Ubuntu 24.04 noble doesn't package keyd (landed
     # in 24.10). keyd upstream ships only source tarballs, no prebuilt debs.

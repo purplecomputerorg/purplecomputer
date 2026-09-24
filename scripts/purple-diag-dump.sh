@@ -33,6 +33,7 @@ collect() {
     echo "bios: $(cat /sys/class/dmi/id/bios_vendor /sys/class/dmi/id/bios_version /sys/class/dmi/id/bios_date 2>/dev/null | tr '\n' ' ')"
     echo "cmdline: $(cat /proc/cmdline)"
     echo "build: $(cat /etc/purple-version 2>/dev/null || echo unknown)"
+    echo "debug mode: $([ -e /opt/purple/debug ] && echo on || echo off), P held at start: $([ -e /run/purple/debug-key ] && echo yes || echo no)"
 
     section "memory"
     grep -E '^(MemTotal|MemAvailable|SwapTotal)' /proc/meminfo

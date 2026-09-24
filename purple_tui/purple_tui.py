@@ -71,7 +71,7 @@ from .keyboard import (
     RoomAction, ControlAction,
     InputFloodGuard,
 )
-from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
+from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available, chime_skip_key_held
 from . import caps as _caps_chokepoint  # noqa: F401  # side-effect: installs Strip render-time uppercase patch
 boot_log.heartbeat("keyboard + input imported; importing power_manager")
 from .power_manager import get_power_manager
@@ -1304,6 +1304,10 @@ class PurpleApp(App):
         mute skip it. Runs alongside the mixer warmup, not after it: it only
         needs pactl, and waits for a sound card that enumerates late."""
         if self._volume_chosen or self._effective_volume() == 0:
+            return
+        if chime_skip_key_held():
+            boot_log.heartbeat("chime skipped: mute key held at start")
+            self._apply_volume()
             return
         self._sound_check_running = True
 

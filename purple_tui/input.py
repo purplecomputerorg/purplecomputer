@@ -59,6 +59,21 @@ def _list_input_paths() -> set:
         return set()
 
 
+def keys_held_now() -> set:
+    """Key codes currently held on any keyboard: one ioctl per device, no
+    event reading, so it is safe before the reader starts and while it runs."""
+    import evdev
+    held = set()
+    for path in _list_input_paths():
+        try:
+            dev = evdev.InputDevice(path)
+            held.update(dev.active_keys())
+            dev.close()
+        except OSError:
+            continue
+    return held
+
+
 # =============================================================================
 # Key Codes (subset of Linux input-event-codes.h)
 # =============================================================================
@@ -161,6 +176,18 @@ class KeyCode:
     # Brightness keys
     KEY_BRIGHTNESSDOWN = 224
     KEY_BRIGHTNESSUP = 225
+
+
+# Held while Purple starts, any of these skips the first-boot chime (a quiet
+# room, a sleeping kid): the mute or volume-down key, or M on keyboards without them.
+CHIME_SKIP_KEYS = frozenset({KeyCode.KEY_MUTE, KeyCode.KEY_VOLUMEDOWN, 50})  # 50 = KEY_M
+
+
+def chime_skip_key_held() -> bool:
+    try:
+        return bool(CHIME_SKIP_KEYS & keys_held_now())
+    except Exception:
+        return False
 
 
 # Keycode to character mapping (printable keys only)

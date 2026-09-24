@@ -44,7 +44,7 @@ The fix is to start picom *after* that crunch, but a fixed `sleep` would just be
 
 `purple-start-compositor` is idempotent (it exits early if a picom is already running): a Purple restart re-execs `xinitrc`, but picom is reparented and survives, so the restart finds it up and leaves it alone, no needless relaunch or flash. To force a restart (debug A/B), `pkill -x picom` first.
 
-We start everywhere rather than hardware-gating: waiting for the UI makes the cost ~free on fast machines, and gating would add DMI/i915 detection without helping the one machine that's actually slow. This is identical on live-boot and installed systems: both run the same `.xinitrc` and the same golden-image picom/launcher/config. The one exception is the 32-bit image: its Xorg runs `AccelMethod none` (Intel 945 cannot run glamor), so there is no hardware GL for picom to use and the launcher skips it there.
+We start everywhere rather than hardware-gating: waiting for the UI makes the cost ~free on fast machines, and gating would add DMI/i915 detection without helping the one machine that's actually slow. This is identical on live-boot and installed systems: both run the same `.xinitrc` and the same golden-image picom/launcher/config. The one exception is the 32-bit image: its Xorg runs `AccelMethod none` (Intel 945 cannot run glamor), so there is no hardware GL for picom to use and the launcher skips it there. On amd64, a machine with no GPU render node (`/dev/dri/renderD*`, e.g. a VM with plain VGA or a GPU with no driver) gets the `xrender` backend only: `glx` there runs on llvmpipe, where picom stays up but stops presenting frames, freezing the screen while the app keeps running.
 
 Two things that matter in `config/picom/picom.conf`:
 

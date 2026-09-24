@@ -177,6 +177,14 @@ def test_compositor_skips_the_32bit_image():
     assert re.search(r'case "\$\(uname -m\)" in i\?86\).*exit 0', launcher)
 
 
+def test_compositor_skips_glx_without_a_render_node():
+    """glx on llvmpipe keeps picom alive but freezes the screen (seen in a
+    QEMU VM with plain VGA), so no GPU render node means xrender only."""
+    launcher = (ROOT / "scripts" / "purple-start-compositor.sh").read_text()
+    assert 'compgen -G "/dev/dri/renderD*" >/dev/null || backends="xrender"' in launcher
+    assert "for backend in $backends; do" in launcher
+
+
 def test_boot_timing_tool_ships():
     """The pre-kernel boot investigation depends on this being on the image;
     it is the only way to measure seek latency and file fragmentation on a

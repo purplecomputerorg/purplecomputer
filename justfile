@@ -283,6 +283,11 @@ release-check *commit:
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 
+# Hardlink a built ISO into ~/isos and print the scp line to pull it to your Mac (same picker as flash).
+# just link-iso [--debug|--no-backup] [--ref <commit>] [iso-path]
+link-iso *args:
+    ./build-scripts/link-iso.sh {{args}}
+
 # Host a built commit's ISO for one customer at files.purplecomputer.org/oneoff/<name>.iso, outside the release paths.
 # just ship-oneoff <commit> [name] [--debug|--standard|--backup]; asks for the name when omitted, debug ISO by default
 ship-oneoff commit *args:

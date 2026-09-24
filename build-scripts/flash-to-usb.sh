@@ -158,65 +158,6 @@ select_drive() {
     IFS='|' read -r TARGET_DEV TARGET_SIZE TARGET_MODEL TARGET_SERIAL <<< "$SELECTED"
 }
 
-die_no_iso() {
-    log_error "No $1 found $(build_source_label)."
-    if [[ -n "$BUILD_COMMIT_FILTER" ]]; then
-        echo "Build it first with 'just build --ref <commit>'."
-    else
-        echo "Run 'just build' first, or pass a path to an ISO."
-    fi
-    exit 1
-}
-
-# Read a 1-based menu choice for a list of $1 items; echoes the choice, or
-# nothing when the user just presses Enter. Exits on invalid input.
-read_menu_choice() {
-    local count="$1" prompt="$2" choice
-    read -p "$prompt" choice
-    [[ -z "$choice" ]] && return 0
-    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt $count ]]; then
-        log_error "Invalid selection"
-        exit 1
-    fi
-    echo "$choice"
-}
-
-# Resolve a specific variant of the newest build, or, when it's missing, offer
-# the newest older build of that variant with an explicit confirmation. Never
-# silently flashes an older build.
-resolve_variant() {
-    local kind="$1" label
-    case "$kind" in
-        debug) label="debug" ;;
-        *)     label="standard (no backup image)" ;;
-    esac
-    ISO_PATH="$(find_latest_iso "$kind")"
-    [[ -n "$ISO_PATH" ]] && return 0
-
-    local stem older
-    stem="$(latest_build_stem)"
-    older="$(newest_iso_of_variant "$kind")"
-    if [[ -z "$stem" || -z "$older" ]]; then
-        die_no_iso "$label ISO"
-    fi
-    log_warn "The newest build ($(basename "$stem")) has no $label ISO."
-    if [[ "$SKIP_CONFIRM" == true ]]; then
-        log_error "Newest $label ISO is from an OLDER build: $older"
-        log_error "Refusing to pick it silently under --yes. Pass its path explicitly."
-        exit 1
-    fi
-    echo ""
-    read -p "Flash the OLDER $(basename "$older") instead? Type 'yes' to continue: " answer
-    if [[ "$answer" != "yes" ]]; then
-        log_info "Aborted."
-        exit 0
-    fi
-    ISO_PATH="$older"
-}
-
-# Newest deliberately-corrupted test ISO, optionally of one scenario
-# (excluded from all normal ISO discovery, so it needs its own resolution
-# path).
 resolve_corrupt_iso() {
     local scen="${1:-}"
     ISO_PATH="$(find_corrupt_iso "$scen")"
@@ -233,42 +174,6 @@ resolve_corrupt_iso() {
 
 # No ISO path and no variant flag: show the newest build's variants and ask
 # point blank which one to flash.
-select_iso() {
-    local stem
-    stem="$(latest_build_stem)"
-    [[ -n "$stem" ]] || die_no_iso "ISO"
-
-    local labels=() paths=() f
-    f="$(variant_path "$stem" backup)"
-    [[ -f "$f" ]] && { paths+=("$f"); labels+=("standard + backup image (recommended: install self-heals if the USB decays)"); }
-    f="$(variant_path "$stem" standard)"
-    [[ -f "$f" ]] && { paths+=("$f"); labels+=("standard (smaller, no backup image copy)"); }
-    f="$(variant_path "$stem" debug)"
-    [[ -f "$f" ]] && { paths+=("$f"); labels+=("debug (visible boot menu, verbose logs, for troubleshooting)"); }
-
-    local version=""
-    [[ -f "${paths[0]}.version" ]] && version="  [$(cat "${paths[0]}.version")]"
-    echo ""
-    echo -e "${BOLD}Newest build: $(basename "$stem")${version}${NC}"
-
-    if [[ "$SKIP_CONFIRM" == true || ${#paths[@]} -eq 1 ]]; then
-        ISO_PATH="${paths[0]}"
-        log_info "Using ${labels[0]%% (*}: $(basename "$ISO_PATH")"
-        return 0
-    fi
-
-    echo ""
-    for i in "${!paths[@]}"; do
-        echo "  $((i+1))) ${labels[$i]}"
-        echo "       $(basename "${paths[$i]}")"
-    done
-    echo ""
-    local choice
-    choice="$(read_menu_choice "${#paths[@]}" "Flash which one? [1-${#paths[@]}, default 1]: ")" || exit 1
-    [[ -n "$choice" ]] || choice=1
-    ISO_PATH="${paths[$((choice-1))]}"
-}
-
 run_boot_settle() {
     local settle_log
     settle_log="$(mktemp -t purple-boot-settle.XXXXXX.log)"

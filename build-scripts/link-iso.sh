@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hardlink a built ISO into ~/isos so it can be pulled to another machine with
+# Symlink a built ISO into ~/isos so it can be pulled to another machine with
 # a short scp line or picked up in Cyberduck, without browsing /opt.
 #
 # Usage: ./link-iso.sh [--debug|--no-backup] [--ref <commit>] [iso-path]
@@ -39,9 +39,9 @@ fi
 
 mkdir -p "$LINK_DIR"
 for f in "$LINK_DIR"/*.iso; do
-    [[ -f "$f" && "$(stat -c %h "$f")" -eq 1 ]] && rm -f "$f" && log_info "Removed $(basename "$f"): its build is gone"
+    [[ -L "$f" && ! -e "$f" ]] && rm -f "$f" && log_info "Removed $(basename "$f"): its build is gone"
 done
-ln -f "$ISO_PATH" "$LINK_DIR/$(basename "$ISO_PATH")"
+ln -sfn "$ISO_PATH" "$LINK_DIR/$(basename "$ISO_PATH")"
 log_info "Linked $(basename "$ISO_PATH") [$(cat "$ISO_PATH.version" 2>/dev/null || echo "no version stamp")]"
 echo ""
 echo "  scp $(hostname -s):isos/$(basename "$ISO_PATH") ~/Downloads/"

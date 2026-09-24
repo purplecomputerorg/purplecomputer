@@ -283,7 +283,7 @@ release-check *commit:
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 
-# Hardlink a built ISO into ~/isos and print the scp line to pull it to your Mac (same picker as flash).
+# Symlink a built ISO into ~/isos and print the scp line to pull it to your Mac (same picker as flash).
 # just link-iso [--debug|--no-backup] [--ref <commit>] [iso-path]
 link-iso *args:
     ./build-scripts/link-iso.sh {{args}}

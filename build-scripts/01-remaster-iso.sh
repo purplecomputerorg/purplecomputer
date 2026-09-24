@@ -193,26 +193,29 @@ add_purple_toram() {
     line='    mount_images_in_directory "${livefs_root}" "${rootmnt}"'
     grep -qxF "$line" "$casper" || { echo "ERROR: casper script changed, cannot add purple.toram hook"; exit 1; }
     cat > "$1/scripts/purple-toram" << 'TORAM_EOF'
+# Console for the video, /dev/kmsg for dmesg and the PURPLE-LOG.TXT report.
+purple_say() { echo "Purple: $1"; echo "purple-toram: $1" > /dev/kmsg 2>/dev/null; }
+
 purple_squashfs_to_ram() {
     grep -qw purple.toram=1 /proc/cmdline || return 0
     local src="$1/$LIVE_MEDIA_PATH" ram=/purple-ram need free t0 f
     need=$(( $(stat -c %s "$src/filesystem.squashfs") / 1024 + 65536 ))
     free=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
     if [ "$free" -lt $(( need + 786432 )) ]; then
-        echo "Purple: not enough memory to copy the system into RAM (${free}k free, need ${need}k + 768M), reading from the stick instead"
+        purple_say "not enough memory to copy the system into RAM (${free}k free, need ${need}k + 768M), reading from the stick instead"
         return 0
     fi
     mkdir -p "$ram" && mount -t tmpfs -o size=${need}k tmpfs "$ram" || return 0
-    echo "Purple: copying the system ($(( need / 1024 )) MB) from the USB stick into memory..."
+    purple_say "copying the system ($(( need / 1024 )) MB) from the USB stick into memory..."
     t0=$(cut -d. -f1 /proc/uptime)
     if dd if="$src/filesystem.squashfs" of="$ram/filesystem.squashfs" bs=1048576; then
         for f in "$src"/*; do
             case "$f" in */filesystem.squashfs|*/vmlinuz*|*/initrd*) ;; *) cp -a "$f" "$ram/" ;; esac
         done
         mount -o bind "$ram" "$src"
-        echo "Purple: copy done in $(( $(cut -d. -f1 /proc/uptime) - t0 ))s, the stick is no longer read for the system"
+        purple_say "copy done in $(( $(cut -d. -f1 /proc/uptime) - t0 ))s, the stick is no longer read for the system"
     else
-        echo "Purple: THE USB STICK COULD NOT BE READ after $(stat -c %s "$ram/filesystem.squashfs") bytes of the system image, continuing from the stick"
+        purple_say "THE USB STICK COULD NOT BE READ after $(stat -c %s "$ram/filesystem.squashfs") bytes of the system image, continuing from the stick"
         umount "$ram"
     fi
 }

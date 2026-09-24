@@ -27,7 +27,7 @@ from ..constants import (
     is_usb_cached, is_usb_present,
 )
 from .gfx import Gfx, rgb
-from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available
+from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
 from ..keyboard import (
     CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction, RoomAction,
     detect_keyboard_mode,
@@ -692,6 +692,10 @@ class PurpleApp:
         mute skip it. Runs alongside the mixer warmup, not after it: it only
         needs pactl, and waits for a sound card that enumerates late."""
         if self._volume_chosen or self._effective_volume() == 0:
+            return
+        if chime_skip_key_held():
+            boot_log.heartbeat("chime skipped: mute key held at start")
+            self._apply_volume()
             return
         self._sound_check_running = True
 

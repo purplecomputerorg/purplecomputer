@@ -117,6 +117,24 @@ def test_first_boot_chime_picks_the_starting_volume(monkeypatch):
     run(go())
 
 
+def test_mute_key_held_at_start_skips_the_chime(monkeypatch):
+    """A quiet room: holding mute, volume-down or M while Purple starts skips
+    the first-boot chime and keeps the default volume as the saved one."""
+    from purple_tui import audio, sound_check
+    from purple_tui.canvas import app as app_mod
+    pushed = []
+    monkeypatch.setattr(audio, "set_system_volume", lambda level, wait=False: pushed.append(level))
+    monkeypatch.setattr(sound_check, "run", lambda **kw: (_ for _ in ()).throw(AssertionError("chimed")))
+    monkeypatch.setattr(app_mod, "chime_skip_key_held", lambda: True)
+    async def go():
+        app = make_app()
+        app._start_sound_check()
+        assert app._sound_check_running is False
+        assert app._volume_chosen is True and settings.get_volume_level() == VOLUME_DEFAULT
+        assert pushed[-1] == VOLUME_DEFAULT
+    run(go())
+
+
 def test_no_chime_once_a_volume_is_saved(monkeypatch):
     from purple_tui import sound_check
     settings.set_volume_level(VOLUME_LEVELS[7])

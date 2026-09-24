@@ -482,7 +482,7 @@ def test_debug_menu_try_everything_entry():
     customer needs one boot, and purple.toram is wired into casper before the
     squashfs is mounted."""
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
-    entries = re.findall(r'menuentry "([^"]+)"', remaster.split("GRUB_DEBUG")[1])
+    entries = re.findall(r'menuentry "([^"]+)"', remaster.split("<< 'GRUB_MENU'")[1].split("GRUB_MENU")[0])
     assert entries[0] == "Purple Computer (DEBUG)"
     assert entries[1].startswith("Purple Computer (DEBUG, try everything")
     for flag in ("intel_iommu=off", "xhci_hcd.quirks=0x800000", "usbcore.autosuspend=-1",
@@ -490,3 +490,28 @@ def test_debug_menu_try_everything_entry():
         assert flag in remaster
     assert 'add_purple_initramfs_hooks "$MAIN_DIR"' in remaster
     assert "purple_squashfs_to_ram" in remaster
+
+
+def test_hold_p_opens_the_boot_menu_on_the_standard_iso():
+    """The standard ISO keeps its zero timeout but a held P reaches the same
+    menu the debug ISO shows: GRUB's hotkey for firmware that keeps the key in
+    its buffer, and a static evdev check in the initramfs for firmware that
+    does not. Both ISOs share one menu file, and the held key turns on the
+    debug flag the way the debug entries' kernel argument does."""
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    standard = remaster.split("<< 'GRUB_PURPLE'")[1].split("GRUB_PURPLE")[0]
+    assert "set timeout=0" in standard and "set timeout_style=hidden" in standard
+    assert re.search(r'menuentry "Boot menu \(hold P while turning on\)" --hotkey=p \{\n\s+configfile /boot/grub/purple-menu\.cfg', standard)
+    assert 'write_purple_menu_cfg "$WORK_DIR/iso-new/boot/grub/purple-menu.cfg"' in remaster
+    debug = remaster.split("<< 'GRUB_DEBUG'")[1].split("GRUB_DEBUG")[0]
+    assert "source /boot/grub/purple-menu.cfg" in debug
+    hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
+    assert "/purple-keyheld 25" in hook, "KEY_P is 25"
+    assert "touch /run/purple/debug-key" in hook and "dmesg -n 7" in hook and "chvt 63" in hook
+    assert "purple_debug_if_key_held; purple_stick_report" in remaster
+    assert 'if grep -q "purple.debug=1" /proc/cmdline 2>/dev/null || [ -e /run/purple/debug-key ]; then' in remaster
+    assert 'unsquashfs -d "$WORK_DIR/sq-keyheld" "$LIVE_SQUASHFS" opt/purple/bin/purple-keyheld' in remaster
+    src = _build_source()
+    assert "gcc -static -O2 -o /opt/purple/bin/purple-keyheld /tmp/purple-keyheld.c" in src
+    c = (ROOT / "tools" / "purple-keyheld.c").read_text()
+    assert "EVIOCGKEY" in c, "must read held state, not wait for press events"

@@ -273,8 +273,9 @@ HOOKS_EOF
 write_purple_menu_cfg() {
     cat > "$1" << 'GRUB_MENU'
 # Purple Computer boot menu: shown on every boot by the debug ISO, and by the
-# standard ISO when P is held while turning on (hotkey in grub.cfg). Verbose
-# boot with all diagnostics; the masked services are explained in grub.cfg.
+# standard ISO when P is held while turning on (hotkey in grub.cfg). Worded
+# for a parent following support's instructions; the masked services are
+# explained in grub.cfg. Everything past the first four entries is for us.
 
 set timeout=10
 set timeout_style=menu
@@ -282,83 +283,81 @@ set default=0
 
 set purple_debug_args="i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1"
 
-menuentry "Purple Computer (DEBUG)" {
+menuentry "Troubleshooting: start Purple and show what's happening" {
     set gfxpayload=keep
     linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args ---
     initrd /casper/initrd$purple_variant
 }
 
-# Workarounds for USB read errors (-5) on old laptops, one entry with all of
-# them and one per suspect: the 24.04 kernel turns the Intel IOMMU on by
-# default, some xHCI controllers mishandle DMA above 4GB (quirks bit 23 =
-# XHCI_NO_64BIT_SUPPORT), USB autosuspend and PCIe power saving can drop a
-# stick mid-boot, and purple.toram reads the system into RAM in one pass so
-# the stick is not read again. log_buf_len keeps the whole kernel log for
-# the PURPLE-LOG.TXT report.
-menuentry "Purple Computer (DEBUG, try everything)" {
+# Every USB read-error (-5) workaround at once, so a customer boots one time:
+# the 24.04 kernel turns the Intel IOMMU on by default, some xHCI controllers
+# mishandle DMA above 4GB (quirks bit 23 = XHCI_NO_64BIT_SUPPORT), USB
+# autosuspend and PCIe power saving can drop a stick mid-boot, and
+# purple.toram reads the system into RAM in one pass so the stick is not read
+# again. log_buf_len keeps the whole kernel log for PURPLE-LOG.TXT.
+menuentry "Troubleshooting: try every fix for USB drive problems" {
     set gfxpayload=keep
     linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off xhci_hcd.quirks=0x800000 usbcore.autosuspend=-1 pcie_aspm=off purple.toram=1 log_buf_len=8M ---
     initrd /casper/initrd$purple_variant
 }
 
-menuentry "Purple Computer (DEBUG, no IOMMU)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off ---
-    initrd /casper/initrd$purple_variant
-}
-
-menuentry "Purple Computer (DEBUG, USB 32-bit DMA)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args xhci_hcd.quirks=0x800000 ---
-    initrd /casper/initrd$purple_variant
-}
-
-menuentry "Purple Computer (DEBUG, no IOMMU + USB 32-bit DMA)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off xhci_hcd.quirks=0x800000 ---
-    initrd /casper/initrd$purple_variant
-}
-
-menuentry "Purple Computer (DEBUG, input test)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.inputtest=1 ---
-    initrd /casper/initrd$purple_variant
-}
-
-menuentry "Purple Computer (DEBUG, recovery shell)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 single username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=casper-md5check.service purple.debug=1 ---
-    initrd /casper/initrd$purple_variant
-}
-
-menuentry "Purple Computer (DEBUG, test error screen)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.failx11=1 ---
-    initrd /casper/initrd$purple_variant
-}
-
-menuentry "Purple Computer (DEBUG, test install failure)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.failinstall=1 ---
-    initrd /casper/initrd$purple_variant
-}
-
-menuentry "---" {
-    true
-}
-
-menuentry "Purple Computer (production boot)" {
+menuentry "Start Purple normally" {
     set gfxpayload=keep
     linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty63 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff ---
     initrd /casper/initrd$purple_variant
 }
 
-menuentry "Boot from next volume" {
-    exit
-}
+submenu "More options (for support)" {
+    menuentry "Keyboard test" {
+        set gfxpayload=keep
+        linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.inputtest=1 ---
+        initrd /casper/initrd$purple_variant
+    }
 
-menuentry "UEFI Firmware Settings" {
-    fwsetup
+    # One USB workaround each, for narrowing down which one mattered.
+    menuentry "USB fix: IOMMU off" {
+        set gfxpayload=keep
+        linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off ---
+        initrd /casper/initrd$purple_variant
+    }
+
+    menuentry "USB fix: USB 32-bit DMA" {
+        set gfxpayload=keep
+        linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args xhci_hcd.quirks=0x800000 ---
+        initrd /casper/initrd$purple_variant
+    }
+
+    menuentry "USB fix: IOMMU off + USB 32-bit DMA" {
+        set gfxpayload=keep
+        linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off xhci_hcd.quirks=0x800000 ---
+        initrd /casper/initrd$purple_variant
+    }
+
+    menuentry "Recovery shell" {
+        set gfxpayload=keep
+        linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 single username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=casper-md5check.service purple.debug=1 ---
+        initrd /casper/initrd$purple_variant
+    }
+
+    menuentry "Test the error screen" {
+        set gfxpayload=keep
+        linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.failx11=1 ---
+        initrd /casper/initrd$purple_variant
+    }
+
+    menuentry "Test an install failure" {
+        set gfxpayload=keep
+        linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.failinstall=1 ---
+        initrd /casper/initrd$purple_variant
+    }
+
+    menuentry "Boot from next volume" {
+        exit
+    }
+
+    menuentry "UEFI Firmware Settings" {
+        fwsetup
+    }
 }
 GRUB_MENU
 }

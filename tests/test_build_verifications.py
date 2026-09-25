@@ -431,50 +431,52 @@ def test_i386_kernel_reports_lid_open_at_boot():
     assert 'set purple_i386_args="button.lid_init_state=open"' in variants
 
 
-def test_diag_dump_and_purpleusb_partition():
-    """Every live boot rewrites PURPLE-LOG.TXT on the stick's third partition.
+def test_stick_log_and_purpleusb_partition():
+    """Every live boot writes PURPLE-LOG.TXT on the stick's third partition.
     That partition must be basic-data FAT (Windows and macOS hide the EFI
     partition), it carries the turn-it-off-first note for people who plug the
     stick into a running computer, and the post-settle recheck must not compare
-    it. Installed systems never run the dump."""
+    it. Installed systems never run the writer."""
     src = _build_source()
-    assert 'cp /purple-src/scripts/purple-diag-dump.sh "$MOUNT_DIR/usr/local/bin/purple-diag-dump"' in src
-    assert "systemctl enable purple-diag-dump.service" in src
-    unit = (ROOT / "config" / "systemd" / "purple-diag-dump.service").read_text()
-    assert "ConditionPathIsMountPoint=/cdrom" in unit
-    assert "ConditionKernelCommandLine=!purple.install=1" in unit
+    assert 'cp /purple-src/scripts/purple-diag-collect.sh "$MOUNT_DIR/usr/local/bin/purple-diag-collect"' in src
+    assert 'cp /purple-src/scripts/purple-stick-log.py "$MOUNT_DIR/usr/local/bin/purple-stick-log"' in src
+    assert "systemctl enable purple-stick-log.service" in src
+    unit = (ROOT / "config" / "systemd" / "purple-stick-log.service").read_text()
+    for line in ("ConditionPathIsMountPoint=/cdrom", "ConditionKernelCommandLine=!purple.install=1",
+                 "DefaultDependencies=no", "WantedBy=sysinit.target"):
+        assert line in unit, "writer must start before a flaky stick dies mid-boot, live boots only"
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
     assert 'mkfs.vfat -F 16 -n PURPLEUSB "$LOG_IMG"' in remaster
     assert '-append_partition 3 EBD0A0A2-B9E5-4433-87C0-68B6B72699C7 "$LOG_IMG"' in remaster, \
         "PURPLEUSB must be a Microsoft basic data partition or desktops hide it"
     assert 'label=Start Purple Computer' in remaster
     assert '"$LOG_MNT/HOW TO START PURPLE.txt"' in remaster
-    assert "blkid -L PURPLEUSB" in (ROOT / "scripts" / "purple-diag-dump.sh").read_text()
     flash = (ROOT / "build-scripts" / "flash-lib.sh").read_text()
     assert "awk '$1 ~ /[^0-9][12]$/ {print $2}'" in flash, "settle recheck must stop at the EFI partition"
-    assert "WantedBy=sysinit.target" in unit, "dump must start before a flaky stick dies mid-boot"
 
 
-def test_stick_log_covers_the_initramfs_and_the_gaps_between_snapshots():
-    """Two gaps in the PURPLE-LOG.TXT snapshot are closed: the initramfs writes
-    an early report before and after mounting the system (and at the end of
-    casper-bottom), and purple-kmsg-stream writes kernel lines straight into
-    the sectors of a preallocated PURPLE-KMSG.TXT, never keeping FAT mounted."""
+def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
+    """PURPLE-LOG.TXT is one preallocated file with a report region and a
+    kernel log region. The initramfs writes the report region in place (1<>
+    never truncates, so the sectors never move) before and after mounting the
+    system and at the end of casper-bottom; purple-stick-log then writes both
+    regions by raw sector writes, never keeping FAT mounted. Sizes must agree
+    between the build, the initramfs hook and the writer."""
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    writer = (ROOT / "scripts" / "purple-stick-log.py").read_text()
+    assert "REPORT_BYTES = 8 << 20" in writer and "KMSG_BYTES = 4 << 20" in writer
+    assert 'head -c 12582912 > "$LOG_MNT/PURPLE-LOG.TXT"' in remaster, "file must be exactly report + kmsg bytes"
     hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
     assert "purple_stick_report() {" in hook
     assert "blkid -L PURPLEUSB" in hook and "cat /casper.log" in hook and "dmesg" in hook
+    assert '| head -c 8388000 1<> "$mnt/PURPLE-LOG.TXT"' in hook, "initramfs must write in place, inside the report region"
+    assert ".tmp" not in hook and "mv " not in hook, "a rename would move the file's sectors"
     assert r'purple_stick_report \"system image found on the stick\"' in remaster
     assert r'purple_stick_report \"about to mount the system\"' in remaster
     assert 'purple_stick_report "casper-bottom done, starting the system" || true' in remaster
-    assert '"$LOG_MNT/PURPLE-KMSG.TXT"' in remaster
-    src = _build_source()
-    assert 'cp /purple-src/scripts/purple-kmsg-stream.py "$MOUNT_DIR/usr/local/bin/purple-kmsg-stream"' in src
-    assert "systemctl enable purple-kmsg-stream.service" in src
-    unit = (ROOT / "config" / "systemd" / "purple-kmsg-stream.service").read_text()
-    for line in ("ConditionPathIsMountPoint=/cdrom", "ConditionKernelCommandLine=!purple.install=1",
-                 "DefaultDependencies=no", "WantedBy=sysinit.target"):
-        assert line in unit
+    assert "FIBMAP" in writer and "os.pwrite" in writer and "fdatasync" in writer
+    collect = (ROOT / "scripts" / "purple-diag-collect.sh").read_text()
+    assert "mount -t vfat" not in collect and "blkid" not in collect, "the collector only prints; purple-stick-log owns the stick"
 
 
 def test_debug_menu_try_everything_entry():

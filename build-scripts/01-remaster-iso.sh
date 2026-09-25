@@ -220,8 +220,10 @@ purple_debug_if_key_held() {
 }
 
 # PURPLE-LOG.TXT written from inside the initramfs: casper's log and dmesg so
-# far. purple-diag-dump replaces it seconds after systemd starts, so this copy
-# is what a customer finds when boot never got that far. Mounted per write.
+# far, into the report region of the preallocated file (in place, 1<> never
+# truncates, so the file's sectors never move and purple-stick-log can keep
+# writing them raw). purple-stick-log replaces the text seconds after systemd
+# starts, so this is what a customer finds when boot never got that far.
 purple_stick_report() {
     local part mnt=/purple-stick
     part=$(blkid -L PURPLEUSB 2>/dev/null) || return 0
@@ -233,8 +235,8 @@ purple_stick_report() {
         echo "cmdline: $(cat /proc/cmdline)"
         echo; echo "===== casper log ====="; cat /casper.log 2>/dev/null
         echo; echo "===== dmesg ====="; dmesg 2>/dev/null
-        echo; echo "===== end ====="
-    } > "$mnt/PURPLE-LOG.TXT.tmp" 2>&1 && mv -f "$mnt/PURPLE-LOG.TXT.tmp" "$mnt/PURPLE-LOG.TXT"
+        echo; echo "===== end of this report: any text below it is from an earlier start ====="
+    } 2>&1 | head -c 8388000 1<> "$mnt/PURPLE-LOG.TXT"
     umount "$mnt" 2>/dev/null
 }
 
@@ -768,11 +770,11 @@ EFI_GRUB_EOF
     # Third partition: a plain FAT "basic data" volume named PURPLEUSB, which
     # Windows and macOS mount like any thumb drive (they hide the EFI partition).
     # It is what a parent sees when they plug the stick into a running computer,
-    # so it carries the "turn it off first" instructions, and purple-diag-dump
+    # so it carries the "turn it off first" instructions, and purple-stick-log
     # writes PURPLE-LOG.TXT here during live boots. autorun.inf no longer runs
     # anything on modern Windows, but Explorer still shows its label.
     LOG_IMG="$WORK_DIR/purpleusb.img"
-    dd if=/dev/zero of="$LOG_IMG" bs=1M count=16 2>/dev/null
+    dd if=/dev/zero of="$LOG_IMG" bs=1M count=32 2>/dev/null
     mkfs.vfat -F 16 -n PURPLEUSB "$LOG_IMG" >/dev/null
     LOG_MNT="$WORK_DIR/purpleusb-mount"
     mkdir -p "$LOG_MNT"
@@ -814,15 +816,18 @@ install it permanently. It's easy!
 
 Not working? Email support@purplecomputer.org and we will help.
 
-(Technical: Purple writes PURPLE-LOG.TXT and PURPLE-KMSG.TXT here while it
-starts up. Support may ask you to email them, or to hold the P key while
-turning the laptop on, which shows a boot menu with extra options. Nothing
-on this drive needs changing, and please don't format it.)
+(Technical: Purple writes PURPLE-LOG.TXT here while it starts up. Support
+may ask you to email it, or to hold the P key while turning the laptop on,
+which shows a boot menu with extra options. Nothing on this drive needs
+changing, and please don't format it.)
 README_EOF
-    # PURPLE-KMSG.TXT: a preallocated 4MB text file that purple-kmsg-stream
-    # fills with kernel lines by writing straight into its sectors, so nothing
-    # stays mounted and no FAT metadata changes while Purple runs.
-    head -c 4194304 /dev/zero | tr '\0' ' ' > "$LOG_MNT/PURPLE-KMSG.TXT"
+    # PURPLE-LOG.TXT: preallocated, 8MB report region then 4MB kernel log
+    # region (sizes in purple-stick-log.py). The initramfs and purple-stick-log
+    # write into it in place, the latter by raw sector writes, so nothing
+    # stays mounted and no FAT metadata changes while Purple runs. Written
+    # last onto a fresh FAT so it is one contiguous run.
+    { echo "PURPLE-LOG.TXT: Purple writes its boot report here. This stick has not been started yet."
+      head -c 12582912 /dev/zero | tr '\0' ' '; } | head -c 12582912 > "$LOG_MNT/PURPLE-LOG.TXT"
     umount "$LOG_MNT"
     rmdir "$LOG_MNT"
 

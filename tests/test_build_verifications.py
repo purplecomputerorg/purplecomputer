@@ -469,7 +469,10 @@ def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
     hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
     assert "purple_stick_report() {" in hook
     assert "blkid -L PURPLEUSB" in hook and "cat /casper.log" in hook and "dmesg" in hook
-    assert '| head -c 8388000 1<> "$mnt/PURPLE-LOG"' in hook, "initramfs must write in place, inside the report region"
+    assert '} 1<> "$mnt/PURPLE-LOG" 2>&1' in hook, "initramfs must write in place, inside the report region"
+    live_hook = remaster.split("<< 'HOOK_EOF'")[1].split("HOOK_EOF")[0]
+    for script in (hook, live_hook):
+        assert not re.search(r"(^|[|;&]\s*)(head|chown)\b", script, re.M), "the casper initrd's busybox has no head or chown"
     assert ".tmp" not in hook and "mv " not in hook, "a rename would move the file's sectors"
     assert r'purple_stick_report \"system image found on the stick\"' in remaster
     assert r'purple_stick_report \"about to mount the system\"' in remaster

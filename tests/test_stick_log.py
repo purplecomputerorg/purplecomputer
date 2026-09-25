@@ -32,7 +32,7 @@ def test_report_region_is_blanked_once_then_padded_to_the_previous_length(tmp_pa
     s.write_report(b"short")
     d = dev.read_bytes()
     assert d[100:105] == b"short" and d[105:].startswith(k.REPORT_END)
-    assert d[105 + len(k.REPORT_END):500].strip() == b""
+    assert d[105 + len(k.REPORT_END):500] == b"\n" * (500 - 105 - len(k.REPORT_END)), "pad with newlines, not spaces"
 
 
 def test_report_longer_than_its_region_is_cut_and_still_ends_with_the_marker(tmp_path):

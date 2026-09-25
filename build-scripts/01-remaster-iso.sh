@@ -824,9 +824,10 @@ README_EOF
     # region (sizes in purple-stick-log.py). The initramfs and purple-stick-log
     # write into it in place, the latter by raw sector writes, so nothing
     # stays mounted and no FAT metadata changes while Purple runs. Written
-    # last onto a fresh FAT so it is one contiguous run.
+    # last onto a fresh FAT so it is one contiguous run. Padded with newlines,
+    # not spaces, so the unused space is empty lines rather than one huge one.
     { echo "PURPLE-LOG.TXT: Purple writes its boot report here. This stick has not been started yet."
-      head -c 12582912 /dev/zero | tr '\0' ' '; } | head -c 12582912 > "$LOG_MNT/PURPLE-LOG.TXT"
+      head -c 12582912 /dev/zero | tr '\0' '\n'; } | head -c 12582912 > "$LOG_MNT/PURPLE-LOG.TXT"
     umount "$LOG_MNT"
     rmdir "$LOG_MNT"
 

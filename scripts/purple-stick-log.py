@@ -29,7 +29,7 @@ FIBMAP, FIGETBSZ = 1, 2
 FAST_UNTIL_UPTIME = 300
 REPORT_FAST, REPORT_SLOW = 5.0, 60.0
 KMSG_FAST, KMSG_SLOW = 1.0, 5.0
-REPORT_END = b"\n===== end of report (the space below is reserved, the kernel log follows it) =====\n"
+REPORT_END = b"\n===== end of report (the empty lines below are reserved space, the kernel log follows them) =====\n"
 KMSG_HEAD = b"===== live kernel log, written as it happens, newest lines last =====\n"
 WRAP = b"\n===== the kernel log filled up and wrapped: lines below this may be older =====\n"
 PENDING_MAX = 1 << 20
@@ -102,7 +102,7 @@ class StickFile:
 
     def write_report(self, data):
         data = data[: REPORT_BYTES - len(REPORT_END)] + REPORT_END
-        self._write(0, data + b" " * max(0, self.report_len - len(data)))
+        self._write(0, data + b"\n" * max(0, self.report_len - len(data)))
         self.report_len = len(data)
 
     def write_kmsg(self, data):

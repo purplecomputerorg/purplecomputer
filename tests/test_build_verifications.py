@@ -484,9 +484,13 @@ def test_debug_menu_try_everything_entry():
     customer needs one boot, and purple.toram is wired into casper before the
     squashfs is mounted."""
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
-    entries = re.findall(r'menuentry "([^"]+)"', remaster.split("<< 'GRUB_MENU'")[1].split("GRUB_MENU")[0])
-    assert entries[0] == "Purple Computer (DEBUG)"
-    assert entries[1].startswith("Purple Computer (DEBUG, try everything")
+    menu = remaster.split("<< 'GRUB_MENU'")[1].split("GRUB_MENU")[0]
+    top = re.findall(r'^(?:menuentry|submenu) "([^"]+)"', menu, re.M)
+    assert top == ["Troubleshooting: start Purple and show what's happening",
+                   "Troubleshooting: try every fix for USB drive problems",
+                   "Start Purple normally", "More options (for support)"], \
+        "the top level is what a parent sees after holding P; everything else goes in the submenu"
+    assert "single username=purple" in menu.split('menuentry "Recovery shell"')[1].split("}")[0]
     for flag in ("intel_iommu=off", "xhci_hcd.quirks=0x800000", "usbcore.autosuspend=-1",
                  "pcie_aspm=off", "purple.toram=1", "log_buf_len=8M"):
         assert flag in remaster

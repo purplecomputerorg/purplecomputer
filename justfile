@@ -263,6 +263,12 @@ release-pick +shas:
 release-test:
     cd {{release_dir}} && just test
 
+# Release test, build, flash in one go: tests release/1.x, builds it (with-backup included), then flashes
+# every whitelisted drive plugged in by the time the build ends, no prompt. Also aliased as purple-rtbf.
+# just rtbf [--no-flash] [--fast] [--force]
+rtbf *args:
+    ./build-scripts/purple-rtbf.sh {{args}}
+
 # Push release/1.x to GitHub (main is pushed separately via /push)
 release-push:
     @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }

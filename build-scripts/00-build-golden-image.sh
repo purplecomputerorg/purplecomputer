@@ -854,7 +854,7 @@ JOURNAL
     cp /purple-src/config/systemd/purple-audio-dump.service "$MOUNT_DIR/etc/systemd/system/"
     chroot "$MOUNT_DIR" systemctl enable purple-audio-dump.service
     # Boot report on the stick: purple-stick-log writes purple-diag-collect's
-    # report and the live kernel log in place into PURPLE-LOG.TXT on the
+    # report and the live kernel log in place into PURPLE-LOG on the
     # PURPLEUSB partition, so a hung boot can be diagnosed from the stick
     # alone. Live boots only (condition in the unit). guides/boot-hang-debugging.md
     cp /purple-src/scripts/purple-diag-collect.sh "$MOUNT_DIR/usr/local/bin/purple-diag-collect"

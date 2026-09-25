@@ -9,7 +9,7 @@ to do, what comes back, and how to read it. The mechanisms behind it are in
 
 Nothing here needs the debug ISO or any key press. It ships on the standard ISO.
 
-- **`PURPLE-LOG.TXT`** on the `PURPLEUSB` drive, one file with two parts. First
+- **`PURPLE-LOG`** on the `PURPLEUSB` drive, one file with two parts. First
   the report, rewritten every 5 seconds for the first five minutes, then once
   a minute: machine and BIOS, kernel command line, whether P was held, failed
   services, what every process is waiting on, Purple's own logs, the journal.
@@ -22,8 +22,7 @@ Nothing here needs the debug ISO or any key press. It ships on the standard ISO.
   the last seconds before a hang are in it. The file is a fixed 12MB and its
   date is the build date; the report's own time is on its first line.
 - **The turn-it-off-first note** and this drive are what a parent sees when they
-  plug the stick into a running Windows or Mac computer. The file opens in
-  Notepad or TextEdit.
+  plug the stick into a running Windows or Mac computer.
 
 ## What to tell a customer
 
@@ -34,8 +33,9 @@ For a boot that hangs or never shows Purple:
 3. Plug the stick into your usual computer. A drive named `PURPLEUSB` appears.
    If Windows asks to format a disk, or a Mac says a disk is not readable,
    choose Cancel or Ignore. Never Format or Initialize.
-4. Email `PURPLE-LOG.TXT` from that drive, plus one photo of the last thing on
-   the laptop's screen.
+4. Email `PURPLE-LOG` from that drive, plus one photo of the last thing on
+   the laptop's screen. Attach it as a file; it is 12MB of mostly empty lines
+  and has no extension on purpose, so a double-click does not open it.
 
 That is usually enough. Ask for the next step only when the reports say the
 fix needs a different boot.
@@ -78,7 +78,7 @@ is the only record).
 
 ## Reading what comes back
 
-- **`PURPLE-LOG.TXT` starts with `purple-initramfs:`** and the message names
+- **`PURPLE-LOG` starts with `purple-initramfs:`** and the message names
   the stage: the boot never got past mounting the system. The dmesg section
   shows why (USB errors, missing driver, memory).
 - **`debug mode: on, P held at start: yes`** in the header: the customer held P

@@ -417,7 +417,7 @@ def test_i386_kernel_reports_lid_open_at_boot():
 
 
 def test_stick_log_and_purpleusb_partition():
-    """Every live boot writes PURPLE-LOG.TXT on the stick's third partition.
+    """Every live boot writes PURPLE-LOG on the stick's third partition.
     That partition must be basic-data FAT (Windows and macOS hide the EFI
     partition), it carries the turn-it-off-first note for people who plug the
     stick into a running computer, and the post-settle recheck must not compare
@@ -441,7 +441,7 @@ def test_stick_log_and_purpleusb_partition():
 
 
 def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
-    """PURPLE-LOG.TXT is one preallocated file with a report region and a
+    """PURPLE-LOG is one preallocated file with a report region and a
     kernel log region. The initramfs writes the report region in place (1<>
     never truncates, so the sectors never move) before and after mounting the
     system and at the end of casper-bottom; purple-stick-log then writes both
@@ -450,11 +450,11 @@ def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
     writer = (ROOT / "scripts" / "purple-stick-log.py").read_text()
     assert "REPORT_BYTES = 8 << 20" in writer and "KMSG_BYTES = 4 << 20" in writer
-    assert 'head -c 12582912 > "$LOG_MNT/PURPLE-LOG.TXT"' in remaster, "file must be exactly report + kmsg bytes"
+    assert 'head -c 12582912 > "$LOG_MNT/PURPLE-LOG"' in remaster, "file must be exactly report + kmsg bytes"
     hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
     assert "purple_stick_report() {" in hook
     assert "blkid -L PURPLEUSB" in hook and "cat /casper.log" in hook and "dmesg" in hook
-    assert '| head -c 8388000 1<> "$mnt/PURPLE-LOG.TXT"' in hook, "initramfs must write in place, inside the report region"
+    assert '| head -c 8388000 1<> "$mnt/PURPLE-LOG"' in hook, "initramfs must write in place, inside the report region"
     assert ".tmp" not in hook and "mv " not in hook, "a rename would move the file's sectors"
     assert r'purple_stick_report \"system image found on the stick\"' in remaster
     assert r'purple_stick_report \"about to mount the system\"' in remaster

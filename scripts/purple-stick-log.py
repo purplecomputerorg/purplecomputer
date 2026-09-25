@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Purple Computer: PURPLE-LOG.TXT on the stick, written in place.
+"""Purple Computer: PURPLE-LOG on the stick, written in place.
 
 The file is preallocated at image build (01-remaster-iso.sh) with two fixed
 regions: the boot report (purple-diag-collect, rewritten every few seconds
@@ -19,7 +19,7 @@ import subprocess
 import sys
 import time
 
-NAME = "PURPLE-LOG.TXT"
+NAME = "PURPLE-LOG"
 REPORT_BYTES = 8 << 20  # keep in sync with purple_stick_report and the build
 KMSG_BYTES = 4 << 20
 MNT = "/run/purple-diag/ro"

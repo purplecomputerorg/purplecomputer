@@ -2,7 +2,7 @@
 # Purple Computer: the boot diagnostic report, printed to stdout.
 #
 # purple-stick-log runs this every few seconds during boot, then once a
-# minute, and writes the text in place into PURPLE-LOG.TXT on the stick's
+# minute, and writes the text in place into PURPLE-LOG on the stick's
 # PURPLEUSB partition (plain FAT, so Windows and macOS mount it like a thumb
 # drive). A customer whose boot hangs holds the power button, plugs the stick
 # into their own computer and emails the file. Read-only. Runs as root.
@@ -58,7 +58,7 @@ collect() {
     section "journal (tail)"
     journalctl -b --no-pager -n 800 2>&1
 
-    section "dmesg (tail; the full live kernel log is at the end of PURPLE-LOG.TXT)"
+    section "dmesg (tail; the full live kernel log is at the end of PURPLE-LOG)"
     dmesg 2>&1 | tail -n 300
 
     section "end"

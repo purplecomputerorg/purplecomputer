@@ -201,7 +201,7 @@ add_purple_initramfs_hooks() {
     chmod +x "$1/purple-keyheld"
     rm -rf "$WORK_DIR/sq-keyheld"
     cat > "$1/scripts/purple-initramfs" << 'HOOKS_EOF'
-# Console for the video, /dev/kmsg for dmesg and the PURPLE-LOG.TXT report.
+# Console for the video, /dev/kmsg for dmesg and the PURPLE-LOG report.
 purple_say() { echo "Purple: $1"; echo "purple-initramfs: $1" > /dev/kmsg 2>/dev/null; }
 
 # "Hold P while turning it on", checked by Linux in case the firmware never
@@ -219,7 +219,7 @@ purple_debug_if_key_held() {
     purple_say "P was held while starting: kernel log on screen, debug mode on"
 }
 
-# PURPLE-LOG.TXT written from inside the initramfs: casper's log and dmesg so
+# PURPLE-LOG written from inside the initramfs: casper's log and dmesg so
 # far, into the report region of the preallocated file (in place, 1<> never
 # truncates, so the file's sectors never move and purple-stick-log can keep
 # writing them raw). purple-stick-log replaces the text seconds after systemd
@@ -236,7 +236,7 @@ purple_stick_report() {
         echo; echo "===== casper log ====="; cat /casper.log 2>/dev/null
         echo; echo "===== dmesg ====="; dmesg 2>/dev/null
         echo; echo "===== end of this report: any text below it is from an earlier start ====="
-    } 2>&1 | head -c 8388000 1<> "$mnt/PURPLE-LOG.TXT"
+    } 2>&1 | head -c 8388000 1<> "$mnt/PURPLE-LOG"
     umount "$mnt" 2>/dev/null
 }
 
@@ -294,7 +294,7 @@ menuentry "Troubleshooting: start Purple and show what's happening" {
 # mishandle DMA above 4GB (quirks bit 23 = XHCI_NO_64BIT_SUPPORT), USB
 # autosuspend and PCIe power saving can drop a stick mid-boot, and
 # purple.toram reads the system into RAM in one pass so the stick is not read
-# again. log_buf_len keeps the whole kernel log for PURPLE-LOG.TXT.
+# again. log_buf_len keeps the whole kernel log for PURPLE-LOG.
 menuentry "Troubleshooting: try every fix for USB drive problems" {
     set gfxpayload=keep
     linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off xhci_hcd.quirks=0x800000 usbcore.autosuspend=-1 pcie_aspm=off purple.toram=1 log_buf_len=8M ---
@@ -770,7 +770,7 @@ EFI_GRUB_EOF
     # Windows and macOS mount like any thumb drive (they hide the EFI partition).
     # It is what a parent sees when they plug the stick into a running computer,
     # so it carries the "turn it off first" instructions, and purple-stick-log
-    # writes PURPLE-LOG.TXT here during live boots. autorun.inf no longer runs
+    # writes PURPLE-LOG here during live boots. autorun.inf no longer runs
     # anything on modern Windows, but Explorer still shows its label.
     LOG_IMG="$WORK_DIR/purpleusb.img"
     dd if=/dev/zero of="$LOG_IMG" bs=1M count=32 2>/dev/null
@@ -815,19 +815,20 @@ install it permanently. It's easy!
 
 Not working? Email support@purplecomputer.org and we will help.
 
-(Technical: Purple writes PURPLE-LOG.TXT here while it starts up. Support
-may ask you to email it, or to hold the P key while turning the laptop on,
-which shows a boot menu with extra options. Nothing on this drive needs
+(Technical: Purple writes a file called PURPLE-LOG here while it starts
+up. Support may ask you to email it as an attachment; there is no need to
+open it. Support may also ask you to hold the P key while turning the laptop
+on, which shows a boot menu with extra options. Nothing on this drive needs
 changing, and please don't format it.)
 README_EOF
-    # PURPLE-LOG.TXT: preallocated, 8MB report region then 4MB kernel log
+    # PURPLE-LOG: preallocated, 8MB report region then 4MB kernel log
     # region (sizes in purple-stick-log.py). The initramfs and purple-stick-log
     # write into it in place, the latter by raw sector writes, so nothing
     # stays mounted and no FAT metadata changes while Purple runs. Written
     # last onto a fresh FAT so it is one contiguous run. Padded with newlines,
     # not spaces, so the unused space is empty lines rather than one huge one.
-    { echo "PURPLE-LOG.TXT: Purple writes its boot report here. This stick has not been started yet."
-      head -c 12582912 /dev/zero | tr '\0' '\n'; } | head -c 12582912 > "$LOG_MNT/PURPLE-LOG.TXT"
+    { echo "PURPLE-LOG: Purple writes its boot report here (plain text, no extension so a double-click does not open 12MB). This stick has not been started yet."
+      head -c 12582912 /dev/zero | tr '\0' '\n'; } | head -c 12582912 > "$LOG_MNT/PURPLE-LOG"
     umount "$LOG_MNT"
     rmdir "$LOG_MNT"
 

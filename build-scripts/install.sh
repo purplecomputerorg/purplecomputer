@@ -828,6 +828,10 @@ main() {
         log "Reboot binary ready"
     fi
 
+    # purple-reboot skips shutdown, so stopping the stick log here is what
+    # writes its final report (with the end of this log) to PURPLE-LOG.
+    systemctl stop purple-stick-log.service 2>/dev/null || true
+
     # Sentinel last - Python polls for this to know install is done.
     touch /run/purple-install-complete
 

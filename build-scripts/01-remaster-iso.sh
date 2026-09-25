@@ -80,9 +80,8 @@ purple_log "=== Purple Computer Live Boot Hook (casper-bottom) ==="
 mkdir -p /root/home/purple
 cp /root/etc/purple/xinitrc /root/home/purple/.xinitrc
 chmod +x /root/home/purple/.xinitrc
-chown 1000:1000 /root/home/purple/.xinitrc
 touch /root/home/purple/.hushlogin
-chown 1000:1000 /root/home/purple/.hushlogin
+chroot /root chown 1000:1000 /home/purple/.xinitrc /home/purple/.hushlogin  # the initrd's busybox has no chown
 purple_log "Restored dotfiles from /etc/purple/"
 
 # Debug mode: create flag file and enable SysRq + verbose logging. Entered by
@@ -237,7 +236,7 @@ purple_stick_report() {
         echo; echo "===== casper log ====="; cat /casper.log 2>/dev/null
         echo; echo "===== dmesg ====="; dmesg 2>/dev/null
         echo; echo "===== end of this report: any text below it is from an earlier start ====="
-    } 2>&1 | head -c 8388000 1<> "$mnt/PURPLE-LOG"
+    } 1<> "$mnt/PURPLE-LOG" 2>&1  # no head in the initrd; casper's log and dmesg stay far under the 8MB region
     umount "$mnt" 2>/dev/null
 }
 

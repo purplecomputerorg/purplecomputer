@@ -574,7 +574,7 @@ device_sha256() {
 GPT_SKIP_BYTES=1048576
 
 # Bytes of the ISO covered by its read-only partitions (1: ISO9660, 2: EFI).
-# Partition 3 (PURPLEUSB) is where purple-diag-dump writes on the debug stick,
+# Partition 3 (PURPLEUSB) is where purple-stick-log writes on the debug stick,
 # settle boot included, so it is not compared. Past the partitions the file
 # holds only a backup GPT the settle boot supersedes and xorriso padding, and
 # casper puts the writable partition on the next 2MiB boundary after the last

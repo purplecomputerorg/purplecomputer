@@ -853,20 +853,15 @@ JOURNAL
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-dump"
     cp /purple-src/config/systemd/purple-audio-dump.service "$MOUNT_DIR/etc/systemd/system/"
     chroot "$MOUNT_DIR" systemctl enable purple-audio-dump.service
-    # Boot diagnostic dump: rewrites PURPLE-LOG.TXT on the stick's PURPLEUSB partition
-    # every few seconds so a hung boot can be diagnosed from the stick alone.
-    # Live boots only (condition in the unit). guides/boot-hang-debugging.md
-    cp /purple-src/scripts/purple-diag-dump.sh "$MOUNT_DIR/usr/local/bin/purple-diag-dump"
-    chmod +x "$MOUNT_DIR/usr/local/bin/purple-diag-dump"
-    cp /purple-src/config/systemd/purple-diag-dump.service "$MOUNT_DIR/etc/systemd/system/"
-    chroot "$MOUNT_DIR" systemctl enable purple-diag-dump.service
-    # Live kernel log: streams /dev/kmsg into the stick's preallocated
-    # PURPLE-KMSG.TXT by raw sector writes, so the seconds between two
-    # PURPLE-LOG.TXT snapshots are never lost.
-    cp /purple-src/scripts/purple-kmsg-stream.py "$MOUNT_DIR/usr/local/bin/purple-kmsg-stream"
-    chmod +x "$MOUNT_DIR/usr/local/bin/purple-kmsg-stream"
-    cp /purple-src/config/systemd/purple-kmsg-stream.service "$MOUNT_DIR/etc/systemd/system/"
-    chroot "$MOUNT_DIR" systemctl enable purple-kmsg-stream.service
+    # Boot report on the stick: purple-stick-log writes purple-diag-collect's
+    # report and the live kernel log in place into PURPLE-LOG.TXT on the
+    # PURPLEUSB partition, so a hung boot can be diagnosed from the stick
+    # alone. Live boots only (condition in the unit). guides/boot-hang-debugging.md
+    cp /purple-src/scripts/purple-diag-collect.sh "$MOUNT_DIR/usr/local/bin/purple-diag-collect"
+    cp /purple-src/scripts/purple-stick-log.py "$MOUNT_DIR/usr/local/bin/purple-stick-log"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-diag-collect" "$MOUNT_DIR/usr/local/bin/purple-stick-log"
+    cp /purple-src/config/systemd/purple-stick-log.service "$MOUNT_DIR/etc/systemd/system/"
+    chroot "$MOUNT_DIR" systemctl enable purple-stick-log.service
     # Hands-on loudness probe, run by a person from the parent-menu terminal.
     cp /purple-src/scripts/purple-audio-probe.sh "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-probe"

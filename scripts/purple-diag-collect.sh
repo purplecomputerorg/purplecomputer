@@ -1,33 +1,17 @@
 #!/bin/bash
-# Purple Computer: periodic boot diagnostic dump to the USB stick's FAT partition.
+# Purple Computer: the boot diagnostic report, printed to stdout.
 #
-# Rewrites PURPLE-LOG.TXT on the stick's PURPLEUSB partition (plain FAT, so
-# Windows and macOS mount it like a thumb drive) every few seconds during boot, then once a minute. A
-# customer whose boot hangs holds the power button, plugs the stick into their
-# own computer and emails the file. The FAT partition is mounted only for the
-# duration of each write so a power cut between writes leaves it clean.
-#
-# Read-only apart from that one file. Runs as root (dmesg, journal). The
-# initramfs writes an early PURPLE-LOG.TXT that this one replaces, and
-# purple-kmsg-stream keeps PURPLE-KMSG.TXT current between snapshots.
+# purple-stick-log runs this every few seconds during boot, then once a
+# minute, and writes the text in place into PURPLE-LOG.TXT on the stick's
+# PURPLEUSB partition (plain FAT, so Windows and macOS mount it like a thumb
+# drive). A customer whose boot hangs holds the power button, plugs the stick
+# into their own computer and emails the file. Read-only. Runs as root.
 set +e
-
-INTERVAL_FAST=5
-FAST_UNTIL_UPTIME=300
-INTERVAL_SLOW=60
-WORK=/run/purple-diag
-MNT=$WORK/efi
-NAME=PURPLE-LOG.TXT
-LOCAL_COPY=/var/log/purple/diag.txt
 
 section() { echo; echo "===== $* ====="; }
 
-stick_log_partition() {
-    blkid -L PURPLEUSB 2>/dev/null | grep .
-}
-
 collect() {
-    echo "purple-diag-dump $(date -Iseconds) uptime=$(cut -d' ' -f1 /proc/uptime)s"
+    echo "purple-boot-report $(date -Iseconds) uptime=$(cut -d' ' -f1 /proc/uptime)s"
     echo "uname: $(uname -a)"
     echo "machine: $(cat /sys/class/dmi/id/sys_vendor /sys/class/dmi/id/product_name /sys/class/dmi/id/product_version 2>/dev/null | tr '\n' ' ')"
     echo "bios: $(cat /sys/class/dmi/id/bios_vendor /sys/class/dmi/id/bios_version /sys/class/dmi/id/bios_date 2>/dev/null | tr '\n' ' ')"
@@ -74,25 +58,10 @@ collect() {
     section "journal (tail)"
     journalctl -b --no-pager -n 800 2>&1
 
-    section "dmesg (tail)"
-    dmesg 2>&1 | tail -n 4000
+    section "dmesg (tail; the full live kernel log is at the end of PURPLE-LOG.TXT)"
+    dmesg 2>&1 | tail -n 300
 
     section "end"
 }
 
-write_to_stick() {
-    local part=$1 file=$2
-    mkdir -p "$MNT"
-    mount -t vfat -o rw,noatime "$part" "$MNT" 2>/dev/null || return 1
-    cp -f "$file" "$MNT/$NAME.tmp" && mv -f "$MNT/$NAME.tmp" "$MNT/$NAME"
-    umount "$MNT" 2>/dev/null || umount -l "$MNT" 2>/dev/null
-}
-
-mkdir -p "$WORK" /var/log/purple
-while :; do
-    collect > "$WORK/dump.txt" 2>&1
-    cp -f "$WORK/dump.txt" "$LOCAL_COPY" 2>/dev/null
-    part=$(stick_log_partition) && write_to_stick "$part" "$WORK/dump.txt"
-    up=$(cut -d. -f1 /proc/uptime)
-    [ "$up" -lt "$FAST_UNTIL_UPTIME" ] && sleep "$INTERVAL_FAST" || sleep "$INTERVAL_SLOW"
-done
+collect

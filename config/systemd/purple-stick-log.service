@@ -1,17 +1,17 @@
 [Unit]
-Description=Purple Computer boot diagnostic dump to the USB stick
-# Live boots only: the stick is the only place the report can go, and an
+Description=Purple Computer boot report and kernel log on the USB stick
+# Live boots only: the stick is the only place the file can go, and an
 # installed system has the persistent journal instead.
 ConditionPathIsMountPoint=/cdrom
 ConditionKernelCommandLine=!purple.install=1
 # Starts as soon as udev has run, not at multi-user: a stick that stops
-# reading a minute into boot still gets the reports written before it did.
+# reading a minute into boot still gets the early reports written before it did.
 DefaultDependencies=no
 After=systemd-udev-trigger.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/purple-diag-dump
+ExecStart=/usr/local/bin/purple-stick-log
 Nice=10
 Restart=on-failure
 RestartSec=5

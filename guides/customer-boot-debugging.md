@@ -10,16 +10,19 @@ to do, what comes back, and how to read it. The mechanisms behind it are in
 Nothing here needs the debug ISO or any key press. It ships on the standard ISO.
 
 - **`PURPLE-LOG`** on the `PURPLEUSB` drive, one file with two parts. First
-  the report, rewritten every 5 seconds for the first five minutes, then once
-  a minute: machine and BIOS, kernel command line, whether P was held, failed
-  services, what every process is waiting on, Purple's own logs, the journal.
+  the report, rewritten every 10 seconds until Purple is on screen, every
+  minute for ten minutes after that, then every ten minutes, and once more at
+  shutdown: machine and BIOS, kernel command line, whether P was held, failed
+  services, what every process is waiting on, Purple's own logs (including the
+  install log, if an install ran), the journal.
   It starts as soon as the kernel finds the stick: the initramfs writes a
   first version before the system is even mounted (and again right before
   mounting it, and at the end of casper-bottom), so a boot that never reaches
   Purple still leaves one. If the file starts with `purple-initramfs:`, boot
-  stopped at that stage. After the report, past some reserved blank space, the
-  kernel log written live, flushed at least once a second early in boot, so
-  the last seconds before a hang are in it. The file is a fixed 12MB and its
+  stopped at that stage. After the report, past some reserved space, the
+  kernel log written live, flushed within seconds, so the last seconds before
+  a hang are in it; the line `newest kernel log line above` marks where this
+  start's log ends. The file is a fixed 12MB and its
   date is the build date; the report's own time is on its first line.
 - **The turn-it-off-first note** and this drive are what a parent sees when they
   plug the stick into a running Windows or Mac computer.

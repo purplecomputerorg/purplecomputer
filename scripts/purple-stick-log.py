@@ -3,17 +3,21 @@
 
 The file is preallocated at image build (01-remaster-iso.sh) with two fixed
 regions: the boot report (purple-diag-collect, rewritten every few seconds
-during boot, then once a minute) and, after it, the kernel log streamed as it
-happens. Its sectors are located once with the partition mounted read-only;
-from then on every write goes straight into those sectors of the partition
-device. Nothing stays mounted and no FAT metadata changes, so a power cut at
-any moment leaves the partition clean and the file holding everything up to
-the last flush. The initramfs writes the same report region in place before
+until Purple is on screen, then less and less often, and once more when the
+service stops at shutdown) and, after it, the kernel log streamed as it
+happens. Writes wait while other programs are stalled on disk and are spaced
+so they take at most a small share of the time, so a slow stick slows the
+log instead of the computer. The file's sectors are located once with the
+partition mounted read-only; from then on every write goes straight into
+those sectors of the partition device. Nothing stays mounted and no FAT
+metadata changes, so a power cut at any moment leaves the partition clean and
+the file holding everything up to the last flush. The initramfs writes the same report region in place before
 this starts (purple_stick_report in the casper hook).
 """
 import fcntl
 import os
 import select
+import signal
 import struct
 import subprocess
 import sys
@@ -26,22 +30,25 @@ MNT = "/run/purple-diag/ro"
 COLLECT = "/usr/local/bin/purple-diag-collect"
 LOCAL_COPY = "/var/log/purple/diag.txt"
 FIBMAP, FIGETBSZ = 1, 2
-FAST_UNTIL_UPTIME = 300
-REPORT_FAST, REPORT_SLOW = 5.0, 60.0
-KMSG_FAST, KMSG_SLOW = 1.0, 5.0
-REPORT_END = b"\n===== end of report (the empty lines below are reserved space, the kernel log follows them) =====\n"
+BOOT_LOG = "/tmp/purple-boot.log"
+UI_MARK = b"first render reached"  # boot_log.mark_first_render, both UIs
+PRESSURE = "/proc/pressure/io"
+KMSG = "/dev/kmsg"
+REPORT_BOOTING, REPORT_UI, REPORT_IDLE, UI_BUSY_FOR = 10.0, 60.0, 600.0, 600.0
+KMSG_BOOTING, KMSG_UI = 1.0, 5.0
+WRITE_SHARE = 0.02  # a write that took t seconds waits at least t / WRITE_SHARE before the next
+STRETCH_MAX = 300.0
+BUSY_PERCENT, BUSY_RETRY, BUSY_WAIT_MAX = 10.0, 2.0, 30.0
+FINAL_TIMEOUT = 2  # shutdown waits on this
+REPORT_END = b"\n===== end of report: anything below, up to the kernel log, is empty space or left from an earlier report =====\n"
 KMSG_HEAD = b"===== live kernel log, written as it happens, newest lines last =====\n"
+SEAM = b"===== newest kernel log line above: anything below is older =====\n"
 WRAP = b"\n===== the kernel log filled up and wrapped: lines below this may be older =====\n"
 PENDING_MAX = 1 << 20
 
 
 def log(msg):
     print(f"purple-stick-log: {msg}", flush=True)
-
-
-def uptime():
-    with open("/proc/uptime") as f:
-        return float(f.read().split()[0])
 
 
 def find_partition(tries=60):
@@ -88,12 +95,15 @@ def format_record(rec):
 
 
 class StickFile:
-    """In-place writer for the two regions of NAME, by raw sector writes."""
+    """In-place writer for the two regions of NAME, by raw sector writes.
+
+    Leftovers from earlier writes are never blanked (that would mean
+    rewriting megabytes during boot); the end-of-report and seam markers
+    label them instead."""
 
     def __init__(self, dev, offset):
         self.fd = os.open(dev, os.O_WRONLY)
         self.offset = offset
-        self.report_len = REPORT_BYTES  # first write blanks the whole region: an earlier boot's report may be there
         self.kmsg_pos = 0
 
     def _write(self, pos, data):
@@ -101,22 +111,67 @@ class StickFile:
         os.fdatasync(self.fd)
 
     def write_report(self, data):
-        data = data[: REPORT_BYTES - len(REPORT_END)] + REPORT_END
-        self._write(0, data + b"\n" * max(0, self.report_len - len(data)))
-        self.report_len = len(data)
+        self._write(0, data[: REPORT_BYTES - len(REPORT_END)] + REPORT_END)
 
     def write_kmsg(self, data):
         if self.kmsg_pos == 0:
             data = KMSG_HEAD + data
-        elif self.kmsg_pos + len(data) > KMSG_BYTES:
+        elif self.kmsg_pos + len(data) + len(SEAM) > KMSG_BYTES:
             self.kmsg_pos = len(KMSG_HEAD)
-            data = (WRAP + data)[: KMSG_BYTES - self.kmsg_pos]
-        self._write(REPORT_BYTES + self.kmsg_pos, data)
+            data = WRAP + data
+        data = data[: KMSG_BYTES - self.kmsg_pos - len(SEAM)]
+        self._write(REPORT_BYTES + self.kmsg_pos, data + SEAM)  # the next write overwrites the seam
         self.kmsg_pos += len(data)
 
 
-def collect():
-    out = subprocess.run([COLLECT], capture_output=True, timeout=120).stdout
+def io_busy():
+    """True while other programs spend a noticeable share of time waiting on disk."""
+    try:
+        with open(PRESSURE) as f:
+            some = f.readline().split()
+        return float(some[1].split("=")[1]) > BUSY_PERCENT
+    except (OSError, IndexError, ValueError):
+        return False
+
+
+def ui_up():
+    try:
+        with open(BOOT_LOG, "rb") as f:
+            return UI_MARK in f.read()
+    except OSError:
+        return False
+
+
+class Schedule:
+    """When one kind of write is next due: its base interval, stretched when
+    writes are slow and held back while the disk is busy, within limits so
+    the log never goes quiet on a struggling machine."""
+
+    def __init__(self):
+        self.due = 0.0
+        self.held_since = None
+        self.last_cost = 0.0
+
+    def ready(self, now):
+        if now < self.due:
+            return False
+        self.held_since = self.held_since or now
+        if now - self.held_since < BUSY_WAIT_MAX and io_busy():
+            self.due = now + BUSY_RETRY
+            return False
+        return True
+
+    def done(self, now, cost, interval):
+        self.held_since = None
+        self.last_cost = cost
+        self.due = now + max(interval, min(cost / WRITE_SHARE, STRETCH_MAX))
+
+
+def collect(timeout=120):
+    try:
+        out = subprocess.run([COLLECT], capture_output=True, timeout=timeout).stdout
+    except subprocess.TimeoutExpired as e:
+        out = (e.stdout or b"") + b"\n[the report stopped here: collecting it took over %ds]\n" % timeout
     try:
         os.makedirs(os.path.dirname(LOCAL_COPY), exist_ok=True)
         with open(LOCAL_COPY, "wb") as f:
@@ -126,38 +181,85 @@ def collect():
     return out
 
 
-def run(stick):
-    kmsg = os.open("/dev/kmsg", os.O_RDONLY | os.O_NONBLOCK)
-    pending = bytearray()
-    last_kmsg = time.monotonic()
-    next_report = 0.0
-    while True:
-        fast = uptime() < FAST_UNTIL_UPTIME
-        kmsg_interval = KMSG_FAST if fast else KMSG_SLOW
-        due = min(next_report, last_kmsg + kmsg_interval if pending else next_report)
-        if select.select([kmsg], [], [], max(0.0, due - time.monotonic()))[0]:
-            try:
-                rec = os.read(kmsg, 8192)
-            except BlockingIOError:
-                rec = b""
-            except OSError:  # EPIPE: the ring buffer overtook us, keep reading
-                pending += b"[kernel log lines were dropped here]\n"
-                rec = b""
-            if rec and len(pending) < PENDING_MAX:
-                pending += format_record(rec)
+def timed(write, *args):
+    t0 = time.monotonic()
+    write(*args)
+    return time.monotonic() - t0
+
+
+class Writer:
+    def __init__(self, stick):
+        self.stick = stick
+        self.pending = bytearray()
+        self.report, self.kmsg = Schedule(), Schedule()
+        self.ui_since = None
+
+    def add(self, rec):
+        if len(self.pending) < PENDING_MAX:
+            self.pending += rec
+
+    def report_interval(self, now):
+        if self.ui_since is None and ui_up():
+            self.ui_since = now
+        if self.ui_since is None:
+            return REPORT_BOOTING
+        return REPORT_UI if now - self.ui_since < UI_BUSY_FOR else REPORT_IDLE
+
+    def next_due(self):
+        return min(self.report.due, self.kmsg.due) if self.pending else self.report.due
+
+    def flush_kmsg(self):
+        cost = timed(self.stick.write_kmsg, bytes(self.pending))
+        self.pending.clear()
+        return cost
+
+    def write_report(self, timeout=120):
+        header = b"stick log: the last report took %.2fs to write, the kernel log %.2fs\n" % (
+            self.report.last_cost, self.kmsg.last_cost)
+        return timed(self.stick.write_report, header + collect(timeout))
+
+    def tick(self):
         now = time.monotonic()
+        if self.pending and self.kmsg.ready(now):
+            self.kmsg.done(now, self.flush_kmsg(), KMSG_BOOTING if self.ui_since is None else KMSG_UI)
+        if self.report.ready(now):
+            interval = self.report_interval(now)
+            self.report.done(now, self.write_report(), interval)
+
+    def final(self):
+        if self.pending:
+            self.flush_kmsg()
+        self.write_report(FINAL_TIMEOUT)
+
+
+def read_kmsg(kmsg):
+    try:
+        return format_record(os.read(kmsg, 8192))
+    except BlockingIOError:
+        return b""
+    except OSError:  # EPIPE: the ring buffer overtook us, keep reading
+        return b"[kernel log lines were dropped here]\n"
+
+
+def run(stick):
+    kmsg = os.open(KMSG, os.O_RDONLY | os.O_NONBLOCK)
+    w = Writer(stick)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    try:
+        while True:
+            if select.select([kmsg], [], [], max(0.0, w.next_due() - time.monotonic()))[0]:
+                w.add(read_kmsg(kmsg))
+            try:
+                w.tick()
+            except OSError as e:
+                log(f"write failed ({e.strerror}), retrying")
+                time.sleep(5)
+    finally:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         try:
-            if pending and now - last_kmsg >= kmsg_interval:
-                stick.write_kmsg(bytes(pending))
-                pending.clear()
-                last_kmsg = now
-            if now >= next_report:
-                stick.write_report(collect())
-                next_report = now + (REPORT_FAST if fast else REPORT_SLOW)
-        except OSError as e:
-            log(f"write failed ({e.strerror}), retrying")
-            time.sleep(5)
-            last_kmsg = next_report = time.monotonic()
+            w.final()
+        except OSError:
+            pass
 
 
 def main():

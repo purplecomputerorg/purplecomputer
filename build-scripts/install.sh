@@ -11,23 +11,20 @@
 
 set -eo pipefail
 
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
 PURPLE='\033[0;35m'
 NC='\033[0m'
 
 # Loud logging to console for debugging
 log() {
-    echo -e "${GREEN}[PURPLE]${NC} $1" >&2
+    echo "[PURPLE] $1" >&2
     echo "[PURPLE] $1" >/dev/console 2>/dev/null || true
 }
 warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1" >&2
+    echo "[WARN] $1" >&2
     echo "[PURPLE WARN] $1" >/dev/console 2>/dev/null || true
 }
 error() {
-    echo -e "${RED}[ERROR]${NC} $1" >&2
+    echo "[ERROR] $1" >&2
     echo "[PURPLE ERROR] $1" >/dev/console 2>/dev/null || true
     exit 1
 }
@@ -52,10 +49,11 @@ disable_swaps_on() {
 
 # Catch unexpected exits (e.g. pipeline failures from USB removal) and emit
 # a tagged error so the UI can display it.
-trap '_rc=$?; if [ $_rc -ne 0 ]; then echo -e "${RED}[ERROR]${NC} Install failed (exit code $_rc)" >&2; echo "[PURPLE ERROR] Install failed (exit code $_rc)" >/dev/console 2>/dev/null || true; fi' EXIT
+trap '_rc=$?; if [ $_rc -ne 0 ]; then echo "[ERROR] Install failed (exit code $_rc)" >&2; echo "[PURPLE ERROR] Install failed (exit code $_rc)" >/dev/console 2>/dev/null || true; fi' EXIT
 
 # Golden image path - set by hook via PURPLE_PAYLOAD_DIR
 GOLDEN_IMAGE="${PURPLE_PAYLOAD_DIR:-/purple}/purple-os.img.zst"
+INSTALL_LOG=/tmp/purple-install.log
 
 # Spawn emergency shell on tty2 (user can access with Alt+F2)
 if [ -c /dev/tty2 ]; then
@@ -200,6 +198,9 @@ nvram_entry() {
 
 # Main installation routine
 main() {
+    # Everything on stderr also goes to a file: purple-diag-collect puts it in
+    # the stick's PURPLE-LOG, and it is copied into the installed system.
+    exec 2> >(tee -a "$INSTALL_LOG" >&2)
     show_splash
 
     log "Purple Computer Factory Installer"
@@ -793,6 +794,7 @@ main() {
                 echo "RESULT: skipped (grub-install not in live env — golden image missing grub-common/grub-pc-bin)" >> "$PERSIST_LOG"
             fi
 
+            cp "$INSTALL_LOG" /mnt/root/var/log/purple/install.log 2>/dev/null || true
             umount /mnt/root 2>/dev/null || true
         else
             warn "Could not mount root partition for Layer 5/6"

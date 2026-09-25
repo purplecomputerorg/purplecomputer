@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/config.sh"
 source "$SCRIPT_DIR/flash-lib.sh"
+CONFIG_FILE="$PROJECT_DIR/.flash-drives.conf"
 RELEASE_DIR="${PURPLE_RELEASE_DIR:-$HOME/purplecomputer-release}"
 
 FLASH=true

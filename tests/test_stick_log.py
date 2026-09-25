@@ -80,3 +80,24 @@ def test_reports_slow_down_once_purple_is_on_screen(tmp_path):
     (tmp_path / "boot.log").write_bytes(b"[python] " + k.UI_MARK + b"; watchdog disarmed\n")
     assert w.report_interval(100.0) == k.REPORT_UI
     assert w.report_interval(100.0 + k.UI_BUSY_FOR) == k.REPORT_IDLE
+
+
+def test_log_summary_reads_the_file_the_writer_produces(tmp_path, capsys):
+    k = _load(report=4000, kmsg=2000)
+    spec = importlib.util.spec_from_file_location("log_summary", ROOT / "scripts" / "purple-log-summary.py")
+    summary = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(summary)
+    dev = tmp_path / "PURPLE-LOG"
+    dev.write_bytes(b"\n" * 6000)
+    s = k.StickFile(str(dev), 0)
+    s.write_report(b"stick log: the last report took 0.05s to write, the kernel log 0.01s\n"
+                   b"purple-boot-report 2026-09-25 uptime=40s\n\n===== boot log =====\n"
+                   b"[10:00:01] xinitrc] === start\n\n===== processes (wchan) =====\n"
+                   b"  PID  PPID STAT ETIMES WCHAN COMMAND\n  812     1 D        30 io_schedule python3\n")
+    s.write_kmsg(b"[   12.000000] blk_update_request: I/O error, dev sdb, sector 1234\n")
+    s.write_kmsg(b"[   13.000000] blk_update_request: I/O error, dev sdb, sector 5678\n")
+    summary.summarize(dev.read_text())
+    out = capsys.readouterr().out
+    assert "NEVER reached" in out and "io_schedule" in out
+    assert "I/O error, dev sdb, sector 1234  (x2)" in out, "repeats collapse to one line with a count"
+    assert "newest kernel log line above" not in out

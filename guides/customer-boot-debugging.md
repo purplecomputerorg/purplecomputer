@@ -90,6 +90,10 @@ is the only record).
 
 ## Reading what comes back
 
+`just read-log <file>` prints the parts that matter: whether Purple reached
+its first screen, failed units, processes stuck on disk, boot milestones, the
+install log, and kernel and journal errors with repeats collapsed.
+
 - **`PURPLE-LOG` starts with `purple-initramfs:`** and the message names
   the stage: the boot never got past mounting the system. The dmesg section
   shows why (USB errors, missing driver, memory).

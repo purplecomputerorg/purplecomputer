@@ -1,8 +1,8 @@
 #!/bin/bash
 # Purple Computer: the boot diagnostic report, printed to stdout.
 #
-# purple-stick-log runs this every few seconds during boot, then once a
-# minute, and writes the text in place into PURPLE-LOG on the stick's
+# purple-stick-log runs this every few seconds during boot, less often once
+# Purple is up, and writes the text in place into PURPLE-LOG on the stick's
 # PURPLEUSB partition (plain FAT, so Windows and macOS mount it like a thumb
 # drive). A customer whose boot hangs holds the power button, plugs the stick
 # into their own computer and emails the file. Read-only. Runs as root.
@@ -29,9 +29,12 @@ collect() {
     ls -l /dev/dri/ 2>&1
 
     section "PCI devices"
-    for d in /sys/bus/pci/devices/*; do
-        echo "  ${d##*/} class=$(cat "$d/class") $(cat "$d/vendor"):$(cat "$d/device") driver=$(basename "$(readlink "$d/driver" 2>/dev/null)" 2>/dev/null)"
-    done
+    # Builtins only (read, cd -P in one subshell): this runs every few seconds during boot.
+    (for d in /sys/bus/pci/devices/*; do
+        read -r class < "$d/class"; read -r vendor < "$d/vendor"; read -r device < "$d/device"
+        driver=; cd -P "$d/driver" 2>/dev/null && driver=${PWD##*/}
+        echo "  ${d##*/} class=$class $vendor:$device driver=$driver"
+    done)
 
     section "systemd: failed units and pending jobs"
     systemctl list-units --failed --no-pager --no-legend 2>&1
@@ -54,6 +57,8 @@ collect() {
     tail -60 /home/purple/.local/share/xorg/Xorg.0.log /var/log/Xorg.0.log 2>/dev/null
     section "power log"
     cat /tmp/purple-power.log 2>/dev/null
+    section "install log"
+    cat /tmp/purple-install.log 2>/dev/null
 
     section "journal (tail)"
     journalctl -b --no-pager -n 800 2>&1

@@ -20,19 +20,16 @@ def test_records_become_dmesg_style_lines_and_continuations_are_dropped():
     assert k.format_record(b"not a record") == b""
 
 
-def test_report_region_is_blanked_once_then_padded_to_the_previous_length(tmp_path):
+def test_report_is_written_in_place_and_leftovers_stay_below_the_end_marker(tmp_path):
     k = _load()
     dev = tmp_path / "dev"
     dev.write_bytes(b"X" * 100 + b"O" * 600 + b"X" * 100)  # O = an earlier boot's text
     s = k.StickFile(str(dev), 100)
-    s.write_report(b"first report " * 5)
-    d = dev.read_bytes()
-    assert d[:100] == b"X" * 100 and d[700:] == b"X" * 100
-    assert d[100:].startswith(b"first report ") and b"O" not in d[100:500]
     s.write_report(b"short")
     d = dev.read_bytes()
-    assert d[100:105] == b"short" and d[105:].startswith(k.REPORT_END)
-    assert d[105 + len(k.REPORT_END):500] == b"\n" * (500 - 105 - len(k.REPORT_END)), "pad with newlines, not spaces"
+    assert d[:100] == b"X" * 100 and d[700:] == b"X" * 100
+    assert d[100:105 + len(k.REPORT_END)] == b"short" + k.REPORT_END
+    assert d[105 + len(k.REPORT_END):500] == b"O" * (395 - len(k.REPORT_END)), "no megabyte blanking during boot"
 
 
 def test_report_longer_than_its_region_is_cut_and_still_ends_with_the_marker(tmp_path):
@@ -45,14 +42,41 @@ def test_report_longer_than_its_region_is_cut_and_still_ends_with_the_marker(tmp
     assert d[500:] == b"X" * 300 and d[500 - len(k.REPORT_END):500] == k.REPORT_END
 
 
-def test_kmsg_region_starts_with_its_header_and_wraps_with_a_marker(tmp_path):
-    k = _load()
+def test_kmsg_region_keeps_a_seam_after_the_newest_line_and_wraps_with_a_marker(tmp_path):
+    k = _load(kmsg=430)
     dev = tmp_path / "dev"
-    dev.write_bytes(b"X" * 800)
+    dev.write_bytes(b"X" * 1000)
     s = k.StickFile(str(dev), 100)
+    region = lambda: dev.read_bytes()[500:930]
     s.write_kmsg(b"a" * 50)
-    s.write_kmsg(b"b" * 150)
-    d = dev.read_bytes()
-    assert d[500:].startswith(k.KMSG_HEAD)
-    assert d[500 + len(k.KMSG_HEAD):].startswith(k.WRAP) and s.kmsg_pos <= 200
-    assert d[700:] == b"X" * 100
+    assert region().startswith(k.KMSG_HEAD + b"a" * 50 + k.SEAM)
+    s.write_kmsg(b"b" * 50)
+    assert region().startswith(k.KMSG_HEAD + b"a" * 50 + b"b" * 50 + k.SEAM), "the next write overwrites the seam"
+    s.write_kmsg(b"c" * 200)
+    assert region()[len(k.KMSG_HEAD):].startswith(k.WRAP + b"c" * 200 + k.SEAM)
+    assert s.kmsg_pos + len(k.SEAM) <= 430 and dev.read_bytes()[930:] == b"X" * 70
+
+
+def test_schedule_stretches_after_slow_writes_and_holds_while_the_disk_is_busy_but_not_forever():
+    k = _load()
+    sched = k.Schedule()
+    sched.done(0.0, 0.01, 10.0)
+    assert sched.due == 10.0, "fast writes keep the base interval"
+    sched.done(0.0, 2.0, 10.0)
+    assert sched.due == 2.0 / k.WRITE_SHARE
+    sched.done(0.0, 60.0, 10.0)
+    assert sched.due == k.STRETCH_MAX, "a very slow stick still gets a report every few minutes"
+    k.io_busy = lambda: True
+    sched = k.Schedule()
+    assert not sched.ready(1.0) and sched.due == 1.0 + k.BUSY_RETRY
+    assert sched.ready(1.0 + k.BUSY_WAIT_MAX), "a busy disk delays a write, never skips it"
+
+
+def test_reports_slow_down_once_purple_is_on_screen(tmp_path):
+    k = _load()
+    k.BOOT_LOG = str(tmp_path / "boot.log")
+    w = k.Writer(None)
+    assert w.report_interval(0.0) == k.REPORT_BOOTING
+    (tmp_path / "boot.log").write_bytes(b"[python] " + k.UI_MARK + b"; watchdog disarmed\n")
+    assert w.report_interval(100.0) == k.REPORT_UI
+    assert w.report_interval(100.0 + k.UI_BUSY_FOR) == k.REPORT_IDLE

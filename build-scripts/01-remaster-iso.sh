@@ -143,6 +143,7 @@ prepend_router() {
     cat > "$tmp" << 'ROUTER'
 source $prefix/purple-router.cfg
 set purple_boot=casper
+export purple_boot
 if [ "$purple_variant" = "-i386" ]; then
     set purple_boot=purple-live
     if [ ! -f /casper/vmlinuz-i386 ]; then
@@ -282,6 +283,8 @@ set timeout_style=menu
 set default=0
 
 set purple_debug_args="i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1"
+# The submenu opens a new scope that only keeps exported variables.
+export purple_debug_args
 
 menuentry "Troubleshooting: start Purple and show what's happening" {
     set gfxpayload=keep

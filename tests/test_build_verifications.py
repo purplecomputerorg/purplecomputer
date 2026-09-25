@@ -496,6 +496,12 @@ def test_hold_p_opens_the_boot_menu_on_the_standard_iso():
     assert 'write_purple_menu_cfg "$WORK_DIR/iso-new/boot/grub/purple-menu.cfg"' in remaster
     debug = remaster.split("<< 'GRUB_DEBUG'")[1].split("GRUB_DEBUG")[0]
     assert "source /boot/grub/purple-menu.cfg" in debug
+    # configfile and submenu scopes only keep exported variables; unexported,
+    # the menu booted "boot=" and the initramfs asked for root=.
+    router = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
+    assert "export purple_variant purple_args" in router
+    assert "set purple_boot=casper\nexport purple_boot\n" in remaster
+    assert "export purple_debug_args" in remaster.split("<< 'GRUB_MENU'")[1].split("GRUB_MENU")[0]
     hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
     assert "/purple-keyheld 25" in hook, "KEY_P is 25"
     assert "touch /run/purple/debug-key" in hook and "dmesg -n 7" in hook and "chvt 63" in hook

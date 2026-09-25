@@ -48,9 +48,18 @@ fix needs a different boot.
 Holding P while the laptop starts opens the same menu the debug ISO shows.
 Instruction for the customer, exactly:
 
-> Hold down the P key before you press the power button, and keep holding it
-> until you see text on the screen. On a Mac, hold Option to pick the USB drive
-> as usual, and start holding P the moment you press Enter on it.
+> Start the laptop from the USB drive the way you usually do, and hold down
+> the P key from the moment it starts from the drive. If your laptop needs a
+> key held to start from USB (Option on a Mac, Volume Down on a Surface), hold
+> P along with it. If you pick the drive from a menu, start holding P as you
+> press Enter on it. Let go of P a few seconds after the laptop's logo goes
+> away. If the screen stays black after you let go, press Enter.
+
+Why the timing matters: the held key has to still be down when GRUB takes over
+from the firmware, which is after the maker's logo. Once the menu is open, every
+repeated P from a held key cancels its countdown, so a black screen that never
+changes may be a menu waiting for input; Enter starts its first entry. That is
+why the instruction says to let go rather than "hold until you see text".
 
 Two layers make this work, and the customer does not need to know which one
 fired:
@@ -70,7 +79,7 @@ The menu, in order:
 
 | Entry | Use it when |
 |---|---|
-| Troubleshooting: start Purple and show what's happening | Default after 10s. Verbose boot, kernel and service lines on screen. |
+| Troubleshooting: start Purple and show what's happening | Default after 10s (any key press, a held P included, stops the countdown). Verbose boot, kernel and service lines on screen. |
 | Troubleshooting: try every fix for USB drive problems | USB read errors (`SQUASHFS error`, `I/O error, dev loop0`). IOMMU off, 32-bit USB DMA, no USB autosuspend, no PCIe power saving, system copied into RAM, bigger kernel log. One boot instead of five. |
 | Start Purple normally | The ordinary boot, for someone who held P by accident or for comparison. |
 | More options (for support) | A submenu: keyboard test, the USB fixes one at a time (for narrowing down which one mattered), recovery shell, our two failure-page self-tests, boot from the next volume, firmware settings. |

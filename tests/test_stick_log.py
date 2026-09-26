@@ -101,3 +101,48 @@ def test_log_summary_reads_the_file_the_writer_produces(tmp_path, capsys):
     assert "NEVER reached" in out and "io_schedule" in out
     assert "I/O error, dev sdb, sector 1234  (x2)" in out, "repeats collapse to one line with a count"
     assert "newest kernel log line above" not in out
+
+
+def test_a_pulled_stick_backs_off_instead_of_collecting_every_tick(monkeypatch):
+    k = _load()
+    collected = []
+    monkeypatch.setattr(k, "collect", lambda timeout=120: collected.append(1) or b"")
+
+    class Gone:
+        def write_report(self, data):
+            raise OSError(5, "Input/output error")
+
+    w = k.Writer(Gone())
+    w.tick()
+    w.tick()
+    assert len(collected) == 1 and w.report.due >= k.STRETCH_MAX
+
+
+def _usb_cache(tmp_path, monkeypatch, avail, mlock_rc):
+    spec = importlib.util.spec_from_file_location("usb_cache", ROOT / "scripts" / "purple-usb-cache.py")
+    c = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(c)
+    (tmp_path / "fs.squashfs").write_bytes(b"s" * 5000)
+    (tmp_path / "boot.log").write_text("")
+    c.SQUASHFS, c.LIVE_CONF = str(tmp_path / "fs.squashfs"), str(tmp_path / "none")
+    c.MARKER, c.BOOT_LOGS = str(tmp_path / "cached"), (str(tmp_path / "boot.log"), str(tmp_path / "absent.log"))
+    monkeypatch.setattr(c, "mem_available", lambda: avail)
+    monkeypatch.setattr(c.ctypes, "CDLL", lambda *a, **kw: type("L", (), {"mlockall": staticmethod(lambda f: mlock_rc)})())
+    paused = []
+    monkeypatch.setattr(c.signal, "pause", lambda: paused.append(1))
+    c.main()
+    return (tmp_path / "boot.log").read_text(), (tmp_path / "cached").exists(), bool(paused)
+
+
+def test_usb_cache_locks_when_there_is_room_and_holds_the_lock(tmp_path, monkeypatch):
+    log, marker, held = _usb_cache(tmp_path, monkeypatch, avail=4 << 30, mlock_rc=0)
+    assert "[usb-cache] Squashfs locked in RAM" in log and "USB safe to remove" in log
+    assert marker and held
+    assert not (tmp_path / "absent.log").exists(), "never creates a boot log as root"
+
+
+def test_usb_cache_only_warms_with_low_ram_or_a_failed_lock(tmp_path, monkeypatch):
+    log, marker, held = _usb_cache(tmp_path, monkeypatch, avail=512 << 20, mlock_rc=0)
+    assert "Low RAM" in log and marker and not held
+    log, marker, held = _usb_cache(tmp_path, monkeypatch, avail=4 << 30, mlock_rc=-1)
+    assert "Could not lock" in log and marker and not held

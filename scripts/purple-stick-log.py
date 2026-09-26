@@ -220,11 +220,15 @@ class Writer:
 
     def tick(self):
         now = time.monotonic()
-        if self.pending and self.kmsg.ready(now):
-            self.kmsg.done(now, self.flush_kmsg(), KMSG_BOOTING if self.ui_since is None else KMSG_UI)
-        if self.report.ready(now):
-            interval = self.report_interval(now)
-            self.report.done(now, self.write_report(), interval)
+        try:
+            if self.pending and self.kmsg.ready(now):
+                self.kmsg.done(now, self.flush_kmsg(), KMSG_BOOTING if self.ui_since is None else KMSG_UI)
+            if self.report.ready(now):
+                interval = self.report_interval(now)
+                self.report.done(now, self.write_report(), interval)
+        except OSError as e:  # stick pulled or failing: try again in a few minutes, not every tick
+            log(f"write failed ({e.strerror}), retrying in {STRETCH_MAX:.0f}s")
+            self.report.due = self.kmsg.due = now + STRETCH_MAX
 
     def final(self):
         if self.pending:
@@ -249,11 +253,7 @@ def run(stick):
         while True:
             if select.select([kmsg], [], [], max(0.0, w.next_due() - time.monotonic()))[0]:
                 w.add(read_kmsg(kmsg))
-            try:
-                w.tick()
-            except OSError as e:
-                log(f"write failed ({e.strerror}), retrying")
-                time.sleep(5)
+            w.tick()
     finally:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         try:

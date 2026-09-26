@@ -20,7 +20,9 @@ collect() {
     echo "debug mode: $([ -e /opt/purple/debug ] && echo on || echo off), P held at start: $([ -e /run/purple/debug-key ] && echo yes || echo no)"
 
     section "memory"
-    grep -E '^(MemTotal|MemAvailable|SwapTotal)' /proc/meminfo
+    grep -E '^(MemTotal|MemAvailable|SwapTotal|Mlocked)' /proc/meminfo
+    # dio=0: the system image is read through the page cache that purple-usb-cache locks
+    grep -H . /sys/block/loop*/loop/backing_file /sys/block/loop*/loop/dio 2>/dev/null
 
     section "DRM connectors"
     for f in /sys/class/drm/card*-*/status; do

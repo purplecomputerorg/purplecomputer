@@ -227,7 +227,7 @@ def test_boot_timing_timeline_is_seconds_since_boot(tmp_path):
         f"[{stamp(9)}] [wait-display] === purple-wait-display started === kernel=6.8\n"
         f"[{stamp(9.5)}] [wait-display]   connector at start: card0-eDP-1 = connected\n"
         f"[{stamp(12)}] [xinitrc] === xinitrc started ===  debug_flag=no\n"
-        f"[{stamp(13)}] [xinitrc] Caching squashfs for USB safety...\n"
+        f"[{stamp(13)}] [usb-cache] Caching squashfs for USB safety...\n"
         f"[{stamp(14)}] [launcher] exec python3 -m purple_tui\n"
         f"[{stamp(14.2)}] [+ 0.010s] [python] watchdog armed\n"
         f"[{stamp(95)}] [+80.810s] [python] PurpleApp.__init__ begin\n"
@@ -453,6 +453,18 @@ def test_stick_log_and_purpleusb_partition():
     assert '"$LOG_MNT/HOW TO START PURPLE.txt"' in remaster
     flash = (ROOT / "build-scripts" / "flash-lib.sh").read_text()
     assert "awk '$1 ~ /[^0-9][12]$/ {print $2}'" in flash, "settle recheck must stop at the EFI partition"
+
+
+def test_usb_cache_service_replaces_the_xinitrc_warmup():
+    """The squashfs warm-up and RAM lock run as root at idle disk priority,
+    and so does the stick log, so a kid's reads from the stick go first."""
+    src = _build_source()
+    assert 'cp /purple-src/scripts/purple-usb-cache.py "$MOUNT_DIR/usr/local/bin/purple-usb-cache"' in src
+    assert "systemctl enable purple-usb-cache.service" in src
+    for unit in ("purple-usb-cache.service", "purple-stick-log.service"):
+        assert "IOSchedulingClass=idle" in (ROOT / "config" / "systemd" / unit).read_text(), unit
+    xinitrc = (ROOT / "config" / "xinit" / "xinitrc").read_text()
+    assert "filesystem.squashfs" not in xinitrc and "purple-usb-cached" not in xinitrc
 
 
 def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():

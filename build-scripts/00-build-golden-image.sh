@@ -891,6 +891,10 @@ JOURNAL
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-diag-collect" "$MOUNT_DIR/usr/local/bin/purple-stick-log"
     cp /purple-src/config/systemd/purple-stick-log.service "$MOUNT_DIR/etc/systemd/system/"
     chroot "$MOUNT_DIR" systemctl enable purple-stick-log.service
+    cp /purple-src/scripts/purple-usb-cache.py "$MOUNT_DIR/usr/local/bin/purple-usb-cache"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-usb-cache"
+    cp /purple-src/config/systemd/purple-usb-cache.service "$MOUNT_DIR/etc/systemd/system/"
+    chroot "$MOUNT_DIR" systemctl enable purple-usb-cache.service
     # Hands-on loudness probe, run by a person from the parent-menu terminal.
     cp /purple-src/scripts/purple-audio-probe.sh "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-probe"

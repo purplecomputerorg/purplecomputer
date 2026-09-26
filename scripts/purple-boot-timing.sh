@@ -38,7 +38,7 @@ timeline() {
     [ -f "$log" ] || { echo "no boot log at /tmp/purple-boot.log"; return; }
     local boot_hms
     boot_hms=$(date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" +%H:%M:%S)
-    grep -E 'wait-display\] (===|Display ready|No connected)|xinitrc\] (=== |Caching|Low RAM|Squashfs|USB safe|matchbox|Launching)|launcher\] exec|\[python\] (watchdog armed|all purple_tui|PurpleApp|main loop|first render|WATCHDOG|mixer)' "$log" |
+    grep -E 'wait-display\] (===|Display ready|No connected)|xinitrc\] (=== |matchbox|Launching)|usb-cache\] |launcher\] exec|\[python\] (watchdog armed|all purple_tui|PurpleApp|main loop|first render|WATCHDOG|mixer)' "$log" |
     awk -v boot="$boot_hms" '
         function secs(t,  a) { split(t, a, ":"); return a[1] * 3600 + a[2] * 60 + a[3] }
         BEGIN { b = secs(boot) }
@@ -127,9 +127,9 @@ timeline
 if [ -n "$LIVE_DISK" ]; then
     section "Memory"
     awk '/^(MemTotal|MemAvailable):/ {printf "%s %d MB  ", $1, $2 / 1024}' /proc/meminfo; echo
-    echo "xinitrc reads the whole squashfs (~1GB) right after X starts, into tmpfs when RAM"
-    echo "allows or through the page cache otherwise, while the app pages in from the same"
-    echo "stick. The Caching -> USB safe window above is how long the stick was saturated."
+    echo "purple-usb-cache reads the whole squashfs (~1GB) once X starts, at idle disk priority,"
+    echo "and locks it in RAM when there is room. The Caching -> USB safe window above is how"
+    echo "long the stick was busy with it."
 
     section "Stick: sequential read (/dev/$LIVE_DISK)"
     if [ "$(id -u)" -ne 0 ]; then

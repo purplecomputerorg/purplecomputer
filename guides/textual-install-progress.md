@@ -194,6 +194,6 @@ Run with: `just test`, or `pytest tests/test_install_reboot.py -v`
 | `build-scripts/00-build-golden-image.sh` | Compiles static reboot binary during image build |
 | `tools/purple-reboot.c` | Source for static reboot binary (fallback chain, tty2 escape) |
 | `tools/test_purple_reboot.c` | C tests for reboot binary (`just test-reboot`) |
-| `config/xinit/xinitrc` | Squashfs tmpfs copy (replaces page cache warmup) |
+| `scripts/purple-usb-cache.py` | Squashfs warm-up, locked in RAM when there is room |
 | `tests/test_install_progress.py` | Documents and tests the pipe-hang fix |
 | `tests/test_install_reboot.py` | Tests the reboot flow and sentinel detection |

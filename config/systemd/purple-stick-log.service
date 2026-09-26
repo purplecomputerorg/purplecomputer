@@ -13,6 +13,8 @@ After=systemd-udev-trigger.service
 Type=simple
 ExecStart=/usr/local/bin/purple-stick-log
 Nice=10
+# Kid-facing reads from the stick go first; the log fills the gaps.
+IOSchedulingClass=idle
 Restart=on-failure
 RestartSec=5
 

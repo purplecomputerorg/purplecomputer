@@ -566,7 +566,7 @@ TMPFILES
     cp /purple-src/tools/purple-reboot.c "$MOUNT_DIR/tmp/purple-reboot.c"
     chroot "$MOUNT_DIR" gcc -static -o /opt/purple/bin/purple-reboot /tmp/purple-reboot.c
     rm -f "$MOUNT_DIR/tmp/purple-reboot.c"
-    log_info "Compiled static reboot binary: $(chroot "$MOUNT_DIR" file /opt/purple/bin/purple-reboot)"
+    log_info "Compiled static reboot binary: $(stat -c %s "$MOUNT_DIR/opt/purple/bin/purple-reboot") bytes"
     # Static held-key check for the initramfs ("hold P while turning it on"),
     # copied into the casper initrd by 01-remaster-iso.sh.
     cp /purple-src/tools/purple-keyheld.c "$MOUNT_DIR/tmp/purple-keyheld.c"
@@ -587,6 +587,8 @@ TMPFILES
     curl -fsSL "https://github.com/rvaiya/keyd/archive/refs/tags/v${KEYD_VERSION}.tar.gz" \
         -o "$MOUNT_DIR/tmp/keyd.tar.gz"
     chroot "$MOUNT_DIR" tar -xzf /tmp/keyd.tar.gz -C /tmp
+    # Upstream allocates the pointer's size, not the struct's: 4 bytes short on i386.
+    sed -i 's/calloc(1, sizeof vkbd)/calloc(1, sizeof *vkbd)/' "$MOUNT_DIR/tmp/keyd-${KEYD_VERSION}/src/vkbd/uinput.c"
     chroot "$MOUNT_DIR" bash -c "cd /tmp/keyd-${KEYD_VERSION} && make && make install PREFIX=/usr FORCE_SYSTEMD=1"
     rm -rf "$MOUNT_DIR/tmp/keyd.tar.gz" "$MOUNT_DIR/tmp/keyd-${KEYD_VERSION}"
     # Sanity-check the install BEFORE leaving this block. A silent failure

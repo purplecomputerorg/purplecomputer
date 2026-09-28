@@ -86,6 +86,7 @@ def test_a_pulled_stick_backs_off_instead_of_collecting_every_tick(monkeypatch):
     k = _load()
     collected = []
     monkeypatch.setattr(k, "collect", lambda timeout=120: collected.append(1) or b"")
+    monkeypatch.setattr(k, "io_busy", lambda: False)
 
     class Gone:
         def write_report(self, data):

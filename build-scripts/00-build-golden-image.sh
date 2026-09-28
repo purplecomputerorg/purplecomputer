@@ -892,6 +892,8 @@ JOURNAL
     cp /purple-src/scripts/purple-stick-log.py "$MOUNT_DIR/usr/local/bin/purple-stick-log"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-diag-collect" "$MOUNT_DIR/usr/local/bin/purple-stick-log"
     cp /purple-src/config/systemd/purple-stick-log.service "$MOUNT_DIR/etc/systemd/system/"
+    printf '#!/bin/sh\nexec sudo /usr/local/bin/purple-stick-log --reset\n' > "$MOUNT_DIR/usr/local/bin/cleanlog"
+    chmod +x "$MOUNT_DIR/usr/local/bin/cleanlog"
     chroot "$MOUNT_DIR" systemctl enable purple-stick-log.service
     cp /purple-src/scripts/purple-usb-cache.py "$MOUNT_DIR/usr/local/bin/purple-usb-cache"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-usb-cache"

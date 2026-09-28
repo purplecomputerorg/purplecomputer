@@ -13,6 +13,9 @@ those sectors of the partition device. Nothing stays mounted and no FAT
 metadata changes, so a power cut at any moment leaves the partition clean and
 the file holding everything up to the last flush. The initramfs writes the same report region in place before
 this starts (purple_stick_report in the casper hook).
+
+--reset (the `cleanlog` command) puts the file back byte for byte as the build
+wrote it and powers off, so a stick tested before shipping goes out clean.
 """
 import fcntl
 import os
@@ -45,6 +48,8 @@ KMSG_HEAD = b"===== live kernel log, written as it happens, newest lines last ==
 SEAM = b"===== newest kernel log line above: anything below is older =====\n"
 WRAP = b"\n===== the kernel log filled up and wrapped: lines below this may be older =====\n"
 PENDING_MAX = 1 << 20
+# The build reads this line with sed (01-remaster-iso.sh): keep it one plain string.
+PRISTINE_HEAD = "PURPLE-LOG: Purple writes its boot report here (plain text, no extension so a double-click does not open 12MB). This stick has not been started yet."
 
 
 def log(msg):
@@ -84,6 +89,11 @@ def file_extent(part):
         subprocess.run(["umount", MNT])
 
 
+def pristine():
+    head = PRISTINE_HEAD.encode() + b"\n"
+    return head + b"\n" * (REPORT_BYTES + KMSG_BYTES - len(head))
+
+
 def format_record(rec):
     header, _, body = rec.partition(b";")
     fields = header.split(b",")
@@ -102,7 +112,7 @@ class StickFile:
     label them instead."""
 
     def __init__(self, dev, offset):
-        self.fd = os.open(dev, os.O_WRONLY)
+        self.fd = os.open(dev, os.O_RDWR)
         self.offset = offset
         self.kmsg_pos = 0
 
@@ -122,6 +132,13 @@ class StickFile:
         data = data[: KMSG_BYTES - self.kmsg_pos - len(SEAM)]
         self._write(REPORT_BYTES + self.kmsg_pos, data + SEAM)  # the next write overwrites the seam
         self.kmsg_pos += len(data)
+
+    def reset(self):
+        """Rewrite the whole file as built; True once a read from the device, not the cache, matches."""
+        data = pristine()
+        self._write(0, data)
+        os.posix_fadvise(self.fd, self.offset, len(data), os.POSIX_FADV_DONTNEED)
+        return os.pread(self.fd, len(data), self.offset) == data
 
 
 def io_busy():
@@ -262,7 +279,32 @@ def run(stick):
             pass
 
 
+def reset():
+    # Stop first: the service writes a last report as it stops.
+    subprocess.run(["systemctl", "stop", "purple-stick-log.service"])
+    parts = subprocess.run(["blkid", "-c", "/dev/null", "-o", "device", "-t", "LABEL=PURPLEUSB"],
+                           capture_output=True, text=True).stdout.split()
+    if len(parts) != 1:
+        print(f"Expected one Purple stick plugged in, found {len(parts)}. Nothing was changed.")
+        return 1
+    try:
+        offset = file_extent(parts[0])
+        ok = offset is not None and StickFile(parts[0], offset).reset()
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"Error: {e}")
+        ok = False
+    if not ok:
+        print("PURPLE-LOG was NOT cleared. Do not ship this stick without reflashing it.")
+        return 1
+    print("PURPLE-LOG cleared and checked. Turning off; do not start from this stick again before shipping.")
+    time.sleep(3)
+    subprocess.run(["systemctl", "poweroff", "--force"])
+    return 0
+
+
 def main():
+    if sys.argv[1:] == ["--reset"]:
+        return reset()
     part = find_partition()
     if not part:
         log("no PURPLEUSB partition, nothing to do")

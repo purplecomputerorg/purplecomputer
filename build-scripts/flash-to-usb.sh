@@ -449,6 +449,11 @@ write_iso() {
         # in parallel after its own udev gate lifts.
         if [[ "$MANAGE_UDEV" == true && "$SKIP_SETTLE" != true ]]; then
             run_boot_settle
+            if ! restore_log_partition "$TARGET_DEV" "$ISO_PATH"; then
+                record_manifest fail-log-restore "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" ""
+                log_error "Could not restore PURPLE-LOG on $TARGET_DEV after boot-settle. Reflash it."
+                exit 1
+            fi
             if ! recheck_after_settle "$TARGET_DEV" "$ISO_PATH"; then
                 record_manifest fail-post-settle "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" ""
                 log_error "$TARGET_DEV verified after writing but NOT after boot-settle: the flash is decaying."

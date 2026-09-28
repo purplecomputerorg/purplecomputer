@@ -435,12 +435,13 @@ def test_stick_log_and_purpleusb_partition():
     """Every live boot writes PURPLE-LOG on the stick's third partition.
     That partition must be basic-data FAT (Windows and macOS hide the EFI
     partition), it carries the turn-it-off-first note for people who plug the
-    stick into a running computer, and the post-settle recheck must not compare
-    it. Installed systems never run the writer."""
+    stick into a running computer, and after the settle boot it is copied back
+    from the ISO and rechecked. Installed systems never run the writer."""
     src = _build_source()
     assert 'cp /purple-src/scripts/purple-diag-collect.sh "$MOUNT_DIR/usr/local/bin/purple-diag-collect"' in src
     assert 'cp /purple-src/scripts/purple-stick-log.py "$MOUNT_DIR/usr/local/bin/purple-stick-log"' in src
     assert "systemctl enable purple-stick-log.service" in src
+    assert "exec sudo /usr/local/bin/purple-stick-log --reset" in src, "cleanlog resets a tested stick"
     unit = (ROOT / "config" / "systemd" / "purple-stick-log.service").read_text()
     for line in ("ConditionPathIsMountPoint=/cdrom", "ConditionKernelCommandLine=!purple.install=1",
                  "DefaultDependencies=no", "WantedBy=sysinit.target"):
@@ -452,7 +453,10 @@ def test_stick_log_and_purpleusb_partition():
     assert 'label=Start Purple Computer' in remaster
     assert '"$LOG_MNT/HOW TO START PURPLE.txt"' in remaster
     flash = (ROOT / "build-scripts" / "flash-lib.sh").read_text()
-    assert "awk '$1 ~ /[^0-9][12]$/ {print $2}'" in flash, "settle recheck must stop at the EFI partition"
+    assert "awk '$1 ~ /[^0-9][123]$/ {print $2}'" in flash, "settle recheck covers PURPLEUSB, restored from the ISO"
+    for script in ("flash-all.sh", "flash-to-usb.sh"):
+        src = (ROOT / "build-scripts" / script).read_text()
+        assert src.index("restore_log_partition") < src.index("recheck_after_settle \""), f"{script}: restore before the recheck"
 
 
 def test_usb_cache_service_replaces_the_xinitrc_warmup():

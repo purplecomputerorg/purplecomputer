@@ -331,6 +331,14 @@ if [[ ${#SETTLE_IDX[@]} -gt 0 ]]; then
     done
 fi
 
+# The settle boot writes its own PURPLE-LOG report; put the ISO's back.
+for i in "${SETTLE_IDX[@]}"; do
+    restore_log_partition "${ST_DEV[$i]}" "${ISOS[$i]}" && continue
+    ST_OK[$i]=false
+    echo -e "${RED}✗${NC} ${ST_DEV[$i]}: could not restore PURPLE-LOG after settle"
+    record_manifest fail-log-restore "${ST_DEV[$i]}" "${ST_SER[$i]}" "" "" "$(basename "${ISOS[$i]}")" ""
+done
+
 # Re-read every settled drive before ejecting, catching flash that decays in
 # the minutes after being written. Must precede eject_drive: a powered-off
 # drive leaves a media-less node whose reads look like corruption.
@@ -338,6 +346,7 @@ if [[ "$REVERIFY" == true && ${#SETTLE_IDX[@]} -gt 0 ]]; then
     log_info "Re-verifying ${#SETTLE_IDX[@]} drive(s) after boot-settle..."
     RV_PIDS=(); RV_IDX=()
     for i in "${SETTLE_IDX[@]}"; do
+        [[ "${ST_OK[$i]}" == true ]] || continue
         while (( $(count_running "${RV_PIDS[@]}") >= 4 )); do sleep 5; done
         recheck_after_settle "${ST_DEV[$i]}" "${ISOS[$i]}" &
         RV_PIDS+=("$!"); RV_IDX+=("$i")

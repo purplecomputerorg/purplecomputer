@@ -5,6 +5,13 @@
 
 TTY=/dev/tty1
 DIAG=/tmp/purple-diag.txt
+DIAG_PERSIST=/var/log/purple/diag.txt
+BOOT_LOG=/tmp/purple-boot.log
+
+log() {
+    echo "[$(date '+%H:%M:%S.%3N')] [x11-failed] $1" >> "$BOOT_LOG" 2>/dev/null
+}
+log "failure screen up: purple-x11 $(systemctl show purple-x11 -p Result -p NRestarts -p ActiveState 2>/dev/null | tr '\n' ' ')"
 
 # Paint tty1 purple background
 printf '\033]P02d1b4e\033[H\033[2J' > "$TTY" 2>/dev/null
@@ -54,9 +61,16 @@ show_diagnostics() {
         journalctl -u purple-x11 -b --no-pager -n 30 2>/dev/null | sed 's/^/    /' \
             || echo "    (no journal entries)"
         echo ""
+        echo "  === who started/stopped X (journal) ==="
+        journalctl -b --no-pager -o short-precise 2>/dev/null \
+            | grep -iE 'purple-x11|purple-splash|graphical.target|start-limit|start request repeated' \
+            | tail -30 | sed 's/^/    /'
+        echo ""
         echo "  === Done ==="
         echo ""
     } > "$DIAG"
+    mkdir -p "$(dirname "$DIAG_PERSIST")" 2>/dev/null
+    cp -f "$DIAG" "$DIAG_PERSIST" 2>/dev/null
 
     # Clear screen then scroll the diag file line by line
     printf '\033[H\033[2J' > "$TTY" 2>/dev/null
@@ -83,6 +97,10 @@ MSG
 # Wait for Enter, then show diagnostics, then loop back to the prompt.
 # read from tty1 so it works even though stdin may be closed.
 while read dummy < "$TTY" 2>/dev/null; do
+    # Enter means someone is reading: nothing may bring X back and wipe the
+    # screen. A runtime mask lives in /run, so a plain power cycle clears it.
+    systemctl mask --runtime --now purple-x11.service >/dev/null 2>&1
+    log "Enter pressed, purple-x11 masked for this boot"
     show_diagnostics
     # After diagnostics finish scrolling, show the prompt again
     printf '\033[H\033[2J' > "$TTY" 2>/dev/null

@@ -22,7 +22,9 @@ TROUBLE = re.compile(
     r"GPU HANG|\*ERROR\*|failed to load firmware|firmware: failed|Call Trace|BUG:|WARNING:|panic|timed out|"
     r"Failed to start|Dependency failed|core dumped|Traceback|(?-i:WATCHDOG)|\[ERROR\]|\[WARN\]|not found",
     re.I)
-NOISE = re.compile(r"Could not resolve keysym|This will ERASE ALL DATA|supply \w+ not found, using dummy regulator")
+NOISE = re.compile(r"Could not resolve keysym|This will ERASE ALL DATA|supply \w+ not found, using dummy regulator|"
+                   r"chown: warning: '\.' should be ':'|ACPI Warning: SystemIO range|not found in smartd database|"
+                   r"not properly aligned for best performance")
 PROGRESS = re.compile(r"^\[PURPLE-PV")
 BOOT_MILESTONES = re.compile(r"=== |Display ready|No connected|Launching|launcher\] exec|watchdog armed|main loop|"
                              r"first render|WATCHDOG|mixer|Squashfs|Low RAM|USB safe")

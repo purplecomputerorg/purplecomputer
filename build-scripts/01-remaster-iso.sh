@@ -829,7 +829,10 @@ README_EOF
     # stays mounted and no FAT metadata changes while Purple runs. Written
     # last onto a fresh FAT so it is one contiguous run. Padded with newlines,
     # not spaces, so the unused space is empty lines rather than one huge one.
-    { echo "PURPLE-LOG: Purple writes its boot report here (plain text, no extension so a double-click does not open 12MB). This stick has not been started yet."
+    # The header comes from purple-stick-log so cleanlog restores these exact bytes.
+    LOG_HEAD=$(sed -n 's/^PRISTINE_HEAD = "\(.*\)"$/\1/p' /purple-src/scripts/purple-stick-log.py)
+    [ -n "$LOG_HEAD" ] || { echo "ERROR: no PRISTINE_HEAD in purple-stick-log.py"; exit 1; }
+    { echo "$LOG_HEAD"
       head -c 12582912 /dev/zero | tr '\0' '\n'; } | head -c 12582912 > "$LOG_MNT/PURPLE-LOG"
     umount "$LOG_MNT"
     rmdir "$LOG_MNT"

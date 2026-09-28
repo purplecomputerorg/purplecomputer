@@ -573,16 +573,27 @@ device_sha256() {
 # drive against the ISO after settling.
 GPT_SKIP_BYTES=1048576
 
-# Bytes of the ISO covered by its read-only partitions (1: ISO9660, 2: EFI).
-# Partition 3 (PURPLEUSB) is where purple-stick-log writes on the debug stick,
-# settle boot included, so it is not compared. Past the partitions the file
+# Bytes of the ISO covered by its partitions (1: ISO9660, 2: EFI, 3: PURPLEUSB,
+# which restore_log_partition puts back after the settle boot). Past them the file
 # holds only a backup GPT the settle boot supersedes and xorriso padding, and
 # casper puts the writable partition on the next 2MiB boundary after the last
 # partition, which can land inside that padding: its mkfs then looks like decay.
 iso_partitioned_bytes() {
     local end
-    end=$(sfdisk -l -q -o device,end "$1" 2>/dev/null | awk '$1 ~ /[^0-9][12]$/ {print $2}' | sort -n | tail -n1)
+    end=$(sfdisk -l -q -o device,end "$1" 2>/dev/null | awk '$1 ~ /[^0-9][123]$/ {print $2}' | sort -n | tail -n1)
     if [[ -n "$end" ]]; then echo $(( (end + 1) * 512 )); else stat -c %s "$1"; fi
+}
+
+# The settle boot runs the stick log like any live boot, so copy PURPLEUSB back
+# from the ISO: the stick ships with the log the build wrote. Sticks tested by
+# hand get the same from `cleanlog`. ISOs without a third partition: no-op.
+restore_log_partition() {
+    local dev="$1" iso="$2" start end
+    read -r start end < <(sfdisk -l -q -o device,start,end "$iso" 2>/dev/null | awk '$1 ~ /[^0-9]3$/ {print $2, $3}')
+    [[ -n "$end" ]] || return 0
+    sudo dd if="$iso" of="$dev" bs=4M skip=$((start * 512)) seek=$((start * 512)) \
+        count=$(((end - start + 1) * 512)) iflag=skip_bytes,count_bytes oflag=seek_bytes \
+        conv=notrunc,fsync status=none
 }
 
 # Confirm a drive still holds the image after boot-settling, catching flash

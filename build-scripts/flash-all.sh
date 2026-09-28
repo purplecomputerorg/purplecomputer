@@ -355,6 +355,12 @@ run_drive() {
             echo -e "    log:   $LOG_DIR/$(basename "$dev").boot-settle.log"
         fi
         slot_release 8
+        if ! restore_log_partition "$dev" "$iso"; then
+            echo -e "${RED}✗${NC} $dev: could not restore PURPLE-LOG after settle"
+            record_manifest fail-log-restore "$dev" "$serial" "" "" "$(basename "$iso")" ""
+            finish_drive "$i" fail "$dev" "$tries" "$log"
+            return 0
+        fi
 
         # Re-read the drive before ejecting, catching flash that decays in the
         # minutes after being written. Must precede eject_drive: a powered-off

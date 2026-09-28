@@ -1,6 +1,8 @@
 """purple-stick-log writes the report and the kernel log into fixed regions of
 one preallocated file, by offset, never outside it."""
 import importlib.util
+import os
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -147,3 +149,21 @@ def test_usb_cache_only_warms_with_low_ram_or_a_failed_lock(tmp_path, monkeypatc
     assert "Low RAM" in log and marker and not held
     log, marker, held = _usb_cache(tmp_path, monkeypatch, avail=4 << 30, mlock_rc=-1)
     assert "Could not lock" in log and marker and not held
+
+
+def test_build_and_cleanlog_write_the_same_bytes(tmp_path):
+    k = _load(report=8 << 20, kmsg=4 << 20)
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    build = remaster[remaster.index("    LOG_HEAD=$("):remaster.index('> "$LOG_MNT/PURPLE-LOG"') + len('> "$LOG_MNT/PURPLE-LOG"')]
+    build = build.replace("/purple-src/", f"{ROOT}/")
+    subprocess.run(["bash", "-ec", build], env={"LOG_MNT": str(tmp_path), "PATH": os.environ["PATH"]}, check=True)
+    assert (tmp_path / "PURPLE-LOG").read_bytes() == k.pristine()
+
+
+def test_reset_rewrites_only_the_file_and_checks_it(tmp_path):
+    k = _load()
+    dev = tmp_path / "dev"
+    dev.write_bytes(b"X" * 100 + b"O" * 600 + b"X" * 100)
+    assert k.StickFile(str(dev), 100).reset()
+    d = dev.read_bytes()
+    assert d[:100] == b"X" * 100 and d[700:] == b"X" * 100 and d[100:700] == k.pristine()

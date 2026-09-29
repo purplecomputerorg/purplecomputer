@@ -442,7 +442,7 @@ main() {
         zstd -dc "$1" \
             | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
             | tee >(wc -c > "$WRITE_SIZE_FILE") \
-            | "${PROGRESS_CMD[@]}" 2> >(while read p; do echo "[PURPLE-PV] $(( PV_FROM + p * (100 - PV_FROM) / 100 ))" >&2; done) \
+            | "${PROGRESS_CMD[@]}" 2> >(while read p; do case "$p" in ''|*[!0-9]*) continue ;; esac; echo "[PURPLE-PV] $(( PV_FROM + p * (100 - PV_FROM) / 100 ))" >&2; done) \
             | dd of=/dev/$TARGET bs=4M conv=fsync
         local ps=("${PIPESTATUS[@]}") s rc=0
         ZSTD_RC=${ps[0]}

@@ -1462,6 +1462,8 @@ class PurpleApp(App):
         @contextmanager
         def _suspend_ctx():
             self._app_suspended = True
+            # Terminal typing never reaches Purple's idle clock
+            self.inhibit_idle("terminal")
 
             # Release evdev grab so terminal can receive keyboard input
             if self._evdev_reader:
@@ -1483,6 +1485,7 @@ class PurpleApp(App):
                     self._evdev_reader.reacquire_grab()
                 # Reset keyboard state to avoid stuck keys
                 self._keyboard_state_machine.reset()
+                self.uninhibit_idle("terminal")
                 self._app_suspended = False
 
         return _suspend_ctx()
@@ -2126,6 +2129,8 @@ class PurpleApp(App):
     def uninhibit_idle(self, reason: str) -> None:
         """Release an idle inhibitor previously added by inhibit_idle()."""
         self._idle_inhibitors.discard(reason)
+        # Inhibited time was not idle; otherwise the next tick sleeps at once.
+        get_power_manager().record_activity()
 
     def _check_idle_state(self) -> None:
         """Check if we should enter sleep mode due to inactivity.

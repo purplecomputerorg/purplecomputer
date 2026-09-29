@@ -6,6 +6,7 @@ switch-on-connect drop-in without failing tests.
 """
 
 import functools
+import importlib.util
 import re
 from pathlib import Path
 
@@ -457,20 +458,28 @@ def test_usb_cache_service_replaces_the_xinitrc_warmup():
 
 
 def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
-    """PURPLE-LOG is one preallocated file with a report region and a
-    kernel log region. The initramfs writes the report region in place (1<>
-    never truncates, so the sectors never move) before and after mounting the
-    system and at the end of casper-bottom; purple-stick-log then writes both
-    regions by raw sector writes, never keeping FAT mounted. Sizes must agree
-    between the build, the initramfs hook and the writer."""
+    """PURPLE-LOG is one preallocated file: a header with the start count,
+    then a slot per start with a report region and a kernel log region. The
+    initramfs claims the start and writes its report region in place (1<> and
+    dd conv=notrunc never truncate, so the sectors never move) before and
+    after mounting the system and at the end of casper-bottom; purple-stick-log
+    then writes both regions by raw sector writes, never keeping FAT mounted.
+    Sizes must agree between the build, the initramfs hook and the writer."""
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
     writer = (ROOT / "scripts" / "purple-stick-log.py").read_text()
-    assert "REPORT_BYTES = 8 << 20" in writer and "KMSG_BYTES = 4 << 20" in writer
-    assert 'head -c 12582912 > "$LOG_MNT/PURPLE-LOG"' in remaster, "file must be exactly report + kmsg bytes"
+    spec = importlib.util.spec_from_file_location("stick_log", ROOT / "scripts" / "purple-stick-log.py")
+    k = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(k)
+    assert f'head -c {k.file_bytes()} > "$LOG_MNT/PURPLE-LOG"' in remaster, "file must be exactly header + slots"
     hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
     assert "purple_stick_report() {" in hook
-    assert "blkid -L PURPLEUSB" in hook and "cat /casper.log" in hook and "dmesg" in hook
-    assert '} 1<> "$mnt/PURPLE-LOG" 2>&1' in hook, "initramfs must write in place, inside the report region"
+    assert "blkid -L PURPLEUSB" in hook and "tail -c 200000 /casper.log" in hook and "dmesg" in hook
+    blk = 4096
+    assert k.HEADER_BYTES % blk == 0 and (k.REPORT_BYTES + k.KMSG_BYTES) % blk == 0
+    dd = (f'seek=$(( {k.HEADER_BYTES // blk} + (n - 1) % {k.SLOTS} * {(k.REPORT_BYTES + k.KMSG_BYTES) // blk} )) '
+          f'count={k.REPORT_BYTES // blk} conv=notrunc')
+    assert f'bs={blk} {dd}' in hook, "initramfs must write in place, inside its slot's report region"
+    assert '1<> "$f"' in hook and "stick-start" in hook and k.START_FILE == "/run/purple/stick-start"
     live_hook = remaster.split("<< 'HOOK_EOF'")[1].split("HOOK_EOF")[0]
     for script in (hook, live_hook):
         assert not re.search(r"(^|[|;&]\s*)(head|chown)\b", script, re.M), "the casper initrd's busybox has no head or chown"

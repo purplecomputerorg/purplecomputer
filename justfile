@@ -290,8 +290,9 @@ upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 
 # Summarize a customer's PURPLE-LOG or diag.txt: where boot got to, what failed or is stuck, kernel and journal errors.
-read-log path:
-    @python3 scripts/purple-log-summary.py "{{path}}"
+# PURPLE-LOG keeps the stick's last 8 starts: the newest is summarized, --all summarizes each.
+read-log path *args:
+    @python3 scripts/purple-log-summary.py "{{path}}" {{args}}
 
 # Symlink a built ISO into ~/isos and print the scp line to pull it to your Mac (same picker as flash).
 # just link-iso [--debug|--no-backup] [--ref <commit>] [iso-path]

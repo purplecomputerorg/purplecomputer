@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Summarize a customer's PURPLE-LOG (or diag.txt) into what matters for a
 diagnosis: where boot got to, what failed or is stuck, and the kernel and
-journal errors, without the megabytes of padding and repeated logs.
+journal errors, without the megabytes of padding and repeated logs. A stick's
+PURPLE-LOG holds its last few starts: the newest is summarized, the others
+listed (--all summarizes each).
 
-Usage: just read-log <path>
+Usage: just read-log <path> [--all]
 """
 import importlib.util
 import re
@@ -29,6 +31,25 @@ PROGRESS = re.compile(r"^\[PURPLE-PV")
 BOOT_MILESTONES = re.compile(r"=== |Display ready|No connected|Launching|launcher\] exec|watchdog armed|main loop|"
                              r"first render|WATCHDOG|mixer|Squashfs|Low RAM|USB safe")
 CASPER = re.compile(r"purple|" + TROUBLE.pattern, re.I)
+
+
+def starts(data):
+    """(start number, bytes) for each used slot, newest first; one unnumbered
+    entry for a diag.txt or a PURPLE-LOG from before slots."""
+    if len(data) != _stick.file_bytes():
+        return [(None, data)]
+    size = _stick.REPORT_BYTES + _stick.KMSG_BYTES
+    found = []
+    for base in range(_stick.HEADER_BYTES, len(data), size):
+        m = re.match(rb"start (\d+) of this stick\n", data[base:base + 64])
+        if m:
+            found.append((int(m[1]), data[base:base + size]))
+    return sorted(found, reverse=True)
+
+
+def machine(data):
+    m = re.search(rb"^machine: (.*)$", data[:8192], re.M)
+    return m[1].decode(errors="replace").strip() if m else "machine unknown"
 
 
 def split_regions(text):
@@ -80,7 +101,7 @@ def summarize(text):
     stuck = [line for line in find(secs, "processes").splitlines()[1:] if re.match(r"\s*\d+\s+\d+\s+D", line)]
 
     show("Report", header[:12])
-    if header and header[0].startswith("purple-initramfs:"):
+    if any(line.startswith("purple-initramfs:") for line in header[:2]):
         show("Verdict", ["Only the initramfs report: boot never reached Purple's own services (see its first line)."])
     else:
         ui = "first render reached" in boot_log
@@ -99,15 +120,24 @@ def summarize(text):
     source = "live kernel log" if kmsg else "dmesg tail in the report"
     klog = kmsg or find(secs, "dmesg")
     if _stick.WRAP.decode().strip() in klog:
-        show("Note", ["The kernel log wrapped: its earliest lines were overwritten."])
+        show("Note", ["The kernel log filled up: the middle of the boot was overwritten, its start and newest lines are kept."])
     show(f"Kernel problems ({source})", matching(klog, TROUBLE, 40))
     show(f"Last kernel lines ({source})", klog.splitlines()[-25:])
 
 
 def main():
-    if len(sys.argv) != 2:
+    args = sys.argv[1:]
+    if len(args) not in (1, 2) or args[1:] not in ([], ["--all"]):
         sys.exit(__doc__.strip().splitlines()[-1])
-    summarize(Path(sys.argv[1]).read_bytes().decode("utf-8", errors="replace"))
+    found = starts(Path(args[0]).read_bytes())
+    if not found:
+        sys.exit("This stick's PURPLE-LOG has no reports: it has not been started since it was flashed or cleaned.")
+    if found[0][0] is not None:
+        show(f"Starts on this stick (newest first, {len(found)} kept)", [f"start {n}: {machine(d)}" for n, d in found])
+    for n, data in found if "--all" in args else found[:1]:
+        if n is not None:
+            print(f"\n# Start {n}")
+        summarize(data.decode("utf-8", errors="replace"))
 
 
 if __name__ == "__main__":

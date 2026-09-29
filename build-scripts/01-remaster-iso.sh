@@ -220,23 +220,41 @@ purple_debug_if_key_held() {
 }
 
 # PURPLE-LOG written from inside the initramfs: casper's log and dmesg so
-# far, into the report region of the preallocated file (in place, 1<> never
-# truncates, so the file's sectors never move and purple-stick-log can keep
-# writing them raw). purple-stick-log replaces the text seconds after systemd
-# starts, so this is what a customer finds when boot never got that far.
+# far, into this start's report region of the preallocated file. Every write
+# is in place (1<> and dd conv=notrunc never truncate, and dd's count keeps it
+# inside the region), so the file's sectors never move and purple-stick-log
+# can keep writing them raw. The first call claims the start number: it bumps
+# the header's count and leaves it in /run for purple-stick-log. That replaces
+# the text seconds after systemd starts, so this is what a customer finds when
+# boot never got that far. Sizes match purple-stick-log.py.
 purple_stick_report() {
-    local part mnt=/purple-stick
+    local part mnt=/purple-stick f=/purple-stick/PURPLE-LOG r=/run/purple/stick-report head n
     part=$(blkid -L PURPLEUSB 2>/dev/null) || return 0
-    mkdir -p "$mnt" && mount -t vfat -o rw,noatime "$part" "$mnt" 2>/dev/null || return 0
+    mkdir -p "$mnt" /run/purple && mount -t vfat -o rw,noatime "$part" "$mnt" 2>/dev/null || return 0
+    [ -f "$f" ] || { umount "$mnt"; return 0; }
+    if [ -s /run/purple/stick-start ]; then
+        read -r n < /run/purple/stick-start
+    else
+        { IFS= read -r head; read -r n; } < "$f"
+        n=${n#starts: }
+        case "$n" in ''|*[!0-9]*) n=0 ;; esac  # a bad number would abort this shell in $(( ))
+        n=$((n + 1))
+        printf '%s\nstarts: %-10d' "$head" "$n" 1<> "$f"
+        echo "$n" > /run/purple/stick-start
+    fi
     {
+        echo "start $n of this stick"
         echo "purple-initramfs: $1 (uptime $(cut -d' ' -f1 /proc/uptime)s)"
         echo "Written before Purple's own services started. If this text is still here,"
         echo "boot never got past mounting the system from the stick."
+        echo "machine: $(cat /sys/class/dmi/id/sys_vendor /sys/class/dmi/id/product_name 2>/dev/null | tr '\n' ' ')"
         echo "cmdline: $(cat /proc/cmdline)"
-        echo; echo "===== casper log ====="; cat /casper.log 2>/dev/null
-        echo; echo "===== dmesg ====="; dmesg 2>/dev/null
+        echo; echo "===== casper log ====="; tail -c 200000 /casper.log 2>/dev/null
+        echo; echo "===== dmesg ====="; dmesg 2>/dev/null | tail -c 700000
         echo; echo "===== end of this report: any text below it is from an earlier start ====="
-    } 1<> "$mnt/PURPLE-LOG" 2>&1  # no head in the initrd; casper's log and dmesg stay far under the 8MB region
+    } > "$r" 2>&1
+    dd if="$r" of="$f" bs=4096 seek=$(( 1 + (n - 1) % 8 * 384 )) count=256 conv=notrunc 2>/dev/null
+    rm -f "$r"
     umount "$mnt" 2>/dev/null
 }
 
@@ -823,8 +841,9 @@ open it. Support may also ask you to hold the P key while turning the laptop
 on, which shows a boot menu with extra options. Nothing on this drive needs
 changing, and please don't format it.)
 README_EOF
-    # PURPLE-LOG: preallocated, 8MB report region then 4MB kernel log
-    # region (sizes in purple-stick-log.py). The initramfs and purple-stick-log
+    # PURPLE-LOG: preallocated, a 4KB header with the start count, then 8
+    # slots of a 1MB report region and a 512KB kernel log region (sizes in
+    # purple-stick-log.py). The initramfs and purple-stick-log
     # write into it in place, the latter by raw sector writes, so nothing
     # stays mounted and no FAT metadata changes while Purple runs. Written
     # last onto a fresh FAT so it is one contiguous run. Padded with newlines,
@@ -832,8 +851,8 @@ README_EOF
     # The header comes from purple-stick-log so cleanlog restores these exact bytes.
     LOG_HEAD=$(sed -n 's/^PRISTINE_HEAD = "\(.*\)"$/\1/p' /purple-src/scripts/purple-stick-log.py)
     [ -n "$LOG_HEAD" ] || { echo "ERROR: no PRISTINE_HEAD in purple-stick-log.py"; exit 1; }
-    { echo "$LOG_HEAD"
-      head -c 12582912 /dev/zero | tr '\0' '\n'; } | head -c 12582912 > "$LOG_MNT/PURPLE-LOG"
+    { echo "$LOG_HEAD"; printf 'starts: %-10d\n' 0
+      head -c 12587008 /dev/zero | tr '\0' '\n'; } | head -c 12587008 > "$LOG_MNT/PURPLE-LOG"
     umount "$LOG_MNT"
     rmdir "$LOG_MNT"
 

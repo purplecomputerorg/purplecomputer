@@ -9,8 +9,10 @@ to do, what comes back, and how to read it. The mechanisms behind it are in
 
 Nothing here needs the debug ISO or any key press. It ships on the standard ISO.
 
-- **`PURPLE-LOG`** on the `PURPLEUSB` drive, one file with two parts. First
-  the report, rewritten every 10 seconds until Purple is on screen, every
+- **`PURPLE-LOG`** on the `PURPLEUSB` drive, one file that keeps the stick's
+  last 8 starts, on any mix of machines: a start never overwrites the 7
+  before it. Each start's section begins `start N of this stick` and has two
+  parts. First the report, rewritten every 10 seconds until Purple is on screen, every
   minute for ten minutes after that, then every ten minutes, and once more at
   shutdown: machine and BIOS, kernel command line, whether P was held, failed
   services, what every process is waiting on, Purple's own logs (including the
@@ -18,12 +20,12 @@ Nothing here needs the debug ISO or any key press. It ships on the standard ISO.
   It starts as soon as the kernel finds the stick: the initramfs writes a
   first version before the system is even mounted (and again right before
   mounting it, and at the end of casper-bottom), so a boot that never reaches
-  Purple still leaves one. If the file starts with `purple-initramfs:`, boot
-  stopped at that stage. After the report, past some reserved space, the
+  Purple still leaves one. If a start's report opens with `purple-initramfs:`,
+  boot stopped at that stage. After the report, past some reserved space, the
   kernel log written live, flushed within seconds, so the last seconds before
   a hang are in it; the line `newest kernel log line above` marks where this
   start's log ends. The file is a fixed 12MB and its
-  date is the build date; the report's own time is on its first line.
+  date is the build date; each report's own time is near its top.
 - **The turn-it-off-first note** and this drive are what a parent sees when they
   plug the stick into a running Windows or Mac computer.
 
@@ -90,11 +92,13 @@ is the only record).
 
 ## Reading what comes back
 
-`just read-log <file>` prints the parts that matter: whether Purple reached
-its first screen, failed units, processes stuck on disk, boot milestones, the
-install log, and kernel and journal errors with repeats collapsed.
+`just read-log <file>` lists the starts on the stick (newest first, with the
+machine) and prints the parts that matter for the newest (`--all` does every
+start): whether Purple reached its first screen, failed units, processes stuck
+on disk, boot milestones, the install log, and kernel and journal errors with
+repeats collapsed.
 
-- **`PURPLE-LOG` starts with `purple-initramfs:`** and the message names
+- **A start's report opens with `purple-initramfs:`** and the message names
   the stage: the boot never got past mounting the system. The dmesg section
   shows why (USB errors, missing driver, memory).
 - **`debug mode: on, P held at start: yes`** in the header: the customer held P

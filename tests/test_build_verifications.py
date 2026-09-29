@@ -558,3 +558,22 @@ def test_hold_p_opens_the_boot_menu_on_the_standard_iso():
     assert "gcc -static -O2 -o /opt/purple/bin/purple-keyheld /tmp/purple-keyheld.c" in src
     c = (ROOT / "tools" / "purple-keyheld.c").read_text()
     assert "EVIOCGKEY" in c, "must read held state, not wait for press events"
+
+
+def test_shutdown_splash_repaints_purple_without_starting_up(tmp_path):
+    """ExecStop repaints tty1 to hide X.Org's exit; "Starting up..." there
+    flashed on every shutdown and read as a restart."""
+    import subprocess
+    body = re.search(r"<<'SPLASH'\n(.*?)\nSPLASH\n", _build_source(), re.DOTALL).group(1)
+    tty = tmp_path / "tty1"
+    script = tmp_path / "purple-splash"
+    script.write_text(body.replace("/dev/tty1", str(tty)))
+    assert "ExecStop=/usr/local/bin/purple-splash stop" in _build_source()
+
+    def paint(*args):
+        subprocess.run(["sh", str(script), *args], check=True)
+        return tty.read_text()
+
+    assert "Starting up" in paint()
+    stop = paint("stop")
+    assert "Starting up" not in stop and "\033]P02d1b4e" in stop

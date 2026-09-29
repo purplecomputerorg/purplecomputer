@@ -663,7 +663,9 @@ fi
 dmesg -n 1 2>/dev/null
 # Redefine VT color 0 (black) to Purple Computer purple (#2d1b4e),
 # then clear screen (fills with purple) and show white text.
-printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
+printf '\033]P02d1b4e\033[H\033[2J' > /dev/tty1 2>/dev/null
+# Shutdown (ExecStop) repaints plain purple: "Starting up..." there reads as a restart
+[ "$1" = stop ] || printf '\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
 SPLASH
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-splash"
 
@@ -717,7 +719,7 @@ Before=getty@tty1.service
 Type=oneshot
 ExecStart=/usr/local/bin/purple-splash
 # On shutdown, repaint tty1 purple so no X.Org or systemd messages are visible
-ExecStop=/usr/local/bin/purple-splash
+ExecStop=/usr/local/bin/purple-splash stop
 RemainAfterExit=yes
 
 [Install]

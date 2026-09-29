@@ -51,7 +51,9 @@ run() {  # case-name  root-to-simulate  expected-root
         echo 'serial; terminal_output serial'
         [ -n "$root" ] && echo "set root=$root"
         echo 'source $prefix/installed.cfg'
-        echo 'echo "RESOLVED root=[$root] variant=[$purple_variant] args=[$purple_root_arg $purple_cmdline]"'
+        echo 'echo "RESOLVED root=[$root] variant=[$purple_variant]"'
+        # Own line: GRUB wraps serial output at 80 columns
+        echo 'echo "args=[$purple_root_arg $purple_cmdline]"'
     } > "$WORK/$name/boot/grub/grub.cfg"
     grub-mkrescue -o "$iso" "$WORK/$name" >/dev/null 2>&1
     out=$(timeout 60 qemu-system-x86_64 -m 256 -hda "$DISK" -cdrom "$iso" -boot d -display none \
@@ -60,7 +62,7 @@ run() {  # case-name  root-to-simulate  expected-root
     resolved=$(grep -o 'RESOLVED root=\[[^]]*\]' <<<"$out" | head -1)
     found_kernel=$(grep -c 'invalid magic number' <<<"$out" || true)
     if [ "$resolved" = "RESOLVED root=[$expect]" ] && grep -q 'Starting Purple Computer' <<<"$out" \
-        && [ "$found_kernel" -ge 1 ] && grep -q 'args=\[root=LABEL=PURPLE_ROOT ro loglevel=3' <<<"$out"; then
+        && [ "$found_kernel" -ge 1 ] && grep -q 'args=\[root=LABEL=PURPLE_ROOT ro quiet loglevel=3' <<<"$out"; then
         echo "ok    $name: root=${root:-<cd>} -> $expect, menuentry ran, kernel file found"
     else
         echo "FAIL  $name: root=${root:-<cd>} -> ${resolved:-no RESOLVED line} (expected [$expect])"

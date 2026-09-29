@@ -25,6 +25,8 @@ import time
 from datetime import datetime
 from typing import Optional
 
+from . import diag_log
+
 
 # /var/log/purple survives reboot on installed systems and the debug ISO
 # (same convention as boot_log.py); rotated per boot by purple-wait-display.sh.
@@ -42,12 +44,7 @@ def _power_log(msg: str) -> None:
         text = (f"\n{'=' * 60}\n"
                 f"Power log started at {datetime.now().isoformat()}\n"
                 f"{'=' * 60}\n") + text
-    for path in _LOG_PATHS:
-        try:
-            with open(path, "a") as f:
-                f.write(text)
-        except Exception:
-            pass
+    diag_log.append(_LOG_PATHS, text, "purple-power")
 
 
 def _get_timing(normal: int, demo: int) -> int:
@@ -409,9 +406,6 @@ class PowerManager:
 
         In demo mode (PURPLE_SLEEP_DEMO=1), just prints a message instead.
         """
-        # Always log shutdown attempts (not just on debug ISO) for diagnostics.
-        _power_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
-                      f"charger={self._charger_state}")
         _power_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
                    f"charger={self._charger_state}")
 

@@ -474,6 +474,33 @@ class TestPowerButtonEvents:
         _run(_test())
 
 
+    def test_one_press_reported_by_both_buttons_is_one_tap(self):
+        """HP Stream 11: a single press arrives on both ACPI buttons, and the
+        second copy used to confirm the shutdown prompt the first opened."""
+        async def _test():
+            cb = AsyncCallback()
+            pb1 = FakeInputDevice("/dev/input/event1", "Power Button",
+                                  {KeyCode.KEY_POWER}, has_ev_rep=False)
+            pb2 = FakeInputDevice("/dev/input/event2", "Power Button",
+                                  {KeyCode.KEY_POWER}, has_ev_rep=False)
+
+            reader = PowerButtonReader(callback=cb, hold_seconds=3)
+            with patch.object(reader, '_find_power_buttons', return_value=[pb1, pb2]):
+                await reader.start()
+
+            for dev, t in ((pb1, 300.0), (pb2, 300.004), (pb1, 302.0)):
+                dev.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_POWER, 1, t))
+                await asyncio.sleep(0.02)
+                dev.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_POWER, 0, t))
+                await asyncio.sleep(0.02)
+
+            await reader.stop()
+
+            assert [c.action for c in cb.calls] == ["tap", "tap"]
+
+        _run(_test())
+
+
 class TestPowerButtonHotplug:
     """A power button the boot scan missed leaves the power menu dead all
     session, the same failure class the keyboard watcher covers."""

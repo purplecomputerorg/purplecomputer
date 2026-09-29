@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional, Awaitable
 
+from . import diag_log
 from .constants import SUPPORT_EMAIL, is_debug
 
 logger = logging.getLogger(__name__)
@@ -356,12 +357,7 @@ class EvdevReader:
     @staticmethod
     def _diag(msg):
         """Append to tmpfs + persistent log so silent-keyboard reports survive reboot."""
-        for path in DIAG_LOG_PATHS:
-            try:
-                with open(path, "a") as f:
-                    f.write(f"{msg}\n")
-            except Exception:
-                pass
+        diag_log.append(DIAG_LOG_PATHS, f"{msg}\n", "purple-evdev")
         logger.info(msg)
 
     def _diag_once(self, msg: str) -> None:
@@ -983,6 +979,10 @@ class PowerButtonReader:
     """
     Reads power button events from evdev and detects tap vs hold.
 
+    Some firmware reports one press on both ACPI buttons, or twice on one
+    (HP Stream 11), so presses closer than PRESS_DEBOUNCE_SECS count once;
+    otherwise the second copy confirms the shutdown prompt the first opened.
+
     Hold detection uses asyncio timers, independent of Textual's event loop.
     This ensures reliable detection even if the TUI is suspended.
 
@@ -1007,6 +1007,9 @@ class PowerButtonReader:
         self._logged_once: set = set()  # Diag lines already written
         self._hold_task: Optional[asyncio.Task] = None
         self._press_time: Optional[float] = None
+        self._last_press = float("-inf")
+
+    PRESS_DEBOUNCE_SECS = 1.0
 
     _device_paths = staticmethod(_list_input_paths)
 
@@ -1172,8 +1175,12 @@ class PowerButtonReader:
                                f"code={event.code} value={event.value}")
 
                 if event.type == EV_KEY and event.code == KeyCode.KEY_POWER:
-                    _power_log(f"POWER KEY: value={event.value} (1=press, 0=release)")
+                    _power_log(f"POWER KEY: {device.path} value={event.value} (1=press, 0=release)")
                     if event.value == 1:  # press
+                        if event.timestamp() - self._last_press < self.PRESS_DEBOUNCE_SECS:
+                            _power_log("POWER KEY: ignored, same press as the last one")
+                            continue
+                        self._last_press = event.timestamp()
                         self._press_time = event.timestamp()
                         self._cancel_hold_task()
                         self._hold_task = asyncio.create_task(self._hold_timer())

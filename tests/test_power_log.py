@@ -36,3 +36,15 @@ class TestPowerLog:
         monkeypatch.setattr(pm, "_header_written", True)
         pm._power_log("still ok")  # must not raise
         assert "still ok" in b.read_text()
+
+    def test_lines_reach_the_journal_under_their_tag(self, tmp_path, monkeypatch):
+        from purple_tui import diag_log
+        sent = []
+        class FakeSocket:
+            def sendto(self, data, flags, addr):
+                sent.append(data.decode())
+        monkeypatch.setattr(diag_log, "_journal", FakeSocket())
+        _paths(tmp_path, monkeypatch)
+        pm._power_log("POWER KEY: pressed")
+        assert any(m.startswith("<14>purple-power: ") and "POWER KEY: pressed" in m for m in sent)
+        assert all(m.split(": ", 1)[1].strip() for m in sent)

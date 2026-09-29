@@ -14,9 +14,9 @@ See also: `guides/boot-display-sequence.md` (normal boot path), `purple_tui/boot
 |---|---|---|---|
 | `/tmp/purple-boot.log` | tmpfs | tmpfs | No |
 | `/var/log/purple/boot.log` | tmpfs (effectively the same as above) | **ext4 on the casper `writable` USB partition** | **Yes, on debug ISO** |
-| `journalctl -t purple-boot` | volatile journal | volatile journal | Depends on `Storage=` in `journald.conf` |
+| `journalctl -t purple-boot` | volatile journal | volatile journal | **Yes on installed systems** (persistent journal, every boot) |
 
-On xinitrc entry, `boot.log` is rotated to `boot.log.prev` — so after a hang + power cycle + boot, the previous boot's full trace lives at `/var/log/purple/boot.log.prev`.
+Once per kernel boot `purple-wait-display` rotates `boot.log`, `power.log` and `evdev.log` to `.prev`, so the files hold only this boot and the last. Every line also goes to the journal (`purple_tui/diag_log.py`), tagged `purple-boot`, `purple-power` and `purple-evdev`. On an installed system, read any earlier boot with `journalctl -b -2 -t purple-power`; `journalctl --list-boots` numbers them.
 
 For a slow (not hung) boot, `sudo purple-boot-timing` prints the lines that bound each phase as seconds since the kernel started, next to `systemd-analyze`, so the gap shows up without reading the raw log. `--timeline` prints just that part.
 

@@ -63,6 +63,7 @@ class FakeInputDevice:
         self._events: asyncio.Queue = asyncio.Queue()
         self._closed = False
         self._grabbed = False
+        self.held_keys: list = []
         self.fd = id(self)
 
     def capabilities(self):
@@ -80,6 +81,9 @@ class FakeInputDevice:
 
     def ungrab(self):
         self._grabbed = False
+
+    def active_keys(self):
+        return self.held_keys
 
     def close(self):
         self._closed = True
@@ -182,6 +186,28 @@ class TestMultiDeviceLifecycle:
 
             reader.reacquire_grab()
             assert kbd1._grabbed and kbd2._grabbed
+
+            await reader.stop()
+
+        _run(_test())
+
+    def test_reacquire_waits_for_held_keys_to_be_released(self):
+        """Grabbing while Enter is still down hides its release from X, which
+        then repeats Enter into the terminal and skips the post-install prompt."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            reader = EvdevReader(callback=AsyncCallback(), grab=True)
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]):
+                await reader.start()
+            reader.release_grab()
+
+            kbd.held_keys = [KeyCode.KEY_ENTER]
+            grabbed_while_held = []
+            real_grab = kbd.grab
+            kbd.grab = lambda: (grabbed_while_held.append(bool(kbd.held_keys)), real_grab())
+            with patch('purple_tui.input.time.sleep', side_effect=lambda _: kbd.held_keys.clear()):
+                reader.reacquire_grab()
+            assert kbd._grabbed and grabbed_while_held == [False]
 
             await reader.stop()
 

@@ -38,6 +38,7 @@ OnFailure=purple-x11-failed.service
 Environment=SDL_AUDIODRIVER=pulseaudio
 # Wait for a real GPU to report a connected display (see the script header)
 ExecStartPre=/usr/local/bin/purple-wait-display
+ExecStartPre=-+/usr/local/bin/purple-backlight-max
 # Clean stale X lock files from previous crashes
 ExecStartPre=-/bin/rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 ExecStart=/usr/bin/startx /home/purple/.xinitrc -- vt1

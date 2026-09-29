@@ -819,11 +819,13 @@ TIMEOUTS
     cp /purple-src/config/systemd/purple-x11.service "$MOUNT_DIR/etc/systemd/system/"
     cp /purple-src/config/systemd/purple-x11-failed.service "$MOUNT_DIR/etc/systemd/system/"
     cp /purple-src/scripts/purple-wait-display.sh "$MOUNT_DIR/usr/local/bin/purple-wait-display"
+    cp /purple-src/scripts/purple-backlight-max.sh "$MOUNT_DIR/usr/local/bin/purple-backlight-max"
     cp /purple-src/scripts/purple-x11-failed.sh "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     cp /purple-src/scripts/purple-start-compositor.sh "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
     cp /purple-src/scripts/purple-boot-timing.sh "$MOUNT_DIR/usr/local/bin/purple-boot-timing"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-boot-timing"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-wait-display"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-backlight-max"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
     # Tear-free compositor config (modesetting has no TearFree option of its own)

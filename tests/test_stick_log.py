@@ -66,14 +66,18 @@ def test_kmsg_region_keeps_a_seam_after_the_newest_line_and_wraps_past_the_kept_
     assert region()[:kept] == k.KMSG_HEAD + b"a" * 20, "the start of the boot is never wrapped over"
     assert region()[kept:].startswith(k.WRAP + b"c" * 300 + k.SEAM)
     assert s.kmsg_pos + len(k.SEAM) <= 600 and dev.read_bytes()[1100:] == b"X" * 100
+    s.write_kmsg(b"d" * 1000 + b"e" * 50)
+    assert region()[kept:].startswith(k.WRAP) and b"e" * 50 + k.SEAM in region(), "an oversized batch keeps its newest lines"
+    assert s.kmsg_pos + len(k.SEAM) <= 600 and dev.read_bytes()[1100:] == b"X" * 100
 
 
 def test_each_start_claims_the_next_slot_and_the_initramfs_claim_wins(tmp_path):
     k = _real()
     dev = tmp_path / "dev"
     dev.write_bytes(b"X" * 100 + k.pristine() + b"X" * 100)
-    none = str(tmp_path / "absent")
-    assert [k.StickFile(str(dev), 100).claim(none) for _ in range(k.SLOTS + 1)] == list(range(1, k.SLOTS + 2))
+    fresh = lambda i: str(tmp_path / f"run{i}" / "stick-start")
+    assert [k.StickFile(str(dev), 100).claim(fresh(i)) for i in range(k.SLOTS + 1)] == list(range(1, k.SLOTS + 2))
+    assert k.StickFile(str(dev), 100).claim(fresh(0)) == 1, "a restarted service reuses its own claim"
     assert k.starts(dev.read_bytes()[100:]) == k.SLOTS + 1
     (tmp_path / "claimed").write_text("12\n")
     s = k.StickFile(str(dev), 100)

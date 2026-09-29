@@ -754,9 +754,6 @@ class InstallProgressScreen(FullScreen):
         if clean.startswith("[PURPLE-RETRY]"):
             self._status = "Double-checking with a backup copy..."
             return self.app.invalidate()
-        if clean.startswith("[PURPLE-MERGING]"):
-            self._status = "Still double-checking, this adds a few extra minutes..."
-            return self.app.invalidate()
         if clean.startswith("[PURPLE-CORRUPT-KEY]"):
             self._corrupt_key = True
             return

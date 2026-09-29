@@ -1677,16 +1677,9 @@ class InstallProgressScreen(PurpleModal):
                 self._set_progress(lo + int(pv_pct * span / 100), self._status)
                 return
         if clean.startswith('[PURPLE-RETRY]'):
-            # Primary image copy was corrupt; install.sh is rewriting from the
-            # backup copy. Progress is forward-only, so just soften the status.
+            # A range of the primary image copy was corrupt; install.sh took it
+            # from the backup copy. Progress is forward-only, so just soften the status.
             self._status = "Double-checking with a backup copy..."
-            self._update_ui()
-            return
-        if clean.startswith('[PURPLE-MERGING]'):
-            # Both whole copies were damaged; install.sh is rewriting from the
-            # good ranges of each. The forward-only bar sits still until pv
-            # catches back up, so the status must explain the extra wait.
-            self._status = "Still double-checking, this adds a few extra minutes..."
             self._update_ui()
             return
         if clean.startswith('[PURPLE-CORRUPT-KEY]'):

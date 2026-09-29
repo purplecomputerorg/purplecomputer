@@ -210,7 +210,7 @@ def test_boot_timing_timeline_is_seconds_since_boot(tmp_path):
     log = tmp_path / "boot.log"
     log.write_text(
         f"[{stamp(9)}] [wait-display] === purple-wait-display started === kernel=6.8\n"
-        f"[{stamp(9.5)}] [wait-display]   connector at start: card0-eDP-1 = connected\n"
+        f"[{stamp(9.5)}] [wait-display]   connector at start: card0-eDP-1 = connected (gpu)\n"
         f"[{stamp(12)}] [xinitrc] === xinitrc started ===  debug_flag=no\n"
         f"[{stamp(13)}] [usb-cache] Caching squashfs for USB safety...\n"
         f"[{stamp(14)}] [launcher] exec python3 -m purple_tui\n"

@@ -173,7 +173,7 @@ On laptops with real function keys, `Ctrl+Alt+F2` switches to tty2. From there: 
 | Last line in log | Hang is likely in |
 |---|---|
 | `=== purple-wait-display started ===` (nothing after) | shell/dash itself, or systemd is not executing ExecStart |
-| `Waiting for display...` with no "Display ready" | i915 async init, connector never reports `connected` |
+| `Waiting for display...` with no "Display ready" | no real GPU connector reports `connected`: slow driver probe (i915 async init), `nomodeset`, or a GPU with no driver |
 | `=== xinitrc started ===` (nothing after) | X server is running but xinitrc is blocked extremely early |
 | `matchbox-window-manager started` (nothing after) | font sizer, config copy, or alacritty exec |
 | `Launching Alacritty...` (nothing after) | alacritty itself (font loading, GPU init, pty setup) |

@@ -82,9 +82,9 @@ The menu, in order:
 | Entry | Use it when |
 |---|---|
 | Troubleshooting: start Purple and show what's happening | Default after 10s (any key press, a held P included, stops the countdown). Verbose boot, kernel and service lines on screen. |
-| Troubleshooting: try every fix for USB drive problems | USB read errors (`SQUASHFS error`, `I/O error, dev loop0`). IOMMU off, 32-bit USB DMA, no USB autosuspend, no PCIe power saving, system copied into RAM, bigger kernel log. One boot instead of five. |
+| Troubleshooting: try every fix for USB drive problems | USB read errors (`SQUASHFS error`, `I/O error, dev loop0`). IOMMU off, 32-bit USB DMA, no USB autosuspend, no PCIe power saving, system and install image copied into RAM (installing from this boot never reads the stick), bigger kernel log. One boot instead of five. |
 | Start Purple normally | The ordinary boot, for someone who held P by accident or for comparison. |
-| More options (for support) | A submenu: keyboard test, the USB fixes one at a time (for narrowing down which one mattered), recovery shell, our two failure-page self-tests, boot from the next volume, firmware settings. |
+| More options (for support) | A submenu: keyboard test, the USB fixes one at a time and the RAM copy alone (for narrowing down which one mattered), recovery shell, our two failure-page self-tests, boot from the next volume, firmware settings. |
 
 What to ask for after a menu boot: the same file plus a photo, or a video
 of the screen when the problem is early (before the stick is found, the screen

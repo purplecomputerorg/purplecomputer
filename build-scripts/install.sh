@@ -53,7 +53,82 @@ trap '_rc=$?; if [ $_rc -ne 0 ]; then echo "[ERROR] Install failed (exit code $_
 
 # Golden image path - set by hook via PURPLE_PAYLOAD_DIR
 GOLDEN_IMAGE="${PURPLE_PAYLOAD_DIR:-/purple}/purple-os.img.zst"
+BACKUP_IMAGE="${GOLDEN_IMAGE%/*}/purple-os-backup.img.zst"
+# Range size in bytes, then one sha256 per range of the compressed image.
+MANIFEST="${GOLDEN_IMAGE}.manifest"
 INSTALL_LOG=/tmp/purple-install.log
+
+# The compressed image is read into this tmpfs before the disk is touched.
+# The "try everything" boot (purple.toram) may have made it already, with a
+# copy inside that is checked like any other source.
+STAGE_DIR=/run/purple-stage
+STAGED_IMAGE=$STAGE_DIR/purple-os.img.zst
+RANGE_TMP=/tmp/purple-range
+# Share of the write's progress bar the read into memory takes.
+STAGE_PV=15
+
+# Mounts the tmpfs when there is room for the image plus 512MB to spare.
+stage_ready() {
+    mountpoint -q "$STAGE_DIR" && return 0
+    local kb=$(( $(stat -c %s "$GOLDEN_IMAGE") / 1024 + 1024 ))
+    [ "$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)" -ge $(( kb + 524288 )) ] || return 1
+    mkdir -p "$STAGE_DIR" && mount -t tmpfs -o size=${kb}k tmpfs "$STAGE_DIR"
+}
+
+# Puts range $1 (sha256 line $2, $3 bytes) in $RANGE_TMP from the first
+# remaining argument whose bytes match, and names it in $RANGE_SRC. Rounds a
+# couple of seconds apart give a stick that drops out for a moment another try.
+read_range() {
+    local i=$1 want=$2 bytes=$3 try src
+    shift 3
+    for try in 1 2 3 4 5; do
+        for src in "$@"; do
+            if dd if="$src" of="$RANGE_TMP" bs="$bytes" skip="$i" count=1 iflag=fullblock status=none 2>/dev/null \
+                && [ "$(sha256sum < "$RANGE_TMP")" = "$want" ]; then
+                RANGE_SRC=$src
+                return 0
+            fi
+        done
+        [ "$try" -eq 5 ] || sleep 2
+    done
+    return 1
+}
+
+# Walks the manifest range by range. stage: fills $STAGED_IMAGE in place,
+# reading the stick only for ranges the copy there lacks or has wrong;
+# stream: prints the checked image for the write. Fails on a range no copy has.
+image_ranges() {
+    local mode=$1 bytes want i=0 n pct last=-1 srcs=("$GOLDEN_IMAGE" "$BACKUP_IMAGE")
+    [ "$mode" = stage ] && srcs=("$STAGED_IMAGE" "${srcs[@]}")
+    n=$(( $(wc -l < "$MANIFEST") - 1 ))
+    {
+        read -r bytes
+        case "$bytes" in ''|*[!0-9]*)
+            warn "Bad image manifest header"
+            return 1 ;;
+        esac
+        while IFS= read -r want; do
+            if ! read_range "$i" "$want" "$bytes" "${srcs[@]}"; then
+                warn "Image range $i could not be read from any copy"
+                rm -f "$RANGE_TMP"
+                return 1
+            fi
+            [ "$RANGE_SRC" != "$BACKUP_IMAGE" ] || echo "[PURPLE-RETRY] range $i from the backup copy" >&2
+            if [ "$mode" = stream ]; then
+                cat "$RANGE_TMP" || return 1
+            else
+                [ "$RANGE_SRC" = "$STAGED_IMAGE" ] \
+                    || dd if="$RANGE_TMP" of="$STAGED_IMAGE" bs="$bytes" seek="$i" conv=notrunc status=none \
+                    || return 1
+                pct=$(( (i + 1) * STAGE_PV / n ))
+                [ "$pct" -eq "$last" ] || echo "[PURPLE-PV] $pct" >&2
+                last=$pct
+            fi
+            i=$((i + 1))
+        done
+    } < "$MANIFEST"
+    rm -f "$RANGE_TMP"
+}
 
 # Spawn emergency shell on tty2 (user can access with Alt+F2)
 if [ -c /dev/tty2 ]; then
@@ -279,6 +354,39 @@ main() {
         *)             PART_PREFIX="/dev/${TARGET}" ;;
     esac
 
+    log "Writing Purple Computer to disk..."
+    log "  Source: $GOLDEN_IMAGE"
+    log "  Target: /dev/$TARGET"
+    log "  This takes 2 to 10 minutes, depending on the computer..."
+    log ""
+
+    # ======================================================================
+    # READ THE IMAGE BEFORE TOUCHING THE DISK
+    # Every range of the compressed image is read from the stick into RAM and
+    # matched against its manifest hash before the disk is wiped, so a stick
+    # this laptop cannot read leaves the computer as it was. A range that
+    # fails comes from the backup copy on with-backup ISOs (cheap flash decays
+    # in storage and transit; seen in the field), and is retried for a stick
+    # that drops out for a moment. Without the RAM, the same checked ranges
+    # stream into the write, as they always did. No manifest (the i386
+    # payload): the image streams straight in and zstd's checksums catch damage.
+    # ======================================================================
+    WRITE_SRC="$GOLDEN_IMAGE" PV_FROM=0
+    if [ -f "$MANIFEST" ]; then
+        WRITE_SRC=ranges
+        if stage_ready; then
+            log "Reading the image into memory first..."
+            if ! image_ranges stage; then
+                # The friendly wording lives in parent_menu.py, keyed off this marker.
+                echo "[PURPLE-CORRUPT-KEY]" >&2
+                error "This Purple Key could not be read. Nothing on this computer was changed."
+            fi
+            WRITE_SRC="$STAGED_IMAGE" PV_FROM=$STAGE_PV
+        else
+            log "Not enough free memory to read the image first; writing it as it is read"
+        fi
+    fi
+
     # ======================================================================
     # PRE-WRITE CLEANUP
     # Clear old partition state so the kernel doesn't hold stale references.
@@ -308,21 +416,7 @@ main() {
 
     # ======================================================================
     # WRITE GOLDEN IMAGE
-    # With-backup ISOs carry a second copy of the image. zstd verifies frame
-    # checksums as it streams, so a decayed copy (cheap USB flash loses data
-    # in storage/transit; seen in the field) fails the pipeline and we retry
-    # from the backup copy. If both whole copies fail, flash decay scatters
-    # bad pages independently across the two copies, so a last-resort pass
-    # merges the good 4MiB ranges of each (hashes in the .manifest sidecar).
-    # dd failing with a healthy stream means the internal disk is the
-    # problem, which no copy or merge fixes.
     # ======================================================================
-    log "Writing Purple Computer to disk..."
-    log "  Source: $GOLDEN_IMAGE"
-    log "  Target: /dev/$TARGET"
-    log "  This will take approximately 10-15 minutes..."
-    log ""
-
     # Decompress and write, teeing the decompressed stream to sha256sum so we
     # can verify the disk contents afterwards without decompressing again.
     # The tee sends the same bytes to both dd (disk write) and sha256sum (checksum).
@@ -338,8 +432,8 @@ main() {
         [ -n "$IMAGE_SIZE" ] || IMAGE_SIZE=$((8192*1024*1024))
     fi
 
-    # Progress stage: pv reports byte progress for the UI; cat passes through
-    # when pv is missing.
+    # Progress stage: pv reports byte progress for the UI, after the share the
+    # read into memory took; cat passes through when pv is missing.
     PROGRESS_CMD=(cat)
     [ -n "$HAVE_PV" ] && PROGRESS_CMD=(pv -n -s "$IMAGE_SIZE")
 
@@ -348,7 +442,7 @@ main() {
         zstd -dc "$1" \
             | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
             | tee >(wc -c > "$WRITE_SIZE_FILE") \
-            | "${PROGRESS_CMD[@]}" 2> >(while read p; do echo "[PURPLE-PV] $p" >&2; done) \
+            | "${PROGRESS_CMD[@]}" 2> >(while read p; do echo "[PURPLE-PV] $(( PV_FROM + p * (100 - PV_FROM) / 100 ))" >&2; done) \
             | dd of=/dev/$TARGET bs=4M conv=fsync
         local ps=("${PIPESTATUS[@]}") s rc=0
         ZSTD_RC=${ps[0]}
@@ -357,82 +451,21 @@ main() {
         return $rc
     }
 
-    BACKUP_IMAGE="${GOLDEN_IMAGE%/*}/purple-os-backup.img.zst"
-    MANIFEST="${GOLDEN_IMAGE}.manifest"
-
-    # Emit each range of the compressed image from whichever copy matches its
-    # manifest hash (manifest: range size in bytes, then one sha256 per range;
-    # written by 01-remaster-iso.sh). Ranges are staged in /tmp so verified
-    # bytes are emitted without re-reading flaky flash, and a bad-sector EIO
-    # on one copy just fails over to the other. A range bad in both copies
-    # truncates the stream, which zstd rejects because the golden image is a
-    # single frame by build; the post-write disk verification backstops the rest.
-    merge_ranges() {
-        local tmp=/tmp/purple-merge-range range=0 bytes want src ok
-        {
-            read -r bytes || return 1
-            case "$bytes" in ''|*[!0-9]*)
-                echo "[PURPLE-MERGE] bad manifest header" >&2
-                return 1 ;;
-            esac
-            while IFS= read -r want; do
-                ok=""
-                for src in "$GOLDEN_IMAGE" "$BACKUP_IMAGE"; do
-                    if dd if="$src" of="$tmp" bs="$bytes" skip=$range count=1 iflag=fullblock status=none 2>/dev/null \
-                        && [ "$(sha256sum < "$tmp")" = "$want" ]; then
-                        ok=1
-                        break
-                    fi
-                done
-                if [ -z "$ok" ]; then
-                    echo "[PURPLE-MERGE] range $range unreadable in both copies" >&2
-                    rm -f "$tmp"
-                    return 1
-                fi
-                cat "$tmp" || { rm -f "$tmp"; return 1; }
-                range=$((range + 1))
-            done
-        } < "$MANIFEST"
-        rm -f "$tmp"
-    }
-
-    IMAGE_SOURCES=("$GOLDEN_IMAGE")
-    if [ -f "$BACKUP_IMAGE" ]; then
-        IMAGE_SOURCES+=("$BACKUP_IMAGE")
-        if [ -f "$MANIFEST" ]; then
-            IMAGE_SOURCES+=(merge)
-        fi
+    if [ "$WRITE_SRC" = ranges ]; then
+        write_image <(image_ranges stream) && WROTE_OK=true || WROTE_OK=false
+    else
+        write_image "$WRITE_SRC" && WROTE_OK=true || WROTE_OK=false
     fi
-
-    WROTE_OK=false
-    for SRC in "${IMAGE_SOURCES[@]}"; do
-        if [ "$SRC" = merge ]; then
-            echo "[PURPLE-MERGING]" >&2
-            log "Both copies are damaged, combining the good parts of each..."
-            if write_image <(merge_ranges); then WROTE_OK=true; fi
-        else
-            if [ "$SRC" != "$GOLDEN_IMAGE" ]; then
-                echo "[PURPLE-RETRY] backup copy" >&2
-                log "First copy was damaged, writing from the backup copy..."
-            fi
-            if write_image "$SRC"; then WROTE_OK=true; fi
-        fi
-        if [ "$WROTE_OK" = "true" ]; then
-            break
-        fi
+    if [ "$WROTE_OK" != "true" ]; then
         # dd failing means the disk rejected writes; a SIGPIPE'd zstd upstream
         # of a dead dd is not evidence of a bad copy, so check dd first.
         if [ "${DD_RC:-1}" -ne 0 ]; then
             error "Could not write to this computer's internal disk."
         fi
-        warn "Image copy failed integrity check while reading (zstd exit ${ZSTD_RC}): $SRC"
-    done
-
-    if [ "$WROTE_OK" != "true" ]; then
-        # The friendly wording lives in parent_menu.py, keyed off this marker.
         echo "[PURPLE-CORRUPT-KEY]" >&2
-        error "Every image copy on this Purple Key failed its integrity check."
+        error "The image on this Purple Key failed its integrity check (zstd exit ${ZSTD_RC})."
     fi
+    umount "$STAGE_DIR" 2>/dev/null || true
 
     # ======================================================================
     # POST-WRITE VERIFICATION

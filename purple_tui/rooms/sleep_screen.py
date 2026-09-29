@@ -17,6 +17,7 @@ from textual import events
 
 import os
 
+from .. import backlight
 from ..power_manager import get_power_manager, LID_SHUTDOWN_DELAY
 from ..constants import is_live_boot, LIVE_AUDIO_MARKER
 
@@ -99,11 +100,14 @@ class SleepScreen(Screen):
         """Start update timer when screen is shown."""
         self._update_status()
         self._status_timer = self.set_interval(5.0, self._tick)
+        backlight.set_level(backlight.SLEEP_LEVEL)
 
     def on_unmount(self) -> None:
         """Clean up timer when screen is hidden."""
         if self._status_timer:
             self._status_timer.stop()
+        from .parent_menu import load_display_settings
+        backlight.set_level(load_display_settings()["brightness"])
 
     def _tick(self) -> None:
         """Update status text and check for idle shutdown."""

@@ -31,6 +31,7 @@ from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, P
 from ..audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
 from ..tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from .. import diagnostics
+from ..backlight import set_level as set_backlight_level
 
 
 # =============================================================================
@@ -165,11 +166,14 @@ def apply_display_settings(brightness: float, contrast: float) -> bool:
 
     Returns True on success.
     """
-    if not display_control_available():
-        return False
-
     brightness = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, brightness))
     contrast = max(CONTRAST_MIN, min(CONTRAST_MAX, contrast))
+    # A real backlight dims the panel (and saves power); xrandr then stays at full
+    if set_backlight_level(brightness):
+        brightness = 1.0
+
+    if not display_control_available():
+        return False
 
     outputs = _get_xrandr_outputs()
     if not outputs:

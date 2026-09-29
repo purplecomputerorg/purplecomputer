@@ -6,6 +6,7 @@
 # PURPLEUSB partition (plain FAT, so Windows and macOS mount it like a thumb
 # drive). A customer whose boot hangs holds the power button, plugs the stick
 # into their own computer and emails the file. Read-only. Runs as root.
+# Every section is capped so the whole report fits its 1MB slot in PURPLE-LOG.
 set +e
 
 section() { echo; echo "===== $* ====="; }
@@ -45,28 +46,28 @@ collect() {
     systemctl status purple-x11 --no-pager -l 2>&1 | head -40
 
     section "processes (wchan shows what a stuck process waits on)"
-    ps -eo pid,ppid,stat,etimes,wchan:28,args --sort=pid 2>&1
+    ps -eo pid,ppid,stat,etimes,wchan:28,args --sort=pid 2>&1 | head -c 100000
 
     section "casper log (initramfs stdout: medium scan, RAM copy, casper-bottom)"
-    cat /var/log/casper.log 2>/dev/null
+    tail -c 100000 /var/log/casper.log 2>/dev/null
     section "initramfs trace (only with the debug kernel option)"
-    tail -n 400 /run/initramfs/initramfs.debug 2>/dev/null
+    tail -n 400 /run/initramfs/initramfs.debug 2>/dev/null | tail -c 50000
     section "boot log"
-    cat /tmp/purple-boot.log 2>/dev/null
+    tail -c 150000 /tmp/purple-boot.log 2>/dev/null
     section "xinitrc log"
     tail -60 /tmp/xinitrc.log 2>/dev/null
     section "Xorg log (tail)"
     tail -60 /home/purple/.local/share/xorg/Xorg.0.log /var/log/Xorg.0.log 2>/dev/null
     section "power log"
-    cat /tmp/purple-power.log 2>/dev/null
+    tail -c 50000 /tmp/purple-power.log 2>/dev/null
     section "install log"
-    cat /tmp/purple-install.log 2>/dev/null
+    tail -c 150000 /tmp/purple-install.log 2>/dev/null
 
     section "journal (tail)"
-    journalctl -b --no-pager -n 800 2>&1
+    journalctl -b --no-pager -n 800 2>&1 | tail -c 250000
 
-    section "dmesg (tail; the full live kernel log is at the end of PURPLE-LOG)"
-    dmesg 2>&1 | tail -n 300
+    section "dmesg (tail; the full live kernel log follows this report in PURPLE-LOG)"
+    dmesg 2>&1 | tail -n 300 | tail -c 60000
 
     section "end"
 }

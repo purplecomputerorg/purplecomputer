@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Purple Computer: PURPLE-LOG on the stick, written in place.
 
-The file is preallocated at image build (01-remaster-iso.sh) with two fixed
-regions: the boot report (purple-diag-collect, rewritten every few seconds
-until Purple is on screen, then less and less often, and once more when the
-service stops at shutdown) and, after it, the kernel log streamed as it
-happens. Writes wait while other programs are stalled on disk and are spaced
+The file is preallocated at image build (01-remaster-iso.sh): a header
+holding the number of starts so far, then SLOTS slots, so the last SLOTS
+starts (on any mix of machines) each keep their own log. Start n writes slot
+(n - 1) % SLOTS. A slot has two fixed regions: the boot report
+(purple-diag-collect, rewritten every few seconds until Purple is on screen,
+then less and less often, and once more when the service stops at shutdown)
+and, after it, the kernel log streamed as it happens. Writes wait while other programs are stalled on disk and are spaced
 so they take at most a small share of the time, so a slow stick slows the
 log instead of the computer. The file's sectors are located once with the
 partition mounted read-only; from then on every write goes straight into
 those sectors of the partition device. Nothing stays mounted and no FAT
 metadata changes, so a power cut at any moment leaves the partition clean and
-the file holding everything up to the last flush. The initramfs writes the same report region in place before
-this starts (purple_stick_report in the casper hook).
+the file holding everything up to the last flush. The initramfs claims the
+start number and writes the same report region in place before this starts
+(purple_stick_report in the casper hook).
 
 --reset (the `cleanlog` command) puts the file back byte for byte as the build
 wrote it and powers off, so a stick tested before shipping goes out clean.
@@ -27,8 +30,10 @@ import sys
 import time
 
 NAME = "PURPLE-LOG"
-REPORT_BYTES = 8 << 20  # keep in sync with purple_stick_report and the build
-KMSG_BYTES = 4 << 20
+# Keep in sync with purple_stick_report and the build (file size).
+HEADER_BYTES, SLOTS, REPORT_BYTES, KMSG_BYTES = 4096, 8, 1 << 20, 512 << 10
+KMSG_KEEP = 128 << 10  # the start of the boot's kernel log, never wrapped over
+START_FILE = "/run/purple/stick-start"  # the initramfs's claim, moved into the real /run
 MNT = "/run/purple-diag/ro"
 COLLECT = "/usr/local/bin/purple-diag-collect"
 LOCAL_COPY = "/var/log/purple/diag.txt"
@@ -46,10 +51,28 @@ FINAL_TIMEOUT = 2  # shutdown waits on this
 REPORT_END = b"\n===== end of report: anything below, up to the kernel log, is empty space or left from an earlier report =====\n"
 KMSG_HEAD = b"===== live kernel log, written as it happens, newest lines last =====\n"
 SEAM = b"===== newest kernel log line above: anything below is older =====\n"
-WRAP = b"\n===== the kernel log filled up and wrapped: lines below this may be older =====\n"
+WRAP = b"\n===== the kernel log filled up and wrapped: lines above are the start of the boot, lines below the newest =====\n"
+CUT = b"\n[the report was cut off here: it did not fit in its slot]\n"
+STARTS = b"starts: %-10d"  # fixed width so it is rewritten in place; the initramfs writes the same
 PENDING_MAX = 1 << 20
 # The build reads this line with sed (01-remaster-iso.sh): keep it one plain string.
-PRISTINE_HEAD = "PURPLE-LOG: Purple writes its boot report here (plain text, no extension so a double-click does not open 12MB). This stick has not been started yet."
+PRISTINE_HEAD = "PURPLE-LOG: Purple's boot reports from the last 8 starts of this stick, one section per start (plain text, no extension so a double-click does not open 12MB)."
+
+
+def file_bytes():
+    return HEADER_BYTES + SLOTS * (REPORT_BYTES + KMSG_BYTES)
+
+
+def slot_base(start):
+    return HEADER_BYTES + (start - 1) % SLOTS * (REPORT_BYTES + KMSG_BYTES)
+
+
+def starts(header):
+    """The start count on the header's second line, 0 if unreadable."""
+    try:
+        return int(header.split(b"\n")[1].split(b":")[1])
+    except (IndexError, ValueError):
+        return 0
 
 
 def log(msg):
@@ -72,8 +95,8 @@ def file_extent(part):
     try:
         path = os.path.join(MNT, NAME)
         size = os.stat(path).st_size
-        if size != REPORT_BYTES + KMSG_BYTES:
-            log(f"{NAME} is {size} bytes, expected {REPORT_BYTES + KMSG_BYTES}")
+        if size != file_bytes():
+            log(f"{NAME} is {size} bytes, expected {file_bytes()}")
             return None
         with open(path, "rb") as f:
             bsz = struct.unpack("i", fcntl.ioctl(f, FIGETBSZ, struct.pack("i", 0)))[0]
@@ -90,8 +113,8 @@ def file_extent(part):
 
 
 def pristine():
-    head = PRISTINE_HEAD.encode() + b"\n"
-    return head + b"\n" * (REPORT_BYTES + KMSG_BYTES - len(head))
+    head = PRISTINE_HEAD.encode() + b"\n" + STARTS % 0 + b"\n"
+    return head + b"\n" * (file_bytes() - len(head))
 
 
 def format_record(rec):
@@ -105,7 +128,7 @@ def format_record(rec):
 
 
 class StickFile:
-    """In-place writer for the two regions of NAME, by raw sector writes.
+    """In-place writer for this start's slot of NAME, by raw sector writes.
 
     Leftovers from earlier writes are never blanked (that would mean
     rewriting megabytes during boot); the end-of-report and seam markers
@@ -115,22 +138,39 @@ class StickFile:
         self.fd = os.open(dev, os.O_RDWR)
         self.offset = offset
         self.kmsg_pos = 0
+        self.start, self.base = 0, HEADER_BYTES
 
     def _write(self, pos, data):
         os.pwrite(self.fd, data, self.offset + pos)
         os.fdatasync(self.fd)
 
+    def claim(self, start_file=START_FILE):
+        """Pick this start's slot: the initramfs's claim, else bump the header's count here."""
+        try:
+            with open(start_file) as f:
+                self.start = int(f.read())
+        except (OSError, ValueError):
+            header = os.pread(self.fd, HEADER_BYTES, self.offset)
+            self.start = starts(header) + 1
+            self._write(header.index(b"\n") + 1, STARTS % self.start)
+        self.base = slot_base(self.start)
+        return self.start
+
     def write_report(self, data):
-        self._write(0, data[: REPORT_BYTES - len(REPORT_END)] + REPORT_END)
+        data = b"start %d of this stick\n" % self.start + data
+        room = REPORT_BYTES - len(REPORT_END)
+        if len(data) > room:
+            data = data[: room - len(CUT)] + CUT
+        self._write(self.base, data + REPORT_END)
 
     def write_kmsg(self, data):
         if self.kmsg_pos == 0:
             data = KMSG_HEAD + data
         elif self.kmsg_pos + len(data) + len(SEAM) > KMSG_BYTES:
-            self.kmsg_pos = len(KMSG_HEAD)
+            self.kmsg_pos = len(KMSG_HEAD) + KMSG_KEEP
             data = WRAP + data
         data = data[: KMSG_BYTES - self.kmsg_pos - len(SEAM)]
-        self._write(REPORT_BYTES + self.kmsg_pos, data + SEAM)  # the next write overwrites the seam
+        self._write(self.base + REPORT_BYTES + self.kmsg_pos, data + SEAM)  # the next write overwrites the seam
         self.kmsg_pos += len(data)
 
     def reset(self):
@@ -321,8 +361,9 @@ def main():
     if offset is None:
         log(f"{NAME} is missing, wrong size or fragmented on {part}, not writing")
         return 0
-    log(f"writing {NAME} in place on {part} at byte {offset}")
-    run(StickFile(part, offset))
+    stick = StickFile(part, offset)
+    log(f"writing start {stick.claim()} of {NAME} in place on {part} at byte {offset + stick.base}")
+    run(stick)
 
 
 if __name__ == "__main__":

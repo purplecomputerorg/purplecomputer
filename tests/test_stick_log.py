@@ -1,5 +1,5 @@
-"""purple-stick-log writes the report and the kernel log into fixed regions of
-one preallocated file, by offset, never outside it."""
+"""purple-stick-log writes the report and the kernel log into this start's
+slot of one preallocated file, by offset, never outside it."""
 import importlib.util
 import os
 import subprocess
@@ -8,12 +8,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load(report=400, kmsg=200):
+def _load(report=400, kmsg=200, header=0, keep=0):
     spec = importlib.util.spec_from_file_location("stick_log", ROOT / "scripts" / "purple-stick-log.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    mod.REPORT_BYTES, mod.KMSG_BYTES = report, kmsg
+    if report:
+        mod.REPORT_BYTES, mod.KMSG_BYTES, mod.HEADER_BYTES, mod.KMSG_KEEP = report, kmsg, header, keep
     return mod
+
+
+def _real():
+    return _load(report=None)
 
 
 def test_records_become_dmesg_style_lines_and_continuations_are_dropped():
@@ -29,12 +34,13 @@ def test_report_is_written_in_place_and_leftovers_stay_below_the_end_marker(tmp_
     s = k.StickFile(str(dev), 100)
     s.write_report(b"short")
     d = dev.read_bytes()
+    text = b"start 0 of this stick\nshort" + k.REPORT_END
     assert d[:100] == b"X" * 100 and d[700:] == b"X" * 100
-    assert d[100:105 + len(k.REPORT_END)] == b"short" + k.REPORT_END
-    assert d[105 + len(k.REPORT_END):500] == b"O" * (395 - len(k.REPORT_END)), "no megabyte blanking during boot"
+    assert d[100:100 + len(text)] == text
+    assert d[100 + len(text):500] == b"O" * (400 - len(text)), "no megabyte blanking during boot"
 
 
-def test_report_longer_than_its_region_is_cut_and_still_ends_with_the_marker(tmp_path):
+def test_report_longer_than_its_region_is_cut_says_so_and_still_ends_with_the_marker(tmp_path):
     k = _load()
     dev = tmp_path / "dev"
     dev.write_bytes(b"X" * 800)
@@ -42,21 +48,43 @@ def test_report_longer_than_its_region_is_cut_and_still_ends_with_the_marker(tmp
     s.write_report(b"r" * 1000)
     d = dev.read_bytes()
     assert d[500:] == b"X" * 300 and d[500 - len(k.REPORT_END):500] == k.REPORT_END
+    assert d[500 - len(k.REPORT_END) - len(k.CUT):500 - len(k.REPORT_END)] == k.CUT
 
 
-def test_kmsg_region_keeps_a_seam_after_the_newest_line_and_wraps_with_a_marker(tmp_path):
-    k = _load(kmsg=430)
+def test_kmsg_region_keeps_a_seam_after_the_newest_line_and_wraps_past_the_kept_start(tmp_path):
+    k = _load(kmsg=600, keep=20)
     dev = tmp_path / "dev"
-    dev.write_bytes(b"X" * 1000)
+    dev.write_bytes(b"X" * 1200)
     s = k.StickFile(str(dev), 100)
-    region = lambda: dev.read_bytes()[500:930]
-    s.write_kmsg(b"a" * 50)
-    assert region().startswith(k.KMSG_HEAD + b"a" * 50 + k.SEAM)
-    s.write_kmsg(b"b" * 50)
-    assert region().startswith(k.KMSG_HEAD + b"a" * 50 + b"b" * 50 + k.SEAM), "the next write overwrites the seam"
-    s.write_kmsg(b"c" * 200)
-    assert region()[len(k.KMSG_HEAD):].startswith(k.WRAP + b"c" * 200 + k.SEAM)
-    assert s.kmsg_pos + len(k.SEAM) <= 430 and dev.read_bytes()[930:] == b"X" * 70
+    region = lambda: dev.read_bytes()[500:1100]
+    s.write_kmsg(b"a" * 100)
+    assert region().startswith(k.KMSG_HEAD + b"a" * 100 + k.SEAM)
+    s.write_kmsg(b"b" * 100)
+    assert region().startswith(k.KMSG_HEAD + b"a" * 100 + b"b" * 100 + k.SEAM), "the next write overwrites the seam"
+    s.write_kmsg(b"c" * 300)
+    kept = len(k.KMSG_HEAD) + 20
+    assert region()[:kept] == k.KMSG_HEAD + b"a" * 20, "the start of the boot is never wrapped over"
+    assert region()[kept:].startswith(k.WRAP + b"c" * 300 + k.SEAM)
+    assert s.kmsg_pos + len(k.SEAM) <= 600 and dev.read_bytes()[1100:] == b"X" * 100
+
+
+def test_each_start_claims_the_next_slot_and_the_initramfs_claim_wins(tmp_path):
+    k = _real()
+    dev = tmp_path / "dev"
+    dev.write_bytes(b"X" * 100 + k.pristine() + b"X" * 100)
+    none = str(tmp_path / "absent")
+    assert [k.StickFile(str(dev), 100).claim(none) for _ in range(k.SLOTS + 1)] == list(range(1, k.SLOTS + 2))
+    assert k.starts(dev.read_bytes()[100:]) == k.SLOTS + 1
+    (tmp_path / "claimed").write_text("12\n")
+    s = k.StickFile(str(dev), 100)
+    assert s.claim(str(tmp_path / "claimed")) == 12 and s.base == k.slot_base(12) == k.slot_base(4)
+    assert k.starts(dev.read_bytes()[100:]) == k.SLOTS + 1, "an initramfs claim already bumped the count"
+    s.write_report(b"r" * (2 * k.REPORT_BYTES))
+    s.write_kmsg(b"k" * (2 * k.KMSG_BYTES))
+    d = dev.read_bytes()[100:-100]
+    size = k.REPORT_BYTES + k.KMSG_BYTES
+    assert d[:s.base] == k.pristine()[:s.base].replace(b"starts: 0 ", b"starts: 9 ")
+    assert d[s.base + size:] == k.pristine()[s.base + size:], "a start never writes outside its slot"
 
 
 def test_schedule_stretches_after_slow_writes_and_holds_while_the_disk_is_busy_but_not_forever():
@@ -131,18 +159,42 @@ def test_usb_cache_only_warms_with_low_ram_or_a_failed_lock(tmp_path, monkeypatc
 
 
 def test_build_and_cleanlog_write_the_same_bytes(tmp_path):
-    k = _load(report=8 << 20, kmsg=4 << 20)
+    k = _real()
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
     build = remaster[remaster.index("    LOG_HEAD=$("):remaster.index('> "$LOG_MNT/PURPLE-LOG"') + len('> "$LOG_MNT/PURPLE-LOG"')]
     build = build.replace("/purple-src/", f"{ROOT}/")
     subprocess.run(["bash", "-ec", build], env={"LOG_MNT": str(tmp_path), "PATH": os.environ["PATH"]}, check=True)
-    assert (tmp_path / "PURPLE-LOG").read_bytes() == k.pristine()
+    assert (tmp_path / "PURPLE-LOG").read_bytes() == k.pristine() and len(k.pristine()) == k.file_bytes()
 
 
 def test_reset_rewrites_only_the_file_and_checks_it(tmp_path):
     k = _load()
     dev = tmp_path / "dev"
-    dev.write_bytes(b"X" * 100 + b"O" * 600 + b"X" * 100)
+    n = k.file_bytes()
+    dev.write_bytes(b"X" * 100 + b"O" * n + b"X" * 100)
     assert k.StickFile(str(dev), 100).reset()
     d = dev.read_bytes()
-    assert d[:100] == b"X" * 100 and d[700:] == b"X" * 100 and d[100:700] == k.pristine()
+    assert d[:100] == b"X" * 100 and d[100 + n:] == b"X" * 100 and d[100:100 + n] == k.pristine()
+
+
+def test_initramfs_hook_claims_a_start_and_writes_only_its_slot(tmp_path):
+    k = _real()
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
+    hook = hook.replace("/purple-stick", str(tmp_path / "stick")).replace("/run/purple", str(tmp_path / "run"))
+    (tmp_path / "stick").mkdir()
+    log = tmp_path / "stick" / "PURPLE-LOG"
+    log.write_bytes(k.pristine())
+    stubs = 'blkid() { echo /dev/x; }; mount() { :; }; umount() { :; }; dmesg() { yes "[ 1.0 ] kernel line" | head -c 2000000; }'
+    run = lambda steps: subprocess.run(["sh", "-c", f"{hook}\n{stubs}\n{steps}"], check=True)
+    run('purple_stick_report one; purple_stick_report two')
+    run(f'rm {tmp_path}/run/stick-start; purple_stick_report three')
+    d = log.read_bytes()
+    size = k.REPORT_BYTES + k.KMSG_BYTES
+    first, second = d[k.slot_base(1):k.slot_base(1) + size], d[k.slot_base(2):k.slot_base(2) + size]
+    assert len(d) == k.file_bytes() and k.starts(d) == 2
+    assert first.startswith(b"start 1 of this stick\npurple-initramfs: two ") and second.startswith(b"start 2 of this stick\n")
+    assert b"===== end of this report" in first and len(first[:k.REPORT_BYTES].rstrip(b"\n")) < k.REPORT_BYTES
+    assert d[k.slot_base(1) + k.REPORT_BYTES:k.slot_base(2)] == k.pristine()[k.slot_base(1) + k.REPORT_BYTES:k.slot_base(2)]
+    assert d[k.slot_base(3):] == k.pristine()[k.slot_base(3):]
+    assert (tmp_path / "run" / "stick-start").read_text() == "2\n"

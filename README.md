@@ -2,9 +2,9 @@ This file is AI-generated with a [human](https://github.com/tavinathanson) heavi
 
 # Purple Computer
 
-**Give them a calm computer you can feel good about.**
+**A calm, offline computer for kids.**
 
-Transform your old laptop into a calm space for open-ended play. No internet, no apps. Designed for ages 3-10, from learning letters to writing code.
+Transform your old laptop into an offline space for open-ended play. No internet, no apps. Designed for ages 3-10, from learning letters to writing code.
 They explore, create, and put it down on their own.
 
 > **Purple Computer is a paid product.**

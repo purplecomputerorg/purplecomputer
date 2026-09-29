@@ -153,6 +153,12 @@ class StickFile:
             header = os.pread(self.fd, HEADER_BYTES, self.offset)
             self.start = starts(header) + 1
             self._write(header.index(b"\n") + 1, STARTS % self.start)
+            try:  # so a restart of this service reuses the slot instead of claiming another
+                os.makedirs(os.path.dirname(start_file), exist_ok=True)
+                with open(start_file, "w") as f:
+                    f.write(f"{self.start}\n")
+            except OSError:
+                pass
         self.base = slot_base(self.start)
         return self.start
 
@@ -164,12 +170,14 @@ class StickFile:
         self._write(self.base, data + REPORT_END)
 
     def write_kmsg(self, data):
+        mark = b""
         if self.kmsg_pos == 0:
-            data = KMSG_HEAD + data
+            mark = KMSG_HEAD
         elif self.kmsg_pos + len(data) + len(SEAM) > KMSG_BYTES:
             self.kmsg_pos = len(KMSG_HEAD) + KMSG_KEEP
-            data = WRAP + data
-        data = data[: KMSG_BYTES - self.kmsg_pos - len(SEAM)]
+            mark = WRAP
+        room = KMSG_BYTES - self.kmsg_pos - len(mark) - len(SEAM)
+        data = mark + data[max(0, len(data) - room):]  # a batch too big for the room keeps its newest lines
         self._write(self.base + REPORT_BYTES + self.kmsg_pos, data + SEAM)  # the next write overwrites the seam
         self.kmsg_pos += len(data)
 

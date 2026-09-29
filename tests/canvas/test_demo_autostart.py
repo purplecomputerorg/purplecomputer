@@ -44,3 +44,18 @@ def test_dispatched_action_resets_idle():
         await press(app, "a")
         assert pm.get_idle_seconds() < 5
     run(go())
+
+
+def test_lifting_an_idle_inhibitor_resets_idle():
+    """Time under an inhibitor (terminal, install) was not idle, so the next
+    idle tick must not show the sleep screen at once."""
+    from purple_tui.power_manager import get_power_manager
+
+    async def go():
+        app = make_app()
+        pm = get_power_manager()
+        app.inhibit_idle("terminal")
+        pm._last_activity -= 300
+        app.uninhibit_idle("terminal")
+        assert pm.get_idle_seconds() < 5
+    run(go())

@@ -787,6 +787,9 @@ class PurpleApp:
 
     def uninhibit_idle(self, reason: str):
         self._idle_inhibitors.discard(reason)
+        # Inhibited time was not idle; otherwise the next tick sleeps at once.
+        from ..power_manager import get_power_manager
+        get_power_manager().record_activity()
 
     def _record_user_activity(self):
         if self._lid_close_time is not None:

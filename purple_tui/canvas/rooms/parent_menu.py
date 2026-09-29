@@ -997,9 +997,12 @@ class TerminalScreen(FullScreen):
         # a parent can't get stuck. Normal exit is typing exit in the shell.
         if reader is not None:
             reader.suspend_for_x_terminal(on_rescue=self._proc.terminate)
+        # Terminal typing never reaches Purple's idle clock
+        self.app.inhibit_idle("terminal")
         try:
             await asyncio.get_running_loop().run_in_executor(None, self._proc.wait)
         finally:
+            self.app.uninhibit_idle("terminal")
             if reader is not None:
                 reader.resume_from_x_terminal()
             self._running = False

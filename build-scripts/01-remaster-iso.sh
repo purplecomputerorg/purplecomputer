@@ -258,6 +258,24 @@ purple_stick_report() {
     umount "$mnt" 2>/dev/null
 }
 
+# The install image too, while the stick is reading well, into the tmpfs
+# install.sh reads it from (/run moves to the real root). install.sh checks
+# every range against the manifest and rereads only a bad one from the stick.
+purple_install_image_to_ram() {
+    local dir=/run/purple-stage need free
+    [ -f "$1" ] || return 0
+    need=$(( $(stat -c %s "$1") / 1024 + 1024 ))
+    free=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
+    [ "$free" -ge $(( need + 786432 )) ] || { purple_say "not enough memory to copy the install image too, installing will read it from the stick"; return 0; }
+    mkdir -p "$dir" && mount -t tmpfs -o size=${need}k tmpfs "$dir" || return 0
+    if dd if="$1" of="$dir/purple-os.img.zst" bs=1048576; then
+        purple_say "install image copied into memory too"
+    else
+        purple_say "could not copy the install image, installing will read it from the stick"
+        umount "$dir"
+    fi
+}
+
 purple_squashfs_to_ram() {
     grep -qw purple.toram=1 /proc/cmdline || return 0
     local src="$1/$LIVE_MEDIA_PATH" ram=/purple-ram need free t0 f
@@ -276,6 +294,7 @@ purple_squashfs_to_ram() {
         done
         mount -o bind "$ram" "$src"
         purple_say "copy done in $(( $(cut -d. -f1 /proc/uptime) - t0 ))s, the stick is no longer read for the system"
+        purple_install_image_to_ram "$1/purple/purple-os.img.zst"
     else
         purple_say "THE USB STICK COULD NOT BE READ after $(stat -c %s "$ram/filesystem.squashfs") bytes of the system image, continuing from the stick"
         umount "$ram"
@@ -350,6 +369,12 @@ submenu "More options (for support)" {
     menuentry "USB fix: IOMMU off + USB 32-bit DMA" {
         set gfxpayload=keep
         linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args intel_iommu=off xhci_hcd.quirks=0x800000 ---
+        initrd /casper/initrd$purple_variant
+    }
+
+    menuentry "USB fix: copy into memory only" {
+        set gfxpayload=keep
+        linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args $purple_debug_args purple.toram=1 ---
         initrd /casper/initrd$purple_variant
     }
 
@@ -653,6 +678,13 @@ SOURCES_EOF
     log_info "Copying golden image (this takes a while)..."
     cp "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os.img.zst"
     cp "${GOLDEN_IMAGE}.size" "$PAYLOAD_DIR/purple-os.img.zst.size" 2>/dev/null || true
+    # Manifest: range size in bytes, then one sha256 per range of the
+    # compressed image. install.sh reads the image into RAM range by range
+    # against it before wiping the disk, and takes a bad range from the backup
+    # copy on with-backup ISOs.
+    RANGE_BYTES=$((4*1024*1024))
+    { echo "$RANGE_BYTES"; split -b "$RANGE_BYTES" --filter='sha256sum' "$GOLDEN_IMAGE"; } \
+        > "$PAYLOAD_DIR/purple-os.img.zst.manifest"
 
     # Copy install script
     create_install_script "$PAYLOAD_DIR"
@@ -897,14 +929,8 @@ README_EOF
     if [ "${PURPLE_WITH_BACKUP_ISO:-0}" = "1" ]; then
         log_info "Building with-backup ISO (adds a second golden image copy)..."
         cp --reflink=auto "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os-backup.img.zst"
-        # Manifest: range size in bytes, then one sha256 per range of the
-        # compressed image. When BOTH copies fail install.sh's whole-copy
-        # attempts, it merges the good ranges of each (see merge_ranges there).
-        RANGE_BYTES=$((4*1024*1024))
-        { echo "$RANGE_BYTES"; split -b "$RANGE_BYTES" --filter='sha256sum' "$GOLDEN_IMAGE"; } \
-            > "$PAYLOAD_DIR/purple-os.img.zst.manifest"
         build_installer_iso "${OUTPUT_ISO%.iso}.with-backup.iso" "PURPLE_INSTALLER"
-        rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst" "$PAYLOAD_DIR/purple-os.img.zst.manifest"
+        rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst"
         log_info "With-backup ISO built successfully!"
     fi
 

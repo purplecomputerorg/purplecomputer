@@ -509,6 +509,24 @@ def test_debug_menu_try_everything_entry():
         assert flag in remaster
     assert 'add_purple_initramfs_hooks "$MAIN_DIR"' in remaster
     assert "purple_squashfs_to_ram" in remaster
+    single = menu.split('menuentry "USB fix: copy into memory only"')[1].split("}")[0]
+    assert "purple.toram=1" in single and "intel_iommu" not in single and "xhci_hcd" not in single
+    # The RAM copy stages the install image where install.sh looks for it.
+    hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
+    assert 'purple_install_image_to_ram "$1/purple/purple-os.img.zst"' in hook
+    assert "local dir=/run/purple-stage " in hook
+    install = (ROOT / "build-scripts" / "install.sh").read_text()
+    assert "STAGE_DIR=/run/purple-stage\nSTAGED_IMAGE=$STAGE_DIR/purple-os.img.zst\n" in install
+
+
+def test_every_iso_carries_the_image_manifest():
+    """install.sh checks the image against the manifest range by range before
+    wiping the disk, so the plain ISO needs it too, not only with-backup."""
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    payload = remaster.split('log_step "6/11: Adding payload to ISO..."')[1].split("create_install_script")[0]
+    assert '> "$PAYLOAD_DIR/purple-os.img.zst.manifest"' in payload
+    assert 'rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst"\n' in remaster
+    assert "purple-os.img.zst.manifest\"\n" not in remaster.split("With-backup variant")[1].split("Build debug ISO")[0]
 
 
 def test_hold_p_opens_the_boot_menu_on_the_standard_iso():

@@ -39,7 +39,7 @@ Log locations
   above, effectively). On the debug ISO, casper mounts the USB's ext4
   `writable` partition at `/var/log`, so this file SURVIVES REBOOT. That's
   the whole point: after a hang + power-cycle, the prior boot's trace is
-  still on disk. xinitrc rotates boot.log -> boot.log.prev on each entry.
+  still on disk. purple-wait-display rotates boot.log -> boot.log.prev once per boot.
 
 See also: guides/install-partition-detection.md for the casper writable
 partition layout on the debug ISO.
@@ -55,6 +55,8 @@ import threading
 import time
 from datetime import datetime
 from typing import Optional
+
+from . import diag_log
 
 _BOOT_LOG_TMP = "/tmp/purple-boot.log"
 _BOOT_LOG_PERSIST = "/var/log/purple/boot.log"
@@ -88,21 +90,7 @@ def _open_append(path: str) -> Optional[int]:
 
 def _write_line(line: str) -> None:
     """Append a single line to both log destinations. Never raises."""
-    data = (line + "\n").encode("utf-8", errors="replace")
-    for path in (_BOOT_LOG_TMP, _BOOT_LOG_PERSIST):
-        try:
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-        except Exception:
-            continue
-        try:
-            os.write(fd, data)
-        except Exception:
-            pass
-        finally:
-            try:
-                os.close(fd)
-            except Exception:
-                pass
+    diag_log.append((_BOOT_LOG_TMP, _BOOT_LOG_PERSIST), line + "\n", "purple-boot")
 
 
 def heartbeat(phase: str) -> None:

@@ -3,6 +3,8 @@ import threading
 
 import pytest
 
+from purple_tui import diag_log
+
 # A mounted app must not probe real audio: the probe subprocess, hotplug
 # listener and retry poll outlive their test and rewrite the mixer flags.
 os.environ.setdefault("PURPLE_NO_AUDIO", "1")
@@ -16,3 +18,9 @@ def _join_mixer_release_threads(monkeypatch):
     for t in threading.enumerate():
         if t.name == "mixer-idle-release":
             t.join(5)
+
+
+@pytest.fixture(autouse=True)
+def _no_journal(monkeypatch):
+    """Keep diagnostic log lines out of the dev machine's journal."""
+    monkeypatch.setattr(diag_log, "JOURNAL_SOCKET", "/nonexistent/purple-test-log")

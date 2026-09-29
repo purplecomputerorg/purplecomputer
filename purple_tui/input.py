@@ -538,6 +538,7 @@ class EvdevReader:
         if not self._grab:
             return
 
+        self._wait_for_keys_up()
         self._grabs_released = False
         for dev in self._devices:
             # Flush any pending events before reacquiring grab
@@ -552,6 +553,19 @@ class EvdevReader:
                 pass
 
             self._grab_device(dev)
+
+    def _wait_for_keys_up(self, timeout: float = 2.0) -> None:
+        """Grabbing mid-press hides the release from X, which then auto-repeats
+        that key (the Enter that closed the terminal) into the pty until reboot."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                if not any(dev.active_keys() for dev in self._devices):
+                    return
+            except OSError:
+                return
+            time.sleep(0.02)
+        self._diag("KBD GRAB: a key is still held, grabbing anyway")
 
     async def _read_loop(self, device) -> None:
         """Main event reading loop for one keyboard device."""

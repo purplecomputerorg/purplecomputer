@@ -15,6 +15,7 @@ from pathlib import Path
 import pygame
 
 from ... import diagnostics
+from ...backlight import set_level as set_backlight_level
 from ... import palette as P
 from ..gfx import FONT_DIR
 from ...audio import adjacent_volume, lock_badge, volume_badge
@@ -97,10 +98,13 @@ def display_control_available() -> bool:
 
 
 def apply_display_settings(brightness: float, contrast: float) -> bool:
-    if not display_control_available():
-        return False
     brightness = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, brightness))
     contrast = max(CONTRAST_MIN, min(CONTRAST_MAX, contrast))
+    # A real backlight dims the panel (and saves power); xrandr then stays at full
+    if set_backlight_level(brightness):
+        brightness = 1.0
+    if not display_control_available():
+        return False
     outputs = _get_xrandr_outputs()
     if not outputs:
         return False
@@ -119,6 +123,9 @@ def apply_saved_display_settings():
     s = load_display_settings()
     if s["brightness"] != BRIGHTNESS_DEFAULT or s["contrast"] != CONTRAST_DEFAULT:
         apply_display_settings(s["brightness"], s["contrast"])
+    else:
+        # Undo a dimmed sleep screen if the app restarted while it was up
+        set_backlight_level(BRIGHTNESS_DEFAULT)
 
 
 class DisplaySettingsScreen(Dialog):

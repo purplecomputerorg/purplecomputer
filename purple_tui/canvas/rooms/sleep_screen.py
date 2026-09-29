@@ -4,6 +4,7 @@ cycle screen. Full-screen overlays; any key wakes or dismisses as noted."""
 import os
 import time
 
+from ... import backlight
 from ... import palette as P
 from ...constants import (ICON_BATTERY_MED, ICON_HOURGLASS, ICON_LAPTOP, ICON_PLUG, ICON_USB,
                          ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, is_live_boot)
@@ -60,9 +61,12 @@ class SleepScreen(FullScreen):
         self._shutdown_initiated = False
         self._update_status()
         self._timer = self.app.timers.every(5.0, self._tick)
+        backlight.set_level(backlight.SLEEP_LEVEL)
 
     def on_close(self):
         self._timer.stop()
+        from .parent_menu import load_display_settings
+        backlight.set_level(load_display_settings()["brightness"])
 
     def _tick(self):
         self._update_status()

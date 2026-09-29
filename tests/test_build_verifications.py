@@ -339,8 +339,8 @@ def test_grub_config_is_one_file_for_esp_and_bios():
     assert cmdline, "purple-cmdline.cfg heredoc missing"
     body = cmdline.group(1)
     assert 'set purple_root_arg="root=LABEL=PURPLE_ROOT"' in body
-    assert re.search(r'^set purple_cmdline="ro loglevel=3 .*console=tty2 .*vt\.default_blu=', body, re.M), \
-        "kernel command line lost its console/colour settings"
+    assert re.search(r'^set purple_cmdline="ro quiet loglevel=3 .*console=tty2 .*vt\.default_blu=', body, re.M), \
+        "kernel command line lost quiet (EFI stub text under our boot line) or its console/colour settings"
     assert re.search(r"cp /purple-src/config/grub/purple-router\.cfg /purple-src/config/grub/purple-variants\.cfg", src), \
         "router or variants file not copied into /boot/grub"
 

@@ -558,12 +558,19 @@ recover_drive() {
     dev_for_serial "$serial" 40
 }
 
+# Healthy sticks read back at 27+ MB/s even sixteen at a time on one hub; dying
+# ones manage 0.4-2 MB/s and would hold a batch for hours. Override with
+# FLASH_MIN_READ_MBPS.
+MIN_READ_MBPS="${FLASH_MIN_READ_MBPS:-8}"
+
 # SHA256 of $2 bytes of a device starting at byte $3 (default 0), read with
 # O_DIRECT after dropping the page cache so the bytes come off the flash
-# rather than out of RAM.
+# rather than out of RAM. Fails if the read errors or runs slower than
+# MIN_READ_MBPS.
 device_sha256() {
+    local limit=$(( $2 / (MIN_READ_MBPS * 1048576) + 60 ))
     sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
-    sudo dd if="$1" bs=4M count="$2" skip="${3:-0}" \
+    sudo timeout "$limit" dd if="$1" bs=4M count="$2" skip="${3:-0}" \
         iflag=direct,count_bytes,skip_bytes status=none 2>/dev/null \
         | sha256sum | awk '{print $1}'
 }
@@ -606,19 +613,22 @@ recheck_after_settle() {
     bytes=$(( $(iso_partitioned_bytes "$iso") - GPT_SKIP_BYTES ))
     expected="$(dd if="$iso" bs=4M skip="$GPT_SKIP_BYTES" count="$bytes" \
         iflag=skip_bytes,count_bytes status=none | sha256sum | awk '{print $1}')"
-    actual="$(device_sha256 "$dev" "$bytes" "$GPT_SKIP_BYTES")"
+    actual="$(device_sha256 "$dev" "$bytes" "$GPT_SKIP_BYTES")" || return 1
     [[ "$actual" == "$expected" ]]
 }
 
-# Re-read the partition table, then power off the drive so it re-enumerates
-# fresh on next plug-in. Some USB controllers (e.g. Verbatim) won't boot
-# unless they re-enumerate; this is what GNOME's "safely eject" and
-# balenaEtcher do at the end of a flash.
+# Power off the drive so it re-enumerates fresh on next plug-in. Some USB
+# controllers (e.g. Verbatim) won't boot unless they re-enumerate; this is
+# what GNOME's "safely eject" and balenaEtcher do at the end of a flash.
+# Writes the USB device's sysfs remove attribute, as udisks power-off does,
+# so it needs no running udev and never waits on other drives' writes.
 eject_drive() {
-    local dev="$1"
-    sudo blockdev --rereadpt "$dev" 2>/dev/null || true
-    sudo partprobe "$dev" 2>/dev/null || true
-    sudo udevadm settle 2>/dev/null || true
+    local dev="$1" usbdir
+    usbdir="$(usb_device_dir "$dev")"
+    sudo blockdev --flushbufs "$dev" 2>/dev/null || true
+    if [[ -n "$usbdir" ]]; then
+        echo 1 | sudo tee "$usbdir/remove" >/dev/null 2>&1 && return 0
+    fi
     sudo udisksctl power-off --block-device "$dev" 2>/dev/null \
         || sudo eject "$dev" 2>/dev/null
 }

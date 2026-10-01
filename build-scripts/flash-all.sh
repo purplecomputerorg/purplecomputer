@@ -2,8 +2,8 @@
 # Flash PurpleOS ISO to ALL whitelisted USB drives in parallel.
 # Each drive runs its own pipeline (flash with retries, boot-settle,
 # re-verify, eject) as an independent job, so one slow or failing drive never
-# holds up the batch. One udev gate is shared across children; per-drive logs
-# stream to /tmp.
+# holds up the batch. udev's exec queue stays paused for the whole run;
+# per-drive logs stream to /tmp.
 
 set -eo pipefail
 
@@ -246,31 +246,20 @@ LOG_DIR="$(mktemp -d -t purple-flash-all.XXXXXX)"
 log_info "Per-drive logs: $LOG_DIR"
 echo
 
-# Cross-job coordination lives in files under STATE_DIR: the udev-gate lock
-# pauses udev while any drive is being written, slot dirs bound settle and
-# re-verify concurrency, and result.$i carries each job's outcome back as
+# Cross-job coordination lives in files under STATE_DIR: slot dirs bound
+# settle and re-verify concurrency, stage.<dev> tells flash-status what a
+# job is doing, and result.$i carries each job's outcome back as
 # "status|dev|tries|log|slot".
 STATE_DIR="$LOG_DIR/state"
 mkdir -p "$STATE_DIR"
 : > "$STATE_DIR/safe-slots"
 SETTLE_MAX=$(boot_settle_max_jobs)
 
-# udev's exec queue must be paused while any drive is written and verified
-# (see flash-to-usb.sh), and running for an eject. Writers hold the gate
-# shared and pause the queue; an ejector takes it exclusively, so it waits
-# only for drives mid-write (a retry included) rather than for the whole
-# batch, then restarts the queue. Both calls are idempotent.
-gate_writing() {
-    exec 9>"$STATE_DIR/udev-gate"
-    flock -s 9
-    sudo udevadm control --stop-exec-queue 2>/dev/null || true
-}
-gate_ejecting() {
-    exec 9>"$STATE_DIR/udev-gate"
-    flock -x 9
-    sudo udevadm control --start-exec-queue 2>/dev/null || true
-}
-gate_release() { exec 9>&-; }
+# udev's exec queue stays paused from the first write to the end of the run
+# (cleanup restarts it), so no automounter touches a drive between its write
+# and its last readback (see flash-to-usb.sh). Nothing here needs udev:
+# ejects and retry power cycles go through sysfs.
+sudo udevadm control --stop-exec-queue 2>/dev/null || true
 
 # Comma-joined ship-ready slots. Labels can't contain | (save_port_label strips it).
 safe_slot_list() { paste -sd'|' "$STATE_DIR/safe-slots" | sed 's/|/, /g'; }
@@ -297,6 +286,8 @@ finish_drive() {
     } 7>"$STATE_DIR/announce.lock"
 }
 
+set_stage() { echo "$2" > "$STATE_DIR/stage.$(basename "$1")"; }
+
 # One drive's whole journey, run as its own background job so a slow or
 # failing drive never holds up the rest of the batch: flash (with power-cycle
 # retries), boot-settle, re-verify, eject.
@@ -314,10 +305,8 @@ run_drive() {
         (( tries > 1 )) && suffix=".try${tries}"
         log="$LOG_DIR/$(basename "$dev")${suffix}.log"
         echo -e "${BOLD}→ $dev${SCENS[$i]:+ [${SCENS[$i]}]}: flashing (tail -f $log)${NC}"
-        gate_writing
         VERIFIED_ISO_SHA256="${SHA_BY_ISO[$iso]}" \
-            "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" "$iso" >"$log" 2>&1 9>&- && ok=true
-        gate_release
+            "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" "$iso" >"$log" 2>&1 && ok=true
         [[ "$ok" == true ]] && break
         (( tries < max_attempts )) || break
         if [[ -z "$port" ]]; then
@@ -345,7 +334,9 @@ run_drive() {
         # Boot the drive once in QEMU so its controller pays the one-time
         # post-write cost here instead of on the parent's first boot (see
         # guides/usb-flash-settle.md). Slots keep concurrent guests in RAM.
+        set_stage "$dev" "waiting for a settle slot"
         slot_acquire "$STATE_DIR/settle-slots" "$SETTLE_MAX" 8
+        set_stage "$dev" "boot-settling"
         log_info "$dev: boot-settling in QEMU..."
         if boot_settle_with_retry "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log"; then
             echo -e "${GREEN}✓${NC} $dev: boot-settled"
@@ -366,7 +357,9 @@ run_drive() {
         # minutes after being written. Must precede eject_drive: a powered-off
         # drive leaves a media-less node whose reads look like corruption.
         if [[ "$REVERIFY" == true ]]; then
+            set_stage "$dev" "waiting for a re-verify slot"
             slot_acquire "$STATE_DIR/reverify-slots" 4 8
+            set_stage "$dev" "re-verifying after settle"
             log_info "$dev: re-verifying after settle..."
             if ! recheck_after_settle "$dev" "$iso"; then
                 slot_release 8
@@ -380,14 +373,12 @@ run_drive() {
         fi
     fi
 
-    # Ejecting needs udev back (udevadm settle), so it waits for whichever
-    # drives are still being written. Corrupt mode skips the eject so the
-    # identify phase can watch for unplugs; safe because every write is synced
-    # and verified, and these sticks get reflashed anyway.
+    # Corrupt mode skips the eject so the identify phase can watch for
+    # unplugs; safe because every write is synced and verified, and these
+    # sticks get reflashed anyway.
     if [[ "$CORRUPT_MODE" != true ]]; then
-        gate_ejecting
+        set_stage "$dev" "ejecting"
         eject_drive "$dev" || true
-        gate_release
     fi
     finish_drive "$i" ok "$dev" "$tries" "$log"
 }
@@ -405,7 +396,6 @@ echo
 for pid in "${PIDS[@]}"; do
     wait "$pid" || true
 done
-# Corrupt mode never ejects, so nothing restarted the queue for it.
 sudo udevadm control --start-exec-queue 2>/dev/null || true
 
 # Fold each job's outcome back into per-drive state. ST_OK[i] is the only

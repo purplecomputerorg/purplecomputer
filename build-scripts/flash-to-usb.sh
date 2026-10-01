@@ -285,39 +285,27 @@ write_iso() {
     sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
     sleep 10
 
-    # Verification: read back from USB and compare SHA256.
-    # On mismatch, retry once with a longer flush delay before failing.
+    # Verification: read back from USB and compare SHA256. One read: it
+    # bypasses every cache, so a mismatch is the stick returning wrong bytes,
+    # and a second read never once rescued a drive across 20 batches.
     local usb_sha256=""
     local verify_passed=false
 
-    for verify_attempt in 1 2; do
-        echo ""
-        if [[ $verify_attempt -eq 1 ]]; then
-            log_info "Verifying write (reading back from USB)..."
-        else
-            log_warn "First verification failed, retrying with extended flush..."
-            sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
-            sleep 15
-        fi
-        echo ""
+    echo ""
+    log_info "Verifying write (reading back from USB)..."
+    echo ""
 
-        # Defense in depth: re-unmount anything that slipped past the udev
-        # block (e.g. an event queued before stop-exec-queue took effect).
-        for part in "${TARGET_DEV}"*; do
-            sudo umount "$part" 2>/dev/null || true
-        done
-
-        usb_sha256="$(device_sha256 "$TARGET_DEV" "$iso_size_bytes")"
-
-        if [[ "$iso_sha256" == "$usb_sha256" ]]; then
-            verify_passed=true
-            break
-        fi
-
-        if [[ $verify_attempt -eq 1 ]]; then
-            log_warn "Checksum mismatch on first read (may be cache lag)"
-        fi
+    # Defense in depth: re-unmount anything that slipped past the udev
+    # block (e.g. an event queued before stop-exec-queue took effect).
+    for part in "${TARGET_DEV}"*; do
+        sudo umount "$part" 2>/dev/null || true
     done
+
+    if ! usb_sha256="$(device_sha256 "$TARGET_DEV" "$iso_size_bytes")"; then
+        log_warn "Readback failed or ran slower than ${MIN_READ_MBPS} MB/s."
+    elif [[ "$iso_sha256" == "$usb_sha256" ]]; then
+        verify_passed=true
+    fi
 
     echo ""
 
@@ -350,8 +338,8 @@ write_iso() {
 
         # Boot the drive once in QEMU so its controller pays the one-time
         # post-write cost here; otherwise the parent's first boot is slow.
-        # Skipped for flash-all children: the parent boot-settles all drives
-        # in parallel after its own udev gate lifts.
+        # Skipped for flash-all children: the parent settles each drive in its
+        # own pipeline.
         if [[ "$MANAGE_UDEV" == true && "$SKIP_SETTLE" != true ]]; then
             run_boot_settle
             if ! restore_log_partition "$TARGET_DEV" "$ISO_PATH"; then
@@ -369,9 +357,7 @@ write_iso() {
         fi
 
         # Power-cycle so the drive re-enumerates fresh on next plug-in.
-        # Skipped when the caller owns the udev gate: udevadm settle would
-        # deadlock against the still-paused exec queue, and the parent
-        # orchestrator handles re-enumeration after all children finish.
+        # flash-all ejects its drives itself, after settling them.
         if [[ "$MANAGE_UDEV" == true ]]; then
             if eject_drive "$TARGET_DEV"; then
                 log_info "Drive ejected."

@@ -4,9 +4,9 @@
 # time, touches nothing.
 #
 # Final verdicts (SHIP READY / FAILED) come from the run's result files.
-# Everything else is a best-effort mid-run stage read from per-drive logs:
-# "written+verified" is real, but a drive only becomes SHIP READY after the
-# post-settle re-verify and eject.
+# After the write passes, the stage comes from flash-all's stage files;
+# before it, from the per-drive log. "written+verified" is real, but a drive
+# only becomes SHIP READY after the post-settle re-verify and eject.
 
 set -eo pipefail
 
@@ -27,7 +27,7 @@ STATE_DIR="$LOG_DIR/state"
 live_slot() {
     local port
     port="$(usb_port_name "$1" 2>/dev/null || true)"
-    [[ -n "$port" ]] && port_label "$port"
+    [[ -z "$port" ]] || port_label "$port"
 }
 
 # Newest attempt log for a drive stem (sda -> sda.try2.log over sda.log).
@@ -40,7 +40,7 @@ for f in "$STATE_DIR"/result.*; do
     [[ -f "$f" ]] || continue
     IFS='|' read -r status dev tries lg slot < "$f"
     stem="$(basename "${lg:-$dev}")"; stem="${stem%.log}"; stem="${stem%.try*}"
-    [[ -z "$slot" ]] && slot="$(live_slot "$dev")"
+    [[ -n "$slot" ]] || slot="$(live_slot "$dev")"
     FINAL["$stem"]="$status|$tries|$slot"
 done
 
@@ -57,7 +57,7 @@ for f in "$LOG_DIR"/*.log; do
     if [[ -n "${FINAL[$stem]:-}" ]]; then
         IFS='|' read -r status tries slot <<< "${FINAL[$stem]}"
         if [[ "$status" == ok ]]; then
-            txt="${GREEN}SHIP READY${NC} (verified, ejected$( (( tries > 1 )) && echo ", after retry"))"
+            txt="${GREEN}SHIP READY${NC} (verified, ejected$( (( tries > 1 )) && echo ", after retry" || true))"
             READY=$((READY + 1))
         else
             txt="${RED}FAILED${NC} after $tries attempt(s), do NOT ship"
@@ -67,17 +67,16 @@ for f in "$LOG_DIR"/*.log; do
         WORKING=$((WORKING + 1))
         slot="$(live_slot "/dev/$stem")"
         log="$(newest_log "$stem")"
+        stage="$(cat "$STATE_DIR/stage.$stem" 2>/dev/null || true)"
         if grep -aq "VERIFICATION PASSED" "$log" 2>/dev/null; then
-            if [[ -f "$LOG_DIR/$stem.boot-settle.log" ]]; then
-                txt="${YELLOW}written+verified${NC}; settling / final re-verify, not final yet"
-            else
-                txt="${YELLOW}written+verified${NC}; waiting to settle"
-            fi
+            txt="${YELLOW}written+verified${NC}; ${stage:-waiting to settle}, not final yet"
+        elif grep -aq "Verifying write" "$log" 2>/dev/null; then
+            txt="verifying write (reading back)"
         else
             prog="$(tr '\r' '\n' < "$log" 2>/dev/null | grep -a "copied" | tail -1 | sed -E 's/^[0-9]+ bytes \(([^,)]*)[^)]*\) copied,/\1 done,/' || true)"
             txt="flashing${prog:+: $prog}"
-            [[ "$log" == *.try*.log ]] && txt="$txt (retry)"
         fi
+        [[ "$log" == *.try*.log ]] && txt="$txt (retry)"
     fi
     ROWS+=("${slot:-?}|/dev/$stem|$txt")
 done

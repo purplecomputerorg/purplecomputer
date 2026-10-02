@@ -1114,6 +1114,7 @@ TIMEOUTS
     # Disable mouse/trackpad - kids use keyboard only
     cp /purple-src/config/xorg/40-disable-pointer.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
     cp /purple-src/config/xorg/99-v3d.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
+    [ "$BOOT" != pi ] || cp /purple-src/config/pi/20-purple-1080p.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
 
     # Purple X11 service: systemd-managed, waits for GPU readiness before starting X
     cp /purple-src/config/systemd/purple-x11.service "$MOUNT_DIR/etc/systemd/system/"

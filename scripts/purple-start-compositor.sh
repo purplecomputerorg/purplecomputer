@@ -16,6 +16,9 @@ command -v picom >/dev/null 2>&1 || { echo "picom not installed; continuing unco
 # image build), so there is no hardware GL here: picom could only composite
 # through llvmpipe on an Atom, all CPU cost and no vsync to gain from it.
 case "$(uname -m)" in i?86) echo "32-bit image has no hardware GL; continuing uncomposited"; exit 0;; esac
+# Raspberry Pi: picom's glx aborts on v3d and xrender costs a full-screen software
+# copy per frame, the one thing a Pi can't spare (Pi 400 bench, 2026-10-02)
+case "$(uname -m)" in aarch64) echo "Raspberry Pi: no compositor, it costs a frame copy; continuing uncomposited"; exit 0;; esac
 [ -f "$CONF" ] || CONF=/dev/null
 
 # Idempotent: a Purple restart re-execs xinitrc, but picom survives (it's

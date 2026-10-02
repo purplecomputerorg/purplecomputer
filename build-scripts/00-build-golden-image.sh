@@ -870,6 +870,10 @@ JOURNAL
     printf '#!/bin/sh\nexec sudo /usr/local/bin/purple-stick-log --reset\n' > "$MOUNT_DIR/usr/local/bin/cleanlog"
     chmod +x "$MOUNT_DIR/usr/local/bin/cleanlog"
     chroot "$MOUNT_DIR" systemctl enable purple-stick-log.service
+    cp /purple-src/scripts/purple-stage-reboot.sh "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"
+    cp /purple-src/config/systemd/purple-stage-reboot.service "$MOUNT_DIR/etc/systemd/system/"
+    chroot "$MOUNT_DIR" systemctl enable purple-stage-reboot.service
     cp /purple-src/scripts/purple-usb-cache.py "$MOUNT_DIR/usr/local/bin/purple-usb-cache"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-usb-cache"
     cp /purple-src/config/systemd/purple-usb-cache.service "$MOUNT_DIR/etc/systemd/system/"

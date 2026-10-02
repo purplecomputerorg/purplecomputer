@@ -170,6 +170,8 @@ _LIVE_CONF = _live_conf()
 SQUASHFS_PATH = _LIVE_CONF.get("SQUASHFS", "/cdrom/casper/filesystem.squashfs")
 PAYLOAD_DIR = _LIVE_CONF.get("PURPLE_PAYLOAD_DIR", "/cdrom/purple")
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"
+# Static reboot/poweroff binary on its own tmpfs (scripts/purple-stage-reboot.sh)
+REBOOT_BIN = "/run/purple-reboot-mount/purple-reboot"
 
 # Touched after the first frame paints. xinitrc waits for this before starting
 # the compositor, so picom's GL init lands after the import/first-paint crunch

@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <linux/vt.h>
 #include <unistd.h>
+#include <sys/reboot.h>
 
 /* -----------------------------------------------------------------------
  * Mock infrastructure
@@ -28,6 +29,7 @@
 
 static struct {
     int reboot_count;
+    int last_reboot_cmd;
     int sync_count;
 
     char opened_paths[MAX_CALLS][256];
@@ -78,7 +80,7 @@ static void mock_reset(void) {
 /* --- Mock implementations called by purple-reboot.c via pr_* macros --- */
 
 int test_reboot(int cmd) {
-    (void)cmd;
+    mock.last_reboot_cmd = cmd;
     mock.reboot_count++;
     return -1; /* Always "fail" so fallback chain runs */
 }
@@ -555,6 +557,37 @@ static int test_sync_before_every_reboot(void) {
     return 1;
 }
 
+static int test_poweroff_powers_off_not_reboots(void) {
+    mock.find_xorg_pid = 123;
+    char *argv[] = {"purple-reboot", "--poweroff", NULL};
+    run_main(2, argv);
+    ASSERT(mock.reboot_count >= 1, "reboot(2) should be called");
+    ASSERT(mock.last_reboot_cmd == RB_POWER_OFF, "should power off, not reboot");
+    ASSERT(mock.reboots_at_first_term == 0, "Xorg stopped before power off");
+    ASSERT(mock.sync_count >= 1, "sync before power off");
+    return 1;
+}
+
+static int test_poweroff_waits_given_delay_first(void) {
+    char *argv[] = {"purple-reboot", "--poweroff", "6", NULL};
+    run_main(3, argv);
+    ASSERT(mock.sleep_count >= 1 && mock.sleep_seconds[0] == 6,
+           "should sleep the given delay before anything else");
+    return 1;
+}
+
+static int test_poweroff_falls_back_to_sysrq_o_without_install_message(void) {
+    char *argv[] = {"purple-reboot", "--poweroff", NULL};
+    run_main(2, argv);
+    ASSERT(was_opened("/proc/sysrq-trigger"), "should try sysrq");
+    ASSERT(mock.write_count == 2 && strcmp(mock.write_data[1], "o") == 0,
+           "only writes are sysrq '1' then 'o' (power off)");
+    ASSERT(!find_write_anywhere("installed successfully"),
+           "power off must not show the install message");
+    ASSERT(!mock.reached_pause_loop, "power off exits instead of holding tty2");
+    return 1;
+}
+
 /* -----------------------------------------------------------------------
  * Main (replaces purple_reboot_main as the real entry point)
  * ----------------------------------------------------------------------- */
@@ -590,6 +623,9 @@ int main(void) {
     RUN_TEST(test_retry_reboot_tears_down_respawned_xorg);
     RUN_TEST(test_wait_tears_down_xorg_after_enter);
     RUN_TEST(test_sync_before_every_reboot);
+    RUN_TEST(test_poweroff_powers_off_not_reboots);
+    RUN_TEST(test_poweroff_waits_given_delay_first);
+    RUN_TEST(test_poweroff_falls_back_to_sysrq_o_without_install_message);
 
     printf("\n%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;

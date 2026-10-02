@@ -21,7 +21,8 @@ Design rules, in priority order:
 
 1. Motion only in response to a key. Nothing moves on an idle screen.
 2. Text and emoji render smoothly at native resolution, any size per element.
-3. A grid exists only where the grid is the content: Music tiles, Art cells.
+3. A grid exists only where the grid is the content: Music tiles, Art cells,
+   the Blocks floor.
 4. The prompt stays monospace with a block caret. That is the DOS memory,
    and the chrome follows it: titles, room tabs, keycaps, hints and menus
    are IBM Plex Mono in mixed case (the ALL CAPS parent setting is the one
@@ -49,7 +50,7 @@ purple_tui/canvas/gfx.py       Gfx: the surface, fonts, text and emoji caches, m
 purple_tui/canvas/ui.py        Timers, TextField, Overlay/Dialog/Picker, Toast, draw_ring
 purple_tui/canvas/app.py       PurpleApp: asyncio loop, readers, dispatch, overlays, frame
 purple_tui/canvas/panels.py    CodePanel, LoopPanel, TimeTravelBar, SpaceHold
-purple_tui/canvas/rooms/     PlayRoom, MusicRoom, ArtRoom, parent flows, system screens
+purple_tui/canvas/rooms/     PlayRoom, MusicRoom, ArtRoom, BlocksRoom, parent flows, system screens
 purple_tui/play_eval.py The Play evaluator (engine; emits markup strings)
 purple_tui/mixer.py     Audio mixer lifecycle (engine)
 purple_tui/palette.py   Theme colors and the sticker palette

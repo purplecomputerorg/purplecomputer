@@ -14,7 +14,7 @@ from ..gfx import rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import contrast_text, luminance, DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..panels import CodePanel, SpaceHold
-from ..ui import draw_keycap, draw_label
+from ..ui import draw_label, draw_mode_switch
 
 COLS, ROWS = 56, 24
 BRUSH_CHAR = "█"
@@ -36,6 +36,16 @@ def _contrast_text_color(bg_hex: str) -> str:
     canvas has always used for letters over paint."""
     r, g, b = int(bg_hex[1:3], 16), int(bg_hex[3:5], 16), int(bg_hex[5:7], 16)
     return "#000000" if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 else "#FFFFFF"
+
+
+def brush_for_key(char: str):
+    """(key, color) for a key that has a sticker or gray color, else None."""
+    k = char.lower()
+    if k in GRAYSCALE:
+        return k, GRAYSCALE[k]
+    if (k.isalpha() or k in KEY_COLORS) and get_key_color(k) != UNMAPPED:
+        return k, get_key_color(k)
+    return None
 
 
 def _visible_arrow_color(fg_hex: str, bg_hex: str) -> str:
@@ -323,22 +333,19 @@ class ArtRoom:
         """Paint one cell by key char or '#rrggbb' (Secret Menu pictures)."""
         self._cursor_x, self._cursor_y = max(0, min(x, COLS - 1)), max(0, min(y, ROWS - 1))
         k = color_key.lower()
+        brush = brush_for_key(k)
         if k.startswith("#"):
             self._last_key_color = k
-        elif k in GRAYSCALE:
-            self._last_key_char, self._last_key_color = k, GRAYSCALE[k]
-        elif (k.isalpha() or k in KEY_COLORS) and get_key_color(k) != UNMAPPED:
-            self._last_key_char, self._last_key_color = k, get_key_color(k)
+        elif brush:
+            self._last_key_char, self._last_key_color = brush
         self._paint_at_cursor()
 
     def _select_brush(self, char: str) -> bool:
         """Set the brush from a key; False when the key has no color."""
-        if char in GRAYSCALE:
-            self._last_key_char, self._last_key_color = char, GRAYSCALE[char]
-        elif (char.isalpha() or char in KEY_COLORS) and get_key_color(char) != UNMAPPED:
-            self._last_key_char, self._last_key_color = char.lower(), get_key_color(char)
-        else:
+        brush = brush_for_key(char)
+        if not brush:
             return False
+        self._last_key_char, self._last_key_color = brush
         self._post_paint_mode_changed()
         return True
 
@@ -543,16 +550,8 @@ class ArtRoom:
     def _draw_header(self, g, r):
         """PAINT / ABC mode switch (active one in inverse video) with the brush
         color as a swatch beside it, and the Tab keycap on the right."""
-        px = g.vh(1.9)
-        cy = r.centery
         if self.app._littles_mode:
-            draw_label(g, "Paint" if self._paint_mode else "Write", px, r.centerx, cy, P.TEXT, anchor="center")
+            draw_label(g, "Paint" if self._paint_mode else "Write", g.vh(1.9), r.centerx, r.centery, P.TEXT, anchor="center")
             return
-        w_paint, w_abc = (g.measure(t, px, "mono-bold")[0] + px for t in ("Paint", "ABC"))
-        x = r.centerx - (w_paint + px + w_abc) // 2
-        draw_label(g, "Paint", px, x + w_paint // 2, cy, anchor="center", on=self._paint_mode)
-        draw_label(g, "ABC", px, x + w_paint + px + w_abc // 2, cy, anchor="center", on=not self._paint_mode)
-        sw = round(r.h * 0.5)
-        g.rect(self._last_key_color, (x - px - sw, cy - sw // 2, sw, sw))
-        g.draw_text("to paint" if not self._paint_mode else "to write", px, r.right, cy, "mono", P.MUTED, anchor="midright")
-        draw_keycap(g, "Tab", px, r.right - g.measure("to write ", px, "mono")[0] - int(px * 0.5), cy, anchor="midright")
+        draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self._last_key_color,
+                         "to write" if self._paint_mode else "to paint")

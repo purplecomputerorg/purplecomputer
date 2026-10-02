@@ -8,10 +8,13 @@ from ..constants import (
     ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
 )
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from .rooms.blocks_room import ICON_CUBE
 from .ui import Dialog, Overlay, Picker, draw_keycap, draw_scrim
 
-ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art")]
-NUMBER_KEY_ROOMS = {"1": "play", "2": "music", "3": "art"}
+ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art"),
+                ("blocks", ICON_CUBE, "Blocks")]
+NUMBER_KEY_ROOMS = {str(i + 1): room for i, (room, _, _) in enumerate(ROOM_OPTIONS)}
+EXTRA_COUNT = 3
 ROWS, EXTRAS, CODE = 0, 1, 2
 
 
@@ -37,11 +40,12 @@ class RoomPicker(Overlay):
                 return
             d = action.direction
             if d in ("left", "right") and self.row != CODE:
-                self.col = max(0, min(2, self.col + (1 if d == "right" else -1)))
+                self.col = max(0, min(self._row_len() - 1, self.col + (1 if d == "right" else -1)))
             elif d == "up":
                 self.row = max(ROWS, self.row - 1)
             elif d == "down":
                 self.row = min(CODE if self.code_row else EXTRAS, self.row + 1)
+                self.col = min(self.col, self._row_len() - 1)
             self.app.invalidate()
             return
         if isinstance(action, CharacterAction):
@@ -69,6 +73,9 @@ class RoomPicker(Overlay):
                 self._toggle_code()
             elif a == "enter" and action.is_down and not action.is_repeat:
                 self._activate()
+
+    def _row_len(self) -> int:
+        return len(ROOM_OPTIONS) if self.row == ROWS else EXTRA_COUNT
 
     def _activate(self):
         if self.row == ROWS:
@@ -100,7 +107,8 @@ class RoomPicker(Overlay):
         foot_h = g.line_height(em(0.92), "mono")
         arrows_h = em(3.6)
         grid_h = 2 * th + gap + (gap + code_h if self.code_row else 0)
-        box = pygame.Rect(0, 0, 3 * tw + 2 * gap + 2 * pad,
+        cols = len(ROOM_OPTIONS)
+        box = pygame.Rect(0, 0, cols * tw + (cols - 1) * gap + 2 * pad,
                           pad + head_h + em(1.5) + grid_h + em(1.5) + foot_h + em(0.9) + arrows_h + pad)
         box.center = (g.w // 2, g.h // 2)
         g.rect(P.SURFACE, box, radius=em(1.0))
@@ -129,7 +137,7 @@ class RoomPicker(Overlay):
         y += grid_h - (code_h + gap if self.code_row else 0)
         if self.code_row:
             y += gap
-            r = pygame.Rect(x0, y, 3 * tw + 2 * gap, code_h)
+            r = pygame.Rect(x0, y, cols * tw + (cols - 1) * gap, code_h)
             on = self.row == CODE
             self._card(g, r, on)
             label = "Close Code" if self.app._code_panel_active else "Open Code"
@@ -191,5 +199,5 @@ class ConfirmFresh(Picker):
     title = "Clear a Room"
 
     def __init__(self, app, room):
-        name = {"play": "Play", "music": "Music", "art": "Art"}[room]
+        name = next(label for rid, _, label in ROOM_OPTIONS if rid == room)
         super().__init__(app, [(room, f"Clear {name} Room"), (None, "Go Back")])

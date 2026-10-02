@@ -28,6 +28,7 @@ from ..constants import (
     is_usb_cached, is_usb_present,
 )
 from .gfx import Gfx, rgb
+from .rooms.blocks_room import ICON_CUBE
 from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
 from ..keyboard import (
     CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction, RoomAction,
@@ -38,9 +39,10 @@ from ..timeline import RoomTimeline
 from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
 from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
-ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART)
-ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE}
-ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  ← →", "art": "Arrows move  ← ↑ ↓ →"}
+ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ("blocks", "Blocks"))
+ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE, "blocks": ICON_CUBE}
+ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  ← →", "art": "Arrows move  ← ↑ ↓ →",
+               "blocks": "Arrows move  ← ↑ ↓ →"}
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
@@ -99,7 +101,7 @@ class PurpleApp:
         self._idle_timer = self._audio_idle_timer = None
         self._demo_player = self._demo_task = None
         self._code_task = None
-        self._timelines = {r: RoomTimeline(r) for r in ("play", "music", "art")}
+        self._timelines = {r: RoomTimeline(r) for r, _ in ROOMS}
         self._timeline_pending: dict = {}
         self._timeline_timer = None
         self._timeline_restored: set = set()
@@ -115,7 +117,8 @@ class PurpleApp:
         from .rooms.play_room import PlayRoom
         from .rooms.music_room import MusicRoom
         from .rooms.art_room import ArtRoom
-        self.rooms = {"play": PlayRoom(self), "music": MusicRoom(self), "art": ArtRoom(self)}
+        from .rooms.blocks_room import BlocksRoom
+        self.rooms = {"play": PlayRoom(self), "music": MusicRoom(self), "art": ArtRoom(self), "blocks": BlocksRoom(self)}
         self.active_room = "play"
         self._panel = None          # bottom panel drawn inside the viewport: code / loop / time
         self._legend_row = -1

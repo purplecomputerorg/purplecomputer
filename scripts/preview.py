@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from purple_tui.canvas.harness import make_app, press  # noqa: E402
 
 SCREENSHOT_DIR = os.environ.get("PURPLE_SCREENSHOT_DIR", "/tmp/screenshots")
-ROOMS = ("play", "music", "art")
+ROOMS = ("play", "music", "art", "blocks")
 
 
 async def run_action(app, action: str):

@@ -30,6 +30,13 @@ def test_rooms_draw_after_typing(size):
         await press(app, "tab")
         await type_text(app, "hi")
         app._draw()
+        app.action_switch_room("blocks")
+        await type_text(app, "qqq")
+        await press(app, "space")
+        await press(app, "up")
+        await press(app, "tab")
+        await press(app, "b")
+        app._draw()
         assert app.g.surface.get_size() == size
     run(go())
 

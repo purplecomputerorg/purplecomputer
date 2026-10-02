@@ -100,12 +100,16 @@ load_denylist() {
 
 # True when a serial is denied, with the reason left in DENY_REASON. Callers
 # must not wrap this in $(): the cache would then load in a subshell and be
-# thrown away, re-reading the file once per drive.
+# thrown away, re-reading the file once per drive. --ignore-denylist exports
+# PURPLE_IGNORE_DENYLIST=1 so flash-all's per-drive children inherit it.
 DENY_REASON=""
 is_denied() {
     load_denylist
     DENY_REASON="${DENIED_SERIALS[$1]:-}"
-    [[ -n "$DENY_REASON" ]]
+    [[ -n "$DENY_REASON" ]] || return 1
+    [[ "${PURPLE_IGNORE_DENYLIST:-}" == "1" ]] || return 0
+    echo "[WARN] Ignoring denylist for serial $1: $DENY_REASON" >&2
+    return 1
 }
 
 # Populate FOUND_DRIVES with "dev|size|model|serial" entries for every

@@ -36,6 +36,7 @@ usage() {
     echo "  --ref <commit>   Flash that commit's build: its archive from 'just build"
     echo "                   --ref <commit>', or the build of it still in the output dir"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
+    echo "  --ignore-denylist  Flash drives even if their serial is in $(denylist_path)"
     echo "  --no-settle      Skip the post-flash QEMU boot-settle (first real boot will be slow)"
     echo "  --settle-only    Skip flashing; just boot-settle and eject an already-flashed drive"
     echo "  --no-udev-gate   Skip udev stop/start (caller manages the gate; used by flash-all)"
@@ -123,7 +124,7 @@ select_drive() {
         done
         if is_denied "$(lsblk -dno SERIAL "$FORCE_DEVICE" 2>/dev/null | xargs)"; then
             log_error "$FORCE_DEVICE is on the denylist: $DENY_REASON"
-            log_error "Check it with 'just check-drive $FORCE_DEVICE', or remove its serial from $(denylist_path) to override."
+            log_error "Check it with 'just check-drive $FORCE_DEVICE', or pass --ignore-denylist to override."
             exit 1
         fi
         log_error "$FORCE_DEVICE is not a whitelisted USB drive."
@@ -472,6 +473,10 @@ main() {
                 ;;
             --no-settle)
                 SKIP_SETTLE=true
+                shift
+                ;;
+            --ignore-denylist)
+                export PURPLE_IGNORE_DENYLIST=1
                 shift
                 ;;
             --settle-only)

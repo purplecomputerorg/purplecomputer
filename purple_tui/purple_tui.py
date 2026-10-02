@@ -709,7 +709,7 @@ class BootModeIndicator(Static):
             label = _read_computer_name() or DEFAULT_COMPUTER_NAME
             parts = [(f"{ICON_HARDDISK} {label}", muted)]
         elif self._keep_usb and self._usb_removed:
-            parts = [(f"{ICON_USB} USB removed {ICON_SIGN_OUT} Turn off, put it back, turn on", muted)]
+            parts = [(f"{ICON_USB} USB removed {ICON_SIGN_OUT} Turn off, put it back", muted)]
         elif self._keep_usb:
             parts = [(f"{ICON_USB} USB {ICON_SIGN_OUT} Keep it in", muted)]
         elif self._is_cached and self._usb_removed:

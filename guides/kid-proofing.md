@@ -65,7 +65,7 @@ kernel.sysrq = 0
 
 SysRq (PrintScreen on most keyboards) combined with Alt triggers "magic" system commands. Value 0 disables all of them.
 
-**Exception:** The shutdown watchdog (`PowerManager.shutdown()`) and post-install reboot watcher re-enable sysrq dynamically (`echo 1 > /proc/sys/kernel/sysrq`) immediately before triggering poweroff/reboot via sysrq. This is the nuclear fallback that works even when overlayfs is dead (USB removed during live boot). Kids cannot trigger it: it requires root and only fires from code paths that have already confirmed shutdown intent.
+**Exception:** The static `purple-reboot` binary (the `PowerManager.shutdown()` backstop and the post-install reboot) re-enables sysrq (`echo 1 > /proc/sys/kernel/sysrq`) immediately before triggering poweroff/reboot via sysrq, if `reboot(2)` failed. This is the nuclear fallback that works even when overlayfs is dead (USB removed during live boot). Kids cannot trigger it: it requires root and only fires from code paths that have already confirmed shutdown intent.
 
 ---
 

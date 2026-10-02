@@ -84,7 +84,8 @@ _POWERD_ACTIVITY = ["dbus-send", "--system", "--type=method_call", "--dest=org.c
 _CHARGER_SMOOTH_COUNT = 2
 
 # How long systemctl gets to power off before the static binary does it
-_POWEROFF_BACKSTOP_SECS = 6
+# (the old watchdog's sysrq stage fired at 8s too)
+_POWEROFF_BACKSTOP_SECS = 8
 
 
 def set_logind_power_key(mode: str) -> bool:

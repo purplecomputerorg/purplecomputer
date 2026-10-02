@@ -641,108 +641,48 @@ class TestPowerButtonHotplug:
 # =============================================================================
 
 class TestShutdownWatchdog:
-    """Test that PowerManager.shutdown() spawns a detached shutdown watchdog.
-
-    The watchdog is a background process that force-powers-off after 5 seconds,
-    ensuring shutdown completes even if the TUI event loop is killed first.
-    All watchdog tests live here (centralized in PowerManager, not ByeScreen).
+    """PowerManager.shutdown() arms a detached backstop: the static binary on
+    tmpfs, which powers off if systemctl hasn't, even with the live USB gone.
+    All backstop tests live here (centralized in PowerManager, not ByeScreen).
     """
 
+    def _calls(self):
+        from purple_tui.power_manager import PowerManager
+        calls = []
+
+        def capture(*args, **kwargs):
+            calls.append((args, kwargs))
+            raise FileNotFoundError("not found")
+
+        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
+            PowerManager().shutdown()
+        return calls
+
     def test_watchdog_uses_start_new_session(self):
-        """Watchdog must detach from TUI's process group."""
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
+        """Backstop must detach from the UI's process group."""
+        assert self._calls()[0][1].get("start_new_session") is True
 
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
+    def test_watchdog_is_the_tmpfs_poweroff_binary_after_8s(self):
+        """8s matches the old sysrq stage: a slow but working systemctl
+        (Surface) finishes first."""
+        from purple_tui.constants import REBOOT_BIN
+        assert self._calls()[0][0][0] == [REBOOT_BIN, "--poweroff", "8"]
 
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        # First call is the watchdog
-        assert calls[0][1].get("start_new_session") is True
-
-    def test_watchdog_command_has_force_poweroff(self):
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
-
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
-
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        cmd = calls[0][0][0]
-        assert cmd[0] == "sh"
-        assert cmd[1] == "-c"
-        assert "poweroff --force" in cmd[2]
-
-    def test_watchdog_uses_single_force(self):
-        """Watchdog uses single --force to preserve ACPI power-off sequence.
+    def test_systemctl_uses_single_force(self):
+        """Single --force preserves the ACPI power-off sequence.
 
         Double --force bypasses ACPI and can leave keyboard backlights on
         and devices in limbo on Modern Standby hardware (Surface, Macs).
         """
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
-
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
-
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        cmd_str = calls[0][0][0][2]
-        assert "--force" in cmd_str
-        assert "--force --force" not in cmd_str
+        for (cmd,), _ in self._calls():
+            assert cmd.count("--force") <= 1
 
     def test_watchdog_swallows_exceptions(self):
-        """Watchdog spawn failure should not prevent shutdown attempt."""
+        """Backstop spawn failure should not prevent shutdown attempt."""
         from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-
         with patch("purple_tui.power_manager.subprocess.Popen",
                    side_effect=OSError("spawn failed")):
-            pm.shutdown()  # Should not raise
-
-    def test_watchdog_has_sysrq_fallback(self):
-        """Watchdog should include sysrq poweroff as nuclear fallback."""
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
-
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
-
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        cmd_str = calls[0][0][0][2]
-        assert "sysrq-trigger" in cmd_str
-
-    def test_watchdog_two_stage_timing(self):
-        """Watchdog: stage 1 at 5s (systemctl), stage 2 at 8s (sysrq)."""
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
-
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
-
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        cmd_str = calls[0][0][0][2]
-        assert "sleep 5" in cmd_str
-        assert "sleep 3" in cmd_str
+            PowerManager().shutdown()  # Should not raise
 
 
 # =============================================================================

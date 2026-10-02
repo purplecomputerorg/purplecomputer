@@ -27,7 +27,7 @@ from pathlib import Path
 import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
-from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, PAYLOAD_DIR, SUPPORT_EMAIL
+from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present, PAYLOAD_DIR, SUPPORT_EMAIL
 from ..audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
 from ..tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from .. import diagnostics
@@ -912,6 +912,8 @@ def _boot_mode_hint() -> str:
         return "Running from USB. Not yet installed.\nReinsert after restart.\nInstall to keep it without the USB."
     if is_usb_cached():
         return "Running from USB. Not yet installed.\nOK to remove USB. Reinsert after restart.\nInstall to keep it without the USB."
+    if is_usb_needed():
+        return "Running from USB. Not yet installed.\nKeep the USB in while you play.\nInstall to keep it without the USB."
     return "Running from USB. Not yet installed.\n\nInstall to keep it without the USB."
 
 

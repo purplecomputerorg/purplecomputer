@@ -132,34 +132,75 @@ def test_a_pulled_stick_backs_off_instead_of_collecting_every_tick(monkeypatch):
     assert len(collected) == 1 and w.report.due >= k.STRETCH_MAX
 
 
-def _usb_cache(tmp_path, monkeypatch, avail, mlock_rc):
+def _usb_cache_module():
     spec = importlib.util.spec_from_file_location("usb_cache", ROOT / "scripts" / "purple-usb-cache.py")
     c = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(c)
-    (tmp_path / "fs.squashfs").write_bytes(b"s" * 5000)
+    return c
+
+
+def _usb_cache(tmp_path, monkeypatch, avail, resident=(), lock_ok=True):
+    """Run main() against a sparse 1 GB image; returns (log, safe, keep, held, warmed, locked)."""
+    c = _usb_cache_module()
+    size = 1 << 30
+    img = tmp_path / "fs.squashfs"
+    with open(img, "wb") as f:
+        f.truncate(size)
     (tmp_path / "boot.log").write_text("")
-    c.SQUASHFS, c.LIVE_CONF = str(tmp_path / "fs.squashfs"), str(tmp_path / "none")
-    c.MARKER, c.BOOT_LOGS = str(tmp_path / "cached"), (str(tmp_path / "boot.log"), str(tmp_path / "absent.log"))
+    c.SQUASHFS, c.LIVE_CONF = str(img), str(tmp_path / "none")
+    c.MARKER, c.KEEP_MARKER = str(tmp_path / "cached"), str(tmp_path / "keep")
+    c.BOOT_LOGS = (str(tmp_path / "boot.log"), str(tmp_path / "absent.log"))
+    warmed, locked, paused = [], [], []
     monkeypatch.setattr(c, "mem_available", lambda: avail)
-    monkeypatch.setattr(c.ctypes, "CDLL", lambda *a, **kw: type("L", (), {"mlockall": staticmethod(lambda f: mlock_rc)})())
-    paused = []
+    monkeypatch.setattr(c, "map_file", lambda path, n: 0x1000)
+    monkeypatch.setattr(c, "wait_for_ui", lambda: None)
+    monkeypatch.setattr(c, "mapped_files", lambda: {"usr/bin/Xorg"})
+    monkeypatch.setattr(c, "read_through_private_mount", lambda sq, rels: warmed.extend(rels))
+    monkeypatch.setattr(c, "resident_runs", lambda addr, n: list(resident))
+    monkeypatch.setattr(c, "lock", lambda addr, runs: locked.extend(runs) or lock_ok)
     monkeypatch.setattr(c.signal, "pause", lambda: paused.append(1))
     c.main()
-    return (tmp_path / "boot.log").read_text(), (tmp_path / "cached").exists(), bool(paused)
+    return ((tmp_path / "boot.log").read_text(), (tmp_path / "cached").exists(), (tmp_path / "keep").exists(),
+            bool(paused), warmed, locked)
 
 
-def test_usb_cache_locks_when_there_is_room_and_holds_the_lock(tmp_path, monkeypatch):
-    log, marker, held = _usb_cache(tmp_path, monkeypatch, avail=4 << 30, mlock_rc=0)
-    assert "[usb-cache] Squashfs locked in RAM" in log and "USB safe to remove" in log
-    assert marker and held
+def test_usb_cache_locks_the_whole_image_when_there_is_room(tmp_path, monkeypatch):
+    log, safe, keep, held, warmed, locked = _usb_cache(tmp_path, monkeypatch, avail=2 << 30)
+    assert locked == [(0, 1 << 30)] and not warmed
+    assert "Locked whole squashfs" in log and "USB safe to remove" in log
+    assert safe and held and not keep
     assert not (tmp_path / "absent.log").exists(), "never creates a boot log as root"
 
 
-def test_usb_cache_only_warms_with_low_ram_or_a_failed_lock(tmp_path, monkeypatch):
-    log, marker, held = _usb_cache(tmp_path, monkeypatch, avail=512 << 20, mlock_rc=0)
-    assert "Low RAM" in log and marker and not held
-    log, marker, held = _usb_cache(tmp_path, monkeypatch, avail=4 << 30, mlock_rc=-1)
-    assert "Could not lock" in log and marker and not held
+def test_usb_cache_low_ram_locks_only_the_session_working_set(tmp_path, monkeypatch):
+    runs = [(0, 4096), (1 << 20, 8 << 20)]
+    log, safe, keep, held, warmed, locked = _usb_cache(tmp_path, monkeypatch, avail=600 << 20, resident=runs)
+    assert "usr/bin/Xorg" in warmed and "opt/purple" in warmed, "mapped files and KEEP are both read"
+    assert locked == runs and "Locked session working set" in log
+    assert safe and held and not keep
+
+
+def test_usb_cache_says_keep_the_usb_in_when_nothing_fits(tmp_path, monkeypatch):
+    for kwargs in ({"avail": 600 << 20, "resident": [(0, 300 << 20)]},
+                   {"avail": 2 << 30, "lock_ok": False}):
+        log, safe, keep, held, _, _ = _usb_cache(tmp_path, monkeypatch, **kwargs)
+        assert keep and not safe and not held and "keep the USB in" in log
+        (tmp_path / "keep").unlink()
+
+
+def test_usb_cache_resident_runs_reads_the_real_page_cache(tmp_path):
+    c = _usb_cache_module()
+    f = tmp_path / "img"
+    f.write_bytes(os.urandom(c.PAGE * 8))
+    size = c.PAGE * 8
+    addr = c.map_file(str(f), size)
+    os.posix_fadvise(os.open(f, os.O_RDONLY), 0, 0, os.POSIX_FADV_DONTNEED)
+    with open(f, "rb") as fh:
+        fh.seek(c.PAGE * 2)
+        fh.read(c.PAGE * 3)
+    runs = c.resident_runs(addr, size)
+    assert (c.PAGE * 2, c.PAGE * 3) in runs or any(o <= c.PAGE * 2 and o + n >= c.PAGE * 5 for o, n in runs)
+    assert c.lock(addr, [(c.PAGE * 2, c.PAGE)]) in (True, False)  # EPERM without CAP_IPC_LOCK is fine here
 
 
 def test_build_and_cleanlog_write_the_same_bytes(tmp_path):
@@ -202,3 +243,9 @@ def test_initramfs_hook_claims_a_start_and_writes_only_its_slot(tmp_path):
     assert d[k.slot_base(1) + k.REPORT_BYTES:k.slot_base(2)] == k.pristine()[k.slot_base(1) + k.REPORT_BYTES:k.slot_base(2)]
     assert d[k.slot_base(3):] == k.pristine()[k.slot_base(3):]
     assert (tmp_path / "run" / "stick-start").read_text() == "2\n"
+
+
+def test_usb_cache_mapped_files_are_image_relative_regular_files():
+    files = _usb_cache_module().mapped_files()
+    assert any("libc" in p or "python" in p for p in files), "this test's own process maps them"
+    assert not any(p.startswith(("/", "proc/", "dev/", "tmp/")) or p.endswith("(deleted)") for p in files)

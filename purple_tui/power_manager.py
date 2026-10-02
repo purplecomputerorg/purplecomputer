@@ -105,7 +105,8 @@ def manual_off_hint() -> str:
     return "Please turn off" if can_power_back_on() else "You can unplug Purple now"
 
 # How long systemctl gets to power off before the static binary does it
-_POWEROFF_BACKSTOP_SECS = 6
+# (the old watchdog's sysrq stage fired at 8s too)
+_POWEROFF_BACKSTOP_SECS = 8
 
 
 def set_logind_power_key(mode: str) -> bool:

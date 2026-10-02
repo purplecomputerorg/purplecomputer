@@ -181,7 +181,7 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 4. Success screen: "Press ENTER to restart"
 5. Textual exits, Python `execv`s into `/run/purple-reboot-mount/purple-reboot --wait` (static binary on tmpfs)
 
-**Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq `echo o > /proc/sysrq-trigger`. Logged to `/tmp/purple-power.log`.
+**Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Backstop: the static `purple-reboot --poweroff 8` on its own tmpfs (staged every boot by `purple-stage-reboot`) powers off if systemctl hasn't, even after the live USB is pulled. Logged to `/tmp/purple-power.log`.
 
 **Post-install reboot:** `purple-reboot` static binary on its own `exec,suid` tmpfs (Ubuntu's `/run` is `nosuid,noexec`). Ignores pty signals so it survives Alacritty dying after USB removal. Calls `reboot(2)` directly.
 

@@ -459,6 +459,18 @@ def test_usb_cache_service_replaces_the_xinitrc_warmup():
     assert "filesystem.squashfs" not in xinitrc and "purple-usb-cached" not in xinitrc
 
 
+def test_poweroff_binary_staged_in_ram_every_boot():
+    """Power off has to work after a live USB is pulled, so the static binary
+    is on its exec,suid tmpfs from boot, not only after an install."""
+    src = _build_source()
+    assert 'scripts/purple-stage-reboot.sh "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"' in src
+    assert "systemctl enable purple-stage-reboot.service" in src
+    assert "/usr/local/bin/purple-stage-reboot" in (ROOT / "build-scripts" / "install.sh").read_text()
+    from purple_tui.constants import REBOOT_BIN
+    assert REBOOT_BIN.startswith("/run/purple-reboot-mount/")
+    assert "DIR=/run/purple-reboot-mount" in (ROOT / "scripts" / "purple-stage-reboot.sh").read_text()
+
+
 def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
     """PURPLE-LOG is one preallocated file: a header with the start count,
     then a slot per start with a report region and a kernel log region. The

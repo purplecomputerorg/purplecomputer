@@ -25,7 +25,7 @@ from ..constants import (
     ICON_PALETTE, ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER,
     ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
-    is_usb_cached, is_usb_present,
+    is_usb_cached, is_usb_needed, is_usb_present,
 )
 from .gfx import Gfx, rgb
 from .rooms.blocks_room import ICON_CUBE
@@ -189,6 +189,7 @@ class PurpleApp:
             self._start_sound_check()
         if not is_live_boot() and os.path.exists(LIVE_AUDIO_MARKER):
             self.timers.after(30.0, self._check_first_boot_audio)
+        self._usb_text = None
         self._usb_timer = self.timers.every(1.0, self._tick_usb) if is_live_boot() else None
         self._battery_timer = self.timers.every(30.0, self.invalidate)
         boot_log.heartbeat("main loop ready")
@@ -1101,7 +1102,10 @@ class PurpleApp:
 
     # ------------------------------------------------------------------ USB / title
     def _tick_usb(self):
-        self.invalidate()
+        text = self._boot_mode_text()
+        if text != self._usb_text:
+            self._usb_text = text
+            self.invalidate()
 
     def computer_name(self) -> str:
         if self._computer_name is None:
@@ -1116,6 +1120,9 @@ class PurpleApp:
     def _boot_mode_text(self) -> str:
         if not is_live_boot():
             return f"{ICON_COMPUTER} {self.computer_name()}"
+        if is_usb_needed():
+            return f"{ICON_USB} USB  Keep it in" if is_usb_present() \
+                else f"{ICON_USB} USB removed  Turn off, put it back"
         if not is_usb_cached():
             return f"{ICON_USB} USB" if int(time.monotonic()) % 2 else "USB"
         return f"{ICON_USB} USB  OK to remove • If restart, reinsert" if is_usb_present() \

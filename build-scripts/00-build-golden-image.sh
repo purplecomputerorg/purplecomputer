@@ -1172,6 +1172,10 @@ JOURNAL
     # Pi: `savelog` copies that report to the boot partition, which any computer can read
     [ "$BOOT" != pi ] || install -m 755 /purple-src/scripts/purple-savelog.sh "$MOUNT_DIR/usr/local/bin/savelog"
     chroot "$MOUNT_DIR" systemctl enable purple-stick-log.service
+    cp /purple-src/scripts/purple-stage-reboot.sh "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"
+    cp /purple-src/config/systemd/purple-stage-reboot.service "$MOUNT_DIR/etc/systemd/system/"
+    chroot "$MOUNT_DIR" systemctl enable purple-stage-reboot.service
     cp /purple-src/scripts/purple-usb-cache.py "$MOUNT_DIR/usr/local/bin/purple-usb-cache"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-usb-cache"
     cp /purple-src/config/systemd/purple-usb-cache.service "$MOUNT_DIR/etc/systemd/system/"

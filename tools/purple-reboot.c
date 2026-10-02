@@ -1,9 +1,11 @@
-/* Static reboot binary for post-install restart.
+/* Static reboot/poweroff binary for post-install restart and USB-safe power off.
  *
  * Compiled statically (zero shared lib dependencies) during golden image
- * build. install.sh copies it to a dedicated tmpfs mount with setuid root.
+ * build. purple-stage-reboot copies it to a dedicated tmpfs mount with
+ * setuid root at boot.
  *
  * With --wait: clears screen, shows success message, waits for Enter, reboots.
+ * With --poweroff [SECONDS]: waits SECONDS (default 0), then powers off.
  * Without: reboots immediately.
  *
  * Before reboot(2) it kills Xorg and waits for it to actually die. Raw
@@ -207,8 +209,8 @@ static void stop_xorg(void) {
     pr_sleep(1);  /* let the driver finish DRM teardown */
 }
 
-/* Try sysrq 'b' (immediate hard reboot, no sync). */
-static void try_sysrq_reboot(void) {
+/* Try sysrq 'b' (hard reboot) or 'o' (power off), no sync. */
+static void try_sysrq(char key) {
     int fd;
 
     /* Enable sysrq first */
@@ -220,7 +222,7 @@ static void try_sysrq_reboot(void) {
 
     fd = pr_open("/proc/sysrq-trigger", O_WRONLY);
     if (fd >= 0) {
-        pr_write(fd, "b", 1);
+        pr_write(fd, &key, 1);
         pr_close(fd);
     }
 }
@@ -295,6 +297,11 @@ int purple_reboot_main(int argc, char **argv) {
     pr_signal(SIGINT, SIG_IGN);
     pr_signal(SIGTSTP, SIG_IGN);
 
+    int poweroff = argc > 1 && strcmp(argv[1], "--poweroff") == 0;
+    int cmd = poweroff ? RB_POWER_OFF : RB_AUTOBOOT;
+    if (poweroff && argc > 2)
+        pr_sleep((unsigned int)atoi(argv[2]));
+
     if (argc > 1 && strcmp(argv[1], "--wait") == 0) {
         pr_write(STDOUT_FILENO, WAIT_MSG, strlen(WAIT_MSG));
 
@@ -317,7 +324,7 @@ int purple_reboot_main(int argc, char **argv) {
 
     stop_xorg();
     pr_sync();
-    pr_reboot(RB_AUTOBOOT);
+    pr_reboot(cmd);
 
     /* reboot() should never return on success.
      * If we're here, something went wrong. Try harder. Kill X again first:
@@ -326,11 +333,13 @@ int purple_reboot_main(int argc, char **argv) {
     pr_sleep(1);
     stop_xorg();
     pr_sync();
-    pr_reboot(RB_AUTOBOOT);
+    pr_reboot(cmd);
 
-    /* Still alive: try sysrq hard reboot */
+    /* Still alive: try sysrq */
     pr_sleep(1);
-    try_sysrq_reboot();
+    try_sysrq(poweroff ? 'o' : 'b');
+    if (poweroff)
+        return 1;
 
     /* Still alive: give up on reboot, show manual instructions */
     pr_sleep(2);

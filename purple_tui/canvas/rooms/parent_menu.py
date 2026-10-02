@@ -20,7 +20,7 @@ from ... import palette as P
 from ..gfx import FONT_DIR
 from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
-from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
+from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
 from .sleep_screen import FullScreen
@@ -1030,6 +1030,8 @@ def _boot_mode_hint() -> str:
         return "Running from USB. Not yet installed.\nReinsert after restart.\nInstall to keep it without the USB."
     if is_usb_cached():
         return "Running from USB. Not yet installed.\nOK to remove USB. Reinsert after restart.\nInstall to keep it without the USB."
+    if is_usb_needed():
+        return "Running from USB. Not yet installed.\nKeep the USB in while you play.\nInstall to keep it without the USB."
     return "Running from USB. Not yet installed.\n\nInstall to keep it without the USB."
 
 

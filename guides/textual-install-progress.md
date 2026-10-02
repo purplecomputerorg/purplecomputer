@@ -157,7 +157,7 @@ All shutdown and reboot paths on Purple Computer:
 | Parent menu "Shut Down" | `ParentMenu._shutdown()` | `pm.shutdown()` |
 | Post-install Enter | `InstallProgressScreen._on_install_complete()` | `execv` into static reboot binary on tmpfs |
 
-`pm.shutdown()` uses `sudo systemctl poweroff --force` with a two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq 'o' (direct kernel poweroff via ACPI). The watchdog runs in a detached process group so it survives TUI death.
+`pm.shutdown()` uses `sudo systemctl poweroff --force` with a backstop: the static `purple-reboot --poweroff 8` on tmpfs, in a detached session so it survives TUI death, powers off (then sysrq 'o') if systemctl hasn't.
 
 All shutdown commands use `sudo` because `systemctl poweroff` without sudo fails with permission denied on the live USB (and Popen doesn't detect this since it only checks if the process spawned, not if it succeeded). The purple user has passwordless sudo everywhere via `/etc/sudoers.d/purple-nopasswd`.
 

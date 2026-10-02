@@ -170,6 +170,8 @@ _LIVE_CONF = _live_conf()
 SQUASHFS_PATH = _LIVE_CONF.get("SQUASHFS", "/cdrom/casper/filesystem.squashfs")
 PAYLOAD_DIR = _LIVE_CONF.get("PURPLE_PAYLOAD_DIR", "/cdrom/purple")
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"
+# Written instead when there is not enough RAM to hold what a session needs
+USB_KEEP_MARKER = "/tmp/purple-usb-keep"
 # Static reboot/poweroff binary on its own tmpfs (scripts/purple-stage-reboot.sh)
 REBOOT_BIN = "/run/purple-reboot-mount/purple-reboot"
 
@@ -185,7 +187,8 @@ UI_READY_MARKER = "/tmp/purple-ui-ready"
 LIVE_AUDIO_MARKER = "/var/log/purple/audio-worked-in-live"
 
 # PURPLE_FAKE_USB env var simulates USB boot states for testing.
-# Values: "caching" (USB blinking), "cached" (safe to remove), "removed" (USB pulled out)
+# Values: "caching" (USB blinking), "cached" (safe to remove), "removed" (USB pulled out),
+# "keep" (too little RAM, must stay in), "keep-removed" (pulled out anyway)
 _FAKE_USB = os.environ.get("PURPLE_FAKE_USB", "")
 
 
@@ -216,10 +219,17 @@ def is_usb_cached() -> bool:
     return os.path.exists(USB_CACHE_MARKER)
 
 
+def is_usb_needed() -> bool:
+    """Too little RAM to hold the system: the USB has to stay in."""
+    if _FAKE_USB:
+        return _FAKE_USB.startswith("keep")
+    return os.path.exists(USB_KEEP_MARKER)
+
+
 def is_usb_present() -> bool:
     """Check if the USB drive is still physically connected."""
     if _FAKE_USB:
-        return _FAKE_USB != "removed"
+        return not _FAKE_USB.endswith("removed")
     return os.path.exists(SQUASHFS_PATH)
 
 # Room titles with icons (uses room name constants)

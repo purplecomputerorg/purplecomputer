@@ -25,6 +25,7 @@ from datetime import datetime
 from typing import Optional
 
 from . import diag_log
+from .constants import REBOOT_BIN
 
 
 # /var/log/purple survives reboot on installed systems and the debug ISO
@@ -102,6 +103,9 @@ def can_power_back_on() -> bool:
 def manual_off_hint() -> str:
     """Shown when Purple leaves turning off to a person."""
     return "Please turn off" if can_power_back_on() else "You can unplug Purple now"
+
+# How long systemctl gets to power off before the static binary does it
+_POWEROFF_BACKSTOP_SECS = 6
 
 
 def set_logind_power_key(mode: str) -> bool:
@@ -412,9 +416,8 @@ class PowerManager:
         There's no user data to lose on a kids' computer, and clean
         shutdown can hang for 10-15 seconds waiting for services.
 
-        Also spawns a watchdog process that force-powers-off after 15
-        seconds, independent of the TUI event loop. This ensures
-        shutdown completes even if systemd kills X11/Textual first.
+        Also arms a backstop that powers off on its own if systemctl
+        hasn't within a few seconds (see below).
 
         In demo mode (PURPLE_SLEEP_DEMO=1), just prints a message instead.
         """
@@ -437,24 +440,13 @@ class PowerManager:
         if not self._poweroff_available:
             _power_log("SHUTDOWN: no poweroff command found, trying anyway")
 
-        # Two-stage watchdog (detached process group, survives TUI death):
-        #   Stage 1 (5s): systemctl --force (clean ACPI shutdown)
-        #   Stage 2 (8s): sysrq poweroff (direct kernel call, no filesystem needed)
-        # sysrq 'o' still goes through ACPI, unlike double --force which bypasses
-        # ACPI and leaves Surface keyboards lit / devices in resume limbo.
-        # sysrq works even if overlayfs is dead (USB removed during live boot).
-        try:
-            subprocess.Popen(
-                ["sh", "-c",
-                 "sleep 5 && sudo systemctl poweroff --force 2>/dev/null; "
-                 "sleep 3 && echo 1 > /proc/sys/kernel/sysrq && "
-                 "echo o > /proc/sysrq-trigger"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-        except Exception:
-            pass
+        # Backstop in its own session, so it outlives the UI: the static
+        # binary on tmpfs stops X and powers off if systemctl hasn't by then.
+        # It is the only thing that still runs once a live USB is pulled
+        # (sh, sudo and systemctl SIGBUS on the dead overlay).
+        backstop = _spawn([REBOOT_BIN, "--poweroff", str(_POWEROFF_BACKSTOP_SECS)],
+                          start_new_session=True)
+        _power_log(f"SHUTDOWN: backstop {'armed' if backstop else 'unavailable'}")
 
         # --force skips clean service stop (near-instant, no data to lose).
         # Always use sudo: non-sudo systemctl lacks permission on live USB,
@@ -465,18 +457,14 @@ class PowerManager:
             ["sudo", "systemctl", "poweroff", "--force"],
             ["sudo", "poweroff", "-f"],
         ]
+        return any(_spawn(cmd) for cmd in commands) or backstop
 
-        for cmd in commands:
-            try:
-                subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                return True
-            except Exception:
-                continue
 
+def _spawn(cmd: list[str], **kwargs) -> bool:
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
+        return True
+    except Exception:
         return False
 
 

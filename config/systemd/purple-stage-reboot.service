@@ -1,0 +1,12 @@
+[Unit]
+Description=Purple Computer: stage the power off and restart binary in RAM
+After=local-fs.target
+Before=purple-x11.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/purple-stage-reboot
+
+[Install]
+WantedBy=multi-user.target

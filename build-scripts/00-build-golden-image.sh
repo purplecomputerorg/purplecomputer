@@ -828,6 +828,8 @@ TMPFILES
     # elsewhere numpy comes from apt (no 1.x wheels for i686 or trixie's Python 3.13)
     [ "$PURPLE_ARCH" = "amd64" ] || chroot "$MOUNT_DIR" apt-get install -y python3-numpy
     chroot "$MOUNT_DIR" $SETARCH pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
+    # Pi: py-spy samples Purple's Python stacks for `savelog profile` (idle unless run)
+    [ "$BOOT" != pi ] || chroot "$MOUNT_DIR" pip3 install --no-cache-dir --break-system-packages py-spy
 
     # Precompile every .py into .pyc so boot doesn't pay cold-compile cost off
     # USB. Saves ~1-2s per cold boot on slow machines where bytecode generation

@@ -41,8 +41,11 @@ mkdir -p "$LINK_DIR"
 for f in "$LINK_DIR"/*.iso "$LINK_DIR"/*.img.xz; do
     [[ -L "$f" && ! -e "$f" ]] && rm -f "$f" && log_info "Removed $(basename "$f"): its build is gone"
 done
-ln -sfn "$ISO_PATH" "$LINK_DIR/$(basename "$ISO_PATH")"
-log_info "Linked $(basename "$ISO_PATH") [$(cat "$ISO_PATH.version" 2>/dev/null || echo "no version stamp")]"
+# A --ref build has the same date-stamped name as today's main build: prefix its commit
+name=$(basename "$ISO_PATH")
+case "$ISO_PATH" in "$INSTALLER_BASE"/archive/*/*) ref=${ISO_PATH#"$INSTALLER_BASE"/archive/}; name="${ref%%/*}-$name" ;; esac
+ln -sfn "$ISO_PATH" "$LINK_DIR/$name"
+log_info "Linked $name [$(cat "$ISO_PATH.version" 2>/dev/null || echo "no version stamp")]"
 echo ""
-echo "  scp $(hostname -s):isos/$(basename "$ISO_PATH") ~/Downloads/"
+echo "  scp $(hostname -s):isos/$name ~/Downloads/"
 echo ""

@@ -818,6 +818,15 @@ EFI_GRUB_EOF
     rmdir "$EFI_MNT"
     log_info "Built fresh EFI image (${EFI_SIZE_KB}KB) with latest signed binaries"
 
+    # Rufus ISO mode copies /EFI/boot from the ISO filesystem, and Rufus flags the
+    # stock 2024 GRUB there as SBAT-revoked. Lowercase names match the stock tree.
+    rm -rf "$WORK_DIR/iso-new/EFI/boot"
+    mkdir -p "$WORK_DIR/iso-new/EFI/boot"
+    for f in "$SIGNED_EFI"/*; do
+        name=$(basename "$f")
+        cp "$f" "$WORK_DIR/iso-new/EFI/boot/${name,,}"
+    done
+
     # Third partition: a plain FAT "basic data" volume named PURPLEUSB, which
     # Windows and macOS mount like any thumb drive (they hide the EFI partition).
     # It is what a parent sees when they plug the stick into a running computer,

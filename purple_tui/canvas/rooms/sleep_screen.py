@@ -9,7 +9,7 @@ from ... import palette as P
 from ...constants import (ICON_BATTERY_MED, ICON_HOURGLASS, ICON_LAPTOP, ICON_PLUG, ICON_USB,
                          ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, is_live_boot)
 from ...keyboard import ControlAction
-from ...power_manager import LID_SHUTDOWN_DELAY, get_power_manager
+from ...power_manager import LID_SHUTDOWN_DELAY, get_power_manager, manual_off_hint
 from ..ui import Overlay
 
 _FACE = ["---     ---", "", "   \\___/   ", "", "   z z z   "]
@@ -88,7 +88,7 @@ class SleepScreen(FullScreen):
         if lid_close_time is not None:
             remaining = max(0, LID_SHUTDOWN_DELAY - (time.time() - lid_close_time))
             lines.append(f"{ICON_HOURGLASS} Shuts off in {_friendly_time(remaining)}.")
-        else:
+        elif pm.get_idle_shutdown_threshold() != float("inf"):
             remaining = max(0, pm.get_idle_shutdown_threshold() - pm.get_idle_seconds())
             icon = f"{ICON_PLUG} Plugged in." if pm.is_on_charger() is True else f"{ICON_BATTERY_MED} Battery."
             lines.append(f"{icon} Shuts off in {_friendly_time(remaining)}.")
@@ -109,7 +109,7 @@ class SleepScreen(FullScreen):
             return
         self._shutdown_initiated = True
         if not get_power_manager().shutdown():
-            self.hint = "Please turn off"
+            self.hint = manual_off_hint()
 
     async def handle(self, action):
         from ...power_manager import _power_log
@@ -155,7 +155,7 @@ class ByeScreen(FullScreen):
 
     def on_open(self):
         if not get_power_manager().shutdown():
-            self.hint = "Please turn off"
+            self.hint = manual_off_hint()
 
     async def handle(self, action):
         pass

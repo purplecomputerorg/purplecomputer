@@ -82,6 +82,33 @@ _POWERD_ACTIVITY = ["dbus-send", "--system", "--type=method_call", "--dest=org.c
 # Number of consecutive reads before changing charger state (smoothing)
 _CHARGER_SMOOTH_COUNT = 2
 
+DEVICE_TREE_MODEL = "/proc/device-tree/model"
+# Only the Pi 5 family has a button that turns a halted board back on
+_PI_WAKEABLE = ("Raspberry Pi 5", "Raspberry Pi 500", "Raspberry Pi Compute Module 5")
+
+
+def device_tree_model() -> str:
+    """Board name on ARM machines (no DMI there), e.g. "Raspberry Pi 400 Rev 1.1"."""
+    try:
+        with open(DEVICE_TREE_MODEL) as f:
+            return f.read().strip("\0 \n")
+    except OSError:
+        return ""
+
+
+def can_power_back_on() -> bool:
+    """False on a Pi 4 or 400: a halted board stays dark until it is unplugged
+    and plugged back in, so Purple never shuts it down itself."""
+    if not hasattr(can_power_back_on, "_cached"):
+        model = device_tree_model()
+        can_power_back_on._cached = not model.startswith("Raspberry Pi") or model.startswith(_PI_WAKEABLE)
+    return can_power_back_on._cached
+
+
+def manual_off_hint() -> str:
+    """Shown when Purple leaves turning off to a person."""
+    return "Please turn off" if can_power_back_on() else "You can unplug Purple now"
+
 
 def set_logind_power_key(mode: str) -> bool:
     """Switch logind HandlePowerKey between 'ignore' and 'poweroff'.
@@ -384,8 +411,11 @@ class PowerManager:
     def get_idle_shutdown_threshold(self) -> int:
         """Get the idle seconds threshold for auto-shutdown.
 
-        Longer timeout on charger (60 min) vs battery (10 min).
+        Longer timeout on charger (60 min) vs battery (10 min); never where
+        the machine can't power back on.
         """
+        if not can_power_back_on():
+            return float("inf")
         if self._charger_state is True:
             return CHARGER_IDLE_SHUTDOWN
         return BATTERY_IDLE_SHUTDOWN
@@ -417,6 +447,10 @@ class PowerManager:
             print("  (Press Ctrl+C to exit)")
             print("=" * 50 + "\n")
             return True
+
+        if not can_power_back_on():
+            _power_log("SHUTDOWN: skipped, this machine can't power back on without unplugging")
+            return False
 
         if not self._poweroff_available:
             _power_log("SHUTDOWN: no poweroff command found, trying anyway")

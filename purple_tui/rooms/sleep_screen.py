@@ -18,7 +18,7 @@ from textual import events
 import os
 
 from .. import backlight
-from ..power_manager import get_power_manager, LID_SHUTDOWN_DELAY
+from ..power_manager import get_power_manager, manual_off_hint, LID_SHUTDOWN_DELAY
 from ..constants import is_live_boot, LIVE_AUDIO_MARKER
 
 
@@ -138,7 +138,7 @@ class SleepScreen(Screen):
         if lid_close_time is not None:
             remaining = max(0, LID_SHUTDOWN_DELAY - (time.time() - lid_close_time))
             lines.append(f"⏳ Shuts off in {_friendly_time(remaining)}.")
-        else:
+        elif pm.get_idle_shutdown_threshold() != float("inf"):
             idle = pm.get_idle_seconds()
             remaining = max(0, pm.get_idle_shutdown_threshold() - idle)
             power_icon = "🔌 Plugged in." if on_charger is True else "🔋 Battery."
@@ -171,7 +171,7 @@ class SleepScreen(Screen):
         pm = get_power_manager()
         if not pm.shutdown():
             try:
-                self.query_one("#sleep-hint", Static).update("Please turn off")
+                self.query_one("#sleep-hint", Static).update(manual_off_hint())
             except Exception:
                 pass
 
@@ -309,7 +309,7 @@ class ByeScreen(Screen):
         pm = get_power_manager()
         if not pm.shutdown():
             try:
-                self.query_one("#bye-text", Static).update("Please turn off")
+                self.query_one("#bye-text", Static).update(manual_off_hint())
             except Exception:
                 pass
 

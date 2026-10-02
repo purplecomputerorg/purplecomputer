@@ -17,6 +17,7 @@ from pathlib import Path
 import pygame
 
 from .. import boot_log
+from .frame_stats import FrameStats
 from .. import palette as P
 from ..constants import (
     CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
@@ -89,6 +90,7 @@ class PurpleApp:
         self._backslash_hold_timer = None
         self._sticky_shift_timer = None
         self._evdev_reader = self._power_button_reader = self._lid_switch_reader = None
+        self._frame_stats = FrameStats(self.g)
         self._lid_close_time = None
         self._lid_was_closed_for = 0
         self._bye_screen_active = False
@@ -228,8 +230,11 @@ class PurpleApp:
                 self._toasts = live
                 self.g.dirty = True
             if self.g.dirty:
+                start = time.monotonic()
                 self._draw()
+                drawn = time.monotonic()
                 self.g.present()
+                self._frame_stats.frame(start, drawn, time.monotonic())
                 if first:
                     first = False
                     self._mark_ui_ready()
@@ -398,6 +403,7 @@ class PurpleApp:
             self._backslash_hold_timer = None
 
     async def _dispatch_keyboard_action(self, action):
+        self._frame_stats.key()
         self._record_user_activity()
         self.invalidate()
         if isinstance(action, RoomAction):

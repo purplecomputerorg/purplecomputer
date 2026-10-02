@@ -57,13 +57,20 @@ log() {
     logger -t purple-boot -- "$msg" 2>/dev/null || true
 }
 
-# gpu: the card sits on a PCI display-class device. firmware: the firmware
-# framebuffer (simpledrm, a platform device), which the primary GPU's driver
-# removes. other: e.g. a USB display such as the T2 Touch Bar (appletbdrm).
+# gpu: the card sits on a PCI display-class device, or is an SoC GPU (a
+# platform device, e.g. Raspberry Pi vc4). firmware: the firmware framebuffer
+# (simpledrm), which the primary GPU's driver removes. other: e.g. a USB
+# display such as the T2 Touch Bar (appletbdrm).
 card_kind() {
     local dir
     dir=$(readlink -f "/sys/class/drm/$1/device")
-    case "$dir" in /sys/devices/platform/*) echo firmware; return ;; esac
+    case "$dir" in /sys/devices/platform/*)
+        case "$(basename "$(readlink -f "$dir/driver")")" in
+            simple-framebuffer|simpledrm|ofdrm) echo firmware ;;
+            *) echo gpu ;;
+        esac
+        return ;;
+    esac
     while [ -n "$dir" ] && [ "$dir" != /sys/devices ]; do
         case "$(cat "$dir/class" 2>/dev/null)" in 0x03*) echo gpu; return ;; esac
         dir=${dir%/*}

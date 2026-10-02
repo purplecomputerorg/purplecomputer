@@ -7,9 +7,12 @@ ARG APT_MIRROR=http://archive.ubuntu.com
 RUN sed -i "s|http://archive.ubuntu.com|${APT_MIRROR}|g" /etc/apt/sources.list.d/ubuntu.sources && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    # Golden image building (debian-archive-keyring: the i386 image is Debian)
+    # Golden image building (debian-archive-keyring: the i386 and Pi images are Debian;
+    # qemu-user-static runs the Pi image's arm64 chroot, xz packs the Pi card image)
     debootstrap \
     debian-archive-keyring \
+    qemu-user-static \
+    xz-utils \
     # ISO remastering
     xorriso \
     isolinux \

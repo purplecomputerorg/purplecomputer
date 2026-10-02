@@ -91,11 +91,9 @@ def get_version_label() -> str:
 
 def get_product_name() -> str:
     """Return the machine's DMI product name, or a fallback."""
-    name = _read("/sys/class/dmi/id/product_name", "")
-    if name:
-        return name
-    vendor = _read("/sys/class/dmi/id/sys_vendor", "")
-    return vendor or "Unknown hardware"
+    from .power_manager import device_tree_model
+    return (_read("/sys/class/dmi/id/product_name", "") or _read("/sys/class/dmi/id/sys_vendor", "")
+            or device_tree_model() or "Unknown hardware")
 
 
 def get_audio_status_line(audio_ok) -> str:
@@ -134,7 +132,7 @@ def device_summary_lines() -> list[str]:
     return [
         f"Purple: {get_version_label() or '(dev)'}",
         f"Kernel: {_run('uname', '-rvm')}",
-        f"Model: {_read('/sys/class/dmi/id/product_name', '(unknown)')}",
+        f"Model: {get_product_name()}",
         f"Vendor: {_read('/sys/class/dmi/id/sys_vendor', '(unknown)')}",
         f"BIOS: {_read('/sys/class/dmi/id/bios_version', '(unknown)')}",
         f"CPU: {_cpu_model()}",

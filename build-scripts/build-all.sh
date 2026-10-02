@@ -18,6 +18,33 @@ log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 log_done() { echo -e "${GREEN}[DONE]${NC} $1"; }
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 
+# The Pi image's chroot runs arm64 programs. The F flag makes the kernel open
+# qemu now, so it works inside the chroot; the registration is kernel-wide and
+# lasts until the host reboots (pi-gen does the same).
+enable_arm64_emulation() {
+    local reg=/proc/sys/fs/binfmt_misc qemu
+    [ -e "$reg/register" ] || mount -t binfmt_misc binfmt_misc "$reg"
+    if [ ! -e "$reg/qemu-aarch64" ]; then
+        qemu=$(command -v qemu-aarch64-static || command -v qemu-aarch64)
+        echo ':qemu-aarch64:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xb7\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:'"$qemu"':F' \
+            > "$reg/register"
+    fi
+    if ! grep -q '^flags:.*F' "$reg/qemu-aarch64"; then
+        echo "ERROR: arm64 emulation is registered without the F flag, so the build chroot can't use it."
+        echo "  Remove it on the host (echo -1 | sudo tee $reg/qemu-aarch64) and rebuild."
+        exit 1
+    fi
+    log_info "arm64 emulation ready ($(sed -n 's/^interpreter //p' "$reg/qemu-aarch64"))"
+}
+
+build_pi() {
+    log_step "Building the Raspberry Pi image..."
+    enable_arm64_emulation
+    PURPLE_ARCH=arm64 ./00-build-golden-image.sh
+    log_done "Pi image ready:"
+    ls -lh "$OUTPUT_DIR"/purple-pi-*.img.xz
+}
+
 print_banner() {
     echo
     echo "=========================================="
@@ -34,6 +61,11 @@ main() {
     fi
 
     cd "$SCRIPT_DIR"
+
+    if [ "${PURPLE_PI:-0}" = "1" ]; then
+        build_pi
+        return
+    fi
 
     START_STEP="${1:-0}"
 

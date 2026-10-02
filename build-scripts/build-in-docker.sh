@@ -4,6 +4,7 @@
 #   step: optional step number to start from (0-1, default: 0)
 #     0 = build golden image (pre-built Ubuntu system)
 #     1 = remaster Ubuntu Server ISO (inject hook into initramfs)
+#   --pi: build the Raspberry Pi card image (purple-pi-<date>.img.xz) instead of the ISOs
 
 set -e
 
@@ -11,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
 IMAGE_NAME="purple-installer-builder"
 FAST_BUILD=0
+PI_BUILD=0
 
 # Parse arguments
 START_STEP=0
@@ -19,6 +21,7 @@ FORCE_BUILD=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --fast) FAST_BUILD=1 ;;
+        --pi) PI_BUILD=1 ;;
         --force) FORCE_BUILD=1 ;;
         --ref) BUILD_REF="$2"; shift ;;
         *) START_STEP="$1" ;;
@@ -114,15 +117,20 @@ main() {
         setup_ref_build
     fi
     resolve_and_log_source
-    skip_if_already_built
-
-    if [ "$START_STEP" -ge 1 ]; then
-        log_info "Build plan: ISOs only (reusing existing golden image)"
+    if [ "$PI_BUILD" = "1" ]; then
+        log_info "Build plan: Raspberry Pi card image (arm64, emulated, the slow step)"
+        log_info "Will produce in $OUTPUT_DIR:"
+        log_info "  purple-pi-$(date +%Y%m%d)$([ "$FAST_BUILD" = "1" ] && echo -fast).img.xz"
     else
-        log_info "Build plan: golden image (the slow step), then ISOs"
+        skip_if_already_built
+        if [ "$START_STEP" -ge 1 ]; then
+            log_info "Build plan: ISOs only (reusing existing golden image)"
+        else
+            log_info "Build plan: golden image (the slow step), then ISOs"
+        fi
+        log_info "Will produce in $OUTPUT_DIR:"
+        planned_iso_names | while read -r line; do log_info "  $line"; done
     fi
-    log_info "Will produce in $OUTPUT_DIR:"
-    planned_iso_names | while read -r line; do log_info "  $line"; done
 
     # Build Docker image
     log_step "Building Docker image..."
@@ -142,9 +150,14 @@ main() {
         -e "PURPLE_VERSION=${PURPLE_VERSION}" \
         -e "PURPLE_COMMIT=${PURPLE_COMMIT}" \
         -e "FAST_BUILD=${FAST_BUILD}" \
+        -e "PURPLE_PI=${PI_BUILD}" \
         -e "PURPLE_WITH_BACKUP_ISO=${PURPLE_WITH_BACKUP_ISO:-}" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"
+
+    if [ "$PI_BUILD" = "1" ]; then
+        "$SCRIPT_DIR/link-iso.sh" "$(ls -t "$OUTPUT_DIR"/purple-pi-*.img.xz | head -1)"
+    fi
 
     log_info "Build complete!"
     log_info "Output in: $OUTPUT_DIR/"

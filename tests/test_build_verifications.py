@@ -164,7 +164,8 @@ def test_i386_image_disables_glamor():
     """Intel 945 (the Atom netbook GPU) reports 64 shader instructions, glamor
     needs 128, and modesetting fails X outright rather than falling back."""
     src = _build_source()
-    m = re.search(r'\[ "\$PURPLE_ARCH" = "amd64" \] \|\| sed -i \'(.*?)\'', src)
+    m = re.search(r'\[ "\$GLAMOR" = 1 \] \|\| sed -i \'(.*?)\'', src)
+    assert re.search(r'^\s+GLAMOR=0$', src, re.M), "i386 profile does not turn glamor off"
     assert m, "i386 AccelMethod override missing"
     assert 'Option     "AccelMethod" "none"' in m.group(1)
     conf = (ROOT / "config" / "xorg" / "10-modesetting.conf").read_text()
@@ -275,7 +276,7 @@ def test_initrd_lean_hook_prunes_modules_and_firmware():
     assert "depmod -b" in body, "hook does not refresh module deps"
     assert re.search(r'chmod \+x "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd"', src), \
         "lean-initrd hook not made executable"
-    assert src.index("zzz-purple-lean-initrd") < src.index('update-initramfs -u -k "$KVER"'), \
+    assert src.index("zzz-purple-lean-initrd") < src.index('update-initramfs -u -k "$kver"'), \
         "hook written after the initrd rebuild it must influence"
     assert re.search(
         r"lsinitramfs .*grep -qE 'kernel/drivers/net/\|kernel/drivers/gpu/\|firmware/nvidia/\|firmware/mellanox/'",
@@ -320,11 +321,12 @@ def test_grub_config_is_one_file_for_esp_and_bios():
     assert src.count('cat > "$MOUNT_DIR/boot/efi/EFI/ubuntu/grub.cfg"') == 0, \
         "a separate ESP grub.cfg heredoc is back"
     cmdline = re.search(
-        r'cat > "\$MOUNT_DIR/boot/grub/purple-cmdline\.cfg" <<\'EOF\'\n(.*?)\nEOF\n', src, re.DOTALL)
+        r'cat > "\$MOUNT_DIR/boot/grub/purple-cmdline\.cfg" <<EOF\n(.*?)\nEOF\n', src, re.DOTALL)
     assert cmdline, "purple-cmdline.cfg heredoc missing"
     body = cmdline.group(1)
     assert 'set purple_root_arg="root=LABEL=PURPLE_ROOT"' in body
-    assert re.search(r'^set purple_cmdline="ro quiet loglevel=3 .*console=tty2 .*vt\.default_blu=', body, re.M), \
+    assert 'set purple_cmdline="$PURPLE_CMDLINE"' in body, "GRUB and the Pi no longer share one command line"
+    assert re.search(r'^PURPLE_CMDLINE="ro quiet loglevel=3 .*console=tty2 .*vt\.default_blu=', src, re.M), \
         "kernel command line lost quiet (EFI stub text under our boot line) or its console/colour settings"
     assert re.search(r"cp /purple-src/config/grub/purple-router\.cfg /purple-src/config/grub/purple-variants\.cfg", src), \
         "router or variants file not copied into /boot/grub"
@@ -577,3 +579,14 @@ def test_shutdown_splash_repaints_purple_without_starting_up(tmp_path):
     assert "Starting up" in paint()
     stop = paint("stop")
     assert "Starting up" not in stop and "\033]P02d1b4e" in stop
+
+
+def test_pi_overlay_root_is_mounted_read_write():
+    """With `ro` on the command line overlayroot remounts its overlay read-only
+    for systemd to flip back, which kernel 6.18 refuses: /var/lib stayed
+    read-only and logind never started, so X got no GPU (Pi 400, first boot)."""
+    src = _build_source()
+    line = re.search(r'echo "(root=LABEL=PURPLE_ROOT [^"]*)" > "\$fw/cmdline\.txt"', src)
+    assert line, "Pi cmdline.txt not written"
+    assert "overlayroot=tmpfs:recurse=0 rw ${PURPLE_CMDLINE#ro }" in line.group(1)
+    assert re.search(r'^PURPLE_CMDLINE="ro ', src, re.M), "the shared line no longer starts with ro, so #ro strips nothing"

@@ -1,0 +1,18 @@
+# Raspberry Pi boot config for Purple, read by the Pi firmware from the FAT partition.
+# The firmware picks kernel8.img (Pi 4, 400) or kernel_2712.img (Pi 5, 500) itself.
+arm_64bit=1
+auto_initramfs=1
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+disable_overscan=1
+disable_splash=1
+# Pi 4 headphone jack (Pi 5, 400 and 500 have none)
+dtparam=audio=on
+# Offline appliance: radios off in hardware, not just left without drivers
+dtoverlay=disable-wifi
+dtoverlay=disable-bt
+
+[pi4]
+arm_boost=1
+
+[all]

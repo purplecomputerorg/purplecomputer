@@ -325,6 +325,10 @@ clean-isos *args:
 build *args:
     ./build-scripts/build-in-docker.sh {{args}}
 
+# Build the Raspberry Pi card image (Pi 4, 400, 5, 500): /opt/purple-installer/output/purple-pi-<date>.img.xz
+build-pi *args:
+    ./build-scripts/build-in-docker.sh --pi {{args}}
+
 # Flash ISO to USB drive (asks which of the newest build's ISOs to use).
 # just flash --ref <commit> flashes that commit's build: archived (see just build --ref) or still in the output dir
 flash *args:

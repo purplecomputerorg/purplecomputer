@@ -16,6 +16,7 @@ collect() {
     echo "uname: $(uname -a)"
     echo "machine: $(cat /sys/class/dmi/id/sys_vendor /sys/class/dmi/id/product_name /sys/class/dmi/id/product_version 2>/dev/null | tr '\n' ' ')"
     echo "bios: $(cat /sys/class/dmi/id/bios_vendor /sys/class/dmi/id/bios_version /sys/class/dmi/id/bios_date 2>/dev/null | tr '\n' ' ')"
+    echo "board: $(tr -d '\0' < /proc/device-tree/model 2>/dev/null)"
     echo "cmdline: $(cat /proc/cmdline)"
     echo "build: $(cat /etc/purple-version 2>/dev/null || echo unknown)"
     echo "debug mode: $([ -e /opt/purple/debug ] && echo on || echo off), P held at start: $([ -e /run/purple/debug-key ] && echo yes || echo no)"
@@ -44,6 +45,12 @@ collect() {
     systemctl list-jobs --no-pager --no-legend 2>&1
     section "systemd: purple-x11"
     systemctl status purple-x11 --no-pager -l 2>&1 | head -40
+    # X gets the GPU from logind over D-Bus; a silent logind means "permission denied" on /dev/dri
+    section "logind and D-Bus"
+    systemctl status systemd-logind dbus.service dbus.socket --no-pager -l 2>&1 | head -60
+    loginctl list-sessions --no-pager 2>&1
+    echo "machine-id: $(cat /etc/machine-id 2>&1)"
+    journalctl -b --no-pager -u systemd-logind -u dbus 2>&1 | tail -c 30000
 
     section "processes (wchan shows what a stuck process waits on)"
     ps -eo pid,ppid,stat,etimes,wchan:28,args --sort=pid 2>&1 | head -c 100000

@@ -38,7 +38,7 @@ else
 fi
 
 mkdir -p "$LINK_DIR"
-for f in "$LINK_DIR"/*.iso; do
+for f in "$LINK_DIR"/*.iso "$LINK_DIR"/*.img.xz; do
     [[ -L "$f" && ! -e "$f" ]] && rm -f "$f" && log_info "Removed $(basename "$f"): its build is gone"
 done
 ln -sfn "$ISO_PATH" "$LINK_DIR/$(basename "$ISO_PATH")"

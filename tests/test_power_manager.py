@@ -508,3 +508,28 @@ if __name__ == "__main__":
         print(f"Shutdown threshold: {pm.get_idle_shutdown_threshold()}")
 
         print("Basic checks passed!")
+
+
+@pytest.mark.parametrize("model, wakeable", [
+    ("", True),
+    ("Raspberry Pi 4 Model B Rev 1.4", False),
+    ("Raspberry Pi 400 Rev 1.1", False),
+    ("Raspberry Pi 5 Model B Rev 1.0", True),
+    ("Raspberry Pi 500 Rev 1.0", True),
+])
+def test_pi_without_wake_never_halts(monkeypatch, tmp_path, model, wakeable):
+    from purple_tui import power_manager
+    path = tmp_path / "model"
+    path.write_text(model + "\0")
+    monkeypatch.setattr(power_manager, "DEVICE_TREE_MODEL", str(path))
+    monkeypatch.delattr(power_manager.can_power_back_on, "_cached", raising=False)
+    monkeypatch.setattr(power_manager, "_power_log", lambda msg: None)
+    try:
+        pm = PowerManager()
+        assert power_manager.can_power_back_on() is wakeable
+        assert (pm.get_idle_shutdown_threshold() == float("inf")) is not wakeable
+        if not wakeable:
+            assert pm.shutdown() is False
+            assert power_manager.manual_off_hint() == "You can unplug Purple now"
+    finally:
+        power_manager.can_power_back_on.__dict__.pop("_cached", None)

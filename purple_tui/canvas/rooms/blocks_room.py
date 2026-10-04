@@ -5,6 +5,7 @@ lowers it, then removes it; away from that block they move the see-through
 cursor instead, and the next block goes in at its height. Holding one letter
 while pressing another mixes the two colors. Tab flips to the back side."""
 
+import math
 import time
 
 import pygame
@@ -20,7 +21,9 @@ from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_A
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 WIDTH, DEPTH, HEIGHT = 24, 12, 8
-FLIP_S = 0.22
+FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
+TURN_S = 0.5
+TURN_MAX_BLOCKS = 400
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
 XRAY_ALPHA = 80
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -207,7 +210,8 @@ class BlocksRoom:
 
     # ---------------------------------------------------------------- flipping
     def _flip(self):
-        self._fade_from = self._scene_surface() if self._c else None
+        """Turn around: a live half turn, or a crossfade when the build is too big to redraw every frame."""
+        self._fade_from = self._scene_surface() if self._c and len(self._blocks) > TURN_MAX_BLOCKS else None
         self._back = not self._back
         self._fade_start = time.monotonic()
         if self._fade_timer is None:
@@ -223,7 +227,7 @@ class BlocksRoom:
     def _fade_progress(self):
         if self._fade_start is None:
             return None
-        p = (time.monotonic() - self._fade_start) / FLIP_S
+        p = (time.monotonic() - self._fade_start) / (FLIP_S if self._fade_from is not None else TURN_S)
         if p >= 1:
             self._fade_start = None
             return None
@@ -399,18 +403,82 @@ class BlocksRoom:
         ox = area.x + (area.w - scene.get_width()) // 2
         oy = area.y + (area.h - scene.get_height()) // 2
         self._origin = (ox, oy)
-        g.surface.blit(scene, (ox, oy))
         p = self._fade_progress()
         if p is None:
+            g.surface.blit(scene, (ox, oy))
             self._draw_cursor(g, ox, oy)
         elif self._fade_from is not None:
+            g.surface.blit(scene, (ox, oy))
             self._fade_from.set_alpha(round(255 * (1 - p)))
             g.surface.blit(self._fade_from, (ox, oy))
+        else:
+            self._draw_turning(g, ox, oy, p)
         draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
                          1 if self._back else 0, self._color, "to turn around")
         foot_y = inner.bottom - chrome_h // 2
         g.draw_text(HINT, g.vh(1.9), inner.x, foot_y, "mono", P.DIM, anchor="midleft")
         g.draw_text(MIX_HINT, g.vh(1.9), inner.right, foot_y, "mono", P.DIM, anchor="midright")
+
+    def _draw_turning(self, g, ox, oy, p):
+        """One frame of the half turn: the world spun about the floor's center
+        and drawn through the same slanted projection as the resting view, so
+        both ends land exactly on the front and back pictures. Flat faces, no
+        checkerboard, since nothing holds still long enough to see it. Zooms out
+        mid-turn so the long floor, end-on, still fits."""
+        dz, hy, sx, slab = self._metrics()
+        c = self._c
+        angle = math.pi * ((p * p * (3 - 2 * p)) + (0 if self._back else 1))
+        cos, sin = math.cos(angle), math.sin(angle)
+        ex = (cos * c + sin * sx, -sin * dz)            # one world step in x, on screen
+        ez = (-sin * c + cos * sx, -cos * dz)           # one world step in z
+        corners = [(a * WIDTH / 2, b * DEPTH / 2) for a in (-1, 1) for b in (-1, 1)]
+        xs = [a * ex[0] + b * ez[0] for a, b in corners]
+        ys = [a * ex[1] + b * ez[1] for a, b in corners]
+        half_w, half_d = WIDTH / 2 * c, DEPTH / 2 * dz
+        k = min(1.0, (half_w + DEPTH / 2 * sx) / max(max(xs), -min(xs)), (half_d + slab) / (max(ys) + slab),
+                (half_d + HEIGHT * hy) / (-min(ys) + HEIGHT * hy))
+        ex, ez, hy = (ex[0] * k, ex[1] * k), (ez[0] * k, ez[1] * k), hy * k
+        cx, cz = WIDTH / 2, DEPTH / 2
+        center = (ox + cx * c + cz * sx, oy + self._base() - cz * dz)
+
+        def at(x, y, z):
+            return (center[0] + (x - cx) * ex[0] + (z - cz) * ez[0],
+                    center[1] + (x - cx) * ex[1] + (z - cz) * ez[1] - y * hy)
+
+        sides = []                                      # (corner offsets, darkness) for the sides facing the viewer
+        for nx, nz, quad in ((0, -1, ((0, 0), (1, 0))), (1, 0, ((1, 0), (1, 1))),
+                             (0, 1, ((1, 1), (0, 1))), (-1, 0, ((0, 1), (0, 0)))):
+            rnx, rnz = nx * cos - nz * sin, nx * sin + nz * cos
+            if rnz - ROW_SKEW * rnx < 0:
+                sides.append((quad, 0.32 * max(0.0, rnx)))
+
+        def box(x0, y0, z0, x1, y1, z1, top, side, seam=None):
+            pts = []
+            for (ax, az), (bx, bz) in (q for q, _ in sides):
+                pts.append([at(x0 + (x1 - x0) * ax, y0, z0 + (z1 - z0) * az), at(x0 + (x1 - x0) * bx, y0, z0 + (z1 - z0) * bz),
+                            at(x0 + (x1 - x0) * bx, y1, z0 + (z1 - z0) * bz), at(x0 + (x1 - x0) * ax, y1, z0 + (z1 - z0) * az)])
+            pts.append([at(x0, y1, z0), at(x1, y1, z0), at(x1, y1, z1), at(x0, y1, z1)])
+            for poly, color in zip(pts, [side(dark) for _, dark in sides] + [top]):
+                pygame.draw.polygon(g.surface, color, poly)
+                if seam:
+                    pygame.draw.polygon(g.surface, seam, poly, 1)
+
+        slab_bg, seam = mix(CANVAS_BG, "#000000", 0.4), rgb(P.LINE)
+        box(0, -SLAB / BLOCK_RISE, 0, WIDTH, 0, DEPTH, rgb(CANVAS_BG), lambda dark: mix(slab_bg, "#000000", dark))
+        shades: dict = {}
+
+        def shade(color, dark):
+            if (color, dark) not in shades:
+                shades[(color, dark)] = mix(color, "#000000", dark)
+            return shades[(color, dark)]
+
+        def depth(b):
+            (x, z, y), _ = b
+            dx, dz_ = x + 0.5 - cx, z + 0.5 - cz
+            return (dx * sin + dz_ * cos) - ROW_SKEW * (dx * cos - dz_ * sin) - y * ROW_DEPTH / BLOCK_RISE
+
+        for (x, z, y), color in sorted(self._blocks.items(), key=depth, reverse=True):
+            box(x, y, z, x + 1, y + 1, z + 1, mix(color, "#ffffff", 0.22), lambda dark, col=color: shade(col, dark), seam)
 
     def _draw_cursor(self, g, ox, oy):
         """A faint glass column over the cursor's cell, and in it a see-through

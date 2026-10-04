@@ -9,7 +9,7 @@ Esc picker reaches the room with 4."""
 import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.blocks_room import FLIP_S, HEIGHT, WIDTH
+from purple_tui.canvas.rooms.blocks_room import HEIGHT, TURN_MAX_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import KeyboardStateMachine
@@ -152,17 +152,31 @@ def test_flip_keeps_blocks_and_arrows_follow_the_screen():
     run(go())
 
 
-def test_flip_fade_stops_its_timer():
+def test_turn_draws_and_stops_its_timer():
     async def go():
         app, room = _blocks()
+        await type_text(app, "abc")
         app._draw()
         await press(app, "tab")
-        app._draw()
-        assert room._fade_timer is not None
-        time.sleep(FLIP_S + 0.05)
+        assert room._fade_from is None          # small build: a live turn, not a crossfade
+        for p in (0.25, 0.5, 0.75):
+            room._fade_start = time.monotonic() - TURN_S * p
+            app._draw()
+        room._fade_start = time.monotonic() - TURN_S - 0.05
         app._draw()
         room._fade_tick()
-        assert room._fade_timer is None and room._fade_from is None
+        assert room._fade_timer is None
+    run(go())
+
+
+def test_big_builds_crossfade_instead_of_turning():
+    async def go():
+        app, room = _blocks()
+        room._blocks = {(x % WIDTH, x // WIDTH % 12, x // (WIDTH * 12)): "#ff0000" for x in range(TURN_MAX_BLOCKS + 1)}
+        app._draw()
+        await press(app, "tab")
+        assert room._fade_from is not None
+        app._draw()
     run(go())
 
 

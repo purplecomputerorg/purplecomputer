@@ -632,6 +632,7 @@ class CharacterAction(KeyAction):
     is_repeat: bool = False  # Is this a key repeat?
     arrow_held: str | None = None  # Arrow direction held when this action fired
     ctrl_held: bool = False  # Was a Ctrl key held? (used only by the secret-menu unlock)
+    char_held: str | None = None  # Another character key still held when this one went down (chords)
 
 
 @dataclass
@@ -861,6 +862,7 @@ class KeyboardStateMachine:
         if char:
             # Apply shift/caps
             final_char = self._apply_shift(char)
+            chord_with = self._held_char if not is_repeat and keycode != self._held_char_keycode else None
             # Track held character (so NavigationAction can carry it)
             if not is_repeat:
                 self._held_char = final_char
@@ -872,6 +874,7 @@ class KeyboardStateMachine:
                 is_repeat=is_repeat,
                 arrow_held=self.held_arrow_direction,
                 ctrl_held=self._ctrl_held,
+                char_held=chord_with,
             ))
 
             # Track if physical shift was used for this character (prevents sticky activation)

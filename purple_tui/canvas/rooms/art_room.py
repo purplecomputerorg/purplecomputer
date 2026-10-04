@@ -10,9 +10,9 @@ from ... import palette as P
 from ...code_runner import ArtCodeRunner
 from ...constants import ICON_ROBOT
 from ...color_mixing import mix_colors_paint
-from ..gfx import rgb
+from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
-from ...palette import contrast_text, luminance, DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
+from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..panels import CodePanel, SpaceHold
 from ..ui import draw_label, draw_mode_switch
 
@@ -22,7 +22,8 @@ ARROW_HOLD_REPEAT_THRESHOLD = 8
 HOLD_ACCEL_MULTIPLIER = 6
 CANVAS_BG = "#221440"
 CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
-HEADING_ARROWS = {"right": "▶", "left": "◀", "up": "▲", "down": "▼"}
+TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
+HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
 HINTS = {
     "littles": "Type to paint!",
     "pen": "Pen is down! Arrows paint a trail. Space lifts the pen.",
@@ -48,8 +49,29 @@ def brush_for_key(char: str):
     return None
 
 
-def _visible_arrow_color(fg_hex: str, bg_hex: str) -> str:
-    return fg_hex if abs(luminance(fg_hex) - luminance(bg_hex)) >= 0.25 else contrast_text(bg_hex)
+def _brush_tip(c: int, color: str, tip, arrow: bool) -> pygame.Surface:
+    """A 2c square centered on the cursor cell, drawn 4x and smoothed down:
+    tip is "ring" (pen up), "dot" (pen down) or None; arrow adds a chevron
+    pointing right."""
+    s = 4
+    size, mid = 2 * c * s, c * s
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    r = round(c * s * (0.42 if tip == "dot" else 0.38))
+    edge = max(s, round(c * s * 0.05))
+    if tip == "ring":
+        band = max(2 * s, round(c * s * 0.13))
+        pygame.draw.circle(surf, rgb(TIP_EDGE), (mid, mid), r + edge, band + 2 * edge)
+        pygame.draw.circle(surf, rgb(color), (mid, mid), r, band)
+    elif tip == "dot":
+        pygame.draw.circle(surf, rgb(TIP_EDGE), (mid, mid), r + edge)
+        pygame.draw.circle(surf, rgb(P.TEXT), (mid, mid), r)
+        pygame.draw.circle(surf, rgb(color), (mid, mid), r - max(s, round(c * s * 0.08)))
+    if arrow:
+        x0, h = mid + max(r, round(c * s * 0.42)) + edge, round(c * s * 0.24)
+        tri = [(x0, mid - h), (x0 + round(h * 1.3), mid), (x0, mid + h)]
+        pygame.draw.polygon(surf, rgb(color), tri)
+        pygame.draw.polygon(surf, rgb(TIP_EDGE), tri, edge)
+    return pygame.transform.smoothscale(surf, (2 * c, 2 * c))
 
 
 class ArtRoom:
@@ -82,6 +104,7 @@ class ArtRoom:
         self._blink_on = True
         self._blink_stamp = time.monotonic()
         self._blink_timer = None
+        self._tips = _Cache()
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
         self.code_panel = None
         self._cell = 10
@@ -105,7 +128,8 @@ class ArtRoom:
         pass
 
     def _blink(self):
-        if self._pen_down or self.code_panel is not None:
+        """Only the write caret blinks; the brush tip holds still."""
+        if self._paint_mode or self.code_panel is not None:
             return
         self._blink_on = not self._blink_on
         self.app.invalidate()
@@ -530,22 +554,16 @@ class ArtRoom:
 
     def _draw_cursor(self, g, ox, oy, c):
         x, y = ox + self._cursor_x * c, oy + self._cursor_y * c
-        visible = self._blink_on or self._pen_down
-        if self._paint_mode:
-            ring = pygame.Rect(x - c, y - c, 3 * c, 3 * c)
-            thick = max(3, c // 3) if self._pen_down else 2
-            if visible:
-                g.rect(self._last_key_color, ring, width=thick)
-                corner = P.TEXT
-                for cx, cy in ((ring.x, ring.y), (ring.right - thick, ring.y), (ring.x, ring.bottom - thick), (ring.right - thick, ring.bottom - thick)):
-                    g.rect(corner, (cx, cy, thick, thick))
-        elif visible:  # underline caret: the next letter lands in this cell
+        if not self._paint_mode and self._blink_on:  # underline caret: the next letter lands in this cell
             bar = max(2, c // 4)
             g.rect(P.ACCENT, (x, y + c - bar, c, bar))
-        if self._use_heading_cursor and visible:
-            dx, dy = {"right": (1, 0), "left": (-1, 0), "up": (0, -1), "down": (0, 1)}[self._heading]
-            color = _visible_arrow_color(self._last_key_color if self._paint_mode else "#FFFFFF", CANVAS_BG)
-            g.draw_text(HEADING_ARROWS[self._heading], max(8, int(c * 0.9)), x + c // 2 + dx * c, y + c // 2 + dy * c, "sans-heavy", color, anchor="center")
+        tip = ("dot" if self._pen_down else "ring") if self._paint_mode else None
+        heading = self._heading if self._use_heading_cursor else None
+        if tip or heading:
+            color = self._last_key_color if self._paint_mode else P.TEXT
+            key = (c, color, tip, heading)
+            sprite = self._tips.get_or(key, lambda: pygame.transform.rotate(_brush_tip(c, color, tip, bool(heading)), HEADING_TURNS.get(heading, 0)))
+            g.surface.blit(sprite, sprite.get_rect(center=(x + c // 2, y + c // 2)))
 
     def _draw_header(self, g, r):
         """PAINT / ABC mode switch (active one in inverse video) with the brush

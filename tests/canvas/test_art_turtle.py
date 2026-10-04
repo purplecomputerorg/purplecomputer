@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from purple_tui.canvas.rooms.art_room import ArtRoom as ArtCanvas, HEADING_ARROWS
+from purple_tui.canvas.rooms.art_room import ArtRoom as ArtCanvas, HEADING_TURNS
 
 
 # ---------------------------------------------------------------------------
@@ -289,11 +289,10 @@ class TestForward:
 class TestHeadingCursors:
     def test_all_directions_have_arrows(self):
         for direction in ['right', 'left', 'up', 'down']:
-            assert direction in HEADING_ARROWS
+            assert direction in HEADING_TURNS
 
     def test_arrows_are_distinct(self):
-        arrows = [v[0] for v in HEADING_ARROWS.values()]
-        assert len(set(arrows)) == 4
+        assert len({a % 360 for a in HEADING_TURNS.values()}) == 4
 
 
 # ---------------------------------------------------------------------------

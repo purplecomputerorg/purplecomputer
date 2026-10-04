@@ -638,6 +638,13 @@ SOURCES
     # guidance depends on seeing the device).
     chroot "$MOUNT_DIR" apt-get install -y usbutils
 
+    # Printing: plug in a USB printer and Print appears (guides/printing.md).
+    # ipp-usb covers driverless printers; the drivers cover the older tail.
+    chroot "$MOUNT_DIR" apt-get install -y cups ipp-usb \
+        printer-driver-hpcups printer-driver-gutenprint printer-driver-brlaser \
+        printer-driver-escpr printer-driver-splix printer-driver-foo2zjs \
+        printer-driver-c2esp printer-driver-pxljr openprinting-ppds
+
     # Verify everything the boot, install and X session shell out to actually
     # landed. With APT::Install-Recommends=0 a Recommends-only relationship
     # silently leaves tools absent, and Ubuntu's base set carries packages
@@ -649,7 +656,7 @@ SOURCES
     MISSING=""
     for cmd in $BOOT_TOOL_CMDS pv dbus-daemon pgrep startx xset xsetroot xrandr \
                xkbset unclutter matchbox-window-manager picom pactl paplay amixer \
-               lsblk udevadm flite logger $UKI_CMDS; do
+               lsblk udevadm flite logger lp lpadmin lpinfo lpstat ipptool ipp-usb $UKI_CMDS; do
         chroot "$MOUNT_DIR" bash -c "command -v $cmd >/dev/null" || MISSING="$MISSING $cmd"
     done
     for path in $BOOT_TOOL_PATHS /usr/lib/systemd/system/dbus.socket "/usr/lib/*/security/pam_systemd.so" $UKI_PATHS; do
@@ -1180,6 +1187,16 @@ JOURNAL
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-usb-cache"
     cp /purple-src/config/systemd/purple-usb-cache.service "$MOUNT_DIR/etc/systemd/system/"
     chroot "$MOUNT_DIR" systemctl enable purple-usb-cache.service
+    # Printing: nothing runs until a printer is plugged in. CUPS starts on its
+    # socket, ipp-usb from its own udev rule, and avahi never (mDNS would talk
+    # to a network; ipp-usb.conf turns its DNS-SD off).
+    install -m 755 /purple-src/scripts/purple-printer-setup.sh "$MOUNT_DIR/usr/local/bin/purple-printer-setup"
+    cp /purple-src/config/systemd/purple-printer.service "$MOUNT_DIR/etc/systemd/system/"
+    cp /purple-src/config/udev/70-purple-printer.rules "$MOUNT_DIR/etc/udev/rules.d/"
+    cp /purple-src/config/ipp-usb/ipp-usb.conf "$MOUNT_DIR/etc/ipp-usb/ipp-usb.conf"
+    chroot "$MOUNT_DIR" systemctl disable cups.service cups.path || true
+    chroot "$MOUNT_DIR" systemctl enable cups.socket
+    chroot "$MOUNT_DIR" systemctl mask avahi-daemon.service avahi-daemon.socket
     # Hands-on loudness probe, run by a person from the parent-menu terminal.
     cp /purple-src/scripts/purple-audio-probe.sh "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-probe"

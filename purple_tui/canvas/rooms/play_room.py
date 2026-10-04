@@ -6,12 +6,14 @@ import pygame
 from ... import palette as P
 from ...constants import ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ...content import get_content
+from .. import paper
 from ..gfx import is_emoji, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
 from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
 from ..ui import MATH_OPERATORS, HintRotator, TextField
 
+PAPER_ZOOM = 1.6
 PLAY_HINTS = [
     "Try: cat  •  2 + 2  •  trex!",
     "Try: say hi  (or hello!, both speak aloud)  •  red sun",
@@ -67,6 +69,7 @@ class Entry:
 
 class PlayRoom:
     name = "play"
+    LANDSCAPE = False
 
     def __init__(self, app):
         self.app = app
@@ -350,15 +353,38 @@ class PlayRoom:
             return g.line_height(g.em(1.05), "mono")
         return g.markup_size(e.markup, self._answer_px(g, e), "mono-bold", width - self._answer_indent(g, e), self._row_gap(g))[1]
 
-    def _draw_entry(self, g, e, x, y, width):
+    def _draw_entry(self, g, e, x, y, width, ink=None):
+        """ink is (text, muted, ground); the screen's tokens unless printing."""
+        text, muted, ground = ink or (P.TEXT, P.MUTED, P.SURFACE)
         if e.kind == "ask":
             px = g.em(1.05)
-            r = g.draw_text("Type → ", px, x, y, "mono-bold", P.MUTED)
-            g.draw_text(e.markup, px, r.right, y, "mono", P.MUTED)
+            r = g.draw_text("Type → ", px, x, y, "mono-bold", muted)
+            g.draw_text(e.markup, px, r.right, y, "mono", muted)
             return
         icon = SPEECH_ICONS.get(e.speech, "")
         if icon:
-            g.draw_text(icon, g.em(1.05), x + g.em(0.1), y, "mono-bold", P.TEXT)
+            g.draw_text(icon, g.em(1.05), x + g.em(0.1), y, "mono-bold", text)
         indent = self._answer_indent(g, e)
-        g.draw_markup(e.markup, self._answer_px(g, e), x + indent, y, "mono-bold", P.TEXT, width - indent,
-                      dim_to=P.SURFACE, line_gap=self._row_gap(g))
+        g.draw_markup(e.markup, self._answer_px(g, e), x + indent, y, "mono-bold", text, width - indent,
+                      dim_to=ground, line_gap=self._row_gap(g))
+
+    def paper(self, g, size):
+        """The newest asks and answers that fit the page, oldest at the top,
+        drawn at screen size and enlarged so they read from across a room."""
+        w, h = (round(n / PAPER_ZOOM) for n in size)
+        rows, used = [], 0
+        for e in reversed(self.history):
+            eh, gap = self._entry_height(g, e, w), self._gap_above(g, e)
+            if used + eh > h:
+                break
+            rows.append((e, eh))
+            used += eh + gap
+        if not rows:
+            return None
+        s = paper.blank((w, h))
+        y = 0
+        with g.drawing_on(s):
+            for e, eh in reversed(rows):
+                self._draw_entry(g, e, 0, y, w, (paper.INK, paper.INK_MUTED, paper.WHITE))
+                y += eh + self._gap_above(g, e)
+        return pygame.transform.smoothscale(s, size)

@@ -13,6 +13,7 @@ from ... import palette as P
 from ...color_mixing import mix_colors_paint
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import DEFAULT_BRUSH_COLOR
+from .. import paper
 from ..gfx import mix, rgb
 from ..ui import draw_mode_switch
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
@@ -35,6 +36,7 @@ class BlocksRoom:
     the cursor change; the cursor is drawn over it."""
 
     name = "blocks"
+    LANDSCAPE = True
 
     def __init__(self, app):
         self.app = app
@@ -331,19 +333,23 @@ class BlocksRoom:
     def _floor_surface(self) -> pygame.Surface:
         """Checkerboard floor on a slab, built once per cell size."""
         if self._floor is None or self._floor.get_size() != self._scene_size():
-            dz, hy, sx, slab = self._metrics()
-            s = pygame.Surface(self._scene_size())
-            s.fill(rgb(P.SURFACE))
-            base, w = self._base(), WIDTH * self._c
-            pygame.draw.polygon(s, mix(CANVAS_BG, "#000000", 0.4), [(0, base), (w, base), (w, base + slab), (0, base + slab)])
-            pygame.draw.polygon(s, mix(CANVAS_BG, "#000000", 0.55),
-                                [(w, base), (w + DEPTH * sx, base - DEPTH * dz), (w + DEPTH * sx, base - DEPTH * dz + slab), (w, base + slab)])
-            for x in range(WIDTH):
-                for z in range(DEPTH):
-                    top, _, _ = self._faces(*self._corner(x, z, 0))
-                    pygame.draw.polygon(s, rgb(CANVAS_ALT if (x + z) % 2 else CANVAS_BG), top)
-            self._floor = s
+            self._floor = self._build_floor(P.SURFACE, CANVAS_BG, CANVAS_ALT, mix(CANVAS_BG, "#000000", 0.4),
+                                            mix(CANVAS_BG, "#000000", 0.55))
         return self._floor
+
+    def _build_floor(self, ground, tile, alt, slab_front, slab_side) -> pygame.Surface:
+        dz, hy, sx, slab = self._metrics()
+        s = pygame.Surface(self._scene_size())
+        s.fill(rgb(ground))
+        base, w = self._base(), WIDTH * self._c
+        pygame.draw.polygon(s, rgb(slab_front), [(0, base), (w, base), (w, base + slab), (0, base + slab)])
+        pygame.draw.polygon(s, rgb(slab_side),
+                            [(w, base), (w + DEPTH * sx, base - DEPTH * dz), (w + DEPTH * sx, base - DEPTH * dz + slab), (w, base + slab)])
+        for x in range(WIDTH):
+            for z in range(DEPTH):
+                top, _, _ = self._faces(*self._corner(x, z, 0))
+                pygame.draw.polygon(s, rgb(alt if (x + z) % 2 else tile), top)
+        return s
 
     def _xray(self, placed) -> frozenset:
         """Blocks nearer the viewer than the cursor's column that cover it on screen."""
@@ -358,19 +364,35 @@ class BlocksRoom:
         placed = [(*self._view(x, z), y, color) for (x, z, y), color in self._blocks.items()]
         xray = self._xray(placed)
         if self._scene is None or self._scene.get_size() != self._scene_size() or xray != self._scene_xray:
-            s = self._floor_surface().copy()
-            for vx, vz, y, color in sorted(placed, key=lambda b: (-b[1], b[0], b[2])):
-                s.blit(self._sprite(color, (vx, vz, y) in xray), self._sprite_rect(vx, vz, y))
-            self._scene, self._scene_xray = s, xray
+            self._scene, self._scene_xray = self._stack(self._floor_surface().copy(), placed, xray), xray
         return self._scene
+
+    def _stack(self, s, placed, xray=frozenset()) -> pygame.Surface:
+        for vx, vz, y, color in sorted(placed, key=lambda b: (-b[1], b[0], b[2])):
+            s.blit(self._sprite(color, (vx, vz, y) in xray), self._sprite_rect(vx, vz, y))
+        return s
+
+    def _fit(self, w, h) -> int:
+        return max(6, int(min(w / (WIDTH + DEPTH * ROW_SKEW), h / (DEPTH * ROW_DEPTH + HEIGHT * BLOCK_RISE + SLAB))))
+
+    def paper(self, g, size):
+        """The build for printing, on a pale floor, nothing see-through and no cursor."""
+        if not self._blocks:
+            return None
+        screen = self._c, self._sprites
+        self._c, self._sprites = self._fit(*size), {}
+        try:
+            floor = self._build_floor(paper.WHITE, "#f1f1f1", "#e4e4e4", "#c8c8c8", "#b4b4b4")
+            return self._stack(floor, [(*self._view(x, z), y, color) for (x, z, y), color in self._blocks.items()])
+        finally:
+            self._c, self._sprites = screen
 
     def draw(self, g, rect):
         pad, gap = g.em(0.7), g.em(0.5)
         inner = rect.inflate(-2 * pad, -2 * pad)
         chrome_h = g.line_height(g.vh(1.9), "mono") + g.em(0.4)
         area = inner.inflate(0, -2 * (chrome_h + gap))
-        c = max(6, int(min(area.w / (WIDTH + DEPTH * ROW_SKEW),
-                           area.h / (DEPTH * ROW_DEPTH + HEIGHT * BLOCK_RISE + SLAB))))
+        c = self._fit(area.w, area.h)
         if c != self._c:
             self._c, self._sprites, self._scene = c, {}, None
         scene = self._scene_surface()

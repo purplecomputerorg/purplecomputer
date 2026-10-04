@@ -12,6 +12,7 @@ from ...constants import ICON_ROBOT
 from ...color_mixing import mix_colors_paint
 from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
+from .. import paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..panels import CodePanel, SpaceHold
 from ..ui import draw_label, draw_mode_switch
@@ -79,6 +80,7 @@ class ArtRoom:
     colors equal, a written letter holds the letter over whatever bg it had."""
 
     name = "art"
+    LANDSCAPE = True
     canvas_width = COLS
     canvas_height = ROWS
     _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
@@ -535,10 +537,26 @@ class ArtRoom:
             if not (0 <= x < COLS and 0 <= y < ROWS):
                 continue
             cell = self._grid.get((x, y))
-            painted = cell and (cell[2] != CANVAS_BG or cell[0] == BRUSH_CHAR)
-            self._surf.fill(rgb(cell[2] if painted else self._ground(x, y)), (x * c, y * c, c, c))
+            self._surf.fill(rgb(cell[2] if self._painted(cell) else self._ground(x, y)), (x * c, y * c, c, c))
         self._dirty = set()
         return self._surf
+
+    @staticmethod
+    def _painted(cell) -> bool:
+        return bool(cell) and (cell[2] != CANVAS_BG or cell[0] == BRUSH_CHAR)
+
+    def paper(self, g, size):
+        """The picture for printing: paint and letters, unpainted cells left white."""
+        if not self.has_content():
+            return None
+        c = min(size[0] // COLS, size[1] // ROWS)
+        s = paper.blank((c * COLS, c * ROWS))
+        for (x, y), cell in self._grid.items():
+            if 0 <= x < COLS and 0 <= y < ROWS and self._painted(cell):
+                s.fill(rgb(cell[2]), (x * c, y * c, c, c))
+        with g.drawing_on(s):
+            self._draw_letters(g, 0, 0, c, on_paper=True)
+        return s
 
     @staticmethod
     def _ground(x: int, y: int) -> str:
@@ -546,10 +564,13 @@ class ArtRoom:
         shows the grid without lines."""
         return CANVAS_ALT if (x + y) % 2 else CANVAS_BG
 
-    def _draw_letters(self, g, ox, oy, c):
+    def _draw_letters(self, g, ox, oy, c, on_paper=False):
+        """On paper a pale letter on an unpainted cell would vanish into the white, so it prints in ink."""
         px = self._letter_px(c)
         for (x, y), (ch, fg, _bg) in self._grid.items():
             if ch not in ("", " ", BRUSH_CHAR) and 0 <= x < COLS and 0 <= y < ROWS:
+                if on_paper and not self._painted(self._grid[(x, y)]) and P.luminance(fg) > 0.5:
+                    fg = paper.INK
                 g.draw_text(ch, px, ox + x * c + c // 2, oy + y * c + c // 2, "block", fg, anchor="center")
 
     def _draw_cursor(self, g, ox, oy, c):

@@ -6,6 +6,7 @@ import threading
 
 from ... import diagnostics
 from ... import palette as P
+from ... import printing
 from ...constants import SUPPORT_EMAIL
 from ...keyboard import ControlAction, NavigationAction
 from ..ui import Dialog, Picker
@@ -95,6 +96,7 @@ class SupportInfoScreen(Picker):
             diagnostics.get_version_label() or "Dev build",
             diagnostics.get_product_name(),
             diagnostics.get_audio_status_line(app.audio_ok),
+            printing.status_line(),
             "",
             f"Contact: {SUPPORT_EMAIL}",
         ])

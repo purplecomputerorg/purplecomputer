@@ -16,6 +16,7 @@ Markup is the small subset of Rich's syntax the rooms already speak:
 import os
 import re
 from collections import OrderedDict
+from contextlib import contextmanager
 from pathlib import Path
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
@@ -455,6 +456,15 @@ class Gfx:
 
     def save(self, path: str):
         pygame.image.save(self.surface, path)
+
+    @contextmanager
+    def drawing_on(self, surface):
+        """Point the drawing calls at another surface (a printed page). Units stay the screen's."""
+        screen, self.surface = self.surface, surface
+        try:
+            yield surface
+        finally:
+            self.surface = screen
 
 
 # One emoji (with its modifiers/ZWJ joins), so long runs can wrap per emoji.

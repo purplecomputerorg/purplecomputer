@@ -1,20 +1,23 @@
-"""The Esc menu: pick a room, or Volume, Clear, Time Travel, and the code toggle."""
+"""The Esc menu: pick a room, or Volume, Clear, Time Travel, Print, and the code toggle."""
 
 import pygame
 
 from .. import palette as P
+from .. import printing
 from ..constants import (
     ICON_BROOM, ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_ROBOT, ICON_TIME_TRAVEL,
     ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
 )
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from .paper import can_print
 from .rooms.blocks_room import ICON_CUBE
 from .ui import Dialog, Overlay, Picker, draw_keycap, draw_scrim
 
 ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art"),
                 ("blocks", ICON_CUBE, "Blocks")]
 NUMBER_KEY_ROOMS = {str(i + 1): room for i, (room, _, _) in enumerate(ROOM_OPTIONS)}
-EXTRA_COUNT = 3
+ICON_PRINTER = "\U000F042A"  # nf-md-printer
+EXTRA_KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "print": "p"}
 ROWS, EXTRAS, CODE = 0, 1, 2
 
 
@@ -24,6 +27,8 @@ class RoomPicker(Overlay):
         self.row = ROWS
         self.col = [o[0] for o in ROOM_OPTIONS].index(app.active_room)
         self.code_row = app.active_room in ("music", "art") and (app._code_panel_active or app._code_panel_enabled)
+        # Print is there only while a printer is plugged in and ready
+        self.extras = ["volume", "clear", "time_travel"] + (["print"] if printing.printer() else [])
 
     def _disabled_volume(self):
         """Icon + label for the Volume slot when the keys are dead: Silent Mode or no audio."""
@@ -54,14 +59,10 @@ class RoomPicker(Overlay):
             ch = action.char.lower()
             if ch in NUMBER_KEY_ROOMS:
                 return self.close({"room": NUMBER_KEY_ROOMS[ch]})
-            if ch == "v":
-                self.row, self.col = EXTRAS, 0
-                return self._open_volume()
-            if ch == "c":
-                self.row, self.col = EXTRAS, 1
-                return self._confirm_clear()
-            if ch == "t":
-                return self.close({"time_travel": True})
+            extra = next((e for e in self.extras if EXTRA_KEYS[e] == ch), None)
+            if extra:
+                self.row, self.col = EXTRAS, self.extras.index(extra)
+                return self._activate()
             return self.close(None)
         if isinstance(action, ControlAction):
             a = action.action
@@ -75,13 +76,15 @@ class RoomPicker(Overlay):
                 self._activate()
 
     def _row_len(self) -> int:
-        return len(ROOM_OPTIONS) if self.row == ROWS else EXTRA_COUNT
+        return len(ROOM_OPTIONS) if self.row == ROWS else len(self.extras)
 
     def _activate(self):
         if self.row == ROWS:
             self.close({"room": ROOM_OPTIONS[self.col][0]})
         elif self.row == EXTRAS:
-            (self._open_volume, self._confirm_clear, lambda: self.close({"time_travel": True}))[self.col]()
+            {"volume": self._open_volume, "clear": self._confirm_clear,
+             "time_travel": lambda: self.close({"time_travel": True}),
+             "print": self._print}[self.extras[self.col]]()
         else:
             self._toggle_code()
 
@@ -91,6 +94,10 @@ class RoomPicker(Overlay):
     def _open_volume(self):
         if not self.app.volume_disabled:
             self.app.push(VolumeModal(self.app))
+
+    def _print(self):
+        if can_print(self.app.room):
+            self.close({"print": True})
 
     def _confirm_clear(self):
         self.app.push(ConfirmFresh(self.app, self.app.active_room), on_close=lambda r: r and self.close({"clear_room": r}))
@@ -119,9 +126,12 @@ class RoomPicker(Overlay):
         y += head_h + em(1.5)
         locked = self._disabled_volume()
         cards = [(ROWS, i, icon, label, str(i + 1), False) for i, (_, icon, label) in enumerate(ROOM_OPTIONS)]
-        cards += [(EXTRAS, 0, *(locked + ("", True) if locked else (ICON_VOLUME_HIGH, "Volume", "V", False))),
-                  (EXTRAS, 1, ICON_BROOM, "Clear", "C", False),
-                  (EXTRAS, 2, ICON_TIME_TRAVEL, "Time Travel", "T", False)]
+        extras = {"volume": locked + ("", True) if locked else (ICON_VOLUME_HIGH, "Volume", "V", False),
+                  "clear": (ICON_BROOM, "Clear", "C", False),
+                  "time_travel": (ICON_TIME_TRAVEL, "Time Travel", "T", False),
+                  "print": (ICON_PRINTER, "Print", "P", False) if can_print(self.app.room)
+                  else (ICON_PRINTER, "Print", "", True)}
+        cards += [(EXTRAS, i, *extras[e]) for i, e in enumerate(self.extras)]
         for row, col, icon, label, key, disabled in cards:
             r = pygame.Rect(x0 + col * (tw + gap), y + row * (th + gap), tw, th)
             on = (self.row, self.col) == (row, col)

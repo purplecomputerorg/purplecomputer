@@ -1,0 +1,5 @@
+# Purple Computer: set up a USB printer the moment it is plugged in, and drop
+# its queue when it goes. Any USB device removal rescans, since a removed
+# device's interfaces are already gone from sysfs.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_USB_INTERFACES}=="*:0701??:*", RUN+="/usr/bin/systemctl --no-block restart purple-printer.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", RUN+="/usr/bin/systemctl --no-block restart purple-printer.service"

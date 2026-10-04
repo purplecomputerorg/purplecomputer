@@ -511,6 +511,20 @@ class PurpleApp:
             self._start_fresh(result["clear_room"])
         elif result.get("time_travel"):
             self._start_time_travel()
+        elif result.get("print"):
+            self.action_print()
+
+    def action_print(self):
+        from .. import printing
+        from .paper import page
+        made = page(self.room, self.g, self.computer_name())
+        if made is None:
+            return
+        wait = printing.ready_in()
+        if wait:
+            self.notify("That's lots of printing for today" if wait == float("inf") else "The printer is still busy", timeout=3)
+            return
+        asyncio.ensure_future(printing.print_page(*made, lambda text: self.notify(text, timeout=4)))
 
     def action_parent_menu(self):
         self._cancel_escape_hold_timer()

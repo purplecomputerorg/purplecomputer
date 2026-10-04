@@ -1,9 +1,9 @@
-"""Blocks room: a floor seen from above and in front, where every letter drops a
-block of its sticker color at the cursor. The cursor is a see-through block
-that rests on top of its column; Space lifts it a level (for roofs, bridges
-and tree tops) and Enter lets it rest again. Holding one letter while pressing
-another mixes the two colors into the block. Tab turns the room a quarter
-turn; arrows always move the way they point on screen."""
+"""Blocks room: a floor seen from above and in front, where every letter (or
+Space, in the current color) drops a block of its sticker color on top of the
+cursor's column. Enter lifts the block just dropped a level and Backspace
+lowers it, then removes it; away from that block they move the see-through
+cursor instead, and the next block goes in at its height. Holding one letter
+while pressing another mixes the two colors. Tab flips to the back side."""
 
 import time
 
@@ -13,39 +13,39 @@ from ... import palette as P
 from ...color_mixing import mix_colors_paint
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import DEFAULT_BRUSH_COLOR
-from ..gfx import hexcolor, mix, rgb
-from ..ui import draw_keycap
+from ..gfx import mix, rgb
+from ..ui import draw_mode_switch
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
-SIZE, HEIGHT = 16, 10         # square floor, so every quarter turn looks the same size
-SPIN_S = 0.18
+WIDTH, DEPTH, HEIGHT = 24, 12, 8
+FLIP_S = 0.22
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
-SEAM = hexcolor(mix(CANVAS_BG, "#000000", 0.3))
 XRAY_ALPHA = 80
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
-KEYS = (("Space", "up"), ("Enter", "down"), ("Tab", "turn"))
-HINT = "Type to build! Hold one letter and press another to mix colors."
+HINT = "Type to build! Enter lifts a block, Backspace lowers it."
+MIX_HINT = "Hold two letters to mix"
 
 
 class BlocksRoom:
     """Blocks live in a dict keyed by world (x, z, y), y up. Drawing and the
-    arrows work in view coordinates: world (x, z) turned self._turn quarter
-    turns. The floor and blocks render into one cached surface, rebuilt when a
-    block changes, the room turns, or the blocks in front of the cursor
-    change; the cursor is drawn over it."""
+    arrows work in view coordinates, which are world (x, z) mirrored when the
+    room shows its back. The floor and blocks render into one cached surface,
+    rebuilt when a block changes, the room flips, or the blocks in front of
+    the cursor change; the cursor is drawn over it."""
 
     name = "blocks"
 
     def __init__(self, app):
         self.app = app
         self._blocks: dict = {}
-        self._x, self._z = SIZE // 2, SIZE // 2
-        self._turn = 0
+        self._x, self._z = WIDTH // 2, DEPTH // 2
+        self._back = False
         self._hover = 0               # lifted cursor height; 0 = resting on the column
         self._color = DEFAULT_BRUSH_COLOR
-        self._last = None             # (pos, key) of the last block dropped, for chords
-        self._spin_from = self._spin_start = self._spin_timer = None
+        self._key = ""
+        self._last = None             # (pos, key) of the block just dropped
+        self._fade_from = self._fade_start = self._fade_timer = None
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
         self._blink_on = True
@@ -95,15 +95,15 @@ class BlocksRoom:
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
         state = {f"b:{x},{z},{y}": color for (x, z, y), color in self._blocks.items()}
-        state.update(cursor=[self._x, self._z], color=self._color, hover=self._hover, turn=self._turn)
+        state.update(cursor=[self._x, self._z], color=self._color, hover=self._hover, back=self._back)
         return state
 
     def restore_timeline_state(self, state: dict):
         self._blocks = {tuple(int(n) for n in k[2:].split(",")): v for k, v in state.items() if k.startswith("b:")}
-        self._x, self._z = state.get("cursor", [SIZE // 2, SIZE // 2])
+        self._x, self._z = state.get("cursor", [WIDTH // 2, DEPTH // 2])
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._turn = state.get("turn", 0)
+        self._back = bool(state.get("back", False))
         self._last = None
         self._changed()
 
@@ -121,11 +121,17 @@ class BlocksRoom:
         """The cursor never sinks into a block: it rides on top of the column."""
         return max(self._top(), self._hover)
 
-    def _place(self, key: str):
+    def _held_block(self):
+        """The block just dropped, while the cursor is still over it."""
+        if self._last and self._last[0] in self._blocks and self._last[0][:2] == (self._x, self._z):
+            return self._last[0]
+        return None
+
+    def _place(self):
         y = self._cursor_y()
         if y < HEIGHT:
             self._blocks[(self._x, self._z, y)] = self._color
-            self._last = ((self._x, self._z, y), key)
+            self._last = ((self._x, self._z, y), self._key)
             self._changed()
 
     def _mix_into_last(self, held_key: str) -> bool:
@@ -138,11 +144,40 @@ class BlocksRoom:
         self._changed()
         return True
 
-    def _remove_top(self):
-        y = self._top() - 1
-        if y >= 0:
-            self._blocks.pop((self._x, self._z, y), None)
+    def _shift_held_block(self, pos, dy: int) -> bool:
+        """Move the block just dropped one level; False when it can't go."""
+        x, z, y = pos
+        dest = (x, z, y + dy)
+        if not 0 <= dest[2] < HEIGHT or dest in self._blocks:
+            return False
+        self._blocks[dest] = self._blocks.pop(pos)
+        self._last = (dest, self._last[1])
+        self._hover = dest[2]
+        self._changed()
+        return True
+
+    def _lift(self):
+        pos = self._held_block()
+        if pos:
+            self._shift_held_block(pos, 1)
+        else:
+            self._hover = min(HEIGHT - 1, self._cursor_y() + 1)
+
+    def _lower(self):
+        """Backspace: down a level first, then remove."""
+        pos = self._held_block()
+        if pos and not self._shift_held_block(pos, -1):
+            del self._blocks[pos]
+            self._last, self._hover = None, 0
             self._changed()
+        elif not pos and self._hover > self._top():
+            self._hover -= 1
+        elif not pos:
+            self._hover = 0
+            y = self._top() - 1
+            if y >= 0:
+                self._blocks.pop((self._x, self._z, y), None)
+                self._changed()
 
     def _changed(self):
         self._scene = None
@@ -151,52 +186,51 @@ class BlocksRoom:
     def _set_color(self, char: str):
         brush = brush_for_key(char)
         if brush:
-            self._color = brush[1]
+            self._key, self._color = brush
             self.app.set_legend(self._color, visible=True)
-        return brush[0] if brush else None
+        return bool(brush)
 
     def _move(self, direction: str) -> bool:
         dx, dz = STEPS[direction]
         vx, vz = self._view(self._x, self._z)
         vx, vz = vx + dx, vz + dz
-        if not (0 <= vx < SIZE and 0 <= vz < SIZE):
+        if not (0 <= vx < WIDTH and 0 <= vz < DEPTH):
             return False
-        self._x, self._z = _rotate(vx, vz, -self._turn)
+        self._x, self._z = self._view(vx, vz)
         return True
 
     def _view(self, x: int, z: int) -> tuple:
-        return _rotate(x, z, self._turn)
+        """World to view and back: the back side is the front mirrored both ways."""
+        return (WIDTH - 1 - x, DEPTH - 1 - z) if self._back else (x, z)
 
-    # ---------------------------------------------------------------- turning
-    def _spin(self):
-        """Quarter turn, shown as the picture squashing to a sliver and
-        opening back out from the new side."""
-        self._spin_from = self._scene_surface() if self._c else None
-        self._turn = (self._turn + 1) % 4
-        self._spin_start = time.monotonic()
-        if self._spin_timer is None:
-            self._spin_timer = self.app.timers.every(1 / 60, self._spin_tick)
+    # ---------------------------------------------------------------- flipping
+    def _flip(self):
+        self._fade_from = self._scene_surface() if self._c else None
+        self._back = not self._back
+        self._fade_start = time.monotonic()
+        if self._fade_timer is None:
+            self._fade_timer = self.app.timers.every(1 / 60, self._fade_tick)
         self._changed()
 
-    def _spin_tick(self):
-        if self._spin_progress() is None:
-            self._spin_timer.stop()
-            self._spin_timer = self._spin_from = None
+    def _fade_tick(self):
+        if self._fade_progress() is None:
+            self._fade_timer.stop()
+            self._fade_timer = self._fade_from = None
         self.app.invalidate()
 
-    def _spin_progress(self):
-        if self._spin_start is None:
+    def _fade_progress(self):
+        if self._fade_start is None:
             return None
-        p = (time.monotonic() - self._spin_start) / SPIN_S
+        p = (time.monotonic() - self._fade_start) / FLIP_S
         if p >= 1:
-            self._spin_start = None
+            self._fade_start = None
             return None
         return p
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
         if isinstance(action, ControlAction):
-            if action.is_down and (not action.is_repeat or action.action == "backspace"):
+            if action.is_down and (not action.is_repeat or action.action in ("backspace", "enter")):
                 self._control(action.action)
         elif isinstance(action, NavigationAction):
             self._navigate(action)
@@ -207,22 +241,21 @@ class BlocksRoom:
 
     def _character(self, action):
         char = UNSHIFT_MAP.get(action.char, action.char) if action.shift_held else action.char
-        key = self._set_color(char)
-        if not key or action.shift_held:
+        if not self._set_color(char) or action.shift_held:
             return
         held = brush_for_key(action.char_held) if action.char_held else None
         if not (held and self._mix_into_last(held[0])):
-            self._place(key)
+            self._place()
 
     def _control(self, name: str):
         if name == "space":
-            self._hover = min(HEIGHT - 1, self._cursor_y() + 1)
+            self._place()
         elif name == "enter":
-            self._hover = 0
-        elif name == "tab":
-            self._spin()
+            self._lift()
         elif name == "backspace":
-            self._remove_top()
+            self._lower()
+        elif name == "tab":
+            self._flip()
 
     def _navigate(self, action):
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
@@ -230,14 +263,16 @@ class BlocksRoom:
         else:
             self._arrow_repeat_dir = action.direction
             self._arrow_repeat_count = 1 if action.is_repeat else 0
-        key = self._set_color(action.char_held) if action.char_held else None
-        fast = not key and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
+        laying = (bool(action.char_held) and self._set_color(action.char_held)) or action.space_held
+        if not laying:
+            self._hover = 0               # a lifted height carries along a line being laid, not a walk
+        fast = not laying and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(HOLD_ACCEL_MULTIPLIER if fast else 1):
                 if not self._move(direction):
                     break
-                if key:
-                    self._place(key)
+                if laying:
+                    self._place()
 
     # ---------------------------------------------------------------- geometry
     def _metrics(self):
@@ -246,7 +281,7 @@ class BlocksRoom:
 
     def _base(self) -> int:
         dz, hy, _, _ = self._metrics()
-        return SIZE * dz + HEIGHT * hy
+        return DEPTH * dz + HEIGHT * hy
 
     def _corner(self, x: int, z: int, y: int) -> tuple:
         """Front-left corner of view cell (x, z) at height y, in scene pixels."""
@@ -283,16 +318,15 @@ class BlocksRoom:
             else:
                 dz, hy, sx, _ = self._metrics()
                 s = pygame.Surface((self._c + sx + 1, dz + hy + 1), pygame.SRCALPHA)
-                seam = max(1, round(self._c / 20))
                 for poly, shade in zip(self._faces(0, dz), (mix(color, "#ffffff", 0.22), rgb(color), mix(color, "#000000", 0.32))):
                     pygame.draw.polygon(s, shade, poly)
-                    pygame.draw.polygon(s, rgb(SEAM), poly, seam)
+                    pygame.draw.polygon(s, rgb(P.LINE), poly, 1)
             self._sprites[key] = s
         return self._sprites[key]
 
     def _scene_size(self) -> tuple:
         dz, hy, sx, slab = self._metrics()
-        return SIZE * self._c + SIZE * sx + 1, self._base() + slab + 1
+        return WIDTH * self._c + DEPTH * sx + 1, self._base() + slab + 1
 
     def _floor_surface(self) -> pygame.Surface:
         """Checkerboard floor on a slab, built once per cell size."""
@@ -300,12 +334,12 @@ class BlocksRoom:
             dz, hy, sx, slab = self._metrics()
             s = pygame.Surface(self._scene_size())
             s.fill(rgb(P.SURFACE))
-            base, w = self._base(), SIZE * self._c
+            base, w = self._base(), WIDTH * self._c
             pygame.draw.polygon(s, mix(CANVAS_BG, "#000000", 0.4), [(0, base), (w, base), (w, base + slab), (0, base + slab)])
             pygame.draw.polygon(s, mix(CANVAS_BG, "#000000", 0.55),
-                                [(w, base), (w + SIZE * sx, base - SIZE * dz), (w + SIZE * sx, base - SIZE * dz + slab), (w, base + slab)])
-            for x in range(SIZE):
-                for z in range(SIZE):
+                                [(w, base), (w + DEPTH * sx, base - DEPTH * dz), (w + DEPTH * sx, base - DEPTH * dz + slab), (w, base + slab)])
+            for x in range(WIDTH):
+                for z in range(DEPTH):
                     top, _, _ = self._faces(*self._corner(x, z, 0))
                     pygame.draw.polygon(s, rgb(CANVAS_ALT if (x + z) % 2 else CANVAS_BG), top)
             self._floor = s
@@ -313,7 +347,7 @@ class BlocksRoom:
 
     def _xray(self, placed) -> frozenset:
         """Blocks nearer the viewer than the cursor's column that cover it on screen."""
-        cvx, cvz = self._view(self._x, self._z)
+        cvz = self._view(self._x, self._z)[1]
         col = self._column_rect()
         return frozenset((vx, vz, y) for vx, vz, y, _ in placed
                          if vz < cvz and self._sprite_rect(vx, vz, y).colliderect(col))
@@ -335,34 +369,26 @@ class BlocksRoom:
         inner = rect.inflate(-2 * pad, -2 * pad)
         chrome_h = g.line_height(g.vh(1.9), "mono") + g.em(0.4)
         area = inner.inflate(0, -2 * (chrome_h + gap))
-        c = max(6, int(min(area.w / (SIZE * (1 + ROW_SKEW)),
-                           area.h / (SIZE * ROW_DEPTH + HEIGHT * BLOCK_RISE + SLAB))))
+        c = max(6, int(min(area.w / (WIDTH + DEPTH * ROW_SKEW),
+                           area.h / (DEPTH * ROW_DEPTH + HEIGHT * BLOCK_RISE + SLAB))))
         if c != self._c:
             self._c, self._sprites, self._scene = c, {}, None
-        p = self._spin_progress()
-        scene = self._scene_surface() if p is None or p >= 0.5 or self._spin_from is None else self._spin_from
+        scene = self._scene_surface()
         ox = area.x + (area.w - scene.get_width()) // 2
         oy = area.y + (area.h - scene.get_height()) // 2
         self._origin = (ox, oy)
+        g.surface.blit(scene, (ox, oy))
+        p = self._fade_progress()
         if p is None:
-            g.surface.blit(scene, (ox, oy))
             self._draw_cursor(g, ox, oy)
-        else:
-            w, h = scene.get_size()
-            sw = max(1, round(w * abs(2 * p - 1)))
-            g.surface.blit(pygame.transform.scale(scene, (sw, h)), (ox + (w - sw) // 2, oy))
-        self._draw_header(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h))
-        g.draw_text(HINT, g.vh(1.9), inner.x, inner.bottom - chrome_h // 2, "mono", P.DIM, anchor="midleft")
-
-    def _draw_header(self, g, r):
-        """Brush swatch on the left; the three keys and what they do on the right."""
-        px = g.vh(1.9)
-        sw = round(r.h * 0.5)
-        g.rect(self._color, (r.x, r.centery - sw // 2, sw, sw))
-        x = r.right
-        for key, label in reversed(KEYS):
-            x = g.draw_text(label, px, x, r.centery, "mono", P.MUTED, anchor="midright").left - int(px * 0.9)
-            x = draw_keycap(g, key, px, x, r.centery, anchor="midright").left - int(px * 1.6)
+        elif self._fade_from is not None:
+            self._fade_from.set_alpha(round(255 * (1 - p)))
+            g.surface.blit(self._fade_from, (ox, oy))
+        draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
+                         1 if self._back else 0, self._color, "to turn around")
+        foot_y = inner.bottom - chrome_h // 2
+        g.draw_text(HINT, g.vh(1.9), inner.x, foot_y, "mono", P.DIM, anchor="midleft")
+        g.draw_text(MIX_HINT, g.vh(1.9), inner.right, foot_y, "mono", P.DIM, anchor="midright")
 
     def _draw_cursor(self, g, ox, oy):
         """A faint glass column over the cursor's cell, and in it a see-through
@@ -384,9 +410,3 @@ class BlocksRoom:
         g.surface.blit(ghost, (ox + r.x, oy + r.y))
         for poly in self._faces(*self._corner(vx, vz, y + 1)):
             pygame.draw.polygon(g.surface, rgb(P.TEXT), shift(poly, ox, oy), 2)
-
-
-def _rotate(x: int, z: int, turns: int) -> tuple:
-    for _ in range(turns % 4):
-        x, z = SIZE - 1 - z, x
-    return x, z

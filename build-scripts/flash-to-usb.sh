@@ -98,7 +98,7 @@ select_unlisted_drive() {
         IFS='|' read -r dev size model serial mounted <<< "${CANDIDATE_DRIVES[$i]}"
         local flag=""
         [[ -n "$mounted" ]] && flag="  ${YELLOW}(has mounted partitions, in use?)${NC}"
-        echo -e "  $((i+1))) $dev - $model ($size, serial $serial)$flag"
+        echo -e "  $((i+1))) $(drive_tag "$dev") - $model ($size, serial $serial)$flag"
     done
     echo ""
     echo -e "  ${RED}${BOLD}The chosen drive will be COMPLETELY ERASED.${NC}"
@@ -143,7 +143,7 @@ select_drive() {
         echo ""
         for i in "${!FOUND_DRIVES[@]}"; do
             IFS='|' read -r dev size model serial <<< "${FOUND_DRIVES[$i]}"
-            echo "  $((i+1))) $dev - $model ($size)"
+            echo "  $((i+1))) $(drive_tag "$dev") - $model ($size)"
         done
         echo ""
         local choice
@@ -193,7 +193,7 @@ confirm_write() {
     echo -e "${BOLD}${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "  ${BOLD}Source:${NC}  $ISO_PATH"
-    echo -e "  ${BOLD}Target:${NC}  $TARGET_DEV"
+    echo -e "  ${BOLD}Target:${NC}  $(drive_tag "$TARGET_DEV")"
     echo -e "  ${BOLD}Model:${NC}   $TARGET_MODEL"
     echo -e "  ${BOLD}Size:${NC}    $TARGET_SIZE"
     echo -e "  ${BOLD}Serial:${NC}  $TARGET_SERIAL"
@@ -202,7 +202,7 @@ confirm_write() {
         echo -e "  ${YELLOW}${BOLD}This drive is NOT in your whitelist. Double-check it's the right one.${NC}"
         echo ""
     fi
-    echo -e "  ${RED}${BOLD}ALL DATA ON $TARGET_DEV WILL BE DESTROYED${NC}"
+    echo -e "  ${RED}${BOLD}ALL DATA ON $(drive_tag "$TARGET_DEV") WILL BE DESTROYED${NC}"
     echo ""
     read -p "Type 'yes' to continue: " confirm
 

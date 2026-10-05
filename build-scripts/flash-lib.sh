@@ -360,6 +360,13 @@ drive_location() {
     echo "$(cat "$usbdir/product" "$usbdir/serial" 2>/dev/null | xargs), USB port $(describe_port "$(basename "$usbdir")")"
 }
 
+# "[top row 3] /dev/sdb" when the drive's socket is labeled, else "/dev/sdb".
+drive_tag() {
+    local label
+    label="$(port_label "$(usb_port_name "$1")")"
+    echo "${label:+[$label] }$1"
+}
+
 # USB port name of a drive (e.g. 4-1.4), stable per physical socket.
 usb_port_name() {
     local usbdir
@@ -420,6 +427,7 @@ load_port_labels() {
 # Label for a port name or key, or empty. Same subshell caveat as is_denied:
 # calling this via $() re-reads the file, which is fine for a file this small.
 port_label() {
+    [[ -n "$1" ]] || return 0
     load_port_labels
     echo "${PORT_LABELS[$(port_key "$1")]:-}"
 }

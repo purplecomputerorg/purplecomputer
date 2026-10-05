@@ -297,6 +297,7 @@ run_drive() {
     local i="$1"
     local dev="${ST_DEV[$i]}" serial="${ST_SER[$i]}" port="${ST_PORT[$i]}"
     local iso="${ISOS[$i]}" tries=0 ok=false log newdev suffix
+    local who="[${SLOTS[$i]}] $dev"
     local max_attempts=$MAX_ATTEMPTS
     # Corrupt mode never retries: these sticks are for one throwaway test.
     [[ "$CORRUPT_MODE" == true ]] && max_attempts=1
@@ -306,7 +307,7 @@ run_drive() {
         suffix=""
         (( tries > 1 )) && suffix=".try${tries}"
         log="$LOG_DIR/$(basename "$dev")${suffix}.log"
-        echo -e "${BOLD}→ $dev${SCENS[$i]:+ [${SCENS[$i]}]}: flashing (tail -f $log)${NC}"
+        echo -e "${BOLD}→ $who${SCENS[$i]:+ [${SCENS[$i]}]}: flashing (tail -f $log)${NC}"
         VERIFIED_ISO_SHA256="${SHA_BY_ISO[$iso]}" \
             "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" "$iso" >"$log" 2>&1 && ok=true
         [[ "$ok" == true ]] && break
@@ -315,7 +316,7 @@ run_drive() {
             log_error "No hub port recorded for $dev ($serial); cannot power-cycle it. Re-seat it by hand and re-run."
             break
         fi
-        log_info "$dev failed; power-cycling $serial at $(slot_name "$i") to retry..."
+        log_info "$who failed; power-cycling $serial to retry..."
         newdev="$(recover_drive "$port" "$serial" || true)"
         if [[ -z "$newdev" ]]; then
             log_error "$serial did not come back after a power cycle; leaving it failed."
@@ -323,14 +324,15 @@ run_drive() {
         fi
         [[ "$newdev" != "$dev" ]] && log_info "$serial came back as $newdev (was $dev)."
         dev="$newdev"
+        who="[${SLOTS[$i]}] $dev"
     done
 
     if [[ "$ok" != true ]]; then
-        echo -e "${RED}✗${NC} $dev — FAILED (see $log)"
+        echo -e "${RED}✗${NC} $who — FAILED (see $log)"
         finish_drive "$i" fail "$dev" "$tries" "$log"
         return 0
     fi
-    echo -e "${GREEN}✓${NC} $dev — flashed and verified$( (( tries > 1 )) && echo " (after retry)")"
+    echo -e "${GREEN}✓${NC} $who — flashed and verified$( (( tries > 1 )) && echo " (after retry)")"
 
     if [[ "$SKIP_SETTLE" != true ]]; then
         # Boot the drive once in QEMU so its controller pays the one-time
@@ -339,17 +341,17 @@ run_drive() {
         set_stage "$dev" "waiting for a settle slot"
         slot_acquire "$STATE_DIR/settle-slots" "$SETTLE_MAX" 8
         set_stage "$dev" "boot-settling"
-        log_info "$dev: boot-settling in QEMU..."
+        log_info "$who: boot-settling in QEMU..."
         if boot_settle_with_retry "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log"; then
-            echo -e "${GREEN}✓${NC} $dev: boot-settled"
+            echo -e "${GREEN}✓${NC} $who: boot-settled"
         else
-            echo -e "${YELLOW}!${NC} $dev: boot settle incomplete after retry, first real boot may be slow"
+            echo -e "${YELLOW}!${NC} $who: boot settle incomplete after retry, first real boot may be slow"
             echo -e "    drive: $(drive_location "$dev")"
             echo -e "    log:   $LOG_DIR/$(basename "$dev").boot-settle.log"
         fi
         slot_release 8
         if ! restore_log_partition "$dev" "$iso"; then
-            echo -e "${RED}✗${NC} $dev: could not restore PURPLE-LOG after settle"
+            echo -e "${RED}✗${NC} $who: could not restore PURPLE-LOG after settle"
             record_manifest fail-log-restore "$dev" "$serial" "" "" "$(basename "$iso")" ""
             finish_drive "$i" fail "$dev" "$tries" "$log"
             return 0
@@ -362,16 +364,16 @@ run_drive() {
             set_stage "$dev" "waiting for a re-verify slot"
             slot_acquire "$STATE_DIR/reverify-slots" 4 8
             set_stage "$dev" "re-verifying after settle"
-            log_info "$dev: re-verifying after settle..."
+            log_info "$who: re-verifying after settle..."
             if ! recheck_after_settle "$dev" "$iso"; then
                 slot_release 8
-                echo -e "${RED}✗${NC} $dev: verified after writing but NOT after settle, flash is decaying"
+                echo -e "${RED}✗${NC} $who: verified after writing but NOT after settle, flash is decaying"
                 record_manifest fail-post-settle "$dev" "$serial" "" "" "$(basename "$iso")" ""
                 finish_drive "$i" fail "$dev" "$tries" "$log"
                 return 0
             fi
             slot_release 8
-            echo -e "${GREEN}✓${NC} $dev: still intact after settle"
+            echo -e "${GREEN}✓${NC} $who: still intact after settle"
         fi
     fi
 

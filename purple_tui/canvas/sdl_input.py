@@ -29,6 +29,9 @@ for _n in ("MUTE", "VOLUMEDOWN", "VOLUMEUP", "POWER"):
         _NAMES[getattr(pygame, f"K_{_n}")] = _n
 KEYMAP = {k: getattr(KeyCode, f"KEY_{n}") for k, n in _NAMES.items() if hasattr(KeyCode, f"KEY_{n}")}
 
+# X doesn't keep what's under a window that closes; the window has to repaint.
+REPAINT_EVENTS = (pygame.WINDOWEXPOSED, pygame.WINDOWSHOWN, pygame.WINDOWRESTORED, pygame.WINDOWFOCUSGAINED)
+
 _pressed: set = set()
 _ready = False
 
@@ -46,6 +49,8 @@ def pump(g):
             yield None
         elif ev.type == pygame.WINDOWSIZECHANGED:
             g.resize()
+        elif ev.type in REPAINT_EVENTS:  # e.g. the parent terminal's xterm closing over us
+            g.dirty = True
         elif ev.type in (pygame.KEYDOWN, pygame.KEYUP):
             code = KEYMAP.get(ev.key)
             if code is None:

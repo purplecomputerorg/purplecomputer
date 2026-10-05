@@ -36,15 +36,46 @@ _last_at = -COOLDOWN_S
 _count = 0
 
 
+NONE, SETTING_UP, BROKEN, READY = "none", "setting up", "broken", "ready"
+SETUP_TIMEOUT_S = 120  # the setup service gives up at 90 s
+# What a press on a Print card that can't print says
+WHY_NOT = {
+    NONE: "Plug in a printer with its USB cable",
+    SETTING_UP: "The printer is getting ready",
+    BROKEN: "This printer doesn't work with Purple yet",
+}
+
+
+def status() -> str:
+    """NONE, SETTING_UP, BROKEN or READY, from the file the setup script writes.
+    On a live boot the print stack is read from the stick, so a pulled stick can't print."""
+    if _FAKE:
+        return READY
+    state = _state()
+    if not state:
+        return NONE
+    if is_live_boot() and not is_usb_present():
+        return BROKEN
+    if state.get("ready"):
+        return READY
+    if state.get("via") == SETTING_UP and time.time() - _state_mtime() < SETUP_TIMEOUT_S:
+        return SETTING_UP
+    return BROKEN
+
+
+def why_not():
+    """What to say when Print is pressed but can't print, or None when it can."""
+    now = status()
+    if now == BROKEN and _state().get("ready"):
+        return "Put the Purple USB back in to print"
+    return WHY_NOT.get(now)
+
+
 def printer():
-    """The ready printer's state, or None. On a live boot the print stack is
-    read from the stick, so a pulled stick means no printing."""
+    """The ready printer's state, or None."""
     if _FAKE:
         return {"ready": True, "model": "Pretend Printer", "via": "fake"}
-    if is_live_boot() and not is_usb_present():
-        return None
-    state = _state()
-    return state if state.get("ready") else None
+    return _state() if status() == READY else None
 
 
 def _state() -> dict:
@@ -55,13 +86,31 @@ def _state() -> dict:
         return {}
 
 
+def state_stamp():
+    """Changes whenever the setup script rewrites or removes its file: one stat, no read."""
+    try:
+        st = os.stat(STATE)
+        return st.st_mtime_ns, st.st_size
+    except OSError:
+        return 0
+
+
+def _state_mtime() -> float:
+    try:
+        return os.stat(STATE).st_mtime
+    except OSError:
+        return 0.0
+
+
 def status_line() -> str:
     """One line for Support info."""
-    state = _state()
-    if not state:
+    state, now = _state(), status()
+    if now == NONE:
         return "Printer: none plugged in"
-    if state.get("ready"):
+    if now == READY:
         return f"Printer: {state.get('model')}, ready"
+    if now == SETTING_UP:
+        return "Printer: getting ready"
     return f"Printer: {state.get('model')} can't print yet (Technical: {state.get('via')})"
 
 

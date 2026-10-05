@@ -19,6 +19,7 @@ import pygame
 from .. import boot_log
 from .frame_stats import FrameStats
 from .. import palette as P
+from .. import printing
 from ..constants import (
     CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
     ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_CHAT, ICON_COMPUTER, ICON_MENU, ICON_MUSIC,
@@ -40,6 +41,9 @@ from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
 from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ("blocks", "Blocks"))
+PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
+PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
+                printing.READY: "The printer is ready. Press Esc, then P"}
 ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE, "blocks": ICON_CUBE}
 ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  ← →", "art": "Arrows move  ← ↑ ↓ →",
                "blocks": "Arrows move  ← ↑ ↓ →"}
@@ -124,6 +128,7 @@ class PurpleApp:
         self._legend_row = -1
         self._legend_visible = True
         self._computer_name = None
+        self._printer_seen = (None, printing.status())  # (file stamp, status) from the last check
         self._load_settings()
         boot_log.heartbeat("PurpleApp.__init__ complete")
 
@@ -189,6 +194,7 @@ class PurpleApp:
             self._start_sound_check()
         if not is_live_boot() and os.path.exists(LIVE_AUDIO_MARKER):
             self.timers.after(30.0, self._check_first_boot_audio)
+        self.timers.every(PRINTER_CHECK_S, self._check_printer)
         self._usb_text = None
         self._usb_timer = self.timers.every(1.0, self._tick_usb) if is_live_boot() else None
         self._battery_timer = self.timers.every(30.0, self.invalidate)
@@ -514,8 +520,18 @@ class PurpleApp:
         elif result.get("print"):
             self.action_print()
 
+    def _check_printer(self):
+        """A toast when a printer is plugged in, gets ready, turns out not to work, or goes."""
+        stamp, was = self._printer_seen
+        now_stamp = printing.state_stamp()
+        if now_stamp == stamp:
+            return
+        now = printing.status()
+        self._printer_seen = (now_stamp, now)
+        if stamp is not None and now != was:
+            self.notify(PRINTER_NEWS.get(now) or printing.why_not(), timeout=4)
+
     def action_print(self):
-        from .. import printing
         from .paper import page
         made = page(self.room, self.g, self.computer_name())
         if made is None:

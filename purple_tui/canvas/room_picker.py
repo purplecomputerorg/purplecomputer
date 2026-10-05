@@ -18,6 +18,7 @@ ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("a
 NUMBER_KEY_ROOMS = {str(i + 1): room for i, (room, _, _) in enumerate(ROOM_OPTIONS)}
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
 EXTRA_KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "print": "p"}
+PRINTER_LABELS = {printing.NONE: "No Printer", printing.SETTING_UP: "Starting Up", printing.BROKEN: "Can't Print"}
 ROWS, EXTRAS, CODE = 0, 1, 2
 
 
@@ -27,8 +28,8 @@ class RoomPicker(Overlay):
         self.row = ROWS
         self.col = [o[0] for o in ROOM_OPTIONS].index(app.active_room)
         self.code_row = app.active_room in ("music", "art") and (app._code_panel_active or app._code_panel_enabled)
-        # Print is there only while a printer is plugged in and ready
-        self.extras = ["volume", "clear", "time_travel"] + (["print"] if printing.printer() else [])
+        self.extras = ["volume", "clear", "time_travel", "print"]
+        self.printer = printing.status()
 
     def _disabled_volume(self):
         """Icon + label for the Volume slot when the keys are dead: Silent Mode or no audio."""
@@ -96,7 +97,10 @@ class RoomPicker(Overlay):
             self.app.push(VolumeModal(self.app))
 
     def _print(self):
-        if can_print(self.app.room):
+        why = printing.why_not()
+        if why:
+            self.app.notify(why, timeout=4)
+        elif can_print(self.app.room):
             self.close({"print": True})
 
     def _confirm_clear(self):
@@ -129,8 +133,7 @@ class RoomPicker(Overlay):
         extras = {"volume": locked + ("", True) if locked else (ICON_VOLUME_HIGH, "Volume", "V", False),
                   "clear": (ICON_BROOM, "Clear", "C", False),
                   "time_travel": (ICON_TIME_TRAVEL, "Time Travel", "T", False),
-                  "print": (ICON_PRINTER, "Print", "P", False) if can_print(self.app.room)
-                  else (ICON_PRINTER, "Print", "", True)}
+                  "print": self._print_card()}
         cards += [(EXTRAS, i, *extras[e]) for i, e in enumerate(self.extras)]
         for row, col, icon, label, key, disabled in cards:
             r = pygame.Rect(x0 + col * (tw + gap), y + row * (th + gap), tw, th)
@@ -159,6 +162,13 @@ class RoomPicker(Overlay):
         y += em(1.5)
         g.draw_text("Enter to pick   ·   Hold Esc for grown-ups", em(0.92), box.centerx, y, "mono", P.DIM, anchor="midtop")
         self._draw_arrow_cluster(g, box.centerx, y + foot_h + em(0.9) + arrows_h - em(0.9))
+
+    def _print_card(self):
+        """Icon, label, key, disabled: the card always says what the printer is doing."""
+        if self.printer == printing.READY:
+            ok = can_print(self.app.room)
+            return ICON_PRINTER, "Print", "P" if ok else "", not ok
+        return ICON_PRINTER, PRINTER_LABELS[self.printer], "", True
 
     def _draw_arrow_cluster(self, g, cx, y):
         """Inverted-T keycaps beside their label, [↑] floating over [↓]."""

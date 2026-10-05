@@ -3,12 +3,13 @@
 # Run as root by purple-printer.service on every printer plug and unplug, and
 # idempotent: it rebuilds the one queue from scratch each time. Tries
 # driverless IPP-over-USB first, then a driver matched to the printer's own
-# IEEE 1284 ID. The app shows Print only when STATE says ready.
+# IEEE 1284 ID. The Esc menu's Print card reads STATE.
 # Design: guides/printing.md
 set -u
-STATE=/run/purple-printer.json  # constants.PRINTER_STATE
+STATE=/run/purple-printer.json  # printing.STATE
 QUEUE=purple
 LOG=/tmp/purple-printer.log
+SETTING_UP="setting up"  # printing.SETTING_UP
 
 log() { echo "[$(date +%H:%M:%S)] $*" >> "$LOG"; }
 
@@ -55,19 +56,27 @@ try_ipp_usb() {
     log "ipp-usb never answered"
 }
 
+# lpinfo runs each request the moment it reads -v or -m, so filters go first.
+# CUPS ranks drivers on the printer's make, model and command set; Brother
+# lasers brlaser doesn't list by name speak the same protocol as the ones it does.
 try_driver() {
     local info uri id model ppd
-    info=$(lpinfo -l -v --include-schemes usb 2>/dev/null)
+    info=$(lpinfo --include-schemes usb -l -v 2>/dev/null)
     uri=$(sed -n 's/^Device: uri = //p' <<<"$info" | head -1)
     id=$(sed -n 's/^ *device-id = //p' <<<"$info" | head -1)
     model=$(sed -n 's/^ *make-and-model = //p' <<<"$info" | head -1)
     [ -n "$uri" ] || { log "no usb device from lpinfo"; write_state false "a printer" "CUPS sees no USB printer"; exit 0; }
-    ppd=$(lpinfo -m --device-id "$id" 2>/dev/null | grep -v -e '^driverless' -e '^everywhere' | head -1 | cut -d' ' -f1)
+    log "device: $uri ($id)"
+    ppd=$(lpinfo --device-id "$id" -m 2>/dev/null | grep -v -e '^driverless' -e '^everywhere' | head -1 | cut -d' ' -f1)
+    if [ -z "$ppd" ] && [[ $id == *MFG:Brother* ]] && [[ $id =~ Brother\ Laser|HBP|XL2HB ]]; then
+        ppd=drv:///brlaser.drv/brl2300d.ppd
+    fi
     if [ -z "$ppd" ]; then
         log "no driver for: $model ($id)"
         write_state false "${model:-a printer}" "no driver for this model"
         exit 0
     fi
+    log "driver: $ppd"
     lpadmin -p "$QUEUE" -E -v "$uri" -m "$ppd" 2>>"$LOG" && finish "$model" "$ppd"
     write_state false "$model" "queue setup failed"
 }
@@ -79,5 +88,6 @@ rm -f "$STATE"
 grep -qs "<Printer $QUEUE>\|<DefaultPrinter $QUEUE>" /etc/cups/printers.conf && lpadmin -x "$QUEUE"
 usb_printer || exit 0
 log "printer plugged in (ipp-usb: $IPP_USB)"
+write_state false "a printer" "$SETTING_UP"
 [ "$IPP_USB" = 1 ] && try_ipp_usb
 try_driver

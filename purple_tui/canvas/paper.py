@@ -1,7 +1,6 @@
 """The printed page: what the kid made, on white, without cursor or hints.
 
 Every page carries a small maker's mark built from the computer's name.
-Every page carries a small maker's mark built from the computer's name.
 A room that can print has paper(g, size), which returns its work drawn to fit
 size on a white ground (or None when there is nothing yet), and LANDSCAPE.
 """

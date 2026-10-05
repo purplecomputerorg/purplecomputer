@@ -1,8 +1,10 @@
 # Printing
 
-Plug a printer into a USB port and a Print card appears in the Esc menu. There is
-no setup screen and no setting. If Purple can't drive the printer, the card never
-appears and Support info says why.
+Plug a printer into a USB port and it prints. There is no setup screen and no
+setting. The Esc menu's Print card always says where things stand: No Printer,
+Starting Up, Can't Print (pressing it says why), or Print. A toast says so too
+when a printer is plugged in, gets ready, turns out not to work, or is unplugged,
+and Support info names the printer and the technical reason.
 
 ## How a printer gets set up
 
@@ -15,9 +17,13 @@ appears and Support info says why.
      builds the queue from what the printer reports (`lpadmin -m everywhere`):
      paper size, color, margins.
    - **Then a driver.** Otherwise the printer's IEEE 1284 ID goes to
-     `lpinfo -m --device-id`, and the best installed driver wins.
-3. It writes `/run/purple-printer.json` (`{"ready", "model", "via"}`). The app
-   reads only that file, so checking for a printer costs no process.
+     `lpinfo --device-id ID -m` (lpinfo acts on `-m` and `-v` the moment it
+     reads them, so filters must come first), and the best installed driver
+     wins. A Brother laser brlaser doesn't list by name gets brlaser's
+     HL-L2300D driver, since that family shares one protocol.
+3. It writes `/run/purple-printer.json` (`{"ready", "model", "via"}`), with
+   `via` "setting up" while it works. The app stats that file every 2 s, so
+   watching for a printer costs no process.
 
 When some other USB device comes or goes, a ready queue is left alone so a
 printing job survives.
@@ -44,7 +50,7 @@ driver, which Ubuntu doesn't ship.
 fits it to A4 as well. A room that prints has `paper(g, size)` and `LANDSCAPE`:
 Art prints its paint and letters with unpainted cells left white, Blocks prints
 the build on a pale floor, Play prints the newest asks and answers that fit.
-Music has nothing to print, so its Print card is dimmed. The bottom corner
+Music has nothing to print, so there the Print card is dimmed. The bottom corner
 says "Made on" plus the computer's name (Parent Menu, Name this Computer),
 adding "with Purple Computer" when the name doesn't already say Purple. The app sends a PNG
 with `lp -o fit-to-page` and CUPS rasterizes it for the printer.

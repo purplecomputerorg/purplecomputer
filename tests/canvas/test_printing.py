@@ -1,4 +1,4 @@
-"""Printing: Print shows in the Esc menu only with a ready printer, rooms print their work on white, and the queue is paced."""
+"""Printing: the Esc menu's Print card follows the printer, rooms print their work on white, and the queue is paced."""
 import asyncio
 import json
 
@@ -44,24 +44,70 @@ async def _menu(app):
     return app.top
 
 
-def test_print_card_only_with_a_ready_printer(tmp_path):
+def _write(**state):
+    with open(printing.STATE, "w") as f:
+        json.dump(state, f)
+
+
+def test_print_card_always_says_what_the_printer_is_doing():
     async def go():
         app = make_app()
-        assert "print" not in (await _menu(app)).extras
-        with open(printing.STATE, "w") as f:
-            json.dump({**READY, "ready": False}, f)
-        assert printing.printer() is None
-        with open(printing.STATE, "w") as f:
-            json.dump(READY, f)
-        app.top.close(None)
-        assert (await _menu(app)).extras[-1] == "print"
+        app.action_switch_room("art")
+        await type_text(app, "q")
+        for state, label, enabled in [(None, "No Printer", False),
+                                      ({"ready": False, "model": "a printer", "via": printing.SETTING_UP}, "Starting Up", False),
+                                      ({"ready": False, "model": "Canon TS3520", "via": "no driver for this model"}, "Can't Print", False),
+                                      (READY, "Print", True)]:
+            if state:
+                _write(**state)
+            menu = await _menu(app)
+            _, shown, key, disabled = menu._print_card()
+            assert (shown, bool(key), not disabled) == (label, enabled, enabled)
+            menu.close(None)
     run(go())
 
 
-def test_pulled_stick_hides_print_on_a_live_boot(plugged_in, monkeypatch):
+def test_a_print_card_that_cant_print_says_why_when_pressed():
+    async def go():
+        app = make_app()
+        app.action_switch_room("art")
+        await type_text(app, "q")
+        await _menu(app)
+        await press(app, "p")
+        assert app.has_overlay(RoomPicker)
+        assert app._toasts[-1].text == "Plug in a printer with its USB cable"
+        _write(ready=False, model="Canon TS3520", via="no driver for this model")
+        assert printing.why_not() == "This printer doesn't work with Purple yet"
+    run(go())
+
+
+def test_plugging_in_a_printer_shows_a_toast_each_step():
+    async def go():
+        app = make_app()
+        app._check_printer()
+        _write(ready=False, model="a printer", via=printing.SETTING_UP)
+        app._check_printer()
+        assert app._toasts[-1].text == "Printer plugged in. Getting it ready"
+        _write(**READY)
+        app._check_printer()
+        assert app._toasts[-1].text == "The printer is ready. Press Esc, then P"
+        n = len(app._toasts)
+        app._check_printer()
+        assert len(app._toasts) == n
+    run(go())
+
+
+def test_a_stuck_setup_reads_as_broken(monkeypatch):
+    _write(ready=False, model="a printer", via=printing.SETTING_UP)
+    monkeypatch.setattr(printing.time, "time", lambda: printing._state_mtime() + printing.SETUP_TIMEOUT_S + 1)
+    assert printing.status() == printing.BROKEN
+
+
+def test_pulled_stick_cant_print_on_a_live_boot(plugged_in, monkeypatch):
     monkeypatch.setattr(printing, "is_live_boot", lambda: True)
     monkeypatch.setattr(printing, "is_usb_present", lambda: False)
     assert printing.printer() is None
+    assert printing.why_not() == "Put the Purple USB back in to print"
 
 
 def test_p_in_the_esc_menu_sends_the_art_page(plugged_in, lp_calls):

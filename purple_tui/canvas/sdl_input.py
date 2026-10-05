@@ -10,6 +10,7 @@ import time
 
 import pygame
 
+from .. import boot_log
 from ..input import KeyCode, RawKeyEvent
 
 _NAMES = {
@@ -31,6 +32,8 @@ KEYMAP = {k: getattr(KeyCode, f"KEY_{n}") for k, n in _NAMES.items() if hasattr(
 
 # X doesn't keep what's under a window that closes; the window has to repaint.
 REPAINT_EVENTS = (pygame.WINDOWEXPOSED, pygame.WINDOWSHOWN, pygame.WINDOWRESTORED, pygame.WINDOWFOCUSGAINED)
+# Window changes are rare (the terminal opening and closing), so every one is logged.
+WINDOW_LOGGED = (pygame.WINDOWHIDDEN, pygame.WINDOWMINIMIZED, pygame.WINDOWFOCUSLOST)
 
 _pressed: set = set()
 _ready = False
@@ -51,6 +54,9 @@ def pump(g):
             g.resize()
         elif ev.type in REPAINT_EVENTS:  # e.g. the parent terminal's xterm closing over us
             g.dirty = True
+            boot_log.heartbeat(f"window: {pygame.event.event_name(ev.type)}")
+        elif ev.type in WINDOW_LOGGED:
+            boot_log.heartbeat(f"window: {pygame.event.event_name(ev.type)}")
         elif ev.type in (pygame.KEYDOWN, pygame.KEYUP):
             code = KEYMAP.get(ev.key)
             if code is None:

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pygame
 
-from ... import diagnostics
+from ... import boot_log, diagnostics
 from ...backlight import set_level as set_backlight_level
 from ... import palette as P
 from ..gfx import FONT_DIR
@@ -995,6 +995,7 @@ class TerminalScreen(FullScreen):
             return
         # If the terminal never takes focus, Ctrl+Alt+F1 closes it (rescue), so
         # a parent can't get stuck. Normal exit is typing exit in the shell.
+        boot_log.heartbeat("terminal: xterm opened")
         if reader is not None:
             reader.suspend_for_x_terminal(on_rescue=self._proc.terminate)
         # Terminal typing never reaches Purple's idle clock
@@ -1002,10 +1003,12 @@ class TerminalScreen(FullScreen):
         try:
             await asyncio.get_running_loop().run_in_executor(None, self._proc.wait)
         finally:
+            boot_log.heartbeat(f"terminal: xterm exited ({self._proc.returncode})")
             self.app.uninhibit_idle("terminal")
             if reader is not None:
                 reader.resume_from_x_terminal()
             self._running = False
+            self.app.note_next_frame("after terminal")
             self.close()
             self.app.invalidate()
 

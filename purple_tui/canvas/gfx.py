@@ -20,6 +20,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+# SDL minimizes a fullscreen window that loses focus, so the parent terminal's
+# xterm left Purple iconified behind a black root window when it closed.
+os.environ.setdefault("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
 import pygame  # noqa: E402
 
 from ..palette import NAMED_COLORS, rgb

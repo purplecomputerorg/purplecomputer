@@ -128,6 +128,7 @@ class PurpleApp:
         self._legend_row = -1
         self._legend_visible = True
         self._computer_name = None
+        self._frame_note = None
         self._printer_seen = (None, printing.status())  # (file stamp, status) from the last check
         self._load_settings()
         boot_log.heartbeat("PurpleApp.__init__ complete")
@@ -245,10 +246,18 @@ class PurpleApp:
                 drawn = time.monotonic()
                 self.g.present()
                 self._frame_stats.frame(start, drawn, time.monotonic())
+                if self._frame_note:
+                    boot_log.heartbeat(f"frame drawn {self._frame_note}")
+                    self._frame_note = None
                 if first:
                     first = False
                     self._mark_ui_ready()
             await asyncio.sleep(1 / 60)
+
+    def note_next_frame(self, why: str):
+        """Log the next frame that reaches the screen (screen-went-black reports)."""
+        self._frame_note = why
+        self.invalidate()
 
     def _mark_ui_ready(self):
         boot_log.mark_first_render()

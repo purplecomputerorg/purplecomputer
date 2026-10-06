@@ -22,7 +22,7 @@ from ..ui import draw_mode_switch
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
-WIDTH, DEPTH, HEIGHT = 24, 12, 12
+WIDTH, DEPTH, HEIGHT = 30, 12, 12
 FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
 TURN_S = 0.5
 TURN_MAX_BLOCKS = 400
@@ -377,18 +377,18 @@ class BlocksRoom:
         placed = [(*self._view(x, z), y, color) for (x, z, y), color in self._blocks.items()]
         xray = self._xray(placed)
         if self._scene is None or self._scene.get_size() != self._scene_size() or xray != self._scene_xray:
-            self._scene, self._scene_xray = self._ceiling(self._stack(self._floor_surface().copy(), placed, xray)), xray
+            self._scene, self._scene_xray = self._stack(self._ceiling(self._floor_surface().copy()), placed, xray), xray
         return self._scene
 
     def _ceiling(self, s) -> pygame.Surface:
-        """A glass lid on corner posts at the height limit, so the top of the world shows."""
+        """A faint dashed outline at the height limit, one dash per cell, so the top of the world shows."""
         pane = pygame.Surface(s.get_size(), pygame.SRCALPHA)
         corners = ((0, 0), (WIDTH, 0), (WIDTH, DEPTH), (0, DEPTH))
-        top = [self._corner(x, z, HEIGHT) for x, z in corners]
-        pygame.draw.polygon(pane, (*rgb(P.TEXT), 12), top)
-        pygame.draw.polygon(pane, (*rgb(P.TEXT), 70), top, 1)
-        for (x, z), lid in zip(corners, top):
-            pygame.draw.line(pane, (*rgb(P.TEXT), 40), self._corner(x, z, 0), lid)
+        for (ax, az), (bx, bz) in zip(corners, corners[1:] + corners[:1]):
+            n = max(abs(bx - ax), abs(bz - az))
+            for i in range(n):
+                ends = [self._corner(ax + (bx - ax) * t / n, az + (bz - az) * t / n, HEIGHT) for t in (i + 0.25, i + 0.75)]
+                pygame.draw.line(pane, (*rgb(P.TEXT), 60), *ends)
         s.blit(pane, (0, 0))
         return s
 

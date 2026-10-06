@@ -262,7 +262,7 @@ class PlayRoom:
             elif a == "space":
                 if not action.is_repeat:
                     f.insert(" ")
-            elif a == "enter":
+            elif a == "enter" and not action.is_repeat:
                 text = f.value.strip()
                 if text:
                     f.clear()

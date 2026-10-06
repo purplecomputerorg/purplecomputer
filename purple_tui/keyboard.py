@@ -834,8 +834,10 @@ class KeyboardStateMachine:
         if keycode == KeyCode.KEY_ENTER:
             actions.append(ControlAction(action='enter', is_down=True, is_repeat=is_repeat))
             return actions
+        # Tab toggles modes, so a held Tab must flip once, not on every repeat.
         if keycode == KeyCode.KEY_TAB:
-            actions.append(ControlAction(action='tab', is_down=True, is_repeat=is_repeat))
+            if not is_repeat:
+                actions.append(ControlAction(action='tab', is_down=True))
             return actions
         if keycode == KeyCode.KEY_COMPOSE:
             actions.append(ControlAction(action='menu', is_down=True, is_repeat=is_repeat))

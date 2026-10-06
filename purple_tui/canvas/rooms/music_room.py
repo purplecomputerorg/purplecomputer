@@ -20,10 +20,12 @@ from ...music_constants import (
     INSTRUMENT_ALIASES, INSTRUMENTS, PERCUSSION_NAMES, pitch_filename, pitch_for,
 )
 from ...palette import KEY_COLORS, text_color_for
+from .. import paper
 from ..panels import CodePanel, LoopPanel, SpaceHold
 from ..ui import draw_label
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
+PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
 _SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
 _KID_MATH_UNREMAP = {"÷": "/", "×": "*"}
@@ -55,6 +57,7 @@ def _load(path) -> pygame.mixer.Sound | None:
 
 
 class MusicRoom:
+    LANDSCAPE = True
     name = "music"
 
     def __init__(self, app):
@@ -617,7 +620,16 @@ class MusicRoom:
         root = self.root_index if self.app._music_key_switching_enabled else DEFAULT_ROOT_INDEX
         g.draw_text(f"Key of {FRIENDLY_KEY_NAMES[root]}", px, r.right, cy, "mono", P.DIM, anchor="midright")
 
-    def _draw_grid(self, g, r):
+    def paper(self, g, size):
+        """The kid's colors on the keyboard grid; quiet keys print as outlined letters."""
+        if all(self.get_color(k) == P.TILE for row in GRID_KEYS for k in row):
+            return None
+        s = paper.blank(size)
+        with g.drawing_on(s):
+            self._draw_grid(g, s.get_rect(), on_paper=True)
+        return s
+
+    def _draw_grid(self, g, r, on_paper=False):
         """Ten by four gapless square blocks: a quiet key is just its letter,
         a sounding key fills its whole block with color."""
         size = min(r.w / 10, r.h / 4)
@@ -633,16 +645,19 @@ class MusicRoom:
                 if melodic:
                     root_idx, at_front = self._transition_state_for_col(col_idx)
                     note, _ = pitch_for(row_idx - 1, col_idx, FRIENDLY_KEYS[root_idx], 0)
-                    if at_front:
+                    if at_front and not on_paper:
                         bg = WAVEFRONT_COLOR
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
                 quiet = bg == P.TILE
                 if not quiet:
                     g.rect(bg, tile)
-                fg = P.MUTED if quiet else text_color_for(bg)
+                elif on_paper:
+                    g.rect(PAPER_OUTLINE, tile, width=2)
+                fg = (paper.INK_MUTED if on_paper else P.MUTED) if quiet else text_color_for(bg)
                 g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
-                show = key in self._note_labels or (melodic and (self._transition is not None or self.show_labels))
+                flashing = key in self._note_labels or (melodic and self._transition is not None)
+                show = (flashing and not on_paper) or (melodic and self.show_labels)
                 label = PERCUSSION_NAMES.get(key, "") if key.isdigit() else (note or "")
                 if show and label:
                     muted = "#6a5a7a" if fg == "#000000" else "#a898c0"

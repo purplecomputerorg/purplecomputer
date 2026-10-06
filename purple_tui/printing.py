@@ -19,6 +19,9 @@ QUEUE = "purple"
 COOLDOWN_S = 20
 SESSION_LIMIT = 20
 WATCH_S, WATCH_EVERY_S = 180, 3
+STUCK_S = 60  # a job still waiting this long means the printer isn't taking it
+NOT_PRINTED = "The printer didn't print that"
+NOT_ANSWERING = "The printer isn't answering. Is it turned on?"
 # printer-state-reasons prefixes, most specific first, with what the screen says
 PROBLEMS = (
     ("media-jam", "Paper is stuck in the printer"),
@@ -151,31 +154,66 @@ async def print_page(surface, landscape: bool, notify) -> bool:
     try:
         pygame.image.save(surface, path)
         opts = ["-o", "fit-to-page"] + (["-o", "landscape"] if landscape else [])
-        await _run("lp", "-d", QUEUE, "-t", "Purple Computer", *opts, path)
+        job = _job_id(await _run("lp", "-d", QUEUE, "-t", "Purple Computer", *opts, path))
     except Exception as e:
         boot_log.heartbeat(f"print: failed to send ({e})")
         notify("The printer didn't answer. Try again soon")
         return False
     finally:
         os.unlink(path)  # lp has copied it into the spool
-    boot_log.heartbeat("print: page sent")
+    boot_log.heartbeat(f"print: page sent as job {job}")
     notify("Printing!")
-    asyncio.ensure_future(_watch(notify))
+    asyncio.ensure_future(_watch(job, notify))
     return True
 
 
-async def _watch(notify):
-    """Until the queue empties, say once per problem what's wrong (no paper, a jam)."""
+def _job_id(lp_out: str):
+    """'request id is purple-12 (1 file(s))' -> '12'."""
+    word = next((w for w in lp_out.split() if w.startswith(f"{QUEUE}-")), "")
+    return word.rsplit("-", 1)[-1] or None
+
+
+def _attr(ipp_out: str, name: str) -> str:
+    """One attribute's value from ipptool -v output."""
+    for line in ipp_out.splitlines():
+        key, _, value = line.strip().partition(" = ")
+        if key.split(" (")[0] == name:
+            return value
+    return ""
+
+
+async def _watch(job, notify):
+    """Until the job finishes, say once per problem what's wrong: no paper, a
+    jam, a job CUPS gave up on, or a printer that never takes it."""
     said = set()
-    for _ in range(WATCH_S // WATCH_EVERY_S):
-        await asyncio.sleep(WATCH_EVERY_S)
-        try:
-            if not (await _run("lpstat", "-o", QUEUE)).strip():
-                return
-            msg = problem(await _run("lpstat", "-l", "-p", QUEUE))
-        except Exception:
-            return
+
+    def say(msg, why=""):
         if msg and msg not in said:
             said.add(msg)
-            boot_log.heartbeat(f"print: {msg}")
+            boot_log.heartbeat(f"print: job {job} {msg} {why}".rstrip())
             notify(msg)
+
+    for tick in range(1, WATCH_S // WATCH_EVERY_S + 1):
+        await asyncio.sleep(WATCH_EVERY_S)
+        try:
+            info = await _run("ipptool", "-tv", f"ipp://localhost/jobs/{job}", "get-job-attributes.test")
+            reasons = await _run("lpstat", "-l", "-p", QUEUE)
+        except Exception as e:
+            boot_log.heartbeat(f"print: job {job} can't be checked ({e})")
+            return
+        state, why = _attr(info, "job-state"), f"({_attr(info, 'job-printer-state-message')})"
+        if state in ("completed", "aborted", "canceled"):
+            boot_log.heartbeat(f"print: job {job} {state} {why}")
+            if state != "completed":
+                say(NOT_PRINTED, why)
+            return
+        msg = problem(reasons)
+        say(msg)
+        if tick * WATCH_EVERY_S >= STUCK_S and not msg:
+            say(NOT_ANSWERING, f"(still {state} {why})")
+    # A job that never finishes holds up every page after it, since CUPS prints one at a time.
+    boot_log.heartbeat(f"print: job {job} cancelled after {WATCH_S}s")
+    try:
+        await _run("cancel", f"{QUEUE}-{job}")
+    except Exception:
+        pass

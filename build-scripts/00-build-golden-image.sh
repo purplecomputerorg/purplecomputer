@@ -643,7 +643,7 @@ SOURCES
     chroot "$MOUNT_DIR" apt-get install -y cups ipp-usb \
         printer-driver-hpcups printer-driver-gutenprint printer-driver-brlaser \
         printer-driver-escpr printer-driver-splix printer-driver-foo2zjs \
-        printer-driver-c2esp printer-driver-pxljr openprinting-ppds
+        printer-driver-c2esp printer-driver-pxljr
 
     # Verify everything the boot, install and X session shell out to actually
     # landed. With APT::Install-Recommends=0 a Recommends-only relationship
@@ -1191,6 +1191,9 @@ JOURNAL
     # socket, ipp-usb from its own udev rule, and avahi never (mDNS would talk
     # to a network; ipp-usb.conf turns its DNS-SD off).
     install -m 755 /purple-src/scripts/purple-printer-setup.sh "$MOUNT_DIR/usr/local/bin/purple-printer-setup"
+    install -m 755 /purple-src/scripts/purple-printer-test.sh "$MOUNT_DIR/usr/local/bin/printer-test"
+    # CUPS reaches USB printers itself; keep the kernel's usblp from claiming one first.
+    echo "blacklist usblp" > "$MOUNT_DIR/etc/modprobe.d/purple-printing.conf"
     cp /purple-src/config/systemd/purple-printer.service "$MOUNT_DIR/etc/systemd/system/"
     cp /purple-src/config/udev/70-purple-printer.rules "$MOUNT_DIR/etc/udev/rules.d/"
     cp /purple-src/config/ipp-usb/ipp-usb.conf "$MOUNT_DIR/etc/ipp-usb/ipp-usb.conf"

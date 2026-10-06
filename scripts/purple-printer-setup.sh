@@ -1,9 +1,9 @@
 #!/bin/bash
 # Purple Computer: make whatever USB printer is plugged in print, with no setup.
 # Run as root by purple-printer.service on every printer plug and unplug, and
-# idempotent: it rebuilds the one queue from scratch each time. Tries
-# driverless IPP-over-USB first, then a driver matched to the printer's own
-# IEEE 1284 ID. The Esc menu's Print card reads STATE.
+# idempotent: it rebuilds the one queue from scratch each time. Every step is
+# a best guess with a fallback: driverless IPP-over-USB first, then a ladder of
+# drivers for the printer's IEEE 1284 ID. The Esc menu's Print card reads STATE.
 # Design: guides/printing.md
 set -u
 STATE=/run/purple-printer.json  # printing.STATE
@@ -56,38 +56,78 @@ try_ipp_usb() {
     log "ipp-usb never answered"
 }
 
-# lpinfo runs each request the moment it reads -v or -m, so filters go first.
-# CUPS ranks drivers on the printer's make, model and command set; Brother
-# lasers brlaser doesn't list by name speak the same protocol as the ones it does.
-try_driver() {
-    local info uri id model ppd
-    info=$(lpinfo --include-schemes usb -l -v 2>/dev/null)
-    uri=$(sed -n 's/^Device: uri = //p' <<<"$info" | head -1)
-    id=$(sed -n 's/^ *device-id = //p' <<<"$info" | head -1)
-    model=$(sed -n 's/^ *make-and-model = //p' <<<"$info" | head -1)
-    [ -n "$uri" ] || { log "no usb device from lpinfo"; write_state false "a printer" "CUPS sees no USB printer"; exit 0; }
-    log "device: $uri ($id)"
-    ppd=$(lpinfo --device-id "$id" -m 2>/dev/null | grep -v -e '^driverless' -e '^everywhere' | head -1 | cut -d' ' -f1)
-    if [ -z "$ppd" ] && [[ $id == *MFG:Brother* ]] && [[ $id =~ Brother\ Laser|HBP|XL2HB ]]; then
-        ppd=drv:///brlaser.drv/brl2300d.ppd
-    fi
-    if [ -z "$ppd" ]; then
-        log "no driver for: $model ($id)"
-        write_state false "${model:-a printer}" "no driver for this model"
-        exit 0
-    fi
-    log "driver: $ppd"
-    lpadmin -p "$QUEUE" -E -v "$uri" -m "$ppd" 2>>"$LOG" && finish "$model" "$ppd"
-    write_state false "$model" "queue setup failed"
+# Drivers worth trying for an IEEE 1284 ID, best guess first: CUPS's own
+# ranking (lpinfo acts on -m the moment it reads it, so the filter goes
+# first), then brlaser for Brother lasers it doesn't name (one protocol for the
+# family), then a generic driver for each language the printer says it speaks.
+drivers_for() {
+    local id=$1 cmd
+    cmd=",$(sed -n 's/.*\(CMD\|COMMAND SET\):\([^;]*\).*/\2/p' <<<"$id"),"
+    lpinfo --device-id "$id" -m 2>/dev/null | grep -v -e '^driverless' -e '^everywhere' | cut -d' ' -f1 | head -3
+    [[ $id == *MFG:Brother* && $id =~ Brother\ Laser|HBP|XL2HB ]] && echo drv:///brlaser.drv/brl2300d.ppd
+    [[ $cmd =~ ,(PCLXL|PCL6), ]] && echo gutenprint.5.3://pcl-g_6/expert
+    [[ $cmd =~ ,PCL ]] && echo gutenprint.5.3://pcl-g_5e/expert
+    [[ $cmd =~ ,(POSTSCRIPT|PS|BR-Script) ]] && echo gutenprint.5.3://ps2/expert
+    [[ $cmd =~ ,PWG ]] && echo drv:///cupsfilters.drv/pwgrast.ppd
 }
 
+# Sets URI, ID and MODEL for the first USB printer the CUPS backend can see.
+usb_device() {
+    local info _
+    for _ in 1 2 3 4 5; do
+        info=$(lpinfo --include-schemes usb -l -v 2>/dev/null)
+        URI=$(sed -n 's/^Device: uri = //p' <<<"$info" | head -1)
+        [ -n "$URI" ] && break
+        sleep 1
+    done
+    ID=$(sed -n 's/^ *device-id = //p' <<<"$info" | head -1)
+    MODEL=$(sed -n 's/^ *make-and-model = //p' <<<"$info" | head -1)
+    [ -n "$URI" ]
+}
+
+try_driver() {  # [driver]: only that one
+    local ppd
+    usb_device || { log "no usb device from lpinfo"; write_state false "a printer" "CUPS sees no USB printer"; exit 0; }
+    log "device: $URI ($ID)"
+    for ppd in ${1:-$(drivers_for "$ID" | awk '!seen[$0]++')}; do
+        log "driver: $ppd"
+        lpadmin -p "$QUEUE" -E -v "$URI" -m "$ppd" 2>>"$LOG" && finish "$MODEL" "$ppd"
+    done
+    log "no driver for: $MODEL ($ID)"
+    write_state false "${MODEL:-a printer}" "no driver for this model"
+}
+
+# No argument: the automatic setup udev runs. printer-test passes a route to
+# force (ipp, or usb with an optional driver), or drivers to only list guesses.
+ROUTE=${1:-auto}
+if [ "$ROUTE" = drivers ]; then
+    held=$(pgrep -x ipp-usb)
+    systemctl stop ipp-usb.service
+    usb_device && echo "$URI" && echo "$ID" && drivers_for "$ID" | awk '!seen[$0]++'
+    [ -z "$held" ] || systemctl start ipp-usb.service
+    exit 0
+fi
 IPP_USB=0
 # Some other USB device came or went: leave a working queue (and its job) alone.
-usb_printer && grep -qs '"ready": true' "$STATE" && exit 0
+[ "$ROUTE" = auto ] && usb_printer && grep -qs '"ready": true' "$STATE" && exit 0
 rm -f "$STATE"
 grep -qs "<Printer $QUEUE>\|<DefaultPrinter $QUEUE>" /etc/cups/printers.conf && lpadmin -x "$QUEUE"
+# The plug event fires before the kernel has listed the printer's interfaces;
+# read them too early and an IPP-over-USB printer looks like a plain one.
+udevadm settle --timeout=10
 usb_printer || exit 0
-log "printer plugged in (ipp-usb: $IPP_USB)"
+pgrep -x ipp-usb >/dev/null && IPP_USB=1
+case $ROUTE in
+    ipp) IPP_USB=1; systemctl start ipp-usb.service ;;
+    usb) IPP_USB=0 ;;
+esac
+log "printer plugged in (ipp-usb: $IPP_USB, route: $ROUTE)"
 write_state false "a printer" "$SETTING_UP"
-[ "$IPP_USB" = 1 ] && try_ipp_usb
-try_driver
+if [ "$IPP_USB" = 1 ]; then
+    try_ipp_usb
+    [ "$ROUTE" = ipp ] && { write_state false "a printer" "ipp-usb never answered"; exit 0; }
+fi
+# ipp-usb holds the printer while it runs, so the USB backend can't reach it.
+systemctl stop ipp-usb.service
+modprobe -r usblp 2>/dev/null
+try_driver "${2:-}"

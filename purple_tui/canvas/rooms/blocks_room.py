@@ -3,7 +3,8 @@ Space, in the current color) drops a block of its sticker color on top of the
 cursor's column. Enter lifts the block just dropped a level and Backspace
 lowers it, then removes it; away from that block they move the see-through
 cursor instead, and the next block goes in at its height. Holding one letter
-while pressing another mixes the two colors. Tab flips to the back side."""
+while pressing another mixes the two colors, and Backslash opens the color
+wheel. Tab flips to the back side."""
 
 import math
 import time
@@ -15,6 +16,7 @@ from ...color_mixing import mix_colors_paint
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import DEFAULT_BRUSH_COLOR
 from .. import paper
+from ..color_wheel import open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..ui import draw_mode_switch
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
@@ -188,11 +190,18 @@ class BlocksRoom:
         self._scene = None
         self.app.invalidate()
 
+    @property
+    def brush_color(self) -> str:
+        return self._color
+
+    def set_brush_color(self, color: str, key: str = ""):
+        self._key, self._color = key, color
+        self.app.set_legend(color, visible=True)
+
     def _set_color(self, char: str):
         brush = brush_for_key(char)
         if brush:
-            self._key, self._color = brush
-            self.app.set_legend(self._color, visible=True)
+            self.set_brush_color(brush[1], brush[0])
         return bool(brush)
 
     def _move(self, direction: str) -> bool:
@@ -247,7 +256,7 @@ class BlocksRoom:
 
     def _character(self, action):
         char = UNSHIFT_MAP.get(action.char, action.char) if action.shift_held else action.char
-        if not self._set_color(char) or action.shift_held:
+        if open_color_wheel(self, char) or not self._set_color(char) or action.shift_held:
             return
         held = brush_for_key(action.char_held) if action.char_held else None
         if not (held and self._mix_into_last(held[0])):

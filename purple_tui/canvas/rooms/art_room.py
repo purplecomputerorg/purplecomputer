@@ -1,5 +1,6 @@
 """Art room: a grid of square cells. Every letter paints its sticker color,
-Space puts the pen down so arrows draw, Tab switches to writing letters, and
+Backslash opens the color wheel, Space puts the pen down so arrows draw,
+holding Backspace makes arrows erase, Tab switches to writing letters, and
 hold Space opens the Logo-style code line."""
 
 import time
@@ -14,6 +15,7 @@ from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from .. import paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
+from ..color_wheel import open_on as open_color_wheel
 from ..panels import CodePanel, SpaceHold
 from ..ui import draw_label, draw_mode_switch
 
@@ -28,6 +30,7 @@ HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
 HINTS = {
     "littles": "Type to paint!",
     "pen": "Pen is down! Arrows paint a trail. Space lifts the pen.",
+    "erase": "Erasing! Arrows clear a trail.",
     "paint": "Type to paint! Every letter is a color. Space puts the pen down.",
     "write": "Type to write! Arrow keys move. Enter for a new line.",
 }
@@ -52,21 +55,26 @@ def brush_for_key(char: str):
 
 def _brush_tip(c: int, color: str, tip, arrow: bool) -> pygame.Surface:
     """A 2c square centered on the cursor cell, drawn 4x and smoothed down:
-    tip is "ring" (pen up), "dot" (pen down) or None; arrow adds a chevron
-    pointing right."""
+    tip is "ring" (pen up), "dot" (pen down), "erase" (a hollow square over
+    the cell) or None; arrow adds a chevron pointing right."""
     s = 4
     size, mid = 2 * c * s, c * s
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     r = round(c * s * (0.42 if tip == "dot" else 0.38))
     edge = max(s, round(c * s * 0.05))
+    band = max(2 * s, round(c * s * 0.13))
     if tip == "ring":
-        band = max(2 * s, round(c * s * 0.13))
         pygame.draw.circle(surf, rgb(TIP_EDGE), (mid, mid), r + edge, band + 2 * edge)
         pygame.draw.circle(surf, rgb(color), (mid, mid), r, band)
     elif tip == "dot":
         pygame.draw.circle(surf, rgb(TIP_EDGE), (mid, mid), r + edge)
         pygame.draw.circle(surf, rgb(P.TEXT), (mid, mid), r)
         pygame.draw.circle(surf, rgb(color), (mid, mid), r - max(s, round(c * s * 0.08)))
+    elif tip == "erase":
+        box = pygame.Rect(0, 0, c * s, c * s)
+        box.center = (mid, mid)
+        pygame.draw.rect(surf, rgb(TIP_EDGE), box.inflate(2 * edge, 2 * edge), band + 2 * edge)
+        pygame.draw.rect(surf, rgb(P.TEXT), box, band)
     if arrow:
         x0, h = mid + max(r, round(c * s * 0.42)) + edge, round(c * s * 0.24)
         tri = [(x0, mid - h), (x0 + round(h * 1.3), mid), (x0, mid + h)]
@@ -103,6 +111,7 @@ class ArtRoom:
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
         self._backspace_repeat_count = 0
+        self._erasing = False         # Backspace held: arrows clear a trail
         self._blink_on = True
         self._blink_stamp = time.monotonic()
         self._blink_timer = None
@@ -122,6 +131,7 @@ class ArtRoom:
 
     def on_leave(self):
         self.code_panel = None
+        self._erasing = False
         if self._blink_timer:
             self._blink_timer.stop()
             self._blink_timer = None
@@ -157,6 +167,14 @@ class ArtRoom:
 
     def _mark_cursor_dirty(self):
         pass
+
+    @property
+    def brush_color(self) -> str:
+        return self._last_key_color
+
+    def set_brush_color(self, color: str, key: str = ""):
+        self._last_key_char, self._last_key_color = key, color
+        self._post_paint_mode_changed()
 
     def _post_paint_mode_changed(self):
         self.app.set_legend(self._last_key_color if self._paint_mode else None, visible=True)
@@ -342,6 +360,9 @@ class ArtRoom:
         elif self._cursor_y > 0:
             self._cursor_y -= 1
             self._cursor_x = COLS - 1
+        self._erase_at_cursor()
+
+    def _erase_at_cursor(self):
         pos = (self._cursor_x, self._cursor_y)
         if pos in self._grid:
             self._del_cell(pos)
@@ -369,11 +390,9 @@ class ArtRoom:
     def _select_brush(self, char: str) -> bool:
         """Set the brush from a key; False when the key has no color."""
         brush = brush_for_key(char)
-        if not brush:
-            return False
-        self._last_key_char, self._last_key_color = brush
-        self._post_paint_mode_changed()
-        return True
+        if brush:
+            self.set_brush_color(brush[1], brush[0])
+        return bool(brush)
 
     # ---------------------------------------------------------------- code panel
     def open_code_panel(self):
@@ -441,6 +460,8 @@ class ArtRoom:
             if not action.is_down:
                 if action.action == "backspace":
                     self._backspace_repeat_count = 0
+                    self._erasing = False
+                    self.app.invalidate()
                 return
             a = action.action
             if a == "space":
@@ -456,6 +477,7 @@ class ArtRoom:
                     self._new_line()
                     self.app.invalidate()
             elif a == "backspace":
+                self._erasing = True
                 self._backspace_repeat_count = self._backspace_repeat_count + 1 if action.is_repeat else 0
                 for _ in range(HOLD_ACCEL_MULTIPLIER if self._backspace_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD else 1):
                     self._backspace()
@@ -472,6 +494,8 @@ class ArtRoom:
                 return
             if action.shift_held and char in UNSHIFT_MAP:
                 char = UNSHIFT_MAP[char]
+            if open_color_wheel(self, char):
+                return
             if self._select_brush(char) and not action.shift_held:
                 self._paint_at_cursor()
                 self._advance_after_stamp(direction)
@@ -484,20 +508,21 @@ class ArtRoom:
         else:
             self._arrow_repeat_dir = action.direction
             self._arrow_repeat_count = 1 if action.is_repeat else 0
-        if self._paint_mode and action.char_held:
+        if self._paint_mode and action.char_held and not self._erasing:
             self._select_brush(action.char_held)
             if self._arrow_repeat_count == 0 or (self._cursor_x, self._cursor_y) != self._last_paint_pos:
                 self._paint_at_cursor()
         if action.direction in ("up", "down") and prior_post_stamp_x is not None and not action.char_held:
             self._cursor_x = prior_post_stamp_x
-        paint_each_step = self._paint_mode and (self._pen_down or bool(action.char_held))
-        steps = HOLD_ACCEL_MULTIPLIER if (not paint_each_step and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD) else 1
+        paint_each_step = self._paint_mode and not self._erasing and (self._pen_down or bool(action.char_held))
+        trail = self._erase_at_cursor if self._erasing else self._paint_at_cursor if paint_each_step else None
+        steps = HOLD_ACCEL_MULTIPLIER if (not trail and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD) else 1
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(steps):
                 if not self._move_in_direction(direction):
                     break
-                if paint_each_step:
-                    self._paint_at_cursor()
+                if trail:
+                    trail()
         self._restart_blink()
         self.app.invalidate()
 
@@ -521,10 +546,17 @@ class ArtRoom:
         self._draw_cursor(g, ox, oy, c)
         if chrome_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
-            key = "littles" if self.app._littles_mode else ("pen" if self._paint_mode and self._pen_down else "paint" if self._paint_mode else "write")
+            key = "littles" if self.app._littles_mode else self._hint_key()
             g.draw_text(HINTS[key], g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
             if self.app._code_panel_enabled and not self.app._littles_mode:
                 g.draw_text(f"{ICON_ROBOT} Hold Space: write code", g.vh(1.9), foot.right, foot.centery, "mono", P.DIM, anchor="midright")
+
+    def _hint_key(self) -> str:
+        if self._erasing:
+            return "erase"
+        if self._paint_mode:
+            return "pen" if self._pen_down else "paint"
+        return "write"
 
     def _canvas_surface(self, g, c):
         """The cells as one surface; only cells that changed since the last
@@ -578,7 +610,7 @@ class ArtRoom:
         if not self._paint_mode and self._blink_on:  # underline caret: the next letter lands in this cell
             bar = max(2, c // 4)
             g.rect(P.ACCENT, (x, y + c - bar, c, bar))
-        tip = ("dot" if self._pen_down else "ring") if self._paint_mode else None
+        tip = "erase" if self._erasing else ("dot" if self._pen_down else "ring") if self._paint_mode else None
         heading = self._heading if self._use_heading_cursor else None
         if tip or heading:
             color = self._last_key_color if self._paint_mode else P.TEXT

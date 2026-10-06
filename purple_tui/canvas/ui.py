@@ -483,14 +483,16 @@ def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", co
 
 
 def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str, tab_hint: str):
-    """Two mode labels (active one in inverse video) with the brush swatch
-    beside them, and the Tab keycap with what it switches to on the right."""
+    """Two mode labels (active one in inverse video) with the brush swatch and
+    the color wheel's keycap beside them, and the Tab keycap with what it
+    switches to on the right."""
     px = g.vh(1.9)
     cy = r.centery
     widths = [g.measure(t, px, "mono-bold")[0] + px for t in labels]
     x = r.centerx - (sum(widths) + px) // 2
     sw = round(r.h * 0.5)
     g.rect(swatch, (x - px - sw, cy - sw // 2, sw, sw))
+    draw_keycap(g, "\\", px, x - px - sw - int(px * 0.9), cy, anchor="midright")
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
         x += w + px

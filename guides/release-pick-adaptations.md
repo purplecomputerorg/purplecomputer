@@ -5,6 +5,12 @@ These are places where the release branch intentionally differs from the origina
 commit, usually because the pick depends on a feature that stays on main.
 If a later pick conflicts weirdly in one of these spots, look here first.
 
+## 2026-10-06
+
+- `13bca80` (power off after the USB is pulled) → release `e20e7cf`
+  - `purple_tui/power_manager.py`: kept release's Raspberry Pi helpers (`can_power_back_on`, `manual_off_hint`) beside the new `_POWEROFF_BACKSTOP_SECS`. Left out main's `shutil.which` filter on the poweroff commands: it comes from the Chromebook work (`7ddc33b`, stays on main) and release does not import `shutil`.
+- `d5f91ea`, `97de8d5`, `cd23883`, `629aa80` → release `ca61a06`, `4a1ae85`, `faa102d`, `987698b`: clean.
+
 ## 2026-09-13
 
 - `759ebad` (CLAUDE.md: logging defaults to always-on) → release `1dc2b39`

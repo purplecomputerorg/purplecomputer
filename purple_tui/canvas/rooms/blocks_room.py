@@ -22,7 +22,7 @@ from ..ui import draw_mode_switch
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
-WIDTH, DEPTH, HEIGHT = 24, 12, 8
+WIDTH, DEPTH, HEIGHT = 24, 12, 12
 FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
 TURN_S = 0.5
 TURN_MAX_BLOCKS = 400
@@ -377,8 +377,20 @@ class BlocksRoom:
         placed = [(*self._view(x, z), y, color) for (x, z, y), color in self._blocks.items()]
         xray = self._xray(placed)
         if self._scene is None or self._scene.get_size() != self._scene_size() or xray != self._scene_xray:
-            self._scene, self._scene_xray = self._stack(self._floor_surface().copy(), placed, xray), xray
+            self._scene, self._scene_xray = self._ceiling(self._stack(self._floor_surface().copy(), placed, xray)), xray
         return self._scene
+
+    def _ceiling(self, s) -> pygame.Surface:
+        """A glass lid on corner posts at the height limit, so the top of the world shows."""
+        pane = pygame.Surface(s.get_size(), pygame.SRCALPHA)
+        corners = ((0, 0), (WIDTH, 0), (WIDTH, DEPTH), (0, DEPTH))
+        top = [self._corner(x, z, HEIGHT) for x, z in corners]
+        pygame.draw.polygon(pane, (*rgb(P.TEXT), 12), top)
+        pygame.draw.polygon(pane, (*rgb(P.TEXT), 70), top, 1)
+        for (x, z), lid in zip(corners, top):
+            pygame.draw.line(pane, (*rgb(P.TEXT), 40), self._corner(x, z, 0), lid)
+        s.blit(pane, (0, 0))
+        return s
 
     def _stack(self, s, placed, xray=frozenset()) -> pygame.Surface:
         for vx, vz, y, color in sorted(placed, key=lambda b: (-b[1], b[0], b[2])):
@@ -500,6 +512,7 @@ class BlocksRoom:
             pygame.draw.polygon(glass, (*rgb(P.TEXT), 22), shift(poly, -col.x, -col.y))
             pygame.draw.polygon(glass, (*rgb(P.TEXT), 60), shift(poly, -col.x, -col.y), 1)
         g.surface.blit(glass, (ox + col.x, oy + col.y))
+        self._draw_cloud(g, ox, oy, vx, vz)
         y = self._cursor_y()
         if y >= HEIGHT:
             return
@@ -509,3 +522,12 @@ class BlocksRoom:
         g.surface.blit(ghost, (ox + r.x, oy + r.y))
         for poly in self._faces(*self._corner(vx, vz, y + 1)):
             pygame.draw.polygon(g.surface, rgb(P.TEXT), shift(poly, ox, oy), 2)
+
+    def _draw_cloud(self, g, ox, oy, vx, vz):
+        """A puff of sky sitting on top of the glass column."""
+        c = self._c
+        dz, _, sx, _ = self._metrics()
+        px, py = self._corner(vx, vz, HEIGHT)
+        cx, cy = ox + px + (c + sx) / 2, oy + py - dz / 2
+        for dx, dy, r in ((-0.35, 0.05, 0.28), (0.35, 0.05, 0.28), (0, -0.12, 0.36)):
+            pygame.draw.circle(g.surface, mix(P.TEXT, CANVAS_BG, 0.15), (round(cx + dx * c), round(cy + dy * c)), round(r * c))

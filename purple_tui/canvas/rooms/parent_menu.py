@@ -332,9 +332,22 @@ class InstallConfirmScreen(Picker):
 
 class ReinstallConfirmScreen(InstallConfirmScreen):
     DESCRIPTION = ("Purple is already set up on this laptop.\n"
-                   "You can keep its settings and everything\nyour kid made, or start fresh.")
-    OPTIONS = [("keep", "Install and keep it all"), (True, "Install and start fresh"), (False, "No, go back")]
-    default_selected = 2
+                   "Installing can keep your kid's work\nand settings, or start fresh.")
+    OPTIONS = [("keep", "Install and keep everything"), (False, "No, go back"), ("fresh", "Start fresh instead")]
+    dim_values = {"fresh"}
+    default_selected = 0
+
+    def _on_confirm(self, value):
+        if value == "fresh":
+            self.app.push(StartFreshConfirmScreen(self.app), on_close=lambda ok: ok and self.close(True))
+        else:
+            self.close(value)
+
+
+class StartFreshConfirmScreen(InstallConfirmScreen):
+    title = "Start Fresh"
+    DESCRIPTION = f"[bold {P.DANGER}]This erases everything your kid\nsaved on this laptop.[/]"
+    OPTIONS = [(True, "Erase and install"), (False, "Go back")]
 
 
 class UnreadableReinstallScreen(InstallConfirmScreen):
@@ -723,7 +736,8 @@ class InstallProgressScreen(FullScreen):
             ["sudo", "-E", "bash", "/cdrom/purple/install.sh"], stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
             env={**os.environ, "PURPLE_PAYLOAD_DIR": PAYLOAD_DIR, "PURPLE_COMPUTER_NAME": self._computer_name,
                  "PURPLE_LIVE_AUDIO_OK": "1" if self.app.audio_ok is True else "0",
-                 "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE),  # copied into the installed system
+                 "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE),
+                 "PURPLE_LIVE_CONFIG": str(SETTINGS_FILE.parent),  # copied into the installed system
                  **({"PURPLE_KEEP_DIR": _KEEP_DIR} if self._keep else {})})
         buf = b""
 
@@ -1128,6 +1142,7 @@ def _get_menu_items(app) -> list:
         items.append(("menu-music-looping", "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"))
         items.append(("menu-music-key-switching", "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
+    items.append(("menu-export", "Copy Saved Work to USB"))
     items.append(("sec-av", "Sound & Display"))
     items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
     items.append(("menu-voice", _voice_menu_label(get_voice())))
@@ -1242,6 +1257,7 @@ class ParentMenu(Overlay):
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),
             "menu-volume": self._open_volume, "menu-voice": self._open_voice,
             "menu-install": self._install_to_disk, "menu-rename": self._rename_computer,
+            "menu-export": lambda: self.app.push(__import__("purple_tui.canvas.rooms.save_export", fromlist=["SaveExportScreen"]).SaveExportScreen(self.app)),
             "menu-shell": lambda: (self.close(), self.app.push(TerminalScreen(self.app))),
             "menu-demo": lambda: (self.close(), self.app.start_demo()),
             "menu-bash": lambda: (self.close(), self.app.exit()), "menu-system": lambda: (self.close(), self.app.exit()),
@@ -1367,6 +1383,7 @@ class ParentMenu(Overlay):
             def on_confirm(choice):
                 if choice:
                     self.close()
+                    self.app._timeline_flush()  # the installer copies the live history
                     self.app.push(InstallProgressScreen(self.app, computer_name=name or "", keep=choice == "keep"))
             self.app.push(_CONFIRM_SCREENS[old](self.app), on_close=on_confirm)
         self.app.push(ComputerNameScreen(self.app, initial=old_name), on_close=on_name)

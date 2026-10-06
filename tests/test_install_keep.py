@@ -41,3 +41,40 @@ def test_other_os_is_not_purple(tmp_path):
 def test_unreadable_purple_keeps_nothing(tmp_path):
     rc, keep = _save(tmp_path, mount_ok=False)
     assert rc == 2 and not any(keep.glob("**/*"))
+
+
+def _carry(tmp_path, keep: bool):
+    live = tmp_path / "live"
+    (live / "saves/art").mkdir(parents=True)
+    (live / "saves/art/1-a.json").write_text("{}")
+    (live / "timeline").mkdir()
+    (live / "timeline/art.jsonl").write_text("live\n")
+    old = tmp_path / "keep/config"
+    (old / "saves/art").mkdir(parents=True)
+    (old / "saves/art/0-b.json").write_text("{}")
+    (old / "timeline").mkdir()
+    (old / "timeline/art.jsonl").write_text("old\n")
+    root = tmp_path / "root"
+    body = INSTALL_SH.read_text().split("if [ -n \"$PURPLE_KEEP_DIR\" ] && [ -d \"$PURPLE_KEEP_DIR/config\" ]; then", 1)[1]
+    body = "if [ -n \"$PURPLE_KEEP_DIR\" ] && [ -d \"$PURPLE_KEEP_DIR/config\" ]; then" + body.split("\n            fi\n", 1)[0] + "\nfi\n"
+    script = f"""
+{_extract_function(INSTALL_SH, 'carry_over').replace('/mnt/root', str(root))}
+log() {{ :; }}; warn() {{ echo "$@" >&2; }}; chown() {{ :; }}
+PURPLE_LIVE_CONFIG="{live}"
+PURPLE_KEEP_DIR="{tmp_path / 'keep' if keep else ''}"
+{body}
+"""
+    subprocess.run(["bash", "-c", script], check=True)
+    return root / "home/purple/.config/purple"
+
+
+def test_keep_merges_saves_from_the_stick_but_keeps_the_laptops_history(tmp_path):
+    cfg = _carry(tmp_path, keep=True)
+    assert sorted(p.name for p in (cfg / "saves/art").iterdir()) == ["0-b.json", "1-a.json"]
+    assert (cfg / "timeline/art.jsonl").read_text() == "old\n"
+
+
+def test_fresh_install_brings_the_whole_live_session(tmp_path):
+    cfg = _carry(tmp_path, keep=False)
+    assert [p.name for p in (cfg / "saves/art").iterdir()] == ["1-a.json"]
+    assert (cfg / "timeline/art.jsonl").read_text() == "live\n"

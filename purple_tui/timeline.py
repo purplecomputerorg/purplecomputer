@@ -20,14 +20,18 @@ MAX_FILE_BYTES = 2_000_000
 SNAPSHOT_EVERY = 20  # full snapshot line every N steps, bounding replay cost
 
 
-def timeline_dir() -> Path | None:
-    """Where logs live, or None for RAM-only (dev mode without an override)."""
-    override = os.environ.get("PURPLE_TIMELINE_DIR")
+def state_dir(name: str, env: str) -> Path | None:
+    """~/.config/purple/<name>, the `env` override, or None for RAM-only (dev mode without an override)."""
+    override = os.environ.get(env)
     if override:
         return Path(override)
     if os.environ.get("PURPLE_DEV_MODE") == "1":
         return None
-    return Path.home() / ".config" / "purple" / "timeline"
+    return Path.home() / ".config" / "purple" / name
+
+
+def timeline_dir() -> Path | None:
+    return state_dir("timeline", "PURPLE_TIMELINE_DIR")
 
 
 class RoomTimeline:

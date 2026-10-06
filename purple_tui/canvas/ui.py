@@ -359,6 +359,7 @@ class Picker(Dialog):
     DESCRIPTION = ""
     default_selected = 0
     escape_value = None
+    dim_values: set = set()  # options drawn quietly until selected (a destructive alternative)
 
     def __init__(self, app, options=None):
         super().__init__(app)
@@ -385,7 +386,7 @@ class Picker(Dialog):
             on = i == self.selected
             if on:
                 g.rect(P.PRIMARY, box, radius=g.em(0.35))
-            color = P.ON_PRIMARY if on else P.TEXT
+            color = P.ON_PRIMARY if on else (P.DIM if opt[0] in self.dim_values else P.TEXT)
             if len(opt) == 3:
                 g.draw_text(opt[1], px, box.centerx, box.centery - g.em(0.6), "mono-bold" if on else "mono", color, anchor="center")
                 g.draw_text(opt[2], g.em(0.85), box.centerx, box.centery + g.em(0.65), "mono", color if on else P.MUTED, anchor="center")

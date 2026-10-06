@@ -29,19 +29,35 @@ def maker_mark(computer_name: str) -> str:
     return f"Made on {computer_name} with Purple Computer"
 
 
-def page(room, g, computer_name: str = ""):
-    """(surface, landscape) for the room's work, or None when there is nothing to print."""
+def page_size(landscape: bool) -> tuple:
+    return PAGE if landscape else PAGE[::-1]
+
+
+def artwork(room, g):
+    """The room's work drawn to fill a page inside its margins, or None when there is nothing yet."""
     if not can_print(room):
         return None
-    landscape = room.LANDSCAPE
-    size = PAGE if landscape else PAGE[::-1]
-    work = room.paper(g, (size[0] - 2 * MARGIN, size[1] - 2 * MARGIN))
-    if work is None:
-        return None
+    w, h = page_size(room.LANDSCAPE)
+    return room.paper(g, (w - 2 * MARGIN, h - 2 * MARGIN))
+
+
+def page(room, g, computer_name: str = ""):
+    """(surface, landscape) for the room's work, or None when there is nothing to print."""
+    work = artwork(room, g)
+    return None if work is None else compose(work, room.LANDSCAPE, g, computer_name)
+
+
+def mark_surface(g, computer_name: str):
+    return g.text(maker_mark(computer_name), MARK_PX, "mono", INK_MUTED)
+
+
+def compose(work, landscape: bool, g, computer_name: str = ""):
+    """(page surface, landscape): the work centered on white with the maker's mark."""
+    size = page_size(landscape)
     out = pygame.Surface(size)
     out.fill(WHITE)
     out.blit(work, work.get_rect(center=out.get_rect().center))
-    mark = g.text(maker_mark(computer_name), MARK_PX, "mono", INK_MUTED)
+    mark = mark_surface(g, computer_name)
     out.blit(mark, mark.get_rect(bottomright=(size[0] - MARGIN, size[1] - MARGIN // 3)))
     return out, landscape
 

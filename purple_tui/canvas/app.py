@@ -56,6 +56,7 @@ STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, a
 STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the TUI's room bar
 TIMELINE_DEBOUNCE_S = 3.0
 TIMELINE_MAX_WAIT_S = 15.0
+MAX_CODE_LINES = 200          # code lines kept with a room's state (Time Travel, saves)
 
 
 def _battery_icon(pct: int, charging: bool) -> str:
@@ -106,6 +107,7 @@ class PurpleApp:
         self._demo_player = self._demo_task = None
         self._code_task = None
         self._timelines = {r: RoomTimeline(r) for r, _ in ROOMS}
+        self._code_lines = {r: [] for r, _ in ROOMS}
         self._timeline_pending: dict = {}
         self._timeline_timer = None
         self._timeline_restored: set = set()
@@ -388,12 +390,28 @@ class PurpleApp:
     def run_code(self, room: str, lines: list):
         """Run code-panel lines against a room; the last correction lands in the panel's recall hint."""
         self._stop_code_execution()
+        self._code_lines[room] = (self._code_lines[room] + lines)[-MAX_CODE_LINES:]
         self._code_task = asyncio.create_task(self.rooms[room].run_code(lines))
+
+    def code_lines(self, room: str) -> list:
+        return self._code_lines[room]
+
+    def room_state(self, room: str) -> dict:
+        """The room's own state plus the code typed in it, as Time Travel and saves keep it."""
+        state = self.rooms[room].timeline_state()
+        state.update({f"code:{i}": line for i, line in enumerate(self._code_lines[room])})
+        return state
+
+    def apply_room_state(self, room: str, state: dict):
+        self.rooms[room].restore_timeline_state(state)
+        code = sorted((int(k[5:]), v) for k, v in state.items() if k.startswith("code:"))
+        self._code_lines[room] = [line for _, line in code]
 
     def _start_fresh(self, room: str | None = None):
         for r in ([room] if room else list(self.rooms)):
             self.timeline_capture_now(r)
             self.rooms[r].clear()
+            self._code_lines[r] = []
             self.timeline_capture_now(r)
         self.invalidate()
 
@@ -526,6 +544,9 @@ class PurpleApp:
             self._start_fresh(result["clear_room"])
         elif result.get("time_travel"):
             self._start_time_travel()
+        elif result.get("save"):
+            from .save_wall import SaveWall
+            self.push(SaveWall(self))
         elif result.get("print"):
             self.action_print()
 
@@ -542,7 +563,14 @@ class PurpleApp:
 
     def action_print(self):
         from .paper import page
-        made = page(self.room, self.g, self.computer_name())
+        self._print_page(page(self.room, self.g, self.computer_name()))
+
+    def print_save(self, save):
+        from .paper import compose
+        work = save.image()
+        self._print_page(None if work is None else compose(work, save.landscape, self.g, self.computer_name()))
+
+    def _print_page(self, made):
         if made is None:
             return
         wait = printing.ready_in()
@@ -617,9 +645,9 @@ class PurpleApp:
         try:
             tip = self._timelines[room].tip()
             if tip:
-                self.rooms[room].restore_timeline_state(tip)
+                self.apply_room_state(room, tip)
             else:
-                self._timelines[room].record(self.rooms[room].timeline_state())
+                self._timelines[room].record(self.room_state(room))
         except Exception:
             pass
 
@@ -628,7 +656,7 @@ class PurpleApp:
         if self._time_travel is not None:
             return
         try:
-            self._timelines[room].record(self.rooms[room].timeline_state())
+            self._timelines[room].record(self.room_state(room))
         except Exception:
             pass
 
@@ -654,6 +682,28 @@ class PurpleApp:
         for room in list(self._timeline_pending):
             self.timeline_capture_now(room)
 
+    def save_room(self):
+        """Save what's on screen: the new Save, None when it was already saved, False when there is nothing yet."""
+        from . import saves
+        from .paper import artwork
+        work = artwork(self.room, self.g)
+        if work is None:
+            return False
+        return saves.add(self.active_room, self.room_state(self.active_room), work, self.room.LANDSCAPE)
+
+    def open_save(self, save):
+        """Load a save into its room as a new Time Travel step, so what was there stays one step back."""
+        room = self.active_room
+        self.room.close_code_panel()
+        self._silence_music()
+        self._timeline_flush()
+        try:
+            self.apply_room_state(room, save.state)
+        except Exception:
+            return
+        self.timeline_capture_now(room)
+        self.invalidate()
+
     def _start_time_travel(self):
         room = self.active_room
         self.room.close_code_panel()
@@ -677,7 +727,7 @@ class PurpleApp:
         tl = self._timelines[tt["room"]]
         if tt["index"] != len(tl) - 1:
             try:
-                self.rooms[tt["room"]].restore_timeline_state(tl.tip())
+                self.apply_room_state(tt["room"], tl.tip())
             except Exception:
                 pass
         self._end_time_travel()
@@ -695,7 +745,7 @@ class PurpleApp:
             return
         tt["index"] = index
         try:
-            self.rooms[tt["room"]].restore_timeline_state(tl.state_at(index))
+            self.apply_room_state(tt["room"], tl.state_at(index))
         except Exception:
             pass
         self.invalidate()

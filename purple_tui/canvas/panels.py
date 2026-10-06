@@ -130,6 +130,7 @@ class CodePanel:
         keywords = set(ROOM_KEYWORDS[room])
         self.field = TextField(keyword_autocomplete(room), validator=lambda w: w.lower() in keywords, context_autocomplete=True)
         self.hints = HintRotator(ROOM_HINTS[room])
+        self._back = 0  # how far up the room's code lines ↑ has stepped
 
     def height(self, g) -> int:
         return 3 * self.app.unit    # the Art header and hint rows it replaces, so the grid keeps its size
@@ -145,6 +146,8 @@ class CodePanel:
                 f.move(-1)
             elif action.direction == "right":
                 f.move(1)
+            else:
+                self._recall(1 if action.direction == "up" else -1)
             return None
         if isinstance(action, ControlAction):
             if not action.is_down:
@@ -161,6 +164,7 @@ class CodePanel:
                     return None
                 f.clear()
                 f.remember(text)
+                self._back = 0
                 if text.lower() == "exit":
                     return "close"
                 self.app.run_code(self.room, [text])
@@ -174,6 +178,12 @@ class CodePanel:
         if isinstance(action, CharacterAction) and not action.is_repeat:
             f.insert(action.char)
         return None
+
+    def _recall(self, step: int):
+        """↑/↓ through the code typed in this room, which a save or Time Travel brings back with it."""
+        lines = self.app.code_lines(self.room)
+        self._back = max(0, min(len(lines), self._back + step))
+        self.field.set(lines[-self._back] if self._back else "")
 
     def draw(self, g, rect):
         """Two lines: the code line, then autocomplete, the recall hint, or a

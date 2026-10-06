@@ -752,7 +752,7 @@ class PlayMode(Vertical):
                         play_input.cursor_position = pos + 1
                     return
 
-            if action.action == 'enter' and action.is_down:
+            if action.action == 'enter' and action.is_down and not action.is_repeat:
                 if play_input.value.strip():
                     line = play_input.value.strip()
                     play_input.value = ""

@@ -1,38 +1,38 @@
 # Commits on main decided to stay off release/1.x: <sha> <why>. release-status hides them.
-6d451de canvas UI, ships with the next major release
-9e542b6 canvas UI, ships with the next major release
-84f0bbf canvas UI, ships with the next major release
-56335b1 canvas UI, ships with the next major release
-eca05fe canvas UI, ships with the next major release
-2905ac7 canvas UI, ships with the next major release
-3b60b13 canvas UI, ships with the next major release
-0670643 canvas UI, ships with the next major release
-0c8c8e3 canvas UI, ships with the next major release
-b414d88 canvas UI, ships with the next major release
-de80475 canvas UI, ships with the next major release
-5ec5f31 canvas UI, ships with the next major release
-ee66c43 canvas UI, ships with the next major release
-71a7975 canvas UI, ships with the next major release
-985b271 canvas UI, ships with the next major release
-6f5b56e canvas UI, ships with the next major release
-a14d1e6 Time Travel and room persistence, ships with the next major release
-52457bd Time Travel and room persistence, ships with the next major release
-a1396d2 Time Travel and room persistence, ships with the next major release
-14dec55 Art pen toggle, ships with the next major release
-aacd9fd Music demo rebuild, ships with the next major release
-fa4e203 Music demo sounds, ships with the next major release
-4674745 Photo-to-art tool and Family Photo item, ships with the next major release
-e4b46f9 canvas UI, ships with the next major release
-75d7596 canvas UI, ships with the next major release
-a0f5247 canvas UI, ships with the next major release
-b43d72c Raspberry Pi card image, stays on main
-b17c1da Raspberry Pi card image, stays on main
-fa648f5 Raspberry Pi card image, stays on main
-d49f45f printing, ships with the next major release
-a6ee711 printing, ships with the next major release
-ee4404d printing, ships with the next major release
-32f9588 Blocks room, ships with the next major release
-7ddc33b Chromebook research, stays on main
+6d451de canvas UI, main only
+9e542b6 canvas UI, main only
+84f0bbf canvas UI, main only
+56335b1 canvas UI, main only
+eca05fe canvas UI, main only
+2905ac7 canvas UI, main only
+3b60b13 canvas UI, main only
+0670643 canvas UI, main only
+0c8c8e3 canvas UI, main only
+b414d88 canvas UI, main only
+de80475 canvas UI, main only
+5ec5f31 canvas UI, main only
+ee66c43 canvas UI, main only
+71a7975 canvas UI, main only
+985b271 canvas UI, main only
+6f5b56e canvas UI, main only
+a14d1e6 Time Travel and room persistence, main only
+52457bd Time Travel and room persistence, main only
+a1396d2 Time Travel and room persistence, main only
+14dec55 Art pen toggle, main only
+aacd9fd Music demo rebuild, main only
+fa4e203 Music demo sounds, main only
+4674745 Photo-to-art tool and Family Photo item, main only
+e4b46f9 canvas UI, main only
+75d7596 canvas UI, main only
+a0f5247 canvas UI, main only
+b43d72c Raspberry Pi card image, main only
+b17c1da Raspberry Pi card image, main only
+fa648f5 Raspberry Pi card image, main only
+d49f45f printing, main only
+a6ee711 printing, main only
+ee4404d printing, main only
+32f9588 Blocks room, main only
+7ddc33b Chromebook research, main only
 105415b flash tooling on the build machine, never in an ISO
-6b5f78f canvas Play layout, ships with the next major release
-899d97f canvas layout, ships with the next major release
+6b5f78f canvas Play layout, main only
+899d97f canvas layout, main only

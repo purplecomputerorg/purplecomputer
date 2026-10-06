@@ -1012,6 +1012,10 @@ class TerminalScreen(FullScreen):
             self.close()
             self.app.invalidate()
 
+    def close_terminal(self):
+        if self._running and self._proc:
+            self._proc.terminate()
+
     async def handle(self, action):
         if self._running:
             return

@@ -945,6 +945,11 @@ class PurpleApp:
         _power_log(f"POWER BUTTON: action={event.action}, suspended={self._app_suspended}, bye_active={self._bye_screen_active}")
         if self._app_suspended or self._bye_screen_active:
             return
+        # The fullscreen xterm would hide the confirm screen
+        from .rooms.parent_menu import TerminalScreen
+        for o in self._overlays:
+            if isinstance(o, TerminalScreen):
+                o.close_terminal()
         if event.action == "tap":
             from .rooms.sleep_screen import ShutdownConfirmScreen
             if self.has_overlay(ShutdownConfirmScreen):

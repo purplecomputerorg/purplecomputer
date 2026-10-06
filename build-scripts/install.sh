@@ -57,6 +57,8 @@ BACKUP_IMAGE="${GOLDEN_IMAGE%/*}/purple-os-backup.img.zst"
 # Range size in bytes, then one sha256 per range of the compressed image.
 MANIFEST="${GOLDEN_IMAGE}.manifest"
 INSTALL_LOG=/tmp/purple-install.log
+# An earlier install's saved work, copied here by --probe before the parent confirms.
+KEEP_DIR=/run/purple-keep
 
 # The compressed image is read into this tmpfs before the disk is touched.
 # The "try everything" boot (purple.toram) may have made it already, with a
@@ -131,7 +133,7 @@ image_ranges() {
 }
 
 # Spawn emergency shell on tty2 (user can access with Alt+F2)
-if [ -c /dev/tty2 ]; then
+if [ "$1" != --probe ] && [ -c /dev/tty2 ]; then
     log "Emergency shell available on tty2 (Alt+F2)"
     setsid bash </dev/tty2 >/dev/tty2 2>&1 &
 fi
@@ -227,6 +229,57 @@ get_disk_size() {
     local size_bytes=$(cat /sys/block/$disk/size 2>/dev/null || echo 0)
     local size_gb=$((size_bytes * 512 / 1024 / 1024 / 1024))
     echo "${size_gb}GB"
+}
+
+part_prefix() {
+    case "$1" in
+        nvme*|mmcblk*) echo "/dev/${1}p" ;;
+        *)             echo "/dev/${1}" ;;
+    esac
+}
+
+# Copies an earlier Purple install's settings, Time Travel history and name into
+# $2 without writing to it. 0 = saved, 1 = no Purple there, 2 = Purple but unreadable.
+save_old_purple() {
+    local part="$1" keep="$2" mnt="${3:-/run/purple-old-root}" rc=0
+    [ "$(blkid -o value -s LABEL "$part" 2>/dev/null)" = PURPLE_ROOT ] || return 1
+    rm -rf "$keep"
+    mkdir -p "$mnt" "$keep"
+    mount -o ro "$part" "$mnt" 2>/dev/null || return 2
+    if [ -d "$mnt/home/purple/.config/purple" ]; then
+        cp -a "$mnt/home/purple/.config/purple" "$keep/config" 2>/dev/null || rc=2
+    fi
+    if [ -f "$mnt/opt/purple/computer_name.txt" ]; then
+        cp "$mnt/opt/purple/computer_name.txt" "$keep/" 2>/dev/null || rc=2
+    fi
+    umount "$mnt" 2>/dev/null || true
+    [ "$rc" -eq 0 ] || rm -rf "$keep"
+    return $rc
+}
+
+# Run by the parent menu before its confirm screen; prints what it found on stdout.
+probe() {
+    local target rc=0
+    rm -rf "$KEEP_DIR"
+    target=$(find_target) || exit 0
+    save_old_purple "$(part_prefix "$target")2" "$KEEP_DIR" || rc=$?
+    case $rc in
+        0) echo "[PURPLE-FOUND] $(cat "$KEEP_DIR/computer_name.txt" 2>/dev/null)" ;;
+        2) echo "[PURPLE-FOUND-UNREADABLE]" ;;
+    esac
+    exit 0
+}
+
+# Copies $1 into the installed purple user's ~/.config/purple. Only warns on
+# failure: under set -e nothing here may stop the install.
+carry_over() {
+    if mkdir -p /mnt/root/home/purple/.config/purple 2>/dev/null \
+        && cp -a "$1" /mnt/root/home/purple/.config/purple/ 2>/dev/null \
+        && chown -R 1000:1000 /mnt/root/home/purple/.config 2>/dev/null; then
+        log "  $2 carried over"
+    else
+        warn "Could not copy $2"
+    fi
 }
 
 # root= for the installed kernel command line, shared by GRUB and the UKI.
@@ -348,11 +401,7 @@ main() {
         error "Golden image not found: $GOLDEN_IMAGE"
     fi
 
-    # Determine partition device naming convention
-    case "$TARGET" in
-        nvme*|mmcblk*) PART_PREFIX="/dev/${TARGET}p" ;;
-        *)             PART_PREFIX="/dev/${TARGET}" ;;
-    esac
+    PART_PREFIX=$(part_prefix "$TARGET")
 
     log "Writing Purple Computer to disk..."
     log "  Source: $GOLDEN_IMAGE"
@@ -764,19 +813,14 @@ main() {
                 fi
             fi
 
-            # Carry the live session's settings over (the volume the sound
-            # check picked, anything the parent changed) so the installed
-            # first boot doesn't start from scratch or chime again.
-            # Every command sits inside the if condition: under set -e a
-            # failure here must only warn, never stop the install.
-            if [ -n "$PURPLE_LIVE_SETTINGS" ] && [ -f "$PURPLE_LIVE_SETTINGS" ]; then
-                if mkdir -p /mnt/root/home/purple/.config/purple 2>/dev/null \
-                    && cp "$PURPLE_LIVE_SETTINGS" /mnt/root/home/purple/.config/purple/settings.json 2>/dev/null \
-                    && chown -R 1000:1000 /mnt/root/home/purple/.config 2>/dev/null; then
-                    log "  Live settings carried over"
-                else
-                    warn "Could not copy live settings"
-                fi
+            # A reinstall the parent chose to keep brings back the earlier
+            # install's settings and Time Travel history. Otherwise the live
+            # session's settings come over (the volume the sound check picked,
+            # anything the parent changed) so first boot doesn't chime again.
+            if [ -n "$PURPLE_KEEP_DIR" ] && [ -d "$PURPLE_KEEP_DIR/config" ]; then
+                carry_over "$PURPLE_KEEP_DIR/config/." "Earlier install's settings and history"
+            elif [ -n "$PURPLE_LIVE_SETTINGS" ] && [ -f "$PURPLE_LIVE_SETTINGS" ]; then
+                carry_over "$PURPLE_LIVE_SETTINGS" "Live settings"
             fi
 
             # Layer 5: pin the kernel command line to this partition's UUID
@@ -864,4 +908,4 @@ main() {
     exit 0
 }
 
-main "$@"
+if [ "$1" = --probe ]; then probe; else main "$@"; fi

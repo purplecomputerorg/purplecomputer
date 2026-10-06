@@ -51,11 +51,13 @@ def test_overlays_and_panels_draw():
         app.action_parent_menu()
         app._draw()
         from purple_tui.canvas.rooms.parent_menu import (ComputerNameScreen, DisplaySettingsScreen, InstallConfirmScreen,
-                                                   LittlesModeScreen, ParentVolumeModal, PinEntry, TerminalScreen)
+                                                   LittlesModeScreen, ParentVolumeModal, PinEntry, ReinstallConfirmScreen,
+                                                   TerminalScreen, UnreadableReinstallScreen)
         from purple_tui.canvas.rooms.help_videos import HelpVideosScreen
         from purple_tui.canvas.rooms.sleep_screen import FirstBootPowerCycleScreen, LiveBootSplash, ShutdownConfirmScreen, SleepScreen
         from purple_tui.canvas.rooms.support_info import SupportInfoScreen
         for overlay in (LittlesModeScreen(app), ComputerNameScreen(app), InstallConfirmScreen(app), PinEntry(app),
+                        ReinstallConfirmScreen(app), UnreadableReinstallScreen(app),
                         ParentVolumeModal(app), DisplaySettingsScreen(app), HelpVideosScreen(app),
                         SupportInfoScreen(app), FirstBootPowerCycleScreen(app), LiveBootSplash(app),
                         ShutdownConfirmScreen(app), SleepScreen(app), TerminalScreen(app)):

@@ -330,6 +330,20 @@ class InstallConfirmScreen(Picker):
         await super().handle(action)
 
 
+class ReinstallConfirmScreen(InstallConfirmScreen):
+    DESCRIPTION = ("Purple is already set up on this laptop.\n"
+                   "You can keep its settings and everything\nyour kid made, or start fresh.")
+    OPTIONS = [("keep", "Install and keep it all"), (True, "Install and start fresh"), (False, "No, go back")]
+    default_selected = 2
+
+
+class UnreadableReinstallScreen(InstallConfirmScreen):
+    DESCRIPTION = ("Purple is already set up on this laptop,\nbut what it saved could not be read.\n\n"
+                   f"[bold {P.DANGER}]Installing will erase it.[/]\n\n"
+                   "(Technical: the old Purple partition\ncould not be mounted or copied.)")
+    OPTIONS = [(True, "Install anyway"), (False, "No, go back")]
+
+
 # ---------------------------------------------------------------------------
 # Sound: volume + lock + test tone
 # ---------------------------------------------------------------------------
@@ -615,8 +629,9 @@ class InstallProgressScreen(FullScreen):
     _SCROLL_DELAY = 0.25
     _SCROLL_VISIBLE = 25
 
-    def __init__(self, app, computer_name: str = ""):
+    def __init__(self, app, computer_name: str = "", keep: bool = False):
         super().__init__(app)
+        self._keep = keep
         self._progress = 0
         self._status = "Starting..."
         self._phase = "installing"
@@ -708,7 +723,8 @@ class InstallProgressScreen(FullScreen):
             ["sudo", "-E", "bash", "/cdrom/purple/install.sh"], stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
             env={**os.environ, "PURPLE_PAYLOAD_DIR": PAYLOAD_DIR, "PURPLE_COMPUTER_NAME": self._computer_name,
                  "PURPLE_LIVE_AUDIO_OK": "1" if self.app.audio_ok is True else "0",
-                 "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE)})  # copied into the installed system
+                 "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE),  # copied into the installed system
+                 **({"PURPLE_KEEP_DIR": _KEEP_DIR} if self._keep else {})})
         buf = b""
 
         def emit(line: bytes):
@@ -1028,6 +1044,25 @@ class TerminalScreen(FullScreen):
 # ---------------------------------------------------------------------------
 _USB_LABELS = ("PURPLE_INSTALLER", "PURPLE_DEBUG")
 _PAYLOAD_PATH = Path("/cdrom/purple/install.sh")
+_KEEP_DIR = "/run/purple-keep"
+_CONFIRM_SCREENS = {None: InstallConfirmScreen, "found": ReinstallConfirmScreen, "unreadable": UnreadableReinstallScreen}
+
+
+def _find_old_install() -> tuple:
+    """("found", old name), ("unreadable", ""), or (None, "") when the disk holds no Purple."""
+    if not _PAYLOAD_PATH.exists():
+        return None, ""
+    try:
+        out = subprocess.run(["sudo", "bash", str(_PAYLOAD_PATH), "--probe"],
+                             capture_output=True, text=True, timeout=60).stdout
+    except Exception:
+        return None, ""
+    for line in out.splitlines():
+        if line.startswith("[PURPLE-FOUND-UNREADABLE]"):
+            return "unreadable", ""
+        if line.startswith("[PURPLE-FOUND]"):
+            return "found", line[len("[PURPLE-FOUND]"):].strip()
+    return None, ""
 
 
 def _boot_mode_hint() -> str:
@@ -1121,6 +1156,7 @@ class ParentMenu(Overlay):
         self.selected = self._next_selectable(-1, 1)
         self._ignore_until_released = {"escape"}
         self._usb_remount_attempted = False
+        self._probing = False
         self._timer = None
 
     def on_open(self):
@@ -1315,16 +1351,25 @@ class ParentMenu(Overlay):
 
 
     def _install_to_disk(self):
+        if self._probing:
+            return
+        self._probing = True
+        threading.Thread(target=lambda: self.app.call_from_thread(self._ask_install, *_find_old_install()),
+                         daemon=True).start()
+
+    def _ask_install(self, old, old_name):
+        self._probing = False
+
         def on_name(name):
             if name is CANCELLED:
                 return
 
-            def on_confirm(ok):
-                if ok:
+            def on_confirm(choice):
+                if choice:
                     self.close()
-                    self.app.push(InstallProgressScreen(self.app, computer_name=name or ""))
-            self.app.push(InstallConfirmScreen(self.app), on_close=on_confirm)
-        self.app.push(ComputerNameScreen(self.app), on_close=on_name)
+                    self.app.push(InstallProgressScreen(self.app, computer_name=name or "", keep=choice == "keep"))
+            self.app.push(_CONFIRM_SCREENS[old](self.app), on_close=on_confirm)
+        self.app.push(ComputerNameScreen(self.app, initial=old_name), on_close=on_name)
 
     def _rename_computer(self):
         current = self.app.computer_name()

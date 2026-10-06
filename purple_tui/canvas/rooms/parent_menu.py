@@ -1080,8 +1080,13 @@ def _find_old_install() -> tuple:
 
 
 def _boot_mode_hint() -> str:
+    from .. import key_save
     if not is_live_boot():
         return "Installed on this computer."
+    if key_save.active() and is_usb_cached():
+        if not is_usb_present():
+            return "Running from USB. Not yet installed.\nUSB removed: new work won't be kept.\nInstall to keep it without the USB."
+        return "Running from USB. Not yet installed.\nKeep the USB in to save your kid's work.\nInstall to keep it without the USB."
     if is_usb_cached() and not is_usb_present():
         return "Running from USB. Not yet installed.\nReinsert after restart.\nInstall to keep it without the USB."
     if is_usb_cached():

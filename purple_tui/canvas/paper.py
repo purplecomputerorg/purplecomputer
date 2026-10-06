@@ -47,17 +47,13 @@ def page(room, g, computer_name: str = ""):
     return None if work is None else compose(work, room.LANDSCAPE, g, computer_name)
 
 
-def mark_surface(g, computer_name: str):
-    return g.text(maker_mark(computer_name), MARK_PX, "mono", INK_MUTED)
-
-
 def compose(work, landscape: bool, g, computer_name: str = ""):
     """(page surface, landscape): the work centered on white with the maker's mark."""
     size = page_size(landscape)
     out = pygame.Surface(size)
     out.fill(WHITE)
     out.blit(work, work.get_rect(center=out.get_rect().center))
-    mark = mark_surface(g, computer_name)
+    mark = g.text(maker_mark(computer_name), MARK_PX, "mono", INK_MUTED)
     out.blit(mark, mark.get_rect(bottomright=(size[0] - MARGIN, size[1] - MARGIN // 3)))
     return out, landscape
 

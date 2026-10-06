@@ -108,7 +108,7 @@ class SleepScreen(FullScreen):
         if self._shutdown_initiated:
             return
         self._shutdown_initiated = True
-        if not get_power_manager().shutdown():
+        if not power_off(self.app):
             self.hint = manual_off_hint()
 
     async def handle(self, action):
@@ -117,6 +117,12 @@ class SleepScreen(FullScreen):
         get_power_manager().record_activity()
         self.app._lid_was_closed_for = 0
         self.close()
+
+
+def power_off(app) -> bool:
+    """Every way the canvas UI turns the computer off: the Key gets the latest work first."""
+    app.flush_for_power_off()
+    return get_power_manager().shutdown()
 
 
 class ShutdownConfirmScreen(FullScreen):
@@ -154,7 +160,7 @@ class ByeScreen(FullScreen):
     hint = "Turning off..."
 
     def on_open(self):
-        if not get_power_manager().shutdown():
+        if not power_off(self.app):
             self.hint = manual_off_hint()
 
     async def handle(self, action):

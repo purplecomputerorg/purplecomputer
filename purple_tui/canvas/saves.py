@@ -1,9 +1,10 @@
 """Saved work: what a kid chose to keep, one folder per room, newest first.
 
 A save is <ms>-<digest>.json (the room's state, code lines included) beside
-<ms>-<digest>.png (its printed-page artwork) and a small .thumb.png, so the
-wall, printing and copying to a USB stick never replay a room. The digest
-makes saving the same work twice a no-op.
+<ms>-<digest>.thumb.png, a small picture of it for the wall. Opening a save
+loads the state; printing and copying to a USB stick redraw it at full size
+(PurpleApp.save_artwork), which keeps a save small enough for the Key's
+PURPLE-SAVE. The digest makes saving the same work twice a no-op.
 """
 
 import hashlib
@@ -17,7 +18,7 @@ import pygame
 
 from ..timeline import state_dir
 
-THUMB_WIDTH = 360
+THUMB_PX = 320  # longest side; wall tiles are about this wide on a 1920px screen
 _ram_dir = None
 
 
@@ -72,15 +73,11 @@ class Save:
         return any(k.startswith("code:") for k in self.state)
 
     @property
-    def image_path(self) -> Path:
-        return self.path.with_suffix(".png")
-
-    def image(self):
-        return _load(self.image_path)
+    def room(self) -> str:
+        return self.path.parent.name
 
     def thumbnail(self):
-        thumb = _load(_thumb_path(self.path))
-        return self.image() if thumb is None else thumb
+        return _load(_thumb_path(self.path))
 
     @property
     def made(self) -> datetime:
@@ -113,7 +110,7 @@ def list_saves(room: str) -> list[Save]:
 
 
 def add(room: str, state: dict, image: pygame.Surface, landscape: bool) -> Save | None:
-    """Write a new save, or None when this exact work is already saved (or the disk refused)."""
+    """Write a new save with a thumbnail of image, or None when this exact work is already saved (or the disk refused)."""
     digest = _digest(state)
     folder = saves_dir() / room
     if any(folder.glob(f"*-{digest}.json")):
@@ -121,8 +118,7 @@ def add(room: str, state: dict, image: pygame.Surface, landscape: bool) -> Save 
     path = folder / f"{int(time.time() * 1000)}-{digest}.json"
     try:
         folder.mkdir(parents=True, exist_ok=True)
-        pygame.image.save(image, str(path.with_suffix(".png")))
-        pygame.image.save(fit(image, THUMB_WIDTH, THUMB_WIDTH), str(_thumb_path(path)))
+        pygame.image.save(fit(image, THUMB_PX, THUMB_PX), str(_thumb_path(path)))
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"state": state, "landscape": landscape}, separators=(",", ":")))
         tmp.replace(path)  # the .json landing is what makes the save exist
@@ -132,7 +128,7 @@ def add(room: str, state: dict, image: pygame.Surface, landscape: bool) -> Save 
 
 
 def delete(save: Save):
-    for p in (save.path, save.image_path, _thumb_path(save.path)):
+    for p in (save.path, _thumb_path(save.path)):
         try:
             p.unlink()
         except OSError:

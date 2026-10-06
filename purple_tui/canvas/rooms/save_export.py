@@ -13,7 +13,7 @@ from pathlib import Path
 import pygame
 
 from .. import saves
-from ..paper import compose, mark_surface
+from ..paper import compose
 from ..ui import Dialog
 
 MOUNT = "/run/purple-export"
@@ -67,7 +67,6 @@ class SaveExportScreen(Dialog):
         self.done = False
 
     def on_open(self):
-        mark_surface(self.app.g, self.app.computer_name())  # rendered here so the worker only reads the text cache
         threading.Thread(target=self._work, daemon=True, name="save-export").start()
 
     def _say(self, *lines, done=False):
@@ -77,8 +76,19 @@ class SaveExportScreen(Dialog):
         self.app.call_from_thread(apply)
 
     def _page(self, save):
-        work = save.image()
-        return None if work is None else compose(work, save.landscape, self.app.g, self.app.computer_name())[0]
+        """The save's printed page, drawn on the UI thread (pygame text and rooms are not thread-safe)."""
+        done, out = threading.Event(), []
+
+        def draw():
+            try:
+                work = self.app.save_artwork(save)
+                if work is not None:
+                    out.append(compose(work, save.landscape, self.app.g, self.app.computer_name())[0])
+            finally:
+                done.set()
+        self.app.call_from_thread(draw)
+        done.wait(30)
+        return out[0] if out else None
 
     def _work(self):
         dev, mounted = find_stick()

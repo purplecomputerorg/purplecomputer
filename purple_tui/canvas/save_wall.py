@@ -72,6 +72,8 @@ class SaveWall(Overlay):
         self.app.open_save(self.tiles[self.selected])
 
     def _save(self):
+        if self.app.key_save.full:
+            return self.app.notify("The USB is full. Hold Backspace on old saves to make room", timeout=4)
         result = self.app.save_room()
         if result is False:
             return self.app.notify("Make something first, then save it", timeout=3)
@@ -101,7 +103,7 @@ class SaveWall(Overlay):
     def _finish_delete(self):
         save = self._deleting[0]
         self._stop_delete()
-        saves.delete(save)
+        self.app.delete_save(save)
         self.saves.remove(save)
         self._select(self.selected)
 
@@ -152,7 +154,7 @@ class SaveWall(Overlay):
         else:
             g.draw_text("Nothing yet", em(0.9), r.centerx, r.centery, "mono", P.DIM, anchor="center")
         if tile is NOW:
-            label = f"{ICON_SAVE} Save this"
+            label = "USB is full" if self.app.key_save.full else f"{ICON_SAVE} Save this"
         else:
             label = tile.when() + (f"  {ICON_ROBOT}" if tile.has_code else "")
         draw_label(g, label, em(0.92), r.centerx, r.bottom + em(1.4), P.TEXT if tile is NOW else P.MUTED,

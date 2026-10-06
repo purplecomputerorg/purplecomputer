@@ -1,0 +1,17 @@
+[Unit]
+Description=Purple Computer: bring back what was kept on the USB stick (PURPLE-SAVE)
+# Live boots only: an installed system keeps ~/.config/purple on its own disk.
+ConditionPathIsMountPoint=/cdrom
+ConditionKernelCommandLine=!purple.install=1
+After=systemd-udev-trigger.service local-fs.target
+# Purple reads its settings and rooms as it starts.
+Before=purple-x11.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/purple-key-save --restore
+# A stick that won't read must not hold up boot: Purple starts with nothing kept.
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

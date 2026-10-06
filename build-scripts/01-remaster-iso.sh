@@ -831,10 +831,11 @@ EFI_GRUB_EOF
     # Windows and macOS mount like any thumb drive (they hide the EFI partition).
     # It is what a parent sees when they plug the stick into a running computer,
     # so it carries the "turn it off first" instructions, and purple-stick-log
-    # writes PURPLE-LOG here during live boots. autorun.inf no longer runs
-    # anything on modern Windows, but Explorer still shows its label.
+    # and purple-key-save write PURPLE-LOG and PURPLE-SAVE here during live boots. autorun.inf no
+    # longer runs anything on modern Windows, but Explorer still shows its label.
+    # 128MB: the log, PURPLE-SAVE, and room left for parents' Studio packs.
     LOG_IMG="$WORK_DIR/purpleusb.img"
-    dd if=/dev/zero of="$LOG_IMG" bs=1M count=32 2>/dev/null
+    dd if=/dev/zero of="$LOG_IMG" bs=1M count=128 2>/dev/null
     mkfs.vfat -F 16 -n PURPLEUSB "$LOG_IMG" >/dev/null
     LOG_MNT="$WORK_DIR/purpleusb-mount"
     mkdir -p "$LOG_MNT"
@@ -876,6 +877,9 @@ install it permanently. It's easy!
 
 Not working? Email support@purplecomputer.org and we will help.
 
+Purple keeps what your kid made in a file called PURPLE-SAVE here, so
+their work is still there next time. Please don't delete it.
+
 (Technical: Purple writes a file called PURPLE-LOG here while it starts
 up. Support may ask you to email it as an attachment; there is no need to
 open it. Support may also ask you to hold the P key while turning the laptop
@@ -894,6 +898,12 @@ README_EOF
     [ -n "$LOG_HEAD" ] || { echo "ERROR: no PRISTINE_HEAD in purple-stick-log.py"; exit 1; }
     { echo "$LOG_HEAD"; printf 'starts: %-10d\n' 0
       head -c 12587008 /dev/zero | tr '\0' '\n'; } | head -c 12587008 > "$LOG_MNT/PURPLE-LOG"
+    # PURPLE-SAVE: the first line, then zeros (two empty slots), written the
+    # same way so it is one contiguous run purple-key-save can write in place.
+    # Size is HEADER_BYTES + 2 * SLOT_BYTES in purple-key-save.py.
+    SAVE_HEAD=$(sed -n 's/^PRISTINE_HEAD = "\(.*\)"$/\1/p' /purple-src/scripts/purple-key-save.py)
+    [ -n "$SAVE_HEAD" ] || { echo "ERROR: no PRISTINE_HEAD in purple-key-save.py"; exit 1; }
+    { echo "$SAVE_HEAD"; head -c 67112960 /dev/zero; } | head -c 67112960 > "$LOG_MNT/PURPLE-SAVE"
     umount "$LOG_MNT"
     rmdir "$LOG_MNT"
 

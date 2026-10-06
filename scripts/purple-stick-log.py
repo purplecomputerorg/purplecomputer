@@ -88,15 +88,19 @@ def find_partition(tries=60):
     return None
 
 
-def file_extent(part):
-    """Byte offset of NAME on the partition, or None if it is not one contiguous run."""
-    os.makedirs(MNT, exist_ok=True)
-    subprocess.run(["mount", "-t", "vfat", "-o", "ro", part, MNT], check=True)
+def file_extent(part, name=NAME, expected=None, mnt=MNT):
+    """Byte offset of name on the partition, or None if it is missing, the wrong size, or not one contiguous run."""
+    expected = expected or file_bytes()
+    os.makedirs(mnt, exist_ok=True)
+    subprocess.run(["mount", "-t", "vfat", "-o", "ro", part, mnt], check=True)
     try:
-        path = os.path.join(MNT, NAME)
+        path = os.path.join(mnt, name)
+        if not os.path.exists(path):
+            log(f"no {name} on {part}")
+            return None
         size = os.stat(path).st_size
-        if size != file_bytes():
-            log(f"{NAME} is {size} bytes, expected {file_bytes()}")
+        if size != expected:
+            log(f"{name} is {size} bytes, expected {expected}")
             return None
         with open(path, "rb") as f:
             bsz = struct.unpack("i", fcntl.ioctl(f, FIGETBSZ, struct.pack("i", 0)))[0]
@@ -109,7 +113,7 @@ def file_extent(part):
                     return None
         return first * bsz
     finally:
-        subprocess.run(["umount", MNT])
+        subprocess.run(["umount", mnt])
 
 
 def pristine():

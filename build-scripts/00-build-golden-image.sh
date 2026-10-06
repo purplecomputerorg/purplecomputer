@@ -1174,11 +1174,17 @@ JOURNAL
     cp /purple-src/scripts/purple-stick-log.py "$MOUNT_DIR/usr/local/bin/purple-stick-log"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-diag-collect" "$MOUNT_DIR/usr/local/bin/purple-stick-log"
     cp /purple-src/config/systemd/purple-stick-log.service "$MOUNT_DIR/etc/systemd/system/"
-    printf '#!/bin/sh\nexec sudo /usr/local/bin/purple-stick-log --reset\n' > "$MOUNT_DIR/usr/local/bin/cleanlog"
+    printf '#!/bin/sh\nsudo /usr/local/bin/purple-key-save --reset || exit 1\nexec sudo /usr/local/bin/purple-stick-log --reset\n' > "$MOUNT_DIR/usr/local/bin/cleanlog"
     chmod +x "$MOUNT_DIR/usr/local/bin/cleanlog"
     # Pi: `savelog` copies that report to the boot partition, which any computer can read
     [ "$BOOT" != pi ] || install -m 755 /purple-src/scripts/purple-savelog.sh "$MOUNT_DIR/usr/local/bin/savelog"
     chroot "$MOUNT_DIR" systemctl enable purple-stick-log.service
+    # PURPLE-SAVE, beside PURPLE-LOG: what kids made comes back on the next
+    # live boot (purple-key-save --restore; Purple runs --write). It loads
+    # purple-stick-log's helpers from beside it in /usr/local/bin.
+    install -m 755 /purple-src/scripts/purple-key-save.py "$MOUNT_DIR/usr/local/bin/purple-key-save"
+    cp /purple-src/config/systemd/purple-key-save.service "$MOUNT_DIR/etc/systemd/system/"
+    chroot "$MOUNT_DIR" systemctl enable purple-key-save.service
     cp /purple-src/scripts/purple-stage-reboot.sh "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"
     cp /purple-src/config/systemd/purple-stage-reboot.service "$MOUNT_DIR/etc/systemd/system/"

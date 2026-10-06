@@ -9,6 +9,7 @@ from ..constants import (
     ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
 )
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from . import key_save
 from .paper import can_print
 from .rooms.blocks_room import ICON_CUBE
 from .save_wall import ICON_SAVE
@@ -86,7 +87,7 @@ class RoomPicker(Overlay):
         elif self.row == EXTRAS:
             {"volume": self._open_volume, "clear": self._confirm_clear,
              "time_travel": lambda: self.close({"time_travel": True}),
-             "save": lambda: self.close({"save": True}),
+             "save": self._save,
              "print": self._print}[self.extras[self.col]]()
         else:
             self._toggle_code()
@@ -97,6 +98,10 @@ class RoomPicker(Overlay):
     def _open_volume(self):
         if not self.app.volume_disabled:
             self.app.push(VolumeModal(self.app))
+
+    def _save(self):
+        if not key_save.unavailable():
+            self.close({"save": True})
 
     def _print(self):
         why = printing.why_not()
@@ -135,7 +140,7 @@ class RoomPicker(Overlay):
         extras = {"volume": locked + ("", True) if locked else (ICON_VOLUME_HIGH, "Volume", "V", False),
                   "clear": (ICON_BROOM, "Clear", "C", False),
                   "time_travel": (ICON_TIME_TRAVEL, "Time Travel", "T", False),
-                  "save": (ICON_SAVE, "Save", "S", False),
+                  "save": self._save_card(),
                   "print": self._print_card()}
         cards += [(EXTRAS, i, *extras[e]) for i, e in enumerate(self.extras)]
         for row, col, icon, label, key, disabled in cards:
@@ -166,6 +171,10 @@ class RoomPicker(Overlay):
         y += em(1.5)
         g.draw_text("Enter to pick   ·   Hold Esc for grown-ups", em(0.92), box.centerx, y, "mono", P.DIM, anchor="midtop")
         self._draw_arrow_cluster(g, box.centerx, y + foot_h + em(0.9) + arrows_h - em(0.9))
+
+    def _save_card(self):
+        why = key_save.unavailable()
+        return (ICON_SAVE, why, "", True) if why else (ICON_SAVE, "Save", "S", False)
 
     def _print_card(self):
         """Icon, label, key, disabled: the card always says what the printer is doing."""

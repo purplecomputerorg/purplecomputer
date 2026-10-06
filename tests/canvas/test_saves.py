@@ -38,7 +38,8 @@ def test_save_from_wall_then_open_it_back():
         await press(app, "enter")
         assert app.top is None
         [save] = saves.list_saves("art")
-        assert save.state == drawn and save.image() is not None and save.thumbnail() is not None
+        assert save.state == drawn and save.thumbnail() is not None
+        assert not any(p.suffix == ".png" and not p.name.endswith(".thumb.png") for p in save.path.parent.iterdir())
         app._start_fresh("art")
         assert app.room_state("art") != drawn
         wall = await _open_wall(app)
@@ -120,7 +121,7 @@ def test_export_writes_each_save_once(tmp_path):
         app = await _art_with_drawing()
         app.save_room()
         dest = tmp_path / "stick"
-        page = lambda s: s.image()  # noqa: E731
+        page = app.save_artwork
         assert export_saves(dest, page) == 1
         assert len(list((dest / FOLDER / "Art").glob("*.png"))) == 1
         assert export_saves(dest, page) == 0
@@ -146,4 +147,71 @@ def test_reinstall_keeps_by_default_and_start_fresh_asks_again():
         await press(app, "up")
         await press(app, "enter")
         assert results == [True] and app.top is None
+    run(go())
+
+
+@pytest.mark.parametrize("room,keys", [("art", "qwerty"), ("music", "asdf"), ("play", "cat\n"), ("blocks", "qq")])
+def test_every_room_redraws_a_save_offscreen_without_touching_the_screen(room, keys):
+    async def go():
+        app = make_app()
+        app.action_switch_room(room)
+        for ch in keys:
+            await press(app, "enter" if ch == "\n" else ch)
+        save = app.save_room()
+        live = app.room_state(room)
+        sentinel = object()
+        app._panel = sentinel
+        work = app.save_artwork(save)
+        assert work is not None and work.get_width() > 100
+        assert app._panel is sentinel and app.room_state(room) == live
+        app._panel = None
+    run(go())
+
+
+def test_save_card_greys_out_on_a_key_that_cannot_keep_work(monkeypatch, tmp_path):
+    from purple_tui.canvas import key_save
+    monkeypatch.setattr(key_save, "is_live_boot", lambda: True)
+    monkeypatch.setattr(key_save, "MARKER", str(tmp_path / "key-save"))
+    present = [True]
+    monkeypatch.setattr(key_save, "is_usb_present", lambda: present[0])
+    assert key_save.unavailable() == "Needs Install"
+    (tmp_path / "key-save").write_text("/dev/x 0 0\n")
+    assert key_save.unavailable() is None and key_save.active()
+    present[0] = False
+    assert key_save.unavailable() == "Needs USB"
+
+    async def go():
+        app = make_app()
+        await press(app, "escape")
+        await press(app, "s")
+        assert not isinstance(app.top, SaveWall)
+        app._draw()
+    run(go())
+
+
+def test_key_writes_wait_for_a_quiet_moment_and_flush_before_power_off(monkeypatch, tmp_path):
+    from purple_tui.canvas import key_save
+    monkeypatch.setattr(key_save, "is_live_boot", lambda: True)
+    monkeypatch.setattr(key_save, "is_usb_present", lambda: True)
+    monkeypatch.setattr(key_save, "MARKER", str(tmp_path / "key-save"))
+    monkeypatch.setattr(key_save, "DEBOUNCE_S", 0.05)
+    (tmp_path / "key-save").write_text("/dev/x 0 0\n")
+    writes = []
+    monkeypatch.setattr(key_save.KeySave, "_write", lambda self, timeout=60: writes.append(timeout) or key_save.FULL)
+
+    async def go():
+        app = await _art_with_drawing()
+        app.save_room()
+        app.key_save.changed()
+        await asyncio.sleep(0.3)
+        assert len(writes) == 1 and app.key_save.full
+        app.key_save.flush()
+        assert len(writes) == 1, "nothing new since the last write"
+        app.key_save.changed()
+        app.flush_for_power_off()
+        assert writes[-1] == key_save.FLUSH_TIMEOUT_S
+        wall = await _open_wall(app)
+        await press(app, "enter")
+        assert isinstance(app.top, SaveWall) and len(saves.list_saves("art")) == 1, "a full USB takes no new saves"
+        wall.close()
     run(go())

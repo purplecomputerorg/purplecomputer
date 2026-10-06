@@ -69,6 +69,27 @@ def _battery_icon(pct: int, charging: bool) -> str:
     return ICON_BATTERY_EMPTY
 
 
+class _Offscreen:
+    """The app as an off-screen copy of a room sees it, so drawing a save never touches the screen's panels or legend."""
+
+    active_room = None
+
+    def __init__(self, app):
+        self._app = app
+
+    def __getattr__(self, name):
+        return getattr(self._app, name)
+
+    def invalidate(self, *_):
+        pass
+
+    def set_panel(self, panel):
+        pass
+
+    def set_legend(self, *_, **__):
+        pass
+
+
 class PurpleApp:
     def __init__(self, headless=False, windowed=False, size=None):
         boot_log.heartbeat("PurpleApp.__init__ begin")
@@ -108,6 +129,9 @@ class PurpleApp:
         self._code_task = None
         self._timelines = {r: RoomTimeline(r) for r, _ in ROOMS}
         self._code_lines = {r: [] for r, _ in ROOMS}
+        from .key_save import KeySave
+        self.key_save = KeySave(self)
+        self._usb_gone_noted = False
         self._timeline_pending: dict = {}
         self._timeline_timer = None
         self._timeline_restored: set = set()
@@ -567,8 +591,18 @@ class PurpleApp:
 
     def print_save(self, save):
         from .paper import compose
-        work = save.image()
+        work = self.save_artwork(save)
         self._print_page(None if work is None else compose(work, save.landscape, self.g, self.computer_name()))
+
+    def save_artwork(self, save):
+        """A save's work at page size, drawn by an off-screen copy of its room."""
+        from .paper import artwork
+        try:
+            scratch = type(self.rooms[save.room])(_Offscreen(self))
+            scratch.restore_timeline_state(save.state)
+            return artwork(scratch, self.g)
+        except Exception:
+            return None
 
     def _print_page(self, made):
         if made is None:
@@ -613,6 +647,7 @@ class PurpleApp:
 
     def _on_parent_menu_dismissed(self, result):
         self.clear_notifications()
+        self.key_save.changed()  # settings live on the Key too
         if isinstance(result, dict) and "littles_mode" in result:
             self._apply_littles_mode(result["littles_mode"])
 
@@ -656,7 +691,8 @@ class PurpleApp:
         if self._time_travel is not None:
             return
         try:
-            self._timelines[room].record(self.room_state(room))
+            if self._timelines[room].record(self.room_state(room)):
+                self.key_save.changed()
         except Exception:
             pass
 
@@ -689,7 +725,20 @@ class PurpleApp:
         work = artwork(self.room, self.g)
         if work is None:
             return False
-        return saves.add(self.active_room, self.room_state(self.active_room), work, self.room.LANDSCAPE)
+        made = saves.add(self.active_room, self.room_state(self.active_room), work, self.room.LANDSCAPE)
+        if made:
+            self.key_save.changed()
+        return made
+
+    def delete_save(self, save):
+        from . import saves
+        saves.delete(save)
+        self.key_save.changed()
+
+    def flush_for_power_off(self):
+        """Everything onto the Key before the computer turns off (live boots; a no-op otherwise)."""
+        self._timeline_flush()
+        self.key_save.flush()
 
     def open_save(self, save):
         """Load a save into its room as a new Time Travel step, so what was there stays one step back."""
@@ -1200,6 +1249,10 @@ class PurpleApp:
         if text != self._usb_text:
             self._usb_text = text
             self.invalidate()
+        from . import key_save
+        if key_save.active() and not is_usb_present() and not self._usb_gone_noted:
+            self._usb_gone_noted = True
+            self.notify("USB removed: new work won't be kept after turning off", timeout=6)
 
     def computer_name(self) -> str:
         if self._computer_name is None:
@@ -1219,6 +1272,9 @@ class PurpleApp:
                 else f"{ICON_USB} USB removed  Turn off, put it back"
         if not is_usb_cached():
             return f"{ICON_USB} USB" if int(time.monotonic()) % 2 else "USB"
+        from . import key_save
+        if key_save.active():
+            return f"{ICON_USB} USB  Keep it in to save" if is_usb_present() else f"{ICON_USB} USB removed · Not saving"
         return f"{ICON_USB} USB  OK to remove • If restart, reinsert" if is_usb_present() \
             else f"{ICON_USB} USB  If restart, reinsert"
 

@@ -502,6 +502,16 @@ def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
     assert r'purple_stick_report \"about to mount the system\"' in remaster
     assert 'purple_stick_report "casper-bottom done, starting the system" || true' in remaster
     assert "FIBMAP" in writer and "os.pwrite" in writer and "fdatasync" in writer
+    spec = importlib.util.spec_from_file_location("key_save", ROOT / "scripts" / "purple-key-save.py")
+    ks = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ks)
+    assert f'head -c {ks.file_bytes()} > "$LOG_MNT/PURPLE-SAVE"' in remaster, "PURPLE-SAVE must be header + two slots"
+    assert "systemctl enable purple-key-save.service" in _build_source()
+    assert 'purple-key-save.py "$MOUNT_DIR/usr/local/bin/purple-key-save"' in _build_source()
+    assert "purple-key-save --reset || exit 1" in _build_source(), "cleanlog clears PURPLE-SAVE before the log"
+    unit = (ROOT / "config" / "systemd" / "purple-key-save.service").read_text()
+    for line in ("Before=purple-x11.service", "ConditionPathIsMountPoint=/cdrom", "purple-key-save --restore"):
+        assert line in unit, "restored before Purple starts, live boots only"
     collect = (ROOT / "scripts" / "purple-diag-collect.sh").read_text()
     assert "mount -t vfat" not in collect and "blkid" not in collect, "the collector only prints; purple-stick-log owns the stick"
 

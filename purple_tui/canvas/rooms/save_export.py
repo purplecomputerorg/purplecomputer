@@ -100,7 +100,7 @@ class SaveExportScreen(Dialog):
         try:
             if not mounted:
                 subprocess.run(["sudo", "mkdir", "-p", MOUNT], check=True, timeout=10)
-                subprocess.run(["sudo", "mount", "-o", f"uid={os.getuid()},gid={os.getgid()}", dev, MOUNT],
+                subprocess.run(["sudo", "mount", "-o", f"uid={os.getuid()},gid={os.getgid()},nosuid,nodev", dev, MOUNT],
                                check=True, capture_output=True, timeout=30)
             copied = export_saves(Path(mnt), self._page)
             os.sync()

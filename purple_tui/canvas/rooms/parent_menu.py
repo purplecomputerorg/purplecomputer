@@ -1110,7 +1110,7 @@ def _find_usb_device():
 def _try_remount_usb(dev: str) -> bool:
     try:
         subprocess.run(["sudo", "umount", "-l", "/cdrom"], capture_output=True, timeout=5)
-        subprocess.run(["sudo", "mount", "-o", "ro", dev, "/cdrom"], capture_output=True, timeout=5)
+        subprocess.run(["sudo", "mount", "-o", "ro,nosuid,nodev", dev, "/cdrom"], capture_output=True, timeout=5)
         return _PAYLOAD_PATH.exists()
     except (subprocess.TimeoutExpired, OSError):
         return False

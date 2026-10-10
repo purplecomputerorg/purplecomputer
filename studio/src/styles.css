@@ -189,7 +189,23 @@ pre code { background: none; color: inherit; padding: 0; }
 .roomstage:focus { box-shadow: 0 0 0 4px var(--fill), 0 0 0 6px var(--magenta); }
 .stage .roomstage canvas { display: block; }
 
-/* Python console and helper */
+/* Room editor tabs, the problem box, and the Room guide */
+.tabs { display: flex; gap: 4px; margin: 0 0 12px; }
+.tab { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; font: inherit; font-weight: 600; color: var(--dim); cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--fill); color: var(--purple); border-color: var(--border); }
+.problem { margin: 14px 0 0; padding: 12px 16px; border-radius: 14px; background: #fdecec; border: 1px solid #f0b8b8; color: #6a1f1f; }
+.problem .where { font-size: 18px; }
+.problem .mono { margin-top: 4px; white-space: pre-wrap; }
+.form-rows { display: grid; gap: 8px; }
+.form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.form-row.head span { font-size: 12px; color: var(--dim); font-weight: 600; }
+.form-row input.bad { border-color: #d77; }
+.form-rows > .btn { justify-self: start; margin-top: 4px; }
+.guide dl { margin: 0; }
+.guide dt { font-weight: 600; margin-top: 12px; }
+.guide dd { margin: 2px 0 0; color: var(--dim); }
+
+/* Python console */
 textarea { resize: vertical; line-height: 1.5; }
 textarea.code { font-family: var(--mono); font-size: 13px; background: #2a1845; color: #e8daf0; border-color: #2a1845; border-radius: 14px; }
 textarea.code:focus { border-color: var(--magenta); box-shadow: none; }

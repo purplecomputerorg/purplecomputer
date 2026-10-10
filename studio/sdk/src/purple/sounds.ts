@@ -32,6 +32,12 @@ export function pitchFor(row: number, col: number, root = 0, octaveShift = 0): {
   return { note: CHROMATIC[semis % 12], octave: Math.floor(semis / 12) };
 }
 
+// "C#4" -> ["C#", 4]; null for anything that is not a note name.
+export function parseNote(text: string): [note: string, octave: number] | null {
+  const m = /^([A-Ga-g])(#?)(\d)$/.exec(text.trim());
+  return m ? [m[1].toUpperCase() + m[2], Number(m[3])] : null;
+}
+
 export function noteFrequency(note: string, octave: number): number {
   const semis = CHROMATIC.indexOf(note) + 12 * (octave + 1);
   return 440 * 2 ** ((semis - 69) / 12);

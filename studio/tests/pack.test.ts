@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEntries, manifest, type PackSpec } from "../sdk/src/pack";
+import { buildEntries, manifest, roomTitle, type PackSpec } from "../sdk/src/pack";
 import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
 
@@ -29,11 +29,17 @@ describe("pack assembly", () => {
     expect((await buildEntries(spec)).map((e) => e.path)).toEqual(["manifest.json", "content/emoji.json", "content/rankings.txt"]);
   });
 
-  it("writes a room's program next to the blocks it came from", async () => {
-    const program = { name: "farm", title: "Farm", rules: [] };
-    const spec: PackSpec = { ...base, rooms: [{ program, blocks: { blocks: { languageVersion: 0, blocks: [] } } }] };
+  it("writes a room's Python next to the blocks it came from", async () => {
+    const source = "from purple import *\nshow('🐄')";
+    const spec: PackSpec = { ...base, rooms: [{ name: "farm", source, blocks: { blocks: { languageVersion: 0, blocks: [] } } }] };
     const entries = await buildEntries(spec);
-    expect(entries.map((e) => e.path)).toEqual(["manifest.json", "content/rooms/farm.json", "content/rooms/farm.blocks.json"]);
-    expect(JSON.parse(new TextDecoder().decode(entries[1].data))).toEqual(program);
+    expect(entries.map((e) => e.path)).toEqual(["manifest.json", "content/rooms/farm.py", "content/rooms/farm.blocks.json"]);
+    expect(new TextDecoder().decode(entries[1].data)).toBe(source + "\n");
+  });
+
+  it("refuses a room name Purple would not load, and titles rooms the way Purple does", async () => {
+    await expect(buildEntries({ ...base, rooms: [{ name: "Big Farm", source: "" }] })).rejects.toThrow(/lowercase/);
+    expect(roomTitle("dinosaur-trivia")).toBe("Dinosaur Trivia");
+    expect(roomTitle("snake2go_fast")).toBe("Snake2Go Fast");
   });
 });

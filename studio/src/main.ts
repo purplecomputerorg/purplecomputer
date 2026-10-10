@@ -4,13 +4,14 @@ import { draft, onChange, pieces } from "./state";
 import { clear, h } from "./ui/dom";
 import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
-import { helperView } from "./ui/helper";
 import { formatView, installView } from "./ui/install";
 import { instrumentsView } from "./ui/instrument";
 import { photosView } from "./ui/photos";
 import { pythonView } from "./ui/python";
+import { EXAMPLES } from "./examples";
 import { addRoom } from "./pybridge";
-import { sampleRoom } from "./roomstate";
+import { roomTitle } from "@sdk/pack";
+import { guideView } from "./ui/guide";
 import { roomsView } from "./ui/rooms";
 import { voiceView } from "./ui/voice";
 import { wordsView } from "./ui/words";
@@ -29,10 +30,10 @@ const SECTIONS: Section[] = [
   { id: "voice", label: "Voice", view: voiceView, count: () => Object.keys(draft.letters).length + draft.phrases.length },
   { id: "words", label: "Words", view: wordsView, count: () => draft.words.length + draft.synonyms.length + draft.ranked.length },
   { id: "instruments", label: "Instruments", view: instrumentsView, count: () => draft.instruments.length, children: () => draft.instruments.map((i) => ({ id: i.name, label: i.name })) },
-  { id: "rooms", label: "Rooms", view: roomsView, count: () => draft.rooms.length, children: () => draft.rooms.map((r) => ({ id: r.program.name, label: r.program.name })) },
+  { id: "rooms", label: "Rooms", view: roomsView, count: () => draft.rooms.length, children: () => draft.rooms.map((r) => ({ id: r.name, label: roomTitle(r.name) })) },
   { id: "colors", label: "Colors", view: colorsView, count: () => (draft.theme ? 1 : 0) },
 ];
-const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, install: installView, format: formatView, helper: helperView, python: pythonView };
+const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, install: installView, format: formatView, guide: guideView, python: pythonView };
 
 function welcomeView(): View {
   return {
@@ -82,8 +83,8 @@ function renderSide() {
     link("#install", "Getting it onto Purple", "?", sec === "install"),
     link("#format", "What is in the pack", "{}", sec === "format"),
     h("li", { class: "sep" }),
+    link("#guide", "Room guide", "¶", sec === "guide"),
     link("#python", "Python", ">_", sec === "python"),
-    link("#helper", "Helper", "✦", sec === "helper"),
   );
   side.append(
     h("a", { class: "brand", href: "#" }, h("img", { src: logo, alt: "" }), h("b", {}, "Purple ", h("span", {}, "Studio"))),
@@ -118,7 +119,7 @@ function route() {
 }
 
 // ?sample seeds a room so a screenshot or a demo lands on a filled editor.
-if (new URLSearchParams(location.search).has("sample")) addRoom(sampleRoom());
+if (new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name, EXAMPLES[0].source);
 
 onChange(() => { renderSide(); renderStage(); });
 window.addEventListener("hashchange", route);

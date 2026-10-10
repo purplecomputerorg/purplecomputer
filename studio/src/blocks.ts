@@ -1,24 +1,27 @@
-// Blockly blocks for the room language, the generator from a workspace to a room program,
-// and the loader back from a program to a workspace. The program is what ships in the pack;
-// the workspace is saved beside it so the room can be reopened.
+// Blockly blocks for rooms and the generator from a workspace to the room's Python. The Python
+// is what ships in the pack; the workspace is saved beside it so the room can be reopened.
 import * as Blockly from "blockly";
-import { COMPARE_OPS, DRUMS, MATH_OPS, SPECIAL_KEYS, type Action, type Expr, type RoomProgram, type Rule, type Test } from "@sdk/room";
+import { Order, pythonGenerator as py } from "blockly/python";
+import { PURPLE } from "@sdk";
 import { INSTRUMENTS } from "@sdk/purple/sounds";
+import { normalizeKey } from "./examples";
 import { draft } from "./state";
 
 export const BACKGROUNDS: [string, string][] = [
   ["night purple", "#1e1033"], ["deep purple", "#2a1845"], ["plum", "#3a1d63"], ["midnight", "#141024"],
   ["forest", "#173a2a"], ["sea", "#12304a"], ["sunset", "#4a1f2e"], ["sand", "#4a3b1f"],
 ];
+const DRUMS: string[] = PURPLE.room.drums;
+const OP_LABELS: Record<string, string> = { "+": "+", "-": "−", "*": "×", "/": "÷", "==": "=", "!=": "≠", "<": "<", ">": ">" };
 
-const OP_LABELS: Record<string, string> = { "+": "+", "-": "−", "*": "×", "/": "÷", "=": "=", "!=": "≠", "<": "<", ">": ">" };
 
-const keyValidator = (v: string) => {
-  const s = v.trim().toLowerCase();
-  if (SPECIAL_KEYS.includes(s)) return s;
-  const chars = [...s];
-  return chars.length ? chars[0] : null;
-};
+const statement = (type: string, message0: string, args0: object[], style: string, tooltip = "") =>
+  ({ type, message0, args0, previousStatement: null, nextStatement: null, inputsInline: true, style, tooltip });
+const event = (type: string, message0: string, args0: object[], tooltip = "") =>
+  ({ type, message0: `${message0} %${args0.length + 1} %${args0.length + 2}`, args0: [...args0, { type: "input_dummy" }, { type: "input_statement", name: "DO" }], style: "event_blocks", hat: "cap", tooltip });
+const value = (type: string, message0: string, args0: object[], output: string | null = null) =>
+  ({ type, message0, args0, output, inputsInline: true, style: output === "Boolean" ? "flow_blocks" : "number_blocks" });
+const input = (name: string, check?: string) => ({ type: "input_value", name, ...(check ? { check } : {}) });
 
 let defined = false;
 
@@ -26,42 +29,40 @@ export function defineBlocks(): void {
   if (defined) return;
   defined = true;
   Blockly.defineBlocksWithJsonArray([
-    { type: "purple_when_start", message0: "when the room opens %1 %2", args0: [{ type: "input_dummy" }, { type: "input_statement", name: "DO" }], style: "event_blocks", hat: "cap", tooltip: "Runs once, when the kid opens the room." },
-    { type: "purple_when_key", message0: "when %1 is pressed %2 %3", args0: [{ type: "field_input", name: "KEY", text: "c" }, { type: "input_dummy" }, { type: "input_statement", name: "DO" }], style: "event_blocks", hat: "cap", tooltip: "A letter, a number, or space, enter, up, down, left, right." },
-    { type: "purple_when_any_key", message0: "when any key is pressed %1 %2", args0: [{ type: "input_dummy" }, { type: "input_statement", name: "DO" }], style: "event_blocks", hat: "cap" },
-    { type: "purple_when_every", message0: "every %1 seconds %2 %3", args0: [{ type: "field_number", name: "SECONDS", value: 2, min: 0.5, max: 60, precision: 0.5 }, { type: "input_dummy" }, { type: "input_statement", name: "DO" }], style: "event_blocks", hat: "cap" },
+    event("purple_when_start", "when the room opens", [], "Runs once, when the kid opens the room."),
+    event("purple_when_key", "when %1 is pressed", [{ type: "field_input", name: "KEY", text: "c" }], "A letter, a number, or space, enter, backspace, up, down, left, right."),
+    event("purple_when_any_key", "when any key is pressed", []),
+    event("purple_when_every", "every %1 seconds", [{ type: "field_number", name: "SECONDS", value: 1, min: 0.1, max: 60, precision: 0.1 }]),
 
-    { type: "purple_show", message0: "show %1", args0: [{ type: "input_value", name: "TEXT" }], previousStatement: null, nextStatement: null, style: "screen_blocks", tooltip: "Big, in the middle of the screen. Replaces what was there." },
-    { type: "purple_add", message0: "add %1 to the line", args0: [{ type: "input_value", name: "TEXT" }], previousStatement: null, nextStatement: null, style: "screen_blocks", tooltip: "Adds to a line that fills up as keys are pressed." },
-    { type: "purple_clear", message0: "clear the screen", previousStatement: null, nextStatement: null, style: "screen_blocks" },
-    { type: "purple_background", message0: "make the background %1", args0: [{ type: "field_dropdown", name: "COLOR", options: BACKGROUNDS }], previousStatement: null, nextStatement: null, style: "screen_blocks" },
-    { type: "purple_say", message0: "say %1", args0: [{ type: "input_value", name: "TEXT" }], previousStatement: null, nextStatement: null, style: "sound_blocks", tooltip: "Purple speaks it, in its own voice or a recorded phrase." },
-    { type: "purple_drum", message0: "hit the %1", args0: [{ type: "field_dropdown", name: "NAME", options: DRUMS.map((d) => [d, d]) }], previousStatement: null, nextStatement: null, style: "sound_blocks" },
-    { type: "purple_wait", message0: "wait %1 seconds", args0: [{ type: "input_value", name: "SECONDS" }], previousStatement: null, nextStatement: null, style: "flow_blocks" },
-    { type: "purple_set", message0: "set %1 to %2", args0: [{ type: "field_input", name: "VAR", text: "count" }, { type: "input_value", name: "VALUE" }], previousStatement: null, nextStatement: null, style: "number_blocks" },
-    { type: "purple_change", message0: "change %1 by %2", args0: [{ type: "field_input", name: "VAR", text: "count" }, { type: "input_value", name: "BY" }], previousStatement: null, nextStatement: null, style: "number_blocks" },
-    { type: "purple_if", message0: "if %1 then %2 %3 else %4 %5", args0: [{ type: "input_value", name: "TEST", check: "Boolean" }, { type: "input_dummy" }, { type: "input_statement", name: "DO" }, { type: "input_dummy" }, { type: "input_statement", name: "ELSE" }], previousStatement: null, nextStatement: null, style: "flow_blocks" },
-    { type: "purple_repeat", message0: "repeat %1 times %2 %3", args0: [{ type: "input_value", name: "TIMES" }, { type: "input_dummy" }, { type: "input_statement", name: "DO" }], previousStatement: null, nextStatement: null, style: "flow_blocks" },
+    statement("purple_show", "show %1", [input("TEXT")], "screen_blocks", "Big, in the middle of the screen. Replaces what was there."),
+    statement("purple_write", "write %1", [input("TEXT")], "screen_blocks", "A line of text under the middle."),
+    statement("purple_clear", "clear the screen", [], "screen_blocks"),
+    statement("purple_background", "make the background %1", [{ type: "field_dropdown", name: "COLOR", options: BACKGROUNDS }], "screen_blocks"),
+    statement("purple_grid_set", "put %1 at column %2 row %3", [input("THING"), input("X"), input("Y")], "screen_blocks", "The grid is 24 columns by 12 rows, starting at 0 in the top left."),
+    statement("purple_grid_erase", "erase column %1 row %2", [input("X"), input("Y")], "screen_blocks"),
+    statement("purple_say", "say %1", [input("TEXT")], "sound_blocks", "Purple speaks it."),
+    statement("purple_drum", "hit the %1", [{ type: "field_dropdown", name: "NAME", options: DRUMS.map((d) => [d, d]) }], "sound_blocks"),
+    statement("purple_set", "set %1 to %2", [{ type: "field_input", name: "VAR", text: "count" }, input("VALUE")], "number_blocks"),
+    statement("purple_change", "change %1 by %2", [{ type: "field_input", name: "VAR", text: "count" }, input("BY")], "number_blocks"),
+    { ...statement("purple_if", "if %1 then %2 %3 else %4 %5", [input("TEST", "Boolean"), { type: "input_dummy" }, { type: "input_statement", name: "DO" }, { type: "input_dummy" }, { type: "input_statement", name: "ELSE" }], "flow_blocks"), inputsInline: false },
+    { ...statement("purple_repeat", "repeat %1 times %2 %3", [input("TIMES"), { type: "input_dummy" }, { type: "input_statement", name: "DO" }], "flow_blocks"), inputsInline: false },
 
-    { type: "purple_var", message0: "%1", args0: [{ type: "field_input", name: "VAR", text: "count" }], output: null, style: "number_blocks", tooltip: "A number or word the room remembers." },
-    { type: "purple_key", message0: "the key pressed", output: null, style: "number_blocks" },
-    { type: "purple_pick", message0: "pick one of %1", args0: [{ type: "field_input", name: "LIST", text: "cow, pig, sheep" }], output: null, style: "number_blocks", tooltip: "Separate choices with commas." },
-    { type: "purple_join", message0: "join %1 %2", args0: [{ type: "input_value", name: "A" }, { type: "input_value", name: "B" }], output: null, inputsInline: true, style: "number_blocks" },
-    { type: "purple_random", message0: "random number from %1 to %2", args0: [{ type: "input_value", name: "FROM" }, { type: "input_value", name: "TO" }], output: null, inputsInline: true, style: "number_blocks" },
-    { type: "purple_math", message0: "%1 %2 %3", args0: [{ type: "input_value", name: "A" }, { type: "field_dropdown", name: "OP", options: MATH_OPS.map((op) => [OP_LABELS[op], op]) }, { type: "input_value", name: "B" }], output: null, inputsInline: true, style: "number_blocks" },
-    { type: "purple_compare", message0: "%1 %2 %3", args0: [{ type: "input_value", name: "A" }, { type: "field_dropdown", name: "OP", options: COMPARE_OPS.map((op) => [OP_LABELS[op], op]) }, { type: "input_value", name: "B" }], output: "Boolean", inputsInline: true, style: "flow_blocks" },
-    { type: "purple_logic", message0: "%1 %2 %3", args0: [{ type: "input_value", name: "A", check: "Boolean" }, { type: "field_dropdown", name: "OP", options: [["and", "and"], ["or", "or"]] }, { type: "input_value", name: "B", check: "Boolean" }], output: "Boolean", inputsInline: true, style: "flow_blocks" },
-    { type: "purple_not", message0: "not %1", args0: [{ type: "input_value", name: "A", check: "Boolean" }], output: "Boolean", style: "flow_blocks" },
+    value("purple_var", "%1", [{ type: "field_input", name: "VAR", text: "count" }]),
+    value("purple_key", "the key pressed", []),
+    value("purple_pick", "pick one of %1", [{ type: "field_input", name: "LIST", text: "cow, pig, sheep" }]),
+    value("purple_join", "join %1 %2", [input("A"), input("B")]),
+    value("purple_random", "random number from %1 to %2", [input("FROM"), input("TO")]),
+    value("purple_math", "%1 %2 %3", [input("A"), { type: "field_dropdown", name: "OP", options: ["+", "-", "*", "/"].map((op) => [OP_LABELS[op], op]) }, input("B")]),
+    value("purple_compare", "%1 %2 %3", [input("A"), { type: "field_dropdown", name: "OP", options: ["==", "!=", "<", ">"].map((op) => [OP_LABELS[op], op]) }, input("B")], "Boolean"),
+    value("purple_logic", "%1 %2 %3", [input("A", "Boolean"), { type: "field_dropdown", name: "OP", options: [["and", "and"], ["or", "or"]] }, input("B", "Boolean")], "Boolean"),
+    value("purple_not", "not %1", [input("A", "Boolean")], "Boolean"),
   ]);
 
   // The instrument list is live: Purple's four plus whatever the parent has made in this pack.
   Blockly.Blocks.purple_play = {
     init(this: Blockly.Block) {
       this.jsonInit({
-        message0: "play note %1 on %2",
-        args0: [{ type: "input_value", name: "NOTE" }, { type: "field_dropdown", name: "INSTRUMENT", options: () => [...INSTRUMENTS, ...draft.instruments.map((i) => i.name)].map((n) => [n, n]) }],
-        previousStatement: null, nextStatement: null, inputsInline: true, style: "sound_blocks",
-        tooltip: "A note name like C4 or F#3. The Music room's keys run from C1 to D7.",
+        ...statement("purple_play", "play note %1 on %2", [input("NOTE"), { type: "field_dropdown", name: "INSTRUMENT", options: () => [...INSTRUMENTS, ...draft.instruments.map((i) => i.name)].map((n) => [n, n]) }], "sound_blocks", "A note name like C4 or F#3."),
       });
     },
   };
@@ -70,8 +71,10 @@ export function defineBlocks(): void {
   const init = whenKey.init;
   whenKey.init = function (this: Blockly.Block) {
     init.call(this);
-    this.getField("KEY")?.setValidator(keyValidator);
+    this.getField("KEY")?.setValidator(normalizeKey);
   };
+
+  defineGenerators();
 
   Blockly.Theme.defineTheme("purple", {
     name: "purple",
@@ -109,15 +112,16 @@ export const TOOLBOX = {
       { kind: "block", type: "purple_when_start" }, { kind: "block", type: "purple_when_every" },
     ] },
     { kind: "category", name: "Screen", categorystyle: "screen_category", contents: [
-      { kind: "block", type: "purple_show", inputs: { TEXT: text("🐄") } }, { kind: "block", type: "purple_add", inputs: { TEXT: text("⭐") } },
+      { kind: "block", type: "purple_show", inputs: { TEXT: text("🐄") } }, { kind: "block", type: "purple_write", inputs: { TEXT: text("Moo!") } },
       { kind: "block", type: "purple_clear" }, { kind: "block", type: "purple_background" },
+      { kind: "block", type: "purple_grid_set", inputs: { THING: text("⭐"), X: num(0), Y: num(0) } }, { kind: "block", type: "purple_grid_erase", inputs: { X: num(0), Y: num(0) } },
     ] },
     { kind: "category", name: "Sound", categorystyle: "sound_category", contents: [
       { kind: "block", type: "purple_say", inputs: { TEXT: text("cow") } }, { kind: "block", type: "purple_play", inputs: { NOTE: text("C4") } },
       { kind: "block", type: "purple_drum" },
     ] },
     { kind: "category", name: "Then", categorystyle: "flow_category", contents: [
-      { kind: "block", type: "purple_wait", inputs: { SECONDS: num(1) } }, { kind: "block", type: "purple_repeat", inputs: { TIMES: num(3) } },
+      { kind: "block", type: "purple_repeat", inputs: { TIMES: num(3) } },
       { kind: "block", type: "purple_if", inputs: { TEST: { block: { type: "purple_compare", inputs: { A: { block: { type: "purple_var" } }, B: num(3) } } } } },
       { kind: "block", type: "purple_compare", inputs: { A: num(1), B: num(2) } }, { kind: "block", type: "purple_logic" }, { kind: "block", type: "purple_not" },
     ] },
@@ -130,79 +134,96 @@ export const TOOLBOX = {
   ],
 };
 
-// Workspace -> program -----------------------------------------------------------------
+// Workspace -> Python ------------------------------------------------------------------
 
-function expr(b: Blockly.Block | null): Expr {
-  if (!b) return "";
-  switch (b.type) {
-    case "text": return String(b.getFieldValue("TEXT") ?? "");
-    case "math_number": return Number(b.getFieldValue("NUM") ?? 0);
-    case "purple_var": return { var: String(b.getFieldValue("VAR") || "count") };
-    case "purple_key": return { key: true };
-    case "purple_pick": {
-      const items = String(b.getFieldValue("LIST") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      return { pick: items.length ? items : [""] };
+const INDENT = "    ";
+const RESERVED = new Set(["key", "grid", "show", "write", "clear", "background", "say", "play", "drum", "ask", "every", "after", "game_over", "random", "on_key", "and", "or", "not", "if", "else", "for", "in", "is", "def", "return", "global", "pass", "True", "False", "None"]);
+
+// A block's variable name as a Python name that cannot clash with the room's own calls.
+function varName(b: Blockly.Block): string {
+  const base = String(b.getFieldValue("VAR") || "count").trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "") || "count";
+  return /^[0-9]/.test(base) || RESERVED.has(base) ? `my_${base}` : base;
+}
+
+const indent = (code: string) => code.split("\n").map((l) => (l ? INDENT + l : l)).join("\n");
+const dedent = (code: string) => code.split("\n").map((l) => (l.startsWith(INDENT) ? l.slice(INDENT.length) : l)).join("\n");
+const body = (b: Blockly.Block, name: string) => py.statementToCode(b, name) || `${INDENT}pass\n`;
+const val = (b: Blockly.Block, name: string, fallback = '""') => py.valueToCode(b, name, Order.NONE) || fallback;
+const atom = (code: string): [string, Order] => [code, Order.ATOMIC];
+
+function defineGenerators(): void {
+  const f = py.forBlock;
+  f.purple_show = (b) => `show(${val(b, "TEXT")})\n`;
+  f.purple_write = (b) => `write(${val(b, "TEXT")})\n`;
+  f.purple_say = (b) => `say(${val(b, "TEXT")})\n`;
+  f.purple_clear = () => "clear()\n";
+  f.purple_background = (b) => `background(${JSON.stringify(b.getFieldValue("COLOR"))})\n`;
+  f.purple_grid_set = (b) => `grid.set(${val(b, "X", "0")}, ${val(b, "Y", "0")}, ${val(b, "THING")})\n`;
+  f.purple_grid_erase = (b) => `grid.erase(${val(b, "X", "0")}, ${val(b, "Y", "0")})\n`;
+  f.purple_play = (b) => `play(${val(b, "NOTE", '"C4"')}, ${JSON.stringify(b.getFieldValue("INSTRUMENT") || "marimba")})\n`;
+  f.purple_drum = (b) => `drum(${JSON.stringify(b.getFieldValue("NAME"))})\n`;
+  f.purple_set = (b) => `${varName(b)} = ${val(b, "VALUE", "0")}\n`;
+  f.purple_change = (b) => `${varName(b)} = ${varName(b)} + ${val(b, "BY", "1")}\n`;
+  f.purple_if = (b) => {
+    const otherwise = py.statementToCode(b, "ELSE");
+    return `if ${val(b, "TEST", "False")}:\n${body(b, "DO")}${otherwise ? `else:\n${otherwise}` : ""}`;
+  };
+  f.purple_repeat = (b) => `for _ in range(int(${val(b, "TIMES", "1")})):\n${body(b, "DO")}`;
+  f.purple_var = (b) => atom(varName(b));
+  f.purple_key = () => atom("key");
+  f.purple_pick = (b) => atom(`random.choice(${JSON.stringify(String(b.getFieldValue("LIST")).split(",").map((s) => s.trim()).filter(Boolean))})`);
+  f.purple_join = (b) => atom(`(str(${val(b, "A")}) + str(${val(b, "B")}))`);
+  f.purple_random = (b) => atom(`random.randint(int(${val(b, "FROM", "1")}), int(${val(b, "TO", "6")}))`);
+  f.purple_math = (b) => atom(`(${val(b, "A", "0")} ${b.getFieldValue("OP")} ${val(b, "B", "0")})`);
+  f.purple_compare = (b) => atom(`(${val(b, "A", "0")} ${b.getFieldValue("OP")} ${val(b, "B", "0")})`);
+  f.purple_logic = (b) => atom(`(${val(b, "A", "False")} ${b.getFieldValue("OP")} ${val(b, "B", "False")})`);
+  f.purple_not = (b) => atom(`(not ${val(b, "A", "False")})`);
+}
+
+export function toPython(ws: Blockly.Workspace): string {
+  py.INDENT = INDENT;
+  py.init(ws);
+  const vars = [...new Set(ws.getAllBlocks(false).filter((b) => b.getField("VAR")).map(varName))];
+  const glob = vars.length ? `${INDENT}global ${vars.join(", ")}\n` : "";
+  const start: string[] = [];
+  const keys: string[] = [];
+  const timers: string[] = [];
+  for (const b of ws.getTopBlocks(true)) {
+    const code = py.statementToCode(b, "DO");
+    if (!code) continue;
+    if (b.type === "purple_when_start") start.push(dedent(code));
+    else if (b.type === "purple_when_key") keys.push(`${INDENT}if key == ${JSON.stringify(b.getFieldValue("KEY") || "c")}:\n${indent(code)}`);
+    else if (b.type === "purple_when_any_key") keys.push(code);
+    else if (b.type === "purple_when_every") {
+      const fn = `every_${timers.length + 1}`;
+      timers.push(`def ${fn}():\n${glob}${code}\n\nevery(${Number(b.getFieldValue("SECONDS")) || 1}, ${fn})\n`);
     }
-    case "purple_join": return { join: [expr(b.getInputTargetBlock("A")), expr(b.getInputTargetBlock("B"))] };
-    case "purple_random": return { random: { from: expr(b.getInputTargetBlock("FROM")), to: expr(b.getInputTargetBlock("TO")) } };
-    case "purple_math": return { math: String(b.getFieldValue("OP")), a: expr(b.getInputTargetBlock("A")), b: expr(b.getInputTargetBlock("B")) };
-    default: return "";
+  }
+  const parts = ["from purple import *\n"];
+  if (vars.length) parts.push(vars.map((v) => `${v} = 0`).join("\n") + "\n");
+  if (keys.length) parts.push(`def on_key(key):\n${glob}${keys.join("")}`);
+  parts.push(...timers);
+  if (start.length) parts.push(start.join(""));
+  const source = parts.join("\n\n").replace(/\n{4,}/g, "\n\n\n").trimEnd() + "\n";
+  return source.includes("random.") ? source.replace("from purple import *\n", "from purple import *\nimport random\n") : source;
+}
+
+// The starting point for "Start a room": a wave when the room opens, and every key shows itself.
+export const BLANK_BLOCKS = {
+  blocks: { languageVersion: 0, blocks: [
+    { type: "purple_when_start", x: 24, y: 24, inputs: { DO: { block: { type: "purple_show", inputs: { TEXT: text("👋") } } } } },
+    { type: "purple_when_any_key", x: 24, y: 150, inputs: { DO: { block: { type: "purple_show", inputs: { TEXT: { ...text(""), block: { type: "purple_key" } } } } } } },
+  ] },
+};
+
+// The Python for a saved workspace, without drawing it.
+export function sourceFromBlocks(state: object): string {
+  defineBlocks();
+  const ws = new Blockly.Workspace();
+  try {
+    Blockly.serialization.workspaces.load(state, ws);
+    return toPython(ws);
+  } finally {
+    ws.dispose();
   }
 }
-
-function test(b: Blockly.Block | null): Test {
-  if (!b) return { compare: "=", a: 1, b: 1 };
-  switch (b.type) {
-    case "purple_compare": return { compare: String(b.getFieldValue("OP")), a: expr(b.getInputTargetBlock("A")), b: expr(b.getInputTargetBlock("B")) };
-    case "purple_logic": {
-      const both = [test(b.getInputTargetBlock("A")), test(b.getInputTargetBlock("B"))];
-      return b.getFieldValue("OP") === "or" ? { or: both } : { and: both };
-    }
-    case "purple_not": return { not: test(b.getInputTargetBlock("A")) };
-    default: return { compare: "=", a: 1, b: 1 };
-  }
-}
-
-function actions(first: Blockly.Block | null): Action[] {
-  const out: Action[] = [];
-  for (let b = first; b; b = b.getNextBlock()) {
-    const a = action(b);
-    if (a) out.push(a);
-  }
-  return out;
-}
-
-function action(b: Blockly.Block): Action | null {
-  switch (b.type) {
-    case "purple_show": case "purple_add": case "purple_say":
-      return { do: b.type.slice(7) as "show" | "add" | "say", text: expr(b.getInputTargetBlock("TEXT")) };
-    case "purple_play": return { do: "play", note: expr(b.getInputTargetBlock("NOTE")), instrument: String(b.getFieldValue("INSTRUMENT") || "marimba") };
-    case "purple_drum": return { do: "drum", name: String(b.getFieldValue("NAME")) };
-    case "purple_clear": return { do: "clear" };
-    case "purple_background": return { do: "background", color: String(b.getFieldValue("COLOR")) };
-    case "purple_wait": return { do: "wait", seconds: expr(b.getInputTargetBlock("SECONDS")) };
-    case "purple_set": return { do: "set", var: String(b.getFieldValue("VAR") || "count"), value: expr(b.getInputTargetBlock("VALUE")) };
-    case "purple_change": return { do: "change", var: String(b.getFieldValue("VAR") || "count"), by: expr(b.getInputTargetBlock("BY")) };
-    case "purple_if": return { do: "if", test: test(b.getInputTargetBlock("TEST")), then: actions(b.getInputTargetBlock("DO")), else: actions(b.getInputTargetBlock("ELSE")) };
-    case "purple_repeat": return { do: "repeat", times: expr(b.getInputTargetBlock("TIMES")), body: actions(b.getInputTargetBlock("DO")) };
-    default: return null;
-  }
-}
-
-function rule(b: Blockly.Block): Rule | null {
-  const body = actions(b.getInputTargetBlock("DO"));
-  switch (b.type) {
-    case "purple_when_start": return { when: { event: "start" }, do: body };
-    case "purple_when_key": return { when: { event: "key", key: String(b.getFieldValue("KEY") || "c") }, do: body };
-    case "purple_when_any_key": return { when: { event: "any_key" }, do: body };
-    case "purple_when_every": return { when: { event: "every", seconds: Number(b.getFieldValue("SECONDS") || 2) }, do: body };
-    default: return null;
-  }
-}
-
-export function toProgram(ws: Blockly.Workspace, name: string, title: string): RoomProgram {
-  const rules = ws.getTopBlocks(true).map(rule).filter((r): r is Rule => r !== null);
-  return { name, title, rules };
-}
-
-export { toState } from "./roomstate";

@@ -7,7 +7,7 @@ export { manifest } from "@sdk/pack";
 
 export async function packSpec(d: Draft = draft): Promise<PackSpec> {
   const pictures = await Promise.all(d.pictures.map(async (p) => ({ name: p.name, ops: p.ops, png: await previewPng(p.cells) })));
-  return { ...d, pictures, rooms: d.rooms.map((r) => ({ program: r.program, blocks: r.blocks })) };
+  return { ...d, pictures, rooms: d.rooms.map((r) => ({ name: r.name, source: r.source, blocks: r.blocks })) };
 }
 
 export async function buildPack(onProgress?: (msg: string) => void): Promise<Blob> {

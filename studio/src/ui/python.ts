@@ -18,12 +18,15 @@ const EXAMPLE = `pack.word("tractor", "🚜")
 pack.synonym("tracter", "tractor")
 pack.rank("tractor")
 
-animals = {"c": ("🐄", "cow", "C4"), "p": ("🐖", "pig", "E4"), "s": ("🐑", "sheep", "G4")}
-pack.room("farm", "Farm",
-    when_start(show("🐄 🐖 🐑"), say("farm")),
-    *[when_key(k, show(e), say(w), play(n)) for k, (e, w, n) in animals.items()],
-    when_any_key(add(key()), drum("woodblock")),
-)
+pack.room("hello", """
+from purple import *
+
+show("👋")
+
+def on_key(key):
+    show(key)
+    play("C4")
+""")
 print(pack)`;
 
 let pyodide: Promise<Pyodide> | null = null;
@@ -72,12 +75,12 @@ export function pythonView(): View {
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "The same pack, from Python. A ", h("span", { class: "mono" }, "pack"), " object adds words, synonyms, instruments, and rooms; small helpers build a room's rules. It runs right here in the browser and changes the pack on the left as it goes."),
+      h("p", { class: "lead" }, "The same pack, from Python. A ", h("span", { class: "mono" }, "pack"), " object adds words, synonyms, instruments, and rooms. It runs right here in the browser and changes the pack on the left as it goes."),
       h("div", { class: "card" }, code, h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "btn small", onclick: run }, "Run"), h("span", { class: "dim small" }, "or Ctrl+Enter"), status), out),
       h("h3", {}, "What you can call"),
       h("pre", { class: "small" }, prelude.split('"""')[1].trim()),
-      h("p", { class: "dim small" }, "Room helpers: ", h("span", { class: "mono" }, "when_start, when_key, when_any_key, every"), " take actions ", h("span", { class: "mono" }, "show, add, say, play, drum, clear, background, wait, set_var, change, if_, repeat"), " built from values ", h("span", { class: "mono" }, "var, key, pick, join, random, math"), " and tests ", h("span", { class: "mono" }, "compare, all_of, any_of, not_"), ". A room that Purple would refuse raises a ValueError with the reason."),
-      h("div", { class: "note" }, h("strong", {}, "What this is not: "), "Python on Purple. Packs never contain code; this page writes the same plain data files the blocks do. The Python runtime is Pyodide, loaded from this site the first time you press Run."),
+      h("p", { class: "dim small" }, "A room is its own Python file; see the ", h("a", { href: "#guide" }, "Room guide"), " for what it can call, and the Rooms page to try one."),
+      h("div", { class: "note" }, h("strong", {}, "What this is not: "), "a way to change Purple itself. This page fills in the pack; only the rooms in it run on Purple, each in a box of its own. The Python runtime is Pyodide, loaded from this site the first time you press Run."),
     ),
     stage: () => null,
   };

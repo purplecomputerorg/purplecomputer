@@ -1,17 +1,18 @@
 import type { Clip } from "./audio";
 import type { Picture } from "./photo";
+import type { TemplateDraft } from "./examples";
 import { packId as sdkPackId } from "@sdk/pack";
 import { APP_BG_DARK, DEFAULT_BG_DARK, ROW_HUES } from "@sdk/purple/art";
 import type { BaseName, Params } from "@sdk/purple/synth";
-import type { RoomProgram } from "@sdk/room";
 
 export interface WordEntry { word: string; emoji: string }
 export interface SynonymEntry { alias: string; word: string }
 export interface Phrase { text: string; clip: Clip }
 export interface Instrument { name: string; base: BaseName; params: Params }
 export interface Theme { background: string; surface: string; hues: { qwerty: number; asdf: number; zxcv: number } }
-// A room is its program (what Purple runs) plus the Blockly workspace it was built from (so it can be reopened).
-export interface RoomDraft { program: RoomProgram; blocks: unknown | null }
+// A room is its Python (what Purple runs) plus what it was made from, blocks or a form, so either can be
+// reopened. Both are null once the Python has been edited by hand.
+export interface RoomDraft { name: string; source: string; blocks: unknown | null; template: TemplateDraft | null }
 
 export interface Draft {
   familyName: string;

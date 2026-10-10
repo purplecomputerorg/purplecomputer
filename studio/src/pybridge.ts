@@ -1,13 +1,12 @@
 // What Studio's Python page can reach: a handful of functions over the draft, each one
 // validating the way Purple would. Pure, so tests can drive it under Pyodide in Node.
+import { ROOM_NAME } from "@sdk/pack";
 import { BASES, defaults, type BaseName } from "@sdk/purple/synth";
-import { parse, RoomError, type RoomProgram } from "@sdk/room";
-import { toState } from "./roomstate";
 import { changed, draft, pieces, slug, type RoomDraft } from "./state";
 
-export function addRoom(program: RoomProgram, blocks: unknown | null = null): RoomDraft {
-  const room: RoomDraft = { program, blocks: blocks ?? toState(program) };
-  draft.rooms = [...draft.rooms.filter((r) => r.program.name !== program.name), room];
+export function addRoom(name: string, source: string, made: Pick<RoomDraft, "blocks" | "template"> = { blocks: null, template: null }): RoomDraft {
+  const room: RoomDraft = { name, source, ...made };
+  draft.rooms = [...draft.rooms.filter((r) => r.name !== name), room];
   changed();
   return room;
 }
@@ -38,13 +37,10 @@ export const bridge = {
     changed();
     return "";
   },
-  add_room(programJson: string): string {
-    try {
-      addRoom(parse(JSON.parse(programJson)));
-      return "";
-    } catch (e) {
-      return e instanceof RoomError ? e.message : String(e);
-    }
+  add_room(name: string, source: string): string {
+    if (!ROOM_NAME.test(name)) return "a room name is lowercase letters, digits, and dashes";
+    addRoom(name, source);
+    return "";
   },
   summary(): string {
     return JSON.stringify(Object.fromEntries(pieces().map((p) => [p.label.replace(/ /g, "_"), p.count])));

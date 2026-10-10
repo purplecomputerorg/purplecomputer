@@ -4,14 +4,14 @@ import exported from "./purple/export.json";
 import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, generateRowGradient, type PaintOp } from "./purple/art";
 import { SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
 import { SYNTH_RATE, renderNote, type BaseName, type Params } from "./purple/synth";
-import type { RoomProgram } from "./room";
 import { gzip, tar, type TarEntry } from "./tar";
 import { encodeWav, type Clip } from "./wav";
 
 export interface PackPicture { name: string; ops: PaintOp[]; png?: Uint8Array }
 export interface PackInstrument { name: string; base: BaseName; params: Params }
 export interface PackTheme { background: string; surface: string; hues: { qwerty: number; asdf: number; zxcv: number } }
-export interface PackRoom { program: RoomProgram; blocks?: unknown }
+// content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Blockly workspace it came from rides beside it.
+export interface PackRoom { name: string; source: string; blocks?: unknown }
 
 export interface PackSpec {
   familyName: string;
@@ -33,6 +33,10 @@ const text = (path: string, body: string): TarEntry => ({ path, data: enc.encode
 const json = (path: string, value: unknown) => text(path, JSON.stringify(value, null, 2) + "\n");
 
 export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+export const ROOM_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+// content.display_name: what Purple shows for a room called `name`.
+export const roomTitle = (name: string) =>
+  name.replace(/[-_]/g, " ").trim().replace(/[a-zA-Z]+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).slice(0, 24);
 export const packId = (spec: Pick<PackSpec, "familyName">) => `${slug(spec.familyName) || "our-family"}-pack`;
 export const packFilename = (spec: Pick<PackSpec, "familyName">) => `${packId(spec)}.purplepack`;
 
@@ -92,8 +96,9 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   }
 
   for (const room of spec.rooms) {
-    entries.push(json(`content/rooms/${room.program.name}.json`, room.program));
-    if (room.blocks) entries.push(json(`content/rooms/${room.program.name}.blocks.json`, room.blocks));
+    if (!ROOM_NAME.test(room.name)) throw new Error(`A room name must be lowercase letters, digits, and dashes: ${room.name}`);
+    entries.push(text(`content/rooms/${room.name}.py`, room.source.endsWith("\n") ? room.source : room.source + "\n"));
+    if (room.blocks) entries.push(json(`content/rooms/${room.name}.blocks.json`, room.blocks));
   }
 
   if (spec.theme) entries.push(json("content/theme.json", themeJson(spec.theme)));

@@ -2,7 +2,7 @@
 
 A `.purplepack` is a gzipped tar of `manifest.json` and a `content/` directory, the same thing `just build-packs` produces for `packs/core-emoji`. This page is the format as Purple reads it: which files the rooms look at, what each must contain, how a pack gets onto a machine, and what the installer refuses. The one section at the end marked **proposed** is a file Studio writes that nothing reads yet.
 
-Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple_tui/pack_manager.py` (`check_pack`, `PackInstaller`). Rooms: `purple_tui/room_program.py` and `purple_tui/rooms/pack_room.py`. USB channel: `purple_tui/usb_updater.py`. Command line: `scripts/purplepack.py`. A TypeScript library that builds all of this without Studio's UI: `studio/sdk/`.
+Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple_tui/pack_manager.py` (`check_pack`, `PackInstaller`). Rooms: `purple_tui/roomkit/` and `purple_tui/canvas/rooms/program_room.py`, described in `guides/family-rooms.md`. USB channel: `purple_tui/usb_updater.py`. Command line: `scripts/purplepack.py`. A TypeScript library that builds all of this without Studio's UI: `studio/sdk/`.
 
 ## manifest.json
 
@@ -63,26 +63,24 @@ Filename is `text.strip().lower().replace(" ", "_") + ".wav"`, the rule in `tts.
 
 Studio renders the WAVs in the browser from its port of the synth. `scripts/purplepack.py render` renders the same files from the Python, the renderer of record, for a pack written by hand or one whose samples were left out to keep the file small. An instrument JSON with no sample directory is not listed.
 
-### rooms/<name>.json
+### rooms/<name>.py
 
-```json
-{"name": "farm", "title": "Farm", "background": "#1e1033", "rules": [
-  {"when": {"event": "key", "key": "c"},
-   "do": [{"do": "show", "text": "🐄"}, {"do": "say", "text": "cow"}, {"do": "play", "note": "C4", "instrument": "marimba"}]},
-  {"when": {"event": "any_key"}, "do": [{"do": "add", "text": {"key": true}}, {"do": "drum", "name": "woodblock"}]}
-]}
+```python
+from purple import *
+
+show("🐄")
+
+
+def on_key(key):
+    show(key)
+    play("C4")
 ```
 
-A family-made room. Purple interprets the file; nothing in it runs as code. The room picker (a tap of Esc) grows a row of these under Play, Music, and Art, on keys 4 to 7, and the room opens as a screen over the current room; Esc leaves. `name` must match the filename and be lowercase letters, digits, and dashes; `title` is what the picker shows; `background` is optional.
+A family-made room: a Python file that runs as a guest. Purple starts it in a process of its own, as a user that can't touch anything else on the machine, and the room can only ask Purple to show, say, and play things over a pipe. A room that errors, hangs, or floods is ended and shows a calm "this room needs fixing" card. The room picker (a tap of Esc) grows a row of these; Esc always leaves. `<name>` is lowercase letters, digits, and dashes, and the picker shows it title-cased (`dinosaur-trivia` becomes Dinosaur Trivia).
 
-The language, in full, is the docstring of `purple_tui/room_program.py`. In short:
+What a room can call, the keys it receives, and the message protocol are in `guides/family-rooms.md`; `purple_tui/roomkit/purple.py` is the module itself. Studio runs the same file in its preview, so what a parent tries there is what the kid gets.
 
-- **Events:** `start` (the room opens), `key` with a `key` (one character, or `space`, `enter`, `up`, `down`, `left`, `right`), `any_key`, `every` with `seconds` (0.5 to 60). A key press runs its own `key` rules, then the `any_key` rules.
-- **Actions:** `show` (big, centered, replaces), `add` (appends to a line that fills up), `say` (Purple's voice, or a pack phrase clip if one matches), `play` (a `note` like `C4` or `F#3` on an `instrument`, built-in or from this pack), `drum` (one of the number-row percussion names), `clear`, `background`, `wait` (seconds, capped at 5), `set` and `change` a variable, `if` with `then` and `else`, `repeat` with `body`.
-- **Values:** a number, a string, `{"var": name}`, `{"key": true}` (the key just pressed), `{"pick": [...]}`, `{"join": [...]}`, `{"random": {"from": a, "to": b}}`, `{"math": op, "a": x, "b": y}`. **Tests:** `{"compare": op, "a": x, "b": y}` with `=`, `!=`, `<`, `>`, plus `and`, `or`, `not`.
-- **Limits**, so a mashed keyboard stays calm: 500 steps per event, 100 repeats, 5 second waits, 200 character texts, 8 levels of nesting. A new key press cancels a run that is still waiting.
-
-Studio's block editor writes this file and saves the Blockly workspace beside it as `<name>.blocks.json`, which Purple ignores; it is there so the room can be reopened for editing. `studio/sdk/src/room.ts` is the same interpreter in TypeScript, and `studio/tests/room-golden.json` (written by `scripts/export_studio.py` from the Python) holds the two to the same trace, so what a parent tries in Studio is what the kid gets.
+Studio saves the Blockly workspace a room was built from beside it as `<name>.blocks.json`, which Purple ignores; it is there so the room can be reopened for editing.
 
 ## Where packs live and how they get there
 
@@ -100,13 +98,13 @@ Studio's block editor writes this file and saves the Blockly workspace beside it
 `check_pack` runs on every install, from the stick or by hand, and the pack is refused with the first few problems listed if any of these fail:
 
 - manifest present and valid as above; `format` not newer than this build reads
-- no `.py`, `.pyc`, `.pyo`, `.pyw` files, and no extensionless or `.sh` file whose first line mentions python
+- no `.py` files except `rooms/<name>.py`, no `.pyc`, `.pyo`, `.pyw`, and no extensionless or `.sh` file whose first line mentions python
 - no absolute paths, no `..` segments, no symlinks or hard links in the archive
 - `emoji.json` and `synonyms.json`, if present, are JSON objects mapping strings to non-empty strings
 - every file in `letters/` and `voice/` is a WAV at 22050 Hz, mono, 16-bit
 - every `instruments/<name>.json` names a known base, has only that base's parameters with numeric values, and has a `content/<name>/` directory whose WAVs are 44100 Hz, mono, 16-bit
 - every `pictures/<name>.json` has an `ops` list of `[x, y, "#rrggbb"]` on the canvas
-- every `rooms/<name>.json` parses as a room program and its `name` matches the filename
+- every `rooms/<name>.py` has a valid name and is UTF-8 text
 
 `scripts/purplepack.py check` runs the same function on a directory or a `.purplepack`.
 

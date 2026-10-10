@@ -46,6 +46,7 @@ export function formatView(): View {
     "  pictures/<name>.json, .png   paint list and preview   parent menu, Pictures",
     "  <instrument>/c1.wav … d7.wav one note per file        Music room",
     "  instruments/<name>.json      the slider numbers       re-rendered by Purple's own synth",
+    "  rooms/<name>.py              a room you made          room picker, family rooms",
     "  theme.json                   background and key rows  not read yet",
   ].join("\n");
   return {
@@ -53,7 +54,7 @@ export function formatView(): View {
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "A pack is a compressed folder. Everything in it is plain data: JSON, text, sound, and images. Purple checks each file before installing and refuses a pack that contains code."),
+      h("p", { class: "lead" }, "A pack is a compressed folder of JSON, text, sound, and images, plus your rooms, each one Python file. Purple checks each file before installing, and runs a room only as a guest in a box of its own."),
       h("pre", {}, h("code", {}, tree)),
       h("p", {}, "The third column is where each file shows up on Purple. The layout copies the folders Purple already uses for its own built-in sounds and words, and Purple's source repository documents it in ", h("span", { class: "mono" }, "studio/PACK_FORMAT.md"), " along with a small command-line tool that builds, checks, and installs packs without this page, for anyone who would rather write a pack by hand."),
     ),

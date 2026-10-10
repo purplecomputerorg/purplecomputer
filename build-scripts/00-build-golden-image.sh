@@ -569,6 +569,9 @@ FSTAB
     chroot "$MOUNT_DIR" usermod -aG sudo,input purple
     chroot "$MOUNT_DIR" passwd -l purple
 
+    # Family rooms run as purple-room: no login, no home, no groups, no sudo (guides/family-rooms.md)
+    chroot "$MOUNT_DIR" useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin purple-room
+
     # Install Purple Computer application
     log_info "Installing Purple Computer application..."
 
@@ -1061,6 +1064,14 @@ LOGIND
 purple ALL=(ALL) NOPASSWD: ALL
 SUDOERS
     chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-nopasswd"
+
+    # purple may start exactly this command as purple-room (canvas/rooms/family_room.py)
+    cat > "$MOUNT_DIR/etc/sudoers.d/purple-room" <<'SUDOERS'
+purple ALL=(purple-room) NOPASSWD: /usr/bin/python3 -I -S /opt/purple/purple_tui/roomkit/runner.py
+SUDOERS
+    chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-room"
+    # A broken sudoers file would break every sudo, shutdown included: fail the build instead
+    chroot "$MOUNT_DIR" visudo -cf /etc/sudoers.d/purple-room
 
     # Disable SysRq magic keys (Alt+PrintScreen combos can force reboot, kill processes, etc.)
     # Kids mashing keys could accidentally trigger these. Value 0 = completely disabled.

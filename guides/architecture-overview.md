@@ -51,7 +51,7 @@ Parent plugs in USB, presses boot key
     │     ↓                                                   │
     │ systemd starts → getty@tty1 auto-login as 'purple'      │
     │     ↓                                                   │
-    │ purple-x11.service → Alacritty → Purple TUI            │
+    │ purple-x11.service → xinitrc → Purple (pygame window)   │
     │     ↓                                                   │
     │ Child plays. Internal disk never touched.               │
     └─────────────────────────────────────────────────────────┘
@@ -142,7 +142,7 @@ After booting from USB, the system caches the entire squashfs filesystem into RA
 
 The live boot uses casper's overlayfs: the squashfs (read-only, on USB) is the lower layer, and a tmpfs (writable, in RAM) is the upper layer. Normally this means the USB must stay inserted because reads go to the squashfs on the USB.
 
-At boot, a background process in xinitrc copies the squashfs into a tmpfs (`/run/purple-squashfs`), so the pages are pinned in RAM (non-evictable) and survive memory pressure. If RAM is too low for the copy (squashfs size plus 1GB headroom), it falls back to the old page-cache warmup: reading the entire squashfs file so the kernel caches every block. Either way, once the background job finishes, the USB is no longer needed.
+Once X starts, `purple-usb-cache.service` (`scripts/purple-usb-cache.py`, root, idle disk priority so Purple's own reads go first) maps the squashfs file and `mlockall`s it: that reads every block once and pins those page-cache pages, which are exactly what the loop device reads (it is buffered, `dio=0`, which the boot report shows). The lock lasts as long as the service runs. With less free RAM than the squashfs plus 1GB, it only reads the file once to warm the cache, which memory pressure can undo. (An earlier tmpfs copy in xinitrc never worked: it ran as `purple`, `/run` is 10% of RAM, and nothing read the copy.)
 
 **User-facing indicator:**
 
@@ -174,7 +174,7 @@ debootstrap → full Purple root filesystem
 
 1. Create disk image, partition (GPT: ESP + root)
 2. Debootstrap Ubuntu 24.04 minimal
-3. Install packages (X11, Alacritty, Python, Purple TUI, etc.)
+3. Install packages (X11, Python, SDL2, Purple app, etc.)
 4. Configure system (auto-login, power management, etc.)
 5. Create squashfs from the mounted root (`mksquashfs`)
 6. Unmount, compress disk image (`zstd`)
@@ -215,7 +215,7 @@ Internal disk contains:
 ├── Standard Ubuntu 24.04 LTS
 ├── Linux kernel (Ubuntu's linux-image-generic)
 ├── GRUB bootloader
-├── X11 + Alacritty terminal
+├── X11 + the Purple window (see guides/canvas-architecture.md)
 ├── Purple TUI application
 └── Everything needed to run Purple Computer
 ```

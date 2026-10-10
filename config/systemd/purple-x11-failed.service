@@ -1,0 +1,18 @@
+[Unit]
+Description=Purple Computer X11 failure screen
+# Activated by purple-x11.service's OnFailure= once its restart limit is hit.
+# Not enabled or wanted by any target: it only ever runs from that trigger.
+Conflicts=purple-x11.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/purple-x11-failed
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYReset=no
+TTYVHangup=no
+TTYVTDisallocate=no
+# Waits for Enter indefinitely; stopping it must not hold up shutdown.
+TimeoutStopSec=5

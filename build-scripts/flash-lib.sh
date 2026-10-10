@@ -100,12 +100,16 @@ load_denylist() {
 
 # True when a serial is denied, with the reason left in DENY_REASON. Callers
 # must not wrap this in $(): the cache would then load in a subshell and be
-# thrown away, re-reading the file once per drive.
+# thrown away, re-reading the file once per drive. --ignore-denylist exports
+# PURPLE_IGNORE_DENYLIST=1 so flash-all's per-drive children inherit it.
 DENY_REASON=""
 is_denied() {
     load_denylist
     DENY_REASON="${DENIED_SERIALS[$1]:-}"
-    [[ -n "$DENY_REASON" ]]
+    [[ -n "$DENY_REASON" ]] || return 1
+    [[ "${PURPLE_IGNORE_DENYLIST:-}" == "1" ]] || return 0
+    echo "[WARN] Ignoring denylist for serial $1: $DENY_REASON" >&2
+    return 1
 }
 
 # Populate FOUND_DRIVES with "dev|size|model|serial" entries for every
@@ -217,17 +221,6 @@ boot_settle_max_jobs() {
     cap=$(( (avail_mb - 2048) / 2560 ))
     (( cap >= 1 )) || cap=1
     echo "$cap"
-}
-
-# Count PIDs still running. Unreaped children sit as zombies until the parent
-# waits, so plain kill -0 would never see a slot free up.
-count_running() {
-    local n=0 pid state
-    for pid in "$@"; do
-        state=$(ps -o state= -p "$pid" 2>/dev/null | tr -d ' ') || true
-        [[ -z "$state" || "$state" == Z* ]] || n=$((n + 1))
-    done
-    echo "$n"
 }
 
 # Boot a freshly flashed drive once in QEMU so its controller pays the
@@ -367,6 +360,13 @@ drive_location() {
     echo "$(cat "$usbdir/product" "$usbdir/serial" 2>/dev/null | xargs), USB port $(describe_port "$(basename "$usbdir")")"
 }
 
+# "[top row 3] /dev/sdb" when the drive's socket is labeled, else "/dev/sdb".
+drive_tag() {
+    local label
+    label="$(port_label "$(usb_port_name "$1")")"
+    echo "${label:+[$label] }$1"
+}
+
 # USB port name of a drive (e.g. 4-1.4), stable per physical socket.
 usb_port_name() {
     local usbdir
@@ -427,6 +427,7 @@ load_port_labels() {
 # Label for a port name or key, or empty. Same subshell caveat as is_denied:
 # calling this via $() re-reads the file, which is fine for a file this small.
 port_label() {
+    [[ -n "$1" ]] || return 0
     load_port_labels
     echo "${PORT_LABELS[$(port_key "$1")]:-}"
 }
@@ -440,13 +441,17 @@ save_port_label() {
     mv "$tmp" "$(port_labels_path)"
 }
 
-# Full port name for a socket key on the fastest bus whose hub exposes that
-# socket right now (1.4 -> 4-1.4). Full names pass through; an unresolvable
-# key is echoed as is, so callers can always print it and port_control_path
-# fails cleanly on it.
+# Full port name for a socket key or label on the fastest bus whose hub exposes
+# that socket right now (1.4 or its label -> 4-1.4). Full names pass through;
+# an unresolvable key is echoed as is, so callers can always print it and
+# port_control_path fails cleanly on it.
 resolve_port_name() {
-    local key="$1" bus n speed best="$1" best_speed=0
+    local key="$1" bus n speed best="$1" best_speed=0 k
     [[ "$key" == *-* ]] && { echo "$key"; return; }
+    load_port_labels
+    for k in "${!PORT_LABELS[@]}"; do
+        [[ "${PORT_LABELS[$k]}" == "$key" ]] && { key="$k"; best="$k"; break; }
+    done
     for bus in /sys/bus/usb/devices/usb*; do
         n="${bus##*/usb}"
         speed="$(cat "$bus/speed" 2>/dev/null || echo 0)"
@@ -465,11 +470,13 @@ describe_port() {
 
 # Repeat a pulse command in the background until the user presses Enter.
 # $1 is the prompt, the rest the command to run once per pulse. The user's
-# reply is left in REPLY for callers that offer choices.
+# reply is left in REPLY for callers that offer choices. The loop stops on its
+# own once the script is gone, so a hard exit can't leave a socket blinking,
+# and finishes its current step when killed so a restore can't race it.
 pulse_until_enter() {
     local prompt="$1" pid
     shift
-    ( while true; do "$@"; sleep 0.7; done ) &
+    ( trap exit TERM; while kill -0 $$ 2>/dev/null; do "$@"; sleep 0.7; done ) &
     pid=$!
     read -r -p "$prompt"
     kill "$pid" 2>/dev/null || true
@@ -526,17 +533,24 @@ slot_release() { eval "exec $1>&-"; }
 # for it to appear (a power-cycled drive takes a few seconds to re-enumerate,
 # and can come back under a different letter).
 dev_for_serial() {
-    local serial="$1" timeout="${2:-30}" waited=0 name
+    local serial="$1" timeout="${2:-30}" waited=0 dev
     while (( waited < timeout )); do
-        name="$(lsblk -d -n -o NAME,SERIAL 2>/dev/null | awk -v s="$serial" '$2 == s {print $1; exit}')"
-        if [[ -n "$name" && -b "/dev/$name" ]]; then
-            echo "/dev/$name"
+        dev="$(dev_of_serial "$serial")"
+        if [[ -n "$dev" ]]; then
+            echo "$dev"
             return 0
         fi
         sleep 2
         waited=$((waited + 2))
     done
     return 1
+}
+
+# Block device holding a serial right now, else empty.
+dev_of_serial() {
+    local name
+    name="$(lsblk -d -n -o NAME,SERIAL 2>/dev/null | awk -v s="$1" '$2 == s {print $1; exit}')"
+    [[ -n "$name" && -b "/dev/$name" ]] && echo "/dev/$name" || true
 }
 
 # Power-cycle a hub port and return the device node the drive comes back on,
@@ -556,12 +570,19 @@ recover_drive() {
     dev_for_serial "$serial" 40
 }
 
+# Healthy sticks read back at 27+ MB/s even sixteen at a time on one hub; dying
+# ones manage 0.4-2 MB/s and would hold a batch for hours. Override with
+# FLASH_MIN_READ_MBPS.
+MIN_READ_MBPS="${FLASH_MIN_READ_MBPS:-8}"
+
 # SHA256 of $2 bytes of a device starting at byte $3 (default 0), read with
 # O_DIRECT after dropping the page cache so the bytes come off the flash
-# rather than out of RAM.
+# rather than out of RAM. Fails if the read errors or runs slower than
+# MIN_READ_MBPS.
 device_sha256() {
+    local limit=$(( $2 / (MIN_READ_MBPS * 1048576) + 60 ))
     sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
-    sudo dd if="$1" bs=4M count="$2" skip="${3:-0}" \
+    sudo timeout "$limit" dd if="$1" bs=4M count="$2" skip="${3:-0}" \
         iflag=direct,count_bytes,skip_bytes status=none 2>/dev/null \
         | sha256sum | awk '{print $1}'
 }
@@ -571,14 +592,27 @@ device_sha256() {
 # drive against the ISO after settling.
 GPT_SKIP_BYTES=1048576
 
-# Bytes of the ISO covered by its partitions. Past them the file holds only
-# a backup GPT the settle boot supersedes and xorriso padding, and casper puts
-# the writable partition on the next 2MiB boundary after the last partition,
-# which can land inside that padding: its mkfs then looks like decay.
+# Bytes of the ISO covered by its partitions (1: ISO9660, 2: EFI, 3: PURPLEUSB,
+# which restore_log_partition puts back after the settle boot). Past them the file
+# holds only a backup GPT the settle boot supersedes and xorriso padding, and
+# casper puts the writable partition on the next 2MiB boundary after the last
+# partition, which can land inside that padding: its mkfs then looks like decay.
 iso_partitioned_bytes() {
     local end
-    end=$(sfdisk -l -q -o end "$1" 2>/dev/null | tail -n +2 | sort -n | tail -n1)
+    end=$(sfdisk -l -q -o device,end "$1" 2>/dev/null | awk '$1 ~ /[^0-9][123]$/ {print $2}' | sort -n | tail -n1)
     if [[ -n "$end" ]]; then echo $(( (end + 1) * 512 )); else stat -c %s "$1"; fi
+}
+
+# The settle boot runs the stick log like any live boot, so copy PURPLEUSB back
+# from the ISO: the stick ships with the log the build wrote. Sticks tested by
+# hand get the same from `cleanlog`. ISOs without a third partition: no-op.
+restore_log_partition() {
+    local dev="$1" iso="$2" start end
+    read -r start end < <(sfdisk -l -q -o device,start,end "$iso" 2>/dev/null | awk '$1 ~ /[^0-9]3$/ {print $2, $3}')
+    [[ -n "$end" ]] || return 0
+    sudo dd if="$iso" of="$dev" bs=4M skip=$((start * 512)) seek=$((start * 512)) \
+        count=$(((end - start + 1) * 512)) iflag=skip_bytes,count_bytes oflag=seek_bytes \
+        conv=notrunc,fsync status=none
 }
 
 # Confirm a drive still holds the image after boot-settling, catching flash
@@ -591,19 +625,22 @@ recheck_after_settle() {
     bytes=$(( $(iso_partitioned_bytes "$iso") - GPT_SKIP_BYTES ))
     expected="$(dd if="$iso" bs=4M skip="$GPT_SKIP_BYTES" count="$bytes" \
         iflag=skip_bytes,count_bytes status=none | sha256sum | awk '{print $1}')"
-    actual="$(device_sha256 "$dev" "$bytes" "$GPT_SKIP_BYTES")"
+    actual="$(device_sha256 "$dev" "$bytes" "$GPT_SKIP_BYTES")" || return 1
     [[ "$actual" == "$expected" ]]
 }
 
-# Re-read the partition table, then power off the drive so it re-enumerates
-# fresh on next plug-in. Some USB controllers (e.g. Verbatim) won't boot
-# unless they re-enumerate; this is what GNOME's "safely eject" and
-# balenaEtcher do at the end of a flash.
+# Power off the drive so it re-enumerates fresh on next plug-in. Some USB
+# controllers (e.g. Verbatim) won't boot unless they re-enumerate; this is
+# what GNOME's "safely eject" and balenaEtcher do at the end of a flash.
+# Writes the USB device's sysfs remove attribute, as udisks power-off does,
+# so it needs no running udev and never waits on other drives' writes.
 eject_drive() {
-    local dev="$1"
-    sudo blockdev --rereadpt "$dev" 2>/dev/null || true
-    sudo partprobe "$dev" 2>/dev/null || true
-    sudo udevadm settle 2>/dev/null || true
+    local dev="$1" usbdir
+    usbdir="$(usb_device_dir "$dev")"
+    sudo blockdev --flushbufs "$dev" 2>/dev/null || true
+    if [[ -n "$usbdir" ]]; then
+        echo 1 | sudo tee "$usbdir/remove" >/dev/null 2>&1 && return 0
+    fi
     sudo udisksctl power-off --block-device "$dev" 2>/dev/null \
         || sudo eject "$dev" 2>/dev/null
 }
@@ -617,10 +654,53 @@ eject_drive() {
 # the edge. Every helper succeeds with empty output when nothing matches, so
 # callers under set -e get their friendly no-ISO errors instead of a die.
 
-# All build ISOs, newest first. The one place corrupt-test ISOs (deliberately
-# damaged test artifacts) are excluded from auto-picking.
+# The source commit baked into an ISO: the .commit sidecar, or for older
+# builds the hash inside a build-* version stamp.
+iso_commit() {
+    local c v
+    c="$(tr -d '[:space:]' 2>/dev/null < "$1.commit" || true)"
+    v="$(tr -d '[:space:]' 2>/dev/null < "$1.version" || true)"
+    if [[ -z "$c" || "$c" == unknown ]]; then
+        [[ "$v" =~ ^build-([0-9a-f]+)- ]] && c="${BASH_REMATCH[1]}" || c=""
+    fi
+    echo "$c"
+}
+
+# stdin: ISO paths; keeps the ones built from commit $1 (all of them when $1
+# is empty). Sidecars hold short hashes, so a full hash matches by prefix.
+built_from_commit() {
+    local iso c
+    while read -r iso; do
+        c="$(iso_commit "$iso")"
+        [[ -z "$1" || ( -n "$c" && "$1" == "$c"* ) ]] && echo "$iso"
+    done
+    true
+}
+
+# use_build_of_ref <commit-ish>: point every ISO helper at that commit's build.
+# 'just build --ref' archives under its own dir; a build made on the normal
+# path is found by the commit stamped in its sidecars. Fails on an unknown ref.
+BUILD_COMMIT_FILTER=""
+use_build_of_ref() {
+    local archive
+    archive="$(archive_dir_for_ref "$1")/output" || return 1
+    if ls "$archive"/purple-*.iso >/dev/null 2>&1; then
+        OUTPUT_DIR="$archive"
+    else
+        BUILD_COMMIT_FILTER="$(git -C "$PROJECT_DIR" rev-parse "$1^{commit}")"
+    fi
+}
+
+# All build ISOs, newest first, of the --ref commit when one was given. The one
+# place corrupt-test ISOs (deliberately damaged test artifacts) are excluded
+# from auto-picking.
 list_build_isos() {
-    ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v corrupt-test || true
+    ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v corrupt-test | built_from_commit "$BUILD_COMMIT_FILTER"
+}
+
+# Where the ISOs being looked for live, for error messages.
+build_source_label() {
+    [[ -n "$BUILD_COMMIT_FILTER" ]] && echo "built from commit ${BUILD_COMMIT_FILTER:0:7} in $OUTPUT_DIR" || echo "in $OUTPUT_DIR"
 }
 
 # stdin: ISO paths; keeps only the given variant (default: standard).
@@ -665,6 +745,105 @@ find_latest_iso() {
 # user-confirmed fallback when the newest build lacks that variant.
 newest_iso_of_variant() {
     list_build_isos | filter_variant "${1:-}" | head -1
+}
+
+# --- Picking an ISO from the output dir ----------------------------------
+# Shared by flash-to-usb.sh and link-iso.sh. Prompts say ISO_ACTION (Flash by
+# default); SKIP_CONFIRM=true takes the default without asking.
+
+die_no_iso() {
+    log_error "No $1 found $(build_source_label)."
+    if [[ -n "$BUILD_COMMIT_FILTER" ]]; then
+        echo "Build it first with 'just build --ref <commit>'."
+    else
+        echo "Run 'just build' first, or pass a path to an ISO."
+    fi
+    exit 1
+}
+
+# Read a 1-based menu choice for a list of $1 items; echoes the choice, or
+# nothing when the user just presses Enter. Exits on invalid input.
+read_menu_choice() {
+    local count="$1" prompt="$2" choice
+    read -p "$prompt" choice
+    [[ -z "$choice" ]] && return 0
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt $count ]]; then
+        log_error "Invalid selection"
+        exit 1
+    fi
+    echo "$choice"
+}
+
+# Resolve a specific variant of the newest build, or, when it's missing, offer
+# the newest older build of that variant with an explicit confirmation. Never
+# silently flashes an older build.
+resolve_variant() {
+    local kind="$1" label
+    case "$kind" in
+        debug) label="debug" ;;
+        *)     label="standard (no backup image)" ;;
+    esac
+    ISO_PATH="$(find_latest_iso "$kind")"
+    [[ -n "$ISO_PATH" ]] && return 0
+
+    local stem older
+    stem="$(latest_build_stem)"
+    older="$(newest_iso_of_variant "$kind")"
+    if [[ -z "$stem" || -z "$older" ]]; then
+        die_no_iso "$label ISO"
+    fi
+    log_warn "The newest build ($(basename "$stem")) has no $label ISO."
+    if [[ "$SKIP_CONFIRM" == true ]]; then
+        log_error "Newest $label ISO is from an OLDER build: $older"
+        log_error "Refusing to pick it silently under --yes. Pass its path explicitly."
+        exit 1
+    fi
+    echo ""
+    read -p "${ISO_ACTION:-Flash} the OLDER $(basename "$older") instead? Type 'yes' to continue: " answer
+    if [[ "$answer" != "yes" ]]; then
+        log_info "Aborted."
+        exit 0
+    fi
+    ISO_PATH="$older"
+}
+
+# Newest deliberately-corrupted test ISO, optionally of one scenario
+# (excluded from all normal ISO discovery, so it needs its own resolution
+# path).
+select_iso() {
+    local stem
+    stem="$(latest_build_stem)"
+    [[ -n "$stem" ]] || die_no_iso "ISO"
+
+    local labels=() paths=() f
+    f="$(variant_path "$stem" backup)"
+    [[ -f "$f" ]] && { paths+=("$f"); labels+=("standard + backup image (recommended: install self-heals if the USB decays)"); }
+    f="$(variant_path "$stem" standard)"
+    [[ -f "$f" ]] && { paths+=("$f"); labels+=("standard (smaller, no backup image copy)"); }
+    f="$(variant_path "$stem" debug)"
+    [[ -f "$f" ]] && { paths+=("$f"); labels+=("debug (visible boot menu, verbose logs, for troubleshooting)"); }
+
+    local version=""
+    [[ -f "${paths[0]}.version" ]] && version="  [$(cat "${paths[0]}.version")]"
+    echo ""
+    echo -e "${BOLD}Newest build: $(basename "$stem")${version}${NC}"
+
+    if [[ "$SKIP_CONFIRM" == true || ${#paths[@]} -eq 1 ]]; then
+        ISO_PATH="${paths[0]}"
+        log_info "Using ${labels[0]%% (*}: $(basename "$ISO_PATH")"
+        return 0
+    fi
+
+    echo ""
+    for i in "${!paths[@]}"; do
+        echo "  $((i+1))) ${labels[$i]}"
+        echo "       $(basename "${paths[$i]}")"
+    done
+    echo ""
+    local choice
+    choice="$(read_menu_choice "${#paths[@]}" "${ISO_ACTION:-Flash} which one? [1-${#paths[@]}, default 1]: ")" || exit 1
+    [[ -n "$choice" ]] || choice=1
+    ISO_PATH="${paths[$((choice-1))]}"
 }
 
 # --- Corrupt-test scenarios --------------------------------------------------

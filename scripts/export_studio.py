@@ -97,7 +97,7 @@ def build_export() -> dict:
             "bg_dark": DEFAULT_BG_DARK,
             "bg_light": DEFAULT_BG_LIGHT,
             "gutter": [GUTTER_BG_DARK_A, GUTTER_BG_DARK_B],
-            "fit": {f"{w}x{h}": list(fit_to_canvas(w, h)) for w, h in FIT_SIZES},
+            "fit": {f"{w}x{h}": list(fit_to_canvas(w, h, CANVAS_WIDTH, CANVAS_HEIGHT)) for w, h in FIT_SIZES},
         },
         "music": {
             "grid_rows": [[k.lower() for k in row] for row in GRID_KEYS[1:]],

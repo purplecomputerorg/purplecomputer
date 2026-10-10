@@ -1,0 +1,8 @@
+[Unit]
+Description=Purple Computer: set up a plugged-in USB printer
+After=cups.socket
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/purple-printer-setup
+TimeoutStartSec=90

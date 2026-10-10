@@ -19,9 +19,14 @@ ConditionKernelCommandLine=!purple.install=1
 # Rate limit for Restart=on-failure below. These are Unit-section keys: systemd
 # ignores them in the service section ("Unknown key name ... ignoring"), which
 # left the limit inert and X restarting forever instead of showing the error
-# screen.
-StartLimitIntervalSec=60
+# screen. The window covers 3 attempts that each spend purple-wait-display's
+# full 15s timeout, or the limit never trips and X restarts forever.
+StartLimitIntervalSec=120
 StartLimitBurst=3
+# The failure screen is its own unit, started only when the restart limit is
+# hit (RestartMode=direct below keeps retries out of 'failed'). As an
+# ExecStopPost it was killed by TimeoutStopSec while waiting for Enter.
+OnFailure=purple-x11-failed.service
 
 [Service]
 # Route pygame/SDL audio through PulseAudio instead of direct ALSA.
@@ -31,8 +36,9 @@ StartLimitBurst=3
 # nowhere. PulseAudio handles default-sink selection and USB speaker
 # hotplug as first-class features. See guides/audio-pipeline.md.
 Environment=SDL_AUDIODRIVER=pulseaudio
-# Poll for a connected display connector (handles i915 async init)
+# Wait for a real GPU to report a connected display (see the script header)
 ExecStartPre=/usr/local/bin/purple-wait-display
+ExecStartPre=-+/usr/local/bin/purple-backlight-max
 # Clean stale X lock files from previous crashes
 ExecStartPre=-/bin/rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 ExecStart=/usr/bin/startx /home/purple/.xinitrc -- vt1
@@ -55,9 +61,10 @@ TTYVTDisallocate=no
 TimeoutStopSec=10
 # Restart on failure (replaces manual fail counter). Rate limit is in [Unit].
 Restart=on-failure
+# systemd 254+ defaults to RestartMode=normal, which fires OnFailure= on every
+# failed attempt; the failure screen's Conflicts= then cancelled the retry.
+RestartMode=direct
 RestartSec=2
-# Show error on tty1 if we hit the restart limit (or any failure)
-ExecStopPost=-/usr/local/bin/purple-x11-failed
 
 [Install]
 WantedBy=graphical.target

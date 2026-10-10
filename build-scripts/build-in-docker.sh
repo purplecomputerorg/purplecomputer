@@ -4,6 +4,7 @@
 #   step: optional step number to start from (0-1, default: 0)
 #     0 = build golden image (pre-built Ubuntu system)
 #     1 = remaster Ubuntu Server ISO (inject hook into initramfs)
+#   --pi: build the Raspberry Pi card image (purple-pi-<date>.img.xz) instead of the ISOs
 
 set -e
 
@@ -11,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
 IMAGE_NAME="purple-installer-builder"
 FAST_BUILD=0
+PI_BUILD=0
 
 # Parse arguments
 START_STEP=0
@@ -19,6 +21,7 @@ FORCE_BUILD=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --fast) FAST_BUILD=1 ;;
+        --pi) PI_BUILD=1 ;;
         --force) FORCE_BUILD=1 ;;
         --ref) BUILD_REF="$2"; shift ;;
         *) START_STEP="$1" ;;
@@ -84,6 +87,26 @@ skip_if_already_built() {
     exit 0
 }
 
+# Say up front exactly what is about to be built, and settle the version the
+# image gets stamped with. Resolved on the host where git works (the container
+# hits safe.directory errors).
+resolve_and_log_source() {
+    local git_hash dirty=""
+    git_hash=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    PURPLE_COMMIT="${PURPLE_COMMIT:-$git_hash}"
+    if [ -z "${PURPLE_VERSION:-}" ]; then
+        PURPLE_VERSION="build-${git_hash}-$(date +%Y%m%d)"
+    fi
+    if [ -n "$BUILD_REF" ]; then
+        log_info "Ref: $BUILD_REF (built in isolation)"
+    else
+        [ -z "$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null)" ] || dirty=" + uncommitted changes"
+        log_info "Branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")$dirty"
+    fi
+    log_info "Commit: $(git -C "$PROJECT_DIR" log -1 --format='%h %s' 2>/dev/null || echo "$git_hash")"
+    log_info "Version: $PURPLE_VERSION"
+}
+
 main() {
     cd "$SCRIPT_DIR"
 
@@ -93,15 +116,21 @@ main() {
     if [ -n "$BUILD_REF" ]; then
         setup_ref_build
     fi
-    skip_if_already_built
-
-    if [ "$START_STEP" -ge 1 ]; then
-        log_info "Build plan: ISOs only (reusing existing golden image)"
+    resolve_and_log_source
+    if [ "$PI_BUILD" = "1" ]; then
+        log_info "Build plan: Raspberry Pi card image (arm64, emulated, the slow step)"
+        log_info "Will produce in $OUTPUT_DIR:"
+        log_info "  purple-pi-$(date +%Y%m%d)$([ "$FAST_BUILD" = "1" ] && echo -fast).img.xz"
     else
-        log_info "Build plan: golden image (the slow step), then ISOs"
+        skip_if_already_built
+        if [ "$START_STEP" -ge 1 ]; then
+            log_info "Build plan: ISOs only (reusing existing golden image)"
+        else
+            log_info "Build plan: golden image (the slow step), then ISOs"
+        fi
+        log_info "Will produce in $OUTPUT_DIR:"
+        planned_iso_names | while read -r line; do log_info "  $line"; done
     fi
-    log_info "Will produce in $OUTPUT_DIR:"
-    planned_iso_names | while read -r line; do log_info "  $line"; done
 
     # Build Docker image
     log_step "Building Docker image..."
@@ -114,14 +143,6 @@ main() {
     log_info "  - We inject a hook script into the initramfs"
     log_info "  - Squashfs and boot stack remain untouched"
 
-    # Resolve version on the host where git works (container hits safe.directory errors)
-    local git_hash
-    git_hash=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    PURPLE_COMMIT="${PURPLE_COMMIT:-$git_hash}"
-    if [ -z "${PURPLE_VERSION:-}" ]; then
-        PURPLE_VERSION="build-${git_hash}-$(date +%Y%m%d)"
-    fi
-
     docker run --rm --privileged \
         -v "$BUILD_CTX:/build" \
         -v "$PROJECT_DIR:/purple-src" \
@@ -129,9 +150,14 @@ main() {
         -e "PURPLE_VERSION=${PURPLE_VERSION}" \
         -e "PURPLE_COMMIT=${PURPLE_COMMIT}" \
         -e "FAST_BUILD=${FAST_BUILD}" \
+        -e "PURPLE_PI=${PI_BUILD}" \
         -e "PURPLE_WITH_BACKUP_ISO=${PURPLE_WITH_BACKUP_ISO:-}" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"
+
+    if [ "$PI_BUILD" = "1" ]; then
+        "$SCRIPT_DIR/link-iso.sh" "$(ls -t "$OUTPUT_DIR"/purple-pi-*.img.xz | head -1)"
+    fi
 
     log_info "Build complete!"
     log_info "Output in: $OUTPUT_DIR/"

@@ -27,9 +27,11 @@ from pathlib import Path
 import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
-from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
+from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present, PAYLOAD_DIR, SUPPORT_EMAIL
 from ..audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
+from ..tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from .. import diagnostics
+from ..backlight import set_level as set_backlight_level
 
 
 # =============================================================================
@@ -164,11 +166,14 @@ def apply_display_settings(brightness: float, contrast: float) -> bool:
 
     Returns True on success.
     """
-    if not display_control_available():
-        return False
-
     brightness = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, brightness))
     contrast = max(CONTRAST_MIN, min(CONTRAST_MAX, contrast))
+    # A real backlight dims the panel (and saves power); xrandr then stays at full
+    if set_backlight_level(brightness):
+        brightness = 1.0
+
+    if not display_control_available():
+        return False
 
     outputs = _get_xrandr_outputs()
     if not outputs:
@@ -371,6 +376,31 @@ _MUSIC_KEY_SWITCHING_CANCELLED = object()
 
 # AllCapsScreen dismiss value
 _ALL_CAPS_CANCELLED = object()
+
+# VoiceScreen dismiss value
+_VOICE_CANCELLED = object()
+
+
+class VoiceScreen(PickerModal):
+    """Pick the synthesizer: Piper (Natural) or flite (Quick)."""
+
+    TITLE = "Voice"
+    DESCRIPTION = "The voice Purple speaks with"
+    OPTIONS = [
+        (VOICE_NATURAL, "Natural", "Smoother, but slower on older laptops"),
+        (VOICE_QUICK, "Quick", "Simpler, and never keeps a kid waiting"),
+    ]
+    escape_value = _VOICE_CANCELLED
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_voice
+        self._selected = next((i for i, opt in enumerate(self.OPTIONS) if opt[0] == get_voice()), 0)
+
+
+def _voice_menu_label(pref: str) -> str:
+    return f"Voice: {VOICE_NAMES.get(pref, VOICE_NAMES[VOICE_NATURAL])}"
+
 
 # KidLettersScreen dismiss value
 _KID_LETTERS_CANCELLED = object()
@@ -895,6 +925,8 @@ def _boot_mode_hint() -> str:
         return "Running from USB. Not yet installed.\nReinsert after restart.\nInstall to keep it without the USB."
     if is_usb_cached():
         return "Running from USB. Not yet installed.\nOK to remove USB. Reinsert after restart.\nInstall to keep it without the USB."
+    if is_usb_needed():
+        return "Running from USB. Not yet installed.\nKeep the USB in while you play.\nInstall to keep it without the USB."
     return "Running from USB. Not yet installed.\n\nInstall to keep it without the USB."
 
 
@@ -993,7 +1025,8 @@ def _get_menu_items() -> list:
     Items whose id starts with `sec-` are section headers: visual-only,
     skipped by keyboard navigation, no action when activated.
     """
-    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps, get_volume_lock, get_parent_pin
+    from ..settings import (get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps,
+                            get_volume_lock, get_parent_pin, get_voice)
 
     items = []
 
@@ -1025,6 +1058,7 @@ def _get_menu_items() -> list:
 
     items.append(("sec-av", "Sound & Display"))
     items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
+    items.append(("menu-voice", _voice_menu_label(get_voice())))
     if display_control_available():
         items.append(("menu-display", "Display"))
 
@@ -1587,7 +1621,7 @@ class InstallProgressScreen(PurpleModal):
             stdout=subprocess.DEVNULL,
             env={
                 **os.environ,
-                "PURPLE_PAYLOAD_DIR": "/cdrom/purple",
+                "PURPLE_PAYLOAD_DIR": PAYLOAD_DIR,
                 "PURPLE_COMPUTER_NAME": self._computer_name,
                 # Lets the installed system's first boot tell "audio worked
                 # minutes ago, silent now" apart from never-had-sound.
@@ -1661,16 +1695,9 @@ class InstallProgressScreen(PurpleModal):
                 self._set_progress(lo + int(pv_pct * span / 100), self._status)
                 return
         if clean.startswith('[PURPLE-RETRY]'):
-            # Primary image copy was corrupt; install.sh is rewriting from the
-            # backup copy. Progress is forward-only, so just soften the status.
+            # A range of the primary image copy was corrupt; install.sh took it
+            # from the backup copy. Progress is forward-only, so just soften the status.
             self._status = "Double-checking with a backup copy..."
-            self._update_ui()
-            return
-        if clean.startswith('[PURPLE-MERGING]'):
-            # Both whole copies were damaged; install.sh is rewriting from the
-            # good ranges of each. The forward-only bar sits still until pv
-            # catches back up, so the status must explain the extra wait.
-            self._status = "Still double-checking, this adds a few extra minutes..."
             self._update_ui()
             return
         if clean.startswith('[PURPLE-CORRUPT-KEY]'):
@@ -1769,7 +1796,8 @@ class InstallProgressScreen(PurpleModal):
 
         # USB / source media state
         section("USB / source media")
-        file_info("Golden image", "/cdrom/purple/purple-os.img.zst")
+        file_info("Golden image", f"{PAYLOAD_DIR}/purple-os.img.zst")
+
         file_info("Install script", "/cdrom/purple/install.sh")
         file_info("/cdrom mount", "/cdrom")
         cmd("cdrom contents", "ls /cdrom/purple/ 2>&1", max_lines=10)
@@ -2175,6 +2203,8 @@ class ParentMenu(PurpleModal):
             self._open_music_key_switching()
         elif item_id == "menu-all-caps":
             self._open_all_caps()
+        elif item_id == "menu-voice":
+            self._open_voice()
         elif item_id == "menu-secret":
             self._open_secret_menu()
         elif item_id == "menu-pictures":
@@ -2358,6 +2388,19 @@ class ParentMenu(PurpleModal):
             widget.update(label)
         except Exception:
             pass
+
+    def _open_voice(self) -> None:
+        def on_result(result):
+            if result is _VOICE_CANCELLED:
+                return
+            from .. import tts
+            tts.set_voice(result)
+            try:
+                self.query_one("#menu-voice", ParentMenuItem).update(_voice_menu_label(result))
+            except Exception:
+                pass
+        self.app.push_screen(VoiceScreen(), callback=on_result)
+
 
     def _open_secret_menu(self) -> None:
         def on_result(result):
@@ -2593,4 +2636,3 @@ class ParentMenu(PurpleModal):
         self.dismiss()
         # Tell the app to start demo after modal is closed
         self.app.call_later(self.app.start_demo)
-

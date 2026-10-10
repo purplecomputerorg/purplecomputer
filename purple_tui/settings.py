@@ -23,6 +23,7 @@ _defaults = {
     "parent_pin": None,          # Optional 4-digit PIN gating the parent menu; None = no PIN
     "kid_letters": False,        # Use the recorded kid-voice clips for A-Z letter names (gated behind the secret menu)
     "secret_unlocked": False,    # Family secret menu revealed via the Ctrl+codeword gesture
+    "voice": "natural",          # Which synthesizer speaks: "natural" (Piper) or "quick" (flite)
 }
 
 
@@ -172,3 +173,12 @@ def set_parent_pin(pin: str | None) -> None:
     save_settings(settings)
 
 
+def get_voice() -> str:
+    """Which synthesizer speaks: "natural" (Piper) or "quick" (flite)."""
+    return load_settings()["voice"]
+
+
+def set_voice(pref: str) -> None:
+    settings = load_settings()
+    settings["voice"] = pref
+    save_settings(settings)

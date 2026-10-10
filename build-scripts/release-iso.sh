@@ -71,28 +71,6 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# The source commit baked into an ISO: the .commit sidecar, or for older
-# builds the hash inside a build-* version stamp.
-iso_commit() {
-    local c v
-    c="$(tr -d '[:space:]' < "$1.commit" 2>/dev/null || true)"
-    v="$(tr -d '[:space:]' < "$1.version" 2>/dev/null || true)"
-    if [ -z "$c" ] || [ "$c" = "unknown" ]; then
-        [[ "$v" =~ ^build-([0-9a-f]+)- ]] && c="${BASH_REMATCH[1]}" || c=""
-    fi
-    echo "$c"
-}
-
-# stdin: ISO paths; keeps the ones built from the release commit.
-built_from_commit() {
-    local iso c
-    while read -r iso; do
-        c="$(iso_commit "$iso")"
-        [ -n "$c" ] && [[ "$RELEASE_COMMIT" == "$c"* ]] && echo "$iso"
-    done
-    true
-}
-
 # Release the newest build of the release commit; newer builds of other
 # commits (usually main) are ignored. Public download stays the standard ISO;
 # with-backup (second golden image copy) is only for flashed-and-shipped USBs.
@@ -105,8 +83,9 @@ SHORT_COMMIT=${RELEASE_COMMIT:0:7}
 git merge-base --is-ancestor "$RELEASE_COMMIT" HEAD \
     || { log_error "$SHORT_COMMIT is not on $BRANCH; only commits already on the shipping branch release"; exit 1; }
 BEHIND=$(git rev-list --count "$RELEASE_COMMIT..HEAD")
-STANDARD_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant standard | built_from_commit | head -1)
-DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant debug | built_from_commit | head -1)
+BUILD_COMMIT_FILTER="$RELEASE_COMMIT"
+STANDARD_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant standard | head -1)
+DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant debug | head -1)
 
 if [ -z "$STANDARD_ISO" ] || [ -z "$DEBUG_ISO" ]; then
     log_error "No standard + debug ISO built from $SHORT_COMMIT in $ISO_DIR"

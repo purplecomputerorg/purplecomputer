@@ -17,8 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image
 
-from purple_tui.art_config import CANVAS_WIDTH, CANVAS_HEIGHT
-from purple_tui.rooms.art_room import DEFAULT_BG_DARK
+from purple_tui.canvas.rooms.art_room import COLS as CANVAS_WIDTH, ROWS as CANVAS_HEIGHT, CANVAS_BG as DEFAULT_BG_DARK
 
 CELL_ASPECT = 2  # a canvas cell is twice as tall as it is wide
 PREVIEW_CELL_PX = 10
@@ -29,12 +28,10 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
-def fit_to_canvas(width: int, height: int) -> tuple[int, int]:
-    """Cell grid size that fits the canvas while preserving the photo aspect."""
-    scale = min(CANVAS_WIDTH / width, CANVAS_HEIGHT * CELL_ASPECT / height)
-    cols = max(1, round(width * scale))
-    rows = max(1, round(height * scale / CELL_ASPECT))
-    return cols, rows
+def fit_to_canvas(width: int, height: int, cols: int = CANVAS_WIDTH, rows: int = CANVAS_HEIGHT) -> tuple[int, int]:
+    """Cell grid size that fits a cols x rows canvas while preserving the photo aspect."""
+    scale = min(cols / width, rows * CELL_ASPECT / height)
+    return max(1, round(width * scale)), max(1, round(height * scale / CELL_ASPECT))
 
 
 def convert(photo_path: str) -> tuple[list[tuple[int, int, str]], list[list[str]]]:

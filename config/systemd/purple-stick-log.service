@@ -1,0 +1,22 @@
+[Unit]
+Description=Purple Computer boot report and kernel log on the USB stick
+# Live boots only: the stick is the only place the file can go, and an
+# installed system has the persistent journal instead.
+ConditionPathIsMountPoint=/cdrom
+ConditionKernelCommandLine=!purple.install=1
+# Starts as soon as udev has run, not at multi-user: a stick that stops
+# reading a minute into boot still gets the early reports written before it did.
+DefaultDependencies=no
+After=systemd-udev-trigger.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/purple-stick-log
+Nice=10
+# Kid-facing reads from the stick go first; the log fills the gaps.
+IOSchedulingClass=idle
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=sysinit.target

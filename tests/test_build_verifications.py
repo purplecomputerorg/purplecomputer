@@ -6,6 +6,7 @@ switch-on-connect drop-in without failing tests.
 """
 
 import functools
+import importlib.util
 import re
 from pathlib import Path
 
@@ -112,21 +113,6 @@ def test_firmware_prune_keeps_and_guards_audio_gpu_dirs():
     assert "missing after prune" in src, "no post-prune firmware existence guard"
 
 
-def test_gl_probe_ships_and_glxinfo_is_verified():
-    """The GL probe needs glxinfo (mesa-utils) in the image; if either quietly
-    vanishes, every machine silently falls back to software rendering. The
-    build must install both and keep glxinfo in the fail-loudly verify loop
-    (a comment mentioning glxinfo must not satisfy this)."""
-    src = _build_source()
-    assert re.search(r"^\s*mesa-utils \\$", src, re.M), \
-        "mesa-utils not in apt install list"
-    assert re.search(r'cp /purple-src/scripts/purple-gl-probe\.sh\b', src), \
-        "purple-gl-probe.sh not copied into the image"
-    assert re.search(r'chmod \+x "\$MOUNT_DIR/usr/local/bin/purple-gl-probe"', src), \
-        "purple-gl-probe not made executable"
-    assert re.search(r"for cmd in [^\n]*\bglxinfo\b", src), \
-        "glxinfo not in the fail-loudly tooling verification loop"
-
 
 def test_x11_service_start_limit_keys_are_in_unit_section():
     """StartLimitIntervalSec/StartLimitBurst are [Unit] keys. Under [Service]
@@ -140,6 +126,67 @@ def test_x11_service_start_limit_keys_are_in_unit_section():
             f"{key} still under [Service]"
 
 
+def test_x11_failure_screen_is_an_onfailure_unit():
+    """As an ExecStopPost the failure screen was killed by TimeoutStopSec=10
+    while it waited for Enter, so 'press Enter to show details' did nothing.
+    OnFailure= fires once, after the restart burst, with no stop timeout."""
+    unit = (ROOT / "config" / "systemd" / "purple-x11.service").read_text()
+    assert re.search(r"^OnFailure=purple-x11-failed\.service$", unit.split("[Service]", 1)[0], re.M), \
+        "purple-x11.service does not trigger purple-x11-failed.service on failure"
+    assert "ExecStopPost=" not in unit, "failure screen is still an ExecStopPost"
+    failed = (ROOT / "config" / "systemd" / "purple-x11-failed.service").read_text()
+    assert re.search(r"^ExecStart=/usr/local/bin/purple-x11-failed$", failed, re.M)
+    assert re.search(r"^TTYPath=/dev/tty1$", failed, re.M), "failure screen does not own tty1"
+    assert re.search(r'cp /purple-src/config/systemd/purple-x11-failed\.service ', _build_source()), \
+        "purple-x11-failed.service not copied into the image"
+    script = (ROOT / "scripts" / "purple-x11-failed.sh").read_text()
+    assert "SERVICE_RESULT" not in script and "FAIL_COUNT_FILE" not in script, \
+        "failure script still carries ExecStopPost bookkeeping"
+
+
+def test_runtime_deps_ubuntu_carries_implicitly_are_explicit():
+    """Debian only Recommends a system bus and the login PAM module; Ubuntu's
+    base set installs them. The i386 image shipped without either, so rootless
+    X had no logind session and 'open /dev/dri/card0: Permission denied'.
+    Each must be both installed and verified at build time."""
+    src = _build_source()
+    for pkg in ("dbus", "libpam-systemd", "procps"):
+        assert re.search(rf"^\s+[\w\- ]*\b{pkg}\b[\w\- ]*\\$", src, re.M), f"{pkg} not in apt install list"
+    check = re.search(r'for cmd in (.*?); do\n\s+chroot "\$MOUNT_DIR" bash -c "command -v \$cmd', src, re.DOTALL)
+    assert check, "runtime tooling verification loop missing"
+    for cmd in ("dbus-daemon", "pgrep", "startx", "xset", "xrandr", "pactl", "lsblk", "udevadm"):
+        assert re.search(rf"\b{cmd}\b", check.group(1)), f"{cmd} not verified at build time"
+    assert "pam_systemd.so" in src and "dbus.socket" in src, \
+        "logind PAM module and dbus socket unit not verified at build time"
+
+
+def test_i386_image_disables_glamor():
+    """Intel 945 (the Atom netbook GPU) reports 64 shader instructions, glamor
+    needs 128, and modesetting fails X outright rather than falling back."""
+    src = _build_source()
+    m = re.search(r'\[ "\$GLAMOR" = 1 \] \|\| sed -i \'(.*?)\'', src)
+    assert re.search(r'^\s+GLAMOR=0$', src, re.M), "i386 profile does not turn glamor off"
+    assert m, "i386 AccelMethod override missing"
+    assert 'Option     "AccelMethod" "none"' in m.group(1)
+    conf = (ROOT / "config" / "xorg" / "10-modesetting.conf").read_text()
+    assert "AccelMethod" not in conf, "amd64 keeps glamor for picom's glx backend"
+
+
+def test_compositor_skips_the_32bit_image():
+    """Without glamor there is no hardware GL, so picom on the Atom would be
+    llvmpipe compositing every frame for nothing."""
+    launcher = (ROOT / "scripts" / "purple-start-compositor.sh").read_text()
+    assert re.search(r'case "\$\(uname -m\)" in i\?86\).*exit 0', launcher)
+
+
+def test_compositor_skips_glx_without_a_render_node():
+    """glx on llvmpipe keeps picom alive but freezes the screen (seen in a
+    QEMU VM with plain VGA), so no GPU render node means xrender only."""
+    launcher = (ROOT / "scripts" / "purple-start-compositor.sh").read_text()
+    assert 'compgen -G "/dev/dri/renderD*" >/dev/null || backends="xrender"' in launcher
+    assert "for backend in $backends; do" in launcher
+
+
 def test_boot_timing_tool_ships():
     """The pre-kernel boot investigation depends on this being on the image;
     it is the only way to measure seek latency and file fragmentation on a
@@ -151,6 +198,37 @@ def test_boot_timing_tool_ships():
         "purple-boot-timing not made executable"
     assert re.search(r"^\s*smartmontools \\$", src, re.M), \
         "smartmontools not in apt install list (SMART check silently skips)"
+
+
+def test_boot_timing_timeline_is_seconds_since_boot(tmp_path):
+    """On a live USB the report has to fit one photo, so the boot log's
+    wall-clock stamps come out as offsets from kernel start, only the lines
+    that bound a startup phase, and without the per-line prefixes."""
+    import os
+    import subprocess
+    from datetime import datetime, timedelta
+    boot = datetime.now() - timedelta(seconds=float(Path("/proc/uptime").read_text().split()[0]))
+    stamp = lambda offset: (boot + timedelta(seconds=offset)).strftime("%H:%M:%S.%f")[:-3]
+    log = tmp_path / "boot.log"
+    log.write_text(
+        f"[{stamp(9)}] [wait-display] === purple-wait-display started === kernel=6.8\n"
+        f"[{stamp(9.5)}] [wait-display]   connector at start: card0-eDP-1 = connected (gpu)\n"
+        f"[{stamp(12)}] [xinitrc] === xinitrc started ===  debug_flag=no\n"
+        f"[{stamp(13)}] [usb-cache] Caching squashfs for USB safety...\n"
+        f"[{stamp(14)}] [launcher] exec python3 -m purple_tui\n"
+        f"[{stamp(14.2)}] [+ 0.010s] [python] watchdog armed\n"
+        f"[{stamp(95)}] [+80.810s] [python] PurpleApp.__init__ begin\n"
+        f"[{stamp(100)}] [+85.810s] [python] first render reached; watchdog disarmed\n"
+    )
+    out = subprocess.run(["bash", str(ROOT / "scripts" / "purple-boot-timing.sh"), "--timeline"],
+                         env={**os.environ, "PURPLE_BOOT_LOG": str(log)},
+                         capture_output=True, text=True, check=True).stdout
+    lines = out.splitlines()
+    assert "connector at start" not in out
+    offsets = [float(re.match(r"\s*(-?\d+\.\d)s  ", line).group(1)) for line in lines]
+    for got, want in zip(offsets, [9, 12, 13, 14, 14.2, 95, 100], strict=True):
+        assert abs(got - want) <= 2, (got, want, out)
+    assert lines[-1].endswith("s  [python] first render reached; watchdog disarmed")
 
 
 def test_audio_probe_tool_ships():
@@ -198,7 +276,7 @@ def test_initrd_lean_hook_prunes_modules_and_firmware():
     assert "depmod -b" in body, "hook does not refresh module deps"
     assert re.search(r'chmod \+x "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd"', src), \
         "lean-initrd hook not made executable"
-    assert src.index("zzz-purple-lean-initrd") < src.index('update-initramfs -u -k "$KVER"'), \
+    assert src.index("zzz-purple-lean-initrd") < src.index('update-initramfs -u -k "$kver"'), \
         "hook written after the initrd rebuild it must influence"
     assert re.search(
         r"lsinitramfs .*grep -qE 'kernel/drivers/net/\|kernel/drivers/gpu/\|firmware/nvidia/\|firmware/mellanox/'",
@@ -206,26 +284,331 @@ def test_initrd_lean_hook_prunes_modules_and_firmware():
         "no fail-loudly artifact check that the initrd is actually lean"
 
 
-def test_installed_grub_pins_root_with_search_fallback():
-    """`search --label` probes every block device; an empty optical drive under
-    Apple EFI made that cost 47s per boot. The installed grub.cfg must pin
-    root to the fixed layout (p2) and keep `search` ONLY as the fallback for
-    wrong hd numbering: a pin without fallback is an unbootable machine, a
-    fallback without pin is the 47s again."""
+def test_installed_grub_derives_root_from_the_boot_device():
+    """`search` probes every block device; an empty optical drive under Apple
+    EFI made that cost 47s per boot, and a fixed (hd0,gpt2) pin missed on 13"
+    MacBook Airs, where a media-less SD reader takes hd0 (the miss printed an
+    error and paused GRUB 10s). The config must derive the root partition from
+    the device GRUB itself was loaded from and keep `search` ONLY as the
+    fallback, with no error-printing test in a menuentry."""
     cfg = _installed_grub_cfg_block()
-    fn = re.search(r"function purple_set_root \{\n(.*?)\n\}", cfg, re.DOTALL)
-    assert fn, "purple_set_root function missing from installed grub.cfg"
-    body = fn.group(1)
-    assert re.search(r"set root=\(hd0,gpt2\)", body), "root not pinned to (hd0,gpt2)"
+    head = cfg.split("menuentry", 1)[0]
+    assert re.search(r'regexp --set=1:purple_disk \'\^\(\[\^,\]\+\)\' "\$root"', head), \
+        "root disk not derived from $root"
+    assert "set root=($purple_disk,gpt2)" in head, "root not set to gpt2 of the boot disk"
     assert re.search(
-        r"if \[ ! -f /boot/vmlinuz \]; then\s*\n\s*search --no-floppy --label PURPLE_ROOT --set=root",
-        body), "fallback search missing or not guarded by the pin check"
-    # Both menuentries use the function; no entry searches unconditionally.
+        r"if \[ ! -f /boot/vmlinuz \]; then\s*\n\s*search --no-floppy --file /boot/vmlinuz --set=root",
+        head), "fallback search missing or unguarded"
+    assert "--label" not in cfg and "fs-uuid" not in cfg, "config still searches by label/uuid"
+    assert "source /boot/grub/purple-cmdline.cfg" in head and "source /boot/grub/purple-router.cfg" in head
     entries = re.findall(r'menuentry [^\n]*\{\n(.*?)\n\}', cfg, re.DOTALL)
     assert len(entries) == 2, f"expected 2 menuentries, found {len(entries)}"
     for entry in entries:
-        assert "purple_set_root" in entry, "menuentry does not call purple_set_root"
-        assert "search --no-floppy" not in entry, \
-            "menuentry still searches unconditionally"
-    assert cfg.count("search --no-floppy --label PURPLE_ROOT") == 1, \
-        "search should appear exactly once: as the fallback inside purple_set_root"
+        assert "search" not in entry and "[ " not in entry, \
+            "menuentry runs a command that can print an error (10s pause before boot)"
+        assert "$purple_root_arg" in entry, "menuentry does not use the shared root= argument"
+    assert "echo \"Starting Purple Computer...\"" in entries[0], "no on-screen sign of life before the slow reads"
+    assert "$purple_cmdline" in entries[0]
+
+
+def test_grub_config_is_one_file_for_esp_and_bios():
+    """UEFI reads /EFI/ubuntu/grub.cfg (signed GRUB's prefix), BIOS reads
+    /boot/grub/grub.cfg. They must be byte-identical copies of one heredoc:
+    a second hand-written ESP config is how the label search survived."""
+    src = _build_source()
+    assert re.search(r'cp "\$MOUNT_DIR/boot/grub/grub\.cfg" "\$MOUNT_DIR/boot/efi/EFI/ubuntu/grub\.cfg"', src), \
+        "ESP grub.cfg is not a copy of the root one"
+    assert src.count('cat > "$MOUNT_DIR/boot/efi/EFI/ubuntu/grub.cfg"') == 0, \
+        "a separate ESP grub.cfg heredoc is back"
+    cmdline = re.search(
+        r'cat > "\$MOUNT_DIR/boot/grub/purple-cmdline\.cfg" <<EOF\n(.*?)\nEOF\n', src, re.DOTALL)
+    assert cmdline, "purple-cmdline.cfg heredoc missing"
+    body = cmdline.group(1)
+    assert 'set purple_root_arg="root=LABEL=PURPLE_ROOT"' in body
+    assert 'set purple_cmdline="$PURPLE_CMDLINE"' in body, "GRUB and the Pi no longer share one command line"
+    assert re.search(r'^PURPLE_CMDLINE="ro quiet loglevel=3 .*console=tty2 .*vt\.default_blu=', src, re.M), \
+        "kernel command line lost quiet (EFI stub text under our boot line) or its console/colour settings"
+    assert re.search(r"cp /purple-src/config/grub/purple-router\.cfg /purple-src/config/grub/purple-variants\.cfg", src), \
+        "router or variants file not copied into /boot/grub"
+
+
+def _install_source() -> str:
+    return (ROOT / "build-scripts" / "install.sh").read_text()
+
+
+def test_install_rewrites_root_arg_in_the_shared_cmdline_file():
+    """Layer 5 used to sed two grub.cfg copies for two patterns each; the
+    root= argument now has exactly one home, sourced by both copies and read
+    by the UKI build."""
+    src = _install_source()
+    assert re.search(r'sed -i "s\|root=LABEL=PURPLE_ROOT\|\$\(root_arg\)\|" /mnt/root/boot/grub/purple-cmdline\.cfg', src), \
+        "root= rewrite does not target purple-cmdline.cfg"
+    assert "search --no-floppy --label" not in src, "install.sh still rewrites a label search"
+    assert "root=LABEL=PURPLE_ROOT|root=UUID" not in src, "old grub.cfg sed is back"
+
+
+def test_install_builds_a_uki_for_macs_with_grub_as_fallback():
+    """Macs boot a unified kernel image the firmware loads itself (Layer 7):
+    Apple EFI reads files through GRUB at well under 1 MB/s on 2009-2010
+    models. Gated on Apple + 64-bit UEFI + Secure Boot off, built from the same
+    kernel choice and command line as GRUB, and shim stays the next NVRAM entry."""
+    src = _install_source()
+    gate = re.search(r"uki_wanted\(\) \{\n(.*?)\n\}", src, re.DOTALL)
+    assert gate, "uki_wanted missing"
+    g = gate.group(1)
+    assert "/sys/class/dmi/id/sys_vendor" in g and "'^Apple'" in g
+    assert "fw_platform_size" in g and '"64"' in g
+    assert "SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c" in g
+    build = re.search(r"build_uki\(\) \{\n(.*?)\n\}", src, re.DOTALL)
+    assert build, "build_uki missing"
+    b = build.group(1)
+    assert "/boot/grub/purple-variants.cfg" in b and "/boot/grub/purple-cmdline.cfg" in b, \
+        "UKI does not share the router data and command line"
+    assert "=~ $purple_t2_models" in b and 'args="$purple_t2_args"' in b
+    assert re.search(r'--cmdline "\$\{args:\+\$args \}\$\(root_arg\) \$purple_cmdline"', b)
+    assert "linuxx64.efi.stub" in b
+    assert "build_uki /mnt/efi/EFI/purple/purple.efi" in src
+    assert re.search(r"nvram_entry \"PurpleOS\" \"\$UKI_LOADER\"", src), "UKI is not the primary NVRAM entry"
+    assert re.search(r"nvram_entry \"\$GRUB_LABEL\" '\\EFI\\purple\\shimx64\.efi'", src), \
+        "shim entry no longer created"
+    build_src = _build_source()
+    assert re.search(r'ARCH_PKGS="casper systemd-hwe-hwdb systemd-ukify systemd-boot-efi"', build_src), \
+        "ukify and the systemd-boot stub are not in the image"
+    assert "UKI_CMDS=ukify" in build_src and "linuxx64.efi.stub" in build_src, \
+        "build does not verify ukify and the stub landed"
+
+
+def test_variants_file_is_the_single_source_for_router_and_installer():
+    variants = (ROOT / "config" / "grub" / "purple-variants.cfg").read_text()
+    for line in variants.splitlines():
+        if line and not line.startswith("#"):
+            assert re.match(r"^set purple_[a-z0-9_]+=", line), f"not eval-safe for bash: {line}"
+    assert "set purple_t2_models=" in variants and "set purple_t2_args=" in variants
+    router = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
+    assert "source /boot/grub/purple-variants.cfg" in router
+    assert 'regexp "$purple_t2_models" "$product"' in router
+    assert 'set purple_args="$purple_t2_args"' in router
+    assert "MacBookPro1[56]" not in router, "T2 model list duplicated in the router"
+    for path in ("scripts/test-grub-router.sh", "build-scripts/01-remaster-iso.sh"):
+        assert "purple-variants.cfg" in (ROOT / path).read_text(), f"{path} does not ship the variants file"
+
+
+def test_core2_nvidia_macs_boot_without_the_lapic_timer():
+    """MacBookAir3,2 lost 2m44s of every boot asleep with no timer to wake it;
+    GRUB and the UKI must both pass the flag, and only to those models."""
+    variants = (ROOT / "config" / "grub" / "purple-variants.cfg").read_text()
+    models = re.search(r"set purple_c2mac_models='(.*)'", variants).group(1)
+    assert re.search(models, "MacBookAir3,2") and re.search(models, "MacBook5,2")
+    assert not re.search(models, "MacBookAir4,2") and not re.search(models, "MacBook5,1")
+    assert 'set purple_c2mac_args="nolapic_timer"' in variants
+    router = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
+    assert 'regexp "$purple_c2mac_models" "$product"' in router
+    assert 'set purple_args="$purple_c2mac_args"' in router
+    build = re.search(r"build_uki\(\) \{\n(.*?)\n\}", _install_source(), re.DOTALL).group(1)
+    assert "=~ $purple_c2mac_models" in build and 'args="$purple_c2mac_args"' in build
+
+
+def test_i386_kernel_reports_lid_open_at_boot():
+    """The Atom netbooks' firmware can report the lid closed until it is moved,
+    which starts the 10 min lid shutdown right after boot."""
+    cfg = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
+    i386_branch = re.search(r"set purple_variant=-i386\n(.*?)\n\s*fi", cfg, re.DOTALL)
+    assert i386_branch, "i386 branch missing"
+    assert 'set purple_args="$purple_i386_args"' in i386_branch.group(1)
+    variants = (ROOT / "config" / "grub" / "purple-variants.cfg").read_text()
+    assert 'set purple_i386_args="button.lid_init_state=open"' in variants
+
+
+def test_stick_log_and_purpleusb_partition():
+    """Every live boot writes PURPLE-LOG on the stick's third partition.
+    That partition must be basic-data FAT (Windows and macOS hide the EFI
+    partition), it carries the turn-it-off-first note for people who plug the
+    stick into a running computer, and after the settle boot it is copied back
+    from the ISO and rechecked. Installed systems never run the writer."""
+    src = _build_source()
+    assert 'cp /purple-src/scripts/purple-diag-collect.sh "$MOUNT_DIR/usr/local/bin/purple-diag-collect"' in src
+    assert 'cp /purple-src/scripts/purple-stick-log.py "$MOUNT_DIR/usr/local/bin/purple-stick-log"' in src
+    assert "systemctl enable purple-stick-log.service" in src
+    assert "exec sudo /usr/local/bin/purple-stick-log --reset" in src, "cleanlog resets a tested stick"
+    unit = (ROOT / "config" / "systemd" / "purple-stick-log.service").read_text()
+    for line in ("ConditionPathIsMountPoint=/cdrom", "ConditionKernelCommandLine=!purple.install=1",
+                 "DefaultDependencies=no", "WantedBy=sysinit.target"):
+        assert line in unit, "writer must start before a flaky stick dies mid-boot, live boots only"
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    assert 'mkfs.vfat -F 16 -n PURPLEUSB "$LOG_IMG"' in remaster
+    assert '-append_partition 3 EBD0A0A2-B9E5-4433-87C0-68B6B72699C7 "$LOG_IMG"' in remaster, \
+        "PURPLEUSB must be a Microsoft basic data partition or desktops hide it"
+    assert 'label=Start Purple Computer' in remaster
+    assert '"$LOG_MNT/HOW TO START PURPLE.txt"' in remaster
+    flash = (ROOT / "build-scripts" / "flash-lib.sh").read_text()
+    assert "awk '$1 ~ /[^0-9][123]$/ {print $2}'" in flash, "settle recheck covers PURPLEUSB, restored from the ISO"
+    for script in ("flash-all.sh", "flash-to-usb.sh"):
+        src = (ROOT / "build-scripts" / script).read_text()
+        assert src.index("restore_log_partition") < src.index("recheck_after_settle \""), f"{script}: restore before the recheck"
+
+
+def test_usb_cache_service_replaces_the_xinitrc_warmup():
+    """The squashfs warm-up and RAM lock run as root at idle disk priority,
+    and so does the stick log, so a kid's reads from the stick go first."""
+    src = _build_source()
+    assert 'cp /purple-src/scripts/purple-usb-cache.py "$MOUNT_DIR/usr/local/bin/purple-usb-cache"' in src
+    assert "systemctl enable purple-usb-cache.service" in src
+    for unit in ("purple-usb-cache.service", "purple-stick-log.service"):
+        assert "IOSchedulingClass=idle" in (ROOT / "config" / "systemd" / unit).read_text(), unit
+    xinitrc = (ROOT / "config" / "xinit" / "xinitrc").read_text()
+    assert "filesystem.squashfs" not in xinitrc and "purple-usb-cached" not in xinitrc
+
+
+def test_poweroff_binary_staged_in_ram_every_boot():
+    """Power off has to work after a live USB is pulled, so the static binary
+    is on its exec,suid tmpfs from boot, not only after an install."""
+    src = _build_source()
+    assert 'scripts/purple-stage-reboot.sh "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"' in src
+    assert "systemctl enable purple-stage-reboot.service" in src
+    assert "/usr/local/bin/purple-stage-reboot" in (ROOT / "build-scripts" / "install.sh").read_text()
+    from purple_tui.constants import REBOOT_BIN
+    assert REBOOT_BIN.startswith("/run/purple-reboot-mount/")
+    assert "DIR=/run/purple-reboot-mount" in (ROOT / "scripts" / "purple-stage-reboot.sh").read_text()
+
+
+def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
+    """PURPLE-LOG is one preallocated file: a header with the start count,
+    then a slot per start with a report region and a kernel log region. The
+    initramfs claims the start and writes its report region in place (1<> and
+    dd conv=notrunc never truncate, so the sectors never move) before and
+    after mounting the system and at the end of casper-bottom; purple-stick-log
+    then writes both regions by raw sector writes, never keeping FAT mounted.
+    Sizes must agree between the build, the initramfs hook and the writer."""
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    writer = (ROOT / "scripts" / "purple-stick-log.py").read_text()
+    spec = importlib.util.spec_from_file_location("stick_log", ROOT / "scripts" / "purple-stick-log.py")
+    k = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(k)
+    assert f'head -c {k.file_bytes()} > "$LOG_MNT/PURPLE-LOG"' in remaster, "file must be exactly header + slots"
+    hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
+    assert "purple_stick_report() {" in hook
+    assert "blkid -L PURPLEUSB" in hook and "tail -c 200000 /casper.log" in hook and "dmesg" in hook
+    blk = 4096
+    assert k.HEADER_BYTES % blk == 0 and (k.REPORT_BYTES + k.KMSG_BYTES) % blk == 0
+    dd = (f'seek=$(( {k.HEADER_BYTES // blk} + (n - 1) % {k.SLOTS} * {(k.REPORT_BYTES + k.KMSG_BYTES) // blk} )) '
+          f'count={k.REPORT_BYTES // blk} conv=notrunc')
+    assert f'bs={blk} {dd}' in hook, "initramfs must write in place, inside its slot's report region"
+    assert '1<> "$f"' in hook and "stick-start" in hook and k.START_FILE == "/run/purple/stick-start"
+    live_hook = remaster.split("<< 'HOOK_EOF'")[1].split("HOOK_EOF")[0]
+    for script in (hook, live_hook):
+        assert not re.search(r"(^|[|;&]\s*)(head|chown)\b", script, re.M), "the casper initrd's busybox has no head or chown"
+    assert ".tmp" not in hook and "mv " not in hook, "a rename would move the file's sectors"
+    assert r'purple_stick_report \"system image found on the stick\"' in remaster
+    assert r'purple_stick_report \"about to mount the system\"' in remaster
+    assert 'purple_stick_report "casper-bottom done, starting the system" || true' in remaster
+    assert "FIBMAP" in writer and "os.pwrite" in writer and "fdatasync" in writer
+    spec = importlib.util.spec_from_file_location("key_save", ROOT / "scripts" / "purple-key-save.py")
+    ks = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ks)
+    assert f'head -c {ks.file_bytes()} > "$LOG_MNT/PURPLE-SAVE"' in remaster, "PURPLE-SAVE must be header + two slots"
+    assert "systemctl enable purple-key-save.service" in _build_source()
+    assert 'purple-key-save.py "$MOUNT_DIR/usr/local/bin/purple-key-save"' in _build_source()
+    assert "purple-key-save --reset || exit 1" in _build_source(), "cleanlog clears PURPLE-SAVE before the log"
+    unit = (ROOT / "config" / "systemd" / "purple-key-save.service").read_text()
+    for line in ("Before=purple-x11.service", "ConditionPathIsMountPoint=/cdrom", "purple-key-save --restore"):
+        assert line in unit, "restored before Purple starts, live boots only"
+    collect = (ROOT / "scripts" / "purple-diag-collect.sh").read_text()
+    assert "mount -t vfat" not in collect and "blkid" not in collect, "the collector only prints; purple-stick-log owns the stick"
+
+
+def test_debug_menu_try_everything_entry():
+    """The debug ISO's second entry stacks every USB read-error workaround so a
+    customer needs one boot, and purple.toram is wired into casper before the
+    squashfs is mounted."""
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    menu = remaster.split("<< 'GRUB_MENU'")[1].split("GRUB_MENU")[0]
+    top = re.findall(r'^(?:menuentry|submenu) "([^"]+)"', menu, re.M)
+    assert top == ["Troubleshooting: start Purple and show what's happening",
+                   "Troubleshooting: try every fix for USB drive problems",
+                   "Start Purple normally", "More options (for support)"], \
+        "the top level is what a parent sees after holding P; everything else goes in the submenu"
+    assert "single username=purple" in menu.split('menuentry "Recovery shell"')[1].split("}")[0]
+    for flag in ("intel_iommu=off", "xhci_hcd.quirks=0x800000", "usbcore.autosuspend=-1",
+                 "pcie_aspm=off", "purple.toram=1", "log_buf_len=8M"):
+        assert flag in remaster
+    assert 'add_purple_initramfs_hooks "$MAIN_DIR"' in remaster
+    assert "purple_squashfs_to_ram" in remaster
+    single = menu.split('menuentry "USB fix: copy into memory only"')[1].split("}")[0]
+    assert "purple.toram=1" in single and "intel_iommu" not in single and "xhci_hcd" not in single
+    # The RAM copy stages the install image where install.sh looks for it.
+    hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
+    assert 'purple_install_image_to_ram "$1/purple/purple-os.img.zst"' in hook
+    assert "local dir=/run/purple-stage " in hook
+    install = (ROOT / "build-scripts" / "install.sh").read_text()
+    assert "STAGE_DIR=/run/purple-stage\nSTAGED_IMAGE=$STAGE_DIR/purple-os.img.zst\n" in install
+
+
+def test_every_iso_carries_the_image_manifest():
+    """install.sh checks the image against the manifest range by range before
+    wiping the disk, so the plain ISO needs it too, not only with-backup."""
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    payload = remaster.split('log_step "6/11: Adding payload to ISO..."')[1].split("create_install_script")[0]
+    assert '> "$PAYLOAD_DIR/purple-os.img.zst.manifest"' in payload
+    assert 'rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst"\n' in remaster
+    assert "purple-os.img.zst.manifest\"\n" not in remaster.split("With-backup variant")[1].split("Build debug ISO")[0]
+
+
+def test_hold_p_opens_the_boot_menu_on_the_standard_iso():
+    """The standard ISO keeps its zero timeout but a held P reaches the same
+    menu the debug ISO shows: GRUB's hotkey for firmware that keeps the key in
+    its buffer, and a static evdev check in the initramfs for firmware that
+    does not. Both ISOs share one menu file, and the held key turns on the
+    debug flag the way the debug entries' kernel argument does."""
+    remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
+    standard = remaster.split("<< 'GRUB_PURPLE'")[1].split("GRUB_PURPLE")[0]
+    assert "set timeout=0" in standard and "set timeout_style=hidden" in standard
+    assert re.search(r'menuentry "Boot menu \(hold P while turning on\)" --hotkey=p \{\n\s+configfile /boot/grub/purple-menu\.cfg', standard)
+    assert 'write_purple_menu_cfg "$WORK_DIR/iso-new/boot/grub/purple-menu.cfg"' in remaster
+    debug = remaster.split("<< 'GRUB_DEBUG'")[1].split("GRUB_DEBUG")[0]
+    assert "source /boot/grub/purple-menu.cfg" in debug
+    # configfile and submenu scopes only keep exported variables; unexported,
+    # the menu booted "boot=" and the initramfs asked for root=.
+    router = (ROOT / "config" / "grub" / "purple-router.cfg").read_text()
+    assert "export purple_variant purple_args" in router
+    assert "set purple_boot=casper\nexport purple_boot\n" in remaster
+    assert "export purple_debug_args" in remaster.split("<< 'GRUB_MENU'")[1].split("GRUB_MENU")[0]
+    hook = remaster.split("<< 'HOOKS_EOF'")[1].split("HOOKS_EOF")[0]
+    assert "/purple-keyheld 25" in hook, "KEY_P is 25"
+    assert "touch /run/purple/debug-key" in hook and "dmesg -n 7" in hook and "chvt 63" in hook
+    assert "purple_debug_if_key_held; purple_stick_report" in remaster
+    assert 'if grep -q "purple.debug=1" /proc/cmdline 2>/dev/null || [ -e /run/purple/debug-key ]; then' in remaster
+    assert 'unsquashfs -d "$WORK_DIR/sq-keyheld" "$LIVE_SQUASHFS" opt/purple/bin/purple-keyheld' in remaster
+    src = _build_source()
+    assert "gcc -static -O2 -o /opt/purple/bin/purple-keyheld /tmp/purple-keyheld.c" in src
+    c = (ROOT / "tools" / "purple-keyheld.c").read_text()
+    assert "EVIOCGKEY" in c, "must read held state, not wait for press events"
+
+
+def test_shutdown_splash_repaints_purple_without_starting_up(tmp_path):
+    """ExecStop repaints tty1 to hide X.Org's exit; "Starting up..." there
+    flashed on every shutdown and read as a restart."""
+    import subprocess
+    body = re.search(r"<<'SPLASH'\n(.*?)\nSPLASH\n", _build_source(), re.DOTALL).group(1)
+    tty = tmp_path / "tty1"
+    script = tmp_path / "purple-splash"
+    script.write_text(body.replace("/dev/tty1", str(tty)))
+    assert "ExecStop=/usr/local/bin/purple-splash stop" in _build_source()
+
+    def paint(*args):
+        subprocess.run(["sh", str(script), *args], check=True)
+        return tty.read_text()
+
+    assert "Starting up" in paint()
+    stop = paint("stop")
+    assert "Starting up" not in stop and "\033]P02d1b4e" in stop
+
+
+def test_pi_overlay_root_is_mounted_read_write():
+    """With `ro` on the command line overlayroot remounts its overlay read-only
+    for systemd to flip back, which kernel 6.18 refuses: /var/lib stayed
+    read-only and logind never started, so X got no GPU (Pi 400, first boot)."""
+    src = _build_source()
+    line = re.search(r'echo "(root=LABEL=PURPLE_ROOT [^"]*)" > "\$fw/cmdline\.txt"', src)
+    assert line, "Pi cmdline.txt not written"
+    assert "overlayroot=tmpfs:recurse=0 rw ${PURPLE_CMDLINE#ro }" in line.group(1)
+    assert re.search(r'^PURPLE_CMDLINE="ro ', src, re.M), "the shared line no longer starts with ro, so #ro strips nothing"

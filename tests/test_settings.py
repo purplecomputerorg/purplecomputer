@@ -20,7 +20,14 @@ def test_volume_lock_round_trip(temp_settings):
     assert temp_settings.get_volume_lock() is None
 
 
+def test_voice_round_trip(temp_settings):
+    assert temp_settings.get_voice() == "natural"
+    temp_settings.set_voice("quick")
+    assert temp_settings.get_voice() == "quick"
+
+
 def test_parent_pin_round_trip(temp_settings):
+
     temp_settings.set_parent_pin("1234")
     assert temp_settings.get_parent_pin() == "1234"
     temp_settings.set_parent_pin(None)

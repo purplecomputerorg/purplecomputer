@@ -10,39 +10,109 @@
 #
 # See docs/PLAN-macbook5-slow-boot.md.
 #
+# On a live USB boot the report fits one photo: stick link speed, systemd's
+# view, the startup timeline in seconds since the kernel started (X allowed,
+# X up, squashfs cache read, python, first paint), memory, stick read speed.
+#
 # Usage:
 #   purple-boot-timing              # report
+#   purple-boot-timing --timeline   # just the startup timeline from the boot log
 #   purple-boot-timing --menu on    # show the GRUB menu (10s) on next boot
 #   purple-boot-timing --menu off   # back to a hidden, immediate boot
 
 set -u
 
-GRUB_CFG=/boot/grub/grub.cfg
+# The same config lives in both places: UEFI reads the ESP copy, BIOS the root one.
+GRUB_CFGS="/boot/grub/grub.cfg /boot/efi/EFI/ubuntu/grub.cfg"
+STUB_INFO=/sys/firmware/efi/efivars/StubInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+UKI=/boot/efi/EFI/purple/purple.efi
 
 section() { printf '\n=== %s ===\n' "$1"; }
 
+# Boot-log lines that bound each startup phase, as seconds since the kernel
+# started. The log carries wall-clock stamps; "now minus uptime" is when the
+# kernel's clock began, so anything before that (firmware, GRUB) is invisible.
+timeline() {
+    local log=${PURPLE_BOOT_LOG:-/tmp/purple-boot.log}
+    [ -f "$log" ] || log=/var/log/purple/boot.log
+    [ -f "$log" ] || { echo "no boot log at /tmp/purple-boot.log"; return; }
+    local boot_hms
+    boot_hms=$(date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" +%H:%M:%S)
+    grep -E 'wait-display\] (===|Display ready|No connected)|xinitrc\] (=== |matchbox|Launching)|usb-cache\] |launcher\] exec|\[python\] (watchdog armed|all purple_tui|PurpleApp|main loop|first render|WATCHDOG|mixer)' "$log" |
+    awk -v boot="$boot_hms" '
+        function secs(t,  a) { split(t, a, ":"); return a[1] * 3600 + a[2] * 60 + a[3] }
+        BEGIN { b = secs(boot) }
+        { d = secs(substr($1, 2, 12)) - b; if (d < -43200) d += 86400
+          sub(/^\[[^]]*\] (\[\+[^]]*\] )?/, "")
+          printf "%7.1fs  %.68s\n", d, $0 }'
+}
+
+# The disk the live squashfs is read from, and the link speed of the USB
+# device behind it (the `speed` file sits on the USB device node, a few
+# levels above the SCSI device the block layer points at).
+live_disk() {
+    local dev
+    dev=$(findmnt -no SOURCE /cdrom 2>/dev/null)
+    [ -n "$dev" ] || dev=$(. /run/purple-live.conf 2>/dev/null; findmnt -no SOURCE -T "${SQUASHFS:-/nonexistent}" 2>/dev/null)
+    [ -n "$dev" ] || return 1
+    lsblk -no PKNAME "$dev" 2>/dev/null | head -1 | grep . || basename "$dev"
+}
+usb_speed() {
+    local node
+    node=$(readlink -f "/sys/block/$1/device" 2>/dev/null)
+    while [ -n "$node" ] && [ ! -f "$node/speed" ]; do node=${node%/*}; done
+    [ -n "$node" ] || { echo "not a USB device"; return; }
+    case "$(cat "$node/speed")" in
+        12|1.5) echo "12 Mb/s: USB 1.1 FALLBACK, ~1 MB/s, every read of the stick is 20-30x slower than it should be" ;;
+        480) echo "480 Mb/s (high-speed, normal for a USB 2.0 port)" ;;
+        *) echo "$(cat "$node/speed") Mb/s (SuperSpeed)" ;;
+    esac
+}
+
 grub_menu() {
-    [ -w "$GRUB_CFG" ] || { echo "need root: sudo purple-boot-timing --menu $1"; exit 1; }
+    [ -w /boot/grub/grub.cfg ] || { echo "need root: sudo purple-boot-timing --menu $1"; exit 1; }
+    for cfg in $GRUB_CFGS; do
+        [ -f "$cfg" ] || continue
+        case "$1" in
+            on)
+                sed -i -e 's/^set timeout=.*/set timeout=10/' \
+                       -e '/^set timeout_style=/d' \
+                       -e '/^set timeout=/a set timeout_style=menu' "$cfg"
+                ;;
+            off)
+                sed -i -e 's/^set timeout=.*/set timeout=0/' \
+                       -e '/^set timeout_style=/d' "$cfg"
+                ;;
+            *) echo "usage: purple-boot-timing --menu on|off"; exit 1 ;;
+        esac
+        printf '%s: ' "$cfg"; grep -E '^set timeout' "$cfg" | tr '\n' ' '; echo
+    done
     case "$1" in
         on)
-            sed -i -e 's/^set timeout=.*/set timeout=10/' \
-                   -e '/^set timeout_style=/d' \
-                   -e '/^set timeout=/a set timeout_style=menu' "$GRUB_CFG"
             echo "GRUB menu on (10s). Reboot and watch which side of the menu the wait is on:"
             echo "  menu appears fast, then a long wait  -> GRUB/stub reading the disk"
             echo "  long wait before the menu appears    -> Apple firmware, before GRUB"
+            [ -e "$STUB_INFO" ] && echo "this Mac boots the UKI, not GRUB: hold Option at power-on and pick EFI Boot to see the menu"
             ;;
-        off)
-            sed -i -e 's/^set timeout=.*/set timeout=0/' \
-                   -e '/^set timeout_style=/d' "$GRUB_CFG"
-            echo "GRUB menu off (timeout=0)."
-            ;;
-        *) echo "usage: purple-boot-timing --menu on|off"; exit 1 ;;
+        off) echo "GRUB menu off (timeout=0)." ;;
     esac
-    grep -E '^set timeout' "$GRUB_CFG"
 }
 
 if [ "${1:-}" = "--menu" ]; then grub_menu "${2:-}"; exit 0; fi
+if [ "${1:-}" = "--timeline" ]; then timeline; exit 0; fi
+
+section "Boot path"
+LIVE_DISK=""
+if grep -qE '(^| )boot=(casper|purple-live)( |$)' /proc/cmdline 2>/dev/null; then
+    LIVE_DISK=$(live_disk || true)
+    echo "Live USB: /dev/${LIVE_DISK:-?} at $(usb_speed "$LIVE_DISK")"
+elif [ -e "$STUB_INFO" ]; then
+    echo "UKI: the firmware loaded $UKI itself (no shim, no GRUB)"
+elif [ -d /sys/firmware/efi ]; then
+    echo "UEFI: shim -> GRUB -> kernel"
+else
+    echo "BIOS: MBR -> GRUB -> kernel"
+fi
 
 section "Boot phases (what Linux can see)"
 systemd-analyze 2>&1 | head -3
@@ -51,14 +121,24 @@ echo
 echo "If the wall-clock wait was much longer than the total above, the extra time"
 echo "is pre-kernel: firmware + GRUB + EFI stub. Read uptime AT FIRST PAINT to confirm."
 
-section "Time to first paint (from boot.log)"
-LOG=/var/log/purple/boot.log
-[ -f "$LOG" ] || LOG=/tmp/purple-boot.log
-if [ -f "$LOG" ]; then
-    head -1 "$LOG"
-    grep -m1 'first render reached' "$LOG" || tail -1 "$LOG"
-else
-    echo "no boot log at /var/log/purple/boot.log"
+section "Startup timeline (seconds since the kernel started)"
+timeline
+
+if [ -n "$LIVE_DISK" ]; then
+    section "Memory"
+    awk '/^(MemTotal|MemAvailable):/ {printf "%s %d MB  ", $1, $2 / 1024}' /proc/meminfo; echo
+    echo "purple-usb-cache reads the whole squashfs (~1GB) once X starts, at idle disk priority,"
+    echo "and locks it in RAM when there is room. The Caching -> USB safe window above is how"
+    echo "long the stick was busy with it."
+
+    section "Stick: sequential read (/dev/$LIVE_DISK)"
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "run with sudo for the read test"
+    else
+        timeout -s INT 15 dd if="/dev/$LIVE_DISK" of=/dev/null bs=1M count=64 iflag=direct 2>&1 | tail -1
+        echo "USB 2.0 stick: 20-35 MB/s. single digits means the stick or the port is the problem."
+    fi
+    exit 0
 fi
 
 section "What the firmware has to read before Linux starts"
@@ -71,6 +151,7 @@ if [ -n "$KERNEL" ] && [ -n "$INITRD" ]; then
 else
     echo "no kernel/initrd found under /boot"
 fi
+[ -f "$UKI" ] && ls -lL "$UKI"
 BOOT_DEV=$(findmnt -no SOURCE /boot 2>/dev/null || findmnt -no SOURCE / 2>/dev/null)
 echo "read from: $BOOT_DEV ($(findmnt -no FSTYPE /boot 2>/dev/null || findmnt -no FSTYPE / 2>/dev/null))"
 if ! command -v filefrag >/dev/null 2>&1; then

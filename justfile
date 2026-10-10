@@ -10,8 +10,9 @@ default:
 
 # Show environment variables for testing
 env:
+    @echo "PURPLE_UX=tui           Run the Textual UI (what release/1.x ships) instead of the canvas"
     @echo "PURPLE_NO_AUDIO=1       Force audio off (test no-sound UX)"
-    @echo "PURPLE_NO_EVDEV=1       Skip evdev input (use terminal keyboard)"
+    @echo "PURPLE_NO_EVDEV=1       Skip evdev input (use the window's keyboard events)"
     @echo "PURPLE_DEV_MODE=1       Dev shortcuts, screenshots, debug keys"
     @echo "PURPLE_SLEEP_DEMO=1     Accelerated sleep/power timings"
     @echo "PURPLE_FAKE_USB=STATE   Simulate USB: caching|cached|removed"
@@ -20,6 +21,8 @@ env:
     @echo "PURPLE_DEMO_SEGMENT=X   Run specific demo segment"
     @echo "PURPLE_TTS_CACHE=path   Override TTS cache dir"
     @echo "PURPLE_SCREENSHOT_DIR=X Override screenshot output dir"
+    @echo "PURPLE_WINDOWED=1       Run in a window instead of fullscreen"
+    @echo "PURPLE_WINDOW_SIZE=WxH  Window / preview size (default: the screen, or 1366x768 headless)"
     @echo "PURPLE_POWER_LOG=1      Force power manager logging"
     @echo ""
     @echo "Example: PURPLE_NO_AUDIO=1 just run"
@@ -239,10 +242,6 @@ apply-zoom:
 zoom-editor:
     python recording-setup/zoom_editor_server.py
 
-# Test code split-screen POC (font resize proof of concept)
-code-split-poc:
-    PURPLE_ALACRITTY_CONFIG=config/alacritty/alacritty-dev.toml alacritty --config-file config/alacritty/alacritty-dev.toml -e {{venv}}/bin/python scripts/code_split_poc.py
-
 # Release ISOs to Cloudflare R2 (e.g., just release, just release v1.0)
 release *args:
     ./build-scripts/release-iso.sh {{args}}
@@ -251,14 +250,29 @@ release *args:
 release_dir := env_var("HOME") / "purplecomputer-release"
 
 # Show what ships vs what waits (= on release/1.x, + main only)
-release-status:
-    @./build-scripts/release-status.sh
+release-status *args:
+    @./build-scripts/release-status.sh {{args}}
 
-# Cherry-pick fixes from main onto release/1.x, run its tests, show what ships
+# Cherry-pick fixes from main onto release/1.x and show what ships (run just release-test before building)
 release-pick +shas:
     git -C {{release_dir}} cherry-pick -x {{shas}}
-    cd {{release_dir}} && just test
     @echo && ./build-scripts/release-status.sh
+    @echo && echo "Run 'just release-test' before purple-build --release."
+
+# Lint and test release/1.x in its worktree; run once after a batch of picks, before building
+release-test:
+    cd {{release_dir}} && just test
+
+# Release test, build, flash in one go: tests release/1.x, builds it (with-backup included), then flashes
+# every whitelisted drive plugged in by the time the build ends, no prompt. Also aliased as purple-rtbf.
+# just rtbf [--no-flash] [--fast] [--force]
+rtbf *args:
+    ./build-scripts/purple-rtbf.sh {{args}}
+
+# Push release/1.x to GitHub (main is pushed separately via /push)
+release-push:
+    @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
+    git -C {{release_dir}} push origin release/1.x
 
 # Publish the already-built release: picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases.
 # Build first with purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.
@@ -274,6 +288,21 @@ release-check *commit:
 # Upload the card PDFs to Cloudflare R2 (the files host)
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
+
+# Summarize a customer's PURPLE-LOG or diag.txt: where boot got to, what failed or is stuck, kernel and journal errors.
+# PURPLE-LOG keeps the stick's last 8 starts: the newest is summarized, --all summarizes each.
+read-log path *args:
+    @python3 scripts/purple-log-summary.py "{{path}}" {{args}}
+
+# Symlink a built ISO into ~/isos and print the scp line to pull it to your Mac (same picker as flash).
+# just link-iso [--debug|--no-backup] [--ref <commit>] [iso-path]
+link-iso *args:
+    ./build-scripts/link-iso.sh {{args}}
+
+# Host a built commit's ISO for one customer at files.purplecomputer.org/oneoff/<name>.iso, outside the release paths.
+# just ship-oneoff <commit> [name] [--debug|--standard|--backup]; asks for the name when omitted, debug ISO by default
+ship-oneoff commit *args:
+    ./build-scripts/upload-oneoff.sh {{commit}} {{args}}
 
 # Prep the postcard PDF for print, writing the -installation / -guide halves alongside.
 #   just print-card                -> purple-pad.pdf, 4x6 with safety margin (FedEx upload)
@@ -296,8 +325,12 @@ clean-isos *args:
 build *args:
     ./build-scripts/build-in-docker.sh {{args}}
 
+# Build the Raspberry Pi card image (Pi 4, 400, 5, 500): /opt/purple-installer/output/purple-pi-<date>.img.xz
+build-pi *args:
+    ./build-scripts/build-in-docker.sh --pi {{args}}
+
 # Flash ISO to USB drive (asks which of the newest build's ISOs to use).
-# just flash --ref <commit> flashes from that commit's archived build (see just build --ref)
+# just flash --ref <commit> flashes that commit's build: archived (see just build --ref) or still in the output dir
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 
@@ -337,7 +370,7 @@ flash-status *args:
 label-ports:
     ./build-scripts/label-ports.sh
 
-# Find sticks by eye. just blink: safe read-pulse tour of every stick, one at a time, with letters and socket labels. just blink /dev/sdX (or a port like 4-1.4): power-cycle blink for that one socket.
+# Find sticks by eye. just blink: safe read-pulse tour of every stick, one at a time, with letters and socket labels. just blink /dev/sdX (or a port like 4-1.4, or a socket label like p): power-cycle blink for that one socket.
 blink *args:
     ./build-scripts/blink-port.sh {{args}}
 
@@ -378,3 +411,28 @@ studio-test:
 # Regenerate the facts Studio imports from Purple (constants and reference synth renders)
 studio-fixtures:
     {{venv}}/bin/python scripts/export_studio.py
+
+# Pretend laptop in QEMU with a build plugged in as a USB stick: UEFI firmware (Esc at power-on), persistent blank disk, screen in a browser.
+# just vm [commit|--release] [--debug|--backup] [--cd] [--legacy] [--empty] [--fresh]; default is the newest build's standard ISO
+vm *args:
+    @./scripts/vm.sh start {{args}}
+
+# Swap the USB stick (or with --cd, the disc) in the running VM: just vm-insert [commit|--release] [--debug|--backup] [--cd]
+vm-insert *args:
+    @./scripts/vm.sh insert {{args}}
+
+# Pull out the USB stick and disc
+vm-eject:
+    @./scripts/vm.sh eject
+
+# Power off the VM (the disk and firmware settings are kept; just vm --fresh wipes them)
+vm-stop:
+    @./scripts/vm.sh stop
+
+# Press keys in the VM (QEMU names: esc, ret, f12, ctrl-alt-delete, ...)
+vm-key +keys:
+    @./scripts/vm.sh key {{keys}}
+
+# Screenshot the VM to /tmp/screenshots
+vm-shot:
+    @./scripts/vm.sh shot

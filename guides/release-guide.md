@@ -21,8 +21,10 @@ Until the next major release, `main` and the shipping branch are separate:
 Day to day:
 
 ```bash
-just release-status          # what ships vs what waits (= on release/1.x, + main only)
-just release-pick <sha>...   # cherry-pick onto release/1.x, run its tests, show status
+just release-status          # what customers have, what ships next, what on main needs a pick decision (--all for everything)
+just release-pick <sha>...   # cherry-pick onto release/1.x, show status
+just release-test            # lint and test release/1.x, once per batch of picks, before building
+just release-push            # push release/1.x to GitHub
 purple-build --release       # build the release worktree (includes the with-backup ISO)
 just flash-all               # flash customer USBs from that build (prefers with-backup)
 just ship                    # confirm, upload, tag (just ship --commit <sha> for an earlier built commit)
@@ -30,6 +32,10 @@ just release-check <sha>     # confirm the public download is that commit
 ```
 
 A commit that is both fix and feature belongs with the feature. The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
+
+`release-status` reads the shipped commit from the public download's `latest.json` (the newest tag on `release/1.x` when offline), lists what sits on `release/1.x` above it, and then only the main commits that still need a fix-or-wait decision: unpicked, and touching a path the image build copies in (`purple_tui/` outside `canvas/`, `config/`, `packs/`, the on-device scripts, the build scripts). Everything else is hidden with a count, and `--all` lists it with a marker: `.` docs and tooling that never reach an ISO, `~` canvas UI only (`purple_tui/canvas/`, `tests/canvas/`), `w` decided to wait, `=` already picked. A fix that touches both UIs shows as two commits by design (the TUI-only one first, see CLAUDE.md, Two UIs): pick that one, the `~` one stays.
+
+A commit that should stay on main for good (a feature for the next major release that touches shared paths) goes in `build-scripts/release-waits`, one line of `<sha> <why>`, and drops out of the decision list.
 
 When a pick needs hand-edits to fit the release branch (usually because it touches a feature that stays on main), log what changed in [release-pick-adaptations.md](release-pick-adaptations.md).
 

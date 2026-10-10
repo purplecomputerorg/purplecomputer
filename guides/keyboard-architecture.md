@@ -13,7 +13,7 @@ By reading evdev directly, Purple gets:
 - Precise timestamps for timing features
 - All keycodes (no filtering)
 
-The terminal (Alacritty) becomes display-only.
+The screen is a pygame window the app paints itself; it never reads its own key events on the device.
 
 ---
 
@@ -47,11 +47,11 @@ TUI Process:
   │     - Handles double-tap (same key < 400ms)
   │     - Emits high-level actions
   │           ↓
-  │   Textual App
+  │   PurpleApp (purple_tui/canvas/app.py)
   │     - Receives actions, updates UI
   │           ↓
-  └── Alacritty (display only)
-        - Renders Textual's output
+  └── SDL window (display only)
+        - Painted by purple_tui/canvas/gfx.py
         - Keyboard input ignored
 ```
 
@@ -123,9 +123,9 @@ With keyboard input bypassing the terminal:
 
 | Concern | Impact |
 |---------|--------|
-| Character echo | None. Textual controls all display in raw mode. |
-| Window resize | Still works. Alacritty notifies Textual via SIGWINCH. |
-| Copy/paste | Alacritty shortcuts won't work. Not needed for kids 2–8+. |
+| Character echo | None. The app draws every character itself. |
+| Window resize | Not applicable: the window is fullscreen at the screen's size. |
+| Copy/paste | None. Not needed for kids 2–8+. |
 | Mouse input | Purple disables trackpad anyway. |
 | Focus | In kiosk mode, only Purple runs. No focus issues. |
 
@@ -248,22 +248,10 @@ Purple reads keyboard directly from evdev, bypassing the terminal. This gives us
 
 Parent mode can open a shell for admin tasks. This requires temporarily releasing the evdev grab so the terminal receives keyboard input.
 
-Use `app.suspend_with_terminal_input()`:
+The Parent Menu terminal opens `xterm` as a sibling X client on the same screen (Purple is itself an X client; see `guides/canvas-architecture.md`). `EvdevReader.suspend_for_x_terminal(on_rescue)` releases the grab so X delivers keys to xterm, and sets `_suspended` so the read loop drops every event (Purple stays inert underneath but keeps running). `resume_from_x_terminal()` clears the flag and reacquires the grab. `TerminalScreen` (`rooms/parent_menu.py`) launches xterm, awaits its exit in an executor, and resumes in a `finally`, so a Popen failure or the process dying still restores input.
 
-```python
-with self.app.suspend_with_terminal_input():
-    os.system('stty sane')
-    subprocess.run(['/bin/bash', '-i'])
-    os.system('stty sane')
+No-stuck guarantees: normal exit is typing `exit` in the shell; if xterm never takes focus, Ctrl+Alt+F1 fires the rescue (`on_rescue` = SIGTERM the xterm), which ends the wait and resumes. Because `_suspended` drops events *after* the VT-combo handling but every reacquire is gated on `not self._suspended`, the deep escape (Ctrl+Alt+F2 to tty2, `back`/Ctrl+Alt+F1 to return) still works during a terminal session without grabbing the keyboard out from under xterm.
 
-self.app.refresh(repaint=True)
-```
-
-This context manager:
-1. Releases the evdev grab
-2. Calls Textual's `suspend()` to restore the terminal
-3. Reacquires the grab and resets keyboard state on exit
+The VT-switch machinery (`_switch_to_tty2` + `chvt`) stays as the emergency path (Ctrl+Alt+F2, or Ctrl+\ held 3s), even though the Parent Menu no longer uses it.
 
 **Important**: When flushing pending evdev events before reacquiring the grab, use `select()` with a 0 timeout to check for data before calling `read_one()`. Otherwise `read_one()` blocks forever.
-
-**Exiting from suspend**: If you need to exit the app from inside a suspend context, use `os._exit(0)` instead of `sys.exit(0)`. The latter tries to unwind through Textual's cleanup, which can leave the terminal in a broken state.

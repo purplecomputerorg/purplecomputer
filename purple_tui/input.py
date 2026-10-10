@@ -14,13 +14,17 @@ See guides/keyboard-architecture.md for details.
 
 import asyncio
 import logging
+import os
+import shutil
+import signal
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional, Awaitable
 
-from .constants import SUPPORT_EMAIL
+from . import diag_log
+from .constants import SUPPORT_EMAIL, is_debug
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +58,21 @@ def _list_input_paths() -> set:
         return set(evdev.list_devices())
     except OSError:
         return set()
+
+
+def keys_held_now() -> set:
+    """Key codes currently held on any keyboard: one ioctl per device, no
+    event reading, so it is safe before the reader starts and while it runs."""
+    import evdev
+    held = set()
+    for path in _list_input_paths():
+        try:
+            dev = evdev.InputDevice(path)
+            held.update(dev.active_keys())
+            dev.close()
+        except OSError:
+            continue
+    return held
 
 
 # =============================================================================
@@ -158,6 +177,18 @@ class KeyCode:
     # Brightness keys
     KEY_BRIGHTNESSDOWN = 224
     KEY_BRIGHTNESSUP = 225
+
+
+# Held while Purple starts, any of these skips the first-boot chime (a quiet
+# room, a sleeping kid): the mute or volume-down key, or M on keyboards without them.
+CHIME_SKIP_KEYS = frozenset({KeyCode.KEY_MUTE, KeyCode.KEY_VOLUMEDOWN, 50})  # 50 = KEY_M
+
+
+def chime_skip_key_held() -> bool:
+    try:
+        return bool(CHIME_SKIP_KEYS & keys_held_now())
+    except Exception:
+        return False
 
 
 # Keycode to character mapping (printable keys only)
@@ -312,6 +343,12 @@ class EvdevReader:
         self._vt_away = False  # True while switched away to another VT
         self._vt_away_time: float = 0  # When _vt_away was set (for chvt race guard)
 
+        # True while a same-screen X terminal (xterm) is focused: grab is
+        # released so X delivers keys to it, and we drop every event so Purple
+        # stays inert underneath. No VT switch. Rescue closes it (see below).
+        self._suspended = False
+        self._on_terminal_rescue = None
+
     @property
     def _device(self):
         """Primary device (for backward compat with logging)."""
@@ -320,12 +357,7 @@ class EvdevReader:
     @staticmethod
     def _diag(msg):
         """Append to tmpfs + persistent log so silent-keyboard reports survive reboot."""
-        for path in DIAG_LOG_PATHS:
-            try:
-                with open(path, "a") as f:
-                    f.write(f"{msg}\n")
-            except Exception:
-                pass
+        diag_log.append(DIAG_LOG_PATHS, f"{msg}\n", "purple-evdev")
         logger.info(msg)
 
     def _diag_once(self, msg: str) -> None:
@@ -438,13 +470,41 @@ class EvdevReader:
         except Exception:
             return True  # Assume tty1 if we can't tell
 
+    def suspend_for_x_terminal(self, on_rescue) -> None:
+        """Release the grab and stop forwarding events so an X client on the
+        same screen (xterm) receives the keyboard. No VT switch.
+
+        on_rescue() is invoked if the parent presses Ctrl+Alt+F1: it must close
+        the terminal so resume_from_x_terminal() runs, guaranteeing no one can
+        get stuck if the terminal never took focus.
+        """
+        if self._suspended:
+            return
+        self._suspended = True
+        self._on_terminal_rescue = on_rescue
+        self.release_grab()
+
+    def resume_from_x_terminal(self) -> None:
+        if not self._suspended:
+            return
+        self._suspended = False
+        self._on_terminal_rescue = None
+        self.reacquire_grab()
+
     def _switch_to_tty2(self) -> None:
         """Switch to tty2, which already has an autologin shell.
 
         The image runs an autologin agetty on tty2 from sysinit.target. Spawning
         a second login here (openvt -f) left two processes reading one tty, so
         each got a fraction of the keystrokes and neither shell was usable.
+
+        ChromeOS has no chvt: on a debug install, leaving Purple is the way
+        to a shell (the launcher brings the console back).
         """
+        if shutil.which("chvt") is None:
+            if is_debug():
+                os.kill(os.getpid(), signal.SIGTERM)
+            return
         subprocess.Popen(["sudo", "chvt", "2"])
 
     def release_grab(self) -> None:
@@ -478,6 +538,7 @@ class EvdevReader:
         if not self._grab:
             return
 
+        self._wait_for_keys_up()
         self._grabs_released = False
         for dev in self._devices:
             # Flush any pending events before reacquiring grab
@@ -492,6 +553,19 @@ class EvdevReader:
                 pass
 
             self._grab_device(dev)
+
+    def _wait_for_keys_up(self, timeout: float = 2.0) -> None:
+        """Grabbing mid-press hides the release from X, which then auto-repeats
+        that key (the Enter that closed the terminal) into the pty until reboot."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                if not any(dev.active_keys() for dev in self._devices):
+                    return
+            except OSError:
+                return
+            time.sleep(0.02)
+        self._diag("KBD GRAB: a key is still held, grabbing anyway")
 
     async def _read_loop(self, device) -> None:
         """Main event reading loop for one keyboard device."""
@@ -550,7 +624,11 @@ class EvdevReader:
                             logger.warning("Emergency VT switch: Ctrl+Alt+F1, switching back to tty1")
                             subprocess.Popen(["sudo", "chvt", "1"])
                             self._vt_away = False
-                            self.reacquire_grab()
+                            if not self._suspended:
+                                self.reacquire_grab()
+                        elif self._suspended and self._on_terminal_rescue is not None:
+                            logger.warning("Terminal rescue: Ctrl+Alt+F1, closing same-screen terminal")
+                            self._on_terminal_rescue()
 
                     # Ctrl+\ held 3s: toggle VT switch
                     if keycode == KeyCode.KEY_BACKSLASH:
@@ -564,7 +642,8 @@ class EvdevReader:
                                     logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching back to tty1")
                                     subprocess.Popen(["sudo", "chvt", "1"])
                                     self._vt_away = False
-                                    self.reacquire_grab()
+                                    if not self._suspended:
+                                        self.reacquire_grab()
                                 else:
                                     logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching to tty2")
                                     self._vt_away = True
@@ -587,9 +666,16 @@ class EvdevReader:
                         if time.monotonic() - self._vt_away_time > 0.5 and self._is_on_tty1():
                             logger.info("VT switch: back on tty1, reacquiring grab")
                             self._vt_away = False
-                            self.reacquire_grab()
+                            if not self._suspended:
+                                self.reacquire_grab()
                         else:
                             continue  # Don't forward events while away
+
+                    # Same-screen X terminal is focused: X delivers keys to it,
+                    # Purple ignores them. Grab is released; Ctrl+Alt+F1 above is
+                    # the rescue out.
+                    if self._suspended:
+                        continue
 
                     scancode = self._pending_scancodes.pop(dev_path, 0)
 
@@ -907,6 +993,10 @@ class PowerButtonReader:
     """
     Reads power button events from evdev and detects tap vs hold.
 
+    Some firmware reports one press on both ACPI buttons, or twice on one
+    (HP Stream 11), so presses closer than PRESS_DEBOUNCE_SECS count once;
+    otherwise the second copy confirms the shutdown prompt the first opened.
+
     Hold detection uses asyncio timers, independent of Textual's event loop.
     This ensures reliable detection even if the TUI is suspended.
 
@@ -925,13 +1015,15 @@ class PowerButtonReader:
         self._devices: list = []  # All power button evdev devices
         self._running = False
         self._tasks: list[asyncio.Task] = []
-        self._heartbeat_task: Optional[asyncio.Task] = None
         self._watcher_task: Optional[asyncio.Task] = None
         self._known_device_paths: set = set()
         self._rescan_wanted = False  # Consumed by _watch_devices
         self._logged_once: set = set()  # Diag lines already written
         self._hold_task: Optional[asyncio.Task] = None
         self._press_time: Optional[float] = None
+        self._last_press = float("-inf")
+
+    PRESS_DEBOUNCE_SECS = 1.0
 
     _device_paths = staticmethod(_list_input_paths)
 
@@ -939,10 +1031,10 @@ class PowerButtonReader:
         """Log identical diag lines once. The log is always-on to disk and a
         flapping node re-runs scans every couple of seconds, so repeats would
         grow it unbounded for as long as the hardware is bad."""
-        from .power_manager import _power_diag
+        from .power_manager import _power_log
         if msg not in self._logged_once:
             self._logged_once.add(msg)
-            _power_diag(msg)
+            _power_log(msg)
 
     @property
     def _device(self):
@@ -968,7 +1060,6 @@ class PowerButtonReader:
         for dev in self._devices:
             self._tasks.append(asyncio.create_task(self._read_loop(dev)))
         self._watcher_task = asyncio.create_task(self._watch_devices())
-        self._heartbeat_task = asyncio.create_task(self._heartbeat())
 
     async def stop(self) -> None:
         """Stop reading and release all devices."""
@@ -982,10 +1073,6 @@ class PowerButtonReader:
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
             self._watcher_task = None
-
-        if self._heartbeat_task:
-            self._heartbeat_task.cancel()
-            self._heartbeat_task = None
 
         # Close all devices first to unblock async_read_loop()
         for dev in self._devices:
@@ -1004,23 +1091,6 @@ class PowerButtonReader:
         self._tasks = []
 
         logger.info("PowerButtonReader: stopped")
-
-    async def _heartbeat(self) -> None:
-        """Periodic check that read loop tasks are still alive (debug only)."""
-        from .power_manager import _power_log
-        try:
-            await asyncio.sleep(30)
-            while self._running:
-                for i, task in enumerate(self._tasks):
-                    state = "alive" if not task.done() else "DEAD"
-                    if task.done():
-                        exc = task.exception() if not task.cancelled() else "cancelled"
-                        state = f"DEAD ({exc})"
-                    dev_path = self._devices[i].path if i < len(self._devices) else "?"
-                    _power_log(f"POWER HEARTBEAT: task[{i}]={state} dev={dev_path}")
-                await asyncio.sleep(60)
-        except asyncio.CancelledError:
-            pass
 
     async def _watch_devices(self) -> None:
         """Adopt power buttons that appear after startup.
@@ -1103,7 +1173,7 @@ class PowerButtonReader:
 
     async def _read_loop(self, device) -> None:
         """Main event reading loop for one power button device."""
-        from .power_manager import _power_diag
+        from .power_manager import _power_log
         self._diag_once(f"POWER READ LOOP: starting on {device.path} ({device.name})")
         event_count = 0
         try:
@@ -1115,12 +1185,16 @@ class PowerButtonReader:
                 event_count += 1
                 # Log first few events to confirm device is alive
                 if event_count <= 5:
-                    _power_diag(f"POWER READ LOOP: event #{event_count} type={event.type} "
+                    _power_log(f"POWER READ LOOP: event #{event_count} type={event.type} "
                                f"code={event.code} value={event.value}")
 
                 if event.type == EV_KEY and event.code == KeyCode.KEY_POWER:
-                    _power_diag(f"POWER KEY: value={event.value} (1=press, 0=release)")
+                    _power_log(f"POWER KEY: {device.path} value={event.value} (1=press, 0=release)")
                     if event.value == 1:  # press
+                        if event.timestamp() - self._last_press < self.PRESS_DEBOUNCE_SECS:
+                            _power_log("POWER KEY: ignored, same press as the last one")
+                            continue
+                        self._last_press = event.timestamp()
                         self._press_time = event.timestamp()
                         self._cancel_hold_task()
                         self._hold_task = asyncio.create_task(self._hold_timer())

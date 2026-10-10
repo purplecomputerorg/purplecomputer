@@ -1,0 +1,15 @@
+[Unit]
+Description=Purple Computer: keep the live system in RAM so the USB stick can be removed
+# After X's pre-start (purple-wait-display) has created the boot log as purple,
+# which is also when the old xinitrc warmup ran.
+After=purple-x11.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/purple-usb-cache
+# Kid-facing reads from the stick go first; this fills the gaps.
+IOSchedulingClass=idle
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

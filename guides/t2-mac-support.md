@@ -165,6 +165,8 @@ With macOS wiped and GRUB installed to the EFI fallback path, the Mac should boo
 
 ## Implementation Path
 
+**Done (August 2026):** phases 1-3 landed as the two-kernel design in `hardware-coverage-plan.md` ("As built"). What remains is bench validation on real T2 hardware.
+
 This doesn't need to be solved all at once. A reasonable progression:
 
 ### Phase 1: Manual validation

@@ -311,53 +311,52 @@ if HAS_PYTEST:
             mgr._poweroff_available = True
             return mgr
 
-        def test_shutdown_calls_systemctl_force(self, pm):
-            """shutdown() should try systemctl poweroff --force first (after watchdog)."""
+        def test_shutdown_arms_backstop_then_systemctl_force(self, pm):
+            """The tmpfs backstop is armed in its own session, then systemctl --force runs."""
+            from purple_tui.constants import REBOOT_BIN
             with patch("purple_tui.power_manager.subprocess.Popen") as mock_popen:
                 result = pm.shutdown()
 
             assert result is True
-            # First call is watchdog, second is the actual shutdown command
             assert mock_popen.call_count == 2
-            cmd = mock_popen.call_args_list[1][0][0]
-            assert cmd == ["sudo", "systemctl", "poweroff", "--force"]
+            backstop = mock_popen.call_args_list[0]
+            assert backstop[0][0][:2] == [REBOOT_BIN, "--poweroff"]
+            assert backstop[1]["start_new_session"] is True
+            assert mock_popen.call_args_list[1][0][0] == ["sudo", "systemctl", "poweroff", "--force"]
 
         def test_shutdown_falls_back_on_failure(self, pm):
             """If first shutdown command fails, should try next one."""
-            call_count = 0
+            calls = []
 
-            def fail_then_succeed(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                # Call 1 = watchdog (succeeds), call 2 = shutdown (fail),
-                # call 3 = shutdown (succeeds)
-                if call_count == 2:
+            def fail_systemctl(cmd, **kwargs):
+                calls.append(cmd)
+                if "systemctl" in cmd:
                     raise FileNotFoundError("not found")
                 return MagicMock()
 
-            with patch("purple_tui.power_manager.subprocess.Popen",
-                       side_effect=fail_then_succeed):
+            with patch("purple_tui.power_manager.subprocess.Popen", side_effect=fail_systemctl):
                 result = pm.shutdown()
 
             assert result is True
-            assert call_count == 3  # watchdog + 1 failure + 1 success
+            assert calls[-1] == ["sudo", "poweroff", "-f"]
+
+        def test_shutdown_succeeds_on_backstop_when_sudo_cannot_start(self, pm):
+            """USB pulled on a live boot: sudo can't exec, the tmpfs binary still powers off."""
+            from purple_tui.constants import REBOOT_BIN
+
+            def only_backstop(cmd, **kwargs):
+                if cmd[0] != REBOOT_BIN:
+                    raise OSError(5, "Input/output error")
+                return MagicMock()
+
+            with patch("purple_tui.power_manager.subprocess.Popen", side_effect=only_backstop):
+                assert pm.shutdown() is True
 
         def test_shutdown_returns_false_when_all_fail(self, pm):
-            """If every shutdown command fails, should return False."""
-            calls = []
-
-            def track(*args, **kwargs):
-                calls.append(args[0])
-                # Let watchdog succeed, fail everything else
-                if len(calls) == 1 and args[0][0] == "sh":
-                    return MagicMock()
-                raise FileNotFoundError("not found")
-
+            """Nothing could start (no backstop, no sudo): the UI asks a person to turn it off."""
             with patch("purple_tui.power_manager.subprocess.Popen",
-                       side_effect=track):
-                result = pm.shutdown()
-
-            assert result is False
+                       side_effect=FileNotFoundError("not found")):
+                assert pm.shutdown() is False
 
         def test_shutdown_tries_even_when_poweroff_unavailable(self, pm):
             """Should still try commands even if _poweroff_available is False."""
@@ -366,7 +365,7 @@ if HAS_PYTEST:
                 result = pm.shutdown()
 
             assert result is True
-            # Watchdog + first shutdown command
+            # Backstop + first shutdown command
             assert mock_popen.call_count == 2
 
         def test_shutdown_demo_mode_does_not_poweroff(self, pm):
@@ -446,6 +445,44 @@ if HAS_PYTEST:
 
 
 # =============================================================================
+# Lid countdown vs. keypresses
+# =============================================================================
+
+class _FakeAppForActivity:
+    """Drives PurpleApp._record_user_activity in isolation."""
+    from purple_tui.purple_tui import PurpleApp
+    _record_user_activity = PurpleApp._record_user_activity
+
+    def __init__(self, lid_close_time):
+        self._lid_close_time = lid_close_time
+        self._armed = 0
+
+    def _arm_audio_idle_timer(self):
+        self._armed += 1
+
+
+def test_keypress_cancels_lid_countdown(monkeypatch):
+    """Some firmware reports the lid closed at boot and never sends the open
+    event; typing proves it is open, so the 10 min shutdown must stop."""
+    from purple_tui import power_manager
+    lines = []
+    monkeypatch.setattr(power_manager, "_power_log", lines.append)
+    app = _FakeAppForActivity(lid_close_time=time.time())
+    app._record_user_activity()
+    assert app._lid_close_time is None
+    assert app._armed == 1
+    assert any("LID COUNTDOWN cancelled" in line for line in lines)
+
+
+def test_keypress_without_countdown_logs_nothing(monkeypatch):
+    from purple_tui import power_manager
+    lines = []
+    monkeypatch.setattr(power_manager, "_power_log", lines.append)
+    _FakeAppForActivity(lid_close_time=None)._record_user_activity()
+    assert lines == []
+
+
+# =============================================================================
 # Standalone runner
 # =============================================================================
 
@@ -470,3 +507,28 @@ if __name__ == "__main__":
         print(f"Shutdown threshold: {pm.get_idle_shutdown_threshold()}")
 
         print("Basic checks passed!")
+
+
+@pytest.mark.parametrize("model, wakeable", [
+    ("", True),
+    ("Raspberry Pi 4 Model B Rev 1.4", False),
+    ("Raspberry Pi 400 Rev 1.1", False),
+    ("Raspberry Pi 5 Model B Rev 1.0", True),
+    ("Raspberry Pi 500 Rev 1.0", True),
+])
+def test_pi_without_wake_never_halts(monkeypatch, tmp_path, model, wakeable):
+    from purple_tui import power_manager
+    path = tmp_path / "model"
+    path.write_text(model + "\0")
+    monkeypatch.setattr(power_manager, "DEVICE_TREE_MODEL", str(path))
+    monkeypatch.delattr(power_manager.can_power_back_on, "_cached", raising=False)
+    monkeypatch.setattr(power_manager, "_power_log", lambda msg: None)
+    try:
+        pm = PowerManager()
+        assert power_manager.can_power_back_on() is wakeable
+        assert (pm.get_idle_shutdown_threshold() == float("inf")) is not wakeable
+        if not wakeable:
+            assert pm.shutdown() is False
+            assert power_manager.manual_off_hint() == "You can unplug Purple now"
+    finally:
+        power_manager.can_power_back_on.__dict__.pop("_cached", None)

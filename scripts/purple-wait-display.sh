@@ -1,13 +1,14 @@
 #!/bin/sh
-# Wait for a display to be connected before starting X11.
+# Wait for a real GPU to report a connected display before starting X11.
+# Runs as ExecStartPre in purple-x11.service.
 #
-# The i915 GPU driver loads asynchronously: the DRM device node (/dev/dri/card0)
-# appears before display connectors are fully initialized. Starting X11 too
-# early can result in a black screen or backlight failure, especially on older
-# hardware (MacBook 2014 Haswell, some ThinkPads).
-#
-# This script polls /sys/class/drm/ for a connected display connector.
-# It's meant to run as ExecStartPre in the purple-x11 systemd service.
+# GPU drivers load from the root filesystem (not the initrd), so X can be queued
+# while the firmware framebuffer (simpledrm) is still card0; X that opens it dies
+# with "no screens found" when the driver replaces it (HP Stream). The driver
+# removes that framebuffer before registering its card, and connector status is
+# only filled in after its initial probe (the 2014 MacBook black screen), so the
+# wait ends once no firmware framebuffer is left and a real GPU reports a
+# connected connector.
 #
 # Boot logging is ALWAYS on (not gated on debug flag): these timestamps are
 # the only evidence we have when a customer reports a slow or hung live boot.
@@ -56,22 +57,60 @@ log() {
     logger -t purple-boot -- "$msg" 2>/dev/null || true
 }
 
-# Check if any DRM connector reports "connected"
-check_connected() {
-    for status_file in /sys/class/drm/card*-*/status; do
-        [ -f "$status_file" ] || continue
-        if [ "$(cat "$status_file" 2>/dev/null)" = "connected" ]; then
-            echo "$status_file"
-            return 0
-        fi
+# gpu: the card sits on a PCI display-class device, or is an SoC GPU (a
+# platform device, e.g. Raspberry Pi vc4). firmware: the firmware framebuffer
+# (simpledrm), which the primary GPU's driver removes. other: e.g. a USB
+# display such as the T2 Touch Bar (appletbdrm).
+card_kind() {
+    local dir
+    dir=$(readlink -f "/sys/class/drm/$1/device")
+    case "$dir" in /sys/devices/platform/*)
+        case "$(basename "$(readlink -f "$dir/driver")")" in
+            simple-framebuffer|simpledrm|ofdrm) echo firmware ;;
+            *) echo gpu ;;
+        esac
+        return ;;
+    esac
+    while [ -n "$dir" ] && [ "$dir" != /sys/devices ]; do
+        case "$(cat "$dir/class" 2>/dev/null)" in 0x03*) echo gpu; return ;; esac
+        dir=${dir%/*}
     done
-    return 1
+    echo other
+}
+
+# Print "name status kind" for each DRM connector
+connectors() {
+    local f name st kind
+    for f in /sys/class/drm/card*-*/status; do
+        [ -f "$f" ] || continue
+        name=${f%/status}; name=${name##*/}
+        st=$(cat "$f" 2>/dev/null)
+        kind=$(card_kind "${name%%-*}")
+        echo "$name ${st:-unreadable} $kind"
+    done
+}
+
+# Print the first connected connector on a real GPU, once the firmware
+# framebuffer is gone. On dual-GPU laptops the other GPU can finish first.
+find_connected() {
+    local list
+    list=$(connectors)
+    case "$list" in *" firmware"*) return 1 ;; esac
+    echo "$list" | while read -r name st kind; do
+        [ "$st $kind" = "connected gpu" ] && echo "$name" && break
+    done
+}
+
+log_connectors() {
+    connectors | while read -r name st kind; do
+        log "  connector at $1: $name = $st ($kind)"
+    done
 }
 
 # Simulate X11 failure for testing the diagnostic error screen.
 # Triggered by purple.failx11=1 kernel parameter (debug ISO GRUB menu).
 # Failing here (ExecStartPre) prevents X from starting at all, so the service
-# hits its restart limit quickly and ExecStopPost shows the error screen.
+# hits its restart limit quickly and OnFailure= shows the error screen.
 if grep -q "purple.failx11=1" /proc/cmdline 2>/dev/null; then
     log "purple.failx11=1 set, failing ExecStartPre to trigger error screen"
     exit 1
@@ -80,17 +119,12 @@ fi
 log "=== purple-wait-display started === kernel=$(uname -r)"
 log "Waiting for display (up to ${MAX_WAIT}s)..."
 
-# Enumerate connectors once for diagnostics
-for f in /sys/class/drm/card*-*/status; do
-    [ -f "$f" ] || continue
-    log "  connector at start: $(echo "$f" | sed 's|.*/drm/||; s|/status||') = $(cat "$f" 2>/dev/null)"
-done
+log_connectors start
 
 waited=0
-while [ "$waited" -lt "$MAX_WAIT" ]; do
-    found=$(check_connected)
-    if [ -n "$found" ]; then
-        connector=$(echo "$found" | sed 's|.*/drm/||; s|/status||')
+while [ "$waited" -lt $((MAX_WAIT * 2)) ]; do
+    connector=$(find_connected)
+    if [ -n "$connector" ]; then
         log "Display ready: $connector (waited ${waited} half-seconds = $((waited / 2)).$((waited % 2 * 5))s)"
         exit 0
     fi
@@ -98,11 +132,8 @@ while [ "$waited" -lt "$MAX_WAIT" ]; do
     waited=$((waited + 1))
 done
 
-# Timeout: proceed anyway. Some hardware (VMs, unusual panels) may not report
-# connector status through sysfs but still work fine with X11.
+# Timeout: proceed anyway. A GPU with no kernel driver leaves only the firmware
+# framebuffer, which X can still drive.
 log "No connected display found after ${MAX_WAIT}s, proceeding anyway"
-for f in /sys/class/drm/card*-*/status; do
-    [ -f "$f" ] || continue
-    log "  connector at timeout: $(echo "$f" | sed 's|.*/drm/||; s|/status||') = $(cat "$f" 2>/dev/null)"
-done
+log_connectors timeout
 exit 0

@@ -157,7 +157,7 @@ All shutdown and reboot paths on Purple Computer:
 | Parent menu "Shut Down" | `ParentMenu._shutdown()` | `pm.shutdown()` |
 | Post-install Enter | `InstallProgressScreen._on_install_complete()` | `execv` into static reboot binary on tmpfs |
 
-`pm.shutdown()` uses `sudo systemctl poweroff --force` with a two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq 'o' (direct kernel poweroff via ACPI). The watchdog runs in a detached process group so it survives TUI death.
+`pm.shutdown()` uses `sudo systemctl poweroff --force` with a backstop: the static `purple-reboot --poweroff 8` on tmpfs, in a detached session so it survives TUI death, powers off (then sysrq 'o') if systemctl hasn't.
 
 All shutdown commands use `sudo` because `systemctl poweroff` without sudo fails with permission denied on the live USB (and Popen doesn't detect this since it only checks if the process spawned, not if it succeeded). The purple user has passwordless sudo everywhere via `/etc/sudoers.d/purple-nopasswd`.
 
@@ -194,6 +194,6 @@ Run with: `just test`, or `pytest tests/test_install_reboot.py -v`
 | `build-scripts/00-build-golden-image.sh` | Compiles static reboot binary during image build |
 | `tools/purple-reboot.c` | Source for static reboot binary (fallback chain, tty2 escape) |
 | `tools/test_purple_reboot.c` | C tests for reboot binary (`just test-reboot`) |
-| `config/xinit/xinitrc` | Squashfs tmpfs copy (replaces page cache warmup) |
+| `scripts/purple-usb-cache.py` | Squashfs warm-up, locked in RAM when there is room |
 | `tests/test_install_progress.py` | Documents and tests the pipe-hang fix |
 | `tests/test_install_reboot.py` | Tests the reboot flow and sentinel detection |

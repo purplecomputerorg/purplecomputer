@@ -2,8 +2,8 @@
 # Flash PurpleOS ISO to ALL whitelisted USB drives in parallel.
 # Each drive runs its own pipeline (flash with retries, boot-settle,
 # re-verify, eject) as an independent job, so one slow or failing drive never
-# holds up the batch. One udev gate is shared across children; per-drive logs
-# stream to /tmp.
+# holds up the batch. udev's exec queue stays paused for the whole run;
+# per-drive logs stream to /tmp.
 
 set -eo pipefail
 
@@ -38,7 +38,9 @@ Options:
                 intact before the drive is ejected
   --no-settle   Skip the post-flash QEMU boot-settle (faster, but the first
                 live boot on each drive will be slow)
-  --ref <c>     Use an old commit's archived build (made by 'just build --ref <c>')
+  --ignore-denylist  Flash drives even if their serial is in .flash-denylist.conf
+  --ref <c>     Flash that commit's build: its archive from 'just build --ref <c>',
+                or the build of it still in the output dir
   --help        Show this help
 EOF
 }
@@ -60,7 +62,8 @@ while [[ -n "${1:-}" ]]; do
         --corrupt)    CORRUPT_MODE=true; shift ;;
         --yes|-y)     SKIP_CONFIRM=true; shift ;;
         --no-settle)  SKIP_SETTLE=true; shift ;;
-        --ref)        OUTPUT_DIR="$(archive_dir_for_ref "$2")/output" || { log_error "Cannot resolve git commit '$2'"; exit 1; }; shift 2 ;;
+        --ignore-denylist) export PURPLE_IGNORE_DENYLIST=1; shift ;;
+        --ref)        use_build_of_ref "$2" || { log_error "Cannot resolve git commit '$2'"; exit 1; }; shift 2 ;;
         *)            POSITIONAL+=("$1"); shift ;;
     esac
 done
@@ -95,8 +98,8 @@ else
         ISO_PATH="$(find_latest_iso "$ISO_KIND")"
     fi
     if [[ -z "$ISO_PATH" || ! -f "$ISO_PATH" ]]; then
-        log_error "No matching ISO for the newest build in $OUTPUT_DIR."
-        if [[ "$OUTPUT_DIR" == */archive/* ]]; then
+        log_error "No matching ISO for the newest build $(build_source_label)."
+        if [[ -n "$BUILD_COMMIT_FILTER" ]]; then
             log_error "Build it first with 'just build --ref <commit>'."
         else
             log_error "Run 'just build' first, or pass an ISO path explicitly."
@@ -144,6 +147,29 @@ else
     done
 fi
 
+# Per-drive state, indexed alongside ENTRIES. Tracked by serial, not device
+# node: a power-cycled drive can come back under a different letter, and
+# retrying the old letter could write to whatever landed there instead.
+# ST_PORT/ST_PORTNAME are captured now, while every drive is still enumerated:
+# a drive that fails or gets ejected loses its /sys/block entry, and with it
+# any way to find which hub socket it sits in.
+ST_DEV=(); ST_SER=(); ST_PORT=(); ST_PORTNAME=()
+for i in "${!ENTRIES[@]}"; do
+    IFS='|' read -r dev _ _ ser <<< "${ENTRIES[$i]}"
+    ST_DEV+=("$dev"); ST_SER+=("$ser")
+    ST_PORT+=("$(usb_port_control "$dev" 2>/dev/null || true)")
+    ST_PORTNAME+=("$(usb_port_name "$dev" 2>/dev/null || true)")
+done
+
+# Physical socket label for drive index $1 ("top row 3"), from the launch-time
+# port capture so it works even after the drive drops off the bus.
+slot_name() {
+    local port="${ST_PORTNAME[$1]}" label
+    [[ -n "$port" ]] || { echo "unknown socket (${ST_DEV[$1]})"; return; }
+    label="$(port_label "$port")"
+    echo "${label:-socket $port}"
+}
+
 echo
 if [[ "$CORRUPT_MODE" == true ]]; then
     echo -e "${BOLD}${YELLOW}Will flash ${#ENTRIES[@]} corrupt-test scenario(s), one per drive, in parallel:${NC}"
@@ -158,10 +184,14 @@ else
         UNSHIPPABLE="this ISO has no .commit sidecar, so its source commit is unknown"
     elif [[ -z "$RELEASE_HEAD" ]]; then
         UNSHIPPABLE="release/1.x was not found locally to compare against"
-    elif [[ "$RELEASE_HEAD" != "$ISO_SRC_COMMIT"* ]]; then
-        if git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" release/1.x 2>/dev/null; then
-            ISO_LINE="an older release build"
-        elif git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" main 2>/dev/null; then
+    elif [[ "$RELEASE_HEAD" == "$ISO_SRC_COMMIT"* ]]; then
+        echo -e "  ${GREEN}Newest release build: commit ${ISO_SRC_COMMIT} is the tip of release/1.x.${NC}"
+    elif git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" release/1.x 2>/dev/null; then
+        BEHIND="$(git -C "$PROJECT_DIR" rev-list --count "${ISO_SRC_COMMIT}..release/1.x" 2>/dev/null || echo '?')"
+        echo -e "  ${GREEN}Release build${NC} (commit ${ISO_SRC_COMMIT}), ${BEHIND} commit(s) behind the tip of release/1.x (${RELEASE_HEAD:0:7})."
+        echo -e "  Shippable; make sure the older release is what you meant to flash."
+    else
+        if git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" main 2>/dev/null; then
             ISO_LINE="a main build, not a release build"
         else
             ISO_LINE="from a commit on neither main nor release/1.x"
@@ -169,16 +199,18 @@ else
         UNSHIPPABLE="this ISO is $ISO_LINE (commit $ISO_SRC_COMMIT), release/1.x is at ${RELEASE_HEAD:0:7}"
     fi
     if [[ -n "$UNSHIPPABLE" ]]; then
-        echo -e "  ${YELLOW}${BOLD}Not confirmed as the current release build:${NC}${YELLOW} ${UNSHIPPABLE}.${NC}"
+        echo -e "  ${YELLOW}${BOLD}Not a release build:${NC}${YELLOW} ${UNSHIPPABLE}.${NC}"
         echo -e "  ${YELLOW}Fine for dev sticks; do not ship these drives to customers.${NC}"
-    else
-        echo -e "  ${GREEN}Current release build: commit ${ISO_SRC_COMMIT} matches release/1.x.${NC}"
     fi
 fi
+SLOTS=()
+for i in "${!ENTRIES[@]}"; do SLOTS+=("$(slot_name "$i")"); done
+# Slot order, not /dev order: a power-cycled stick comes back under a later letter.
 for i in "${!ENTRIES[@]}"; do
     IFS='|' read -r dev size model serial <<< "${ENTRIES[$i]}"
-    printf "  %-10s %-8s %-22s %-16s %s\n" "$dev" "$size" "$model" "$serial" "${SCENS[$i]:+-> ${SCENS[$i]}}"
-done
+    printf "  %-16s %-10s %-8s %-22s %-16s %s\n" "${SLOTS[$i]}" "$dev" "$size" "$model" "$serial" "${SCENS[$i]:+-> ${SCENS[$i]}}"
+done | sort -V
+echo -e "  ${BOLD}Slots:${NC} $(printf '%s\n' "${SLOTS[@]}" | sort -V | paste -sd, | sed 's/,/, /g')"
 echo -e "  ${RED}${BOLD}ALL DATA ON THESE DRIVES WILL BE DESTROYED${NC}"
 echo
 
@@ -206,8 +238,6 @@ sudo -v
 ( while true; do sudo -n -v 2>/dev/null || exit; sleep 60; done ) &
 SUDO_KEEPALIVE_PID=$!
 
-log_info "Pausing udev exec queue..."
-sudo udevadm control --stop-exec-queue 2>/dev/null || true
 cleanup() {
     kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
     sudo udevadm control --start-exec-queue 2>/dev/null || true
@@ -218,56 +248,47 @@ LOG_DIR="$(mktemp -d -t purple-flash-all.XXXXXX)"
 log_info "Per-drive logs: $LOG_DIR"
 echo
 
-# Per-drive state, indexed alongside ENTRIES. Tracked by serial, not device
-# node: a power-cycled drive can come back under a different letter, and
-# retrying the old letter could write to whatever landed there instead.
-# ST_PORT/ST_PORTNAME are captured now, while every drive is still enumerated:
-# a drive that fails or gets ejected loses its /sys/block entry, and with it
-# any way to find which hub socket it sits in.
-ST_DEV=(); ST_SER=(); ST_PORT=(); ST_PORTNAME=()
-for i in "${!ENTRIES[@]}"; do
-    IFS='|' read -r dev _ _ ser <<< "${ENTRIES[$i]}"
-    ST_DEV+=("$dev"); ST_SER+=("$ser")
-    ST_PORT+=("$(usb_port_control "$dev" 2>/dev/null || true)")
-    ST_PORTNAME+=("$(usb_port_name "$dev" 2>/dev/null || true)")
-done
-
-# Cross-job coordination lives in files under STATE_DIR: flashed.$i markers
-# gate the udev queue restart, slot dirs bound settle/re-verify concurrency,
-# and result.$i carries each job's outcome back as "status|dev|tries|log".
+# Cross-job coordination lives in files under STATE_DIR: slot dirs bound
+# settle and re-verify concurrency, stage.<dev> tells flash-status what a
+# job is doing, and result.$i carries each job's outcome back as
+# "status|dev|tries|log|slot".
 STATE_DIR="$LOG_DIR/state"
 mkdir -p "$STATE_DIR"
 : > "$STATE_DIR/safe-slots"
 SETTLE_MAX=$(boot_settle_max_jobs)
 
-# Physical socket label for drive index $1 ("top row 3"), from the launch-time
-# port capture so it works even after the drive drops off the bus.
-slot_name() {
-    local port="${ST_PORTNAME[$1]}" label
-    [[ -n "$port" ]] || { echo "unknown socket (${ST_DEV[$1]})"; return; }
-    label="$(port_label "$port")"
-    echo "${label:-socket $port}"
-}
+# udev's exec queue stays paused from the first write to the end of the run
+# (cleanup restarts it), so no automounter touches a drive between its write
+# and its last readback (see flash-to-usb.sh). Nothing here needs udev:
+# ejects and retry power cycles go through sysfs.
+sudo udevadm control --stop-exec-queue 2>/dev/null || true
 
 # Comma-joined ship-ready slots. Labels can't contain | (save_port_label strips it).
 safe_slot_list() { paste -sd'|' "$STATE_DIR/safe-slots" | sed 's/|/, /g'; }
 
 # Record a drive's outcome and announce, by physical slot, that its stick can
-# come out of the hub. Good sticks join the running ship-ready list.
+# come out of the hub. Good sticks join the running ship-ready list. The
+# append and the announcement share one lock so parallel finishers can't
+# interleave their lines or print a count that disagrees with the list.
 finish_drive() {
     local i="$1" status="$2" dev="$3" tries="$4" log="$5" slot safe
     slot="$(slot_name "$i")"
     echo "$status|$dev|$tries|$log|$slot" > "$STATE_DIR/result.$i"
     [[ "$CORRUPT_MODE" == true ]] && return 0
-    if [[ "$status" == ok ]]; then
-        echo "$slot" >> "$STATE_DIR/safe-slots"
-        echo -e "${GREEN}${BOLD}✓ TAKE OUT ${slot}${NC}${GREEN}: done, safe to ship.${NC}"
-    else
-        echo -e "${RED}${BOLD}✗ TAKE OUT ${slot}${NC}${RED}: FAILED, set it aside, do NOT ship it.${NC}"
-    fi
-    safe="$(safe_slot_list)"
-    echo -e "  ${BOLD}Ship-ready so far ($(wc -l < "$STATE_DIR/safe-slots")/${#ENTRIES[@]}):${NC} ${safe:-none}"
+    {
+        flock 7
+        if [[ "$status" == ok ]]; then
+            echo "$slot" >> "$STATE_DIR/safe-slots"
+            echo -e "${GREEN}${BOLD}✓ TAKE OUT ${slot}${NC}${GREEN}: done, safe to ship.${NC}"
+        else
+            echo -e "${RED}${BOLD}✗ TAKE OUT ${slot}${NC}${RED}: FAILED, set it aside, do NOT ship it.${NC}"
+        fi
+        safe="$(safe_slot_list)"
+        echo -e "  ${BOLD}Ship-ready so far ($(wc -l < "$STATE_DIR/safe-slots")/${#ENTRIES[@]}):${NC} ${safe:-none}"
+    } 7>"$STATE_DIR/announce.lock"
 }
+
+set_stage() { echo "$2" > "$STATE_DIR/stage.$(basename "$1")"; }
 
 # One drive's whole journey, run as its own background job so a slow or
 # failing drive never holds up the rest of the batch: flash (with power-cycle
@@ -276,6 +297,7 @@ run_drive() {
     local i="$1"
     local dev="${ST_DEV[$i]}" serial="${ST_SER[$i]}" port="${ST_PORT[$i]}"
     local iso="${ISOS[$i]}" tries=0 ok=false log newdev suffix
+    local who="[${SLOTS[$i]}] $dev"
     local max_attempts=$MAX_ATTEMPTS
     # Corrupt mode never retries: these sticks are for one throwaway test.
     [[ "$CORRUPT_MODE" == true ]] && max_attempts=1
@@ -285,18 +307,16 @@ run_drive() {
         suffix=""
         (( tries > 1 )) && suffix=".try${tries}"
         log="$LOG_DIR/$(basename "$dev")${suffix}.log"
-        echo -e "${BOLD}→ $dev${SCENS[$i]:+ [${SCENS[$i]}]}: flashing (tail -f $log)${NC}"
-        if VERIFIED_ISO_SHA256="${SHA_BY_ISO[$iso]}" \
-            "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" "$iso" >"$log" 2>&1; then
-            ok=true
-            break
-        fi
+        echo -e "${BOLD}→ $who${SCENS[$i]:+ [${SCENS[$i]}]}: flashing (tail -f $log)${NC}"
+        VERIFIED_ISO_SHA256="${SHA_BY_ISO[$iso]}" \
+            "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" "$iso" >"$log" 2>&1 && ok=true
+        [[ "$ok" == true ]] && break
         (( tries < max_attempts )) || break
         if [[ -z "$port" ]]; then
             log_error "No hub port recorded for $dev ($serial); cannot power-cycle it. Re-seat it by hand and re-run."
             break
         fi
-        log_info "$dev failed; power-cycling $serial at $(slot_name "$i") to retry..."
+        log_info "$who failed; power-cycling $serial to retry..."
         newdev="$(recover_drive "$port" "$serial" || true)"
         if [[ -z "$newdev" ]]; then
             log_error "$serial did not come back after a power cycle; leaving it failed."
@@ -304,57 +324,64 @@ run_drive() {
         fi
         [[ "$newdev" != "$dev" ]] && log_info "$serial came back as $newdev (was $dev)."
         dev="$newdev"
+        who="[${SLOTS[$i]}] $dev"
     done
 
-    # The parent restarts the udev exec queue once every drive has one of these.
-    : > "$STATE_DIR/flashed.$i"
-
     if [[ "$ok" != true ]]; then
-        echo -e "${RED}✗${NC} $dev — FAILED (see $log)"
+        echo -e "${RED}✗${NC} $who — FAILED (see $log)"
         finish_drive "$i" fail "$dev" "$tries" "$log"
         return 0
     fi
-    echo -e "${GREEN}✓${NC} $dev — flashed and verified$( (( tries > 1 )) && echo " (after retry)")"
+    echo -e "${GREEN}✓${NC} $who — flashed and verified$( (( tries > 1 )) && echo " (after retry)")"
 
     if [[ "$SKIP_SETTLE" != true ]]; then
         # Boot the drive once in QEMU so its controller pays the one-time
         # post-write cost here instead of on the parent's first boot (see
         # guides/usb-flash-settle.md). Slots keep concurrent guests in RAM.
+        set_stage "$dev" "waiting for a settle slot"
         slot_acquire "$STATE_DIR/settle-slots" "$SETTLE_MAX" 8
-        log_info "$dev: boot-settling in QEMU..."
+        set_stage "$dev" "boot-settling"
+        log_info "$who: boot-settling in QEMU..."
         if boot_settle_with_retry "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log"; then
-            echo -e "${GREEN}✓${NC} $dev: boot-settled"
+            echo -e "${GREEN}✓${NC} $who: boot-settled"
         else
-            echo -e "${YELLOW}!${NC} $dev: boot settle incomplete after retry, first real boot may be slow"
+            echo -e "${YELLOW}!${NC} $who: boot settle incomplete after retry, first real boot may be slow"
             echo -e "    drive: $(drive_location "$dev")"
             echo -e "    log:   $LOG_DIR/$(basename "$dev").boot-settle.log"
         fi
         slot_release 8
+        if ! restore_log_partition "$dev" "$iso"; then
+            echo -e "${RED}✗${NC} $who: could not restore PURPLE-LOG after settle"
+            record_manifest fail-log-restore "$dev" "$serial" "" "" "$(basename "$iso")" ""
+            finish_drive "$i" fail "$dev" "$tries" "$log"
+            return 0
+        fi
 
         # Re-read the drive before ejecting, catching flash that decays in the
         # minutes after being written. Must precede eject_drive: a powered-off
         # drive leaves a media-less node whose reads look like corruption.
         if [[ "$REVERIFY" == true ]]; then
+            set_stage "$dev" "waiting for a re-verify slot"
             slot_acquire "$STATE_DIR/reverify-slots" 4 8
-            log_info "$dev: re-verifying after settle..."
+            set_stage "$dev" "re-verifying after settle"
+            log_info "$who: re-verifying after settle..."
             if ! recheck_after_settle "$dev" "$iso"; then
                 slot_release 8
-                echo -e "${RED}✗${NC} $dev: verified after writing but NOT after settle, flash is decaying"
+                echo -e "${RED}✗${NC} $who: verified after writing but NOT after settle, flash is decaying"
                 record_manifest fail-post-settle "$dev" "$serial" "" "" "$(basename "$iso")" ""
                 finish_drive "$i" fail "$dev" "$tries" "$log"
                 return 0
             fi
             slot_release 8
-            echo -e "${GREEN}✓${NC} $dev: still intact after settle"
+            echo -e "${GREEN}✓${NC} $who: still intact after settle"
         fi
     fi
 
-    # Ejecting needs udev back (udevadm settle), so wait for the parent to
-    # lift the queue after the last drive finishes writing. Corrupt mode skips
-    # the eject so the identify phase can watch for unplugs; safe because every
-    # write is synced and verified, and these sticks get reflashed anyway.
+    # Corrupt mode skips the eject so the identify phase can watch for
+    # unplugs; safe because every write is synced and verified, and these
+    # sticks get reflashed anyway.
     if [[ "$CORRUPT_MODE" != true ]]; then
-        while [[ ! -e "$STATE_DIR/udev-lifted" ]]; do sleep 1; done
+        set_stage "$dev" "ejecting"
         eject_drive "$dev" || true
     fi
     finish_drive "$i" ok "$dev" "$tries" "$log"
@@ -370,26 +397,10 @@ echo
 log_info "All ${#ENTRIES[@]} drive pipeline(s) started; each flashes, settles (up to $SETTLE_MAX at a time so QEMU guests fit in RAM), re-verifies, and ejects on its own. Takes a while, walk away."
 echo
 
-# Restart the udev exec queue as soon as every drive is done writing (marker
-# present, or its job died without leaving one), so early finishers can eject
-# while stragglers are still settling.
-while true; do
-    PENDING=false
-    for i in "${!ENTRIES[@]}"; do
-        [[ -e "$STATE_DIR/flashed.$i" ]] && continue
-        [[ "$(count_running "${PIDS[$i]}")" == 0 ]] && continue
-        PENDING=true
-        break
-    done
-    [[ "$PENDING" == false ]] && break
-    sleep 2
-done
-sudo udevadm control --start-exec-queue 2>/dev/null || true
-: > "$STATE_DIR/udev-lifted"
-
 for pid in "${PIDS[@]}"; do
     wait "$pid" || true
 done
+sudo udevadm control --start-exec-queue 2>/dev/null || true
 
 # Fold each job's outcome back into per-drive state. ST_OK[i] is the only
 # source of truth for whether a drive is good: every stage below iterates
@@ -625,19 +636,50 @@ done
 SAFE_LIST="$(safe_slot_list)"
 echo -e "${BOLD}The other $(( ${#DEVS[@]} - ${#FAILED[@]} )) drive(s) are verified and fine to ship${SAFE_LIST:+: ${SAFE_LIST}}.${NC}"
 
-# Blink each failed drive's hub socket so it can be found by eye. Failed
-# sticks only: a blink is a power cycle, which is fine on a drive whose
-# contents are already worthless. 'just blink' does this standalone.
+# Block until the drive holding serial $1 leaves the bus (0) or the user
+# presses Enter (1).
+wait_for_unplug() {
+    while [[ -n "$(dev_of_serial "$1")" ]]; do
+        read -r -t 1 && return 1
+    done
+    echo
+}
+
+# Blink a failed drive's hub socket so it can be found by eye, then watch the
+# bus to confirm the stick that comes out is that one. Failed sticks only: a
+# blink is a power cycle, which is fine on a drive whose contents are already
+# worthless. Good sticks are already powered off, so pulling one by mistake
+# shows as nothing happening. 'just blink' does the blink standalone. Returns 1
+# when the user types q to stop blinking.
+confirm_pulled() {
+    local i="$1" serial="${ST_SER[$1]}" slot
+    slot="$(slot_name "$i")"
+    while true; do
+        blink_port_until_enter "${ST_PORT[$i]}" "Blinking $slot... Enter once you've spotted it, q+Enter to stop blinking: "
+        [[ "$REPLY" == q ]] && return 1
+        if ! dev_for_serial "$serial" 20 >/dev/null; then
+            log_warn "$serial did not come back after blinking, so I can't watch for its unplug. Pull the stick that was blinking."
+            return 0
+        fi
+        echo -n "Now pull $slot out. If nothing happens, you pulled a good stick: put it back and press Enter to blink again (q+Enter to stop): "
+        if wait_for_unplug "$serial"; then
+            echo -e "${GREEN}✓ That was ${BOLD}$slot${NC}${GREEN} ($serial), the failed stick. Set it aside.${NC}"
+            return 0
+        fi
+        [[ "$REPLY" == q ]] && return 1
+    done
+}
+
 if [[ -t 0 ]]; then
     for i in "${!ENTRIES[@]}"; do
         [[ "${ST_OK[$i]}" == true ]] && continue
         [[ -n "${ST_PORT[$i]}" ]] || continue
         echo
-        read -r -p "Blink the socket holding ${ST_SER[$i]}? [Y/n] " ans
+        read -r -p "Blink the socket holding ${ST_SER[$i]}? [Y/n, q stops blinking] " ans
+        [[ "$ans" == [qQ]* ]] && break
         [[ "$ans" == [nN]* ]] && continue
-        blink_port_until_enter "${ST_PORT[$i]}" "Blinking $(slot_name "$i")... press Enter once you've spotted it: "
-        newdev="$(dev_for_serial "${ST_SER[$i]}" 20 || true)"
-        [[ -n "$newdev" && "$newdev" != "${ST_DEV[$i]}" ]] && log_info "It came back as $newdev; use that for check-drive."
+        confirm_pulled "$i" || break
     done
 fi
-exit 1
+# A batch that shipped anything is a success; the failed drives are reported above.
+(( SUCCEEDED > 0 ))

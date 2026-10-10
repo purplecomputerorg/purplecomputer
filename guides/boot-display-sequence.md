@@ -56,7 +56,7 @@ On shutdown, `ExecStop` repaints the splash so systemd teardown messages aren't 
 
 ### 5. GPU Readiness + X11 (1-15s)
 
-`purple-x11.service` starts. `ExecStartPre` runs `purple-wait-display`, which polls `/sys/class/drm/card*-*/status` for a connected display. This handles i915's async initialization on older hardware (MacBook 2014 took several seconds to report a connected display).
+`purple-x11.service` starts. `ExecStartPre` runs `purple-wait-display`, which polls `/sys/class/drm/card*-*/status` for a connected connector on a real GPU (a card whose device sits on a PCI display-class device). GPU drivers are not in the initrd, so they load after systemd starts, while the firmware framebuffer (simpledrm, not a PCI device) is still card0. X started on it dies with "no screens found" when the driver replaces it (HP Stream). The driver removes the firmware framebuffer before registering its own card, and fills in connector status only after its async initial probe (the MacBook 2014 took several seconds), so the wait ends once no firmware framebuffer card is left and a real GPU reports a connected connector. Requiring the framebuffer to be gone matters on dual-GPU laptops, where only the primary GPU's driver removes it and the other GPU can finish first. USB displays such as the T2 Touch Bar (appletbdrm) are ignored the same way.
 
 Old Intel panels (pre-2016 MacBooks) also need `i915.enable_psr=0 i915.enable_fbc=0` on the kernel cmdline to stop a partial-redraw checkerboard artifact. See `intel-display-tuning.md` for what it fixes, why it's safe, and why it costs Purple almost no battery.
 
@@ -71,7 +71,7 @@ Once a display is found (or 15s timeout), X11 starts. xinit guarantees the X ser
 
 ### 6. If X11 Fails
 
-`purple-x11-failed` (`ExecStopPost`) paints tty1 purple and shows either a kid-friendly message ("Please turn off and on again") or debug details (log paths, tty2 shell hint). Restart is attempted 3 times within 60s.
+Restart is attempted 3 times within 120s (long enough for three full 15s display waits). `RestartMode=direct` keeps the retries out of the `failed` state; systemd 254+ otherwise fires `OnFailure=` on every failed attempt, and the failure screen's `Conflicts=` cancelled the retry. When that limit is hit, `OnFailure=` starts `purple-x11-failed.service`, which paints tty1 purple and shows a kid-friendly message ("Please turn off and on again") and, on Enter, scrolls the diagnostics. It is a separate unit rather than an `ExecStopPost` because `TimeoutStopSec` killed the stop-post script while it waited for Enter.
 
 ---
 
@@ -112,7 +112,7 @@ Audited the full boot path for unnecessary delays. Changes made:
 
 **`sleep 0.5` after matchbox-window-manager.** Could be replaced by polling `_NET_SUPPORTING_WM_CHECK` via `xprop`, but `xprop` requires `x11-utils` which isn't installed. Adding a package for 0.4s isn't worth the image size tradeoff.
 
-**`purple-wait-display.sh` (15s max poll).** Already fast on real hardware (exits on first connected connector, usually <0.5s). The 15s timeout protects against VMs and hardware with slow display enumeration. Reducing it risks black screens on edge-case hardware.
+**`purple-wait-display.sh` (15s max poll).** Already fast on real hardware (exits on the first connected real-GPU connector). The 15s timeout protects against VMs and hardware with slow display enumeration. Reducing it risks black screens on edge-case hardware.
 
 **Apple logo time.** Entirely firmware. We can't control EFI initialization speed. GRUB is already instant (timeout=0).
 
@@ -167,6 +167,10 @@ dd if=/path/to/iso of=efi.img bs=512 skip=$((LBA * 4)) count=SECTORS
 ### On the live machine
 
 ```bash
+# One screen, fits a photo: stick link speed, systemd's view, the startup
+# timeline as seconds since the kernel started, memory, stick read speed
+sudo purple-boot-timing
+
 # Check what GRUB config is active
 cat /cdrom/boot/grub/grub.cfg
 

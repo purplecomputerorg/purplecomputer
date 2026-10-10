@@ -7,20 +7,16 @@ BUILD_DIR="$INSTALLER_BASE/build"
 OUTPUT_DIR="$INSTALLER_BASE/output"
 TEST_DIR="$INSTALLER_BASE/test-results"
 
-DIST_NAME="noble"
-DIST_FULL="Ubuntu 24.04.1 LTS"
-ARCH="amd64"
-
-# Ubuntu Server ISO (initramfs injection architecture)
+# Ubuntu Server ISO (initramfs injection architecture). The golden image's
+# distro and arch live in 00-build-golden-image.sh (PURPLE_ARCH).
 UBUNTU_ISO_URL="https://releases.ubuntu.com/24.04.1/ubuntu-24.04.1-live-server-amd64.iso"
 UBUNTU_ISO_NAME="ubuntu-24.04.1-live-server-amd64.iso"
 
-# Essential base packages for golden image (the installed system)
-GOLDEN_PACKAGES="linux-image-generic grub-efi-amd64 systemd sudo"
 
 # Where 'just build --ref <commit>' keeps an old commit's build state (its own
 # golden image and output dir), so it never clobbers the current build. Flash
-# from it with 'just flash --ref <commit>'.
+# from it with 'just flash --ref <commit>' (which also finds an ordinary build
+# of that commit still in the output dir).
 archive_dir_for_ref() {
     local hash
     hash="$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." rev-parse --short "$1")" || return 1

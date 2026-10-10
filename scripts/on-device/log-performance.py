@@ -205,7 +205,6 @@ def write_context():
         "debug_iso": os.path.exists("/opt/purple/debug"),
         "boot_disk": disk,
         "usb_speed_mbps": usb_speed_mbps(disk) if disk else None,
-        "alacritty_software_gl": proc_env_var("alacritty", "LIBGL_ALWAYS_SOFTWARE"),
         "picom_cmdline": proc_cmdline("picom"),
         "sinks": run_cmd(["pactl", "list", "short", "sinks"]),
         "sink_inputs": run_cmd(["pactl", "list", "short", "sink-inputs"]),
@@ -330,12 +329,7 @@ def report_machine(ctx, recs):
 
 def report_pipelines(ctx):
     section("Display and audio pipeline")
-    if ctx.get("alacritty_software_gl") == "1":
-        warn("Alacritty draws every frame on the CPU (LIBGL_ALWAYS_SOFTWARE=1). "
-             f"The GL probe chose software; {GL_PROBE_LOG} says why. Force an A/B "
-             "with GL_MODE=0 after the probe block in /home/purple/.xinitrc.")
-    elif ctx.get("alacritty_software_gl") is not None:
-        ok("Alacritty uses hardware GL")
+    ok("Purple paints its own window in software (no GL); expect near-zero CPU while idle")
     picom = ctx.get("picom_cmdline")
     if picom:
         backend = (re.search(r"--backend (\w+)", picom) or [None, "?"])[1]
@@ -446,11 +440,9 @@ def verdicts(ctx, series, procs, throttled, psi):
     findings = []
     sat = frac_above([s["pct"] for s in series], 85)
     single = frac_above([s["maxcore"] for s in series], 90)
-    if ctx.get("alacritty_software_gl") == "1" and top.get("alacritty", 0) > 25:
-        findings.append("Software GL rendering: alacritty is a top CPU consumer and it is "
-                        f"rasterizing on the CPU. Check {GL_PROBE_LOG} for why the probe "
-                        "chose software; A/B with GL_MODE=0 after the probe block in "
-                        "/home/purple/.xinitrc.")
+    if top.get("python3", 0) > 40:
+        findings.append("Purple (python3) is a top CPU consumer. It repaints only on keystrokes and "
+                        "timers; a busy idle app means a runaway timer or audio loop. Check Timers.intervals().")
     if sat > 0.25:
         heavy = ", ".join(n for n, a in list(top.items())[:3] if a > 15) or "see table above"
         findings.append(f"The CPU is simply out of headroom {sat:.0%} of the time. "

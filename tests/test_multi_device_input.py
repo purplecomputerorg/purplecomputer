@@ -63,6 +63,7 @@ class FakeInputDevice:
         self._events: asyncio.Queue = asyncio.Queue()
         self._closed = False
         self._grabbed = False
+        self.held_keys: list = []
         self.fd = id(self)
 
     def capabilities(self):
@@ -80,6 +81,9 @@ class FakeInputDevice:
 
     def ungrab(self):
         self._grabbed = False
+
+    def active_keys(self):
+        return self.held_keys
 
     def close(self):
         self._closed = True
@@ -182,6 +186,28 @@ class TestMultiDeviceLifecycle:
 
             reader.reacquire_grab()
             assert kbd1._grabbed and kbd2._grabbed
+
+            await reader.stop()
+
+        _run(_test())
+
+    def test_reacquire_waits_for_held_keys_to_be_released(self):
+        """Grabbing while Enter is still down hides its release from X, which
+        then repeats Enter into the terminal and skips the post-install prompt."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            reader = EvdevReader(callback=AsyncCallback(), grab=True)
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]):
+                await reader.start()
+            reader.release_grab()
+
+            kbd.held_keys = [KeyCode.KEY_ENTER]
+            grabbed_while_held = []
+            real_grab = kbd.grab
+            kbd.grab = lambda: (grabbed_while_held.append(bool(kbd.held_keys)), real_grab())
+            with patch('purple_tui.input.time.sleep', side_effect=lambda _: kbd.held_keys.clear()):
+                reader.reacquire_grab()
+            assert kbd._grabbed and grabbed_while_held == [False]
 
             await reader.stop()
 
@@ -474,6 +500,33 @@ class TestPowerButtonEvents:
         _run(_test())
 
 
+    def test_one_press_reported_by_both_buttons_is_one_tap(self):
+        """HP Stream 11: a single press arrives on both ACPI buttons, and the
+        second copy used to confirm the shutdown prompt the first opened."""
+        async def _test():
+            cb = AsyncCallback()
+            pb1 = FakeInputDevice("/dev/input/event1", "Power Button",
+                                  {KeyCode.KEY_POWER}, has_ev_rep=False)
+            pb2 = FakeInputDevice("/dev/input/event2", "Power Button",
+                                  {KeyCode.KEY_POWER}, has_ev_rep=False)
+
+            reader = PowerButtonReader(callback=cb, hold_seconds=3)
+            with patch.object(reader, '_find_power_buttons', return_value=[pb1, pb2]):
+                await reader.start()
+
+            for dev, t in ((pb1, 300.0), (pb2, 300.004), (pb1, 302.0)):
+                dev.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_POWER, 1, t))
+                await asyncio.sleep(0.02)
+                dev.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_POWER, 0, t))
+                await asyncio.sleep(0.02)
+
+            await reader.stop()
+
+            assert [c.action for c in cb.calls] == ["tap", "tap"]
+
+        _run(_test())
+
+
 class TestPowerButtonHotplug:
     """A power button the boot scan missed leaves the power menu dead all
     session, the same failure class the keyboard watcher covers."""
@@ -588,108 +641,48 @@ class TestPowerButtonHotplug:
 # =============================================================================
 
 class TestShutdownWatchdog:
-    """Test that PowerManager.shutdown() spawns a detached shutdown watchdog.
-
-    The watchdog is a background process that force-powers-off after 5 seconds,
-    ensuring shutdown completes even if the TUI event loop is killed first.
-    All watchdog tests live here (centralized in PowerManager, not ByeScreen).
+    """PowerManager.shutdown() arms a detached backstop: the static binary on
+    tmpfs, which powers off if systemctl hasn't, even with the live USB gone.
+    All backstop tests live here (centralized in PowerManager, not ByeScreen).
     """
 
+    def _calls(self):
+        from purple_tui.power_manager import PowerManager
+        calls = []
+
+        def capture(*args, **kwargs):
+            calls.append((args, kwargs))
+            raise FileNotFoundError("not found")
+
+        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
+            PowerManager().shutdown()
+        return calls
+
     def test_watchdog_uses_start_new_session(self):
-        """Watchdog must detach from TUI's process group."""
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
+        """Backstop must detach from the UI's process group."""
+        assert self._calls()[0][1].get("start_new_session") is True
 
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
+    def test_watchdog_is_the_tmpfs_poweroff_binary_after_8s(self):
+        """8s matches the old sysrq stage: a slow but working systemctl
+        (Surface) finishes first."""
+        from purple_tui.constants import REBOOT_BIN
+        assert self._calls()[0][0][0] == [REBOOT_BIN, "--poweroff", "8"]
 
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        # First call is the watchdog
-        assert calls[0][1].get("start_new_session") is True
-
-    def test_watchdog_command_has_force_poweroff(self):
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
-
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
-
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        cmd = calls[0][0][0]
-        assert cmd[0] == "sh"
-        assert cmd[1] == "-c"
-        assert "poweroff --force" in cmd[2]
-
-    def test_watchdog_uses_single_force(self):
-        """Watchdog uses single --force to preserve ACPI power-off sequence.
+    def test_systemctl_uses_single_force(self):
+        """Single --force preserves the ACPI power-off sequence.
 
         Double --force bypasses ACPI and can leave keyboard backlights on
         and devices in limbo on Modern Standby hardware (Surface, Macs).
         """
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
-
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
-
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        cmd_str = calls[0][0][0][2]
-        assert "--force" in cmd_str
-        assert "--force --force" not in cmd_str
+        for (cmd,), _ in self._calls():
+            assert cmd.count("--force") <= 1
 
     def test_watchdog_swallows_exceptions(self):
-        """Watchdog spawn failure should not prevent shutdown attempt."""
+        """Backstop spawn failure should not prevent shutdown attempt."""
         from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-
         with patch("purple_tui.power_manager.subprocess.Popen",
                    side_effect=OSError("spawn failed")):
-            pm.shutdown()  # Should not raise
-
-    def test_watchdog_has_sysrq_fallback(self):
-        """Watchdog should include sysrq poweroff as nuclear fallback."""
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
-
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
-
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        cmd_str = calls[0][0][0][2]
-        assert "sysrq-trigger" in cmd_str
-
-    def test_watchdog_two_stage_timing(self):
-        """Watchdog: stage 1 at 5s (systemctl), stage 2 at 8s (sysrq)."""
-        from purple_tui.power_manager import PowerManager
-        pm = PowerManager()
-        calls = []
-
-        def capture(*args, **kwargs):
-            calls.append((args, kwargs))
-            raise FileNotFoundError("not found")
-
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
-            pm.shutdown()
-
-        cmd_str = calls[0][0][0][2]
-        assert "sleep 5" in cmd_str
-        assert "sleep 3" in cmd_str
+            PowerManager().shutdown()  # Should not raise
 
 
 # =============================================================================
@@ -1184,3 +1177,25 @@ class TestSilentKeyboardRecovery:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_keys_held_now_unions_every_keyboard_and_skips_unreadable_ones(monkeypatch):
+    import types
+    from purple_tui import input as input_mod
+
+    class Dev:
+        def __init__(self, path):
+            if path == "/dev/input/event9":
+                raise OSError("busy")
+            self.path = path
+        def active_keys(self):
+            return {"/dev/input/event0": [42], "/dev/input/event1": [113]}[self.path]
+        def close(self):
+            pass
+
+    monkeypatch.setitem(sys.modules, "evdev", types.SimpleNamespace(InputDevice=Dev))
+    monkeypatch.setattr(input_mod, "_list_input_paths", lambda: {"/dev/input/event0", "/dev/input/event1", "/dev/input/event9"})
+    assert input_mod.keys_held_now() == {42, 113}
+    assert input_mod.chime_skip_key_held() is True
+    monkeypatch.setattr(input_mod, "_list_input_paths", lambda: {"/dev/input/event0"})
+    assert input_mod.chime_skip_key_held() is False

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Purple VM</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #aaa; font: 14px system-ui, sans-serif; }
+  #screen { position: absolute; inset: 0; }
+  #status { position: absolute; top: 8px; left: 12px; z-index: 1; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="status">Connecting…</div>
+<div id="screen"></div>
+<script type="module">
+  import RFB from 'https://cdn.jsdelivr.net/gh/novnc/noVNC@v1.5.0/core/rfb.js';
+
+  const status = document.getElementById('status');
+  const password = decodeURIComponent(location.hash.slice(1)) || 'purple';
+  let rfb;
+
+  function connect() {
+    rfb = new RFB(document.getElementById('screen'), `ws://${location.hostname}:5700`, { credentials: { password } });
+    rfb.scaleViewport = true;
+    rfb.focusOnClick = true;
+    rfb.addEventListener('connect', () => { status.textContent = ''; rfb.focus(); });
+    // The VM restarting (just vm-stop, just vm) drops the socket; keep retrying.
+    rfb.addEventListener('disconnect', () => { status.textContent = 'VM is off. Waiting for just vm…'; setTimeout(connect, 2000); });
+  }
+  connect();
+</script>
+</body>
+</html>

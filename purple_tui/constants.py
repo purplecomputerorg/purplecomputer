@@ -13,7 +13,8 @@ SUPPORT_EMAIL = "support@purplecomputer.org"
 
 # Debug mode: touch /opt/purple/debug to enable debug features on any install.
 # Controls: "Exit to System" in parent menu, debug shell on exit, extra diagnostics.
-DEBUG_FLAG_PATH = "/opt/purple/debug"
+# PURPLE_DEBUG_FLAG moves the flag where /opt is read-only (ChromeOS rootfs).
+DEBUG_FLAG_PATH = os.environ.get("PURPLE_DEBUG_FLAG", "/opt/purple/debug")
 
 def is_debug() -> bool:
     """Check if this install has debug mode enabled."""
@@ -47,6 +48,12 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 #   - Viewport: VIEWPORT_HEIGHT + border-top(1) rows (no bottom border)
 #   - Code panel: CODE_PANEL_MIN_HEIGHT rows (flexible via 1fr, no top border)
 #   - Compact indicator: 1 row (no margin)
+
+# The canvas viewport is this many square units on every machine, sized to fit:
+# a 2:1 stage, the shape of the terminal UI's frame. The Art grid is the same
+# units (minus its header and hint rows), so no computer gets a wider picture.
+CANVAS_COLS = 48
+CANVAS_ROWS = 24
 
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 29          # Viewport widget height (CSS)
@@ -110,6 +117,10 @@ ICON_TAB = "󰌒"                # nf-md-keyboard_tab
 ICON_BROOM = "󰃢"              # nf-md-broom (start fresh / clear)
 ICON_ROBOT = "󰚩"              # nf-md-robot (same as ICON_CODE, for code space toggle)
 ICON_TIME_TRAVEL = "󰕍"        # nf-md-restore (Time Travel scrubbing)
+ICON_COMPUTER = "\U000F0379"  # nf-md-monitor (this computer, title bar)
+ICON_LAPTOP = "\U000F0322"    # nf-md-laptop (lid status lines)
+ICON_PLUG = "\U000F06A5"      # nf-md-power_plug (plugged in)
+ICON_HOURGLASS = "\U000F051F" # nf-md-timer_sand (countdowns)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)
@@ -142,9 +153,27 @@ def display_len(text: str) -> int:
     return len(text) + extra
 
 
-# Live boot squashfs caching
-SQUASHFS_PATH = "/cdrom/casper/filesystem.squashfs"
+# Where the live stick keeps its squashfs and install payload: casper's paths,
+# unless the 32-bit Key's boot script recorded its own (initramfs/purple-live).
+LIVE_CONF_PATH = "/run/purple-live.conf"
+
+
+def _live_conf() -> dict:
+    try:
+        with open(LIVE_CONF_PATH) as f:
+            return dict(line.rstrip("\n").split("=", 1) for line in f if "=" in line)
+    except OSError:
+        return {}
+
+
+_LIVE_CONF = _live_conf()
+SQUASHFS_PATH = _LIVE_CONF.get("SQUASHFS", "/cdrom/casper/filesystem.squashfs")
+PAYLOAD_DIR = _LIVE_CONF.get("PURPLE_PAYLOAD_DIR", "/cdrom/purple")
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"
+# Written instead when there is not enough RAM to hold what a session needs
+USB_KEEP_MARKER = "/tmp/purple-usb-keep"
+# Static reboot/poweroff binary on its own tmpfs (scripts/purple-stage-reboot.sh)
+REBOOT_BIN = "/run/purple-reboot-mount/purple-reboot"
 
 # Touched after the first frame paints. xinitrc waits for this before starting
 # the compositor, so picom's GL init lands after the import/first-paint crunch
@@ -158,12 +187,13 @@ UI_READY_MARKER = "/tmp/purple-ui-ready"
 LIVE_AUDIO_MARKER = "/var/log/purple/audio-worked-in-live"
 
 # PURPLE_FAKE_USB env var simulates USB boot states for testing.
-# Values: "caching" (USB blinking), "cached" (safe to remove), "removed" (USB pulled out)
+# Values: "caching" (USB blinking), "cached" (safe to remove), "removed" (USB pulled out),
+# "keep" (too little RAM, must stay in), "keep-removed" (pulled out anyway)
 _FAKE_USB = os.environ.get("PURPLE_FAKE_USB", "")
 
 
 def is_live_boot() -> bool:
-    """Check if running from a casper live boot (USB or otherwise).
+    """Check if running from a live boot: casper, or the 32-bit Key's purple-live.
 
     Reads /proc/cmdline once and caches the result (doesn't change at runtime).
     Set PURPLE_FAKE_USB=caching|cached|removed to simulate in dev/test.
@@ -174,7 +204,9 @@ def is_live_boot() -> bool:
         else:
             try:
                 from pathlib import Path
-                is_live_boot._cached = "boot=casper" in Path("/proc/cmdline").read_text()
+                cmdline = Path("/proc/cmdline").read_text()
+                is_live_boot._cached = any(f"boot={mode}" in cmdline for mode in ("casper", "purple-live"))
+
             except Exception:
                 is_live_boot._cached = False
     return is_live_boot._cached
@@ -187,10 +219,17 @@ def is_usb_cached() -> bool:
     return os.path.exists(USB_CACHE_MARKER)
 
 
+def is_usb_needed() -> bool:
+    """Too little RAM to hold the system: the USB has to stay in."""
+    if _FAKE_USB:
+        return _FAKE_USB.startswith("keep")
+    return os.path.exists(USB_KEEP_MARKER)
+
+
 def is_usb_present() -> bool:
     """Check if the USB drive is still physically connected."""
     if _FAKE_USB:
-        return _FAKE_USB != "removed"
+        return not _FAKE_USB.endswith("removed")
     return os.path.exists(SQUASHFS_PATH)
 
 # Room titles with icons (uses room name constants)

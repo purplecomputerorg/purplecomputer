@@ -33,9 +33,10 @@ usage() {
     echo "                   a positional scenario name (primary|backup|both|merge) picks that scenario's ISO"
     echo "  --yes            Skip all prompts (default ISO: newest build, with-backup"
     echo "                   if present, else standard)"
-    echo "  --ref <commit>   Flash from an old commit's archived build (made by"
-    echo "                   'just build --ref <commit>') instead of the current output dir"
+    echo "  --ref <commit>   Flash that commit's build: its archive from 'just build"
+    echo "                   --ref <commit>', or the build of it still in the output dir"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
+    echo "  --ignore-denylist  Flash drives even if their serial is in $(denylist_path)"
     echo "  --no-settle      Skip the post-flash QEMU boot-settle (first real boot will be slow)"
     echo "  --settle-only    Skip flashing; just boot-settle and eject an already-flashed drive"
     echo "  --no-udev-gate   Skip udev stop/start (caller manages the gate; used by flash-all)"
@@ -97,7 +98,7 @@ select_unlisted_drive() {
         IFS='|' read -r dev size model serial mounted <<< "${CANDIDATE_DRIVES[$i]}"
         local flag=""
         [[ -n "$mounted" ]] && flag="  ${YELLOW}(has mounted partitions, in use?)${NC}"
-        echo -e "  $((i+1))) $dev - $model ($size, serial $serial)$flag"
+        echo -e "  $((i+1))) $(drive_tag "$dev") - $model ($size, serial $serial)$flag"
     done
     echo ""
     echo -e "  ${RED}${BOLD}The chosen drive will be COMPLETELY ERASED.${NC}"
@@ -123,7 +124,7 @@ select_drive() {
         done
         if is_denied "$(lsblk -dno SERIAL "$FORCE_DEVICE" 2>/dev/null | xargs)"; then
             log_error "$FORCE_DEVICE is on the denylist: $DENY_REASON"
-            log_error "Check it with 'just check-drive $FORCE_DEVICE', or remove its serial from $(denylist_path) to override."
+            log_error "Check it with 'just check-drive $FORCE_DEVICE', or pass --ignore-denylist to override."
             exit 1
         fi
         log_error "$FORCE_DEVICE is not a whitelisted USB drive."
@@ -142,7 +143,7 @@ select_drive() {
         echo ""
         for i in "${!FOUND_DRIVES[@]}"; do
             IFS='|' read -r dev size model serial <<< "${FOUND_DRIVES[$i]}"
-            echo "  $((i+1))) $dev - $model ($size)"
+            echo "  $((i+1))) $(drive_tag "$dev") - $model ($size)"
         done
         echo ""
         local choice
@@ -158,65 +159,6 @@ select_drive() {
     IFS='|' read -r TARGET_DEV TARGET_SIZE TARGET_MODEL TARGET_SERIAL <<< "$SELECTED"
 }
 
-die_no_iso() {
-    log_error "No $1 found in $OUTPUT_DIR."
-    if [[ "$OUTPUT_DIR" == */archive/* ]]; then
-        echo "Build it first with 'just build --ref <commit>'."
-    else
-        echo "Run 'just build' first, or pass a path to an ISO."
-    fi
-    exit 1
-}
-
-# Read a 1-based menu choice for a list of $1 items; echoes the choice, or
-# nothing when the user just presses Enter. Exits on invalid input.
-read_menu_choice() {
-    local count="$1" prompt="$2" choice
-    read -p "$prompt" choice
-    [[ -z "$choice" ]] && return 0
-    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt $count ]]; then
-        log_error "Invalid selection"
-        exit 1
-    fi
-    echo "$choice"
-}
-
-# Resolve a specific variant of the newest build, or, when it's missing, offer
-# the newest older build of that variant with an explicit confirmation. Never
-# silently flashes an older build.
-resolve_variant() {
-    local kind="$1" label
-    case "$kind" in
-        debug) label="debug" ;;
-        *)     label="standard (no backup image)" ;;
-    esac
-    ISO_PATH="$(find_latest_iso "$kind")"
-    [[ -n "$ISO_PATH" ]] && return 0
-
-    local stem older
-    stem="$(latest_build_stem)"
-    older="$(newest_iso_of_variant "$kind")"
-    if [[ -z "$stem" || -z "$older" ]]; then
-        die_no_iso "$label ISO"
-    fi
-    log_warn "The newest build ($(basename "$stem")) has no $label ISO."
-    if [[ "$SKIP_CONFIRM" == true ]]; then
-        log_error "Newest $label ISO is from an OLDER build: $older"
-        log_error "Refusing to pick it silently under --yes. Pass its path explicitly."
-        exit 1
-    fi
-    echo ""
-    read -p "Flash the OLDER $(basename "$older") instead? Type 'yes' to continue: " answer
-    if [[ "$answer" != "yes" ]]; then
-        log_info "Aborted."
-        exit 0
-    fi
-    ISO_PATH="$older"
-}
-
-# Newest deliberately-corrupted test ISO, optionally of one scenario
-# (excluded from all normal ISO discovery, so it needs its own resolution
-# path).
 resolve_corrupt_iso() {
     local scen="${1:-}"
     ISO_PATH="$(find_corrupt_iso "$scen")"
@@ -233,42 +175,6 @@ resolve_corrupt_iso() {
 
 # No ISO path and no variant flag: show the newest build's variants and ask
 # point blank which one to flash.
-select_iso() {
-    local stem
-    stem="$(latest_build_stem)"
-    [[ -n "$stem" ]] || die_no_iso "ISO"
-
-    local labels=() paths=() f
-    f="$(variant_path "$stem" backup)"
-    [[ -f "$f" ]] && { paths+=("$f"); labels+=("standard + backup image (recommended: install self-heals if the USB decays)"); }
-    f="$(variant_path "$stem" standard)"
-    [[ -f "$f" ]] && { paths+=("$f"); labels+=("standard (smaller, no backup image copy)"); }
-    f="$(variant_path "$stem" debug)"
-    [[ -f "$f" ]] && { paths+=("$f"); labels+=("debug (visible boot menu, verbose logs, for troubleshooting)"); }
-
-    local version=""
-    [[ -f "${paths[0]}.version" ]] && version="  [$(cat "${paths[0]}.version")]"
-    echo ""
-    echo -e "${BOLD}Newest build: $(basename "$stem")${version}${NC}"
-
-    if [[ "$SKIP_CONFIRM" == true || ${#paths[@]} -eq 1 ]]; then
-        ISO_PATH="${paths[0]}"
-        log_info "Using ${labels[0]%% (*}: $(basename "$ISO_PATH")"
-        return 0
-    fi
-
-    echo ""
-    for i in "${!paths[@]}"; do
-        echo "  $((i+1))) ${labels[$i]}"
-        echo "       $(basename "${paths[$i]}")"
-    done
-    echo ""
-    local choice
-    choice="$(read_menu_choice "${#paths[@]}" "Flash which one? [1-${#paths[@]}, default 1]: ")" || exit 1
-    [[ -n "$choice" ]] || choice=1
-    ISO_PATH="${paths[$((choice-1))]}"
-}
-
 run_boot_settle() {
     local settle_log
     settle_log="$(mktemp -t purple-boot-settle.XXXXXX.log)"
@@ -287,7 +193,7 @@ confirm_write() {
     echo -e "${BOLD}${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "  ${BOLD}Source:${NC}  $ISO_PATH"
-    echo -e "  ${BOLD}Target:${NC}  $TARGET_DEV"
+    echo -e "  ${BOLD}Target:${NC}  $(drive_tag "$TARGET_DEV")"
     echo -e "  ${BOLD}Model:${NC}   $TARGET_MODEL"
     echo -e "  ${BOLD}Size:${NC}    $TARGET_SIZE"
     echo -e "  ${BOLD}Serial:${NC}  $TARGET_SERIAL"
@@ -296,7 +202,7 @@ confirm_write() {
         echo -e "  ${YELLOW}${BOLD}This drive is NOT in your whitelist. Double-check it's the right one.${NC}"
         echo ""
     fi
-    echo -e "  ${RED}${BOLD}ALL DATA ON $TARGET_DEV WILL BE DESTROYED${NC}"
+    echo -e "  ${RED}${BOLD}ALL DATA ON $(drive_tag "$TARGET_DEV") WILL BE DESTROYED${NC}"
     echo ""
     read -p "Type 'yes' to continue: " confirm
 
@@ -380,39 +286,27 @@ write_iso() {
     sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
     sleep 10
 
-    # Verification: read back from USB and compare SHA256.
-    # On mismatch, retry once with a longer flush delay before failing.
+    # Verification: read back from USB and compare SHA256. One read: it
+    # bypasses every cache, so a mismatch is the stick returning wrong bytes,
+    # and a second read never once rescued a drive across 20 batches.
     local usb_sha256=""
     local verify_passed=false
 
-    for verify_attempt in 1 2; do
-        echo ""
-        if [[ $verify_attempt -eq 1 ]]; then
-            log_info "Verifying write (reading back from USB)..."
-        else
-            log_warn "First verification failed, retrying with extended flush..."
-            sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
-            sleep 15
-        fi
-        echo ""
+    echo ""
+    log_info "Verifying write (reading back from USB)..."
+    echo ""
 
-        # Defense in depth: re-unmount anything that slipped past the udev
-        # block (e.g. an event queued before stop-exec-queue took effect).
-        for part in "${TARGET_DEV}"*; do
-            sudo umount "$part" 2>/dev/null || true
-        done
-
-        usb_sha256="$(device_sha256 "$TARGET_DEV" "$iso_size_bytes")"
-
-        if [[ "$iso_sha256" == "$usb_sha256" ]]; then
-            verify_passed=true
-            break
-        fi
-
-        if [[ $verify_attempt -eq 1 ]]; then
-            log_warn "Checksum mismatch on first read (may be cache lag)"
-        fi
+    # Defense in depth: re-unmount anything that slipped past the udev
+    # block (e.g. an event queued before stop-exec-queue took effect).
+    for part in "${TARGET_DEV}"*; do
+        sudo umount "$part" 2>/dev/null || true
     done
+
+    if ! usb_sha256="$(device_sha256 "$TARGET_DEV" "$iso_size_bytes")"; then
+        log_warn "Readback failed or ran slower than ${MIN_READ_MBPS} MB/s."
+    elif [[ "$iso_sha256" == "$usb_sha256" ]]; then
+        verify_passed=true
+    fi
 
     echo ""
 
@@ -445,10 +339,15 @@ write_iso() {
 
         # Boot the drive once in QEMU so its controller pays the one-time
         # post-write cost here; otherwise the parent's first boot is slow.
-        # Skipped for flash-all children: the parent boot-settles all drives
-        # in parallel after its own udev gate lifts.
+        # Skipped for flash-all children: the parent settles each drive in its
+        # own pipeline.
         if [[ "$MANAGE_UDEV" == true && "$SKIP_SETTLE" != true ]]; then
             run_boot_settle
+            if ! restore_log_partition "$TARGET_DEV" "$ISO_PATH"; then
+                record_manifest fail-log-restore "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" ""
+                log_error "Could not restore PURPLE-LOG on $TARGET_DEV after boot-settle. Reflash it."
+                exit 1
+            fi
             if ! recheck_after_settle "$TARGET_DEV" "$ISO_PATH"; then
                 record_manifest fail-post-settle "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" ""
                 log_error "$TARGET_DEV verified after writing but NOT after boot-settle: the flash is decaying."
@@ -459,9 +358,7 @@ write_iso() {
         fi
 
         # Power-cycle so the drive re-enumerates fresh on next plug-in.
-        # Skipped when the caller owns the udev gate: udevadm settle would
-        # deadlock against the still-paused exec queue, and the parent
-        # orchestrator handles re-enumeration after all children finish.
+        # flash-all ejects its drives itself, after settling them.
         if [[ "$MANAGE_UDEV" == true ]]; then
             if eject_drive "$TARGET_DEV"; then
                 log_info "Drive ejected."
@@ -567,7 +464,7 @@ main() {
                 shift
                 ;;
             --ref)
-                OUTPUT_DIR="$(archive_dir_for_ref "$2")/output" || { log_error "Cannot resolve git commit '$2'"; exit 1; }
+                use_build_of_ref "$2" || { log_error "Cannot resolve git commit '$2'"; exit 1; }
                 shift 2
                 ;;
             --device)
@@ -576,6 +473,10 @@ main() {
                 ;;
             --no-settle)
                 SKIP_SETTLE=true
+                shift
+                ;;
+            --ignore-denylist)
+                export PURPLE_IGNORE_DENYLIST=1
                 shift
                 ;;
             --settle-only)

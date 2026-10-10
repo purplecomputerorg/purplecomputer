@@ -56,7 +56,7 @@ from .constants import (
     ICON_SHIFT,
     ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, ICON_TIME_TRAVEL, display_len,
     APP_BACKGROUND,
-    is_usb_cached, is_usb_present,
+    is_usb_cached, is_usb_needed, is_usb_present,
     VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WRAPPER_REFERENCE_ROWS,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
@@ -71,7 +71,7 @@ from .keyboard import (
     RoomAction, ControlAction,
     InputFloodGuard,
 )
-from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
+from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available, chime_skip_key_held
 from . import caps as _caps_chokepoint  # noqa: F401  # side-effect: installs Strip render-time uppercase patch
 boot_log.heartbeat("keyboard + input imported; importing power_manager")
 from .power_manager import get_power_manager
@@ -666,31 +666,32 @@ class BootModeIndicator(Static):
         super().__init__(**kwargs)
         self._is_live = False
         self._is_cached = False
+        self._keep_usb = False
         self._usb_removed = False
         self._blink_state = True
+        self._waiting = []
 
     def on_mount(self) -> None:
         self._is_live = is_live_boot()
         self._push_to_title_bar()
         if not self._is_live:
             return
+        if not self._check_cache_done():
+            self._waiting = [self.set_interval(5.0, self._check_cache_done),
+                             self.set_interval(1.0, self._toggle_blink)]
 
-        if is_usb_cached():
-            self._is_cached = True
-            self._usb_removed = not is_usb_present()
-            self._push_to_title_bar()
-            self.set_interval(5.0, self._check_usb_removed)
-            return
-
-        self.set_interval(5.0, self._check_cache_done)
-        self.set_interval(1.0, self._toggle_blink)
-
-    def _check_cache_done(self) -> None:
-        if is_usb_cached():
-            self._is_cached = True
-            self._blink_state = True
-            self._push_to_title_bar()
-            self.set_interval(5.0, self._check_usb_removed)
+    def _check_cache_done(self) -> bool:
+        if not (is_usb_cached() or is_usb_needed()):
+            return False
+        for timer in self._waiting:
+            timer.stop()
+        self._is_cached = is_usb_cached()
+        self._keep_usb = not self._is_cached
+        self._usb_removed = not is_usb_present()
+        self._blink_state = True
+        self._push_to_title_bar()
+        self.set_interval(5.0, self._check_usb_removed)
+        return True
 
     def _check_usb_removed(self) -> None:
         removed = not is_usb_present()
@@ -699,8 +700,6 @@ class BootModeIndicator(Static):
             self._push_to_title_bar()
 
     def _toggle_blink(self) -> None:
-        if self._is_cached:
-            return
         self._blink_state = not self._blink_state
         self._push_to_title_bar()
 
@@ -709,6 +708,10 @@ class BootModeIndicator(Static):
         if not self._is_live:
             label = _read_computer_name() or DEFAULT_COMPUTER_NAME
             parts = [(f"{ICON_HARDDISK} {label}", muted)]
+        elif self._keep_usb and self._usb_removed:
+            parts = [(f"{ICON_USB} USB removed {ICON_SIGN_OUT} Turn off, put it back", muted)]
+        elif self._keep_usb:
+            parts = [(f"{ICON_USB} USB {ICON_SIGN_OUT} Keep it in", muted)]
         elif self._is_cached and self._usb_removed:
             parts = [(f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted)]
         elif self._is_cached:
@@ -1088,7 +1091,7 @@ class PurpleApp(App):
 
         # Start power button reader (separate device from keyboard)
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
-            from .power_manager import POWER_HOLD_SHUTDOWN, _power_diag
+            from .power_manager import POWER_HOLD_SHUTDOWN, _power_log
             self._power_button_reader = PowerButtonReader(
                 callback=self._handle_power_button_event,
                 hold_seconds=POWER_HOLD_SHUTDOWN,
@@ -1096,12 +1099,12 @@ class PurpleApp(App):
             try:
                 await self._power_button_reader.start()
                 if not self._power_button_reader._devices:
-                    _power_diag("POWER BUTTON INIT: no device found, watcher will adopt one")
+                    _power_log("POWER BUTTON INIT: no device found, watcher will adopt one")
                 else:
                     for dev in self._power_button_reader._devices:
-                        _power_diag(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
+                        _power_log(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
             except Exception as e:
-                _power_diag(f"POWER BUTTON INIT: start failed: {e}")
+                _power_log(f"POWER BUTTON INIT: start failed: {e}")
                 self._power_button_reader = None
 
         # Start lid switch reader (instant lid open/close detection via evdev)
@@ -1305,6 +1308,10 @@ class PurpleApp(App):
         needs pactl, and waits for a sound card that enumerates late."""
         if self._volume_chosen or self._effective_volume() == 0:
             return
+        if chime_skip_key_held():
+            boot_log.heartbeat("chime skipped: mute key held at start")
+            self._apply_volume()
+            return
         self._sound_check_running = True
 
         def _work():
@@ -1469,6 +1476,8 @@ class PurpleApp(App):
         @contextmanager
         def _suspend_ctx():
             self._app_suspended = True
+            # Terminal typing never reaches Purple's idle clock
+            self.inhibit_idle("terminal")
 
             # Release evdev grab so terminal can receive keyboard input
             if self._evdev_reader:
@@ -1490,6 +1499,7 @@ class PurpleApp(App):
                     self._evdev_reader.reacquire_grab()
                 # Reset keyboard state to avoid stuck keys
                 self._keyboard_state_machine.reset()
+                self.uninhibit_idle("terminal")
                 self._app_suspended = False
 
         return _suspend_ctx()
@@ -2148,6 +2158,8 @@ class PurpleApp(App):
     def uninhibit_idle(self, reason: str) -> None:
         """Release an idle inhibitor previously added by inhibit_idle()."""
         self._idle_inhibitors.discard(reason)
+        # Inhibited time was not idle; otherwise the next tick sleeps at once.
+        get_power_manager().record_activity()
 
     def _check_idle_state(self) -> None:
         """Check if we should enter sleep mode due to inactivity.
@@ -2261,6 +2273,12 @@ class PurpleApp(App):
 
     def _record_user_activity(self) -> None:
         """Record that user is active. Resets idle timer."""
+        if self._lid_close_time is not None:
+            # Typing proves the lid is open: some firmware reports it closed at
+            # boot and never sends the open event, which would power off mid-use.
+            from .power_manager import _power_log
+            _power_log("LID COUNTDOWN cancelled: key pressed")
+            self._lid_close_time = None
         try:
             pm = get_power_manager()
             pm.record_activity()

@@ -5,6 +5,32 @@ These are places where the release branch intentionally differs from the origina
 commit, usually because the pick depends on a feature that stays on main.
 If a later pick conflicts weirdly in one of these spots, look here first.
 
+## 2026-10-06
+
+- `13bca80` (power off after the USB is pulled) → release `e20e7cf`
+  - `purple_tui/power_manager.py`: kept release's Raspberry Pi helpers (`can_power_back_on`, `manual_off_hint`) beside the new `_POWEROFF_BACKSTOP_SECS`. Left out main's `shutil.which` filter on the poweroff commands: it comes from the Chromebook work (`7ddc33b`, stays on main) and release does not import `shutil`.
+- `d5f91ea`, `97de8d5`, `cd23883`, `629aa80` → release `ca61a06`, `4a1ae85`, `faa102d`, `987698b`: clean.
+
+## 2026-09-13
+
+- `759ebad` (CLAUDE.md: logging defaults to always-on) → release `1dc2b39`
+  - `CLAUDE.md`: the new paragraph sits right above the Non-visual bullet, which main rewrote for the canvas UI (stderr goes to the xinitrc log there). Kept release's Textual-only bullet, inserted the paragraph above it.
+
+## 2026-09-02
+
+The two-UI consolidation, four picks that move code out of Textual files into shared modules the canvas already used (`08850dc3` mixer, `b812e028` Play evaluator, `fe451910` sticker palette, `c5766086` sound check report). Each shared module was new to release, so every pick needed its file added by hand (`git checkout <sha> -- <file>`), and two needed more:
+
+- `08850dc3` (one mixer) → release `b935b3c`
+  - `purple_tui/mixer.py`: added from the pick (modify/delete: release never had the file).
+  - `purple_tui/audio.py`, `purple_tui/tts.py`: the three lazy imports resolve to `from .mixer import ...`. Main's side of the hunk was replacing a binding hook release never carried, so the text differs but the result is the same as main.
+  - `purple_tui/__main__.py`: kept release's. The pick only removed the hook binding, which release never had.
+- `b812e028` (Play evaluator) → release `6ee87cc`
+  - `purple_tui/play_eval.py`: added from the pick.
+- `fe451910` (sticker palette) → release `c1f01cc`
+  - `purple_tui/palette.py`: added from the pick.
+  - `purple_tui/rooms/art_room.py`: the removed palette block sat next to `BOX_CHARS_PEN_DOWN`, which main has (pen toggle, stays on main) and release does not. Resolved to neither: palette block gone, pen-down block still absent.
+- `c5766086` (sound check report) → release `b153a96`: clean.
+
 ## 2026-08-28
 
 The audio chain, `ea6c0c7` through `717f6a1` (18 picks: PulseAudio volume, speech

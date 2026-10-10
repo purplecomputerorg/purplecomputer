@@ -11,23 +11,20 @@
 
 set -eo pipefail
 
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
 PURPLE='\033[0;35m'
 NC='\033[0m'
 
 # Loud logging to console for debugging
 log() {
-    echo -e "${GREEN}[PURPLE]${NC} $1" >&2
+    echo "[PURPLE] $1" >&2
     echo "[PURPLE] $1" >/dev/console 2>/dev/null || true
 }
 warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1" >&2
+    echo "[WARN] $1" >&2
     echo "[PURPLE WARN] $1" >/dev/console 2>/dev/null || true
 }
 error() {
-    echo -e "${RED}[ERROR]${NC} $1" >&2
+    echo "[ERROR] $1" >&2
     echo "[PURPLE ERROR] $1" >/dev/console 2>/dev/null || true
     exit 1
 }
@@ -52,13 +49,91 @@ disable_swaps_on() {
 
 # Catch unexpected exits (e.g. pipeline failures from USB removal) and emit
 # a tagged error so the UI can display it.
-trap '_rc=$?; if [ $_rc -ne 0 ]; then echo -e "${RED}[ERROR]${NC} Install failed (exit code $_rc)" >&2; echo "[PURPLE ERROR] Install failed (exit code $_rc)" >/dev/console 2>/dev/null || true; fi' EXIT
+trap '_rc=$?; if [ $_rc -ne 0 ]; then echo "[ERROR] Install failed (exit code $_rc)" >&2; echo "[PURPLE ERROR] Install failed (exit code $_rc)" >/dev/console 2>/dev/null || true; fi' EXIT
 
 # Golden image path - set by hook via PURPLE_PAYLOAD_DIR
 GOLDEN_IMAGE="${PURPLE_PAYLOAD_DIR:-/purple}/purple-os.img.zst"
+BACKUP_IMAGE="${GOLDEN_IMAGE%/*}/purple-os-backup.img.zst"
+# Range size in bytes, then one sha256 per range of the compressed image.
+MANIFEST="${GOLDEN_IMAGE}.manifest"
+INSTALL_LOG=/tmp/purple-install.log
+# An earlier install's saved work, copied here by --probe before the parent confirms.
+KEEP_DIR=/run/purple-keep
+
+# The compressed image is read into this tmpfs before the disk is touched.
+# The "try everything" boot (purple.toram) may have made it already, with a
+# copy inside that is checked like any other source.
+STAGE_DIR=/run/purple-stage
+STAGED_IMAGE=$STAGE_DIR/purple-os.img.zst
+RANGE_TMP=/tmp/purple-range
+# Share of the write's progress bar the read into memory takes.
+STAGE_PV=15
+
+# Mounts the tmpfs when there is room for the image plus 512MB to spare.
+stage_ready() {
+    mountpoint -q "$STAGE_DIR" && return 0
+    local kb=$(( $(stat -c %s "$GOLDEN_IMAGE") / 1024 + 1024 ))
+    [ "$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)" -ge $(( kb + 524288 )) ] || return 1
+    mkdir -p "$STAGE_DIR" && mount -t tmpfs -o size=${kb}k tmpfs "$STAGE_DIR"
+}
+
+# Puts range $1 (sha256 line $2, $3 bytes) in $RANGE_TMP from the first
+# remaining argument whose bytes match, and names it in $RANGE_SRC. Rounds a
+# couple of seconds apart give a stick that drops out for a moment another try.
+read_range() {
+    local i=$1 want=$2 bytes=$3 try src
+    shift 3
+    for try in 1 2 3 4 5; do
+        for src in "$@"; do
+            if dd if="$src" of="$RANGE_TMP" bs="$bytes" skip="$i" count=1 iflag=fullblock status=none 2>/dev/null \
+                && [ "$(sha256sum < "$RANGE_TMP")" = "$want" ]; then
+                RANGE_SRC=$src
+                return 0
+            fi
+        done
+        [ "$try" -eq 5 ] || sleep 2
+    done
+    return 1
+}
+
+# Walks the manifest range by range. stage: fills $STAGED_IMAGE in place,
+# reading the stick only for ranges the copy there lacks or has wrong;
+# stream: prints the checked image for the write. Fails on a range no copy has.
+image_ranges() {
+    local mode=$1 bytes want i=0 n pct last=-1 srcs=("$GOLDEN_IMAGE" "$BACKUP_IMAGE")
+    [ "$mode" = stage ] && srcs=("$STAGED_IMAGE" "${srcs[@]}")
+    n=$(( $(wc -l < "$MANIFEST") - 1 ))
+    {
+        read -r bytes
+        case "$bytes" in ''|*[!0-9]*)
+            warn "Bad image manifest header"
+            return 1 ;;
+        esac
+        while IFS= read -r want; do
+            if ! read_range "$i" "$want" "$bytes" "${srcs[@]}"; then
+                warn "Image range $i could not be read from any copy"
+                rm -f "$RANGE_TMP"
+                return 1
+            fi
+            [ "$RANGE_SRC" != "$BACKUP_IMAGE" ] || echo "[PURPLE-RETRY] range $i from the backup copy" >&2
+            if [ "$mode" = stream ]; then
+                cat "$RANGE_TMP" || return 1
+            else
+                [ "$RANGE_SRC" = "$STAGED_IMAGE" ] \
+                    || dd if="$RANGE_TMP" of="$STAGED_IMAGE" bs="$bytes" seek="$i" conv=notrunc status=none \
+                    || return 1
+                pct=$(( (i + 1) * STAGE_PV / n ))
+                [ "$pct" -eq "$last" ] || echo "[PURPLE-PV] $pct" >&2
+                last=$pct
+            fi
+            i=$((i + 1))
+        done
+    } < "$MANIFEST"
+    rm -f "$RANGE_TMP"
+}
 
 # Spawn emergency shell on tty2 (user can access with Alt+F2)
-if [ -c /dev/tty2 ]; then
+if [ "$1" != --probe ] && [ -c /dev/tty2 ]; then
     log "Emergency shell available on tty2 (Alt+F2)"
     setsid bash </dev/tty2 >/dev/tty2 2>&1 &
 fi
@@ -94,9 +169,11 @@ find_target() {
     # Method 2: Find the device containing the live filesystem
     # The ISO volume is labeled PURPLE_INSTALLER
     local iso_dev=""
-    iso_dev=$(blkid -L PURPLE_INSTALLER 2>/dev/null | sed 's/[0-9]*$//' || true)
+    iso_dev=$( (blkid -L PURPLE_INSTALLER || blkid -L PURPLE_DEBUG) 2>/dev/null || true)
     if [ -n "$iso_dev" ]; then
-        boot_dev=$(basename "$iso_dev")
+        # lsblk resolves partition to parent for every naming scheme (sda1, mmcblk0p1)
+        boot_dev=$(lsblk -no pkname "$iso_dev" 2>/dev/null | head -1)
+        [ -n "$boot_dev" ] || boot_dev=$(basename "$iso_dev")
         log "  Boot device (ISO): $boot_dev"
     fi
 
@@ -154,8 +231,104 @@ get_disk_size() {
     echo "${size_gb}GB"
 }
 
+part_prefix() {
+    case "$1" in
+        nvme*|mmcblk*) echo "/dev/${1}p" ;;
+        *)             echo "/dev/${1}" ;;
+    esac
+}
+
+# Copies an earlier Purple install's settings, Time Travel history and name into
+# $2 without writing to it. 0 = saved, 1 = no Purple there, 2 = Purple but unreadable.
+save_old_purple() {
+    local part="$1" keep="$2" mnt="${3:-/run/purple-old-root}" rc=0
+    [ "$(blkid -o value -s LABEL "$part" 2>/dev/null)" = PURPLE_ROOT ] || return 1
+    rm -rf "$keep"
+    mkdir -p "$mnt" "$keep"
+    mount -o ro "$part" "$mnt" 2>/dev/null || return 2
+    if [ -d "$mnt/home/purple/.config/purple" ]; then
+        cp -a "$mnt/home/purple/.config/purple" "$keep/config" 2>/dev/null || rc=2
+    fi
+    if [ -f "$mnt/opt/purple/computer_name.txt" ]; then
+        cp "$mnt/opt/purple/computer_name.txt" "$keep/" 2>/dev/null || rc=2
+    fi
+    umount "$mnt" 2>/dev/null || true
+    [ "$rc" -eq 0 ] || rm -rf "$keep"
+    return $rc
+}
+
+# Run by the parent menu before its confirm screen; prints what it found on stdout.
+probe() {
+    local target rc=0
+    rm -rf "$KEEP_DIR"
+    target=$(find_target) || exit 0
+    save_old_purple "$(part_prefix "$target")2" "$KEEP_DIR" || rc=$?
+    case $rc in
+        0) echo "[PURPLE-FOUND] $(cat "$KEEP_DIR/computer_name.txt" 2>/dev/null)" ;;
+        2) echo "[PURPLE-FOUND-UNREADABLE]" ;;
+    esac
+    exit 0
+}
+
+# Copies $1 into the installed purple user's ~/.config/purple. Only warns on
+# failure: under set -e nothing here may stop the install.
+carry_over() {
+    if mkdir -p /mnt/root/home/purple/.config/purple 2>/dev/null \
+        && cp -a "$1" /mnt/root/home/purple/.config/purple/ 2>/dev/null \
+        && chown -R 1000:1000 /mnt/root/home/purple/.config 2>/dev/null; then
+        log "  $2 carried over"
+    else
+        warn "Could not copy $2"
+    fi
+}
+
+# root= for the installed kernel command line, shared by GRUB and the UKI.
+root_arg() {
+    if [ -n "$ROOT_UUID" ]; then echo "root=UUID=$ROOT_UUID"; else echo "root=LABEL=PURPLE_ROOT"; fi
+}
+
+# Layer 7 is for Macs: no Secure Boot to satisfy, and Apple's EFI reads the
+# kernel through GRUB at well under 1 MB/s on 2009-2010 models while loading
+# a PE itself is fast (it is how macOS boots). Everything else keeps shim +
+# GRUB. See docs/PLAN-macbook5-slow-boot.md.
+uki_wanted() {
+    grep -qi '^Apple' /sys/class/dmi/id/sys_vendor 2>/dev/null || return 1
+    [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = "64" ] || return 1
+    local sb=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+    if [ -f "$sb" ] && [ "$(od -An -tu1 -j4 -N1 "$sb" 2>/dev/null | tr -d ' ')" = "1" ]; then
+        return 1
+    fi
+    command -v ukify >/dev/null 2>&1
+}
+
+# Kernel, initrd and command line in one EFI binary the firmware loads itself.
+# Same kernel choice as purple-router.cfg: both read purple-variants.cfg.
+build_uki() {
+    local out="$1" variant="" args="" product
+    eval "$(sed -n 's/^set \(purple_[a-z0-9_]*=\)/\1/p' /boot/grub/purple-variants.cfg /boot/grub/purple-cmdline.cfg)"
+    product=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
+    if [[ "$product" =~ $purple_t2_models ]] && [ -f /boot/vmlinuz-t2 ]; then
+        variant=-t2
+        args="$purple_t2_args"
+    elif [[ "$product" =~ $purple_c2mac_models ]]; then
+        args="$purple_c2mac_args"
+    fi
+    ukify build --stub /usr/lib/systemd/boot/efi/linuxx64.efi.stub \
+        --linux "/boot/vmlinuz$variant" --initrd "/boot/initrd.img$variant" \
+        --cmdline "${args:+$args }$(root_arg) $purple_cmdline" --output "$out" >/tmp/purple-uki.log 2>&1
+}
+
+# NVRAM entry LABEL -> LOADER on the target's ESP; prints its Boot#### number.
+nvram_entry() {
+    efibootmgr -c -d "/dev/$TARGET" -p 1 -L "$1" -l "$2" >/dev/null 2>&1 || return 1
+    efibootmgr 2>/dev/null | grep -E "^Boot[0-9A-Fa-f]{4}\*? $1([[:space:]]|\$)" | head -1 | cut -c5-8
+}
+
 # Main installation routine
 main() {
+    # Everything on stderr also goes to a file: purple-diag-collect puts it in
+    # the stick's PURPLE-LOG, and it is copied into the installed system.
+    exec 2> >(tee -a "$INSTALL_LOG" >&2)
     show_splash
 
     log "Purple Computer Factory Installer"
@@ -228,11 +401,40 @@ main() {
         error "Golden image not found: $GOLDEN_IMAGE"
     fi
 
-    # Determine partition device naming convention
-    case "$TARGET" in
-        nvme*|mmcblk*) PART_PREFIX="/dev/${TARGET}p" ;;
-        *)             PART_PREFIX="/dev/${TARGET}" ;;
-    esac
+    PART_PREFIX=$(part_prefix "$TARGET")
+
+    log "Writing Purple Computer to disk..."
+    log "  Source: $GOLDEN_IMAGE"
+    log "  Target: /dev/$TARGET"
+    log "  This takes 2 to 10 minutes, depending on the computer..."
+    log ""
+
+    # ======================================================================
+    # READ THE IMAGE BEFORE TOUCHING THE DISK
+    # Every range of the compressed image is read from the stick into RAM and
+    # matched against its manifest hash before the disk is wiped, so a stick
+    # this laptop cannot read leaves the computer as it was. A range that
+    # fails comes from the backup copy on with-backup ISOs (cheap flash decays
+    # in storage and transit; seen in the field), and is retried for a stick
+    # that drops out for a moment. Without the RAM, the same checked ranges
+    # stream into the write, as they always did. No manifest (the i386
+    # payload): the image streams straight in and zstd's checksums catch damage.
+    # ======================================================================
+    WRITE_SRC="$GOLDEN_IMAGE" PV_FROM=0
+    if [ -f "$MANIFEST" ]; then
+        WRITE_SRC=ranges
+        if stage_ready; then
+            log "Reading the image into memory first..."
+            if ! image_ranges stage; then
+                # The friendly wording lives in parent_menu.py, keyed off this marker.
+                echo "[PURPLE-CORRUPT-KEY]" >&2
+                error "This Purple Key could not be read. Nothing on this computer was changed."
+            fi
+            WRITE_SRC="$STAGED_IMAGE" PV_FROM=$STAGE_PV
+        else
+            log "Not enough free memory to read the image first; writing it as it is read"
+        fi
+    fi
 
     # ======================================================================
     # PRE-WRITE CLEANUP
@@ -263,21 +465,7 @@ main() {
 
     # ======================================================================
     # WRITE GOLDEN IMAGE
-    # With-backup ISOs carry a second copy of the image. zstd verifies frame
-    # checksums as it streams, so a decayed copy (cheap USB flash loses data
-    # in storage/transit; seen in the field) fails the pipeline and we retry
-    # from the backup copy. If both whole copies fail, flash decay scatters
-    # bad pages independently across the two copies, so a last-resort pass
-    # merges the good 4MiB ranges of each (hashes in the .manifest sidecar).
-    # dd failing with a healthy stream means the internal disk is the
-    # problem, which no copy or merge fixes.
     # ======================================================================
-    log "Writing Purple Computer to disk..."
-    log "  Source: $GOLDEN_IMAGE"
-    log "  Target: /dev/$TARGET"
-    log "  This will take approximately 10-15 minutes..."
-    log ""
-
     # Decompress and write, teeing the decompressed stream to sha256sum so we
     # can verify the disk contents afterwards without decompressing again.
     # The tee sends the same bytes to both dd (disk write) and sha256sum (checksum).
@@ -293,8 +481,8 @@ main() {
         [ -n "$IMAGE_SIZE" ] || IMAGE_SIZE=$((8192*1024*1024))
     fi
 
-    # Progress stage: pv reports byte progress for the UI; cat passes through
-    # when pv is missing.
+    # Progress stage: pv reports byte progress for the UI, after the share the
+    # read into memory took; cat passes through when pv is missing.
     PROGRESS_CMD=(cat)
     [ -n "$HAVE_PV" ] && PROGRESS_CMD=(pv -n -s "$IMAGE_SIZE")
 
@@ -303,7 +491,7 @@ main() {
         zstd -dc "$1" \
             | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
             | tee >(wc -c > "$WRITE_SIZE_FILE") \
-            | "${PROGRESS_CMD[@]}" 2> >(while read p; do echo "[PURPLE-PV] $p" >&2; done) \
+            | "${PROGRESS_CMD[@]}" 2> >(while read p; do case "$p" in ''|*[!0-9]*) continue ;; esac; echo "[PURPLE-PV] $(( PV_FROM + p * (100 - PV_FROM) / 100 ))" >&2; done) \
             | dd of=/dev/$TARGET bs=4M conv=fsync
         local ps=("${PIPESTATUS[@]}") s rc=0
         ZSTD_RC=${ps[0]}
@@ -312,82 +500,21 @@ main() {
         return $rc
     }
 
-    BACKUP_IMAGE="${GOLDEN_IMAGE%/*}/purple-os-backup.img.zst"
-    MANIFEST="${GOLDEN_IMAGE}.manifest"
-
-    # Emit each range of the compressed image from whichever copy matches its
-    # manifest hash (manifest: range size in bytes, then one sha256 per range;
-    # written by 01-remaster-iso.sh). Ranges are staged in /tmp so verified
-    # bytes are emitted without re-reading flaky flash, and a bad-sector EIO
-    # on one copy just fails over to the other. A range bad in both copies
-    # truncates the stream, which zstd rejects because the golden image is a
-    # single frame by build; the post-write disk verification backstops the rest.
-    merge_ranges() {
-        local tmp=/tmp/purple-merge-range range=0 bytes want src ok
-        {
-            read -r bytes || return 1
-            case "$bytes" in ''|*[!0-9]*)
-                echo "[PURPLE-MERGE] bad manifest header" >&2
-                return 1 ;;
-            esac
-            while IFS= read -r want; do
-                ok=""
-                for src in "$GOLDEN_IMAGE" "$BACKUP_IMAGE"; do
-                    if dd if="$src" of="$tmp" bs="$bytes" skip=$range count=1 iflag=fullblock status=none 2>/dev/null \
-                        && [ "$(sha256sum < "$tmp")" = "$want" ]; then
-                        ok=1
-                        break
-                    fi
-                done
-                if [ -z "$ok" ]; then
-                    echo "[PURPLE-MERGE] range $range unreadable in both copies" >&2
-                    rm -f "$tmp"
-                    return 1
-                fi
-                cat "$tmp" || { rm -f "$tmp"; return 1; }
-                range=$((range + 1))
-            done
-        } < "$MANIFEST"
-        rm -f "$tmp"
-    }
-
-    IMAGE_SOURCES=("$GOLDEN_IMAGE")
-    if [ -f "$BACKUP_IMAGE" ]; then
-        IMAGE_SOURCES+=("$BACKUP_IMAGE")
-        if [ -f "$MANIFEST" ]; then
-            IMAGE_SOURCES+=(merge)
-        fi
+    if [ "$WRITE_SRC" = ranges ]; then
+        write_image <(image_ranges stream) && WROTE_OK=true || WROTE_OK=false
+    else
+        write_image "$WRITE_SRC" && WROTE_OK=true || WROTE_OK=false
     fi
-
-    WROTE_OK=false
-    for SRC in "${IMAGE_SOURCES[@]}"; do
-        if [ "$SRC" = merge ]; then
-            echo "[PURPLE-MERGING]" >&2
-            log "Both copies are damaged, combining the good parts of each..."
-            if write_image <(merge_ranges); then WROTE_OK=true; fi
-        else
-            if [ "$SRC" != "$GOLDEN_IMAGE" ]; then
-                echo "[PURPLE-RETRY] backup copy" >&2
-                log "First copy was damaged, writing from the backup copy..."
-            fi
-            if write_image "$SRC"; then WROTE_OK=true; fi
-        fi
-        if [ "$WROTE_OK" = "true" ]; then
-            break
-        fi
+    if [ "$WROTE_OK" != "true" ]; then
         # dd failing means the disk rejected writes; a SIGPIPE'd zstd upstream
         # of a dead dd is not evidence of a bad copy, so check dd first.
         if [ "${DD_RC:-1}" -ne 0 ]; then
             error "Could not write to this computer's internal disk."
         fi
-        warn "Image copy failed integrity check while reading (zstd exit ${ZSTD_RC}): $SRC"
-    done
-
-    if [ "$WROTE_OK" != "true" ]; then
-        # The friendly wording lives in parent_menu.py, keyed off this marker.
         echo "[PURPLE-CORRUPT-KEY]" >&2
-        error "Every image copy on this Purple Key failed its integrity check."
+        error "The image on this Purple Key failed its integrity check (zstd exit ${ZSTD_RC})."
     fi
+    umount "$STAGE_DIR" 2>/dev/null || true
 
     # ======================================================================
     # POST-WRITE VERIFICATION
@@ -398,7 +525,7 @@ main() {
     if [ -f "$WRITE_SHA256_FILE" ] && [ -s "$WRITE_SHA256_FILE" ] && [ -f "$WRITE_SIZE_FILE" ] && [ -s "$WRITE_SIZE_FILE" ]; then
         WRITE_SHA256=$(cat "$WRITE_SHA256_FILE")
         WRITE_SIZE=$(cat "$WRITE_SIZE_FILE" | tr -d ' ')
-        log "Verifying disk write (this takes a few minutes)..."
+        log "Verifying disk write of $WRITE_SIZE bytes (this takes a few minutes)..."
 
         # Flush hardware write caches before reading back
         blockdev --flushbufs /dev/$TARGET 2>/dev/null || true
@@ -524,13 +651,17 @@ main() {
     # filesystem inside is still at image size. resize2fs
     # extends it to fill the partition. e2fsck -fy is required by resize2fs
     # before an offline grow; -y is safe because we just verified the dd
-    # write byte-for-byte.
+    # write byte-for-byte. resize2fs -f skips its own "checked since last
+    # mount" test: e2fsck stamps the check with the machine's clock, and a
+    # clock behind the image build date (dead CMOS battery) makes that
+    # stamp older than the build's mount, so resize2fs refused and the
+    # install silently kept the 8GB image size.
     # ======================================================================
     ROOT_PART_TMP="${PART_PREFIX}2"
     log "Checking root filesystem..."
     e2fsck -fy "$ROOT_PART_TMP" || warn "e2fsck reported issues (continuing)"
     log "Growing root filesystem to fill disk..."
-    resize2fs "$ROOT_PART_TMP" || warn "resize2fs failed (install will use golden-image size)"
+    resize2fs -f "$ROOT_PART_TMP" || warn "resize2fs failed (install will use golden-image size)"
 
     # ==========================================================================
     # HYBRID BOOT SETUP (UEFI + BIOS) - See guides/nvram-boot-entry.md
@@ -542,9 +673,11 @@ main() {
     # 1. /EFI/BOOT/BOOTX64.EFI (shim) + grubx64.efi - UEFI spec fallback
     # 2. /EFI/Microsoft/Boot/bootmgfw.efi (shim) + grubx64.efi - Surface, HP
     # 3. /EFI/purple/shimx64.efi + grubx64.efi - vendor path for NVRAM entry
-    # 4. NVRAM Boot#### entry - bonus for compliant firmware
-    # 5. grub.cfg UUID rewrite for deterministic boot (both EFI and root copies)
+    # 4. NVRAM Boot#### entries - bonus for compliant firmware
+    # 5. purple-cmdline.cfg root=UUID rewrite (sourced by both grub.cfg copies)
     # 6. BIOS MBR + core.img in bios_grub partition - legacy/CSM firmware path
+    # 7. Macs: UKI at /EFI/purple/purple.efi booted directly by the firmware
+    #    (first NVRAM entry); shim + GRUB stays as the fallback entry
     # ==========================================================================
 
     log "Setting up boot (UEFI + BIOS)..."
@@ -566,68 +699,85 @@ main() {
         if mount "$EFI_PART" /mnt/efi; then
 
             # Layer 1: Standard fallback path (already in golden image)
-            # shim (BOOTX64.EFI) loads grubx64.efi from same directory
+            # shim (BOOTX64.EFI) loads grubx64.efi from same directory.
+            # The i386 image carries only BOOTIA32.EFI: layers 2-4 are x64
+            # paths, so it gets layer 1 and 5 alone.
+            HAVE_X64=0
             if [ -f /mnt/efi/EFI/BOOT/BOOTX64.EFI ] && [ -f /mnt/efi/EFI/BOOT/grubx64.efi ]; then
+                HAVE_X64=1
                 log "  Layer 1: /EFI/BOOT/ shim + GRUB present"
+            elif [ -f /mnt/efi/EFI/BOOT/BOOTIA32.EFI ]; then
+                log "  Layer 1: /EFI/BOOT/ 32-bit GRUB present (i386 image)"
             else
-                warn "  Layer 1: signed boot files missing!"
+                error "Boot files missing from the EFI partition (bad image?)"
             fi
 
-            # Layer 2: Vendor path for NVRAM entry (shim + GRUB + MOK Manager)
-            mkdir -p /mnt/efi/EFI/purple
-            cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/purple/shimx64.efi 2>/dev/null || true
-            cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/purple/grubx64.efi 2>/dev/null || true
-            cp /mnt/efi/EFI/BOOT/mmx64.efi /mnt/efi/EFI/purple/mmx64.efi 2>/dev/null || true
-            log "  Layer 2: /EFI/purple/ shim + GRUB"
+            if [ "$HAVE_X64" -eq 1 ]; then
+                # Layer 2: Vendor path for NVRAM entry (shim + GRUB + MOK Manager)
+                mkdir -p /mnt/efi/EFI/purple
+                cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/purple/shimx64.efi
+                cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/purple/grubx64.efi
+                cp /mnt/efi/EFI/BOOT/mmx64.efi /mnt/efi/EFI/purple/mmx64.efi 2>/dev/null || true
+                log "  Layer 2: /EFI/purple/ shim + GRUB"
 
-            # Layer 3: Microsoft path (Surface, HP need this)
-            # shim as bootmgfw.efi + grubx64.efi in same directory
-            WINDOWS_DETECTED=0
-            if [ -f /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi ]; then
-                MS_SIZE=$(stat -c%s /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi 2>/dev/null || echo 0)
-                # Windows bootmgfw.efi is ~1.5-2.5MB, our shim is smaller (~1.2MB)
-                if [ "$MS_SIZE" -gt 1500000 ] && [ "$MS_SIZE" -lt 2800000 ]; then
-                    log "  Layer 3: Windows detected, preserving bootmgfw.efi"
-                    WINDOWS_DETECTED=1
+                # Layer 3: Microsoft path (Surface, HP need this)
+                # shim as bootmgfw.efi + grubx64.efi in same directory
+                WINDOWS_DETECTED=0
+                if [ -f /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi ]; then
+                    MS_SIZE=$(stat -c%s /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi 2>/dev/null || echo 0)
+                    # Windows bootmgfw.efi is ~1.5-2.5MB, our shim is smaller (~1.2MB)
+                    if [ "$MS_SIZE" -gt 1500000 ] && [ "$MS_SIZE" -lt 2800000 ]; then
+                        log "  Layer 3: Windows detected, preserving bootmgfw.efi"
+                        WINDOWS_DETECTED=1
+                    fi
+                fi
+                if [ "$WINDOWS_DETECTED" -eq 0 ]; then
+                    mkdir -p /mnt/efi/EFI/Microsoft/Boot
+                    cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi
+                    cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/Microsoft/Boot/grubx64.efi
+                    cp /mnt/efi/EFI/BOOT/mmx64.efi /mnt/efi/EFI/Microsoft/Boot/mmx64.efi 2>/dev/null || true
+                    log "  Layer 3: /EFI/Microsoft/Boot/ shim + GRUB"
                 fi
             fi
-            if [ "$WINDOWS_DETECTED" -eq 0 ]; then
-                mkdir -p /mnt/efi/EFI/Microsoft/Boot
-                cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi
-                cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/Microsoft/Boot/grubx64.efi
-                cp /mnt/efi/EFI/BOOT/mmx64.efi /mnt/efi/EFI/Microsoft/Boot/mmx64.efi 2>/dev/null || true
-                log "  Layer 3: /EFI/Microsoft/Boot/ shim + GRUB"
+
+            # Layer 7: Macs boot the kernel directly; a failed build just
+            # leaves the GRUB path.
+            UKI_LOADER=""
+            if [ "$HAVE_X64" -eq 1 ] && uki_wanted; then
+                if build_uki /mnt/efi/EFI/purple/purple.efi; then
+                    UKI_LOADER='\EFI\purple\purple.efi'
+                    log "  Layer 7: UKI built ($(stat -c%s /mnt/efi/EFI/purple/purple.efi) bytes)"
+                else
+                    warn "  Layer 7: UKI build failed (GRUB path still boots):"
+                    while IFS= read -r ln; do warn "    $ln"; done < /tmp/purple-uki.log
+                    rm -f /mnt/efi/EFI/purple/purple.efi
+                fi
             fi
 
-            # Layer 4: NVRAM entry (bonus, not required)
-            # Points to shim, which chain-loads grubx64.efi
-            if command -v efibootmgr >/dev/null 2>&1; then
-                # Remove existing PurpleOS entries
+            # Layer 4: NVRAM entries, UKI first when there is one, then shim.
+            # efibootmgr -c already prepends to BootOrder; re-asserting the
+            # order covers firmware that appends instead.
+            if [ "$HAVE_X64" -eq 1 ] && command -v efibootmgr >/dev/null 2>&1; then
                 for bootnum in $(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | sed 's/Boot//' || true); do
                     efibootmgr -b "$bootnum" -B 2>/dev/null || true
                 done
-
-                if efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\purple\shimx64.efi' 2>/dev/null; then
-                    log "  Layer 4: NVRAM entry created"
-                    # Set boot order
-                    PURPLE_BOOTNUM=$(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | head -1 | sed 's/Boot//')
-                    if [ -n "$PURPLE_BOOTNUM" ]; then
-                        CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep "BootOrder:" | sed 's/BootOrder: //')
-                        NEW_ORDER="$PURPLE_BOOTNUM"
-                        for entry in $(echo "$CURRENT_ORDER" | tr ',' ' '); do
-                            [ "$entry" != "$PURPLE_BOOTNUM" ] && NEW_ORDER="$NEW_ORDER,$entry"
-                        done
-                        efibootmgr -o "$NEW_ORDER" 2>/dev/null || true
-                    fi
+                PURPLE_NUMS=()
+                GRUB_LABEL="PurpleOS"
+                if [ -n "$UKI_LOADER" ]; then
+                    num=$(nvram_entry "PurpleOS" "$UKI_LOADER") && PURPLE_NUMS+=("$num")
+                    GRUB_LABEL="PurpleOS Fallback"
+                fi
+                num=$(nvram_entry "$GRUB_LABEL" '\EFI\purple\shimx64.efi') && PURPLE_NUMS+=("$num")
+                if [ "${#PURPLE_NUMS[@]}" -gt 0 ]; then
+                    NEW_ORDER=$(IFS=,; echo "${PURPLE_NUMS[*]}")
+                    for entry in $(efibootmgr 2>/dev/null | sed -n 's/^BootOrder: //p' | tr ',' ' '); do
+                        case ",$NEW_ORDER," in *",$entry,"*) ;; *) NEW_ORDER="$NEW_ORDER,$entry" ;; esac
+                    done
+                    efibootmgr -o "$NEW_ORDER" 2>/dev/null || true
+                    log "  Layer 4: NVRAM boot order $NEW_ORDER${UKI_LOADER:+ (UKI first)}"
                 else
                     log "  Layer 4: NVRAM entry failed (fallback paths will work)"
                 fi
-            fi
-
-            # Layer 5 (EFI part): Update search config with UUID
-            if [ -n "$ROOT_UUID" ] && [ -f /mnt/efi/EFI/ubuntu/grub.cfg ]; then
-                sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/efi/EFI/ubuntu/grub.cfg
-                log "  Layer 5: Updated EFI search config with UUID"
             fi
 
             umount /mnt/efi 2>/dev/null || true
@@ -663,26 +813,26 @@ main() {
                 fi
             fi
 
-            # Carry the live session's settings over (the volume the sound
-            # check picked, anything the parent changed) so the installed
-            # first boot doesn't start from scratch or chime again.
-            # Every command sits inside the if condition: under set -e a
-            # failure here must only warn, never stop the install.
-            if [ -n "$PURPLE_LIVE_SETTINGS" ] && [ -f "$PURPLE_LIVE_SETTINGS" ]; then
-                if mkdir -p /mnt/root/home/purple/.config/purple 2>/dev/null \
-                    && cp "$PURPLE_LIVE_SETTINGS" /mnt/root/home/purple/.config/purple/settings.json 2>/dev/null \
-                    && chown -R 1000:1000 /mnt/root/home/purple/.config 2>/dev/null; then
-                    log "  Live settings carried over"
-                else
-                    warn "Could not copy live settings"
+            # A reinstall the parent chose to keep brings back the earlier
+            # install's settings and Time Travel history, plus the saves made
+            # on the USB stick. Otherwise the live session comes over whole
+            # (settings, so first boot doesn't chime again, history and saves).
+            # PURPLE_LIVE_SETTINGS alone is what the Textual UI passes.
+            if [ -n "$PURPLE_KEEP_DIR" ] && [ -d "$PURPLE_KEEP_DIR/config" ]; then
+                carry_over "$PURPLE_KEEP_DIR/config/." "Earlier install's settings and history"
+                if [ -n "$PURPLE_LIVE_CONFIG" ] && [ -d "$PURPLE_LIVE_CONFIG/saves" ]; then
+                    carry_over "$PURPLE_LIVE_CONFIG/saves" "Saved work from the USB stick"
                 fi
+            elif [ -n "$PURPLE_LIVE_CONFIG" ] && [ -d "$PURPLE_LIVE_CONFIG" ]; then
+                carry_over "$PURPLE_LIVE_CONFIG/." "Live settings, history and saves"
+            elif [ -n "$PURPLE_LIVE_SETTINGS" ] && [ -f "$PURPLE_LIVE_SETTINGS" ]; then
+                carry_over "$PURPLE_LIVE_SETTINGS" "Live settings"
             fi
 
-            # Layer 5 (root part): Update grub.cfg with UUID for deterministic boot
-            if [ -n "$ROOT_UUID" ] && [ -f /mnt/root/boot/grub/grub.cfg ]; then
-                sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
-                sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
-                log "  Layer 5: Updated root grub.cfg with UUID"
+            # Layer 5: pin the kernel command line to this partition's UUID
+            if [ -f /mnt/root/boot/grub/purple-cmdline.cfg ]; then
+                sed -i "s|root=LABEL=PURPLE_ROOT|$(root_arg)|" /mnt/root/boot/grub/purple-cmdline.cfg
+                log "  Layer 5: kernel command line uses $(root_arg)"
             fi
 
             # Layer 6: BIOS boot (MBR + core.img in the bios_grub partition).
@@ -727,6 +877,7 @@ main() {
                 echo "RESULT: skipped (grub-install not in live env — golden image missing grub-common/grub-pc-bin)" >> "$PERSIST_LOG"
             fi
 
+            cp "$INSTALL_LOG" /mnt/root/var/log/purple/install.log 2>/dev/null || true
             umount /mnt/root 2>/dev/null || true
         else
             warn "Could not mount root partition for Layer 5/6"
@@ -747,18 +898,15 @@ main() {
     # Python cannot do these without sudo, and sudo from within Textual hangs.
     touch /run/casper-no-prompt
 
-    # Static reboot binary on its own tmpfs (with exec+suid).
-    # Ubuntu's /run is nosuid,noexec and systemd resists remounting.
-    # The binary is the ONLY thing that works after USB removal:
-    # /bin/sh, Python, sudo all SIGBUS on dead overlayfs code pages.
-    # With --wait it shows a message, waits for Enter, then reboots.
-    mkdir -p /run/purple-reboot-mount
-    mount -t tmpfs -o size=1M,exec,suid tmpfs /run/purple-reboot-mount
-    if [ -f /opt/purple/bin/purple-reboot ]; then
-        cp /opt/purple/bin/purple-reboot /run/purple-reboot-mount/purple-reboot
-        chmod 4755 /run/purple-reboot-mount/purple-reboot
+    # Normally staged at boot; with --wait it shows a message, waits for
+    # Enter, then reboots, and is the only thing that works after USB removal.
+    if /usr/local/bin/purple-stage-reboot; then
         log "Reboot binary ready"
     fi
+
+    # purple-reboot skips shutdown, so stopping the stick log here is what
+    # writes its final report (with the end of this log) to PURPLE-LOG.
+    systemctl stop purple-stick-log.service 2>/dev/null || true
 
     # Sentinel last - Python polls for this to know install is done.
     touch /run/purple-install-complete
@@ -766,4 +914,4 @@ main() {
     exit 0
 }
 
-main "$@"
+if [ "$1" = --probe ]; then probe; else main "$@"; fi

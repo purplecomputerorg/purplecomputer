@@ -66,7 +66,7 @@ xlog "X server ready (xinit handshake)"
 # Hide the mouse cursor permanently (keyboard-only UI, no mouse needed).
 # unclutter -idle 0 hides immediately; -root avoids event interference.
 # Previous approaches that didn't work:
-#   xsetroot -cursor: only hides on root window, not inside Alacritty
+#   xsetroot -cursor: only hides on root window, not inside the app window
 #   XFixesHideCursor one-shot: cursor hide dies when the script exits
 unclutter -idle 0 -root &
 xlog "unclutter started (PID=$!)"
@@ -100,39 +100,8 @@ command -v spice-vdagent &>/dev/null && spice-vdagent &
 # Set root window background color
 xsetroot -solid "#2d1b4e"
 
-# Live boot: copy squashfs to tmpfs so pages are pinned (non-evictable).
-# Unlike the old page-cache warmup (cat > /dev/null), tmpfs pages survive
-# memory pressure. This keeps the system alive after USB removal.
-# Falls back to page cache warmup if RAM is too low for the copy.
-# The TUI shows a blinking USB icon until this finishes, then an eject symbol.
-SQUASHFS="/cdrom/casper/filesystem.squashfs"
-USB_CACHE_MARKER="/tmp/purple-usb-cached"
-if [ -f "$SQUASHFS" ] && [ ! -f "$USB_CACHE_MARKER" ]; then
-    xlog "Caching squashfs for USB safety..."
-    (
-        AVAIL_KB=$(awk '/MemAvailable/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
-        SQUASH_BYTES=$(stat -c %s "$SQUASHFS" 2>/dev/null || echo 0)
-        SQUASH_KB=$((SQUASH_BYTES / 1024))
-        # Need squashfs size + 1GB headroom for the running system
-        NEEDED_KB=$((SQUASH_KB + 1048576))
-
-        if [ "$AVAIL_KB" -gt "$NEEDED_KB" ] 2>/dev/null; then
-            mkdir -p /run/purple-squashfs
-            if cp "$SQUASHFS" /run/purple-squashfs/filesystem.squashfs 2>/dev/null; then
-                xlog "Squashfs copied to tmpfs (${SQUASH_KB}KB, ${AVAIL_KB}KB available)"
-            else
-                xlog "Squashfs tmpfs copy failed, falling back to page cache"
-                rm -f /run/purple-squashfs/filesystem.squashfs
-                cat "$SQUASHFS" > /dev/null 2>&1
-            fi
-        else
-            xlog "Low RAM (${AVAIL_KB}KB avail, need ${NEEDED_KB}KB), using page cache warmup"
-            cat "$SQUASHFS" > /dev/null 2>&1
-        fi
-        touch "$USB_CACHE_MARKER"
-        xlog "USB safe to remove"
-    ) &
-fi
+# The squashfs warm-up and RAM lock that make the stick safe to pull run as
+# root in purple-usb-cache.service, at idle disk priority.
 
 # Window manager (required for fullscreen)
 matchbox-window-manager -use_titlebar no &
@@ -158,92 +127,30 @@ UI_READY_MARKER=/tmp/purple-ui-ready
         [ -f "$UI_READY_MARKER" ] && break
         sleep 0.25
     done
+    # Sizes the live session's RAM floor (LIVE_MIN_KB in the 32-bit Key's boot script).
+    xlog "memory at UI ready: $(awk '/^(MemTotal|MemAvailable):/ {printf "%s %dMB  ", $1, $2 / 1024}' /proc/meminfo)"
     xlog "compositor: $(purple-start-compositor 2>&1)"
 ) &
 
-# Prevent HiDPI scaling surprises
-export WINIT_X11_SCALE_FACTOR=1.0
-
-# Alacritty GL mode: probe hardware GL, fall back to software (llvmpipe).
-# Software works on any GPU but burns a core-plus rasterizing on real
-# hardware (measured Jul 2026: Surface i5 114% -> 3% of a core). The probe
-# flips machines with a verified GPU driver to hardware GL; VMs, missing
-# drivers, and any probe failure land on software, exactly the pre-probe
-# behavior. The decision is cached per boot (/tmp/purple-gl-mode), and the
-# session default below stays software so only Alacritty (and its children)
-# ever sees the probed mode. To force one mode for an A/B, set GL_MODE after
-# this block. History and decision rules:
-# guides/intel-display-tuning.md#software-gl-for-alacritty-history-and-revisit-criteria
-export LIBGL_ALWAYS_SOFTWARE=1
-GL_MODE=$(purple-gl-probe 2>/dev/null)
-case "$GL_MODE" in 0|1) ;; *) GL_MODE=1 ;; esac
-xlog "Alacritty GL: LIBGL_ALWAYS_SOFTWARE=$GL_MODE ($(tail -1 /tmp/purple-gl-probe.log 2>/dev/null || echo no probe log))"
-
-# Debug mode: extra diagnostics at boot
+# Debug mode: extra display diagnostics at boot
 if [ -f "$DEBUG_FLAG" ]; then
     xlog "--- Display diagnostics (debug mode) ---"
     echo "xrandr:"
     xrandr 2>&1 | head -20
-    echo "Xft.dpi:"
-    xrdb -query 2>&1 | grep -i dpi || echo "  (none set)"
-    echo "GDK_SCALE=$GDK_SCALE QT_SCALE_FACTOR=$QT_SCALE_FACTOR"
-    echo "WINIT_X11_SCALE_FACTOR=$WINIT_X11_SCALE_FACTOR"
-    echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE (alacritty gets $GL_MODE)"
-    python3 /opt/purple/calc_font_size.py --info 2>&1 || echo "calc_font_size.py --info failed"
-    # GL driver info
-    echo "GL renderer:"
-    if command -v glxinfo &>/dev/null; then
-        glxinfo 2>/dev/null | grep -iE 'renderer|vendor|version|string' | sed 's/^/  /'
-    else
-        echo "  (glxinfo not installed)"
-    fi
     xlog "--- End display diagnostics ---"
 fi
 
-# Best-guess font size (the app auto-corrects on startup via font_sizer.py)
-FONT_SIZE=$(python3 /opt/purple/calc_font_size.py 2>/dev/null || echo "16")
-xlog "Font size: $FONT_SIZE"
+# Purple draws straight into an SDL window with software rendering: no GL,
+# no terminal emulator, no font sizing. LIBGL_ALWAYS_SOFTWARE stays set so
+# nothing in the session touches a GPU driver that may lie (see
+# guides/intel-display-tuning.md); picom picks its own backend.
+export LIBGL_ALWAYS_SOFTWARE=1
+export SDL_VIDEODRIVER=x11
 
-# Copy config to writable location so the app can adjust font size at runtime.
-# Alacritty watches this file and auto-reloads on changes.
-ALACRITTY_CONFIG="/tmp/purple-alacritty.toml"
-cp /etc/purple/alacritty.toml "$ALACRITTY_CONFIG"
-export PURPLE_ALACRITTY_CONFIG="$ALACRITTY_CONFIG"
-
-# Write initial font size into the config file (not -o flag, which would
-# override the file and prevent font_sizer.py from adjusting at runtime)
-sed -i "s/^size = .*/size = ${FONT_SIZE}/" "$ALACRITTY_CONFIG"
-
-# Debug mode: log terminal size after launch
-if [ -f "$DEBUG_FLAG" ]; then
-    (
-        sleep 3
-        xlog "--- Terminal size check (3s after launch) ---"
-        if command -v xdotool &>/dev/null; then
-            WID=$(xdotool search --name "Alacritty" 2>/dev/null | head -1)
-            if [ -n "$WID" ]; then
-                xdotool getwindowgeometry "$WID" 2>&1
-            else
-                echo "  Alacritty window not found!"
-            fi
-        fi
-        xlog "--- End terminal size check ---"
-    ) >> /tmp/xinitrc.log 2>&1 &
-fi
-
-xlog "Launching Alacritty..."
-LIBGL_ALWAYS_SOFTWARE="$GL_MODE" alacritty --config-file "$ALACRITTY_CONFIG" \
-    -e /usr/local/bin/purple
-ALACRITTY_EXIT=$?
-xlog "Alacritty exited with code $ALACRITTY_EXIT"
-
-# A driver can pass the glxinfo probe yet crash Alacritty's real renderer.
-# Poison the per-boot cache so the restart below (and every later one this
-# boot) runs on software GL instead of crash-looping on hardware.
-if [ "$GL_MODE" = "0" ] && [ "$ALACRITTY_EXIT" -ne 0 ]; then
-    echo 1 > /tmp/purple-gl-mode 2>/dev/null
-    xlog "Alacritty died under hardware GL; software GL for the rest of this boot"
-fi
+xlog "Launching Purple..."
+/usr/local/bin/purple
+PURPLE_EXIT=$?
+xlog "Purple exited with code $PURPLE_EXIT"
 
 # Restart Purple (keeps X running for fast restart without screen flash).
 # If X itself crashes, this script exits and systemd restarts the whole service.

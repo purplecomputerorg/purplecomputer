@@ -14,26 +14,28 @@ Timing varies by charger and lid state:
   Lid closed (any):      immediate sleep face, 10 min -> shutdown
 
 Demo mode: Set PURPLE_SLEEP_DEMO=1 to use accelerated timings for testing.
-Diagnostic logging: rare events (shutdowns, power button scans) always log to
-/tmp/purple-power.log + /var/log/purple/power.log. Verbose power decisions log
-only on the debug ISO (when /opt/purple/debug exists) or with PURPLE_POWER_LOG=1.
+Every power decision logs to /tmp/purple-power.log + /var/log/purple/power.log
+on every ISO: a few lines per event, bounded ticks only while asleep or lid-closed.
 """
 
 import os
+import shutil
 import subprocess
 import time
 from datetime import datetime
 from typing import Optional
 
+from . import diag_log
+from .constants import REBOOT_BIN
+
 
 # /var/log/purple survives reboot on installed systems and the debug ISO
 # (same convention as boot_log.py); rotated per boot by purple-wait-display.sh.
 _LOG_PATHS = ("/tmp/purple-power.log", "/var/log/purple/power.log")
-_log_enabled: Optional[bool] = None
 _header_written = False
 
 
-def _append(msg: str) -> None:
+def _power_log(msg: str) -> None:
     """Timestamped append to tmpfs + persistent log. Never raises."""
     global _header_written
     ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -43,31 +45,7 @@ def _append(msg: str) -> None:
         text = (f"\n{'=' * 60}\n"
                 f"Power log started at {datetime.now().isoformat()}\n"
                 f"{'=' * 60}\n") + text
-    for path in _LOG_PATHS:
-        try:
-            with open(path, "a") as f:
-                f.write(text)
-        except Exception:
-            pass
-
-
-def _power_diag(msg: str) -> None:
-    """Always-on log for rare, high-value events (shutdowns, power button
-    scans and adoption). Chatty streams belong in _power_log instead."""
-    _append(msg)
-
-
-def _power_log(msg: str) -> None:
-    """Log a power management event with timestamp.
-
-    Auto-enabled on debug ISO. Can also be forced with PURPLE_POWER_LOG=1.
-    """
-    global _log_enabled
-    if _log_enabled is None:
-        from .constants import is_debug
-        _log_enabled = is_debug() or os.environ.get("PURPLE_POWER_LOG") == "1"
-    if _log_enabled:
-        _append(msg)
+    diag_log.append(_LOG_PATHS, text, "purple-power")
 
 
 def _get_timing(normal: int, demo: int) -> int:
@@ -97,8 +75,45 @@ POWER_HOLD_SHUTDOWN = _get_timing(3, 2)          # 3 sec / 2 sec: hold power to 
 
 LOGIND_CONF_PATH = "/etc/systemd/logind.conf.d/purple-power.conf"
 
+_POWERD = shutil.which("powerd") is not None
+POWERD_ACTIVITY_SECONDS = 20
+_POWERD_ACTIVITY = ["dbus-send", "--system", "--type=method_call", "--dest=org.chromium.PowerManager",
+                    "/org/chromium/PowerManager", "org.chromium.PowerManager.HandleUserActivity", "int32:0"]
+
 # Number of consecutive reads before changing charger state (smoothing)
 _CHARGER_SMOOTH_COUNT = 2
+
+DEVICE_TREE_MODEL = "/proc/device-tree/model"
+# Only the Pi 5 family has a button that turns a halted board back on
+_PI_WAKEABLE = ("Raspberry Pi 5", "Raspberry Pi 500", "Raspberry Pi Compute Module 5")
+
+
+def device_tree_model() -> str:
+    """Board name on ARM machines (no DMI there), e.g. "Raspberry Pi 400 Rev 1.1"."""
+    try:
+        with open(DEVICE_TREE_MODEL) as f:
+            return f.read().strip("\0 \n")
+    except OSError:
+        return ""
+
+
+def can_power_back_on() -> bool:
+    """False on a Pi 4 or 400: a halted board stays dark until it is unplugged
+    and plugged back in, so Purple never shuts it down itself."""
+    if not hasattr(can_power_back_on, "_cached"):
+        model = device_tree_model()
+        can_power_back_on._cached = not model.startswith("Raspberry Pi") or model.startswith(_PI_WAKEABLE)
+    return can_power_back_on._cached
+
+
+def manual_off_hint() -> str:
+    """Shown when Purple leaves turning off to a person."""
+    return "Please turn off" if can_power_back_on() else "You can unplug Purple now"
+
+
+# How long systemctl gets to power off before the static binary does it
+# (the old watchdog's sysrq stage fired at 8s too)
+_POWEROFF_BACKSTOP_SECS = 8
 
 
 def set_logind_power_key(mode: str) -> bool:
@@ -169,6 +184,7 @@ class PowerManager:
 
     def __init__(self):
         self._last_activity = time.time()
+        self._powerd_told = 0.0
         self._lid_path: Optional[str] = None
         self._mains_path: Optional[str] = None
         self._battery_path: Optional[str] = None
@@ -233,7 +249,6 @@ class PowerManager:
                     f"initial_charger={self._charger_state}")
 
         # Check if systemctl exists. Use shutil.which (no subprocess, can't hang).
-        import shutil
         self._poweroff_available = shutil.which("systemctl") is not None
         if not self._poweroff_available:
             # Also check for plain poweroff as fallback
@@ -325,8 +340,20 @@ class PowerManager:
         """Call this on any user input to reset idle timer."""
         idle_was = self.get_idle_seconds()
         self._last_activity = time.time()
-        if idle_was > 5:
+        self._tell_powerd()
+        if idle_was > 60:  # a real pause, not typing rhythm
             _power_log(f"ACTIVITY: idle reset (was {idle_was:.1f}s idle)")
+
+    def _tell_powerd(self) -> None:
+        """ChromeOS: powerd dims and suspends on idle unless something reports
+        activity. Chrome does that normally; with Chrome stopped it falls to us."""
+        if not _POWERD or time.time() - self._powerd_told < POWERD_ACTIVITY_SECONDS:
+            return
+        self._powerd_told = time.time()
+        try:
+            subprocess.Popen(_POWERD_ACTIVITY, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
 
     def get_idle_seconds(self) -> float:
         """Get seconds since last activity."""
@@ -390,8 +417,11 @@ class PowerManager:
     def get_idle_shutdown_threshold(self) -> int:
         """Get the idle seconds threshold for auto-shutdown.
 
-        Longer timeout on charger (60 min) vs battery (10 min).
+        Longer timeout on charger (60 min) vs battery (10 min); never where
+        the machine can't power back on.
         """
+        if not can_power_back_on():
+            return float("inf")
         if self._charger_state is True:
             return CHARGER_IDLE_SHUTDOWN
         return BATTERY_IDLE_SHUTDOWN
@@ -406,15 +436,11 @@ class PowerManager:
         There's no user data to lose on a kids' computer, and clean
         shutdown can hang for 10-15 seconds waiting for services.
 
-        Also spawns a watchdog process that force-powers-off after 15
-        seconds, independent of the TUI event loop. This ensures
-        shutdown completes even if systemd kills X11/Textual first.
+        Also arms a backstop that powers off on its own if systemctl
+        hasn't within a few seconds (see below).
 
         In demo mode (PURPLE_SLEEP_DEMO=1), just prints a message instead.
         """
-        # Always log shutdown attempts (not just on debug ISO) for diagnostics.
-        _power_diag(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
-                      f"charger={self._charger_state}")
         _power_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
                    f"charger={self._charger_state}")
 
@@ -427,27 +453,20 @@ class PowerManager:
             print("=" * 50 + "\n")
             return True
 
+        if not can_power_back_on():
+            _power_log("SHUTDOWN: skipped, this machine can't power back on without unplugging")
+            return False
+
         if not self._poweroff_available:
             _power_log("SHUTDOWN: no poweroff command found, trying anyway")
 
-        # Two-stage watchdog (detached process group, survives TUI death):
-        #   Stage 1 (5s): systemctl --force (clean ACPI shutdown)
-        #   Stage 2 (8s): sysrq poweroff (direct kernel call, no filesystem needed)
-        # sysrq 'o' still goes through ACPI, unlike double --force which bypasses
-        # ACPI and leaves Surface keyboards lit / devices in resume limbo.
-        # sysrq works even if overlayfs is dead (USB removed during live boot).
-        try:
-            subprocess.Popen(
-                ["sh", "-c",
-                 "sleep 5 && sudo systemctl poweroff --force 2>/dev/null; "
-                 "sleep 3 && echo 1 > /proc/sys/kernel/sysrq && "
-                 "echo o > /proc/sysrq-trigger"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-        except Exception:
-            pass
+        # Backstop in its own session, so it outlives the UI: the static
+        # binary on tmpfs stops X and powers off if systemctl hasn't by then.
+        # It is the only thing that still runs once a live USB is pulled
+        # (sh, sudo and systemctl SIGBUS on the dead overlay).
+        backstop = _spawn([REBOOT_BIN, "--poweroff", str(_POWEROFF_BACKSTOP_SECS)],
+                          start_new_session=True)
+        _power_log(f"SHUTDOWN: backstop {'armed' if backstop else 'unavailable'}")
 
         # --force skips clean service stop (near-instant, no data to lose).
         # Always use sudo: non-sudo systemctl lacks permission on live USB,
@@ -458,18 +477,16 @@ class PowerManager:
             ["sudo", "systemctl", "poweroff", "--force"],
             ["sudo", "poweroff", "-f"],
         ]
+        # sudo always spawns, so a missing systemctl (ChromeOS: upstart) would look like success
+        commands = [c for c in commands if shutil.which(c[1])] or commands
+        return any(_spawn(cmd) for cmd in commands) or backstop
 
-        for cmd in commands:
-            try:
-                subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                return True
-            except Exception:
-                continue
 
+def _spawn(cmd: list[str], **kwargs) -> bool:
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
+        return True
+    except Exception:
         return False
 
 

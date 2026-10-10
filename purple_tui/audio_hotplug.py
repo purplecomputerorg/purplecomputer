@@ -56,6 +56,7 @@ def debounce_events(
     on_event: Callable[[str], None],
     *,
     debounce_seconds: float = _DEBOUNCE_SECONDS,
+    parse: Callable[[str], Optional[str]] = parse_event_line,
     _clock: Callable[[], float] = time.monotonic,
 ) -> None:
     """Coalesce bursts of udev event lines into one callback per quiet period.
@@ -73,7 +74,7 @@ def debounce_events(
             on_event(pending_action)
             pending_action = None
             deadline = None
-        action = parse_event_line(line)
+        action = parse(line)
         if action is None:
             continue
         pending_action = action
@@ -117,6 +118,7 @@ def run_hotplug_loop(
     on_event: Callable[[str], None],
     *,
     debounce_seconds: float = _DEBOUNCE_SECONDS,
+    parse: Callable[[str], Optional[str]] = parse_event_line,
     _monitor_cmd: Optional[list[str]] = None,
 ) -> None:
     """Run the udev monitor loop until the subprocess exits."""
@@ -166,6 +168,7 @@ def run_hotplug_loop(
             _iter_lines_with_silence_flushes(proc.stdout, debounce_seconds),
             _fire,
             debounce_seconds=debounce_seconds,
+            parse=parse,
         )
     finally:
         atexit.unregister(_kill)
@@ -176,13 +179,14 @@ def start(
     on_event: Callable[[str], None],
     *,
     debounce_seconds: float = _DEBOUNCE_SECONDS,
+    parse: Callable[[str], Optional[str]] = parse_event_line,
     _monitor_cmd: Optional[list[str]] = None,
 ) -> threading.Thread:
     """Start the hotplug listener in a daemon thread. Returns the thread."""
     t = threading.Thread(
         target=run_hotplug_loop,
         args=(on_event,),
-        kwargs={"debounce_seconds": debounce_seconds, "_monitor_cmd": _monitor_cmd},
+        kwargs={"debounce_seconds": debounce_seconds, "parse": parse, "_monitor_cmd": _monitor_cmd},
         daemon=True,
         name="audio-hotplug",
     )

@@ -2,6 +2,8 @@
 
 Findings and plan (August 2026) for booting Purple on three hardware classes the current ISO can't reach, plus the ISO size work that makes room for them. Companion to `t2-mac-support.md`, `secure-boot.md`, and `usb-boot-reference.md`.
 
+**Status (September 2026): landed on main from branch `expanded-laptops`; bench tests on real hardware still open (see "Still open" below).** The plan below is kept as the rationale; the "As built" section at the end records where each piece landed and where the build deviated from the plan.
+
 ## The three classes
 
 "32-bit" hides two different problems, and T2 is a third. Ranked by devices unlocked per week of work:
@@ -161,13 +163,15 @@ Without the cleanup: 6.9GB / 10.6GB, which rules out 8GB sticks and squeezes 16G
 
 ### 32-bit CPU
 
-- **Install-only, no live session.** Casper is Ubuntu-only with no i386 build, and porting the live hooks, `install-sources.yaml`, the `13swap` neutering and the reboot flow to Debian `live-boot` was most of the estimated cost. Skipping live boot removes it. The boot path is a Debian i386 kernel plus a small installer initramfs (~50-80MB): Purple-branded confirm screen, dd the image, `grub-install`, reboot into a native install. On an Atom with 1GB RAM this is a better experience than running off USB2 with a RAM overlay.
+- **Live session from our own boot script (September 2026; the install-only plan below is superseded).** Casper is Ubuntu-only with no i386 build, and porting its hooks to Debian `live-boot` looked like most of the cost. Instead `build-scripts/initramfs/purple-live` does casper's job in a few dozen lines: mount the Key, loop-mount `purple32/filesystem.squashfs`, overlay a tmpfs, switch root, rewrite fstab, and record the stick's paths in `/run/purple-live.conf` for `constants.py` and `xinitrc` (casper never writes that file, so the 64-bit stick is untouched). The parent menu then installs exactly as on 64-bit. Machines under 700MB of RAM, or booted with `purple.installonly=1`, get the install prompt instead. Cost: the i386 squashfs, about 1GB more on the ISO.
+- **Install-only (original plan, now the low-RAM fallback).** Casper is Ubuntu-only with no i386 build, and porting the live hooks, `install-sources.yaml`, the `13swap` neutering and the reboot flow to Debian `live-boot` was most of the estimated cost. Skipping live boot removes it. The boot path is a Debian i386 kernel plus a small installer initramfs (~50-80MB): Purple-branded confirm screen, dd the image, `grub-install`, reboot into a native install. On an Atom with 1GB RAM this is a better experience than running off USB2 with a RAM overlay.
 - **Payload stays on the ISO.** GRUB loads the i386 kernel and initrd off the ISO; the initrd mounts the ISO9660 filesystem (`isofs` + `usb-storage`) and reads `purple-os-i386.img.zst`. No partitioned-stick format, no changes to `flash-all`, settle tests, Etcher, or verified-flash hashing. An earlier draft of this plan wrongly assumed a stick-format change.
 - **One install path.** `install.sh` reads its image from `PURPLE_PAYLOAD_DIR`, so the installer initrd carries bash, zstd, parted, e2fsprogs and runs the existing script pointed at `/cdrom/purple32/`.
 - **Base: Debian 12 bookworm i386.** Same systemd, so `purple-x11.service`, the boot-log heartbeat, and the shutdown watchdog port nearly unchanged. Debian 13 dropped i386 kernels; bookworm is supported to June 2028 with no successor. Alpine keeps x86 longer but is musl plus OpenRC, and every unit file and binary wheel diverges. Not worth it.
 - **Python 3.11.** bookworm ships 3.11.2; `pyproject.toml` targets py312. Run the test suite under 3.11 once before committing; any 3.12-only syntax has to go.
 - **Wheels.** pygame has i686 wheels, evdev compiles, textual/rich/wcwidth are pure Python. numpy has no cp311 i686 wheel: use Debian's `python3-numpy` (1.24, inside the `<2` pin). onnxruntime has never shipped i686, so Piper is out.
-- **Voice.** `tts.py` needs an espeak-ng backend. Today `_get_piper_voice()` failing means silence with no fallback, so this is also the missing amd64 fallback.
+- **Voice.** `tts.py` speaks through flite (the parent menu's Quick voice) whenever Piper cannot, so the i386 image only needs the `flite` package and `/opt/purple/flite-voices/cmu_us_lnh.flitevox`, the same two the amd64 build installs. Landed on main; the branch's earlier espeak-ng fallback in `tts.py` is superseded and should be dropped on rebase.
+
 - **Screen.** `REQUIRED_TERMINAL_COLS` (146) × 37 rows fits 1024x600 at 11pt; `font_sizer.py` auto-shrinks to `MIN_FONT = 8.0` at runtime. Only `scripts/calc_font_size.py` has the 12pt floor. Legibility question, not a layout rewrite.
 - **GL.** `purple-gl-probe` already falls back to software GL (6-7% of a core on an HP Stream), so GMA950-class GPUs are covered.
 - **Arch branches live in the build scripts only**, plus TTS engine selection. No arch conditionals in the app.
@@ -175,7 +179,7 @@ Without the cleanup: 6.9GB / 10.6GB, which rules out 8GB sticks and squeezes 16G
 
 ## Sequencing
 
-1. **Zero free blocks, drop `/pool`.** Half a day. Every later build, flash, and test gets faster; report before/after sizes.
+1. **Zero free blocks, drop `/pool`.** Landed on main September 2026 (`00-build-golden-image.sh` zero-fills the root filesystem after the squashfs, `01-remaster-iso.sh` excludes `pool` and `dists` from the ISO copy). Every later build, flash, and test gets faster.
 2. **Router + BOOTIA32.** A couple of days, QEMU-verifiable. Harmless with one kernel (always picks `stock`). Unlocks 2006-2008 Macs and Bay Trail.
 3. **T2.** Gated on bench hardware.
 4. **32-bit payload.** No hardware dependency, can run alongside T2.
@@ -187,3 +191,24 @@ All four are features, so they land on main and ship in a new ISO rather than vi
 - Does Canonical's signed GRUB allow `smbios` under Secure Boot lockdown? (Safe either way; decides whether T2 detection works on a T2 Mac that someone re-enabled Secure Boot on, which can't boot Linux anyway.)
 - Which stick capacities ship today? Decides whether the with-backup variant needs the cleanup before any feature lands.
 - Any support emails from the "Purple does not support this computer" screen? Real counts for the 32-bit CPU class would confirm or kill step 4.
+
+## As built
+
+One variable does the routing. `config/grub/purple-router.cfg` sets `purple_variant` to `""`, `-t2` or `-i386` (plus `purple_args`, the T2 kernel parameters), and every menuentry on the ISO boots `/casper/vmlinuz$purple_variant` with `/casper/initrd$purple_variant`. The model regex and the per-variant arguments live in `config/grub/purple-variants.cfg`, `set name=value` lines that the router `source`s and `install.sh` `eval`s, so the Mac UKI (`guides/nvram-boot-entry.md`, Layer 7) makes the same choice. The installed grub.cfg sources the same router and boots `/boot/vmlinuz$purple_variant`. The installed grub.cfg falls back to the stock kernel when the routed file is missing (the i386 image has no `vmlinuz-i386`; installed kernels are always the right arch). `scripts/test-grub-router.sh` runs the QEMU matrix above; `scripts/preview-grub-guard.sh` still renders the "too old" screen, which now only appears when the i386 payload is missing (fast builds skip it).
+
+GRUB script gotcha: `if insmod cpuid && ! cpuid -l` routed every 64-bit machine to `-i386` in QEMU. Nested `if`s behave; keep them.
+
+| Piece | Where |
+|---|---|
+| Zero free blocks | `00-build-golden-image.sh`, after the squashfs, before unmount |
+| Drop `/pool`, `/dists` | `01-remaster-iso.sh`, step 4 |
+| BOOTIA32.EFI | `grub-mkimage -O i386-efi -p /EFI/ubuntu` in `00-build-golden-image.sh`, on both the golden ESP and (via `signed-efi/`) the ISO's EFI image. Same prefix as Canonical's signed GRUB, so it reads the same `/EFI/ubuntu/grub.cfg`. Every needed module is built in: once that config points `$prefix` at a device with no `i386-efi/` tree, nothing else can load, and a failed `insmod cpuid` would route a 32-bit CPU to the amd64 kernel |
+| T2 kernel | `install_pinned_deb` in `00-build-golden-image.sh`: `linux-image-6.18.45-1-t2-noble` and `apple-t2-audio-config` 0.5.2, sha256-pinned. dpkg's postinst builds the initrd through the lean hook; the remaster extracts both kernel pairs from the squashfs and patches both initrds |
+| i386 image | `PURPLE_ARCH=i386 ./00-build-golden-image.sh` (run by `build-all.sh` after the amd64 image, skipped on fast builds). Same script, Debian trixie i386 (bookworm has no alacritty) with bookworm's `linux-image-686` pinned in (trixie has no i386 kernel). `requirements.txt` skips numpy and Piper on i686 via PEP 508 markers; Debian's `python3-numpy` (2.x, built for the i686 baseline, so the SSE4.2 problem behind `numpy-pin.md` doesn't apply) fills in. No casper. Output under `build/i386/` |
+| i386 live session and installer | No custom initrd: initramfs-tools boot script `build-scripts/initramfs/purple-live` (`boot=purple-live`) mounts the stick by label, then either boots `purple32/filesystem.squashfs` under a RAM overlay (the parent menu installs from there, `PURPLE_PAYLOAD_DIR=/cdrom/purple32` via `/run/purple-live.conf`) or, under 700MB of RAM or with `purple.installonly=1`, asks for YES and runs the ISO's own `install.sh` directly. The hook next to it adds the loop, squashfs and overlay modules plus bash, zstd, pv, parted, util-linux, e2fsprogs and `grub-install` with `i386-pc`, only when `PURPLE_KEY_INITRD=1` |
+| Voice on i386 | flite, the same Quick voice the amd64 image ships; `tts.py` uses it whenever Piper is absent, so the i386 image just skips the Piper model download |
+
+Two traps found in QEMU, both in the installer initrd: the busybox hook runs before ours and `copy_exec` skips files that exist, so busybox's `dd`/`blkid`/`wc` applets shadowed the real ones (busybox `wc -c` wraps at 32 bits, which turned the 8GB write into `WRITE_SIZE=0` and an instant SHA mismatch). The hook now removes the applet links first.
+
+Still open: bench-test the T2 kernel on a 2018-2020 Air (display firmware, audio profile, `apple-bce` autoload), BOOTIA32 on a 2006-2008 MacBook, and the i386 live session and installer on an Atom netbook.
+ All three paths are QEMU-verified only as far as QEMU can go.

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Render the GRUB unsupported-computer (32-bit) screen without building an ISO:
-# extract the guard snippet from 01-remaster-iso.sh, boot it via grub-mkrescue
-# in QEMU with a 32-bit CPU, and screendump to a PNG.
+# Render the GRUB unsupported-computer screen (32-bit CPU, no i386 payload on
+# the ISO) without building one: extract the router prelude from
+# 01-remaster-iso.sh, boot it via grub-mkrescue in QEMU with a 32-bit CPU, and
+# screendump to a PNG. The routing itself is checked by test-grub-router.sh.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,9 +17,10 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/boot/grub" "$OUT_DIR"
 
-awk '/^LONGMODE_GUARD$/{on=0} on{print} /<< .LONGMODE_GUARD.$/{on=1}' \
+awk '/^ROUTER$/{on=0} on{print} /<< .ROUTER.$/{on=1}' \
     "$REPO/build-scripts/01-remaster-iso.sh" > "$WORK/boot/grub/grub.cfg"
-[ -s "$WORK/boot/grub/grub.cfg" ] || { echo "ERROR: guard snippet not found in 01-remaster-iso.sh" >&2; exit 1; }
+[ -s "$WORK/boot/grub/grub.cfg" ] || { echo "ERROR: router snippet not found in 01-remaster-iso.sh" >&2; exit 1; }
+cp "$REPO/config/grub/purple-router.cfg" "$WORK/boot/grub/"
 
 grub-mkrescue -o "$WORK/guard.iso" "$WORK" >/dev/null 2>&1
 

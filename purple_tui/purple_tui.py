@@ -1689,8 +1689,7 @@ class PurpleApp(App):
         if self._keyboard_state_machine.check_escape_hold():
             self._escape_triggered_long_hold = True  # Prevent picker open/close on release
             self._cancel_escape_hold_timer()
-            from .rooms.pack_room import PackRoomScreen
-            if len(self.screen_stack) > 1 and isinstance(self.screen, (RoomPickerScreen, PackRoomScreen)):
+            if len(self.screen_stack) > 1 and isinstance(self.screen, RoomPickerScreen):
                 self.screen.dismiss(None)
             self.action_parent_menu()
 
@@ -1717,14 +1716,7 @@ class PurpleApp(App):
         By switching the room content before dismissing, we avoid a flicker
         frame where the old room is visible behind the picker.
         """
-        room_name = event.result.get("room", "")
-        if room_name.startswith("pack:"):
-            # A family room runs as a screen over the current room. It is
-            # pushed from the picker's dismiss callback, once the picker is
-            # gone, so Esc from the room lands back where the kid was.
-            if len(self.screen_stack) > 1:
-                self.screen.dismiss({"pack_room": room_name[5:]})
-            return
+        room_name = event.result.get("room")
         if room_name == "play":
             self.action_switch_room(ROOM_PLAY[0])
         elif room_name == "music":
@@ -1735,20 +1727,9 @@ class PurpleApp(App):
         if len(self.screen_stack) > 1:
             self.screen.dismiss(None)
 
-    def _open_pack_room(self, name: str) -> None:
-        from .content import get_content
-        from .rooms.pack_room import PackRoomScreen
-        program = get_content().room(name)
-        if program is not None:
-            self.push_screen(PackRoomScreen(program))
-
     def _on_room_picked(self, result: dict | None) -> None:
         """Handle mode picker dismiss for non-room actions."""
         if result is None:
-            return
-
-        if result.get("pack_room"):
-            self._open_pack_room(result["pack_room"])
             return
 
         # Toggle code panel
@@ -1800,22 +1781,24 @@ class PurpleApp(App):
                     music._play_key(key, m)
 
                 def set_inst(name):
-                    from .music_constants import instruments, INSTRUMENT_ALIASES
+                    from .music_constants import INSTRUMENTS, INSTRUMENT_ALIASES
                     name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
-                    available = instruments()
-                    matchers = (
-                        lambda a, b: a == name_lower or b == name_lower,
-                        lambda a, b: a.startswith(name_lower) or b.startswith(name_lower),
-                    )
-                    for matches in matchers:
-                        for i, (inst_id, inst_name) in enumerate(available):
-                            if matches(inst_name.lower(), inst_id.lower()):
-                                music._instrument_index = i
-                                if music.grid:
-                                    music.grid.set_instrument(i)
-                                if music._header:
-                                    music._header.update_instrument(inst_name)
-                                return
+                    for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
+                        if inst_name.lower() == name_lower or inst_id.lower() == name_lower:
+                            music._instrument_index = i
+                            if music.grid:
+                                music.grid.set_instrument(i)
+                            if music._header:
+                                music._header.update_instrument(inst_name)
+                            return
+                    for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
+                        if inst_name.lower().startswith(name_lower) or inst_id.lower().startswith(name_lower):
+                            music._instrument_index = i
+                            if music.grid:
+                                music.grid.set_instrument(i)
+                            if music._header:
+                                music._header.update_instrument(inst_name)
+                            return
 
                 def set_letters(on):
                     music._letters_mode = on
@@ -2006,13 +1989,13 @@ class PurpleApp(App):
             pass
         try:
             from .rooms.music_room import MusicGrid, MusicRoomHeader
-            from .music_constants import instruments
+            from .music_constants import INSTRUMENTS
             content_area = self.query_one("#content-area")
             music = content_area.query_one("#room-music")
             grid = music.query_one(MusicGrid)
             # Sync instrument: code may have changed it via "choose"
             music._instrument_index = grid._instrument_index
-            music.query_one(MusicRoomHeader).update_instrument(instruments()[grid._instrument_index][1])
+            music.query_one(MusicRoomHeader).update_instrument(INSTRUMENTS[grid._instrument_index][1])
             self._set_room_bottom_pinned("music", music, False)
         except Exception:
             pass

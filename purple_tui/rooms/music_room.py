@@ -23,9 +23,9 @@ import time
 from ..keyboard import CharacterAction, ControlAction, NavigationAction, HoldOrTap
 from ..music_constants import (
     GRID_KEYS, ALL_KEYS, COLORS, COLOR_KEYCAP,
-    PERCUSSION_NAMES,
+    INSTRUMENTS, PERCUSSION_NAMES,
     FRIENDLY_KEYS, FRIENDLY_KEY_NAMES, DEFAULT_ROOT_INDEX,
-    pitch_for, pitch_filename, instruments,
+    pitch_for, pitch_filename,
 )
 from .art_room import KEY_COLORS, text_color_for
 from ..music_session import MODE_MUSIC, MODE_LETTERS
@@ -70,57 +70,6 @@ _KEY_TO_RC: dict[str, tuple[int, int]] = {
     if not GRID_KEYS[r][c].isdigit()
 }
 
-def sounds_root() -> Path:
-    """The core sound pack's content directory."""
-    paths = [
-        Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
-        Path.home() / ".purple" / "packs" / "core-sounds" / "content",
-    ]
-    return next((p for p in paths if p.exists()), paths[0])
-
-
-def find_sound(base: Path, name: str) -> Path | None:
-    """Find a sound file, preferring .ogg over .wav."""
-    for ext in ('.ogg', '.wav'):
-        p = base / f"{name}{ext}"
-        if p.exists():
-            return p
-    return None
-
-
-def _load_sound(path: Path) -> "mixer.pygame.mixer.Sound | None":
-    try:
-        sound = mixer.pygame.mixer.Sound(str(path))
-        sound.set_volume(0.4)
-        return sound
-    except mixer.pygame.error:
-        return None
-
-
-def load_instrument_sounds(instrument_id: str) -> dict:
-    """Every pitch-named .wav and .ogg in the instrument's directory, keyed by
-    stem ('c4', 'cs5'), .ogg winning a stem both have. A pack instrument's
-    directory replaces the core one. Empty when the mixer is not ready."""
-    from ..content import get_content
-    if not mixer.mixer_ready_for_play():
-        return {}
-    inst_path = get_content().instrument_dir(instrument_id) or sounds_root() / instrument_id
-    if not inst_path.exists():
-        return {}
-    loaded = ((p.stem, _load_sound(p)) for p in sorted(inst_path.glob("*.wav")) + sorted(inst_path.glob("*.ogg")))
-    return {stem: sound for stem, sound in loaded if sound is not None}
-
-
-def load_percussion_sounds() -> dict:
-    """The number-row percussion, keyed by digit. Empty when the mixer is not ready."""
-    if not mixer.mixer_ready_for_play():
-        return {}
-    root = sounds_root()
-    found = ((key, find_sound(root, key)) for key in ALL_KEYS if key.isdigit())
-    loaded = ((key, _load_sound(path)) for key, path in found if path)
-    return {key: sound for key, sound in loaded if sound is not None}
-
-
 class MusicRoomHeader(Static):
     """Shows current mode with both options visible, current highlighted.
 
@@ -139,7 +88,7 @@ class MusicRoomHeader(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._letters_mode = False
-        self._instrument_name = instruments()[0][1]
+        self._instrument_name = INSTRUMENTS[0][1]
         self._code_mode = False
         self._root_index = DEFAULT_ROOT_INDEX
 
@@ -280,11 +229,24 @@ class MusicGrid(Widget):
         self.refresh()
 
     def _get_sounds_path(self) -> Path:
-        return sounds_root()
+        """Find the sounds directory."""
+        paths = [
+            Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
+            Path.home() / ".purple" / "packs" / "core-sounds" / "content",
+        ]
+        for p in paths:
+            if p.exists():
+                return p
+        return paths[0]
 
     @staticmethod
     def _find_sound(base: Path, name: str) -> Path | None:
-        return find_sound(base, name)
+        """Find a sound file, preferring .ogg over .wav."""
+        for ext in ('.ogg', '.wav'):
+            p = base / f"{name}{ext}"
+            if p.exists():
+                return p
+        return None
 
     def _drop_stale_sounds(self) -> None:
         if self._sounds_generation != mixer.mixer_generation():
@@ -299,18 +261,45 @@ class MusicGrid(Widget):
         self._letter_sounds_loaded = False
 
     def _ensure_instrument_loaded(self, instrument_id: str) -> None:
-        """Cache an instrument's sounds once per mixer generation."""
+        """Load instrument sounds if not already cached.
+
+        Loads every pitch-named .ogg in the instrument directory (e.g.
+        'c4.ogg', 'cs5.ogg') keyed by the filename stem. Lookup at play
+        time uses pitch_for(...) to compute the right stem.
+        """
         self._drop_stale_sounds()
         if instrument_id in self._instrument_sounds or not mixer.mixer_ready_for_play():
             return
-        self._instrument_sounds[instrument_id] = load_instrument_sounds(instrument_id)
+        sounds_path = self._get_sounds_path()
+        inst_path = sounds_path / instrument_id
+        cache: dict[str, mixer.pygame.mixer.Sound] = {}
+        if inst_path.exists():
+            for path in inst_path.glob("*.ogg"):
+                try:
+                    sound = mixer.pygame.mixer.Sound(str(path))
+                    sound.set_volume(0.4)
+                    cache[path.stem] = sound
+                except mixer.pygame.error:
+                    pass
+        self._instrument_sounds[instrument_id] = cache
 
     def _ensure_percussion_loaded(self) -> None:
         """Load percussion sounds (shared across all instruments)."""
         self._drop_stale_sounds()
         if self._percussion_loaded or not mixer.mixer_ready_for_play():
             return
-        self._percussion_sounds = load_percussion_sounds()
+        sounds_path = self._get_sounds_path()
+        for key in ALL_KEYS:
+            if not key.isdigit():
+                continue
+            path = self._find_sound(sounds_path, key)
+            if path:
+                try:
+                    sound = mixer.pygame.mixer.Sound(str(path))
+                    sound.set_volume(0.4)
+                    self._percussion_sounds[key] = sound
+                except mixer.pygame.error:
+                    pass
         self._percussion_loaded = True
 
     def _pitch_stem_for_key(self, key: str) -> str | None:
@@ -347,7 +336,7 @@ class MusicGrid(Widget):
         stem = self._pitch_stem_for_key(key)
         if stem is None:
             return
-        inst_id = instruments()[instrument_index][0]
+        inst_id = INSTRUMENTS[instrument_index][0]
         self._ensure_instrument_loaded(inst_id)
         sounds = self._instrument_sounds.get(inst_id, {})
         if stem in sounds:
@@ -449,20 +438,22 @@ class MusicGrid(Widget):
         self._letter_sounds_loaded = True
 
     def _load_letter_sounds(self) -> None:
-        """Load pregenerated letter and number name clips.
+        """Load pregenerated letter and number name clips from the letters/ subdirectory.
 
-        A pack's content/letters/ is searched first, then letters-kid/ when
-        the parent enables Kid Voice (VM-only), then the core letters/, so a
-        family recording wins and any key it lacks falls back to the stock clip.
+        When the parent enables Kid Voice (VM-only), A-Z clips are sourced from
+        letters-kid/ first, falling back to the standard letters/ clip for any
+        key without a kid recording (e.g. the digits).
         """
-        from ..content import get_content
-        from ..settings import get_kid_letters
         sounds_path = self._get_sounds_path()
-        search_dirs = get_content().pack_dirs("letters")
+        letters_path = sounds_path / "letters"
+        if not letters_path.exists():
+            return
+        search_dirs = [letters_path]
+        from ..settings import get_kid_letters
         if get_kid_letters():
-            search_dirs.append(sounds_path / "letters-kid")
-        search_dirs.append(sounds_path / "letters")
-        search_dirs = [d for d in search_dirs if d.exists()]
+            kid_path = sounds_path / "letters-kid"
+            if kid_path.exists():
+                search_dirs.insert(0, kid_path)
         for key in _SPEAKABLE_KEYS:
             path = next(
                 (p for d in search_dirs if (p := self._find_sound(d, key.lower()))),
@@ -907,7 +898,7 @@ class MusicMode(Container, can_focus=True):
             self.grid._show_labels = bool(state.get("labels", False))
             self.grid.refresh()
         if self._header:
-            self._header.update_instrument(instruments()[self._instrument_index][1])
+            self._header.update_instrument(INSTRUMENTS[self._instrument_index][1])
             self._header.update_mode(self._letters_mode)
             self._header.update_pitch(self._root_index)
         self._update_hint()
@@ -1242,7 +1233,7 @@ class MusicMode(Container, can_focus=True):
             # Sync instrument state back from grid
             self._instrument_index = self.grid._instrument_index
             if self._header:
-                self._header.update_instrument(instruments()[self._instrument_index][1])
+                self._header.update_instrument(INSTRUMENTS[self._instrument_index][1])
             # Restore hint bar and flex sizing; suppress rendering during reflow
             try:
                 self.query_one("#example-hint", MusicExampleHint).display = True
@@ -1288,7 +1279,7 @@ class MusicMode(Container, can_focus=True):
                 self._letters_mode = not self._letters_mode
                 if self._header:
                     self._header.update_mode(self._letters_mode)
-                label = "Say Letters" if self._letters_mode else instruments()[self._instrument_index][1]
+                label = "Say Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
                 self.app.clear_notifications()
                 self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
             return
@@ -1321,9 +1312,8 @@ class MusicMode(Container, can_focus=True):
                 elif not action.is_down:
                     if self._enter_hold.on_up():
                         # Tap: cycle instrument
-                        available = instruments()
-                        self._instrument_index = (self._instrument_index + 1) % len(available)
-                        _inst_id, inst_name = available[self._instrument_index]
+                        self._instrument_index = (self._instrument_index + 1) % len(INSTRUMENTS)
+                        _inst_id, inst_name = INSTRUMENTS[self._instrument_index]
                         if self.grid:
                             self.grid.set_instrument(self._instrument_index)
                         if self._header:
@@ -1351,7 +1341,7 @@ class MusicMode(Container, can_focus=True):
                     self._letters_mode = not self._letters_mode
                     if self._header:
                         self._header.update_mode(self._letters_mode)
-                    label = "Say Letters" if self._letters_mode else instruments()[self._instrument_index][1]
+                    label = "Say Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
                     self.app.clear_notifications()
                     self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
                     return

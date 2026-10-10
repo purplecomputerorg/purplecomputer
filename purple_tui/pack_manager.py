@@ -6,8 +6,9 @@ Handles installation of content purplepacks. These are CONTENT ONLY:
 - sounds packs (audio files)
 - stories packs (text + audio)
 
-NO PYTHON CODE is ever executed from packs. Modes are Python modules
-shipped with the app and curated/reviewed by Purple Computer team.
+The one exception to content-only is content/rooms/<name>.py, a family room,
+which Purple only ever runs as a guest in its own process and user (see
+guides/family-rooms.md). Any other code in a pack is refused.
 
 The pack layout, and what the runtime reads from it, is written up in
 studio/PACK_FORMAT.md. `check_pack` is the one place that knows the rules;
@@ -21,12 +22,13 @@ import wave
 from pathlib import Path
 from typing import Optional
 
-from .content import PACK_FORMAT, read_manifest
+from .content import PACK_FORMAT, ROOM_NAME, read_manifest
 
 # Valid content-only pack types (no executable code)
 VALID_PACK_TYPES = ['emoji', 'sounds', 'stories']
 
 CODE_SUFFIXES = {'.py', '.pyc', '.pyo', '.pyw'}
+ROOM_MAX_BYTES = 64 * 1024
 VOICE_RATE, VOICE_CHANNELS, VOICE_WIDTH = 22050, 1, 2
 SAMPLE_RATE, SAMPLE_CHANNELS, SAMPLE_WIDTH = 44100, 1, 2
 
@@ -125,7 +127,7 @@ def check_pack(pack_dir: Path) -> list[str]:
         return [f"manifest.json: {msg}"]
 
     for path in sorted(pack_dir.rglob('*')):
-        if path.is_file() and _looks_like_code(path):
+        if path.is_file() and _looks_like_code(path) and not _is_room_file(pack_dir, path):
             problems.append(f"{path.relative_to(pack_dir)}: packs may not contain code")
     if problems:
         return problems
@@ -140,18 +142,26 @@ def check_pack(pack_dir: Path) -> list[str]:
     return problems
 
 
+def _is_room_file(pack_dir: Path, path: Path) -> bool:
+    return path.parent == pack_dir / 'content' / 'rooms' and path.suffix == '.py' and bool(ROOM_NAME.match(path.stem))
+
+
+def room_source_problem(path: Path) -> str | None:
+    """Why a room file can't be offered, checked without running it."""
+    if path.stat().st_size > ROOM_MAX_BYTES:
+        return f"{path.name}: rooms are at most {ROOM_MAX_BYTES // 1024} KB"
+    try:
+        compile(path.read_text(encoding='utf-8'), 'room.py', 'exec')
+    except UnicodeDecodeError:
+        return f"{path.name}: not UTF-8 text"
+    except SyntaxError as e:
+        return f"{path.name}: line {e.lineno}: {e.msg}"
+    return None
+
+
 def _check_rooms(content: Path) -> list[str]:
-    from .content import room_specs
-    from .room_program import RoomError, parse
-    problems = []
-    for spec in room_specs(content):
-        try:
-            program = parse(_json_object(spec))
-            if program["name"] != spec.stem:
-                problems.append(f"content/rooms/{spec.name}: name must match the filename ({spec.stem})")
-        except RoomError as e:
-            problems.append(f"content/rooms/{spec.name}: {e}")
-    return problems
+    from .content import room_files
+    return [f"content/rooms/{p}" for path in room_files(content) if (p := room_source_problem(path))]
 
 
 def _check_word_maps(content: Path) -> list[str]:

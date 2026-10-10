@@ -4,7 +4,6 @@ instrument, hold Enter records a loop, hold Space opens the code line."""
 
 import asyncio
 import time
-from pathlib import Path
 
 import pygame
 
@@ -14,20 +13,21 @@ from ...code_runner import MusicCodeRunner
 from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_MUSIC, ICON_ROBOT
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
-from ...mixer import mixer_generation, mixer_ready_for_play, warm_mixer
+from ...mixer import warm_mixer
 from ...music_constants import (
     ALL_KEYS, COLOR_KEYCAP, COLORS, DEFAULT_ROOT_INDEX, FRIENDLY_KEY_NAMES, FRIENDLY_KEYS, GRID_KEYS,
-    INSTRUMENT_ALIASES, INSTRUMENTS, PERCUSSION_NAMES, pitch_filename, pitch_for,
+    INSTRUMENT_ALIASES, PERCUSSION_NAMES, instruments, pitch_filename, pitch_for,
 )
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..panels import CodePanel, LoopPanel, SpaceHold
+from ..sounds import SPEAKABLE_KEYS as _SPEAKABLE_KEYS, SoundBank
 from ..ui import draw_label
+from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
-_SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
 _KID_MATH_UNREMAP = {"÷": "/", "×": "*"}
 _KID_MATH_DISPLAY = {"/": "÷", "*": "×"}
 WAVEFRONT_COLOR = "#7a5aa6"
@@ -37,31 +37,17 @@ LETTERS_CROSS_KEY_DEBOUNCE_S = 0.20
 NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit"
 
 
-def _sounds_path() -> Path:
-    paths = [Path(__file__).parents[3] / "packs" / "core-sounds" / "content",
-             Path.home() / ".purple" / "packs" / "core-sounds" / "content"]
-    return next((p for p in paths if p.exists()), paths[0])
 
-
-def _find_sound(base: Path, name: str):
-    return next((p for ext in (".ogg", ".wav") if (p := base / f"{name}{ext}").exists()), None)
-
-
-def _load(path) -> pygame.mixer.Sound | None:
-    try:
-        s = pygame.mixer.Sound(str(path))
-        s.set_volume(0.4)
-        return s
-    except pygame.error:
-        return None
-
-
-class MusicRoom:
+class MusicRoom(Room):
+    name, label, icon = "music", "Music", ICON_MUSIC
+    arrow_hint = "Arrows change key  ← →"
     LANDSCAPE = True
-    name = "music"
+    has_code_panel = True
+    shows_legend = False
+    keeps_audio_awake = True
 
     def __init__(self, app):
-        self.app = app
+        super().__init__(app)
         self.color_state = {k: -1 for k in ALL_KEYS}
         self.instrument_index = 0
         self.root_index = DEFAULT_ROOT_INDEX
@@ -71,12 +57,7 @@ class MusicRoom:
         self._note_timers: dict = {}
         self._transition = None
         self._transition_timer = None
-        self._instrument_sounds: dict = {}
-        self._percussion_sounds: dict = {}
-        self._percussion_loaded = False
-        self._letter_sounds: dict = {}
-        self._letter_sounds_loaded = False
-        self._sounds_generation = mixer_generation()
+        self.sounds = SoundBank()
         self.loop = LoopStation()
         self._loop_task = None
         self._loop_timer = None
@@ -139,57 +120,6 @@ class MusicRoom:
         self.restore_timeline_state({})
 
     # ---------------------------------------------------------------- sounds
-    def _drop_stale_sounds(self):
-        if self._sounds_generation != mixer_generation():
-            self._clear_sound_caches()
-            self._sounds_generation = mixer_generation()
-
-    def _clear_sound_caches(self):
-        self._instrument_sounds.clear()
-        self._percussion_sounds.clear()
-        self._percussion_loaded = False
-        self._letter_sounds.clear()
-        self._letter_sounds_loaded = False
-
-    def _ensure_instrument_loaded(self, instrument_id: str):
-        self._drop_stale_sounds()
-        if instrument_id in self._instrument_sounds or not mixer_ready_for_play():
-            return
-        inst_path = _sounds_path() / instrument_id
-        cache = {}
-        if inst_path.exists():
-            for path in inst_path.glob("*.ogg"):
-                if (s := _load(path)) is not None:
-                    cache[path.stem] = s
-        self._instrument_sounds[instrument_id] = cache
-
-    def _ensure_percussion_loaded(self):
-        self._drop_stale_sounds()
-        if self._percussion_loaded or not mixer_ready_for_play():
-            return
-        for key in ALL_KEYS:
-            if key.isdigit() and (path := _find_sound(_sounds_path(), key)) and (s := _load(path)) is not None:
-                self._percussion_sounds[key] = s
-        self._percussion_loaded = True
-
-    def _ensure_letter_sounds_loaded(self):
-        self._drop_stale_sounds()
-        if self._letter_sounds_loaded or not mixer_ready_for_play():
-            return
-        self._letter_sounds_loaded = True
-        base = _sounds_path()
-        letters_path = base / "letters"
-        if not letters_path.exists():
-            return
-        dirs = [letters_path]
-        from ...settings import get_kid_letters
-        if get_kid_letters() and (base / "letters-kid").exists():
-            dirs.insert(0, base / "letters-kid")
-        for key in _SPEAKABLE_KEYS:
-            path = next((p for d in dirs if (p := _find_sound(d, key.lower()))), None)
-            if path and (s := _load(path)) is not None:
-                self._letter_sounds[key] = s
-
     def _pitch_stem_for_key(self, key: str):
         rc = _KEY_TO_RC.get(key)
         if rc is None:
@@ -201,13 +131,10 @@ class MusicRoom:
         if self.app._effective_volume() == 0:
             return
         if key.isdigit():
-            self._ensure_percussion_loaded()
-            sound = self._percussion_sounds.get(key)
+            sound = self.sounds.percussion().get(key)
         else:
             stem = self._pitch_stem_for_key(key)
-            inst_id = INSTRUMENTS[instrument_index][0]
-            self._ensure_instrument_loaded(inst_id)
-            sound = self._instrument_sounds.get(inst_id, {}).get(stem) if stem else None
+            sound = self.sounds.instrument(self._instrument(instrument_index)[0]).get(stem) if stem else None
         if sound is not None:
             ch = play_safe(sound)
             if ch is not None and volume_scale != 1.0:
@@ -216,13 +143,17 @@ class MusicRoom:
     def play_letter(self, key: str):
         if self.app._effective_volume() == 0:
             return
-        self._ensure_letter_sounds_loaded()
-        if key in self._letter_sounds:
-            play_safe(self._letter_sounds[key])
+        if sound := self.sounds.letters().get(key):
+            play_safe(sound)
+
+    @staticmethod
+    def _instrument(index: int) -> tuple:
+        """(id, name); an index saved before a pack was removed wraps instead of failing."""
+        available = instruments()
+        return available[index % len(available)]
 
     def reset_letter_sounds(self):
-        self._letter_sounds.clear()
-        self._letter_sounds_loaded = False
+        self.sounds.clear()
 
     def cleanup_sounds(self):
         try:
@@ -230,7 +161,7 @@ class MusicRoom:
                 pygame.mixer.stop()
         except pygame.error:
             pass
-        self._clear_sound_caches()
+        self.sounds.clear()
         for t in self._note_timers.values():
             t.stop()
         self._note_timers.clear()
@@ -438,7 +369,7 @@ class MusicRoom:
     def set_instrument_by_name(self, name: str):
         name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
         for match in (lambda a, b: a == b, lambda a, b: a.startswith(b)):
-            for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
+            for i, (inst_id, inst_name) in enumerate(instruments()):
                 if match(inst_name.lower(), name_lower) or match(inst_id.lower(), name_lower):
                     self.instrument_index = i
                     self.app.invalidate()
@@ -544,7 +475,7 @@ class MusicRoom:
         elif not action.is_down:
             self._stop_enter_ring()
             if self.enter_hold.on_up():
-                self.instrument_index = (self.instrument_index + 1) % len(INSTRUMENTS)
+                self.instrument_index = (self.instrument_index + 1) % len(instruments())
                 self.app.invalidate()
 
     def _flush_enter(self):
@@ -612,7 +543,7 @@ class MusicRoom:
         Arrows for the key live in the status strip, not here."""
         px = g.em(1.0)
         cy = r.y + g.em(1.9)
-        plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {INSTRUMENTS[self.instrument_index][1]}"
+        plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {self._instrument(self.instrument_index)[1]}"
         if self.app._littles_mode:
             draw_label(g, plate, px, r.centerx, cy, P.TEXT, anchor="center", on=True)
             return

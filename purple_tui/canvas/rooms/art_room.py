@@ -9,7 +9,7 @@ import pygame
 
 from ... import palette as P
 from ...code_runner import ArtCodeRunner
-from ...constants import ICON_ROBOT
+from ...constants import ICON_PALETTE, ICON_ROBOT
 from ...color_mixing import mix_colors_paint
 from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
@@ -18,6 +18,7 @@ from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get
 from ..color_wheel import open_on as open_color_wheel
 from ..panels import CodePanel, SpaceHold
 from ..ui import draw_label, draw_mode_switch
+from .base import Room
 
 COLS, ROWS = 56, 24
 BRUSH_CHAR = "█"
@@ -83,19 +84,21 @@ def _brush_tip(c: int, color: str, tip, arrow: bool) -> pygame.Surface:
     return pygame.transform.smoothscale(surf, (2 * c, 2 * c))
 
 
-class ArtRoom:
+class ArtRoom(Room):
     """Cells are (char, fg, bg); a painted cell holds BRUSH_CHAR with both
     colors equal, a written letter holds the letter over whatever bg it had."""
 
-    name = "art"
+    name, label, icon = "art", "Art", ICON_PALETTE
+    arrow_hint = "Arrows move  ← ↑ ↓ →"
     LANDSCAPE = True
+    has_code_panel = True
     canvas_width = COLS
     canvas_height = ROWS
     _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
     _TURN_LEFT = {'right': 'up', 'up': 'left', 'left': 'down', 'down': 'right'}
 
     def __init__(self, app):
-        self.app = app
+        super().__init__(app)
         self._grid: dict = {}
         self._painted_positions: set = set()
         self._last_paint_pos = None
@@ -135,9 +138,6 @@ class ArtRoom:
         if self._blink_timer:
             self._blink_timer.stop()
             self._blink_timer = None
-
-    def stop_sound(self):
-        pass
 
     def _blink(self):
         """Only the write caret blinks; the brush tip holds still."""

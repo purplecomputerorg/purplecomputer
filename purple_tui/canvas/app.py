@@ -22,14 +22,13 @@ from .. import palette as P
 from .. import printing
 from ..constants import (
     CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
-    ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_CHAT, ICON_COMPUTER, ICON_MENU, ICON_MUSIC,
-    ICON_PALETTE, ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER,
-    ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
+    ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_COMPUTER, ICON_MENU,
+    ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, STICKY_SHIFT_GRACE,
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
     is_usb_cached, is_usb_needed, is_usb_present,
 )
 from .gfx import Gfx, rgb
-from .rooms.blocks_room import ICON_CUBE
+from .rooms import ROOM_CLASSES, ROOM_NAMES
 from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
 from ..keyboard import (
     CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction, RoomAction,
@@ -40,13 +39,9 @@ from ..timeline import RoomTimeline
 from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
 from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
-ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ("blocks", "Blocks"))
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
 PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
                 printing.READY: "The printer is ready. Press Esc, then P"}
-ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE, "blocks": ICON_CUBE}
-ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  ← →", "art": "Arrows move  ← ↑ ↓ →",
-               "blocks": "Arrows move  ← ↑ ↓ →"}
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
@@ -127,8 +122,8 @@ class PurpleApp:
         self._idle_timer = self._audio_idle_timer = None
         self._demo_player = self._demo_task = None
         self._code_task = None
-        self._timelines = {r: RoomTimeline(r) for r, _ in ROOMS}
-        self._code_lines = {r: [] for r, _ in ROOMS}
+        self._timelines = {r: RoomTimeline(r) for r in ROOM_NAMES}
+        self._code_lines = {r: [] for r in ROOM_NAMES}
         from .key_save import KeySave
         self.key_save = KeySave(self)
         self._usb_gone_noted = False
@@ -144,11 +139,7 @@ class PurpleApp:
             detect_keyboard_mode()
         from ..secret import SecretKnock
         self._secret_knock = SecretKnock()
-        from .rooms.play_room import PlayRoom
-        from .rooms.music_room import MusicRoom
-        from .rooms.art_room import ArtRoom
-        from .rooms.blocks_room import BlocksRoom
-        self.rooms = {"play": PlayRoom(self), "music": MusicRoom(self), "art": ArtRoom(self), "blocks": BlocksRoom(self)}
+        self.rooms = {c.name: c(self) for c in ROOM_CLASSES}
         self.active_room = "play"
         self._panel = None          # bottom panel drawn inside the viewport: code / loop / time
         self._legend_row = -1
@@ -378,12 +369,12 @@ class PurpleApp:
         self.room.on_enter()
         self.timeline_restore(room_name)
         if self._code_panel_active:
-            if room_name in ("music", "art"):
+            if self.room.has_code_panel:
                 self.room.open_code_panel()
             else:
                 self._code_panel_active = False
         self._legend_row = -1
-        self._legend_visible = room_name != "music"
+        self._legend_visible = self.room.shows_legend
         self._update_shift_indicator()
         self.invalidate()
 
@@ -401,8 +392,7 @@ class PurpleApp:
 
     def _silence_music(self):
         self._stop_code_execution()
-        if self.active_room == "music":
-            self.rooms["music"].stop_sound()
+        self.room.stop_sound()
 
     def _stop_code_execution(self) -> bool:
         if self._code_task and not self._code_task.done():
@@ -560,6 +550,8 @@ class PurpleApp:
             return
         if "room" in result:
             self.action_switch_room(result["room"])
+        elif "family" in result:
+            self.open_family_room(result["family"])
         elif result.get("close_code"):
             self.room.close_code_panel()
         elif result.get("open_code"):
@@ -573,6 +565,14 @@ class PurpleApp:
             self.push(SaveWall(self))
         elif result.get("print"):
             self.action_print()
+
+    def open_family_room(self, name: str):
+        from ..content import get_content
+        from .rooms.family_room import FamilyRoom
+        room = next((r for r in get_content().rooms if r.name == name), None)
+        if room is not None:
+            self._silence_music()
+            self.push(FamilyRoom(self, room))
 
     def _check_printer(self):
         """A toast when a printer is plugged in, gets ready, turns out not to work, or goes."""
@@ -1146,7 +1146,7 @@ class PurpleApp:
                 self._audio_idle_timer.stop()
                 self._audio_idle_timer = None
             return
-        if self.active_room == "music" or tts._current_channel is not None \
+        if self.room.keeps_audio_awake or tts._current_channel is not None \
                 or get_power_manager().get_idle_seconds() < AUDIO_IDLE_SECONDS:
             return
         request_idle_release()
@@ -1350,7 +1350,7 @@ class PurpleApp:
         px = g.em(1.0)
         g.draw_text(self._boot_mode_text(), px, frame.x, y, "mono", P.MUTED, anchor="midleft")
         if title is None:
-            title = f"{ROOM_ICONS[self.active_room]} {dict(ROOMS)[self.active_room]}"
+            title = f"{self.room.icon} {self.room.label}"
         g.draw_text(title, px, frame.centerx, y, "mono-bold", P.ACCENT, anchor="center", track=0.04)
         right = self._battery_text()
         if self._keyboard_state_machine._sticky_shift_active:
@@ -1388,7 +1388,7 @@ class PurpleApp:
         gap = g.em(0.5)
         esc = f"Esc {ICON_MENU}"
         esc_w = g.measure(esc, px, "mono")[0] + round(px * 1.4)
-        names = [(rid, f"{ROOM_ICONS[rid]} {label}") for rid, label in ROOMS] if tabs else []
+        names = [(rid, f"{r.icon} {r.label}") for rid, r in self.rooms.items()] if tabs else []
         widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for _, t in names]
         x = frame.centerx - (esc_w + sum(gap + w for w in widths)) // 2
         x = draw_keycap(g, esc, px, x, y).right + gap
@@ -1396,7 +1396,7 @@ class PurpleApp:
             draw_label(g, label, px, x + w // 2, y, P.MUTED, anchor="center", on=rid == self.active_room)
             x += w + gap
         if right is None:
-            right = ARROW_HINTS[self.active_room]
+            right = self.room.arrow_hint
             if self._effective_volume() == 0:
                 right = f"{ICON_VOLUME_OFF}  " + right
         g.draw_text(right, px, frame.right, y, "mono", P.DIM, anchor="midright")

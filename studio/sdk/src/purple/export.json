@@ -622,42 +622,14 @@
   }
  },
  "room": {
-  "format": 1,
-  "events": [
-   "start",
-   "key",
-   "any_key",
-   "every"
+  "grid": [
+   24,
+   12
   ],
-  "actions": [
-   "show",
-   "add",
-   "say",
-   "play",
-   "drum",
-   "clear",
-   "background",
-   "wait",
-   "set",
-   "change",
-   "if",
-   "repeat"
-  ],
-  "math_ops": [
-   "+",
-   "-",
-   "*",
-   "/"
-  ],
-  "compare_ops": [
-   "=",
-   "!=",
-   "<",
-   ">"
-  ],
-  "special_keys": [
+  "keys": [
    "space",
    "enter",
+   "backspace",
    "up",
    "down",
    "left",
@@ -686,15 +658,6 @@
    "7": "triangle",
    "8": "tambourine",
    "9": "bongo"
-  },
-  "limits": {
-   "steps": 500,
-   "wait_seconds": 5.0,
-   "text": 200,
-   "repeat": 100,
-   "depth": 8,
-   "line": 400,
-   "every_min_seconds": 0.5
   }
  }
 }

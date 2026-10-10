@@ -47,8 +47,8 @@ def make_pack(root: Path, pack_id: str = "the-tests-pack", fmt: int | None = 1, 
     (c / "pictures").mkdir()
     (c / "pictures" / "palm.json").write_text(json.dumps({"name": "palm", "ops": [[43, 0, "#ffffff"], [44, 1, "#fefefe"]]}))
     (c / "rooms").mkdir()
-    (c / "rooms" / "farm.json").write_text(json.dumps({"name": "farm", "title": "Farm", "rules": [
-        {"when": {"event": "key", "key": "c"}, "do": [{"do": "show", "text": "🐄"}, {"do": "say", "text": "cow"}]}]}))
+    (c / "rooms" / "farm.py").write_text('from purple import *\n\ndef on_key(key):\n    show("🐄")\n    say("cow")\n')
+    (c / "rooms" / "farm.blocks.json").write_text("{}")
     if instrument:
         (c / "instruments").mkdir()
         (c / "instruments" / f"{instrument}.json").write_text(json.dumps(
@@ -78,17 +78,21 @@ class TestLoader:
         assert packs.instrument_dir("kitchen") == c / "kitchen"
         assert packs.instrument_dir("marimba") is None
         assert [(p.name, p.ops) for p in packs.pictures] == [("palm", [(43, 0, "#ffffff"), (44, 1, "#fefefe")])]
-        assert [r["title"] for r in packs.rooms] == ["Farm"]
-        assert packs.room("farm")["rules"][0]["when"] == {"event": "key", "key": "c"}
-        assert packs.room("barn") is None
+        assert [(r.name, r.title, r.path) for r in packs.rooms] == [("farm", "Farm", c / "rooms" / "farm.py")]
 
-    def test_broken_room_is_skipped_by_the_loader_and_refused_by_the_installer(self, tmp_path):
+    def test_room_with_a_syntax_error_is_refused_by_the_installer(self, tmp_path):
         d = make_pack(tmp_path)
-        (d / "content" / "rooms" / "bad.json").write_text(json.dumps({"name": "bad", "rules": [{"when": {"event": "jump"}, "do": []}]}))
-        cm = ContentManager(packs_dir=tmp_path)
-        cm.load_all()
-        assert [r["name"] for r in cm.rooms] == ["farm"]
-        assert any("rooms/bad.json" in p and "event must be" in p for p in check_pack(d))
+        (d / "content" / "rooms" / "bad.py").write_text("def on_key(key)\n    show(key)\n")
+        assert any("rooms/bad.py: line 1" in p for p in check_pack(d))
+
+    def test_code_anywhere_but_rooms_is_refused(self, tmp_path):
+        d = make_pack(tmp_path)
+        (d / "content" / "evil.py").write_text("print('hi')\n")
+        (d / "content" / "rooms" / "Not_A_Name.py").write_text("print('hi')\n")
+        problems = check_pack(d)
+        assert any("content/evil.py: packs may not contain code" in p for p in problems)
+        assert any("Not_A_Name.py: packs may not contain code" in p for p in problems)
+        assert not any("farm.py" in p for p in problems)
 
     def test_pack_instruments_follow_the_built_ins(self, packs):
         assert instruments() == INSTRUMENTS + [("kitchen", "Kitchen")]

@@ -129,9 +129,7 @@ class SaveWall(Overlay):
         box = pygame.Rect(0, 0, COLS * tw + (COLS - 1) * gap + 2 * pad, 0)
         box.h = em(3.0) + pad + ROWS_SHOWN * th + (ROWS_SHOWN - 1) * gap + em(1.2) + hint_h + pad
         box.center = (g.w // 2, g.h // 2)
-        from .app import ROOM_ICONS, ROOMS
-        room = self.app.active_room
-        y0 = draw_window(g, box, f"{ICON_SAVE}  Save  ·  {ROOM_ICONS[room]} {dict(ROOMS)[room]}") + pad
+        y0 = draw_window(g, box, f"{ICON_SAVE}  Save  ·  {self.app.room.icon} {self.app.room.label}") + pad
         first = self.top_row * COLS
         for i, tile in enumerate(self.tiles[first:first + COLS * ROWS_SHOWN], start=first):
             row, col = divmod(i - first, COLS)

@@ -4,7 +4,7 @@ scrolls up; the line you're typing sits above the rotating 'Try:' hint."""
 import pygame
 
 from ... import palette as P
-from ...constants import ICON_VOLUME_HIGH, ICON_VOLUME_OFF
+from ...constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ...content import get_content
 from .. import paper
 from ..gfx import is_emoji, strip_markup
@@ -12,6 +12,7 @@ from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
 from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
 from ..ui import MATH_OPERATORS, HintRotator, TextField
+from .base import Room
 
 PAPER_ZOOM = 1.6
 PLAY_HINTS = [
@@ -67,12 +68,12 @@ class Entry:
         self.speech = ""          # "", generating, playing, filtered
 
 
-class PlayRoom:
-    name = "play"
-    LANDSCAPE = False
+class PlayRoom(Room):
+    name, label, icon = "play", "Play", ICON_CHAT
+    arrow_hint = "Arrows scroll  ↑ ↓"
 
     def __init__(self, app):
-        self.app = app
+        super().__init__(app)
         self.evaluator = SimpleEvaluator()
         self.field = TextField(_play_autocomplete, validator=_play_validator)
         self.hints = HintRotator(PLAY_HINTS)
@@ -86,21 +87,6 @@ class PlayRoom:
     def on_enter(self):
         self.hints.advance()
         self.app.set_legend(None, visible=True)
-
-    def on_leave(self):
-        pass
-
-    def stop_sound(self):
-        pass
-
-    def open_code_panel(self):
-        pass
-
-    def close_code_panel(self):
-        pass
-
-    def hold_progress(self):
-        return None
 
     def cursor_fraction(self, vp):
         return (0.07, 0.9)

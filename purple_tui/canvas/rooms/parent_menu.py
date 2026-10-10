@@ -233,6 +233,25 @@ class CodePanelScreen(_YesNo):
         return get_code_panel()
 
 
+class FamilyRoomsScreen(_YesNo):
+    title = "Show Family Rooms"
+    DESCRIPTION = "Show the rooms from your Purple Studio pack in the Esc menu"
+
+    @staticmethod
+    def getter():
+        from ...settings import get_family_rooms
+        return get_family_rooms()
+
+
+class PicturesScreen(Picker):
+    title = "Pictures"
+    DESCRIPTION = "Paint one onto the Art room"
+
+    def __init__(self, app):
+        from ...content import display_name, get_content
+        super().__init__(app, [(p, display_name(p.name)) for p in get_content().pictures] + [(None, "Close")])
+
+
 class MusicLoopingScreen(_YesNo):
     title = "Allow Music Looping"
     DESCRIPTION = "Allow recording loops in Music by holding the enter button"
@@ -457,8 +476,8 @@ class ParentVolumeModal(Dialog):
             from ...mixer import warm_mixer
             if not warm_mixer():
                 return
-            from .music_room import _sounds_path
-            path = _sounds_path() / "glockenspiel" / "c5.ogg"
+            from ..sounds import core_sounds
+            path = core_sounds() / "glockenspiel" / "c5.ogg"
             if path.exists():
                 sound = pygame.mixer.Sound(str(path))
                 sound.set_volume(level / 100)
@@ -1129,10 +1148,15 @@ def _is_dev_environment() -> bool:
     return bool(os.environ.get("PURPLE_TEST_BATTERY")) or (Path(__file__).parents[3] / ".git").is_dir()
 
 
+def _family_rooms_label(on: bool) -> str:
+    return "Show Family Rooms: Yes" if on else "Show Family Rooms: No"
+
+
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
-    from ...settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching, get_music_looping,
-                            get_parent_pin, get_secret_unlocked, get_voice, get_volume_lock)
+    from ...content import get_content
+    from ...settings import (get_all_caps, get_code_panel, get_family_rooms, get_littles_mode, get_music_key_switching,
+                            get_music_looping, get_parent_pin, get_secret_unlocked, get_voice, get_volume_lock)
     items = [("menu-help", "Help & Videos")]
     if is_live_boot():
         items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
@@ -1146,6 +1170,10 @@ def _get_menu_items(app) -> list:
         items.append(("menu-code-panel", "Allow Code Space: Yes" if get_code_panel() else "Allow Code Space: No"))
         items.append(("menu-music-looping", "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"))
         items.append(("menu-music-key-switching", "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"))
+        if get_content().rooms:
+            items.append(("menu-family-rooms", _family_rooms_label(get_family_rooms())))
+    if get_content().pictures:
+        items.append(("menu-pictures", "Pictures"))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
     items.append(("menu-export", "Copy Saved Work to USB"))
     items.append(("sec-av", "Sound & Display"))
@@ -1257,6 +1285,7 @@ class ParentMenu(Overlay):
             return
         handler = {
             "menu-littles": self._open_littles_mode, "menu-code-panel": self._open_code_panel,
+            "menu-family-rooms": self._open_family_rooms, "menu-pictures": self._open_pictures,
             "menu-music-looping": self._open_music_looping, "menu-music-key-switching": self._open_music_key_switching,
             "menu-all-caps": self._open_all_caps, "menu-secret": self._open_secret_menu,
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),
@@ -1289,6 +1318,22 @@ class ParentMenu(Overlay):
                 self.app.room.close_code_panel()
             self._relabel("menu-code-panel", "Allow Code Space: Yes" if v else "Allow Code Space: No")
         self.app.push(CodePanelScreen(self.app), on_close=apply)
+
+    def _open_family_rooms(self):
+        def apply(v):
+            if v is not CANCELLED:
+                from ...settings import set_family_rooms
+                set_family_rooms(v)
+                self._relabel("menu-family-rooms", _family_rooms_label(v))
+        self.app.push(FamilyRoomsScreen(self.app), on_close=apply)
+
+    def _open_pictures(self):
+        def done(picture):
+            if picture:
+                from ..secret_doodle import paint_ops
+                self.close()
+                paint_ops(self.app, picture.ops)
+        self.app.push(PicturesScreen(self.app), on_close=done)
 
     def _open_music_looping(self):
         def apply(v):

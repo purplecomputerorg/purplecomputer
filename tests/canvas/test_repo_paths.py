@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
-from purple_tui.canvas.rooms import music_room, parent_menu
+from purple_tui.canvas import sounds
+from purple_tui.canvas.rooms import parent_menu
 
 
 def test_music_sounds_are_found():
-    assert (music_room._sounds_path() / "glockenspiel" / "c5.ogg").exists()
+    assert (sounds.core_sounds() / "glockenspiel" / "c5.ogg").exists()
 
 
 def test_parent_shell_rc_is_found():

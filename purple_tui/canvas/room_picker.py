@@ -4,33 +4,44 @@ import pygame
 
 from .. import palette as P
 from .. import printing
-from ..constants import (
-    ICON_BROOM, ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_ROBOT, ICON_TIME_TRAVEL,
-    ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
-)
+from ..constants import ICON_BROOM, ICON_ROBOT, ICON_TIME_TRAVEL, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from . import key_save
 from .paper import can_print
-from .rooms.blocks_room import ICON_CUBE
+from .rooms.family_room import ICON_FAMILY
 from .save_wall import ICON_SAVE
 from .ui import Dialog, Overlay, Picker, draw_keycap, draw_scrim
 
-ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art"),
-                ("blocks", ICON_CUBE, "Blocks")]
-NUMBER_KEY_ROOMS = {str(i + 1): room for i, (room, _, _) in enumerate(ROOM_OPTIONS)}
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
 EXTRA_KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "save": "s", "print": "p"}
 PRINTER_LABELS = {printing.NONE: "No Printer", printing.SETTING_UP: "Starting Up", printing.BROKEN: "Can't Print"}
-ROWS, EXTRAS, CODE = 0, 1, 2
+ROWS, FAMILY, EXTRAS, CODE = "rooms", "family", "extras", "code"
+MAX_FAMILY_ROOMS = 6
+FAMILY_LABEL_CHARS = 12
+
+
+def family_rooms() -> list:
+    """Rooms from installed packs, unless the parent turned them off."""
+    from ..content import get_content
+    from ..settings import get_family_rooms
+    return get_content().rooms[:MAX_FAMILY_ROOMS] if get_family_rooms() else []
+
+
+def _short(title: str) -> str:
+    return title if len(title) <= FAMILY_LABEL_CHARS else title[:FAMILY_LABEL_CHARS - 1] + "…"
 
 
 class RoomPicker(Overlay):
     def __init__(self, app):
         super().__init__(app)
+        self.options = list(app.rooms.values())
         self.row = ROWS
-        self.col = [o[0] for o in ROOM_OPTIONS].index(app.active_room)
-        self.code_row = app.active_room in ("music", "art") and (app._code_panel_active or app._code_panel_enabled)
+        self.col = list(app.rooms).index(app.active_room)
+        self.code_row = app.room.has_code_panel and (app._code_panel_active or app._code_panel_enabled)
+        self.family = family_rooms()
         self.extras = ["volume", "clear", "time_travel", "save", "print"]
+        self.card_rows = [ROWS] + ([FAMILY] if self.family else []) + [EXTRAS]
+        self.rows = self.card_rows + ([CODE] if self.code_row else [])
         self.printer = printing.status()
 
     def _disabled_volume(self):
@@ -49,19 +60,19 @@ class RoomPicker(Overlay):
             d = action.direction
             if d in ("left", "right") and self.row != CODE:
                 self.col = max(0, min(self._row_len() - 1, self.col + (1 if d == "right" else -1)))
-            elif d == "up":
-                self.row = max(ROWS, self.row - 1)
-            elif d == "down":
-                self.row = min(CODE if self.code_row else EXTRAS, self.row + 1)
-                self.col = min(self.col, self._row_len() - 1)
+            elif d in ("up", "down"):
+                i = self.rows.index(self.row) + (1 if d == "down" else -1)
+                self.row = self.rows[max(0, min(len(self.rows) - 1, i))]
+                if self.row != CODE:
+                    self.col = min(self.col, self._row_len() - 1)
             self.app.invalidate()
             return
         if isinstance(action, CharacterAction):
             if action.is_repeat:
                 return
             ch = action.char.lower()
-            if ch in NUMBER_KEY_ROOMS:
-                return self.close({"room": NUMBER_KEY_ROOMS[ch]})
+            if ch.isdigit() and 0 < int(ch) <= len(self.options):
+                return self.close({"room": self.options[int(ch) - 1].name})
             extra = next((e for e in self.extras if EXTRA_KEYS[e] == ch), None)
             if extra:
                 self.row, self.col = EXTRAS, self.extras.index(extra)
@@ -79,11 +90,13 @@ class RoomPicker(Overlay):
                 self._activate()
 
     def _row_len(self) -> int:
-        return len(ROOM_OPTIONS) if self.row == ROWS else len(self.extras)
+        return {ROWS: len(self.options), FAMILY: len(self.family), EXTRAS: len(self.extras)}[self.row]
 
     def _activate(self):
         if self.row == ROWS:
-            self.close({"room": ROOM_OPTIONS[self.col][0]})
+            self.close({"room": self.options[self.col].name})
+        elif self.row == FAMILY:
+            self.close({"family": self.family[self.col].name})
         elif self.row == EXTRAS:
             {"volume": self._open_volume, "clear": self._confirm_clear,
              "time_travel": lambda: self.close({"time_travel": True}),
@@ -124,8 +137,10 @@ class RoomPicker(Overlay):
         head_h = g.line_height(em(1.15), "mono-bold")
         foot_h = g.line_height(em(0.92), "mono")
         arrows_h = em(3.6)
-        grid_h = 2 * th + gap + (gap + code_h if self.code_row else 0)
-        cols = max(len(ROOM_OPTIONS), len(self.extras))
+        n = len(self.card_rows)
+        grid_h = n * th + (n - 1) * gap + (gap + code_h if self.code_row else 0)
+        lengths = {ROWS: len(self.options), FAMILY: len(self.family), EXTRAS: len(self.extras)}
+        cols = max(lengths.values())
         box = pygame.Rect(0, 0, cols * tw + (cols - 1) * gap + 2 * pad,
                           pad + head_h + em(1.5) + grid_h + em(1.5) + foot_h + em(0.9) + arrows_h + pad)
         box.center = (g.w // 2, g.h // 2)
@@ -136,7 +151,8 @@ class RoomPicker(Overlay):
         g.draw_text("Pick a room", em(1.15), box.centerx, y, "mono-bold", P.TEXT, anchor="midtop", track=0.06)
         y += head_h + em(1.5)
         locked = self._disabled_volume()
-        cards = [(ROWS, i, icon, label, str(i + 1), False) for i, (_, icon, label) in enumerate(ROOM_OPTIONS)]
+        cards = [(ROWS, i, r.icon, r.label, str(i + 1), False) for i, r in enumerate(self.options)]
+        cards += [(FAMILY, i, ICON_FAMILY, _short(r.title), "", False) for i, r in enumerate(self.family)]
         extras = {"volume": locked + ("", True) if locked else (ICON_VOLUME_HIGH, "Volume", "V", False),
                   "clear": (ICON_BROOM, "Clear", "C", False),
                   "time_travel": (ICON_TIME_TRAVEL, "Time Travel", "T", False),
@@ -144,8 +160,8 @@ class RoomPicker(Overlay):
                   "print": self._print_card()}
         cards += [(EXTRAS, i, *extras[e]) for i, e in enumerate(self.extras)]
         for row, col, icon, label, key, disabled in cards:
-            inset = (cols - (len(ROOM_OPTIONS) if row == ROWS else len(self.extras))) * (tw + gap) // 2
-            r = pygame.Rect(x0 + inset + col * (tw + gap), y + row * (th + gap), tw, th)
+            inset = (cols - lengths[row]) * (tw + gap) // 2
+            r = pygame.Rect(x0 + inset + col * (tw + gap), y + self.card_rows.index(row) * (th + gap), tw, th)
             on = (self.row, self.col) == (row, col)
             self._card(g, r, on)
             fg = P.ON_PRIMARY if on else (P.DIM if disabled else P.TEXT)
@@ -156,6 +172,8 @@ class RoomPicker(Overlay):
                 g.draw_text(f"Press {key}", em(0.9), r.centerx, r.y + em(5.6), "mono", fg if on else P.DIM, anchor="center")
             if key and on:
                 g.draw_text("or Enter", em(0.9), r.centerx, r.y + em(6.7), "mono", fg, anchor="center")
+            elif on and not disabled and not key:
+                g.draw_text("Press Enter", em(0.9), r.centerx, r.y + em(5.6), "mono", fg, anchor="center")
         y += grid_h - (code_h + gap if self.code_row else 0)
         if self.code_row:
             y += gap
@@ -232,5 +250,5 @@ class ConfirmFresh(Picker):
     title = "Clear a Room"
 
     def __init__(self, app, room):
-        name = next(label for rid, _, label in ROOM_OPTIONS if rid == room)
+        name = app.rooms[room].label
         super().__init__(app, [(room, f"Clear {name} Room"), (None, "Go Back")])

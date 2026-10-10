@@ -121,7 +121,7 @@ Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). `PUR
 
 ## Canvas UI (default)
 
-The screen is a pygame window the app paints itself (`purple_tui/canvas/gfx.py`, `purple_tui/canvas/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere.
+The screen is a pygame window the app paints itself (`purple_tui/canvas/gfx.py`, `purple_tui/canvas/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere. Rooms subclass `canvas/rooms/base.py`; family rooms from packs run sandboxed: `guides/family-rooms.md`.
 
 ## Textual UI (`PURPLE_UX=tui`, frozen)
 

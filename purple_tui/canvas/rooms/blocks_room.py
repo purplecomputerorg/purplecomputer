@@ -19,6 +19,7 @@ from .. import paper
 from ..color_wheel import open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..ui import draw_mode_switch
+from .base import Room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
@@ -33,18 +34,19 @@ HINT = "Type to build! Enter lifts a block, Backspace lowers it."
 MIX_HINT = "Hold two letters to mix"
 
 
-class BlocksRoom:
+class BlocksRoom(Room):
     """Blocks live in a dict keyed by world (x, z, y), y up. Drawing and the
     arrows work in view coordinates, which are world (x, z) mirrored when the
     room shows its back. The floor and blocks render into one cached surface,
     rebuilt when a block changes, the room flips, or the blocks in front of
     the cursor change; the cursor is drawn over it."""
 
-    name = "blocks"
+    name, label, icon = "blocks", "Blocks", ICON_CUBE
+    arrow_hint = "Arrows move  ← ↑ ↓ →"
     LANDSCAPE = True
 
     def __init__(self, app):
-        self.app = app
+        super().__init__(app)
         self._blocks: dict = {}
         self._x, self._z = WIDTH // 2, DEPTH // 2
         self._back = False
@@ -73,18 +75,6 @@ class BlocksRoom:
         if self._blink_timer:
             self._blink_timer.stop()
             self._blink_timer = None
-
-    def stop_sound(self):
-        pass
-
-    def open_code_panel(self):
-        pass
-
-    def close_code_panel(self):
-        pass
-
-    def hold_progress(self):
-        return None
 
     def _blink(self):
         self._blink_on = not self._blink_on

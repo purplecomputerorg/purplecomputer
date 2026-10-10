@@ -40,6 +40,7 @@ READ_TODAY = {
     "content/voice/": "phrase clips, spoken by Purple",
     "content/pictures/": "pictures, parent menu",
     "content/instruments/": "instrument definitions; samples in content/<name>/",
+    "content/rooms/": "family rooms, Esc menu (guides/family-rooms.md)",
 }
 
 

@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from purple_tui import audio
 from purple_tui import mixer as music_room
 from purple_tui.canvas.app import PurpleApp
-from purple_tui.canvas.rooms.music_room import MusicRoom
+from purple_tui.canvas.sounds import SoundBank
 
 
 class _FakeMixer:
@@ -218,30 +218,18 @@ def test_sound_caches_reload_after_mixer_quit(monkeypatch):
     """Sounds are tied to the device they were decoded for: any quit bumps
     the generation and stale caches must clear on next load."""
     _ready_mixer(monkeypatch)
+    bank = SoundBank()
+    loads = []
 
-    class GridStub:
-        _drop_stale_sounds = MusicRoom._drop_stale_sounds
-        _clear_sound_caches = MusicRoom._clear_sound_caches
+    def load():
+        loads.append(1)
+        return {"c5": object()}
 
-        def __init__(self):
-            self._instrument_sounds = {"glockenspiel": {"c5": object()}}
-            self._percussion_sounds = {"1": object()}
-            self._percussion_loaded = True
-            self._letter_sounds = {"a": object()}
-            self._letter_sounds_loaded = True
-            self._sounds_generation = music_room.mixer_generation()
-
-    grid = GridStub()
-    grid._drop_stale_sounds()
-    assert grid._instrument_sounds  # same generation: untouched
+    first = bank._get("glockenspiel", load)
+    assert bank._get("glockenspiel", load) is first and len(loads) == 1  # same generation: cached
 
     music_room._quit_mixer()
-    grid._drop_stale_sounds()
-
-    assert grid._instrument_sounds == {}
-    assert grid._percussion_sounds == {} and not grid._percussion_loaded
-    assert grid._letter_sounds == {} and not grid._letter_sounds_loaded
-    assert grid._sounds_generation == music_room.mixer_generation()
+    assert bank._get("glockenspiel", load) is not first and len(loads) == 2
 
 
 class _PlayableSound:
@@ -307,7 +295,7 @@ class _FakeAppForIdleCheck:
     _check_audio_idle = PurpleApp._check_audio_idle
 
     def __init__(self, room):
-        self.active_room = room
+        self.room = SimpleNamespace(keeps_audio_awake=room == "music")
         self._audio_idle_timer = _FakeTimer()
 
 

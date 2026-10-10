@@ -10,6 +10,7 @@ Purplepacks are content-only (JSON + assets) - NO executable Python code.
 """
 
 import json
+import re
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -29,6 +30,17 @@ class Instrument:
     id: str
     name: str
     path: Path
+
+
+@dataclass
+class Room:
+    """A family room: content/rooms/<name>.py, run as a guest (guides/family-rooms.md)."""
+    name: str
+    path: Path
+
+    @property
+    def title(self) -> str:
+        return display_name(self.name)
 
 
 @dataclass
@@ -143,7 +155,7 @@ class ContentManager:
         self.user_content: list[Path] = []
         self.instruments: list[Instrument] = []
         self.pictures: list[Picture] = []
-        self.rooms: list[dict] = []                # parsed room programs, see room_program.py
+        self.rooms: list[Room] = []
         self._loaded = False
         # Unified prefix index: prefix -> [(word, color_hex|None, emoji|None), ...]
         # Ranked by kid-likelihood from rankings.txt
@@ -305,16 +317,8 @@ class ContentManager:
             self._load_rooms(content_dir)
 
     def _load_rooms(self, content_dir: Path) -> None:
-        from .room_program import RoomError, parse
-        for spec in room_specs(content_dir):
-            try:
-                program = parse(_read_json(spec))
-            except RoomError:
-                continue
-            self.rooms = [r for r in self.rooms if r["name"] != program["name"]] + [program]
-
-    def room(self, name: str) -> dict | None:
-        return next((r for r in self.rooms if r["name"] == name), None)
+        for path in room_files(content_dir):
+            self.rooms = [r for r in self.rooms if r.name != path.stem] + [Room(path.stem, path)]
 
     def _load_instruments(self, content_dir: Path) -> None:
         for spec in sorted((content_dir / "instruments").glob("*.json")):
@@ -705,9 +709,12 @@ class ContentManager:
         return bool(self.exact_emoji(word) or self.exact_color(word))
 
 
-def room_specs(content_dir: Path) -> list[Path]:
-    """content/rooms/<name>.json, leaving out the <name>.blocks.json editor files Studio saves beside them."""
-    return sorted(p for p in (content_dir / "rooms").glob("*.json") if not p.name.endswith(".blocks.json"))
+ROOM_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+
+
+def room_files(content_dir: Path) -> list[Path]:
+    """content/rooms/<name>.py; Studio's <name>.blocks.json beside them is for Studio only."""
+    return sorted(p for p in (content_dir / "rooms").glob("*.py") if ROOM_NAME.match(p.stem))
 
 
 def _pack_dirs(packs_dir: Path) -> list[Path]:

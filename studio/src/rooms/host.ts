@@ -22,7 +22,16 @@ export interface Scene {
   over: string | null;
 }
 
-export interface Problem { text: string; line: number | null }
+// setup: the preview can't run here at all, as opposed to a problem in the room.
+export interface Problem { text: string; line: number | null; setup?: boolean }
+
+// Rooms block on shared memory (purple.ask), which browsers only allow on a cross-origin isolated
+// page, and that needs a secure context: https, or http on localhost.
+export const NOT_ISOLATED: Problem = {
+  text: "The preview needs a secure page. Open Studio at its https:// address, or at http://localhost on the computer running it.",
+  line: null,
+  setup: true,
+};
 
 export interface Effects {
   redraw(): void;
@@ -69,8 +78,9 @@ export class RoomHost {
     this.stop();
     this.source = source;
     this.scene = emptyScene(this.defaultBackground);
-    this.fx.problem(null);
+    this.fx.problem(globalThis.crossOriginIsolated ? null : NOT_ISOLATED);
     this.fx.redraw();
+    if (!globalThis.crossOriginIsolated) return;
     this.guest = this.spare ?? spawn();
     this.spare = spawn();
     this.guest.worker.onmessage = (e: MessageEvent<string>) => this.receive(e.data);

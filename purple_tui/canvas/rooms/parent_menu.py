@@ -1330,9 +1330,9 @@ class ParentMenu(Overlay):
     def _open_pictures(self):
         def done(picture):
             if picture:
-                from ..secret_doodle import paint_ops
+                from ..secret_doodle import paint_cells
                 self.close()
-                paint_ops(self.app, picture.ops)
+                paint_cells(self.app, picture.ops)
         self.app.push(PicturesScreen(self.app), on_close=done)
 
     def _open_music_looping(self):

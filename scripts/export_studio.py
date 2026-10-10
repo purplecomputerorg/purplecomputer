@@ -17,23 +17,23 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from purple_tui import synth  # noqa: E402
-from purple_tui.art_config import CANVAS_HEIGHT, CANVAS_WIDTH  # noqa: E402
-from purple_tui.constants import VIEWPORT_HEIGHT, VIEWPORT_WIDTH  # noqa: E402
+from purple_tui import palette as P  # noqa: E402
+from purple_tui.constants import ART_COLS, ART_ROWS, CANVAS_COLS, CANVAS_ROWS  # noqa: E402
 from purple_tui.content import PACK_FORMAT  # noqa: E402
 from purple_tui.music_constants import (  # noqa: E402
     DEFAULT_ROOT_INDEX, FRIENDLY_KEYS, GRID_KEYS, INSTRUMENTS, PERCUSSION, pitch_filename, pitch_for, reachable_pitches,
 )
-from purple_tui.rooms.art_room import (  # noqa: E402
-    APP_BG_DARK, DEFAULT_BG_DARK, DEFAULT_BG_LIGHT, GUTTER_BG_DARK_A, GUTTER_BG_DARK_B, KEY_COLORS,
-)
-from purple_tui.rooms.music_room import _SPEAKABLE_KEYS  # noqa: E402
+from purple_tui.canvas.rooms.art_room import CANVAS_ALT, CANVAS_BG  # noqa: E402
+from purple_tui.palette import KEY_COLORS  # noqa: E402
+from purple_tui.canvas.sounds import SPEAKABLE_KEYS  # noqa: E402
 from purple_tui.roomkit.purple import H as ROOM_H, W as ROOM_W  # noqa: E402
 from purple_tui.tts import voice_clip_filename  # noqa: E402
-from tools.photo_to_art import CELL_ASPECT, fit_to_canvas  # noqa: E402
+from tools.photo_to_art import fit_to_canvas  # noqa: E402
 
 EXPORT_PATH = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
 GOLDEN_PATH = ROOT / "studio" / "tests" / "golden.json"
 
+PALETTE_NAMES = ("BG", "SURFACE", "TILE", "FIELD", "HAIR", "LINE", "PRIMARY", "ON_PRIMARY", "ACCENT", "TEXT", "MUTED", "DIM", "CARET", "DANGER", "GOOD")
 FIT_SIZES = [(4032, 3024), (3024, 4032), (1000, 1000), (1920, 1080), (100, 2000), (2000, 100), (1, 1), (132, 50), (264, 50), (50, 25)]
 CLIP_EXAMPLES = ["  Hello There ", "It's Purple Computer", "hi", "5 times 5 ducks equals 25 ducks"]
 # Golden renders: two pitches at the defaults, then one short varied render per instrument.
@@ -62,16 +62,17 @@ def build_export() -> dict:
     return {
         "generated_by": "scripts/export_studio.py; do not edit",
         "pack_format": PACK_FORMAT,
+        "screen": {
+            "viewport": [CANVAS_COLS, CANVAS_ROWS],
+            "palette": {name.lower(): getattr(P, name) for name in PALETTE_NAMES},
+        },
         "art": {
-            "viewport": [VIEWPORT_WIDTH, VIEWPORT_HEIGHT],
-            "canvas": [CANVAS_WIDTH, CANVAS_HEIGHT],
-            "cell_aspect": CELL_ASPECT,
+            "canvas": [ART_COLS, ART_ROWS],
+            "cell_aspect": 1,
             "key_colors": {k: v for k, v in KEY_COLORS.items() if k not in ("÷", "×")},
-            "app_bg": APP_BG_DARK,
-            "bg_dark": DEFAULT_BG_DARK,
-            "bg_light": DEFAULT_BG_LIGHT,
-            "gutter": [GUTTER_BG_DARK_A, GUTTER_BG_DARK_B],
-            "fit": {f"{w}x{h}": list(fit_to_canvas(w, h, CANVAS_WIDTH, CANVAS_HEIGHT)) for w, h in FIT_SIZES},
+            "canvas_bg": CANVAS_BG,
+            "canvas_alt": CANVAS_ALT,
+            "fit": {f"{w}x{h}": list(fit_to_canvas(w, h, ART_COLS, ART_ROWS, 1)) for w, h in FIT_SIZES},
         },
         "music": {
             "grid_rows": [[k.lower() for k in row] for row in GRID_KEYS[1:]],
@@ -81,7 +82,7 @@ def build_export() -> dict:
             "grid_pitches": grid_pitches,
         },
         "voice": {
-            "letter_keys": sorted(k.lower() for k in _SPEAKABLE_KEYS),
+            "letter_keys": sorted(k.lower() for k in SPEAKABLE_KEYS),
             "sample_rate": clip_rate,
             "channels": clip_channels,
             "clip_filenames": {text: voice_clip_filename(text) for text in CLIP_EXAMPLES},

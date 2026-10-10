@@ -84,7 +84,12 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 
 .stage h3 { margin-top: 0; }
 .stage .caption { font-size: 13px; color: var(--dim); margin-top: 12px; }
-.frame { width: 100%; height: auto; display: block; border-radius: 10px; }
+.screen-wrap { position: relative; border-radius: 12px; overflow: hidden; }
+.screen-wrap canvas.screen { display: block; width: 100%; aspect-ratio: 1366 / 768; }
+.screen-full { position: absolute; top: 8px; right: 8px; z-index: 2; width: 30px; height: 30px; border: none; border-radius: 7px; background: rgba(255, 255, 255, 0.14); color: #fff; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; opacity: 0.8; }
+.screen-full:hover, .screen-full:focus-visible { opacity: 1; background: rgba(255, 255, 255, 0.24); }
+.screen-wrap:fullscreen { display: flex; align-items: center; justify-content: center; border-radius: 0; background: #1d1234; }
+.screen-wrap:fullscreen canvas.screen { width: min(100vw, calc(100vh * 1366 / 768)); }
 
 .card { background: var(--card); border-radius: 18px; border: 1px solid var(--line); padding: 20px 22px; margin: 16px 0; }
 .card.plain { border: none; background: none; padding: 0; }
@@ -186,11 +191,10 @@ pre code { background: none; color: inherit; padding: 0; }
 .blockly { height: 560px; border-radius: 16px; border: 1px solid var(--line); overflow: hidden; background: #fbfaf8; }
 .blocklyToolboxDiv { border-right: 1px solid var(--line); }
 .roomstage { outline: none; border-radius: 12px; cursor: pointer; position: relative; }
-.roomstage-hint { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 12px; background: rgba(20, 10, 35, 0.55); color: #fff; font-size: 13px; }
+.roomstage-hint { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 12px; background: rgba(20, 10, 35, 0.55); color: #fff; font-size: 13px; }
 .roomstage-hint strong { font-size: 20px; }
 .roomstage:focus .roomstage-hint { display: none; }
 .roomstage:focus { box-shadow: 0 0 0 4px var(--fill), 0 0 0 6px var(--magenta); }
-.stage .roomstage canvas { display: block; }
 
 /* Room editor tabs, the problem box, and the Room guide */
 .tabs { display: flex; gap: 4px; margin: 0 0 12px; }

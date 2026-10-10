@@ -7,12 +7,14 @@ This is a draft, not a shipping product, and nothing in it is a public commitmen
 ## Run it
 
 ```bash
-just studio            # npm install and a dev server on http://localhost:5173 (also reachable on the LAN)
+just studio            # npm install and a dev server on https://localhost:5173 (also https://<this machine>:5173 on the LAN)
 just studio-test       # tsc, vitest
 just studio-fixtures   # regenerate export.json and golden.json from Purple's Python (see below)
 ```
 
 Or from `studio/`: `npm install`, `npm run dev`, `npm test`, `npm run build` (static output in `studio/dist/`, deployable anywhere that serves files).
+
+The dev server and `vite preview` use https with a self-signed certificate (`@vitejs/plugin-basic-ssl`), so the browser warns once per machine; accept it to continue. It has to be https: the room preview needs a cross-origin isolated page, browsers only allow that in a secure context, and plain http counts as secure only on localhost. Opened over plain http from another machine, the preview says so instead of running rooms.
 
 **Hosting.** Studio needs three response headers on every file it serves, which `vite` and `vite preview` already send (`vite.config.ts`, `HEADERS`): `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, so a room's worker can block on shared memory while it waits for a key or an answer, and the `Content-Security-Policy` in the same file, whose `connect-src 'self'` keeps the page and every room worker off the network. A static host has to be configured to send them; without the first two the preview cannot run rooms, and without the CSP header room workers are not fenced in (the page itself also carries the CSP as a meta tag).
 
@@ -34,7 +36,7 @@ A small, calm editor in three panes:
 | --- | --- | --- |
 | Your own words and emoji | Words, synonyms, autocomplete picks. | Play room, exactly as the core emoji pack. |
 | Your own voice | Record or upload a clip per key (A to Z, 0 to 9) and per phrase; 22050 Hz mono 16-bit WAV, trimmed and faded like Purple's own clips. | Say Letters plays the family's clip for any key recorded and Purple's for the rest; a recorded phrase is played instead of the synthesized voice whenever Purple would say those exact words. |
-| Your own photos | Drop a photo, see it painted on the Art room canvas at the real 132 by 25 cell size. | The parent menu gains a Pictures entry; choosing one paints it onto the Art canvas. |
+| Your own photos | Drop a photo, see it painted on the Art room's grid at the real 56 by 24 square-cell size. | The parent menu gains a Pictures entry; choosing one paints it onto the Art canvas. |
 | Your own instrument sounds | Start from any of Purple's four instruments and move the numbers behind its sound with sliders while a Music room keyboard plays it. The full sample set, one note per pitch the grid can reach, is rendered from the same equations. | The Music room lists it after the built-in four; Enter cycles to it and the code panel can choose it by name. The slider numbers ship beside the samples so Purple's own synth can re-render it. |
 | Your own rooms | A small game, story, or quiz in Python: built from blocks, from a trivia or soundboard form, from the Snake example, or written by hand. The stage on the right runs it live, in a worker of its own, with the same `purple` module Purple uses. | The room picker gains a row of family rooms. Each runs as a guest in its own process and can only ask Purple to show, say, and play things; see `guides/family-rooms.md`. |
 | Your own colors | Background, canvas, and a hue per letter row, previewed on the Art frame. | Nothing yet. Emitted as a proposed `theme.json`. |
@@ -87,7 +89,7 @@ Sliding a control re-renders and replays the last key within a frame or two; all
 - Percussion (the number row) is shared by every instrument and is not editable here.
 - Purple reads packs when it starts. A stick plugged in while Purple is running is installed at once but shows up at the next start.
 - Nothing is saved between browser sessions. Closing the tab loses the draft; the page warns once there is something in it.
-- Microphone recording needs a secure context, so over plain http on a LAN the Record button reports the mic unavailable; uploading a file still works. An SSH tunnel to localhost fixes it.
+- Microphone recording also needs the secure context, which the https dev server provides.
 
 ## Not done, on purpose
 

@@ -2,7 +2,8 @@ import type { Clip } from "./audio";
 import type { Picture } from "./photo";
 import type { TemplateDraft } from "./examples";
 import { packId as sdkPackId } from "@sdk/pack";
-import { APP_BG_DARK, DEFAULT_BG_DARK, ROW_HUES } from "@sdk/purple/art";
+import { CANVAS_BG, ROW_HUES } from "@sdk/purple/art";
+import PURPLE from "@sdk/purple/export.json";
 import type { BaseName, Params } from "@sdk/purple/synth";
 
 export interface WordEntry { word: string; emoji: string }
@@ -27,7 +28,7 @@ export interface Draft {
   theme: Theme | null;
 }
 
-export const DEFAULT_THEME: Theme = { background: APP_BG_DARK, surface: DEFAULT_BG_DARK, hues: { ...ROW_HUES } };
+export const DEFAULT_THEME: Theme = { background: PURPLE.screen.palette.bg, surface: CANVAS_BG, hues: { ...ROW_HUES } };
 
 export const draft: Draft = {
   familyName: "",

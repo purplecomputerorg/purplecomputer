@@ -223,7 +223,7 @@ def _check_instruments(content: Path) -> list[str]:
 
 
 def _check_pictures(content: Path) -> list[str]:
-    from .art_config import CANVAS_HEIGHT, CANVAS_WIDTH
+    from .constants import ART_COLS, ART_ROWS
     problems = []
     for spec in sorted((content / 'pictures').glob('*.json')):
         rel = f"content/pictures/{spec.name}"
@@ -233,11 +233,11 @@ def _check_pictures(content: Path) -> list[str]:
             problems.append(f"{rel}: needs an ops list of [x, y, \"#rrggbb\"]")
             continue
         bad = [op for op in ops if not (isinstance(op, list) and len(op) == 3
-                                        and isinstance(op[0], int) and 0 <= op[0] < CANVAS_WIDTH
-                                        and isinstance(op[1], int) and 0 <= op[1] < CANVAS_HEIGHT
+                                        and isinstance(op[0], int) and 0 <= op[0] < ART_COLS
+                                        and isinstance(op[1], int) and 0 <= op[1] < ART_ROWS
                                         and isinstance(op[2], str) and len(op[2]) == 7 and op[2][0] == '#')]
         if bad:
-            problems.append(f"{rel}: {len(bad)} ops are off the {CANVAS_WIDTH} by {CANVAS_HEIGHT} canvas or not [x, y, \"#rrggbb\"]")
+            problems.append(f"{rel}: {len(bad)} ops are off the {ART_COLS} by {ART_ROWS} Art grid or not [x, y, \"#rrggbb\"]")
     return problems
 
 

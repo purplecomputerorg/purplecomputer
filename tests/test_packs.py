@@ -142,7 +142,7 @@ class TestCheckPack:
         (lambda d: (d / "content" / "emoji.json").write_text('{"cat": 3}'), "emoji.json: every entry"),
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "marimba", "params": {"reverb": 1}})), "no parameter 'reverb'"),
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "piano"})), "base must be one of"),
-        (lambda d: (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [[999, 0, "#ffffff"]]})), "off the 132 by 25 canvas"),
+        (lambda d: (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [[999, 0, "#ffffff"]]})), "off the 56 by 24 Art grid"),
         (lambda d: (d / "manifest.json").write_text(json.dumps({"id": "x", "name": "x", "version": "1.0", "type": "emoji"})), "Invalid version"),
         (lambda d: (d / "manifest.json").write_text(json.dumps({"id": "../x", "name": "x", "version": "1.0.0", "type": "emoji"})), "Invalid pack id"),
         (lambda d: (d / "manifest.json").write_text(json.dumps({"id": "x", "name": "x", "version": "1.0.0", "type": "emoji", "format": 9})), "newer format"),

@@ -1,5 +1,6 @@
-// The room on the right: a RoomHost drawn the way Purple's screen draws a family room, with the
-// synth for notes, the core percussion clips, and the browser's voice for "say".
+// The room on the right: a RoomHost drawn the way Purple's screen draws a family room
+// (purple_tui/canvas/rooms/family_room.py), with the synth for notes, the core percussion clips,
+// and the browser's voice for "say".
 import { PURPLE, SYNTH_RATE, defaults, noteFrequency, parseNote, renderNote, type BaseName } from "@sdk";
 import { roomTitle } from "@sdk/pack";
 import { INSTRUMENTS } from "@sdk/purple/sounds";
@@ -7,21 +8,14 @@ import { audioContext, clipToBuffer, playBuffer } from "../audio";
 import { GRID_H, GRID_W, RoomHost, type Problem, type Scene } from "../rooms/host";
 import { draft } from "../state";
 import { h } from "./dom";
-import { DEFAULT_COLORS, MUTED, PRIMARY, WHITE } from "./facsimile";
+import { MONO, P, SANS, ScreenCanvas, drawScreen, fit, rounded, text } from "./screen";
 
 const DRUM_URLS = import.meta.glob("../../../packs/core-sounds/content/[0-9].ogg", { eager: true, query: "?url", import: "default" }) as Record<string, string>;
 const DRUM_KEYS: Record<string, string> = PURPLE.room.drum_keys;
 const HEX = /^#[0-9a-fA-F]{6}$/;
-
-// Logical size: a 24 by 12 grid of 40px squares, inside the frame, with a title and a hint strip.
-const CELL = 40;
-const PAD = 20;
-const TOP = 44;
-const BOTTOM = 40;
-const FRAME = { x: PAD, y: TOP, w: GRID_W * CELL, h: GRID_H * CELL };
-const WIDTH = FRAME.w + 2 * PAD;
-const HEIGHT = TOP + FRAME.h + BOTTOM;
-const FONT = "Figtree, Inter, system-ui, sans-serif";
+// The room area inside the stage, as the laptop sizes it: 48 by 24 units of 24px.
+const VP = { x: 107, y: 80, w: 1152, h: 576 };
+const CELL = Math.min(VP.w / GRID_W, VP.h / GRID_H);
 
 export function browserKey(e: KeyboardEvent): string | null {
   const map: Record<string, string> = { " ": "space", Enter: "enter", Backspace: "backspace", ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
@@ -33,34 +27,33 @@ export interface StageHooks { problem(p: Problem | null): void; print(text: stri
 
 export class RoomStage {
   readonly element: HTMLElement;
-  private canvas = h("canvas", { width: WIDTH * 2, height: HEIGHT * 2 });
+  private screen: ScreenCanvas;
   private host: RoomHost;
-  private failed = false;
+  private problem: Problem | null = null;
   private notes = new Map<string, AudioBuffer>();
   private drums = new Map<string, Promise<AudioBuffer | null>>();
-  private frame = 0;
 
   constructor(private name: string, hooks: StageHooks) {
-    this.canvas.style.width = "100%";
-    this.canvas.style.aspectRatio = `${WIDTH} / ${HEIGHT}`;
+    this.screen = new ScreenCanvas((ctx) => draw(ctx, this.host.scene, roomTitle(this.name), this.problem), true);
+    this.element = this.screen.element;
+    this.element.classList.add("roomstage");
+    this.element.tabIndex = 0;
     // The hint covers the room whenever it isn't getting keys; CSS hides it on focus.
-    this.element = h("div", { class: "roomstage", tabindex: 0 }, this.canvas,
-      h("div", { class: "roomstage-hint" }, h("strong", {}, "Click to play"), h("span", {}, "then use the keyboard, like on Purple")));
+    this.element.append(h("div", { class: "roomstage-hint" }, h("strong", {}, "Click to play"), h("span", {}, "then use the keyboard, like on Purple")));
     this.host = new RoomHost({
-      redraw: () => this.redraw(),
+      redraw: () => this.screen.redraw(),
       say: (t) => this.say(t),
       play: (n, i) => this.play(n, i),
       drum: (n) => this.drum(n),
       print: hooks.print,
-      problem: (p) => { this.failed = !!p; hooks.problem(p); },
-    }, DEFAULT_COLORS.surface);
+      problem: (p) => { this.problem = p; hooks.problem(p); },
+    }, P.surface);
     this.element.addEventListener("keydown", (e) => {
       const key = browserKey(e);
       if (!key || e.metaKey || e.ctrlKey) return;
       e.preventDefault();
       if (!e.repeat || ["up", "down", "left", "right", "backspace"].includes(key)) this.host.key(key);
     });
-    this.redraw();
   }
 
   run(source: string): void {
@@ -74,13 +67,8 @@ export class RoomStage {
 
   dispose(): void {
     this.host.dispose();
+    this.screen.dispose();
     speechSynthesis?.cancel();
-    cancelAnimationFrame(this.frame);
-  }
-
-  private redraw(): void {
-    cancelAnimationFrame(this.frame);
-    this.frame = requestAnimationFrame(() => draw(this.canvas, this.host.scene, roomTitle(this.name), this.failed));
   }
 
   private say(text: string): void {
@@ -117,86 +105,53 @@ export class RoomStage {
   }
 }
 
-function fitText(ctx: CanvasRenderingContext2D, text: string, px: number, maxWidth: number, weight = 600): number {
-  for (; px > 14; px -= 4) {
-    ctx.font = `${weight} ${px}px ${FONT}`;
-    if (ctx.measureText(text).width <= maxWidth) break;
-  }
-  return px;
+const mid = VP.x + VP.w / 2;
+
+function draw(ctx: CanvasRenderingContext2D, s: Scene, title: string, problem: Problem | null): void {
+  drawScreen(ctx, { title: `⌂ ${title}`, right: "Esc leaves", stage: problem ? P.surface : s.background }, () => {
+    if (problem?.setup) return card(ctx, "Can't preview here", problem.text);
+    if (problem) return card(ctx, "This room needs fixing", "A grown-up can fix it in Purple Studio.  Esc goes back.",
+      `(Technical: ${problem.text}${problem.line ? ` (line ${problem.line})` : ""})`);
+    if (s.cells.size) drawGrid(ctx, s);
+    else drawWords(ctx, s);
+    drawFooter(ctx, s);
+  });
 }
 
-function centered(ctx: CanvasRenderingContext2D, text: string, y: number, px: number, color: string, weight = 600): void {
-  fitText(ctx, text, px, FRAME.w - 2 * CELL, weight);
-  ctx.fillStyle = color;
-  ctx.fillText(text, FRAME.x + FRAME.w / 2, y);
+function drawGrid(ctx: CanvasRenderingContext2D, s: Scene): void {
+  for (const [at, thing] of s.cells) {
+    const [x, y] = at.split(",").map(Number);
+    const px = VP.x + x * CELL;
+    const py = VP.y + y * CELL;
+    if (HEX.test(thing)) rounded(ctx, px + 1, py + 1, CELL - 2, CELL - 2, CELL / 8, thing);
+    else text(ctx, thing, px + CELL / 2, py + CELL / 2, CELL * 0.78, P.text, "center", SANS);
+  }
 }
 
-function draw(canvas: HTMLCanvasElement, s: Scene, title: string, failed: boolean): void {
-  const ctx = canvas.getContext("2d")!;
-  ctx.setTransform(2, 0, 0, 2, 0, 0);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = DEFAULT_COLORS.background;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  centered(ctx, title, TOP / 2, 20, PRIMARY);
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(FRAME.x, FRAME.y, FRAME.w, FRAME.h, 14);
-  ctx.fillStyle = failed ? DEFAULT_COLORS.surface : s.background;
-  ctx.fill();
-  ctx.clip();
-  if (failed) {
-    centered(ctx, "🔧", FRAME.y + FRAME.h * 0.4, 72, WHITE);
-    centered(ctx, "This room needs fixing", FRAME.y + FRAME.h * 0.6, 28, WHITE);
-  } else {
-    drawScene(ctx, s);
-  }
-  ctx.restore();
-  ctx.strokeStyle = PRIMARY;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(FRAME.x, FRAME.y, FRAME.w, FRAME.h, 14);
-  ctx.stroke();
-  centered(ctx, "Esc leaves the room", HEIGHT - BOTTOM / 2, 15, MUTED, 500);
+function drawWords(ctx: CanvasRenderingContext2D, s: Scene): void {
+  if (s.big) text(ctx, s.big, mid, VP.y + VP.h * 0.36, fit(ctx, s.big, Math.round(VP.h * 0.24), VP.w * 0.9), P.text, "center", SANS, 600);
+  const px = VP.h * 0.055;
+  s.lines.forEach((line, i) => text(ctx, line, mid, VP.y + VP.h * 0.6 + i * px * 1.35 + px / 2, px, P.text, "center", SANS));
 }
 
-function drawScene(ctx: CanvasRenderingContext2D, s: Scene): void {
-  if (s.cells.size) {
-    for (const [at, thing] of s.cells) {
-      const [x, y] = at.split(",").map(Number);
-      const px = FRAME.x + x * CELL;
-      const py = FRAME.y + y * CELL;
-      if (HEX.test(thing)) {
-        ctx.fillStyle = thing;
-        ctx.beginPath();
-        ctx.roundRect(px + 2, py + 2, CELL - 4, CELL - 4, 6);
-        ctx.fill();
-      } else {
-        fitText(ctx, thing, 30, CELL - 4, 600);
-        ctx.fillStyle = WHITE;
-        ctx.fillText(thing, px + CELL / 2, py + CELL / 2 + 1);
-      }
-    }
-  } else {
-    const lines = s.lines.length;
-    if (s.big) centered(ctx, s.big, FRAME.y + FRAME.h * (lines ? 0.32 : 0.45), 120, WHITE);
-    s.lines.forEach((line, i) => centered(ctx, line, FRAME.y + FRAME.h * 0.58 + i * 30, 22, WHITE, 500));
-  }
+function drawFooter(ctx: CanvasRenderingContext2D, s: Scene): void {
+  const px = VP.h * 0.05;
+  const y = VP.y + VP.h - px * 2.2 + px / 2;
   if (s.ask) {
-    const y = FRAME.y + FRAME.h - 70;
-    if (s.ask.prompt) centered(ctx, s.ask.prompt, y - 28, 16, MUTED, 500);
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.strokeStyle = PRIMARY;
-    ctx.beginPath();
-    ctx.roundRect(FRAME.x + FRAME.w / 2 - 220, y - 4, 440, 44, 10);
-    ctx.fill();
-    ctx.stroke();
-    centered(ctx, `${s.ask.text}▏`, y + 18, 22, WHITE, 500);
+    if (s.ask.prompt) text(ctx, s.ask.prompt, VP.x + px, y - px * 1.5, px, P.muted, "left", SANS);
+    const w = text(ctx, "Answer →", VP.x + px, y, px, P.accent, "left", MONO, 700);
+    const tw = text(ctx, s.ask.text, VP.x + px + w + px / 2, y, px, P.text, "left", MONO);
+    ctx.fillStyle = P.caret;
+    ctx.fillRect(VP.x + px + w + px / 2 + tw, y - px * 0.5, px * 0.55, px * 1.05);
+  } else if (s.over !== null) {
+    text(ctx, s.over, mid, y, px, P.accent, "center", MONO, 700);
   }
-  if (s.over !== null) {
-    ctx.fillStyle = "rgba(20, 10, 36, 0.72)";
-    ctx.fillRect(FRAME.x, FRAME.y, FRAME.w, FRAME.h);
-    centered(ctx, s.over, FRAME.y + FRAME.h / 2, 30, WHITE);
-  }
+}
+
+function card(ctx: CanvasRenderingContext2D, title: string, line: string, technical = ""): void {
+  const px = VP.h * 0.06;
+  const cy = VP.y + VP.h / 2;
+  text(ctx, title, mid, cy - px * 2, fit(ctx, title, px * 1.4, VP.w * 0.9, MONO, 700), P.text, "center", MONO, 700);
+  text(ctx, line, mid, cy, fit(ctx, line, px, VP.w * 0.92, SANS, 400), P.muted, "center", SANS);
+  if (technical) text(ctx, technical, mid, cy + px * 1.8, fit(ctx, technical, px * 0.7, VP.w * 0.92, MONO, 400), P.dim, "center", MONO);
 }

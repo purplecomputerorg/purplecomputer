@@ -51,7 +51,7 @@ Filename is `text.strip().lower().replace(" ", "_") + ".wav"`, the rule in `tts.
 { "name": "palm", "ops": [[43, 0, "#ffffff"], [44, 0, "#fefefe"]] }
 ```
 
-`ops` is the `[x, y, "#rrggbb"]` paint-op list `tools/photo_to_art.py` generates, on the 132 by 25 Art canvas with the photo fitted and centered. Every op must be on the canvas. The parent menu shows a Pictures entry when any pack has one; choosing a picture switches to the Art room and paints it onto a fresh canvas. `<name>.png` is a preview for people; Purple does not open it.
+`ops` is a `[x, y, "#rrggbb"]` paint-op list on the canvas UI's 56 by 24 Art grid of square cells, the photo fitted and centered; Purple paints each op on its cell. Every op must be on the grid. The parent menu shows a Pictures entry when any pack has one; choosing a picture switches to the Art room and paints it onto a fresh canvas. `<name>.png` is a preview for people; Purple does not open it.
 
 ### instruments/<name>.json and <name>/<pitch>.wav
 

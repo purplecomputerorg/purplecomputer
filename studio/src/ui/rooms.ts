@@ -66,7 +66,7 @@ function problemBox(): { element: HTMLElement; show(p: Problem | null): void } {
     show(p) {
       element.hidden = !p;
       if (!p) return;
-      const where = p.line ? `Line ${p.line}` : "The room stopped";
+      const where = p.setup ? "Can't preview here" : p.line ? `Line ${p.line}` : "The room stopped";
       const copy = `${where}: ${p.text}`;
       element.replaceChildren(
         h("div", { class: "row between" }, h("strong", { class: "where" }, where), h("button", { class: "linkbtn dim small", onclick: () => navigator.clipboard?.writeText(copy) }, "Copy the error")),

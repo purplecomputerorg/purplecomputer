@@ -1,132 +1,85 @@
-import { paintCells } from "../photo";
-import { APP_BG_DARK, CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_BG_DARK, GUTTER_BG_DARK, VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from "@sdk/purple/art";
+// The Art, Music, and Play rooms as Purple's canvas UI draws them (purple_tui/canvas/rooms/),
+// laid out on its 1366x768 screen: recognizable, not pixel exact.
+import { CANVAS_ALT, CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, KEY_COLORS } from "@sdk/purple/art";
 import { GRID_ROWS, PERCUSSION_ROW } from "@sdk/purple/sounds";
-import { h } from "./dom";
+import { paintCells } from "../photo";
+import { FRAME, MONO, P, SANS, pill, rounded, screen, text } from "./screen";
 
 export interface FrameColors { background: string; surface: string }
-export const DEFAULT_COLORS: FrameColors = { background: APP_BG_DARK, surface: DEFAULT_BG_DARK };
-export const PRIMARY = "#9b7bc4";
-export const MUTED = "#8a78a8";
-export const WHITE = "#f4eefc";
-export { VIEWPORT_HEIGHT, VIEWPORT_WIDTH };
-const PAD = 1;
+export const DEFAULT_COLORS: FrameColors = { background: P.bg, surface: CANVAS_BG };
 
-export interface Pen {
-  cell: (x: number, y: number, color: string, w?: number, hgt?: number) => void;
-  text: (t: string, x: number, y: number, color: string, bold?: boolean) => void;
-  ctx: CanvasRenderingContext2D;
-  cw: number;
-  ch: number;
+// The checkerboard partner of a family's canvas color: the same small step Purple's own pair takes.
+function alt(surface: string): string {
+  if (surface === CANVAS_BG) return CANVAS_ALT;
+  const n = parseInt(surface.slice(1), 16);
+  const up = (v: number) => Math.min(255, v + 6).toString(16).padStart(2, "0");
+  return `#${up(n >> 16)}${up((n >> 8) & 255)}${up(n & 255)}`;
 }
 
-// The shared viewport: app background, heavy border, then whatever the room draws inside.
-// Cells are `cellPx` wide and twice as tall, the same shape as the terminal's.
-export function frame(colors: FrameColors, draw: (pen: Pen) => void, cellPx = 5): HTMLCanvasElement {
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const cols = VIEWPORT_WIDTH + 2 * PAD;
-  const rows = VIEWPORT_HEIGHT + 2 * PAD;
-  const canvas = h("canvas", { class: "frame", width: cols * cellPx * dpr, height: rows * cellPx * 2 * dpr });
-  canvas.style.aspectRatio = `${cols} / ${rows * 2}`;
-  const ctx = canvas.getContext("2d")!;
-  ctx.scale(dpr, dpr);
-  const cw = cellPx;
-  const ch = cellPx * 2;
-  ctx.fillStyle = colors.background;
-  ctx.fillRect(0, 0, cols * cw, rows * ch);
-  ctx.strokeStyle = PRIMARY;
-  ctx.lineWidth = Math.max(1, cellPx / 3);
-  ctx.strokeRect(PAD * cw - cw / 2, PAD * ch - ch / 4, VIEWPORT_WIDTH * cw + cw, VIEWPORT_HEIGHT * ch + ch / 2);
-  ctx.textBaseline = "middle";
-  draw({
-    ctx, cw, ch,
-    cell: (x, y, color, w = 1, hgt = 1) => {
-      ctx.fillStyle = color;
-      ctx.fillRect((x + PAD) * cw, (y + PAD) * ch, w * cw, hgt * ch);
-    },
-    text: (t, x, y, color, bold = false) => {
-      ctx.font = `${bold ? "600 " : ""}${cellPx * 1.8}px ui-monospace, Menlo, monospace`;
-      ctx.fillStyle = color;
-      ctx.fillText(t, (x + PAD) * cw, (y + PAD + 0.5) * ch);
-    },
-  });
-  return canvas;
-}
+const ART_CELL = 20;
+const ART = { x: 122, y: 128 };
 
-export function artFrame(cells: string[][] | null, colors: FrameColors = DEFAULT_COLORS): HTMLCanvasElement {
-  return frame(colors, ({ cell, text, ctx, cw, ch }) => {
-    cell(0, 0, colors.surface, VIEWPORT_WIDTH);
-    for (let x = 0; x < VIEWPORT_WIDTH; x++) {
-      cell(x, 1, GUTTER_BG_DARK[x % 2]);
-      cell(x, VIEWPORT_HEIGHT - 2, GUTTER_BG_DARK[x % 2]);
-    }
-    for (let y = 2; y < VIEWPORT_HEIGHT - 2; y++) {
-      cell(0, y, GUTTER_BG_DARK[y % 2]);
-      cell(VIEWPORT_WIDTH - 1, y, GUTTER_BG_DARK[y % 2]);
-    }
-    cell(1, 2, colors.surface, CANVAS_WIDTH, CANVAS_HEIGHT);
-    if (cells) {
-      ctx.save();
-      ctx.translate((1 + PAD) * cw, (2 + PAD) * ch);
-      paintCells(ctx, cells, cw, colors.surface);
-      ctx.restore();
-    }
-    cell(60, 0, "#ffffff", 5);
-    ["#DF7070", "#DFC070", "#7090DF"].forEach((c, i) => cell(61 + i, 0, c));
-    text("ABC", 67, 0, MUTED);
-    text("Tab to write", 96, 0, MUTED);
-    const hint = "Type to paint! Every letter is a color. Space puts the pen down.";
-    text(hint, Math.floor((VIEWPORT_WIDTH - hint.length) / 2), VIEWPORT_HEIGHT - 1, MUTED);
+export function artFrame(cells: string[][] | null, colors: FrameColors = DEFAULT_COLORS) {
+  return screen({ title: "Art", right: "Arrows move  ← ↑ ↓ →", ground: colors.background }, (ctx) => {
+    // One pixel per cell, scaled up unsmoothed: crisp squares with no seams at any size.
+    const grid = new OffscreenCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const g = grid.getContext("2d")!;
+    const a = alt(colors.surface);
+    for (let y = 0; y < CANVAS_HEIGHT; y++)
+      for (let x = 0; x < CANVAS_WIDTH; x++) {
+        g.fillStyle = (x + y) % 2 ? a : colors.surface;
+        g.fillRect(x, y, 1, 1);
+      }
+    if (cells) paintCells(g, cells, 1, null);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(grid, ART.x, ART.y, CANVAS_WIDTH * ART_CELL, CANVAS_HEIGHT * ART_CELL);
+    const x = pill(ctx, "Paint", 622, 105, true);
+    text(ctx, "ABC", 622 + x + 20, 105, 17, P.muted, "left", MONO, 700);
+    text(ctx, "Tab to write", FRAME.x + FRAME.w - 18, 105, 16, P.muted, "right");
+    text(ctx, "Type to paint! Every letter is a color. Space puts the pen down.", 119, 631, 16, P.dim);
   });
 }
 
 export interface MusicFrameOptions { instrument: string; sayLetters?: boolean; activeKey?: string | null }
 
-export function musicFrame({ instrument, sayLetters = false, activeKey = null }: MusicFrameOptions, colors: FrameColors = DEFAULT_COLORS): HTMLCanvasElement {
-  return frame(colors, ({ cell, text }) => {
-    const label = ` ${instrument} `;
-    const pillX = Math.floor((VIEWPORT_WIDTH - label.length - 13) / 2);
-    if (sayLetters) {
-      text(label, pillX, 1, MUTED);
-      cell(pillX + label.length + 1, 1, PRIMARY, 13);
-      text(" Say Letters ", pillX + label.length + 1, 1, APP_BG_DARK, true);
-    } else {
-      cell(pillX, 1, PRIMARY, label.length);
-      text(label, pillX, 1, APP_BG_DARK, true);
-      text("Say Letters", pillX + label.length + 2, 1, MUTED);
-    }
-    text("← Key C →", 2, 1, MUTED);
-    text("Tab to say letters", VIEWPORT_WIDTH - 22, 1, MUTED);
-    const rows = [PERCUSSION_ROW, ...GRID_ROWS];
-    rows.forEach((keys, r) => {
-      const y = 6 + r * 5;
+export function musicFrame({ instrument, sayLetters = false, activeKey = null }: MusicFrameOptions, colors: FrameColors = DEFAULT_COLORS) {
+  return screen({ title: "♫ Music", right: "Arrows change key  ← →", ground: colors.background }, (ctx) => {
+    pill(ctx, sayLetters ? "Saying Letters" : `♫ ${instrument}`, 135, 114, true);
+    text(ctx, "Key of C", FRAME.x + FRAME.w - 34, 114, 18, P.dim, "right");
+    [PERCUSSION_ROW, ...GRID_ROWS].forEach((keys, r) => {
+      const y = 210 + r * 108;
       keys.forEach((k, c) => {
-        const x = 7 + c * 13;
+        const x = 198 + c * 107.8;
         const shown = k === "/" ? "÷" : k.toUpperCase();
-        if (k === activeKey) {
-          cell(x - 1, y, PRIMARY, 3);
-          text(shown, x, y, APP_BG_DARK, true);
-        } else text(shown, x, y, r === 0 ? MUTED : WHITE, true);
+        const on = k === activeKey;
+        if (on) rounded(ctx, x - 44, y - 44, 88, 88, 12, KEY_COLORS[k] ?? P.primary);
+        text(ctx, shown, x, y, 32, on ? P.on_primary : P.dim, "center", MONO, 600);
       });
     });
-    const hint = "Space: show notes   Arrows: switch key   Enter: instrument   Hold Enter: loop";
-    text(hint, Math.floor((VIEWPORT_WIDTH - hint.length) / 2), VIEWPORT_HEIGHT - 1, MUTED);
+    text(ctx, "Space: notes   Tab: say letters   Enter: instrument   Hold Enter: loop", 190, 622, 16, P.dim);
   });
 }
 
 export interface PlayLine { ask: string; answer: string }
 
-export function playFrame(lines: PlayLine[], colors: FrameColors = DEFAULT_COLORS): HTMLCanvasElement {
-  return frame(colors, ({ cell, text }) => {
-    let y = 2;
-    for (const { ask, answer } of lines.slice(-5)) {
-      text("Ask →", 2, y, PRIMARY, true);
-      text(ask, 8, y, WHITE);
-      text("→ " + answer, 6, y + 1, WHITE);
-      y += 3;
-    }
-    text("Ask →", 2, VIEWPORT_HEIGHT - 4, PRIMARY, true);
-    cell(8, VIEWPORT_HEIGHT - 4, "#d7e8a0");
-    const hint = "Try: say hi  (or hello!, both speak aloud)  •  red sun";
-    text(hint, Math.floor((VIEWPORT_WIDTH - hint.length) / 2), VIEWPORT_HEIGHT - 1, MUTED);
+const isPicture = (s: string) => !/[a-z0-9]/i.test(s);
+
+export function playFrame(lines: PlayLine[], colors: FrameColors = DEFAULT_COLORS) {
+  return screen({ title: "Play", right: "Arrows scroll  ↑ ↓", ground: colors.background }, (ctx) => {
+    const x = 135;
+    const shown = lines.slice(-3);
+    shown.forEach(({ ask, answer }, i) => {
+      const y = 542 - (shown.length - i) * 96;
+      const w = text(ctx, "Type", x, y, 19, P.muted, "left", MONO, 700);
+      text(ctx, `→ ${ask}`, x + w + 10, y, 19, P.muted);
+      if (isPicture(answer)) text(ctx, answer, x, y + 41, 34, P.text, "left", SANS);
+      else text(ctx, answer, x, y + 38, 20, P.text);
+    });
+    const w = text(ctx, "Type →", x, 542, 21, P.accent, "left", MONO, 700);
+    rounded(ctx, x + w + 14, 524, 372, 36, 7, P.field, P.line);
+    ctx.fillStyle = P.caret;
+    ctx.fillRect(x + w + 25, 532, 10, 20);
+    text(ctx, "Type a word, then press Enter", x + w + 25, 578, 16, P.dim);
+    text(ctx, "Try: cat * 5  •  say yellow", x, 620, 16, P.dim);
   });
 }

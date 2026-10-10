@@ -19,7 +19,7 @@ describe("art port matches purple_tui", () => {
   it("ops are centered like photo_to_art.convert", () => {
     const cells = [["#000000", "#111111"], ["#222222", "#333333"]];
     const ops = cellsToOps(cells);
-    expect(ops[0]).toEqual([65, 11, "#000000"]);
-    expect(ops[3]).toEqual([66, 12, "#333333"]);
+    expect(ops[0]).toEqual([27, 11, "#000000"]);
+    expect(ops[3]).toEqual([28, 12, "#333333"]);
   });
 });

@@ -28,10 +28,11 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
-def fit_to_canvas(width: int, height: int, cols: int = CANVAS_WIDTH, rows: int = CANVAS_HEIGHT) -> tuple[int, int]:
-    """Cell grid size that fits a cols x rows canvas while preserving the photo aspect."""
-    scale = min(cols / width, rows * CELL_ASPECT / height)
-    return max(1, round(width * scale)), max(1, round(height * scale / CELL_ASPECT))
+def fit_to_canvas(width: int, height: int, cols: int = CANVAS_WIDTH, rows: int = CANVAS_HEIGHT,
+                  aspect: float = CELL_ASPECT) -> tuple[int, int]:
+    """Cell grid size that fits a cols x rows canvas of cells aspect times taller than wide, keeping the photo's shape."""
+    scale = min(cols / width, rows * aspect / height)
+    return max(1, round(width * scale)), max(1, round(height * scale / aspect))
 
 
 def convert(photo_path: str) -> tuple[list[tuple[int, int, str]], list[list[str]]]:

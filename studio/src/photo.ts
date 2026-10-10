@@ -1,4 +1,4 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_BG_DARK, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "@sdk/purple/art";
+import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "@sdk/purple/art";
 
 export interface Picture { name: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string }
 
@@ -47,21 +47,24 @@ export async function pictureFromFile(file: File): Promise<Picture> {
   return { name, cells, ops: cellsToOps(cells), sourceUrl: URL.createObjectURL(file) };
 }
 
-// Same rendering as tools/photo_to_art.write_preview: a cell is PREVIEW_CELL_PX wide and twice as tall.
-export function paintCells(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, cells: string[][], cellPx: number, bg = DEFAULT_BG_DARK) {
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * cellPx * 2);
+// The picture on the Art grid, centered the way Purple paints it; a cell is cellPx wide.
+export function paintCells(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, cells: string[][], cellPx: number, bg: string | null = CANVAS_BG) {
+  const ch = cellPx * CELL_ASPECT;
+  if (bg) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * ch);
+  }
   const [x0, y0] = canvasOrigin(cells[0].length, cells.length);
   cells.forEach((row, cy) =>
     row.forEach((color, cx) => {
       ctx.fillStyle = color;
-      ctx.fillRect((x0 + cx) * cellPx, (y0 + cy) * cellPx * 2, cellPx, cellPx * 2);
+      ctx.fillRect((x0 + cx) * cellPx, (y0 + cy) * ch, cellPx, ch);
     }),
   );
 }
 
 export async function previewPng(cells: string[][], cellPx = 10): Promise<Uint8Array> {
-  const canvas = new OffscreenCanvas(CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * cellPx * 2);
+  const canvas = new OffscreenCanvas(CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * cellPx * CELL_ASPECT);
   paintCells(canvas.getContext("2d")!, cells, cellPx);
   return new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
 }

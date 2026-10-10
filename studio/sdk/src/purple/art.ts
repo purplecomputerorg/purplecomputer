@@ -5,16 +5,13 @@ import exported from "./export.json";
 
 const art = exported.art;
 
-export const VIEWPORT_WIDTH = art.viewport[0];
-export const VIEWPORT_HEIGHT = art.viewport[1];
+// The canvas UI's Art grid: square cells, and pack pictures are painted on it 1:1.
 export const CANVAS_WIDTH = art.canvas[0];
 export const CANVAS_HEIGHT = art.canvas[1];
 export const CELL_ASPECT = art.cell_aspect;
 
-export const APP_BG_DARK = art.app_bg;
-export const DEFAULT_BG_DARK = art.bg_dark;
-export const DEFAULT_BG_LIGHT = art.bg_light;
-export const GUTTER_BG_DARK = art.gutter as [string, string];
+export const CANVAS_BG = art.canvas_bg;
+export const CANVAS_ALT = art.canvas_alt;
 export const KEY_COLORS: Record<string, string> = art.key_colors;
 
 export const QWERTY_ROW = [..."qwertyuiop[]"];

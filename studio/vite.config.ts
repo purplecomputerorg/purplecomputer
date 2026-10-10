@@ -2,6 +2,7 @@
 import { copyFileSync, mkdirSync, readdirSync, createReadStream, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import { defineConfig, type Plugin } from "vite";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -56,7 +57,9 @@ const HEADERS = {
 // Core pack data is imported straight from ../packs so Studio and Purple share one source of truth.
 export default defineConfig({
   base: "./",
-  plugins: [pyodideAssets(), { name: "csp-meta", transformIndexHtml: (html) => html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`) }],
+  // https: cross-origin isolation (and so the room preview) needs a secure context, and the Mac
+  // opens the dev server as https://simba:5173, which plain http on a LAN name is not.
+  plugins: [basicSsl(), pyodideAssets(), { name: "csp-meta", transformIndexHtml: (html) => html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`) }],
   resolve: { alias: { "@sdk": resolve(here, "sdk/src") } },
   // host: true listens on the LAN so the dev server can be opened from another machine (the Mac hits "simba").
   server: { host: true, allowedHosts: ["simba"], fs: { allow: [".."] }, headers: HEADERS },

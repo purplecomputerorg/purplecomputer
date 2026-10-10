@@ -9,7 +9,7 @@ import pygame
 
 from ... import palette as P
 from ...code_runner import ArtCodeRunner
-from ...constants import ICON_PALETTE, ICON_ROBOT
+from ...constants import ART_COLS, ART_ROWS, ICON_PALETTE, ICON_ROBOT
 from ...color_mixing import mix_colors_paint
 from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
@@ -20,7 +20,7 @@ from ..panels import CodePanel, SpaceHold
 from ..ui import draw_label, draw_mode_switch
 from .base import Room
 
-COLS, ROWS = 56, 24
+COLS, ROWS = ART_COLS, ART_ROWS
 BRUSH_CHAR = "█"
 ARROW_HOLD_REPEAT_THRESHOLD = 8
 HOLD_ACCEL_MULTIPLIER = 6

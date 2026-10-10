@@ -43,7 +43,9 @@ export class RoomStage {
   constructor(private name: string, hooks: StageHooks) {
     this.canvas.style.width = "100%";
     this.canvas.style.aspectRatio = `${WIDTH} / ${HEIGHT}`;
-    this.element = h("div", { class: "roomstage", tabindex: 0, title: "Click here, then press keys" }, this.canvas);
+    // The hint covers the room whenever it isn't getting keys; CSS hides it on focus.
+    this.element = h("div", { class: "roomstage", tabindex: 0 }, this.canvas,
+      h("div", { class: "roomstage-hint" }, h("strong", {}, "Click to play"), h("span", {}, "then use the keyboard, like on Purple")));
     this.host = new RoomHost({
       redraw: () => this.redraw(),
       say: (t) => this.say(t),
@@ -64,6 +66,10 @@ export class RoomStage {
   run(source: string): void {
     speechSynthesis?.cancel();
     this.host.start(source);
+  }
+
+  focus(): void {
+    this.element.focus({ preventScroll: true });
   }
 
   dispose(): void {

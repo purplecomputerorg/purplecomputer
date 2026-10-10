@@ -180,7 +180,7 @@ function editor(room: RoomDraft): View {
       "section",
       {},
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, tabs.blocks, tabs.python),
-        h("div", { class: "row" }, h("span", { class: "dim small" }, "Click the room on the right, then press keys"), h("button", { class: "btn small", onclick: () => { restart(); stage.element.focus(); } }, "Restart"))),
+        h("button", { class: "btn small", onclick: () => { restart(); stage.focus(); } }, "▶ Play from the start")),
       panes.blocks,
       panes.python,
       problems.element,
@@ -194,6 +194,7 @@ function editor(room: RoomDraft): View {
     mounted: () => {
       showTab(room.blocks || room.template ? "blocks" : "python");
       restart();
+      stage.focus();
     },
     cleanup: () => { clearTimeout(timer); stage.dispose(); ws?.dispose(); ws = null; },
   };

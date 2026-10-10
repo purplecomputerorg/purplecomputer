@@ -185,7 +185,10 @@ pre code { background: none; color: inherit; padding: 0; }
 /* Rooms: the block editor and the live room */
 .blockly { height: 560px; border-radius: 16px; border: 1px solid var(--line); overflow: hidden; background: #fbfaf8; }
 .blocklyToolboxDiv { border-right: 1px solid var(--line); }
-.roomstage { outline: none; border-radius: 12px; cursor: pointer; }
+.roomstage { outline: none; border-radius: 12px; cursor: pointer; position: relative; }
+.roomstage-hint { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 12px; background: rgba(20, 10, 35, 0.55); color: #fff; font-size: 13px; }
+.roomstage-hint strong { font-size: 20px; }
+.roomstage:focus .roomstage-hint { display: none; }
 .roomstage:focus { box-shadow: 0 0 0 4px var(--fill), 0 0 0 6px var(--magenta); }
 .stage .roomstage canvas { display: block; }
 

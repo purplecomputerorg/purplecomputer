@@ -2,15 +2,13 @@ import type { Clip } from "./audio";
 import type { Picture } from "./photo";
 import type { TemplateDraft } from "./examples";
 import { packId as sdkPackId } from "@sdk/pack";
-import { CANVAS_BG, ROW_HUES } from "@sdk/purple/art";
-import PURPLE from "@sdk/purple/export.json";
+import type { Theme } from "@sdk/purple/theme";
 import type { BaseName, Params } from "@sdk/purple/synth";
 
 export interface WordEntry { word: string; emoji: string }
 export interface SynonymEntry { alias: string; word: string }
 export interface Phrase { text: string; clip: Clip }
 export interface Instrument { name: string; base: BaseName; params: Params }
-export interface Theme { background: string; surface: string; hues: { qwerty: number; asdf: number; zxcv: number } }
 // A room is its Python (what Purple runs) plus what it was made from, blocks or a form, so either can be
 // reopened. Both are null once the Python has been edited by hand.
 export interface RoomDraft { name: string; source: string; blocks: unknown | null; template: TemplateDraft | null }
@@ -28,7 +26,6 @@ export interface Draft {
   theme: Theme | null;
 }
 
-export const DEFAULT_THEME: Theme = { background: PURPLE.screen.palette.bg, surface: CANVAS_BG, hues: { ...ROW_HUES } };
 
 export const draft: Draft = {
   familyName: "",

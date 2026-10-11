@@ -40,7 +40,7 @@ def fetch_wheels() -> None:
 
 def take_posters() -> None:
     shots = OUT.parent / "shots"
-    for room in ("play", "music", "art"):
+    for room in ("play", "music", "art", "blocks"):
         env = {**os.environ, "PURPLE_SCREENSHOT_DIR": str(shots)}
         subprocess.run([sys.executable, str(ROOT / "scripts" / "preview.py"), room], cwd=ROOT, env=env, check=True, capture_output=True)
         (shots / f"{room}.png").replace(OUT.parent / f"poster-{room}.png")

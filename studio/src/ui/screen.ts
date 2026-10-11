@@ -1,17 +1,24 @@
 // Purple's screen as the canvas UI draws it (purple_tui/canvas/app.py at 1366x768): the
 // computer's name and the room title above a rounded stage, the keyboard note and the Esc pill
-// below. Every preview on the right goes through here, so they all look like the laptop.
-import { PURPLE } from "@sdk";
+// below. Studio's room stage draws through here, in the family's colors when they have some.
+import { PURPLE, themePalette } from "@sdk";
 import { draft } from "../state";
 import { h } from "./dom";
 
-export const P = PURPLE.screen.palette;
+type ScreenPalette = typeof PURPLE.screen.palette;
+let cached: [key: string, palette: ScreenPalette] = ["", PURPLE.screen.palette];
+function palette(): ScreenPalette {
+  const key = JSON.stringify(draft.theme);
+  if (key !== cached[0]) cached = [key, draft.theme ? { ...PURPLE.screen.palette, ...themePalette(draft.theme) } : PURPLE.screen.palette];
+  return cached[1];
+}
+// Reads the current palette on every use, so a theme change reaches the next frame.
+export const P = new Proxy({} as ScreenPalette, { get: (_, k) => palette()[k as keyof ScreenPalette] });
 export const W = 1366;
 export const H = 768;
 export const FRAME = { x: 101, y: 74, w: 1164, h: 588 };
 export const MONO = `"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace`;
 export const SANS = `"IBM Plex Sans", Figtree, Inter, system-ui, sans-serif`;
-const EXPAND_ICON = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>`;
 
 export interface Chrome {
   title: string;
@@ -58,8 +65,7 @@ export function pill(ctx: CanvasRenderingContext2D, label: string, x: number, y:
 
 // The whole screen; body draws inside the stage, clipped to its rounded corners.
 export function drawScreen(ctx: CanvasRenderingContext2D, chrome: Chrome, body: (ctx: CanvasRenderingContext2D) => void): void {
-  // A family's colors reach every preview through the ground around the stage.
-  ctx.fillStyle = draft.theme?.background ?? P.bg;
+  ctx.fillStyle = P.bg;
   ctx.fillRect(0, 0, W, H);
   text(ctx, "My Purple Computer", FRAME.x, 44, 19, P.muted);
   text(ctx, chrome.title, W / 2, 44, 19, P.accent, "center", MONO, 700);
@@ -79,22 +85,15 @@ export function drawScreen(ctx: CanvasRenderingContext2D, chrome: Chrome, body: 
 }
 
 // A preview canvas that draws at its displayed size times devicePixelRatio, so it stays sharp
-// at any width and in full screen. Call redraw() when what it shows changes.
+// at any width. Call redraw() when what it shows changes.
 export class ScreenCanvas {
   readonly element: HTMLElement;
   readonly canvas = h("canvas", { class: "screen" });
   private frame = 0;
   private observer: ResizeObserver;
 
-  constructor(private draw: (ctx: CanvasRenderingContext2D) => void, focusable = false) {
-    const full = h("button", { class: "screen-full", title: "Full screen", "aria-label": "Full screen" });
-    full.innerHTML = EXPAND_ICON;
-    full.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (document.fullscreenElement) void document.exitFullscreen();
-      else void this.element.requestFullscreen?.().then(() => focusable && this.element.focus({ preventScroll: true }));
-    });
-    this.element = h("div", { class: "screen-wrap" }, this.canvas, full);
+  constructor(private draw: (ctx: CanvasRenderingContext2D) => void) {
+    this.element = h("div", { class: "screen-wrap" }, this.canvas);
     this.observer = new ResizeObserver(() => this.redraw());
     this.observer.observe(this.canvas);
     this.redraw();

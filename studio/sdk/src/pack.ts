@@ -1,15 +1,15 @@
 // Builds a .purplepack from a plain description. Everything Purple reads is described
 // in studio/PACK_FORMAT.md; this is the one place that knows the file layout.
 import exported from "./purple/export.json";
-import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, generateRowGradient, type PaintOp } from "./purple/art";
+import { type PaintOp } from "./purple/art";
 import { SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
 import { SYNTH_RATE, renderNote, type BaseName, type Params } from "./purple/synth";
+import { themeJson, type Theme } from "./purple/theme";
 import { gzip, tar, type TarEntry } from "./tar";
 import { encodeWav, type Clip } from "./wav";
 
 export interface PackPicture { name: string; ops: PaintOp[]; png?: Uint8Array }
 export interface PackInstrument { name: string; base: BaseName; params: Params }
-export interface PackTheme { background: string; surface: string; hues: { qwerty: number; asdf: number; zxcv: number } }
 // content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Blockly workspace it came from rides beside it.
 export interface PackRoom { name: string; source: string; blocks?: unknown }
 
@@ -23,7 +23,7 @@ export interface PackSpec {
   pictures: PackPicture[];
   instruments: PackInstrument[];
   rooms: PackRoom[];
-  theme: PackTheme | null;
+  theme: Theme | null;
 }
 
 export const PACK_FORMAT: number = exported.pack_format;
@@ -58,18 +58,6 @@ export function emojiEntries(spec: PackSpec): TarEntry[] {
   if (spec.synonyms.length) out.push(json("content/synonyms.json", Object.fromEntries(spec.synonyms.map((s) => [s.alias, s.word]))));
   if (spec.ranked.length) out.push(text("content/rankings.txt", spec.ranked.join("\n") + "\n"));
   return out;
-}
-
-export function themeJson(t: PackTheme) {
-  return {
-    background: t.background,
-    surface: t.surface,
-    keys: {
-      ...generateRowGradient(t.hues.qwerty, QWERTY_ROW),
-      ...generateRowGradient(t.hues.asdf, ASDF_ROW),
-      ...generateRowGradient(t.hues.zxcv, ZXCV_ROW),
-    },
-  };
 }
 
 const yieldToUi = () => new Promise((r) => setTimeout(r, 0));

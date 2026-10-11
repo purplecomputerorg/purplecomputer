@@ -39,13 +39,20 @@ function say(text: string): Promise<void> {
 }
 
 // The room a Studio page shows; see setup() in live.py.
-export interface RoomSetup { room: "play" | "music" | "art"; letters?: boolean; instrument?: string; picture?: string }
+export type Room = "play" | "music" | "art" | "blocks";
+// at: the room's cursor, as fractions of the screen (see place() in live.py).
+export interface Place { room: Room; menu: boolean; at: [number, number] | null }
+export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: string }
 
 export interface LivePurple {
   // Installs a .purplepack (null: none) and starts Purple again so it reads it.
   load(pack: Uint8Array | null): Promise<void>;
-  setup(room: RoomSetup): Promise<void>;
-  key(char: string): Promise<void>;
+  // Both resolve to where Purple is afterwards: Esc opens the room picker, picking one changes the
+  // room, and keys move the cursor.
+  setup(room: RoomSetup): Promise<Place>;
+  key(char: string): Promise<Place>;
+  // Where Purple is now, after keys it got straight from the browser.
+  place(): Promise<Place>;
 }
 
 export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) => void): Promise<LivePurple> {
@@ -74,14 +81,21 @@ sys.path.insert(0, "${ROOT}")
   await py.runPythonAsync(controller);
   const call = (code: string) => py.runPythonAsync(code);
   const arg = (v: unknown) => `__import__("json").loads(${JSON.stringify(JSON.stringify(v))})`;
+  const place = async (code: string): Promise<Place> => {
+    const proxy = (await call(code)) as { toJs(): [Room, boolean, [number, number] | null]; destroy(): void };
+    const [room, menu, at] = proxy.toJs();
+    proxy.destroy();
+    return { room, menu, at };
+  };
   const live: LivePurple = {
     async load(pack) {
       if (pack) py.FS.writeFile("/tmp/studio.purplepack", pack);
       await call(`install(${pack ? `"/tmp/studio.purplepack"` : "None"})`);
       await call("await restart()");
     },
-    setup: async (room) => void (await call(`setup(**${arg(room)})`)),
-    key: async (char) => void (await call(`await key(${arg(char)})`)),
+    setup: (room) => place(`setup(**${arg(room)})`),
+    key: (char) => place(`await key(${arg(char)})`),
+    place: () => place("place()"),
   };
   await live.load(null);
   return live;

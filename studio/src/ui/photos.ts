@@ -38,6 +38,10 @@ function dropZone(): HTMLElement {
   return h("div", {}, drop, status);
 }
 
+// Every photo in the pack; the one being looked at is marked.
+const photoList = (current: string | null) => draft.pictures.length < 2 && current ? null : h("div", { class: "photo-list" },
+  ...draft.pictures.map((p) => h("a", { href: `#photos/${encodeURIComponent(p.name)}`, "aria-current": p.name === current ? "page" : null, title: p.name }, h("img", { src: p.sourceUrl, alt: p.name }))));
+
 const caption = "Purple's Art room with your photo painted on. Type to paint over it.";
 
 export function photosView(item: string | null): View {
@@ -50,6 +54,7 @@ export function photosView(item: string | null): View {
         "section",
         {},
         h("p", { class: "lead" }, "A photo becomes a painting in the Art room, made of the same squares a kid paints with. They can draw right on top of it."),
+        photoList(null),
         dropZone(),
         h("p", { class: "dim small" }, "On Purple, a parent opens it from the parent menu, under Pictures."),
       ),
@@ -68,6 +73,7 @@ export function photosView(item: string | null): View {
       "section",
       {},
       h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px" }, h("img", { class: "photo", src: pic.sourceUrl, alt: "" }), h("div", {}, h("p", {}, "Painted on the right at the size it will be on Purple."), h("button", { class: "linkbtn dim", onclick: remove }, "Remove this photo")))),
+      photoList(pic.name),
       h("h3", {}, "Add another"),
       dropZone(),
     ),

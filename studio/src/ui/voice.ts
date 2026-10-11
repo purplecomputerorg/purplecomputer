@@ -3,6 +3,7 @@ import { play } from "../audio";
 import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
 import { changed, draft } from "../state";
 import { h, pageKeys } from "./dom";
+import { sticker } from "./stickers";
 import { liveScreen } from "./live";
 import { recordControl } from "./record";
 import type { View } from "./view";
@@ -31,7 +32,7 @@ function lettersView(): View {
   };
   function render() {
     keys.replaceChildren(...KEY_ROWS.map((row) => h("div", { class: "r" }, ...row.map((k) =>
-      h("button", { class: ["key", k in draft.letters && "done", k === current && "current"].filter(Boolean).join(" "), onclick: () => select(k) }, k)))));
+      h("button", { class: ["vkey", k in draft.letters && "done", k === current && "current"].filter(Boolean).join(" "), "aria-label": k, onclick: () => select(k) }, sticker(k))))));
     big.textContent = current;
     count.textContent = `${Object.keys(draft.letters).length} of ${LETTER_KEYS.length} recorded. Keys you skip keep Purple's voice.`;
     const clip = draft.letters[current];
@@ -63,6 +64,7 @@ function lettersView(): View {
       h("p", { class: "dim small" }, "Tip: type a key on your keyboard to jump to it. Studio moves to the next key after each recording."),
     ),
     live: { room: "music", letters: true },
+    keys: () => { const mine = Object.keys(draft.letters).slice(0, 5); return mine.length ? mine : [..."abcde"]; },
     previewTitle: "What your kid hears",
     caption: "Purple's Music room, saying letters. Keys you recorded say them in your voice.",
     cleanup: unlisten,

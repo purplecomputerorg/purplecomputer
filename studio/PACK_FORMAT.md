@@ -86,13 +86,15 @@ Studio saves the Blockly workspace a room was built from beside it as `<name>.bl
 
 ```json
 {
-  "background": "#1e1033",
-  "surface": "#2a1845",
+  "colors": { "bg": "#0d2233", "surface": "#123045", "text": "#c7def3", "accent": "#8fc3f0" },
+  "canvas": "#112c40",
   "keys": { "q": "#F2A5A5", "w": "#EE8D8D" }
 }
 ```
 
-A family's colors, read by the canvas UI when Purple starts (`purple_tui/canvas/theme.py`; the Textual UI ignores it). `background` is the ground around every room, `surface` the Art canvas (its checkerboard partner is a small step lighter), and `keys` maps letter-row keys to the colors they paint with in Art, light up in Music, and mark in Play; the row legend beside the screen follows them. Studio writes the full letter-row map from `generate_row_gradient` with the parent's hue per row. Every field is optional, anything that isn't a `#rrggbb` color or a letter-row key is ignored, and the number row always stays gray. The key stickers keep Purple's own colors, so a themed screen no longer matches them. With several themed packs, the last installed wins.
+A family's colors, read by the canvas UI when Purple starts (`purple_tui/canvas/theme.py`; the Textual UI ignores it). `colors` sets any of the screen's palette roles from `purple_tui/palette.py` by their lowercase names: `bg`, `surface`, `tile`, `field`, `hair`, `line`, `primary`, `on_primary`, `accent`, `text`, `muted`, `dim`. `canvas` is the Art canvas (its checkerboard partner is a small step away). `keys` maps letter-row keys to the colors they paint with in Art, light up in Music, and mark in Play; the row legend beside the screen follows them. Every field is optional, anything that isn't a `#rrggbb` color or a known role or letter-row key is ignored, and the number row always stays gray. The key stickers keep Purple's own colors, so themed paint colors no longer match them. With several themed packs, the last installed wins.
+
+Studio writes the whole palette, derived from one color the parent picks (`sdk/src/purple/theme.ts`): Purple's own palette turned to that color with the same relationships between its colors, a light color flipping it to dark text on a light screen, and each kind of text nudged until it reads on the panels it sits on.
 
 ## Where packs live and how they get there
 

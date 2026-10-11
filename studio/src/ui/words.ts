@@ -1,5 +1,6 @@
 import { CORE_EMOJI } from "@sdk/purple/core";
 import { changed, draft, type WordEntry } from "../state";
+import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, openEmojiPicker } from "./emojipicker";
 import type { View } from "./view";
@@ -95,6 +96,7 @@ export function wordsView(): View {
       h("p", { class: "dim small" }, `Purple already knows ${Object.keys(CORE_EMOJI).length} words, like cat and dog. Your words come first when Purple suggests what to type.`),
     ),
     live: { room: "play" },
+    keys: () => typingKeys(draft.words[0]?.word || "cat"),
     caption: "Purple's Play room, with your words in it. Type one and press Enter.",
     mounted: () => table.querySelector<HTMLInputElement>(".blank input")?.focus(),
   };

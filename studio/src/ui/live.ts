@@ -1,25 +1,41 @@
 // The real Purple on the right: one iframe (purple.html), started when Studio opens and kept for
 // the whole visit, so it's usually ready before anyone looks. Until it is, a screenshot of the
 // same room, taken from Purple itself, stands in.
-import type { RoomSetup } from "../live/boot";
-import type { FromFrame, ToFrame } from "../live/frame";
+import type { Place, Room, RoomSetup } from "../live/boot";
+import type { FromFrame, ToFrame, View } from "../live/frame";
+import { announceKey } from "../keys";
 import { buildPack } from "../pack";
 import { draft, pieces } from "../state";
 import { h } from "./dom";
-
-const EXPAND_ICON = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>`;
-declare global { interface Navigator { keyboard?: { lock(keys: string[]): Promise<void>; unlock(): void } } }
+import { tryHint } from "./playable";
 
 const poster = (room: string) => new URL(`purple/poster-${room}.png`, document.baseURI).href;
 // Quiet time after the last edit before the pack is rebuilt and Purple restarts with it.
 const SETTLE_MS = 700;
+// On a phone Purple's screen is too small to read whole, so it shows a close-up: this much bigger,
+// around the spot given here, or else the room's cursor (Art and Blocks follow theirs).
+const ZOOM: Record<Room, { scale: number; at?: [number, number] }> = {
+  play: { scale: 2, at: [0.33, 0.6] },
+  music: { scale: 1.3, at: [0.5, 0.47] },
+  art: { scale: 2 },
+  blocks: { scale: 1.6 },
+};
+// The same test as the phone rules in styles.css.
+export const PHONE = matchMedia("(max-width: 700px), (max-height: 500px) and (pointer: coarse)");
+export const MOUSE = matchMedia("(pointer: fine)");
+const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
 
 class LiveScreen {
   readonly element: HTMLElement;
   private frame = h("iframe", { class: "live-frame", src: "purple.html", title: "Purple", tabindex: -1 });
   private poster = h("img", { class: "live-poster", alt: "" });
   private status = h("span", {}, "Starting Purple");
-  private hint = h("button", { class: "playable-hint", type: "button" }, h("strong", {}, "Click to try it"), h("span", {}, "then use the keyboard, like on Purple"));
+  private hint = tryHint("button", "then use the keyboard, like on Purple");
+  private zoomed = true;
+  private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
+  // Set by Studio: Purple moved to another room, or opened or closed a menu.
+  onMove = () => {};
+  place: Place = { room: "play", menu: false, at: null };
   private ready = false;
   private setup: RoomSetup = { room: "play" };
   private timer = 0;
@@ -29,18 +45,17 @@ class LiveScreen {
   private listening = new Promise<void>((resolve) => (this.hello = resolve));
 
   constructor() {
-    const full = h("button", { class: "screen-full", title: "Full screen", "aria-label": "Full screen" });
-    full.innerHTML = EXPAND_ICON;
-    full.onclick = () => this.fullscreen();
     this.hint.onclick = () => this.focus();
-    this.element = h("div", { class: "screen-wrap live" }, this.frame, this.poster, h("div", { class: "live-status" }, h("i"), this.status), this.hint, full);
+    this.element = h("div", { class: "screen-wrap live" }, this.frame, this.poster, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton);
+    PHONE.addEventListener("change", () => this.reframe());
+    this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
-    document.addEventListener("fullscreenchange", () => !document.fullscreenElement && navigator.keyboard?.unlock());
     void this.sync();
   }
 
   show(setup: RoomSetup): void {
     this.setup = setup;
+    this.moved({ room: setup.room, menu: false, at: null });
     this.poster.src = poster(setup.room);
     if (this.ready) this.post({ type: "setup", setup });
   }
@@ -51,13 +66,21 @@ class LiveScreen {
     this.timer = window.setTimeout(() => void this.sync(), SETTLE_MS);
   }
 
-  key(char: string): void {
-    if (this.ready) this.post({ type: "key", char });
+  key(key: string): void {
+    if (!this.ready) return;
+    this.post({ type: "key", char: key });
+    announceKey(key);
   }
 
   focus(): void {
     this.frame.focus();
     this.post({ type: "focus" });
+  }
+
+  // Someone used the demo (a key, a room, the zoom): on a computer, send their typing to Purple
+  // too. A phone keeps its own keyboard's focus.
+  engage(): void {
+    if (MOUSE.matches) this.focus();
   }
 
   private async sync(): Promise<void> {
@@ -81,16 +104,32 @@ class LiveScreen {
       this.post({ type: "setup", setup: this.setup });
     }
     if (m.type === "focus") this.element.classList.toggle("focused", m.on);
+    if (m.type === "focus" && m.on) this.element.classList.add("tried");
+    if (m.type === "keydown") announceKey(m.key);
+    if (m.type === "place") this.moved(m.place);
+  }
+
+  private moved(place: Place): void {
+    const same = place.room === this.place.room && place.menu === this.place.menu;
+    this.place = place;
+    this.reframe();
+    if (!same) this.onMove();
+  }
+
+  // The whole screen, or on a phone the close-up; menus show whole, since they sit in the middle.
+  private reframe(): void {
+    const { room, menu, at } = this.place;
+    const zoom = PHONE.matches && !menu ? ZOOM[room] : null;
+    this.zoomButton.hidden = !zoom;
+    this.zoomButton.textContent = this.zoomed ? "Whole screen" : "Zoom in";
+    const size = zoom && this.zoomed ? 1 / zoom.scale : 1;
+    const [x, y] = zoom?.at ?? at ?? [0.5, 0.5];
+    const view: View = [clamp(x - size / 2, 1 - size), clamp(y - size / 2, 1 - size), size, size];
+    this.post({ type: "view", view });
   }
 
   private post(m: ToFrame): void {
     void this.listening.then(() => this.frame.contentWindow?.postMessage(m, location.origin));
-  }
-
-  private fullscreen(): void {
-    if (document.fullscreenElement) return void document.exitFullscreen();
-    // Keyboard lock keeps Esc for Purple's room picker instead of leaving full screen (Chrome).
-    void this.element.requestFullscreen?.().then(() => { void navigator.keyboard?.lock(["Escape"]); this.focus(); });
   }
 }
 

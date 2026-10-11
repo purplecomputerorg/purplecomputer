@@ -1,6 +1,6 @@
-"""A pack's theme.json recolors the canvas UI (the ground, the Art canvas, the letter rows and
-their legend) when Purple starts; a pack without one, or a malformed one, leaves Purple's own
-colors, and the number row always stays gray."""
+"""A pack's theme.json recolors the canvas UI (the screen's palette, the Art canvas, the letter
+rows and their legend) when Purple starts; a pack without one, or a malformed one, leaves
+Purple's own colors, and the number row always stays gray."""
 
 import json
 
@@ -14,7 +14,7 @@ from purple_tui.canvas.harness import make_app, press, run
 from purple_tui.canvas.rooms import art_room
 from purple_tui.content import ContentManager
 
-DEFAULT_Q, DEFAULT_BG, DEFAULT_CANVAS = P.KEY_COLORS["q"], P.BG, art_room.CANVAS_BG
+DEFAULT_Q, DEFAULT_BG, DEFAULT_TEXT, DEFAULT_CANVAS = P.KEY_COLORS["q"], P.BG, P.TEXT, art_room.CANVAS_BG
 
 
 @pytest.fixture
@@ -36,11 +36,11 @@ def themed(tmp_path, monkeypatch):
 
 
 def test_a_theme_recolors_the_rows_ground_and_canvas(themed):
-    themed({"background": "#0d2233", "surface": "#112c40", "keys": {"q": "#11aa22", "a": "#2233cc"}})
+    themed({"colors": {"bg": "#0d2233", "text": "#eeeeff"}, "canvas": "#112c40", "keys": {"q": "#11aa22", "a": "#2233cc"}})
 
     async def go():
         app = make_app()
-        assert P.BG == "#0d2233" and art_room.CANVAS_BG == "#112c40"
+        assert (P.BG, P.TEXT, P.SURFACE, art_room.CANVAS_BG) == ("#0d2233", "#eeeeff", "#251845", "#112c40")
         assert P.get_key_color("q") == "#11aa22" and P.get_key_color("1") == P.GRAYSCALE["1"]
         app.action_switch_room("art")
         await press(app, "q")
@@ -50,20 +50,20 @@ def test_a_theme_recolors_the_rows_ground_and_canvas(themed):
 
 
 def test_no_theme_or_a_bad_one_keeps_purples_colors(themed):
-    themed({"background": "red", "surface": 7, "keys": {"q": "nope", "1": "#000000"}})
+    themed({"colors": {"bg": "red", "text": 7, "banner": "#000000"}, "canvas": "blue", "keys": {"q": "nope", "1": "#000000"}})
     run(_start())
-    assert (P.KEY_COLORS["q"], P.BG, art_room.CANVAS_BG, P.KEY_COLORS["1"]) == (DEFAULT_Q, DEFAULT_BG, DEFAULT_CANVAS, P.GRAYSCALE["1"])
+    assert (P.KEY_COLORS["q"], P.BG, P.TEXT, art_room.CANVAS_BG, P.KEY_COLORS["1"]) == (DEFAULT_Q, DEFAULT_BG, DEFAULT_TEXT, DEFAULT_CANVAS, P.GRAYSCALE["1"])
     themed(None)
     run(_start())
     assert P.KEY_COLORS["q"] == DEFAULT_Q
 
 
 def test_starting_again_without_the_theme_puts_purples_colors_back(themed):
-    themed({"keys": {"q": "#11aa22"}})
+    themed({"colors": {"bg": "#0d2233"}, "keys": {"q": "#11aa22"}})
     run(_start())
     assert P.KEY_COLORS["q"] == "#11aa22"
     theme.apply({})
-    assert P.KEY_COLORS["q"] == DEFAULT_Q and P.ROW_LEGEND_COLORS[1] == ["#DF7070", "#BF4040", "#802020"]
+    assert P.KEY_COLORS["q"] == DEFAULT_Q and P.BG == DEFAULT_BG and P.ROW_LEGEND_COLORS[1] == ["#DF7070", "#BF4040", "#802020"]
 
 
 async def _start():

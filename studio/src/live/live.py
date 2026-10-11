@@ -7,7 +7,7 @@ from pathlib import Path
 
 from purple_tui import content
 from purple_tui.canvas.app import PurpleApp
-from purple_tui.keyboard import CharacterAction
+from purple_tui.canvas.press import press
 from purple_tui.pack_manager import PackInstaller
 
 PACKS = Path.home() / ".purple" / "packs"
@@ -55,8 +55,19 @@ def setup(room, letters=False, instrument=None, picture=None):
             from purple_tui.canvas.secret_doodle import paint_cells
             paint_cells(_app, found.ops)
     _app.invalidate()
+    return place()
 
 
-async def key(char):
-    """A key typed on the Studio page, sent the way Purple's keyboard sends one."""
-    await _app._dispatch_keyboard_action(CharacterAction(char=char, shifted=False))
+async def key(name):
+    """A key from the Studio page (typed there, or tapped on the pretend keyboard): a character,
+    or space, enter, backspace, escape, tab, or an arrow."""
+    await press(_app, name)
+    return place()
+
+
+def place():
+    """Where Purple is: its room, whether a menu (the room picker, say) is open over it, and the
+    room's cursor as fractions of the screen, if it has one. A phone zooms in around the cursor."""
+    vp, cursor = _app._viewport_rect(), _app._get_cursor_position()
+    at = [(vp.x + cursor[0] * vp.w) / _app.g.w, (vp.y + cursor[1] * vp.h) / _app.g.h] if cursor else None
+    return [_app.active_room, bool(_app.top), at]

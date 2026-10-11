@@ -46,6 +46,11 @@ export class RoomStage {
     this.screen.focus();
   }
 
+  // Esc and Tab never reach a room on Purple either.
+  press(key: string): void {
+    if (key !== "escape" && key !== "tab") this.host.key(key);
+  }
+
   dispose(): void {
     this.host.dispose();
     this.screen.dispose();

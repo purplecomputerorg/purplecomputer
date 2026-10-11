@@ -139,6 +139,8 @@ class PurpleApp:
             detect_keyboard_mode()
         from ..secret import SecretKnock
         self._secret_knock = SecretKnock()
+        from . import theme
+        theme.apply(theme.find())
         self.rooms = {c.name: c(self) for c in ROOM_CLASSES}
         self.active_room = "play"
         self._panel = None          # bottom panel drawn inside the viewport: code / loop / time
@@ -385,9 +387,9 @@ class PurpleApp:
         self.invalidate()
 
     def set_legend(self, color: str | None, visible: bool = True):
-        from ..palette import get_legend_row_from_color
+        from .theme import legend_row
         self._legend_visible = visible
-        self._legend_row = get_legend_row_from_color(color) if color else -1
+        self._legend_row = legend_row(color) if color else -1
         self.invalidate()
 
     def _silence_music(self):

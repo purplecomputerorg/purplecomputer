@@ -50,7 +50,7 @@ def take_posters() -> None:
 def main() -> None:
     fetch_wheels()
     take_posters()
-    files = subprocess.run(["git", "ls-files", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
+    files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
         for f in files:

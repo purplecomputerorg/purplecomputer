@@ -23,7 +23,6 @@ interface Section {
   label: string;
   icon: string;
   blurb: string;
-  soon?: boolean;
   view: (item: string | null) => View;
   count: () => number;
   children?: () => { id: string; label: string }[];
@@ -35,7 +34,7 @@ const SECTIONS: Section[] = [
   { id: "words", label: "Words", icon: "🐶", blurb: "Your words, each with its own emoji", view: wordsView, count: () => draft.words.length },
   { id: "instruments", label: "Instruments", icon: "🎹", blurb: "A sound of your own for the Music room", view: instrumentsView, count: () => draft.instruments.length, children: () => draft.instruments.map((i) => ({ id: i.name, label: i.name })) },
   { id: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView, count: () => draft.rooms.length, children: () => draft.rooms.map((r) => ({ id: r.name, label: roomTitle(r.name) })) },
-  { id: "colors", label: "Colors", icon: "🎨", blurb: "The colors the letters paint with", soon: true, view: colorsView, count: () => (draft.theme ? 1 : 0) },
+  { id: "colors", label: "Colors", icon: "🎨", blurb: "The colors the letters paint with", view: colorsView, count: () => (draft.theme ? 1 : 0) },
 ];
 const MORE: [id: string, label: string, view: (item: string | null) => View][] = [
   ["install", "Putting it on Purple", installView],
@@ -54,7 +53,7 @@ function welcomeView(): View {
       h("h1", {}, "Make it your family's."),
       h("p", { class: "serif" }, "The dog on the canvas. Grandma saying the letters. A room where C is for cow."),
       h("div", { class: "cards" }, ...SECTIONS.map((s) =>
-        h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label, s.soon ? h("span", { class: "tag soon" }, "Soon") : null), h("span", {}, s.blurb)))),
+        h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
       h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB stick. Nothing here leaves this computer."),
     ),
     live: { room: "play" },
@@ -130,7 +129,7 @@ function route() {
   const view = section ? section.view(item) : PAGES[sec] ? PAGES[sec](item) : welcomeView();
   current = view;
   clear(main);
-  if (view.title) main.append(h("div", { class: "editor-head" }, h("h2", {}, view.title), view.soon ? h("span", { class: "tag soon" }, "Preview only") : null));
+  if (view.title) main.append(h("div", { class: "editor-head" }, h("h2", {}, view.title)));
   main.append(view.editor);
   renderSide();
   renderStage();

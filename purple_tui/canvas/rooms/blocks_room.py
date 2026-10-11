@@ -20,7 +20,8 @@ from ..color_wheel import open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..ui import draw_mode_switch
 from .base import Room
-from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
+from . import art_room
+from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 WIDTH, DEPTH, HEIGHT = 30, 12, 12
@@ -336,8 +337,8 @@ class BlocksRoom(Room):
     def _floor_surface(self) -> pygame.Surface:
         """Checkerboard floor on a slab, built once per cell size."""
         if self._floor is None or self._floor.get_size() != self._scene_size():
-            self._floor = self._build_floor(P.SURFACE, CANVAS_BG, CANVAS_ALT, mix(CANVAS_BG, "#000000", 0.4),
-                                            mix(CANVAS_BG, "#000000", 0.55))
+            bg = art_room.CANVAS_BG  # a family theme can change it (canvas/theme.py)
+            self._floor = self._build_floor(P.SURFACE, bg, art_room.CANVAS_ALT, mix(bg, "#000000", 0.4), mix(bg, "#000000", 0.55))
         return self._floor
 
     def _build_floor(self, ground, tile, alt, slab_front, slab_side) -> pygame.Surface:
@@ -474,8 +475,8 @@ class BlocksRoom(Room):
                 if seam:
                     pygame.draw.polygon(g.surface, seam, poly, 1)
 
-        slab_bg, seam = mix(CANVAS_BG, "#000000", 0.4), rgb(P.LINE)
-        box(0, -SLAB / BLOCK_RISE, 0, WIDTH, 0, DEPTH, rgb(CANVAS_BG), lambda dark: mix(slab_bg, "#000000", dark))
+        slab_bg, seam = mix(art_room.CANVAS_BG, "#000000", 0.4), rgb(P.LINE)
+        box(0, -SLAB / BLOCK_RISE, 0, WIDTH, 0, DEPTH, rgb(art_room.CANVAS_BG), lambda dark: mix(slab_bg, "#000000", dark))
         shades: dict = {}
 
         def shade(color, dark):
@@ -520,4 +521,4 @@ class BlocksRoom(Room):
         px, py = self._corner(vx, vz, HEIGHT)
         cx, cy = ox + px + (c + sx) / 2, oy + py - dz / 2
         for dx, dy, r in ((-0.35, 0.05, 0.28), (0.35, 0.05, 0.28), (0, -0.12, 0.36)):
-            pygame.draw.circle(g.surface, mix(P.TEXT, CANVAS_BG, 0.15), (round(cx + dx * c), round(cy + dy * c)), round(r * c))
+            pygame.draw.circle(g.surface, mix(P.TEXT, art_room.CANVAS_BG, 0.15), (round(cx + dx * c), round(cy + dy * c)), round(r * c))

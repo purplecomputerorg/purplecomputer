@@ -85,7 +85,6 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 
 .editor-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; margin-bottom: 14px; }
 .tag { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
-.tag.soon { background: var(--fill); color: var(--purple); }
 
 .stage h3 { margin-top: 0; }
 .stage .caption { font-size: 13px; color: var(--dim); margin-top: 12px; }

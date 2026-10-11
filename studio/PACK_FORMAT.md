@@ -82,6 +82,18 @@ What a room can call, the keys it receives, and the message protocol are in `gui
 
 Studio saves the Blockly workspace a room was built from beside it as `<name>.blocks.json`, which Purple ignores; it is there so the room can be reopened for editing.
 
+### theme.json
+
+```json
+{
+  "background": "#1e1033",
+  "surface": "#2a1845",
+  "keys": { "q": "#F2A5A5", "w": "#EE8D8D" }
+}
+```
+
+A family's colors, read by the canvas UI when Purple starts (`purple_tui/canvas/theme.py`; the Textual UI ignores it). `background` is the ground around every room, `surface` the Art canvas (its checkerboard partner is a small step lighter), and `keys` maps letter-row keys to the colors they paint with in Art, light up in Music, and mark in Play; the row legend beside the screen follows them. Studio writes the full letter-row map from `generate_row_gradient` with the parent's hue per row. Every field is optional, anything that isn't a `#rrggbb` color or a letter-row key is ignored, and the number row always stays gray. The key stickers keep Purple's own colors, so a themed screen no longer matches them. With several themed packs, the last installed wins.
+
 ## Where packs live and how they get there
 
 - Built-in: `packs/`, copied to `/opt/purple/packs/` at image build.
@@ -119,17 +131,3 @@ just python scripts/purplepack.py install my-pack.purplepack [--packs-dir DIR] [
 ```
 
 A pack directory is `manifest.json` plus `content/`; this page is the whole contract. Someone building on Purple without Studio needs nothing else.
-
-## Proposed, not read by Purple
-
-### content/theme.json
-
-```json
-{
-  "background": "#1e1033",
-  "surface": "#2a1845",
-  "keys": { "q": "#F2A5A5", "w": "#EE8D8D" }
-}
-```
-
-`background` and `surface` are the two dark-theme colors registered in `purple_tui.py`. `keys` is the full letter-row map from `art_room.generate_row_gradient`, ported byte for byte, with the parent's hue per row. The number row is intentionally absent: it stays grayscale so the keycap stickers keep matching. Nothing reads this; the keyboard-row colors are shared truth with the printed stickers, so changing them is a product decision, not a loader change.

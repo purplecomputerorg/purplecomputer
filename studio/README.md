@@ -28,8 +28,8 @@ Stack: Vite, TypeScript, vanilla DOM, no backend. Two runtime dependencies: Bloc
 A small, calm editor in three panes, built so someone who has never seen Purple gets it in a few seconds:
 
 - **Left: what you can add.** Six plain entries (Photos, Voice, Words, Instruments, Rooms, Colors) with counts, then one Download button. The power tools (Room guide, Python console, the file layout, the by-hand install route) sit in a quiet More list at the bottom. File paths live only on "What is in the file".
-- **Middle: the editor** for the selected thing, headed by its name. The one part Purple doesn't read yet (Colors) says "Preview only".
-- **Right: the real Purple.** Purple's own Python and pygame canvas UI, running in the browser under Pyodide, in the room the piece shows up in: Play for words and phrases, Music in Say Letters or playing the instrument being edited, Art with the photo painted on. Two pages keep a preview of their own: Rooms (Studio's room stage, since Purple runs family rooms as a separate process) and Colors (Purple doesn't read a theme yet). See "The live Purple" below.
+- **Middle: the editor** for the selected thing, headed by its name.
+- **Right: the real Purple.** Purple's own Python and pygame canvas UI, running in the browser under Pyodide, in the room the piece shows up in: Play for words and phrases, Music in Say Letters or playing the instrument being edited, Art with the photo painted on or in the family's colors. Rooms keeps a preview of its own (Studio's room stage), since Purple runs family rooms as a separate process. See "The live Purple" below.
 
 ## The live Purple
 
@@ -49,7 +49,7 @@ A small, calm editor in three panes, built so someone who has never seen Purple 
 | Your own photos | Drop a photo, see it painted on the Art room's grid at the real 56 by 24 square-cell size. | The parent menu gains a Pictures entry; choosing one paints it onto the Art canvas. |
 | Your own instrument sounds | Start from any of Purple's four instruments and move the numbers behind its sound with sliders while a Music room keyboard plays it. The full sample set, one note per pitch the grid can reach, is rendered from the same equations. | The Music room lists it after the built-in four; Enter cycles to it and the code panel can choose it by name. The slider numbers ship beside the samples so Purple's own synth can re-render it. |
 | Your own rooms | A small game, story, or quiz in Python: built from blocks, from a trivia or soundboard form, from the Snake example, or written by hand. The stage on the right runs it live, in a worker of its own, with the same `purple` module Purple uses. | The room picker gains a row of family rooms. Each runs as a guest in its own process and can only ask Purple to show, say, and play things; see `guides/family-rooms.md`. |
-| Your own colors | A preset, or a hue per letter row from a row of swatches; background and canvas under a fold. Previewed by painting in Art. | Nothing yet. Emitted as a proposed `theme.json`. |
+| Your own colors | A preset, or a hue per letter row from a row of swatches; background and canvas under a fold. | The canvas UI paints with them: the ground, the Art canvas, and the letter rows in every room (`theme.json`). The number row and the key stickers keep Purple's colors. |
 
 Two more ways in, for parents who would rather write than click:
 
@@ -103,7 +103,6 @@ Sliding a control re-renders and replays the last key within a frame or two; all
 
 ## Not done, on purpose
 
-- **Theme.** `theme.json` is written and not read. The letter-row colors are shared truth with the printed keycap stickers, so changing them per family is a product decision first.
 - **The stage's voice is the browser's**, not Piper's. The words are the same; the voice is not.
 - **A running app noticing a new pack.** Cheap to add as a stat on the packs directory at room switch; left out until the boot-time path has been seen on hardware.
 - **Regenerating the shipped OGGs** from the parameterized synth, which needs ffmpeg and a listen.

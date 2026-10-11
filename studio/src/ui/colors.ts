@@ -1,9 +1,13 @@
-import { generateRowGradient, hslToHex } from "@sdk/purple/art";
+import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, generateRowGradient, hslToHex } from "@sdk/purple/art";
 import { DEFAULT_THEME, changed, draft, type Theme } from "../state";
 import { clear, h } from "./dom";
-import { LETTER_ROWS, artPreview } from "./facsimile";
 import type { View } from "./view";
 
+const LETTER_ROWS = [
+  ["qwerty", "Top row", QWERTY_ROW],
+  ["asdf", "Middle row", ASDF_ROW],
+  ["zxcv", "Bottom row", ZXCV_ROW],
+] as const;
 const PRESETS: [name: string, theme: Theme][] = [
   ["Purple", DEFAULT_THEME],
   ["Ocean", { background: "#0d2233", surface: "#112c40", hues: { qwerty: 190, asdf: 220, zxcv: 260 } }],
@@ -23,7 +27,6 @@ function keycaps(hue: number, keys: readonly string[]): HTMLElement {
 
 export function colorsView(): View {
   const body = h("div");
-  const preview = artPreview(() => draft.pictures[0]?.cells ?? null);
 
   function render() {
     const theme = draft.theme ?? DEFAULT_THEME;
@@ -60,15 +63,14 @@ export function colorsView(): View {
 
   return {
     title: "Colors",
-    soon: true,
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "Pick the colors your kid paints with. Click the preview and type to try them."),
+      h("p", { class: "lead" }, "Pick the colors Purple paints with. Click Purple on the right and type to try them."),
       body,
-      h("p", { class: "dim small" }, "Purple doesn't use these colors yet. They go in the pack so they're ready when it does. The number row stays gray to match the key stickers."),
+      h("p", { class: "dim small" }, "The number row stays gray. Key stickers keep Purple's own colors."),
     ),
-    preview,
-    caption: "Art: every letter paints its row's color. Arrows move, Space puts the pen down.",
+    live: { room: "art" },
+    caption: "Purple's Art room in your colors. Every letter paints its row's color.",
   };
 }

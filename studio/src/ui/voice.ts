@@ -3,7 +3,7 @@ import { play } from "../audio";
 import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
 import { changed, draft } from "../state";
 import { h, pageKeys } from "./dom";
-import { musicPreview, playPreview } from "./facsimile";
+import { liveScreen } from "./live";
 import { recordControl } from "./record";
 import type { View } from "./view";
 
@@ -28,7 +28,6 @@ function lettersView(): View {
   const select = (k: string) => {
     current = k;
     render();
-    preview.redraw();
   };
   function render() {
     keys.replaceChildren(...KEY_ROWS.map((row) => h("div", { class: "r" }, ...row.map((k) =>
@@ -44,9 +43,12 @@ function lettersView(): View {
     changed();
     render();
   };
-  const preview = musicPreview(() => ({ instrument: "marimba", sayLetters: true }), select);
-  // Typing a key anywhere on the page jumps to it and says it, the way the preview does.
-  const unlisten = pageKeys((k) => preview.press(k));
+  // Typing a key anywhere on the page jumps to it, and Purple says it.
+  const unlisten = pageKeys((k) => {
+    if (!LETTER_KEYS.includes(k)) return;
+    select(k);
+    liveScreen().key(k);
+  });
   render();
 
   return {
@@ -60,9 +62,9 @@ function lettersView(): View {
       count,
       h("p", { class: "dim small" }, "Tip: type a key on your keyboard to jump to it. Studio moves to the next key after each recording."),
     ),
-    preview,
+    live: { room: "music", letters: true },
     previewTitle: "What your kid hears",
-    caption: "Music, in Say Letters mode. A green dot means the key is in your voice.",
+    caption: "Purple's Music room, saying letters. Keys you recorded say them in your voice.",
     cleanup: unlisten,
   };
 }
@@ -71,7 +73,6 @@ function phrasesView(): View {
   const list = h("div", { class: "stack" });
   const text = h("input", { type: "text", placeholder: "Good night, Maya", "aria-label": "Phrase" });
   const status = h("div", { class: "status" });
-  const last = () => draft.phrases.at(-1)?.text;
 
   function render() {
     list.replaceChildren(...draft.phrases.map((p, i) => h("div", { class: "phrase-row" },
@@ -101,9 +102,9 @@ function phrasesView(): View {
       h("div", { class: "card" }, h("div", { class: "phrase-new" }, text, record), status),
       h("p", { class: "dim small" }, "Capitals and spacing don't matter. Anything you haven't recorded, Purple says in its own voice."),
     ),
-    preview: playPreview(() => (last() ? [{ ask: `say ${last()}`, answer: last()! }] : []), () => `Try: say ${last() ?? "good night"}`),
+    live: { room: "play" },
     previewTitle: "What your kid hears",
-    caption: "Play: type say and a phrase, then press Enter.",
+    caption: "Purple's Play room. Type say and your phrase, then press Enter.",
   };
 }
 

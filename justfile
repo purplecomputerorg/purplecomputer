@@ -399,9 +399,14 @@ pystdin:
     @{{venv}}/bin/python -
 
 # Purple Studio (parent-facing web app, studio/): dev server
-studio:
+studio: studio-bundle
     cd studio && npm install --no-audit --no-fund
     cd studio && npm run dev
+
+# Purple itself for Studio's live preview: purple.zip, the Pyodide wheels it needs, room posters
+studio-bundle:
+    cd studio && npm install --no-audit --no-fund
+    {{venv}}/bin/python scripts/studio_bundle.py
 
 # Purple Studio: type-check and unit tests
 studio-test:

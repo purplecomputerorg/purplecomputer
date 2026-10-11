@@ -40,7 +40,7 @@ p { margin: 0 0 12px; }
 code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fill); color: var(--purple-dark); padding: 1px 6px; border-radius: 6px; }
 
 /* IDE shell */
-.ide { display: grid; grid-template-columns: 232px minmax(0, 1fr) 460px; min-height: 100vh; }
+.ide { display: grid; grid-template-columns: 232px minmax(0, 1fr) 520px; min-height: 100vh; }
 .side { background: var(--panel); border-right: 1px solid var(--line); padding: 18px 12px; position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
 .main { padding: 28px 36px 64px; min-width: 0; }
 .ide.no-stage { grid-template-columns: 232px minmax(0, 1fr); }
@@ -272,3 +272,17 @@ details.more-options summary { cursor: pointer; color: var(--purple); font-weigh
 .phrase-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
 .phrase-new { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
 ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
+
+/* The live Purple: a screenshot of the room until Purple is running, then the real thing */
+.screen-wrap.live { aspect-ratio: 1366 / 768; background: #1d1234; }
+.live-frame, .live-poster { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.live-poster { object-fit: contain; transition: opacity 0.4s; pointer-events: none; }
+.live.ready .live-poster { opacity: 0; }
+.live-status { position: absolute; left: 10px; bottom: 10px; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 9px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); color: #e8daf0; font-size: 12px; transition: opacity 0.3s; }
+.live-status i { width: 12px; height: 12px; border-radius: 99px; border: 2px solid rgba(232, 218, 240, 0.3); border-top-color: #e8daf0; animation: spin 0.9s linear infinite; }
+.live.ready .live-status { opacity: 0; pointer-events: none; }
+.live .playable-hint { border: 0; font: inherit; cursor: pointer; opacity: 0; pointer-events: none; }
+.live.ready:not(.focused) .playable-hint { opacity: 1; pointer-events: auto; }
+.screen-wrap.live:fullscreen { aspect-ratio: auto; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .live-status i { animation: none; } }

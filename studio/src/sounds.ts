@@ -1,8 +1,8 @@
-// What every preview and the room stage make audible: synth notes, the core percussion clips,
-// a family's recordings, and the browser's voice standing in for Purple's.
+// What Studio itself makes audible (the room stage, the instrument sliders): synth notes, the core
+// percussion clips, and the browser's voice standing in for Purple's.
 import { PURPLE, SYNTH_RATE, defaults, noteFrequency, renderNote, type BaseName, type Params } from "@sdk";
 import { GRID_ROWS, INSTRUMENTS, pitchFor } from "@sdk/purple/sounds";
-import { audioContext, clipToBuffer, play, playBuffer } from "./audio";
+import { audioContext, clipToBuffer, playBuffer } from "./audio";
 import { draft } from "./state";
 
 const DRUM_URLS = import.meta.glob("../../packs/core-sounds/content/[0-9].ogg", { eager: true, query: "?url", import: "default" }) as Record<string, string>;
@@ -57,17 +57,3 @@ export function say(text: string): void {
 }
 
 export const hush = () => ("speechSynthesis" in window) && speechSynthesis.cancel();
-
-// A key in Say Letters mode: the family's recording when there is one, a voice otherwise.
-export function sayKey(key: string): void {
-  const clip = draft.letters[key];
-  if (clip) play(clip);
-  else say(key);
-}
-
-// What Purple says for text a kid typed: the family's phrase recording when one matches.
-export function sayPhrase(text: string): void {
-  const clip = draft.phrases.find((p) => p.text.toLowerCase() === text.trim().toLowerCase())?.clip;
-  if (clip) play(clip);
-  else say(text);
-}

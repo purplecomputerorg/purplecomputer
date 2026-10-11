@@ -111,3 +111,4 @@ pytest-of-*/
 # Purple Studio (studio/, web)
 studio/node_modules/
 studio/dist/
+studio/.cache/

@@ -13,8 +13,8 @@ export async function packSpec(d: Draft = draft): Promise<PackSpec> {
   return { ...d, pictures, ranked, rooms: d.rooms.map((r) => ({ name: r.name, source: r.source, blocks: r.blocks })) };
 }
 
-export async function buildPack(onProgress?: (msg: string) => void): Promise<Blob> {
-  return build(await packSpec(), onProgress);
+export async function buildPack(onProgress?: (msg: string) => void, d: Draft = draft): Promise<Blob> {
+  return build(await packSpec(d), onProgress);
 }
 
 export const packFilename = () => filename(draft);

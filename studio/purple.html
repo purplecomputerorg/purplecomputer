@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Purple</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #1d1234; overflow: hidden; }
+      body { display: flex; align-items: center; justify-content: center; }
+      #screen { display: block; width: min(100vw, calc(100vh * 1366 / 768)); aspect-ratio: 1366 / 768; outline: none; cursor: pointer; }
+      #canvas { position: absolute; left: -10000px; top: 0; }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas" width="1366" height="768"></canvas>
+    <canvas id="screen" tabindex="0"></canvas>
+    <script type="module" src="/src/live/frame.ts"></script>
+  </body>
+</html>

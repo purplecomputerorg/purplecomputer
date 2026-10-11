@@ -10,6 +10,7 @@ This is a draft, not a shipping product, and nothing in it is a public commitmen
 just studio            # npm install and a dev server on https://localhost:5173 (also https://<this machine>:5173 on the LAN)
 just studio-test       # tsc, vitest
 just studio-fixtures   # regenerate export.json and golden.json from Purple's Python (see below)
+just studio-bundle     # Purple itself for the live preview: .cache/purple.zip, Pyodide wheels, room posters (just studio runs it)
 ```
 
 Or from `studio/`: `npm install`, `npm run dev`, `npm test`, `npm run build` (static output in `studio/dist/`, deployable anywhere that serves files).
@@ -28,7 +29,16 @@ A small, calm editor in three panes, built so someone who has never seen Purple 
 
 - **Left: what you can add.** Six plain entries (Photos, Voice, Words, Instruments, Rooms, Colors) with counts, then one Download button. The power tools (Room guide, Python console, the file layout, the by-hand install route) sit in a quiet More list at the bottom. File paths live only on "What is in the file".
 - **Middle: the editor** for the selected thing, headed by its name. The one part Purple doesn't read yet (Colors) says "Preview only".
-- **Right: a playable preview.** Purple's canvas screen for the room the piece shows up in (Art for photos and colors, Music for letters and instruments, Play for words and phrases, the room itself for rooms). Every preview takes keys once clicked, the same in the panel and in full screen: Art paints in the chosen row colors, Music plays the instrument or says each key in the family's recordings, Play answers words with their emoji and says `say ...` lines in a recorded phrase. The family's background color reaches every preview.
+- **Right: the real Purple.** Purple's own Python and pygame canvas UI, running in the browser under Pyodide, in the room the piece shows up in: Play for words and phrases, Music in Say Letters or playing the instrument being edited, Art with the photo painted on. Two pages keep a preview of their own: Rooms (Studio's room stage, since Purple runs family rooms as a separate process) and Colors (Purple doesn't read a theme yet). See "The live Purple" below.
+
+## The live Purple
+
+`purple.html` boots Purple in an iframe that Studio starts at first paint and keeps for the whole visit; until it is running (about 3 seconds on a fast machine, 33 MB on first load) a screenshot of the same room from `just preview` stands in. After each edit settles, Studio builds the pack exactly as Download would (minus rooms), and Purple installs it with its own `PackInstaller` and starts again, the way it reads packs after a reboot. Keys typed on the Voice and Instruments pages are sent to Purple too.
+
+- `scripts/studio_bundle.py` zips `purple_tui`, its fonts, the core packs, and the emoji font, fetches the Pyodide wheels Purple needs (pygame-ce, fonttools, rich, wcwidth), and takes the posters.
+- `src/live/browser.py` turns what a browser can't do into no-ops before Purple loads: threads don't start, glyph coverage comes from the fonts' character maps (pygame.freetype doesn't initialize in Pyodide), the page draws emoji with the same Noto Color Emoji, the mixer opens without the subprocess probe, and speech plays Purple's recorded clips or the browser's voice where Purple would use Piper.
+- `src/live/live.py` installs a pack, restarts the app, and sets up the room a page asks for.
+- pygame's WebAssembly build evaluates JavaScript, so `purple.html` alone carries a CSP with `'unsafe-eval'`; a static host has to send that policy for that one file. Studio's own pages keep the strict one.
 
 ## What Purple does with each piece
 

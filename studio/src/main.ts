@@ -4,7 +4,6 @@ import { draft, onChange, pieces } from "./state";
 import { clear, h } from "./ui/dom";
 import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
-import { playPreview } from "./ui/facsimile";
 import { formatView, installView } from "./ui/install";
 import { instrumentsView } from "./ui/instrument";
 import { photosView } from "./ui/photos";
@@ -13,6 +12,7 @@ import { EXAMPLES } from "./examples";
 import { addRoom } from "./pybridge";
 import { roomTitle } from "@sdk/pack";
 import { guideView } from "./ui/guide";
+import { liveScreen } from "./ui/live";
 import { roomsView } from "./ui/rooms";
 import { voiceView } from "./ui/voice";
 import { wordsView } from "./ui/words";
@@ -57,9 +57,9 @@ function welcomeView(): View {
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label, s.soon ? h("span", { class: "tag soon" }, "Soon") : null), h("span", {}, s.blurb)))),
       h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB stick. Nothing here leaves this computer."),
     ),
-    preview: playPreview(() => [{ ask: "cat", answer: "🐱" }], () => "Try: dog  •  red sun  •  say hello"),
+    live: { room: "play" },
     previewTitle: "This is Purple",
-    caption: "Purple's Play room. Every preview here works like the real thing.",
+    caption: "The real Purple, running in your browser. Try cat, red sun, or 3 dogs.",
   };
 }
 
@@ -67,6 +67,12 @@ const app = document.getElementById("app")!;
 const side = h("aside", { class: "side" });
 const main = h("main", { class: "main" });
 const stage = h("aside", { class: "stage" });
+const live = liveScreen();
+const liveTitle = h("h3");
+const liveCaption = h("p", { class: "caption" });
+const liveBox = h("div", {}, liveTitle, live.element, liveCaption);
+const previewBox = h("div");
+stage.append(liveBox, previewBox);
 const ide = h("div", { class: "ide" }, side, main, stage);
 app.append(ide);
 
@@ -99,11 +105,21 @@ function renderSide() {
   );
 }
 
+// The live Purple keeps its place in the stage for the whole visit (moving an iframe reloads it);
+// other previews come and go below it.
 function renderStage() {
-  clear(stage);
-  ide.classList.toggle("no-stage", !current?.preview);
-  if (!current?.preview) return;
-  stage.append(h("div", {}, h("h3", {}, current.previewTitle ?? "What your kid sees"), current.preview.element, current.caption ? h("p", { class: "caption" }, current.caption) : null));
+  const v = current;
+  ide.classList.toggle("no-stage", !v?.live && !v?.preview);
+  liveBox.hidden = !v?.live;
+  clear(previewBox);
+  const title = v?.previewTitle ?? "What your kid sees";
+  if (v?.live) {
+    live.show(v.live);
+    liveTitle.textContent = title;
+    liveCaption.textContent = v.caption ?? "";
+  } else if (v?.preview) {
+    previewBox.append(h("h3", {}, title), v.preview.element, h("p", { class: "caption" }, v.caption ?? ""));
+  }
 }
 
 function route() {
@@ -125,7 +141,7 @@ function route() {
 // ?sample seeds a room so a screenshot or a demo lands on a filled editor.
 if (new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name, EXAMPLES[0].source);
 
-onChange(() => { renderSide(); current?.preview?.redraw?.(); });
+onChange(() => { renderSide(); current?.preview?.redraw?.(); live.changed(); });
 window.addEventListener("hashchange", route);
 window.addEventListener("beforeunload", (e) => pieces().length && e.preventDefault());
 route();

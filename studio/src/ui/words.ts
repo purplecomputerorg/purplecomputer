@@ -2,7 +2,6 @@ import { CORE_EMOJI } from "@sdk/purple/core";
 import { changed, draft, type WordEntry } from "../state";
 import { h } from "./dom";
 import { closeEmojiPicker, openEmojiPicker } from "./emojipicker";
-import { playPreview } from "./facsimile";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -85,7 +84,6 @@ function wordTable(): HTMLElement {
 }
 
 export function wordsView(): View {
-  const recent = () => draft.words.filter((w) => w.emoji).slice(-3);
   const table = wordTable();
   return {
     title: "Words",
@@ -96,11 +94,8 @@ export function wordsView(): View {
       table,
       h("p", { class: "dim small" }, `Purple already knows ${Object.keys(CORE_EMOJI).length} words, like cat and dog. Your words come first when Purple suggests what to type.`),
     ),
-    preview: playPreview(
-      () => (recent().length ? recent().map((w) => ({ ask: w.word, answer: w.emoji })) : [{ ask: "cat", answer: CORE_EMOJI.cat }]),
-      () => `Try: ${(recent().length ? recent().map((w) => w.word) : ["dog", "red sun"]).join("  •  ")}`,
-    ),
-    caption: "Play: type a word and press Enter.",
+    live: { room: "play" },
+    caption: "Purple's Play room, with your words in it. Type one and press Enter.",
     mounted: () => table.querySelector<HTMLInputElement>(".blank input")?.focus(),
   };
 }

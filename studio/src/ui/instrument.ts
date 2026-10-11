@@ -3,7 +3,7 @@ import { BASES, BASE_NAMES, defaults, type BaseName } from "@sdk/purple/synth";
 import { playGridKey } from "../sounds";
 import { changed, draft, slug, type Instrument } from "../state";
 import { field, h, pageKeys } from "./dom";
-import { musicPreview } from "./facsimile";
+import { liveScreen } from "./live";
 import type { View } from "./view";
 
 function chooser(): View {
@@ -29,9 +29,9 @@ function chooser(): View {
         h("button", { class: "base", onclick: () => start(b) }, h("b", {}, `Start from ${BASES[b].label}`), h("span", {}, BASES[b].blurb))))),
       draft.instruments.length ? h("p", { class: "dim small" }, "Yours so far: ", ...draft.instruments.flatMap((i, n) => [n ? ", " : "", h("a", { href: `#instruments/${encodeURIComponent(i.name)}` }, i.name)])) : null,
     ),
-    preview: musicPreview(() => ({ instrument: "marimba", sayLetters: false })),
+    live: { room: "music" },
     previewTitle: "What your kid hears",
-    caption: "Music: letter keys play notes, number keys play drums.",
+    caption: "Purple's Music room. Letter keys play notes, number keys play drums.",
   };
 }
 
@@ -70,8 +70,11 @@ function editor(inst: Instrument): View {
     }
   }
 
-  const preview = musicPreview(() => ({ instrument: inst.name, sayLetters: false }), (k) => (lastKey = k));
-  const unlisten = pageKeys((k) => preview.press(k));
+  // Typing on the page plays Purple's Music room, which has this instrument once edits settle.
+  const unlisten = pageKeys((k) => {
+    lastKey = k;
+    liveScreen().key(k);
+  });
 
   const reset = () => {
     Object.assign(inst.params, defaults(inst.base));
@@ -93,9 +96,9 @@ function editor(inst: Instrument): View {
       h("p", { class: "dim small" }, "Type on your keyboard to play it. Moving a slider plays the last note again."),
       h("div", { class: "card" }, sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to ${base.label}'s numbers`), h("button", { class: "linkbtn dim", onclick: remove }, "Remove this instrument"))),
     ),
-    preview,
+    live: { room: "music", instrument: inst.name },
     previewTitle: "What your kid hears",
-    caption: `Music, playing ${inst.name}.`,
+    caption: `Purple's Music room playing ${inst.name}. Moving a slider plays it in Studio; Purple has the new sound a moment later.`,
     cleanup: () => { unlisten(); clearTimeout(replayTimer); },
   };
 }

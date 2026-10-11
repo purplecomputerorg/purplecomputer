@@ -7,6 +7,9 @@ import { defineConfig, type Plugin } from "vite";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pyodideDir = resolve(here, "node_modules/pyodide");
+// Files fetched or built for the in-browser Purple: Pyodide's pygame-ce wheel, and purple.zip
+// from scripts/studio_bundle.py.
+const cacheDir = resolve(here, ".cache");
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
 
 // Pyodide loads its runtime files by URL next to itself, so serve node_modules/pyodide
@@ -15,19 +18,34 @@ function pyodideAssets(): Plugin {
   return {
     name: "pyodide-assets",
     configureServer(server) {
-      server.middlewares.use("/pyodide", (req, res, next) => {
+      const serve = (prefix: string, dirs: string[]) => server.middlewares.use(prefix, (req, res, next) => {
         const name = (req.url ?? "/").slice(1).split("?")[0];
-        const file = join(pyodideDir, name);
-        if (!name || !existsSync(file) || !readdirSync(pyodideDir).includes(name)) return next();
-        res.setHeader("Content-Type", name.endsWith(".wasm") ? "application/wasm" : name.endsWith(".json") ? "application/json" : name.endsWith(".zip") ? "application/zip" : "text/javascript");
+        const dir = dirs.find((d) => existsSync(d) && readdirSync(d).includes(name));
+        if (!name || !dir) return next();
+        const file = join(dir, name);
+        res.setHeader("Content-Type", name.endsWith(".wasm") ? "application/wasm" : name.endsWith(".json") ? "application/json" : /\.(zip|whl)$/.test(name) ? "application/zip" : "text/javascript");
         for (const [k, v] of Object.entries(HEADERS)) res.setHeader(k, v);
         createReadStream(file).pipe(res);
       });
+      // pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval.
+      server.middlewares.use((req, res, next) => {
+        if (req.url?.startsWith("/purple.html")) {
+          const set = res.setHeader.bind(res);
+          res.setHeader = (k: string, v: number | string | readonly string[]) => set(k, k.toLowerCase() === "content-security-policy" ? LIVE_CSP : v);
+        }
+        next();
+      });
+      serve("/pyodide", [pyodideDir, join(cacheDir, "pyodide")]);
+      serve("/purple", [cacheDir]);
     },
     closeBundle() {
-      const out = resolve(here, "dist/pyodide");
-      mkdirSync(out, { recursive: true });
-      for (const f of PYODIDE_FILES) if (existsSync(join(pyodideDir, f))) copyFileSync(join(pyodideDir, f), join(out, f));
+      const copyAll = (from: string, to: string, keep: (f: string) => boolean) => {
+        mkdirSync(to, { recursive: true });
+        if (existsSync(from)) for (const f of readdirSync(from).filter(keep)) copyFileSync(join(from, f), join(to, f));
+      };
+      copyAll(pyodideDir, resolve(here, "dist/pyodide"), (f) => PYODIDE_FILES.includes(f));
+      copyAll(join(cacheDir, "pyodide"), resolve(here, "dist/pyodide"), (f) => f.endsWith(".whl"));
+      copyAll(cacheDir, resolve(here, "dist/purple"), (f) => /^(purple\.zip|poster-.*\.png)$/.test(f));
     },
   };
 }
@@ -48,6 +66,7 @@ export const CSP = [
   "base-uri 'self'",
   "form-action 'none'",
 ].join("; ");
+const LIVE_CSP = CSP.replace("'wasm-unsafe-eval'", "'wasm-unsafe-eval' 'unsafe-eval'");
 const HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",
@@ -59,14 +78,14 @@ export default defineConfig({
   base: "./",
   // https: cross-origin isolation (and so the room preview) needs a secure context, and the Mac
   // opens the dev server as https://simba:5173, which plain http on a LAN name is not.
-  plugins: [basicSsl(), pyodideAssets(), { name: "csp-meta", transformIndexHtml: (html) => html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`) }],
+  plugins: [basicSsl(), pyodideAssets(), { name: "csp-meta", transformIndexHtml: (html, ctx) => html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${ctx.path.endsWith("purple.html") ? LIVE_CSP : CSP}" />`) }],
   resolve: { alias: { "@sdk": resolve(here, "sdk/src") } },
   // host: true listens on the LAN so the dev server can be opened from another machine (the Mac hits "simba").
   server: { host: true, allowedHosts: ["simba"], fs: { allow: [".."] }, headers: HEADERS },
   preview: { headers: HEADERS },
   worker: { format: "es" },
   // Drum clips stay files: a data: URL fetch would fall outside connect-src.
-  build: { target: "es2022", assetsInlineLimit: (file) => (file.endsWith(".ogg") ? false : undefined) },
+  build: { target: "es2022", rollupOptions: { input: { main: resolve(here, "index.html"), purple: resolve(here, "purple.html") } }, assetsInlineLimit: (file) => (file.endsWith(".ogg") ? false : undefined) },
   optimizeDeps: { exclude: ["pyodide"] },
   test: { environment: "node" },
 });

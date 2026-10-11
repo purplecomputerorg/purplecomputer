@@ -1,7 +1,6 @@
 import { pictureFromFile } from "../photo";
 import { changed, draft } from "../state";
 import { h } from "./dom";
-import { artPreview } from "./facsimile";
 import type { View } from "./view";
 
 function dropZone(): HTMLElement {
@@ -39,11 +38,11 @@ function dropZone(): HTMLElement {
   return h("div", {}, drop, status);
 }
 
-const caption = "Art: click, then type over the photo to paint on it.";
+const caption = "Purple's Art room with your photo painted on. Type to paint over it.";
 
 export function photosView(item: string | null): View {
   const pic = item ? draft.pictures.find((p) => p.name === item) : null;
-  const preview = artPreview(() => (pic ?? draft.pictures[0])?.cells ?? null);
+  const live = { room: "art", picture: (pic ?? draft.pictures[0])?.name } as const;
   if (!pic) {
     return {
       title: "Photos",
@@ -54,7 +53,7 @@ export function photosView(item: string | null): View {
         dropZone(),
         h("p", { class: "dim small" }, "On Purple, a parent opens it from the parent menu, under Pictures."),
       ),
-      preview,
+      live,
       caption,
     };
   }
@@ -72,7 +71,7 @@ export function photosView(item: string | null): View {
       h("h3", {}, "Add another"),
       dropZone(),
     ),
-    preview,
+    live,
     caption,
   };
 }

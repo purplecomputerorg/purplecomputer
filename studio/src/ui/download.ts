@@ -1,23 +1,20 @@
-import { buildPack, manifest, packFilename } from "../pack";
-import { DEFAULT_THEME, changed, draft, packId, pieces } from "../state";
+import { buildPack, packFilename } from "../pack";
+import { changed, draft, pieces } from "../state";
 import { clear, field, h } from "./dom";
-import { artFrame } from "./facsimile";
 import type { View } from "./view";
 
 export function downloadView(): View {
   const nameIn = h("input", { type: "text", placeholder: "The Nathansons", value: draft.familyName });
   const summary = h("ul", { class: "summary" });
-  const idLine = h("p", { class: "dim small" });
   const status = h("div", { class: "status" });
-  const button = h("button", { class: "btn logo" }, "Download the pack");
+  const button = h("button", { class: "btn logo" }, "Download");
 
   function render() {
     clear(summary);
     const list = pieces();
     for (const p of list) summary.append(h("li", {}, h("span", {}, p.label), h("span", { class: "n" }, String(p.count))));
-    if (!list.length) summary.append(h("li", { class: "dim" }, "Nothing in the pack yet. Every part is optional, but an empty pack changes nothing."));
+    if (!list.length) summary.append(h("li", { class: "dim" }, "Nothing added yet. Pick something on the left to start."));
     button.disabled = !list.length;
-    idLine.replaceChildren("Saved as ", h("span", { class: "mono" }, packFilename()), ". Purple will list it as ", h("strong", {}, manifest(draft).name), " and keep it at ", h("span", { class: "mono" }, `~/.purple/packs/${packId()}/`), ".");
   }
   nameIn.oninput = () => {
     draft.familyName = nameIn.value;
@@ -33,29 +30,29 @@ export function downloadView(): View {
       const a = h("a", { href: URL.createObjectURL(blob), download: packFilename() });
       a.click();
       URL.revokeObjectURL(a.href);
-      status.replaceChildren("Downloaded. Next: ", h("a", { href: "#install" }, "getting it onto Purple"), ".");
+      status.textContent = `Downloaded ${packFilename()}.`;
     } catch (e) {
-      status.textContent = `Something went wrong while packing: ${e instanceof Error ? e.message : String(e)}`;
+      status.textContent = `Something went wrong while packing. (Technical: ${e instanceof Error ? e.message : String(e)})`;
     }
     button.disabled = false;
   };
 
   return {
-    title: "Your pack",
-    path: `${packFilename()}  ·  manifest.json + content/`,
-    tag: "real",
+    title: "Download",
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "One file holds everything you made here. It never leaves this computer unless you move it."),
-      h("div", { class: "card" }, field("Your family's name, for the pack's label", nameIn), idLine, summary),
+      h("p", { class: "lead" }, "Everything you made goes into one file."),
+      h("div", { class: "card" }, field("Your family's name", nameIn), summary),
       h("div", { class: "row", style: "margin-top:22px" }, button),
       status,
-      h("div", { class: "note" },
-        h("strong", {}, "What Purple reads from this pack: "), "the words and autocomplete picks, the letter and phrase recordings, the pictures, and the instruments. ",
-        "Colors ride along as a small theme file Purple does not read yet. The layout is described in ", h("a", { href: "#format" }, "what is in the pack"), ". Nothing in the pack can run as a program, and Purple checks that before installing it."),
+      h("h3", {}, "Then put it on Purple"),
+      h("ol", { class: "steps" },
+        h("li", {}, "Name a USB stick ", h("span", { class: "mono" }, "PURPLE_UPDATE"), "."),
+        h("li", {}, "Copy the file onto it."),
+        h("li", {}, "Plug it into Purple, then turn Purple on."),
+      ),
+      h("p", { class: "dim small" }, "Step by step, and other ways: ", h("a", { href: "#install" }, "Putting it on Purple"), "."),
     ),
-    stage: () => artFrame(draft.pictures[0]?.cells ?? null, draft.theme ?? DEFAULT_THEME),
-    caption: "The Art room as this pack would leave it.",
   };
 }

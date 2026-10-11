@@ -1,11 +1,13 @@
+export interface Preview { element: HTMLElement; redraw?(): void; dispose(): void }
+
 export interface View {
   title: string;
-  path?: string;
-  // "real": Purple reads this today. "proposed": written into the pack, read by nothing yet.
-  tag?: "real" | "proposed";
+  // Purple doesn't use this part of the pack yet; the heading says so.
+  soon?: boolean;
   editor: HTMLElement;
-  stage: () => HTMLElement | null;
-  stageTitle?: string;
+  // Built once per view and kept across edits, so whatever the parent typed into it stays.
+  preview?: Preview;
+  previewTitle?: string;
   caption?: string;
   // Called once the editor is in the document, for things that need a laid-out element (Blockly).
   mounted?: () => void;

@@ -17,7 +17,7 @@ function freeName(base: string): string {
 }
 
 function list(): View {
-  const nameIn = h("input", { type: "text", placeholder: "farm" });
+  const nameIn = h("input", { type: "text", placeholder: "Farm" });
   const status = h("div", { class: "status" });
   const open = (base: string, source: string, made: Pick<RoomDraft, "blocks" | "template">) => {
     const name = freeName(slug(nameIn.value) || base);
@@ -30,34 +30,26 @@ function list(): View {
   };
   return {
     title: "Rooms",
-    path: "content/rooms/<name>.py",
-    tag: "real",
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Snap blocks together or write Python, try it on the right, and it runs the same way on Purple."),
-      h("div", { class: "card" },
-        field("What to call it", nameIn), status,
-        h("p", { style: "margin-top:14px" }, h("button", { class: "btn", onclick: () => open("my-room", sourceFromBlocks(BLANK_BLOCKS), { blocks: BLANK_BLOCKS, template: null }) }, "Start a room"),
-          h("span", { class: "dim small", style: "margin-left:12px" }, "It starts with blocks: a wave, and every key shows itself."))),
-      h("h3", {}, "Or fill in a form"),
-      ...(Object.entries(TEMPLATES) as [TemplateDraft["kind"], (typeof TEMPLATES)[TemplateDraft["kind"]]][]).map(([kind, t]) => {
-        const template = { kind, data: t.defaults() } as TemplateDraft;
-        return choice(t.label, t.about, "Start this form", () => open(kind, templateSource(template), { blocks: null, template }));
-      }),
-      h("h3", {}, "Or start from an example"),
-      choice(EXAMPLES[0].label, EXAMPLES[0].about, "Start from this", () => open(EXAMPLES[0].name, EXAMPLES[0].source, { blocks: null, template: null })),
+      h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Your kid finds it next to Purple's rooms."),
+      h("div", { class: "name-field" }, field("Its name on Purple (optional)", nameIn), status),
+      h("h3", {}, "Pick a way to start"),
+      h("div", { class: "cards" },
+        ...(Object.entries(TEMPLATES) as [TemplateDraft["kind"], (typeof TEMPLATES)[TemplateDraft["kind"]]][]).map(([kind, t]) => {
+          const template = { kind, data: t.defaults() } as TemplateDraft;
+          return choice(kind === "trivia" ? "❓" : "🔊", t.label, t.about, () => open(kind, templateSource(template), { blocks: null, template }));
+        }),
+        choice("🧱", "Blocks", "Snap blocks together to make anything. No typing code.", () => open("my-room", sourceFromBlocks(BLANK_BLOCKS), { blocks: BLANK_BLOCKS, template: null })),
+        choice("🐍", EXAMPLES[0].label, `${EXAMPLES[0].about} Written in Python, ready to change.`, () => open(EXAMPLES[0].name, EXAMPLES[0].source, { blocks: null, template: null }))),
       draft.rooms.length ? h("p", { class: "dim small" }, "Yours so far: ", ...draft.rooms.flatMap((r, n) => [n ? ", " : "", h("a", { href: `#rooms/${encodeURIComponent(r.name)}` }, roomTitle(r.name))])) : null,
-      h("p", { class: "dim small" }, "Everything a room can do is on the ", h("a", { href: "#guide" }, "Room guide"), "."),
-      h("div", { class: "note" }, h("strong", {}, "What Purple does with this: "), "the room picker (a tap of Esc) grows a row of your rooms. A room runs in a box of its own: it can ask Purple to show, say, and play things, and nothing else. Esc always leaves, and a room that breaks shows a calm \"this room needs fixing\" card instead."),
     ),
-    stage: () => null,
   };
 }
 
-const choice = (label: string, about: string, button: string, go: () => void) => h("div", { class: "card row between" },
-  h("div", {}, h("strong", {}, label), h("div", { class: "dim small" }, about)),
-  h("button", { class: "btn secondary small", onclick: go }, button));
+const choice = (icon: string, label: string, about: string, go: () => void) =>
+  h("button", { class: "pick", onclick: go }, h("span", { class: "pick-icon" }, icon), h("b", {}, label), h("span", {}, about));
 
 function problemBox(): { element: HTMLElement; show(p: Problem | null): void } {
   const element = h("div", { class: "problem", hidden: true });
@@ -174,8 +166,6 @@ function editor(room: RoomDraft): View {
 
   return {
     title: roomTitle(room.name),
-    path: `content/rooms/${room.name}.py${room.blocks ? `  ·  content/rooms/${room.name}.blocks.json` : ""}`,
-    tag: "real",
     editor: h(
       "section",
       {},
@@ -188,15 +178,14 @@ function editor(room: RoomDraft): View {
       h("p", { class: "dim small" }, "What a room can call is on the ", h("a", { href: "#guide" }, "Room guide"), "."),
       h("p", { style: "margin-top:18px" }, h("button", { class: "linkbtn dim", onclick: remove }, "Remove this room")),
     ),
-    stage: () => stage.element,
-    stageTitle: "What your kid sees",
-    caption: "Sound comes from the same synth Purple uses; the voice is your browser's.",
+    preview: stage,
+    caption: "Your room, running. Here the voice is your browser's; on Purple it's Purple's own.",
     mounted: () => {
       showTab(room.blocks || room.template ? "blocks" : "python");
       restart();
       stage.focus();
     },
-    cleanup: () => { clearTimeout(timer); stage.dispose(); ws?.dispose(); ws = null; },
+    cleanup: () => { clearTimeout(timer); ws?.dispose(); ws = null; },
   };
 }
 

@@ -95,6 +95,5 @@ export function guideView(): View {
         ...(s.code ?? []).flatMap((c) => [h("p", { class: "dim small" }, c.label), h("pre", {}, c.source.trimEnd())]),
       ]),
     ),
-    stage: () => null,
   };
 }

@@ -1,8 +1,7 @@
 import { pictureFromFile } from "../photo";
-import { CANVAS_HEIGHT, CANVAS_WIDTH } from "@sdk/purple/art";
-import { changed, draft, DEFAULT_THEME } from "../state";
+import { changed, draft } from "../state";
 import { h } from "./dom";
-import { artFrame } from "./facsimile";
+import { artPreview } from "./facsimile";
 import type { View } from "./view";
 
 function dropZone(): HTMLElement {
@@ -40,25 +39,23 @@ function dropZone(): HTMLElement {
   return h("div", {}, drop, status);
 }
 
-const note = () => h("div", { class: "note" }, h("strong", {}, "What Purple does with this: "), "the parent menu gets a Pictures entry listing each one. Choosing a picture paints it onto the Art room canvas, where the kid can draw over it or clear it, the same as any drawing.");
+const caption = "Art: click, then type over the photo to paint on it.";
 
 export function photosView(item: string | null): View {
   const pic = item ? draft.pictures.find((p) => p.name === item) : null;
-  const theme = draft.theme ?? DEFAULT_THEME;
+  const preview = artPreview(() => (pic ?? draft.pictures[0])?.cells ?? null);
   if (!pic) {
     return {
       title: "Photos",
-      path: "content/pictures/<name>.json",
-      tag: "real",
       editor: h(
         "section",
         {},
-        h("p", { class: "lead" }, `A photo becomes a painting in the Art room: one block of color per cell, ${CANVAS_WIDTH} across and ${CANVAS_HEIGHT} down. Your kid draws on top of it, or over it.`),
+        h("p", { class: "lead" }, "A photo becomes a painting in the Art room, made of the same squares a kid paints with. They can draw right on top of it."),
         dropZone(),
-        note(),
+        h("p", { class: "dim small" }, "On Purple, a parent opens it from the parent menu, under Pictures."),
       ),
-      stage: () => artFrame(draft.pictures[0]?.cells ?? null, theme),
-      caption: draft.pictures.length ? `The Art room with ${draft.pictures[0].name}.` : "The Art room, empty. Drop a photo to see it painted here.",
+      preview,
+      caption,
     };
   }
   const remove = () => {
@@ -68,17 +65,14 @@ export function photosView(item: string | null): View {
   };
   return {
     title: pic.name,
-    path: `content/pictures/${pic.name}.json  ·  ${pic.name}.png`,
-    tag: "real",
     editor: h(
       "section",
       {},
-      h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px" }, h("img", { class: "photo", src: pic.sourceUrl, alt: "" }), h("div", {}, h("p", {}, `${pic.cells[0].length} by ${pic.cells.length} cells, centered on the canvas. ${pic.ops.length} paint strokes.`), h("p", { class: "dim small" }, "Every cell is one keypress's worth of paint, so a kid can erase or draw over any part of it."), h("button", { class: "linkbtn dim", onclick: remove }, "Remove this photo")))),
+      h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px" }, h("img", { class: "photo", src: pic.sourceUrl, alt: "" }), h("div", {}, h("p", {}, "Painted on the right at the size it will be on Purple."), h("button", { class: "linkbtn dim", onclick: remove }, "Remove this photo")))),
       h("h3", {}, "Add another"),
       dropZone(),
-      note(),
     ),
-    stage: () => artFrame(pic.cells, theme),
-    caption: `The Art room with ${pic.name} painted at real size.`,
+    preview,
+    caption,
   };
 }

@@ -2,6 +2,7 @@
 // computer's name and the room title above a rounded stage, the keyboard note and the Esc pill
 // below. Every preview on the right goes through here, so they all look like the laptop.
 import { PURPLE } from "@sdk";
+import { draft } from "../state";
 import { h } from "./dom";
 
 export const P = PURPLE.screen.palette;
@@ -15,8 +16,6 @@ const EXPAND_ICON = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none"
 export interface Chrome {
   title: string;
   right?: string;
-  // A family's proposed theme: the ground around the stage, and the stage itself.
-  ground?: string;
   stage?: string;
 }
 
@@ -59,7 +58,8 @@ export function pill(ctx: CanvasRenderingContext2D, label: string, x: number, y:
 
 // The whole screen; body draws inside the stage, clipped to its rounded corners.
 export function drawScreen(ctx: CanvasRenderingContext2D, chrome: Chrome, body: (ctx: CanvasRenderingContext2D) => void): void {
-  ctx.fillStyle = chrome.ground ?? P.bg;
+  // A family's colors reach every preview through the ground around the stage.
+  ctx.fillStyle = draft.theme?.background ?? P.bg;
   ctx.fillRect(0, 0, W, H);
   text(ctx, "My Purple Computer", FRAME.x, 44, 19, P.muted);
   text(ctx, chrome.title, W / 2, 44, 19, P.accent, "center", MONO, 700);
@@ -117,9 +117,4 @@ export class ScreenCanvas {
     cancelAnimationFrame(this.frame);
     this.observer.disconnect();
   }
-}
-
-// For previews that are drawn once per render of the page.
-export function screen(chrome: Chrome, body: (ctx: CanvasRenderingContext2D) => void): HTMLElement {
-  return new ScreenCanvas((ctx) => drawScreen(ctx, chrome, body)).element;
 }

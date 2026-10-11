@@ -5,7 +5,7 @@ import type { View } from "./view";
 export function installView(): View {
   const file = packFilename();
   return {
-    title: "Getting it onto Purple",
+    title: "Putting it on Purple",
     editor: h(
       "section",
       {},
@@ -30,7 +30,6 @@ export function installView(): View {
       h("h3", {}, "Sharing"),
       h("p", {}, "The pack is a plain file. Email it to Grandma, or put it on a stick for a cousin. There is no place to upload it and nothing to sign up for."),
     ),
-    stage: () => null,
   };
 }
 
@@ -50,7 +49,7 @@ export function formatView(): View {
     "  theme.json                   background and key rows  not read yet",
   ].join("\n");
   return {
-    title: "What is in the pack",
+    title: "What is in the file",
     editor: h(
       "section",
       {},
@@ -58,6 +57,5 @@ export function formatView(): View {
       h("pre", {}, h("code", {}, tree)),
       h("p", {}, "The third column is where each file shows up on Purple. The layout copies the folders Purple already uses for its own built-in sounds and words, and Purple's source repository documents it in ", h("span", { class: "mono" }, "studio/PACK_FORMAT.md"), " along with a small command-line tool that builds, checks, and installs packs without this page, for anyone who would rather write a pack by hand."),
     ),
-    stage: () => null,
   };
 }

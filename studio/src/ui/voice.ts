@@ -1,83 +1,112 @@
 import type { Clip } from "../audio";
-import { LETTER_KEYS, voiceClipFilename } from "@sdk/purple/sounds";
+import { play } from "../audio";
+import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
 import { changed, draft } from "../state";
-import { clear, field, h } from "./dom";
-import { musicFrame, playFrame } from "./facsimile";
-import { clipRow, recordControl } from "./record";
+import { h, pageKeys } from "./dom";
+import { musicPreview, playPreview } from "./facsimile";
+import { recordControl } from "./record";
 import type { View } from "./view";
 
-export function voiceView(): View {
+// The keys that have a voice clip, laid out like the keyboard.
+const KEY_ROWS = [PERCUSSION_ROW, ...GRID_ROWS].map((row) => row.filter((k) => LETTER_KEYS.includes(k)));
+
+const tabs = (which: "letters" | "phrases") => h("div", { class: "tabs", role: "tablist" },
+  h("a", { class: "tab", href: "#voice", "aria-selected": String(which === "letters") }, "Letters and numbers"),
+  h("a", { class: "tab", href: "#voice/phrases", "aria-selected": String(which === "phrases") }, "Phrases"));
+
+const clipActions = (clip: Clip, onRemove: () => void) => h("div", { class: "row" },
+  h("button", { class: "btn secondary small", onclick: () => play(clip) }, "▶ Hear it"),
+  h("button", { class: "linkbtn dim small", onclick: onRemove }, "Remove"));
+
+function lettersView(): View {
   let current = LETTER_KEYS.find((k) => !(k in draft.letters)) ?? "a";
-  let lastPhrase: string | null = draft.phrases.at(-1)?.text ?? null;
-  const keys = h("div", { class: "keys" });
+  const keys = h("div", { class: "keyboard" });
   const big = h("div", { class: "big-letter" });
-  const currentClip = h("div");
+  const count = h("p", { class: "dim" });
+  const actions = h("div");
 
-  function renderLetters() {
-    clear(keys);
-    for (const k of LETTER_KEYS) {
-      const cls = ["key", k in draft.letters && "done", k === current && "current"].filter(Boolean).join(" ");
-      keys.append(h("button", { class: cls, onclick: () => { current = k; renderLetters(); changed(); } }, k));
-    }
+  const select = (k: string) => {
+    current = k;
+    render();
+    preview.redraw();
+  };
+  function render() {
+    keys.replaceChildren(...KEY_ROWS.map((row) => h("div", { class: "r" }, ...row.map((k) =>
+      h("button", { class: ["key", k in draft.letters && "done", k === current && "current"].filter(Boolean).join(" "), onclick: () => select(k) }, k)))));
     big.textContent = current;
-    clear(currentClip);
+    count.textContent = `${Object.keys(draft.letters).length} of ${LETTER_KEYS.length} recorded. Keys you skip keep Purple's voice.`;
     const clip = draft.letters[current];
-    if (clip) currentClip.append(clipRow(clip, `content/letters/${current}.wav`, () => { delete draft.letters[current]; changed(); renderLetters(); }));
+    actions.replaceChildren(clip ? clipActions(clip, () => { delete draft.letters[current]; changed(); render(); }) : "");
   }
-  const onLetter = (clip: Clip) => {
+  const onClip = (clip: Clip) => {
     draft.letters[current] = clip;
-    current = LETTER_KEYS[(LETTER_KEYS.indexOf(current) + 1) % LETTER_KEYS.length];
+    current = LETTER_KEYS.find((k) => !(k in draft.letters)) ?? current;
     changed();
-    renderLetters();
+    render();
   };
-  renderLetters();
-
-  const phraseIn = h("input", { type: "text", placeholder: "Good morning, Maya" });
-  const phraseName = h("span", { class: "mono" }, "content/voice/….wav");
-  phraseIn.oninput = () => (phraseName.textContent = `content/voice/${voiceClipFilename(phraseIn.value || "…")}`);
-  const phrases = h("div", { class: "stack" });
-  function renderPhrases() {
-    clear(phrases);
-    draft.phrases.forEach((p, i) =>
-      phrases.append(h("div", { class: "card" }, h("p", {}, h("strong", {}, p.text)), clipRow(p.clip, `content/voice/${voiceClipFilename(p.text)}`, () => { draft.phrases.splice(i, 1); changed(); renderPhrases(); }))));
-  }
-  renderPhrases();
-  const phraseStatus = h("div", { class: "status" });
-  const onPhrase = (clip: Clip) => {
-    const text = phraseIn.value.trim();
-    if (!text) {
-      phraseStatus.textContent = "Type the phrase first, so Purple knows when to play it.";
-      return;
-    }
-    phraseStatus.textContent = "";
-    draft.phrases = draft.phrases.filter((p) => p.text.toLowerCase() !== text.toLowerCase());
-    draft.phrases.push({ text, clip });
-    lastPhrase = text;
-    phraseIn.value = "";
-    phraseIn.dispatchEvent(new Event("input"));
-    changed();
-    renderPhrases();
-  };
+  const preview = musicPreview(() => ({ instrument: "marimba", sayLetters: true }), select);
+  // Typing a key anywhere on the page jumps to it and says it, the way the preview does.
+  const unlisten = pageKeys((k) => preview.press(k));
+  render();
 
   return {
     title: "Voice",
-    path: "content/letters/<key>.wav  ·  content/voice/<phrase>.wav",
-    tag: "real",
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "Purple says letters and numbers out loud in the Music room, and reads back what a kid types in Play. Those can be in a voice your kid knows."),
-      h("h3", {}, "Letters and numbers"),
-      h("p", { class: "dim small" }, "Pick a key, say its name, stop. Studio moves to the next one. Any you skip keep Purple's own voice."),
-      h("div", { class: "card" }, keys, big, recordControl(onLetter), currentClip),
-      h("h3", {}, "Phrases"),
-      h("p", { class: "dim small" }, "When a kid types exactly this phrase in Play, Purple plays your recording instead of speaking it. Capitals and spacing do not matter."),
-      h("div", { class: "card" }, field("The phrase, exactly as your kid would type it", phraseIn), h("p", { class: "dim small" }, "Saved as ", phraseName), recordControl(onPhrase), phraseStatus),
-      phrases,
-      h("div", { class: "note" }, h("strong", {}, "What Purple does with this: "), "the Music room's Say Letters mode plays your clip for any key you recorded and Purple's own clip for the rest. A phrase you record is what Purple says instead of its built-in voice whenever it would say exactly those words."),
+      tabs("letters"),
+      h("p", { class: "lead" }, "In the Music room, every key can say its own name. Record yours: pick a key, press Record, say it, press Stop."),
+      h("div", { class: "card voice-card" }, keys, h("div", { class: "voice-now" }, big, h("div", { class: "stack" }, recordControl(onClip), actions))),
+      count,
+      h("p", { class: "dim small" }, "Tip: type a key on your keyboard to jump to it. Studio moves to the next key after each recording."),
     ),
-    stage: () => (lastPhrase ? playFrame([{ ask: lastPhrase, answer: `♪ ${lastPhrase}` }]) : musicFrame({ instrument: "Marimba", sayLetters: true, activeKey: current })),
-    stageTitle: "What your kid hears",
-    caption: lastPhrase ? "Play, reading a phrase back in your recording." : "The Music room in Say Letters mode: each key says its name.",
+    preview,
+    previewTitle: "What your kid hears",
+    caption: "Music, in Say Letters mode. A green dot means the key is in your voice.",
+    cleanup: unlisten,
   };
+}
+
+function phrasesView(): View {
+  const list = h("div", { class: "stack" });
+  const text = h("input", { type: "text", placeholder: "Good night, Maya", "aria-label": "Phrase" });
+  const status = h("div", { class: "status" });
+  const last = () => draft.phrases.at(-1)?.text;
+
+  function render() {
+    list.replaceChildren(...draft.phrases.map((p, i) => h("div", { class: "phrase-row" },
+      h("strong", {}, p.text), clipActions(p.clip, () => { draft.phrases.splice(i, 1); changed(); render(); }))));
+  }
+  const onClip = (clip: Clip) => {
+    const t = text.value.trim();
+    if (!t) return void (status.textContent = "Type the phrase first, so Purple knows when to play it.");
+    status.textContent = "";
+    draft.phrases = [...draft.phrases.filter((p) => p.text.toLowerCase() !== t.toLowerCase()), { text: t, clip }];
+    text.value = "";
+    changed();
+    render();
+  };
+  const record = recordControl(onClip);
+  text.addEventListener("keydown", (e) => e.key === "Enter" && text.value.trim() && record.querySelector("button")?.click());
+  render();
+
+  return {
+    title: "Voice",
+    editor: h(
+      "section",
+      {},
+      tabs("phrases"),
+      h("p", { class: "lead" }, "Purple reads things out loud in Play when a kid types ", h("span", { class: "mono" }, "say"), " first, like ", h("span", { class: "mono" }, "say good night"), ". Record a phrase and they hear you instead."),
+      list,
+      h("div", { class: "card" }, h("div", { class: "phrase-new" }, text, record), status),
+      h("p", { class: "dim small" }, "Capitals and spacing don't matter. Anything you haven't recorded, Purple says in its own voice."),
+    ),
+    preview: playPreview(() => (last() ? [{ ask: `say ${last()}`, answer: last()! }] : []), () => `Try: say ${last() ?? "good night"}`),
+    previewTitle: "What your kid hears",
+    caption: "Play: type say and a phrase, then press Enter.",
+  };
+}
+
+export function voiceView(item: string | null): View {
+  return item === "phrases" ? phrasesView() : lettersView();
 }

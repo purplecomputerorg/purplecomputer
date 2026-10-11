@@ -2,10 +2,17 @@ import { describe, expect, it } from "vitest";
 import { buildEntries, manifest, roomTitle, type PackSpec } from "../sdk/src/pack";
 import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
+import { packSpec } from "../src/pack";
+import type { Draft } from "../src/state";
 
 const base: PackSpec = { familyName: "", pictures: [], letters: {}, phrases: [], words: [], synonyms: [], ranked: [], instruments: [], rooms: [], theme: null };
 
 describe("pack assembly", () => {
+  it("ranks a family's own words after anything ranked by hand, leaving Purple's ranked words alone", async () => {
+    const d: Draft = { ...base, pictures: [], rooms: [], words: [{ word: "biscuit", emoji: "🐶" }, { word: "cat", emoji: "🐈" }, { word: "tractor", emoji: "🚜" }], ranked: ["tractor"] };
+    expect((await packSpec(d)).ranked).toEqual(["tractor", "biscuit"]);
+  });
+
   it("names the pack after the family and keeps the manifest loader-shaped", () => {
     expect(manifest({ familyName: "The Nathansons" })).toEqual({
       id: "the-nathansons-pack", name: "The Nathansons' Purple", version: "1.0.0", type: "emoji", format: 1, description: "Made with Purple Studio.",

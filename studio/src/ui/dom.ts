@@ -25,4 +25,19 @@ export function filePicker(accept: string, onFile: (f: File) => void, label = "o
   return h("span", {}, h("button", { class: "linkbtn dim", onclick: () => input.click() }, label), input);
 }
 
-export const seconds = (n: number) => `${n.toFixed(1)}s`;
+// True when a key is going into a text field, so page-wide key shortcuts leave it alone.
+export function typingIn(e: Event): boolean {
+  const t = e.target as HTMLElement;
+  return t.tagName === "TEXTAREA" || t.isContentEditable || (t.tagName === "INPUT" && (t as HTMLInputElement).type === "text");
+}
+
+// Calls onKey for plain single key presses on the page that aren't going into a text field or
+// already handled (a focused preview handles its own). Returns the remover.
+export function pageKeys(onKey: (key: string) => void): () => void {
+  const listener = (e: KeyboardEvent) => {
+    if (e.defaultPrevented || typingIn(e) || e.metaKey || e.ctrlKey || e.altKey || e.repeat || [...e.key].length !== 1) return;
+    onKey(e.key.toLowerCase());
+  };
+  document.addEventListener("keydown", listener);
+  return () => document.removeEventListener("keydown", listener);
+}

@@ -43,6 +43,6 @@ export const bridge = {
     return "";
   },
   summary(): string {
-    return JSON.stringify(Object.fromEntries(pieces().map((p) => [p.label.replace(/ /g, "_"), p.count])));
+    return JSON.stringify(Object.fromEntries(pieces().map((p) => [p.id, p.count])));
   },
 };

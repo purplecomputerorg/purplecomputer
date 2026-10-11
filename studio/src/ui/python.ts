@@ -82,6 +82,5 @@ export function pythonView(): View {
       h("p", { class: "dim small" }, "A room is its own Python file; see the ", h("a", { href: "#guide" }, "Room guide"), " for what it can call, and the Rooms page to try one."),
       h("div", { class: "note" }, h("strong", {}, "What this is not: "), "a way to change Purple itself. This page fills in the pack; only the rooms in it run on Purple, each in a box of its own. The Python runtime is Pyodide, loaded from this site the first time you press Run."),
     ),
-    stage: () => null,
   };
 }

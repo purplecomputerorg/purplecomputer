@@ -46,20 +46,20 @@ export const draft: Draft = {
 export { slug } from "@sdk/pack";
 export const packId = (d: Draft = draft) => sdkPackId(d);
 
-export interface Piece { label: string; count: number }
+export interface Piece { id: string; label: string; count: number }
 
 // What the parent has put in so far, for the summary and the download gate.
 export function pieces(): Piece[] {
   return [
-    { label: "photos", count: draft.pictures.length },
-    { label: "letter recordings", count: Object.keys(draft.letters).length },
-    { label: "phrases", count: draft.phrases.length },
-    { label: "words", count: draft.words.length },
-    { label: "synonyms", count: draft.synonyms.length },
-    { label: "autocomplete picks", count: draft.ranked.length },
-    { label: "instruments", count: draft.instruments.length },
-    { label: "rooms", count: draft.rooms.length },
-    { label: "colors", count: draft.theme ? 1 : 0 },
+    { id: "photos", label: "photos", count: draft.pictures.length },
+    { id: "letter_recordings", label: "letters in your voice", count: Object.keys(draft.letters).length },
+    { id: "phrases", label: "phrases in your voice", count: draft.phrases.length },
+    { id: "words", label: "words", count: draft.words.length },
+    { id: "synonyms", label: "nicknames", count: draft.synonyms.length },
+    { id: "autocomplete_picks", label: "words suggested first", count: draft.ranked.length },
+    { id: "instruments", label: "instruments", count: draft.instruments.length },
+    { id: "rooms", label: "rooms", count: draft.rooms.length },
+    { id: "colors", label: "colors", count: draft.theme ? 1 : 0 },
   ].filter((p) => p.count > 0);
 }
 

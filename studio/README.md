@@ -24,22 +24,22 @@ Stack: Vite, TypeScript, vanilla DOM, no backend. Two runtime dependencies: Bloc
 
 ## The shape
 
-A small, calm editor in three panes:
+A small, calm editor in three panes, built so someone who has never seen Purple gets it in a few seconds:
 
-- **Left: the pack.** A tree of what is in it, with counts, and each photo and instrument as its own entry. This is the actual file layout the parent will download.
-- **Middle: the editor** for the selected thing. Every editor is headed by the real path inside the pack and a tag saying whether Purple reads it or whether it is a proposal.
-- **Right: the stage.** A facsimile of the room the kid would see or hear, redrawn as the parent works: the Art room for photos and colors, the Music room for instruments and letters, Play for words and phrases. Drawn at the real 134 by 29 cell viewport with the TUI's own colors.
+- **Left: what you can add.** Six plain entries (Photos, Voice, Words, Instruments, Rooms, Colors) with counts, then one Download button. The power tools (Room guide, Python console, the file layout, the by-hand install route) sit in a quiet More list at the bottom. File paths live only on "What is in the file".
+- **Middle: the editor** for the selected thing, headed by its name. The one part Purple doesn't read yet (Colors) says "Preview only".
+- **Right: a playable preview.** Purple's canvas screen for the room the piece shows up in (Art for photos and colors, Music for letters and instruments, Play for words and phrases, the room itself for rooms). Every preview takes keys once clicked, the same in the panel and in full screen: Art paints in the chosen row colors, Music plays the instrument or says each key in the family's recordings, Play answers words with their emoji and says `say ...` lines in a recorded phrase. The family's background color reaches every preview.
 
 ## What Purple does with each piece
 
 | Piece | In Studio | On Purple |
 | --- | --- | --- |
-| Your own words and emoji | Words, synonyms, autocomplete picks. | Play room, exactly as the core emoji pack. |
+| Your own words and emoji | One table: type a word, press Enter, pick its emoji from a search over the words Purple already knows. Each new word is also ranked, so it comes first in autocomplete. Synonyms stay available from the Python console. | Play room, exactly as the core emoji pack. |
 | Your own voice | Record or upload a clip per key (A to Z, 0 to 9) and per phrase; 22050 Hz mono 16-bit WAV, trimmed and faded like Purple's own clips. | Say Letters plays the family's clip for any key recorded and Purple's for the rest; a recorded phrase is played instead of the synthesized voice whenever Purple would say those exact words. |
 | Your own photos | Drop a photo, see it painted on the Art room's grid at the real 56 by 24 square-cell size. | The parent menu gains a Pictures entry; choosing one paints it onto the Art canvas. |
 | Your own instrument sounds | Start from any of Purple's four instruments and move the numbers behind its sound with sliders while a Music room keyboard plays it. The full sample set, one note per pitch the grid can reach, is rendered from the same equations. | The Music room lists it after the built-in four; Enter cycles to it and the code panel can choose it by name. The slider numbers ship beside the samples so Purple's own synth can re-render it. |
 | Your own rooms | A small game, story, or quiz in Python: built from blocks, from a trivia or soundboard form, from the Snake example, or written by hand. The stage on the right runs it live, in a worker of its own, with the same `purple` module Purple uses. | The room picker gains a row of family rooms. Each runs as a guest in its own process and can only ask Purple to show, say, and play things; see `guides/family-rooms.md`. |
-| Your own colors | Background, canvas, and a hue per letter row, previewed on the Art frame. | Nothing yet. Emitted as a proposed `theme.json`. |
+| Your own colors | A preset, or a hue per letter row from a row of swatches; background and canvas under a fold. Previewed by painting in Art. | Nothing yet. Emitted as a proposed `theme.json`. |
 
 Two more ways in, for parents who would rather write than click:
 

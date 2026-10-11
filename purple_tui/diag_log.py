@@ -39,5 +39,5 @@ def _to_journal(text: str, tag: str) -> None:
                 # MSG_DONTWAIT: a stalled journald must never block the UI
                 _journal.sendto(f"<14>{tag}: {line}".encode("utf-8", errors="replace"),
                                 socket.MSG_DONTWAIT, JOURNAL_SOCKET)
-    except OSError:
+    except (OSError, AttributeError):  # AttributeError: no AF_UNIX (Studio's in-browser Purple)
         pass

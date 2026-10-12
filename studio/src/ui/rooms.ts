@@ -4,23 +4,18 @@ import { BLANK_BLOCKS, TOOLBOX, defineBlocks, sourceFromBlocks, toPython } from 
 import { EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
 import { addRoom } from "../pybridge";
 import type { Problem } from "../rooms/host";
-import { changed, draft, slug, type RoomDraft } from "../state";
+import { changed, draft, freeName, type RoomDraft } from "../state";
 import { field, h } from "./dom";
 import { RoomStage } from "./roomstage";
+import { tryBar } from "./trybar";
 import { templateForm } from "./templateform";
 import type { View } from "./view";
-
-function freeName(base: string): string {
-  let name = base;
-  for (let n = 2; draft.rooms.some((r) => r.name === name); n++) name = `${base}-${n}`;
-  return name;
-}
 
 function list(): View {
   const nameIn = h("input", { type: "text", placeholder: "Farm" });
   const status = h("div", { class: "status" });
   const open = (base: string, source: string, made: Pick<RoomDraft, "blocks" | "template">) => {
-    const name = freeName(slug(nameIn.value) || base);
+    const name = freeName(nameIn.value || base, (n) => draft.rooms.some((r) => r.name === n));
     if (!ROOM_NAME.test(name)) {
       status.textContent = "Use letters, numbers, and dashes for the name.";
       return;
@@ -43,7 +38,11 @@ function list(): View {
         }),
         choice("🧱", "Blocks", "Snap blocks together to make anything. No typing code.", () => open("my-room", sourceFromBlocks(BLANK_BLOCKS), { blocks: BLANK_BLOCKS, template: null })),
         choice("🐍", EXAMPLES[0].label, `${EXAMPLES[0].about} Written in Python, ready to change.`, () => open(EXAMPLES[0].name, EXAMPLES[0].source, { blocks: null, template: null }))),
-      draft.rooms.length ? h("p", { class: "dim small" }, "Yours so far: ", ...draft.rooms.flatMap((r, n) => [n ? ", " : "", h("a", { href: `#rooms/${encodeURIComponent(r.name)}` }, roomTitle(r.name))])) : null,
+      ...([true, false] as const).map((kept) => {
+        const rooms = draft.rooms.filter((r) => !!r.kept === kept);
+        return rooms.length ? h("div", {}, h("h3", {}, kept ? "On your Purple" : "Trying"), h("div", { class: "row" }, ...rooms.map((r) =>
+          h("a", { class: "btn secondary small", href: `#rooms/${encodeURIComponent(r.name)}` }, roomTitle(r.name))))) : null;
+      }),
     ),
   };
 }
@@ -158,7 +157,7 @@ function editor(room: RoomDraft): View {
   tabs.python.onclick = () => showTab("python");
 
   const remove = () => {
-    if (!confirm(`Remove ${roomTitle(room.name)} from the pack?`)) return;
+    if (!confirm(`Throw away ${roomTitle(room.name)}?`)) return;
     draft.rooms = draft.rooms.filter((r) => r !== room);
     changed();
     location.hash = "#rooms";
@@ -169,6 +168,7 @@ function editor(room: RoomDraft): View {
     editor: h(
       "section",
       {},
+      tryBar(room, remove),
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, tabs.blocks, tabs.python),
         h("button", { class: "btn small", onclick: () => { restart(); stage.focus(); } }, "▶ Play from the start")),
       panes.blocks,
@@ -176,7 +176,6 @@ function editor(room: RoomDraft): View {
       problems.element,
       out,
       h("p", { class: "dim small" }, "What a room can call is on the ", h("a", { href: "#guide" }, "Room guide"), "."),
-      h("p", { style: "margin-top:18px" }, h("button", { class: "linkbtn dim", onclick: remove }, "Remove this room")),
     ),
     preview: stage,
     caption: "Your room, running. Here the voice is your browser's; on Purple it's Purple's own.",

@@ -2,6 +2,7 @@ import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, DEFAULT_THEME, hslToHex, themePalette, 
 import { changed, draft } from "../state";
 import { clear, h } from "./dom";
 import { PURPLE_STICKERS, sticker } from "./stickers";
+import { tryBar } from "./trybar";
 import type { View } from "./view";
 
 // Screen colors: one base each; Purple's text and panels follow it.
@@ -54,6 +55,7 @@ export function colorsView(): View {
     const custom = !SCREENS.some(([, base]) => base === t.base);
     clear(body);
     body.append(h("div", {},
+      draft.theme ? tryBar(draft.colors) : null,
       h("h3", {}, "Screen"),
       h("div", { class: "presets" },
         ...SCREENS.map(([name, base]) => h("button", { class: "preset", "aria-pressed": String(t.base === base), onclick: () => edit((n) => { n.base = base; n.colors = {}; }) },
@@ -83,7 +85,7 @@ export function colorsView(): View {
         h("p", { class: "dim small" }, "Purple works these out from your screen color, so they stay easy to read. Change any one here."),
         h("h4", {}, "Words"), h("div", { class: "wells" }, ...TEXT_ROLES.map(well)),
         h("h4", {}, "Screen"), h("div", { class: "wells" }, ...SCREEN_ROLES.map(well))),
-      draft.theme ? h("p", {}, h("button", { class: "linkbtn dim", onclick: () => set(structuredClone(DEFAULT_THEME)) }, "Undo all my color changes")) : null,
+      draft.theme ? h("p", {}, h("button", { class: "linkbtn dim", onclick: () => { draft.colors = {}; set(structuredClone(DEFAULT_THEME)); } }, "Undo all my color changes")) : null,
     ));
   }
   render();

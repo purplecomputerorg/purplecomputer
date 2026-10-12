@@ -3,6 +3,7 @@ import { changed, draft, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, openEmojiPicker } from "./emojipicker";
+import { addAllBar, keepButton } from "./trybar";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -13,6 +14,7 @@ const WORD = /^[a-z][a-z'-]*$/;
 function wordTable(): HTMLElement {
   const rows = h("div", { class: "word-rows" });
   const status = h("div", { class: "status" });
+  const pending = h("div");
 
   const checkWord = (word: string, self: WordEntry | null): string | null => {
     if (!WORD.test(word)) return "A word is letters only, no spaces. Kids type one word at a time.";
@@ -68,7 +70,7 @@ function wordTable(): HTMLElement {
       changed();
       render();
     } }, "✕");
-    return h("div", { class: `word-row${entry ? "" : " blank"}` }, word, h("div", { class: "emoji-wrap" }, emoji), was, remove);
+    return h("div", { class: `word-row${entry ? "" : " blank"}` }, word, h("div", { class: "emoji-wrap" }, emoji), was, entry ? keepButton(entry, render) : h("span"), remove);
   }
 
   function render() {
@@ -78,10 +80,11 @@ function wordTable(): HTMLElement {
       ...draft.words.map(row),
       row(null),
     );
+    pending.replaceChildren(addAllBar(draft.words, (n) => `${n} word${n === 1 ? " is" : "s are"}`, render) ?? "");
     rows.querySelector<HTMLInputElement>(".blank input")?.focus({ preventScroll: true });
   }
   render();
-  return h("div", { class: "card" }, rows, status);
+  return h("div", {}, h("div", { class: "card" }, rows, status), pending);
 }
 
 export function wordsView(): View {

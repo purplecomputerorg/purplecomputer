@@ -1,6 +1,6 @@
 import "./styles.css";
 import logo from "../../assets/logo.svg";
-import { draft, onChange, pieces } from "./state";
+import { allPieces, onChange, pieces } from "./state";
 import { clear, h } from "./ui/dom";
 import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
@@ -26,16 +26,15 @@ interface Section {
   icon: string;
   blurb: string;
   view: (item: string | null) => View;
-  count: () => number;
 }
 
 const SECTIONS: Section[] = [
-  { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or your kid's drawing, for them to paint on top of", view: picturesView, count: () => draft.pictures.length },
-  { id: "voice", label: "Voice", icon: "🎙️", blurb: "Your voice on the keys, saying anything you like", view: voiceView, count: () => Object.keys(draft.letters).length + draft.phrases.length },
-  { id: "words", label: "Words", icon: "🐶", blurb: "Your words, each with its own emoji", view: wordsView, count: () => draft.words.length },
-  { id: "instruments", label: "Instruments", icon: "🎹", blurb: "A sound of your own for the Music room", view: instrumentsView, count: () => draft.instruments.length },
-  { id: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView, count: () => draft.rooms.length },
-  { id: "colors", label: "Colors", icon: "🎨", blurb: "The colors the letters paint with", view: colorsView, count: () => (draft.theme ? 1 : 0) },
+  { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or your kid's drawing, for them to paint on top of", view: picturesView },
+  { id: "voice", label: "Voice", icon: "🎙️", blurb: "Your voice on the keys, saying anything you like", view: voiceView },
+  { id: "words", label: "Words", icon: "🐶", blurb: "Your words, each with its own emoji", view: wordsView },
+  { id: "instruments", label: "Instruments", icon: "🎹", blurb: "A sound of your own for the Music room", view: instrumentsView },
+  { id: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
+  { id: "colors", label: "Colors", icon: "🎨", blurb: "The colors the letters paint with", view: colorsView },
 ];
 const MORE: [id: string, label: string, view: (item: string | null) => View][] = [
   ["install", "Putting it on Purple", installView],
@@ -107,13 +106,16 @@ function parseHash(): [section: string, item: string | null] {
   return [section, rest.length ? decodeURIComponent(rest.join("/")) : null];
 }
 
+// How many things on each Studio page are added to the family's Purple.
+const added = (section: string) => pieces().filter((p) => p.section === section).reduce((sum, p) => sum + p.count, 0);
+
 function renderTop() {
   const [sec] = parseHash();
   const n = pieces().reduce((sum, p) => sum + p.count, 0);
   top.replaceChildren(
     h("a", { class: "brand", href: "#" }, h("img", { src: logo, alt: "" }), h("b", {}, "Purple ", h("span", {}, "Studio"))),
     h("nav", { class: "tabs-nav" }, ...SECTIONS.map((s) => h("a", { href: `#${s.id}`, "aria-current": sec === s.id ? "page" : null },
-      h("span", { class: "icon" }, s.icon), h("span", { class: "label" }, s.label), s.count() ? h("span", { class: "n" }, String(s.count())) : null))),
+      h("span", { class: "icon" }, s.icon), h("span", { class: "label" }, s.label), added(s.id) ? h("span", { class: "n" }, String(added(s.id))) : null))),
     h("details", { class: "more-menu" }, h("summary", {}, "More"),
       h("div", {}, ...MORE.map(([id, label]) => h("a", { href: `#${id}`, "aria-current": sec === id ? "page" : null, onclick: (e: Event) => (e.target as HTMLElement).closest("details")?.removeAttribute("open") }, label)))),
     h("a", { class: `btn download${sec === "pack" ? " here" : ""}`, href: "#pack" }, "Download", n ? h("span", { class: "n" }, String(n)) : null),
@@ -154,5 +156,5 @@ if (new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name
 
 onChange(() => { renderTop(); renderPhoneBar(); current?.preview?.redraw?.(); live.changed(); });
 window.addEventListener("hashchange", route);
-window.addEventListener("beforeunload", (e) => pieces().length && e.preventDefault());
+window.addEventListener("beforeunload", (e) => allPieces().some((p) => p.items.length) && e.preventDefault());
 route();

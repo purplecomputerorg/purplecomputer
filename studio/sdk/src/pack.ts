@@ -10,7 +10,7 @@ import { encodeWav, type Clip } from "./wav";
 
 // title: the name as the family typed it, which Purple shows as is; name is the file name.
 export interface PackPicture { name: string; title?: string; ops: PaintOp[]; png?: Uint8Array }
-export interface PackInstrument { name: string; base: BaseName; params: Params }
+export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params }
 // content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Blockly workspace it came from rides beside it.
 export interface PackRoom { name: string; source: string; blocks?: unknown }
 
@@ -33,7 +33,7 @@ const enc = new TextEncoder();
 const text = (path: string, body: string): TarEntry => ({ path, data: enc.encode(body) });
 const json = (path: string, value: unknown) => text(path, JSON.stringify(value, null, 2) + "\n");
 
-export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+export const slug = (s: string) => s.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 export const ROOM_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 // content.display_name: what Purple shows for a room called `name`.
 export const roomTitle = (name: string) =>
@@ -75,7 +75,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   }
 
   for (const inst of spec.instruments) {
-    entries.push(json(`content/instruments/${inst.name}.json`, { name: inst.name, base: inst.base, params: inst.params }));
+    entries.push(json(`content/instruments/${inst.name}.json`, { name: inst.title ?? inst.name, base: inst.base, params: inst.params }));
     for (const pitch of SAMPLE_PITCHES) {
       onProgress?.(`Rendering ${inst.name}: ${pitch.note}${pitch.octave}`);
       await yieldToUi();

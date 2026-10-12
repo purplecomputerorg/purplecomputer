@@ -4,6 +4,7 @@ import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
 import { changed, draft } from "../state";
 import { h, pageKeys } from "./dom";
 import { keyLabel, sticker } from "./stickers";
+import { addAllBar, keepButton, tryBar } from "./trybar";
 import { liveScreen } from "./live";
 import { recordControl } from "./record";
 import type { View } from "./view";
@@ -16,16 +17,15 @@ const tabs = (which: "letters" | "phrases") => h("div", { class: "tabs", role: "
   h("a", { class: "tab", href: "#voice", "aria-selected": String(which === "letters") }, "Letters and numbers"),
   h("a", { class: "tab", href: "#voice/phrases", "aria-selected": String(which === "phrases") }, "Phrases"));
 
-const clipActions = (clip: Clip, onRemove: () => void) => h("div", { class: "row" },
-  h("button", { class: "btn secondary small", onclick: () => play(clip) }, "▶ Hear it"),
-  h("button", { class: "linkbtn dim small", onclick: onRemove }, "Remove"));
+const hear = (clip: Clip) => h("button", { class: "btn secondary small", onclick: () => play(clip) }, "▶ Hear it");
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? " is" : "s are"}`;
 
 function lettersView(): View {
   let current = nextToRecord() ?? "1";
   const keys = h("div", { class: "keyboard" });
   const now = h("div", { class: "voice-key" });
   const prompt = h("p", { class: "voice-prompt" });
-  const count = h("p", { class: "voice-count" });
+  const pending = h("div");
   const actions = h("div");
 
   const select = (k: string) => {
@@ -33,17 +33,19 @@ function lettersView(): View {
     render();
   };
   function render() {
-    keys.replaceChildren(...KEY_ROWS.map((row) => h("div", { class: "r" }, ...row.map((k) =>
-      h("button", { class: ["vkey", k in draft.letters && "done", k === current && "current"].filter(Boolean).join(" "), "aria-label": k, onclick: () => select(k) }, sticker(k))))));
+    // A straight grid, like Purple's Music room: a dot on a key tried, a check on a key added.
+    keys.replaceChildren(...KEY_ROWS.flat().map((k) => h("button", {
+      class: ["vkey", draft.letters[k] && (draft.letters[k].kept ? "kept" : "tried"), k === current && "current"].filter(Boolean).join(" "),
+      "aria-label": k, onclick: () => select(k),
+    }, sticker(k))));
     now.replaceChildren(sticker(current));
-    const clip = draft.letters[current];
-    prompt.replaceChildren(clip ? h("span", {}, h("b", {}, keyLabel(current)), " has your recording. Record again to change it.") : h("span", {}, "What should ", h("b", {}, keyLabel(current)), " say?"));
-    const done = Object.keys(draft.letters).length;
-    count.textContent = done ? `${done} key${done === 1 ? "" : "s"} recorded` : "";
-    actions.replaceChildren(clip ? clipActions(clip, () => { delete draft.letters[current]; changed(); render(); }) : "");
+    const letter = draft.letters[current];
+    prompt.replaceChildren(letter ? h("span", {}, h("b", {}, keyLabel(current)), " has your recording. Record again to change it.") : h("span", {}, "What should ", h("b", {}, keyLabel(current)), " say?"));
+    actions.replaceChildren(letter ? h("div", { class: "stack" }, hear(letter.clip), tryBar(letter, () => { delete draft.letters[current]; changed(); render(); })) : "");
+    pending.replaceChildren(addAllBar(Object.values(draft.letters), (n) => plural(n, "recording"), render) ?? "");
   }
   const onClip = (clip: Clip) => {
-    draft.letters[current] = clip;
+    draft.letters[current] = { clip, kept: draft.letters[current]?.kept };
     current = nextToRecord() ?? current;
     changed();
     render();
@@ -65,8 +67,8 @@ function lettersView(): View {
       h("p", { class: "lead" }, "In the Music room's Say Letters, each key plays what you record for it. Its name, \"D is for Dad,\" a sneeze, a song: anything goes."),
       h("div", { class: "card voice-card" },
         keys,
-        h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, recordControl(onClip), actions)),
-        count),
+        h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, recordControl(onClip), actions))),
+      pending,
       h("p", { class: "dim small" }, "Letters and numbers you skip say their own names in Purple's voice; the other keys stay quiet until you give them something. Type a key on your keyboard to jump to it."),
     ),
     live: { room: "music", letters: true },
@@ -84,7 +86,9 @@ function phrasesView(): View {
 
   function render() {
     list.replaceChildren(...draft.phrases.map((p, i) => h("div", { class: "phrase-row" },
-      h("strong", {}, p.text), clipActions(p.clip, () => { draft.phrases.splice(i, 1); changed(); render(); }))));
+      h("strong", {}, p.text), h("div", { class: "row" }, hear(p.clip), keepButton(p, render),
+        h("button", { class: "remove", title: "Remove", "aria-label": `Remove ${p.text}`, onclick: () => { draft.phrases.splice(i, 1); changed(); render(); } }, "✕")))),
+      addAllBar(draft.phrases, (n) => plural(n, "phrase"), render) ?? "");
   }
   const onClip = (clip: Clip) => {
     const t = text.value.trim();

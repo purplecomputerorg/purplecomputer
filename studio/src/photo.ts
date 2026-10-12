@@ -3,10 +3,11 @@ import dog from "./assets/dog.jpg";
 import saturn from "./assets/saturn.jpg";
 import greatWave from "./assets/great-wave.jpg";
 import house from "./assets/sample-drawing.svg";
-import { roomTitle } from "@sdk/pack";
+import { slug } from "@sdk/pack";
+import type { Keepable } from "./state";
 import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "@sdk/purple/art";
 
-export interface Picture { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string }
+export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string }
 
 const hex = (r: number, g: number, b: number) =>
   "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
@@ -43,11 +44,9 @@ export function downsample(img: ImageData, cols: number, rows: number): string[]
 }
 
 // A picture's name is its file name in the pack; Purple shows its title as typed, or else the name tidied.
-export const slug = (text: string) => text.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "picture";
-export const pictureTitle = (p: { name: string; title?: string }) => p.title || roomTitle(p.name);
 
 export async function pictureFromFile(file: File): Promise<Picture> {
-  return pictureFromBitmap(await createImageBitmap(file), slug(file.name.replace(/\.[^.]+$/, "")), URL.createObjectURL(file));
+  return pictureFromBitmap(await createImageBitmap(file), slug(file.name.replace(/\.[^.]+$/, "")) || "picture", URL.createObjectURL(file));
 }
 
 // Studio's examples, painted the same way as a family's pictures. One goes in the pack only if

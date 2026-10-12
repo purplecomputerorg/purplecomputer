@@ -86,12 +86,13 @@ class LiveScreen {
 
   private async sync(): Promise<void> {
     // Rooms stay out: Purple runs them as a separate process, which a browser can't; the Rooms
-    // page previews them itself.
-    const live = { ...draft, rooms: [] };
+    // page previews them itself. Pictures being tried are painted straight on the screen, so Open
+    // lists only the added ones.
+    const live = { ...draft, rooms: [], pictures: draft.pictures.filter((p) => p.kept) };
     const key = JSON.stringify(live, (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
     if (key === this.sent) return this.busy(false);
     this.sent = key;
-    const pack = new Uint8Array(await (await buildPack(undefined, live)).arrayBuffer());
+    const pack = new Uint8Array(await (await buildPack(undefined, live, true)).arrayBuffer());
     this.post({ type: "load", pack, setup: this.setup });
   }
 

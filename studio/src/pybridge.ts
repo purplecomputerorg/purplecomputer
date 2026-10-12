@@ -1,10 +1,11 @@
 // What Studio's Python page can reach: a handful of functions over the draft, each one
-// validating the way Purple would. Pure, so tests can drive it under Pyodide in Node.
+// validating the way Purple would. Pure, so tests can drive it under Pyodide in Node. Asking the
+// pack for something is adding it, so these go straight onto the family's Purple.
 import { ROOM_NAME } from "@sdk/pack";
 import { BASES, defaults, type BaseName } from "@sdk/purple/synth";
 import { changed, draft, pieces, slug, type RoomDraft } from "./state";
 
-export function addRoom(name: string, source: string, made: Pick<RoomDraft, "blocks" | "template"> = { blocks: null, template: null }): RoomDraft {
+export function addRoom(name: string, source: string, made: Pick<RoomDraft, "blocks" | "template" | "kept"> = { blocks: null, template: null }): RoomDraft {
   const room: RoomDraft = { name, source, ...made };
   draft.rooms = [...draft.rooms.filter((r) => r.name !== name), room];
   changed();
@@ -13,11 +14,11 @@ export function addRoom(name: string, source: string, made: Pick<RoomDraft, "blo
 
 export const bridge = {
   add_word(word: string, emoji: string) {
-    draft.words = [...draft.words.filter((w) => w.word !== word), { word, emoji }];
+    draft.words = [...draft.words.filter((w) => w.word !== word), { word, emoji, kept: true }];
     changed();
   },
   add_synonym(alias: string, word: string) {
-    draft.synonyms = [...draft.synonyms.filter((s) => s.alias !== alias), { alias, word }];
+    draft.synonyms = [...draft.synonyms.filter((s) => s.alias !== alias), { alias, word, kept: true }];
     changed();
   },
   rank(word: string) {
@@ -33,13 +34,13 @@ export const bridge = {
       if (typeof v !== "number") return `${k} must be a number`;
     }
     const id = slug(name) || `my-${base}`;
-    draft.instruments = [...draft.instruments.filter((i) => i.name !== id), { name: id, base: base as BaseName, params: { ...allowed, ...(params as Record<string, number>) } }];
+    draft.instruments = [...draft.instruments.filter((i) => i.name !== id), { name: id, base: base as BaseName, params: { ...allowed, ...(params as Record<string, number>) }, kept: true }];
     changed();
     return "";
   },
   add_room(name: string, source: string): string {
     if (!ROOM_NAME.test(name)) return "a room name is lowercase letters, digits, and dashes";
-    addRoom(name, source);
+    addRoom(name, source, { blocks: null, template: null, kept: true });
     return "";
   },
   summary(): string {

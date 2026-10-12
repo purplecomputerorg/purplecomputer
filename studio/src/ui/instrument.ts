@@ -1,33 +1,52 @@
 import { INSTRUMENTS } from "@sdk/purple/sounds";
-import { BASES, BASE_NAMES, defaults, type BaseName } from "@sdk/purple/synth";
+import { BASES, BASE_NAMES, defaults, type BaseName, type Params } from "@sdk/purple/synth";
 import { playGridKey } from "../sounds";
-import { changed, draft, slug, type Instrument } from "../state";
+import { changed, draft, freeName, titleOf, withSample, type Instrument } from "../state";
+import { tryBar } from "./trybar";
 import { field, h, pageKeys } from "./dom";
 import { liveScreen } from "./live";
 import type { View } from "./view";
 
+// Sounds to try first: Purple's four instruments with their sliders moved toward something familiar.
+const SOUNDS: { title: string; base: BaseName; params: Params }[] = [
+  { title: "Bells", base: "glockenspiel", params: { duration: 2.6, ring: 2.4, shimmer: 1.6 } },
+  { title: "Music box", base: "glockenspiel", params: { duration: 0.6, ring: 0.5, fundamental: 0.3, ping: 0.15 } },
+  { title: "Harp", base: "ukulele", params: { duration: 1.8, damping: 0.998, warmth: 0.3, softness: 5, pluck_pos: 0.4, body_mix: 0.15 } },
+  { title: "Banjo", base: "ukulele", params: { duration: 0.6, damping: 0.99, warmth: 0.9, softness: 0, pluck_pos: 0.12, body_freq: 700, body_q: 8, body_mix: 0.7 } },
+  { title: "Xylophone", base: "marimba", params: { duration: 0.35, bar_decay: 9, wood: 1, sparkle: 0.2, tube: 0, mallet: 0.5 } },
+  { title: "Deep marimba", base: "marimba", params: { duration: 1.2, bar_decay: 3, tube: 0.55, tube_decay: 10, mallet: 0.1 } },
+  { title: "Organ", base: "accordion", params: { attack_ms: 40, detune: 0.5, harmonics: 14, rolloff: 1800, trem_rate: 6, trem_depth: 0.06 } },
+  { title: "Harmonica", base: "accordion", params: { attack_ms: 30, detune: 4, harmonics: 6, rolloff: 2600, trem_depth: 0.03 } },
+];
+
+const taken = (n: string, except?: Instrument) => (INSTRUMENTS as readonly string[]).includes(n) || draft.instruments.some((i) => i !== except && i.name === n);
+
+// Trying a sound replaces the last one tried, unless it was changed or added.
+function tryOut(title: string, base: BaseName, params: Params) {
+  const others = draft.instruments.filter((i) => !i.sample || i.kept);
+  const name = freeName(title, (n) => (INSTRUMENTS as readonly string[]).includes(n) || others.some((i) => i.name === n));
+  const n = name.match(/-(\d+)$/)?.[1];
+  draft.instruments = withSample(draft.instruments, { name, title: n && !title.endsWith(n) ? `${title} ${n}` : title, base, params: { ...defaults(base), ...params } });
+  changed();
+  location.hash = `#instruments/${encodeURIComponent(name)}`;
+}
+
 function chooser(): View {
-  const nameIn = h("input", { type: "text", placeholder: "Kitchen marimba" });
-  const status = h("div", { class: "status" });
-  const start = (base: BaseName) => {
-    const name = slug(nameIn.value) || `my-${base}`;
-    if ((INSTRUMENTS as readonly string[]).includes(name) || draft.instruments.some((i) => i.name === name)) {
-      status.textContent = `There is already a ${name}. Pick another name.`;
-      return;
-    }
-    draft.instruments.push({ name, base, params: defaults(base) });
-    changed();
-    location.hash = `#instruments/${encodeURIComponent(name)}`;
-  };
+  const theirs = (kept: boolean) => draft.instruments.filter((i) => !!i.kept === kept).map((i) =>
+    h("a", { class: "btn secondary small", href: `#instruments/${encodeURIComponent(i.name)}` }, titleOf(i)));
+  const section = (title: string, links: HTMLElement[]) => (links.length ? h("div", {}, h("h3", {}, title), h("div", { class: "row" }, ...links)) : null);
   return {
     title: "Instruments",
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "Purple's Music room has four instruments. Start from one, change how it sounds, and it becomes a fifth."),
-      h("div", { class: "card" }, field("What to call it", nameIn), status, h("div", { class: "bases" }, ...BASE_NAMES.map((b) =>
-        h("button", { class: "base", onclick: () => start(b) }, h("b", {}, `Start from ${BASES[b].label}`), h("span", {}, BASES[b].blurb))))),
-      draft.instruments.length ? h("p", { class: "dim small" }, "Yours so far: ", ...draft.instruments.flatMap((i, n) => [n ? ", " : "", h("a", { href: `#instruments/${encodeURIComponent(i.name)}` }, i.name)])) : null,
+      h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, change how it sounds, and add it to your Purple when you like it."),
+      section("On your Purple", theirs(true)),
+      section("Trying", theirs(false)),
+      h("h3", {}, "Try a sound"),
+      h("div", { class: "row" }, ...SOUNDS.map((snd) => h("button", { class: "btn secondary", onclick: () => tryOut(snd.title, snd.base, snd.params) }, snd.title))),
+      h("p", { class: "dim small" }, "Or start from one of Purple's own, just as it is: ", ...BASE_NAMES.flatMap((b, i) => [i ? ", " : "",
+        h("button", { class: "linkbtn", onclick: () => tryOut(`My ${BASES[b].label.toLowerCase()}`, b, {}) }, BASES[b].label)]), "."),
     ),
     live: { room: "music" },
     previewTitle: "What your kid hears",
@@ -40,16 +59,13 @@ function editor(inst: Instrument): View {
   let replayTimer = 0;
   const base = BASES[inst.base];
 
-  const nameIn = h("input", { type: "text", value: inst.name });
+  const nameIn = h("input", { type: "text", value: titleOf(inst), maxLength: 24 });
   nameIn.onchange = () => {
-    const name = slug(nameIn.value) || inst.name;
-    if (draft.instruments.some((i) => i !== inst && i.name === name) || (INSTRUMENTS as readonly string[]).includes(name)) {
-      nameIn.value = inst.name;
-      return;
-    }
-    inst.name = name;
+    inst.title = nameIn.value.trim() || titleOf(inst);
+    inst.sample = false;
+    inst.name = freeName(inst.title, (n) => taken(n, inst));
     changed();
-    location.hash = `#instruments/${encodeURIComponent(name)}`;
+    location.hash = `#instruments/${encodeURIComponent(inst.name)}`;
   };
 
   const sliders = h("div", { class: "sliders" });
@@ -61,6 +77,7 @@ function editor(inst: Instrument): View {
       const range = h("input", { type: "range", min: spec.min, max: spec.max, step: spec.step, value: inst.params[spec.key] });
       range.oninput = () => {
         inst.params[spec.key] = Number(range.value);
+        inst.sample = false;
         val.textContent = fmt(inst.params[spec.key], spec.unit);
         changed();
         clearTimeout(replayTimer);
@@ -88,17 +105,18 @@ function editor(inst: Instrument): View {
   };
 
   return {
-    title: inst.name,
+    title: titleOf(inst),
     editor: h(
       "section",
       {},
-      h("div", { class: "card" }, h("div", { class: "row between" }, h("div", { style: "flex:1;min-width:200px" }, field("Name", nameIn)), h("span", { class: "dim small" }, `Started from ${base.label}. ${base.blurb}`))),
+      tryBar(inst, remove),
+      h("div", { class: "card" }, h("div", { class: "row between" }, h("div", { style: "flex:1;min-width:200px" }, field("Name", nameIn)), h("span", { class: "dim small" }, `Made from Purple's ${base.label}.`))),
       h("p", { class: "dim small" }, "Type on your keyboard to play it. Moving a slider plays the last note again."),
-      h("div", { class: "card" }, sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to ${base.label}'s numbers`), h("button", { class: "linkbtn dim", onclick: remove }, "Remove this instrument"))),
+      h("div", { class: "card" }, sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to a plain ${base.label}`))),
     ),
     live: { room: "music", instrument: inst.name },
     previewTitle: "What your kid hears",
-    caption: `Purple's Music room playing ${inst.name}. Moving a slider plays it in Studio; Purple has the new sound a moment later.`,
+    caption: `Purple's Music room playing ${titleOf(inst)}. Moving a slider plays it in Studio; Purple has the new sound a moment later.`,
     cleanup: () => { unlisten(); clearTimeout(replayTimer); },
   };
 }

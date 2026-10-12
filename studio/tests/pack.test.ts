@@ -6,11 +6,18 @@ import { packSpec } from "../src/pack";
 import type { Draft } from "../src/state";
 
 const base: PackSpec = { familyName: "", pictures: [], letters: {}, phrases: [], words: [], synonyms: [], ranked: [], instruments: [], rooms: [], theme: null };
+const draftBase: Draft = { ...base, letters: {}, pictures: [], rooms: [], colors: {} };
 
 describe("pack assembly", () => {
   it("ranks a family's own words after anything ranked by hand, leaving Purple's ranked words alone", async () => {
-    const d: Draft = { ...base, pictures: [], rooms: [], words: [{ word: "biscuit", emoji: "🐶" }, { word: "cat", emoji: "🐈" }, { word: "tractor", emoji: "🚜" }], ranked: ["tractor"] };
+    const d: Draft = { ...draftBase, words: [{ word: "biscuit", emoji: "🐶", kept: true }, { word: "cat", emoji: "🐈", kept: true }, { word: "tractor", emoji: "🚜", kept: true }], ranked: ["tractor"] };
     expect((await packSpec(d)).ranked).toEqual(["tractor", "biscuit"]);
+  });
+
+  it("downloads only what the family added, while Studio's Purple plays what they're trying too", async () => {
+    const d: Draft = { ...draftBase, words: [{ word: "biscuit", emoji: "🐶", kept: true }, { word: "zorbo", emoji: "🐙" }] };
+    expect((await packSpec(d)).words.map((w) => w.word)).toEqual(["biscuit"]);
+    expect((await packSpec(d, true)).words.map((w) => w.word)).toEqual(["biscuit", "zorbo"]);
   });
 
   it("names the pack after the family and keeps the manifest loader-shaped", () => {

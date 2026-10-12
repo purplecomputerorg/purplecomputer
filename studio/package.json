@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "blockly": "^13.2.1",
+    "emojibase-data": "17.0.0",
     "pyodide": "^314.0.6"
   }
 }

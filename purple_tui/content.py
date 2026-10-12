@@ -52,11 +52,17 @@ class Picture:
 
     @property
     def title(self) -> str:
-        return self.label[:24] or display_name(self.name)
+        return self.label or display_name(self.name)
 
 
 def display_name(slug: str) -> str:
     return slug.replace("-", " ").replace("_", " ").strip().title()[:24]
+
+
+def typed_name(data, stem: str) -> str:
+    """A pack file's "name" as the family typed it, apostrophes and all; "" when it's missing or just the file name."""
+    name = data.get("name") if isinstance(data, dict) else None
+    return name.strip()[:24] if isinstance(name, str) and name.strip() != stem else ""
 
 
 def read_manifest(pack_dir: Path) -> dict | None:
@@ -330,18 +336,14 @@ class ContentManager:
             samples = content_dir / spec.stem
             if not samples.is_dir():
                 continue
-            data = _read_json(spec)
-            name = data.get("name") if isinstance(data, dict) else None
-            self.instruments.append(Instrument(spec.stem, display_name(name if isinstance(name, str) and name else spec.stem), samples))
+            self.instruments.append(Instrument(spec.stem, typed_name(_read_json(spec), spec.stem) or display_name(spec.stem), samples))
 
     def _load_pictures(self, content_dir: Path) -> None:
         for spec in sorted((content_dir / "pictures").glob("*.json")):
             data = _read_json(spec)
             ops = data.get("ops") if isinstance(data, dict) else None
             if isinstance(ops, list) and all(_is_paint_op(op) for op in ops):
-                label = data.get("name")
-                label = label.strip() if isinstance(label, str) and label != spec.stem else ""
-                self.pictures.append(Picture(spec.stem, [(x, y, c) for x, y, c in ops], label))
+                self.pictures.append(Picture(spec.stem, [(x, y, c) for x, y, c in ops], typed_name(data, spec.stem)))
 
     def pack_dirs(self, sub: str) -> list[Path]:
         """content/<sub>/ in every user pack that has one, last installed first,

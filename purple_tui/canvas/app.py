@@ -563,8 +563,10 @@ class PurpleApp:
         elif result.get("time_travel"):
             self._start_time_travel()
         elif result.get("save"):
-            from .save_wall import SaveWall
-            self.push(SaveWall(self))
+            self.save_now()
+        elif result.get("open"):
+            from .library import Library
+            self.push(Library(self))
         elif result.get("print"):
             self.action_print()
 
@@ -596,11 +598,15 @@ class PurpleApp:
         work = self.save_artwork(save)
         self._print_page(None if work is None else compose(work, save.landscape, self.g, self.computer_name()))
 
+    def offscreen(self, room: str):
+        """A copy of the room that draws nowhere, for redrawing work without touching the screen."""
+        return type(self.rooms[room])(_Offscreen(self))
+
     def save_artwork(self, save):
         """A save's work at page size, drawn by an off-screen copy of its room."""
         from .paper import artwork
         try:
-            scratch = type(self.rooms[save.room])(_Offscreen(self))
+            scratch = self.offscreen(save.room)
             scratch.restore_timeline_state(save.state)
             return artwork(scratch, self.g)
         except Exception:
@@ -731,6 +737,16 @@ class PurpleApp:
         if made:
             self.key_save.changed()
         return made
+
+    def save_now(self):
+        """Esc, S: save what's on screen and say so."""
+        from .library import ICON_SAVE
+        if self.key_save.full:
+            return self.notify("The USB is full. Open your saves and hold Backspace on old ones to make room", timeout=4)
+        result = self.save_room()
+        if result is False:
+            return self.notify("Make something first, then save it", timeout=3)
+        self.notify(f"{ICON_SAVE}  Saved" if result else f"{ICON_SAVE}  Already saved", timeout=2)
 
     def delete_save(self, save):
         from . import saves

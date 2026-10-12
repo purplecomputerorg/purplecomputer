@@ -6,7 +6,7 @@ import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
 import { formatView, installView } from "./ui/install";
 import { instrumentsView } from "./ui/instrument";
-import { photosView } from "./ui/photos";
+import { picturesView } from "./ui/pictures";
 import { pythonView } from "./ui/python";
 import { EXAMPLES } from "./examples";
 import { addRoom } from "./pybridge";
@@ -30,7 +30,7 @@ interface Section {
 }
 
 const SECTIONS: Section[] = [
-  { id: "photos", label: "Photos", icon: "🖼️", blurb: "A family photo, painted in the Art room", view: photosView, count: () => draft.pictures.length },
+  { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or your kid's drawing, painted in the Art room", view: picturesView, count: () => draft.pictures.length },
   { id: "voice", label: "Voice", icon: "🎙️", blurb: "Your voice saying the letters", view: voiceView, count: () => Object.keys(draft.letters).length + draft.phrases.length },
   { id: "words", label: "Words", icon: "🐶", blurb: "Your words, each with its own emoji", view: wordsView, count: () => draft.words.length },
   { id: "instruments", label: "Instruments", icon: "🎹", blurb: "A sound of your own for the Music room", view: instrumentsView, count: () => draft.instruments.length },

@@ -5,7 +5,8 @@ import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { announceKey } from "../keys";
 import { buildPack } from "../pack";
-import { draft, pieces } from "../state";
+import { EXAMPLES, examplePicture } from "../photo";
+import { draft } from "../state";
 import { h } from "./dom";
 import { tryHint } from "./playable";
 
@@ -85,12 +86,13 @@ class LiveScreen {
 
   private async sync(): Promise<void> {
     // Rooms stay out: Purple runs them as a separate process, which a browser can't; the Rooms
-    // page previews them itself.
-    const live = { ...draft, rooms: [] };
+    // page previews them itself. Studio's example pictures ride along so the Pictures page can show any.
+    const extra = EXAMPLES.filter((e) => !draft.pictures.some((p) => p.name === e.name));
+    const live = { ...draft, rooms: [], pictures: [...draft.pictures, ...(await Promise.all(extra.map(examplePicture)))] };
     const key = JSON.stringify(live, (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
     if (key === this.sent) return;
     this.sent = key;
-    const pack = pieces().length ? new Uint8Array(await (await buildPack(undefined, live)).arrayBuffer()) : null;
+    const pack = new Uint8Array(await (await buildPack(undefined, live)).arrayBuffer());
     this.post({ type: "load", pack, setup: this.setup });
   }
 

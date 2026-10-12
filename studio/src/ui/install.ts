@@ -42,7 +42,7 @@ export function formatView(): View {
     "  rankings.txt                 one word per line        Play room autocomplete",
     "  letters/a.wav … 9.wav        your voice, per key      Music room, Say Letters",
     "  voice/<phrase>.wav           your voice, per phrase   spoken instead of Purple's voice",
-    "  pictures/<name>.json, .png   paint list and preview   parent menu, Pictures",
+    "  pictures/<name>.json, .png   paint list and preview   Art room, Open",
     "  <instrument>/c1.wav … d7.wav one note per file        Music room",
     "  instruments/<name>.json      the slider numbers       re-rendered by Purple's own synth",
     "  rooms/<name>.py              a room you made          room picker, family rooms",

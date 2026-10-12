@@ -38,7 +38,7 @@ READ_TODAY = {
     "content/rankings.txt": "autocomplete order, Play room",
     "content/letters/": "letter and number clips, Music room Say Letters",
     "content/voice/": "phrase clips, spoken by Purple",
-    "content/pictures/": "pictures, parent menu",
+    "content/pictures/": "pictures, Art room's Open",
     "content/instruments/": "instrument definitions; samples in content/<name>/",
     "content/rooms/": "family rooms, Esc menu (guides/family-rooms.md)",
 }

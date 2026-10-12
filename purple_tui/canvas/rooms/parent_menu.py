@@ -243,15 +243,6 @@ class FamilyRoomsScreen(_YesNo):
         return get_family_rooms()
 
 
-class PicturesScreen(Picker):
-    title = "Pictures"
-    DESCRIPTION = "Paint one onto the Art room"
-
-    def __init__(self, app):
-        from ...content import display_name, get_content
-        super().__init__(app, [(p, display_name(p.name)) for p in get_content().pictures] + [(None, "Close")])
-
-
 class MusicLoopingScreen(_YesNo):
     title = "Allow Music Looping"
     DESCRIPTION = "Allow recording loops in Music by holding the enter button"
@@ -1172,8 +1163,6 @@ def _get_menu_items(app) -> list:
         items.append(("menu-music-key-switching", "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"))
         if get_content().rooms:
             items.append(("menu-family-rooms", _family_rooms_label(get_family_rooms())))
-    if get_content().pictures:
-        items.append(("menu-pictures", "Pictures"))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
     items.append(("menu-export", "Copy Saved Work to USB"))
     items.append(("sec-av", "Sound & Display"))
@@ -1285,7 +1274,7 @@ class ParentMenu(Overlay):
             return
         handler = {
             "menu-littles": self._open_littles_mode, "menu-code-panel": self._open_code_panel,
-            "menu-family-rooms": self._open_family_rooms, "menu-pictures": self._open_pictures,
+            "menu-family-rooms": self._open_family_rooms,
             "menu-music-looping": self._open_music_looping, "menu-music-key-switching": self._open_music_key_switching,
             "menu-all-caps": self._open_all_caps, "menu-secret": self._open_secret_menu,
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),
@@ -1326,14 +1315,6 @@ class ParentMenu(Overlay):
                 set_family_rooms(v)
                 self._relabel("menu-family-rooms", _family_rooms_label(v))
         self.app.push(FamilyRoomsScreen(self.app), on_close=apply)
-
-    def _open_pictures(self):
-        def done(picture):
-            if picture:
-                from ..secret_doodle import paint_cells
-                self.close()
-                paint_cells(self.app, picture.ops)
-        self.app.push(PicturesScreen(self.app), on_close=done)
 
     def _open_music_looping(self):
         def apply(v):

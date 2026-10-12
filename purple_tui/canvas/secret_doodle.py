@@ -4,13 +4,16 @@ from ..secret_doodle import build_ops
 from ..secret_photo import OPS
 
 
-def paint_cells(app, cells: list) -> None:
-    """Switch to the Art room and paint (x, y, color) cells of its grid onto a fresh canvas."""
-    app.action_switch_room("art")
-    art = app.rooms["art"]
+def paint_picture(art, cells: list) -> None:
+    """Paint (x, y, color) cells of the Art grid onto a fresh canvas."""
     art.clear()
     for x, y, k in cells:
         art.paint_at(x, y, k)
+
+
+def paint_cells(app, cells: list) -> None:
+    app.action_switch_room("art")
+    paint_picture(app.rooms["art"], cells)
     app.invalidate()
 
 

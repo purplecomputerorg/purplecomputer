@@ -40,7 +40,7 @@ async def restart():
 
 def setup(room, letters=False, instrument=None, picture=None):
     """The room a Studio page shows: Music in Say Letters or playing an instrument, or Art with a
-    pack picture painted on it, the way the parent menu's Pictures paints one."""
+    pack picture painted on it, the way Art's Open paints one."""
     while _app.top:
         _app.pop(_app.top)
     if room != _app.active_room:

@@ -1,6 +1,6 @@
-"""The Save wall (Esc, S): the first tile saves what's on screen, the rest are
-this room's saves, newest first. Enter opens one, P prints it, holding
-Backspace removes it."""
+"""Open (Esc, O): this room's saves, newest first, and in Art the pictures the
+family added from Purple Studio. Enter opens one, P prints it, holding
+Backspace removes a save."""
 
 import time
 
@@ -9,33 +9,60 @@ import pygame
 from .. import palette as P
 from .. import printing
 from ..constants import ICON_ROBOT
+from ..content import display_name, get_content
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from . import saves
 from .saves import fit
-from .paper import artwork
+from .secret_doodle import paint_picture
 from .ui import Overlay, draw_bar, draw_label, draw_scrim, draw_window
 
 ICON_SAVE = "\U000F0193"  # nf-md-content_save
+ICON_OPEN = "\U000F0770"  # nf-md-folder_open
+ICON_HOME = "\U000F02DC"  # nf-md-home
 COLS, ROWS_SHOWN = 4, 2
 DELETE_HOLD_S = 1.2
-NOW = "now"
+LABEL_CHARS = 14
 
 
-class SaveWall(Overlay):
+class PictureTile:
+    """A pack picture as the library sees a save: its Art state is the picture painted on a fresh canvas."""
+    room = "art"
+    landscape = True
+    has_code = False
+
+    def __init__(self, app, picture):
+        self.app = app
+        self.picture = picture
+        self.id = f"picture-{picture.name}"
+        self._state = None
+
+    @property
+    def state(self) -> dict:
+        if self._state is None:
+            art = self.app.offscreen("art")
+            paint_picture(art, self.picture.ops)
+            self._state = art.timeline_state()
+        return self._state
+
+    def thumbnail(self):
+        return self.app.save_artwork(self)
+
+    def when(self) -> str:
+        name = display_name(self.picture.name)
+        return f"{ICON_HOME} {name if len(name) <= LABEL_CHARS else name[:LABEL_CHARS - 1] + '…'}"
+
+
+class Library(Overlay):
     def __init__(self, app):
         super().__init__(app)
-        self.saves = saves.list_saves(app.active_room)
-        self.now_work = artwork(app.room, app.g)
+        pictures = get_content().pictures if app.active_room == "art" else []
+        self.tiles = saves.list_saves(app.active_room) + [PictureTile(app, p) for p in pictures]
         self.selected = 0
         self.top_row = 0
         self._thumbs: dict = {}
         self._deleting = None   # (save, started) while Backspace is held on it
         self._hold_timers: list = []
         self.can_print = printing.status() == printing.READY
-
-    @property
-    def tiles(self) -> list:
-        return [NOW] + self.saves
 
     def on_close(self):
         self._stop_delete()
@@ -48,15 +75,23 @@ class SaveWall(Overlay):
         elif isinstance(action, ControlAction) and action.action == "backspace":
             if not action.is_down:
                 self._stop_delete()
-            elif not action.is_repeat and self.selected > 0:
-                self._start_delete(self.tiles[self.selected])
+            elif not action.is_repeat and self._removable(self._tile()):
+                self._start_delete(self._tile())
         elif isinstance(action, ControlAction) and action.is_down and not action.is_repeat:
             if action.action == "escape":
                 self.close()
-            elif action.action == "enter":
-                self._activate()
+            elif action.action == "enter" and self.tiles:
+                self.close()
+                self.app.open_save(self._tile())
         elif isinstance(action, CharacterAction) and not action.is_repeat and action.char.lower() == "p":
             self._print()
+
+    def _tile(self):
+        return self.tiles[self.selected] if self.tiles else None
+
+    @staticmethod
+    def _removable(tile) -> bool:
+        return isinstance(tile, saves.Save)
 
     def _select(self, index: int):
         self._stop_delete()
@@ -65,28 +100,13 @@ class SaveWall(Overlay):
         self.top_row = min(max(self.top_row, row - ROWS_SHOWN + 1), row)
         self.app.invalidate()
 
-    def _activate(self):
-        if self.selected == 0:
-            return self._save()
-        self.close()
-        self.app.open_save(self.tiles[self.selected])
-
-    def _save(self):
-        if self.app.key_save.full:
-            return self.app.notify("The USB is full. Hold Backspace on old saves to make room", timeout=4)
-        result = self.app.save_room()
-        if result is False:
-            return self.app.notify("Make something first, then save it", timeout=3)
-        self.close()
-        self.app.notify(f"{ICON_SAVE}  Saved" if result else f"{ICON_SAVE}  Already saved", timeout=2)
-
     def _print(self):
         why = printing.why_not()
         if why:
             return self.app.notify(why, timeout=4)
-        tile = self.tiles[self.selected]
-        self.close()
-        self.app.action_print() if tile is NOW else self.app.print_save(tile)
+        if self.tiles:
+            self.close()
+            self.app.print_save(self._tile())
 
     def _start_delete(self, save):
         self._stop_delete()
@@ -104,7 +124,7 @@ class SaveWall(Overlay):
         save = self._deleting[0]
         self._stop_delete()
         self.app.delete_save(save)
-        self.saves.remove(save)
+        self.tiles.remove(save)
         self._select(self.selected)
 
     def _delete_progress(self, tile) -> float:
@@ -114,9 +134,9 @@ class SaveWall(Overlay):
 
     # ---------------------------------------------------------------- drawing
     def _thumb(self, tile, w: int, h: int):
-        key = (tile if tile is NOW else tile.id, w, h)
+        key = (tile.id, w, h)
         if key not in self._thumbs:
-            source = self.now_work if tile is NOW else tile.thumbnail()
+            source = tile.thumbnail()
             self._thumbs[key] = None if source is None else fit(source, w, h)
         return self._thumbs[key]
 
@@ -129,15 +149,14 @@ class SaveWall(Overlay):
         box = pygame.Rect(0, 0, COLS * tw + (COLS - 1) * gap + 2 * pad, 0)
         box.h = em(3.0) + pad + ROWS_SHOWN * th + (ROWS_SHOWN - 1) * gap + em(1.2) + hint_h + pad
         box.center = (g.w // 2, g.h // 2)
-        y0 = draw_window(g, box, f"{ICON_SAVE}  Save  ·  {self.app.room.icon} {self.app.room.label}") + pad
+        y0 = draw_window(g, box, f"{ICON_OPEN}  Open  ·  {self.app.room.icon} {self.app.room.label}") + pad
         first = self.top_row * COLS
         for i, tile in enumerate(self.tiles[first:first + COLS * ROWS_SHOWN], start=first):
             row, col = divmod(i - first, COLS)
             self._draw_tile(g, pygame.Rect(box.x + pad + col * (tw + gap), y0 + row * (th + gap), tw, ih), i, tile)
-        if not self.saves:
-            r = pygame.Rect(box.x + pad + tw + gap, y0, (COLS - 1) * (tw + gap) - gap, ih)
-            g.draw_markup("[dim]What you save shows up here.\nCome back any time to open it again.[/]", em(0.95),
-                          r.x, r.centery - em(1.3), "mono", P.MUTED, r.w, "center", P.SURFACE)
+        if not self.tiles:
+            g.draw_markup("[dim]Nothing saved yet.\nSave something from the Esc menu and it shows up here.[/]", em(0.95),
+                          box.x + pad, y0 + th - em(1.3), "mono", P.MUTED, box.w - 2 * pad, "center", P.SURFACE)
         self._draw_hint(g, box, box.bottom - pad - hint_h, hint_h)
 
     def _draw_tile(self, g, r: pygame.Rect, i: int, tile):
@@ -149,27 +168,20 @@ class SaveWall(Overlay):
         thumb = self._thumb(tile, r.w - em(0.8), r.h - em(0.8))
         if thumb is not None:
             g.surface.blit(thumb, thumb.get_rect(center=r.center))
-        else:
-            g.draw_text("Nothing yet", em(0.9), r.centerx, r.centery, "mono", P.DIM, anchor="center")
-        if tile is NOW:
-            label = "USB is full" if self.app.key_save.full else f"{ICON_SAVE} Save this"
-        else:
-            label = tile.when() + (f"  {ICON_ROBOT}" if tile.has_code else "")
-        draw_label(g, label, em(0.92), r.centerx, r.bottom + em(1.4), P.TEXT if tile is NOW else P.MUTED,
-                   anchor="center", on=on)
+        label = tile.when() + (f"  {ICON_ROBOT}" if tile.has_code else "")
+        draw_label(g, label, em(0.92), r.centerx, r.bottom + em(1.4), P.MUTED, anchor="center", on=on)
         progress = self._delete_progress(tile)
         if progress > 0:
             draw_bar(g, r.x + em(0.6), r.bottom - em(1.2), r.w - em(1.2), em(0.6), progress, P.DANGER)
 
     def _draw_hint(self, g, box, y, h):
-        if self.selected == 0:
-            hint = "Enter: save"
-        else:
-            hint = "Enter: open    Hold ⌫: remove"
-        if self.can_print:
+        hint = "Enter: open" if self.tiles else ""
+        if self._removable(self._tile()):
+            hint += "    Hold ⌫: remove"
+        if self.can_print and self.tiles:
             hint += "    P: print"
         rows = (len(self.tiles) + COLS - 1) // COLS
         more = ("▲ " if self.top_row > 0 else "") + ("▼ more" if self.top_row + ROWS_SHOWN < rows else "")
-        g.draw_text(f"{hint}    Esc: close", g.em(0.92), box.centerx, y + h // 2, "mono", P.DIM, anchor="center")
+        g.draw_text(f"{hint}    Esc: close".strip(), g.em(0.92), box.centerx, y + h // 2, "mono", P.DIM, anchor="center")
         if more:
             g.draw_text(more.strip(), g.em(0.92), box.right - g.em(1.8), y + h // 2, "mono", P.DIM, anchor="midright")

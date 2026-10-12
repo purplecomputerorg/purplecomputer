@@ -1,4 +1,4 @@
-"""The Esc menu: pick a room, or Volume, Clear, Time Travel, Save, Print, and the code toggle."""
+"""The Esc menu: pick a room, or Volume, Clear, Time Travel, Save, Open, Print, and the code toggle."""
 
 import pygame
 
@@ -9,11 +9,11 @@ from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from . import key_save
 from .paper import can_print
 from .rooms.family_room import ICON_FAMILY
-from .save_wall import ICON_SAVE
+from .library import ICON_OPEN, ICON_SAVE
 from .ui import Dialog, Overlay, Picker, draw_keycap, draw_scrim
 
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
-EXTRA_KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "save": "s", "print": "p"}
+EXTRA_KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "save": "s", "open": "o", "print": "p"}
 PRINTER_LABELS = {printing.NONE: "No Printer", printing.SETTING_UP: "Starting Up", printing.BROKEN: "Can't Print"}
 ROWS, FAMILY, EXTRAS, CODE = "rooms", "family", "extras", "code"
 MAX_FAMILY_ROOMS = 6
@@ -39,7 +39,7 @@ class RoomPicker(Overlay):
         self.col = list(app.rooms).index(app.active_room)
         self.code_row = app.room.has_code_panel and (app._code_panel_active or app._code_panel_enabled)
         self.family = family_rooms()
-        self.extras = ["volume", "clear", "time_travel", "save", "print"]
+        self.extras = ["volume", "clear", "time_travel", "save", "open", "print"]
         self.card_rows = [ROWS] + ([FAMILY] if self.family else []) + [EXTRAS]
         self.rows = self.card_rows + ([CODE] if self.code_row else [])
         self.printer = printing.status()
@@ -101,6 +101,7 @@ class RoomPicker(Overlay):
             {"volume": self._open_volume, "clear": self._confirm_clear,
              "time_travel": lambda: self.close({"time_travel": True}),
              "save": self._save,
+             "open": lambda: self.close({"open": True}),
              "print": self._print}[self.extras[self.col]]()
         else:
             self._toggle_code()
@@ -157,6 +158,7 @@ class RoomPicker(Overlay):
                   "clear": (ICON_BROOM, "Clear", "C", False),
                   "time_travel": (ICON_TIME_TRAVEL, "Time Travel", "T", False),
                   "save": self._save_card(),
+                  "open": (ICON_OPEN, "Open", "O", False),
                   "print": self._print_card()}
         cards += [(EXTRAS, i, *extras[e]) for i, e in enumerate(self.extras)]
         for row, col, icon, label, key, disabled in cards:

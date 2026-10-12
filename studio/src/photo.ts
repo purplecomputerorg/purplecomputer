@@ -1,3 +1,8 @@
+import dinosaur from "./assets/dinosaur.svg";
+import dog from "./assets/dog.jpg";
+import earthrise from "./assets/earthrise.jpg";
+import greatWave from "./assets/great-wave.jpg";
+import house from "./assets/sample-drawing.svg";
 import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "@sdk/purple/art";
 
 export interface Picture { name: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string }
@@ -37,14 +42,38 @@ export function downsample(img: ImageData, cols: number, rows: number): string[]
 }
 
 export async function pictureFromFile(file: File): Promise<Picture> {
-  const bitmap = await createImageBitmap(file);
+  const name = file.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "picture";
+  return pictureFromBitmap(await createImageBitmap(file), name, URL.createObjectURL(file));
+}
+
+// Studio's examples, painted the same way as a family's pictures. Purple shows one while the
+// family has none of their own; one goes in the pack only if they pick it.
+export interface Example { name: string; src: string; alt: string; credit?: string }
+export const EXAMPLES: Example[] = [
+  { name: "our-house", src: house, alt: "A drawing of a house, a sun, and a tree" },
+  { name: "dinosaur", src: dinosaur, alt: "A dinosaur to color in" },
+  { name: "dog", src: dog, alt: "A black dog looking up" },
+  { name: "earthrise", src: earthrise, alt: "The Earth rising over the Moon", credit: "NASA, from Apollo 8 in 1968" },
+  { name: "great-wave", src: greatWave, alt: "A giant wave curling over boats", credit: "Katsushika Hokusai, around 1831" },
+];
+const examples = new Map<string, Promise<Picture>>();
+export function examplePicture({ name, src }: Example): Promise<Picture> {
+  if (!examples.has(name)) examples.set(name, (async () => {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    return pictureFromBitmap(await createImageBitmap(img), name, src);
+  })());
+  return examples.get(name)!;
+}
+
+function pictureFromBitmap(bitmap: ImageBitmap, name: string, sourceUrl: string): Picture {
   const [cols, rows] = fitToCanvas(bitmap.width, bitmap.height);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(bitmap, 0, 0);
   const cells = downsample(ctx.getImageData(0, 0, bitmap.width, bitmap.height), cols, rows);
-  const name = file.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "picture";
-  return { name, cells, ops: cellsToOps(cells), sourceUrl: URL.createObjectURL(file) };
+  return { name, cells, ops: cellsToOps(cells), sourceUrl };
 }
 
 // The picture on the Art grid, centered the way Purple paints it; a cell is cellPx wide.

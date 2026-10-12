@@ -1,4 +1,4 @@
-"""Saving: the Save wall from the Esc menu, opening and removing saves, and code lines riding along."""
+"""Saving from the Esc menu, the Open library (saves and pack pictures), removing saves, and code lines riding along."""
 
 import asyncio
 
@@ -6,7 +6,7 @@ import pytest
 
 from purple_tui.canvas import saves
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.save_wall import DELETE_HOLD_S, SaveWall
+from purple_tui.canvas.library import DELETE_HOLD_S, Library, PictureTile
 
 
 @pytest.fixture(autouse=True)
@@ -22,30 +22,54 @@ async def _art_with_drawing():
     return app
 
 
-async def _open_wall(app):
+async def _save(app):
     await press(app, "escape")
     await press(app, "s")
-    assert isinstance(app.top, SaveWall)
+
+
+async def _open_library(app):
+    await press(app, "escape")
+    await press(app, "o")
+    assert isinstance(app.top, Library)
     app._draw()
     return app.top
 
 
-def test_save_from_wall_then_open_it_back():
+def test_save_from_the_esc_menu_then_open_it_back():
     async def go():
         app = await _art_with_drawing()
         drawn = app.room_state("art")
-        await _open_wall(app)
-        await press(app, "enter")
+        await _save(app)
         assert app.top is None
         [save] = saves.list_saves("art")
         assert save.state == drawn and save.thumbnail() is not None
         assert not any(p.suffix == ".png" and not p.name.endswith(".thumb.png") for p in save.path.parent.iterdir())
         app._start_fresh("art")
         assert app.room_state("art") != drawn
-        wall = await _open_wall(app)
-        await press(app, "right")
+        library = await _open_library(app)
         await press(app, "enter")
-        assert wall.closed and app.room_state("art") == drawn
+        assert library.closed and app.room_state("art") == drawn
+    run(go())
+
+
+def test_pack_pictures_open_in_art_only_and_cannot_be_removed(monkeypatch):
+    from purple_tui.content import Picture, get_content
+    monkeypatch.setattr(get_content(), "pictures", [Picture("palm-tree", [(2, 3, "#ff0000")])])
+
+    async def go():
+        app = await _art_with_drawing()
+        drawn = app.room_state("art")
+        library = await _open_library(app)
+        [tile] = library.tiles
+        assert isinstance(tile, PictureTile) and app.save_artwork(tile) is not None
+        await press(app, "backspace", hold=DELETE_HOLD_S + 0.2)
+        assert library.tiles == [tile]
+        await press(app, "enter")
+        assert app.room_state("art")["c:2,3"][2] == "#ff0000"
+        assert app._timelines["art"].tip() != drawn, "the picture is a new Time Travel step"
+        library.close()
+        app.action_switch_room("music")
+        assert (await _open_library(app)).tiles == []
     run(go())
 
 
@@ -58,13 +82,12 @@ def test_saving_the_same_work_twice_adds_one_tile():
     run(go())
 
 
-def test_nothing_to_save_keeps_the_wall_open():
+def test_nothing_to_save_saves_nothing():
     async def go():
         app = make_app()
         app.action_switch_room("art")
-        await _open_wall(app)
-        await press(app, "enter")
-        assert isinstance(app.top, SaveWall) and saves.list_saves("art") == []
+        await _save(app)
+        assert app.top is None and saves.list_saves("art") == []
     run(go())
 
 
@@ -72,8 +95,7 @@ def test_holding_backspace_removes_a_save_and_a_tap_does_not():
     async def go():
         app = await _art_with_drawing()
         app.save_room()
-        await _open_wall(app)
-        await press(app, "right")
+        await _open_library(app)
         await press(app, "backspace", hold=0.1)
         assert len(saves.list_saves("art")) == 1
         await press(app, "backspace", hold=DELETE_HOLD_S + 0.2)
@@ -100,17 +122,17 @@ def test_code_lines_ride_along_and_mark_the_tile():
     run(go())
 
 
-def test_wall_scrolls_past_two_rows():
+def test_library_scrolls_past_two_rows():
     async def go():
         app = make_app()
         app.action_switch_room("art")
         for ch in "abcdefghij":
             await type_text(app, ch)
             app.save_room()
-        wall = await _open_wall(app)
+        library = await _open_library(app)
         for _ in range(3):
             await press(app, "down")
-        assert wall.top_row == 1
+        assert library.top_row == 1
         app._draw()
     run(go())
 
@@ -182,9 +204,8 @@ def test_save_card_greys_out_on_a_key_that_cannot_keep_work(monkeypatch, tmp_pat
 
     async def go():
         app = make_app()
-        await press(app, "escape")
-        await press(app, "s")
-        assert not isinstance(app.top, SaveWall)
+        await _save(app)
+        assert saves.list_saves("art") == [] and saves.list_saves("play") == []
         app._draw()
     run(go())
 
@@ -210,8 +231,7 @@ def test_key_writes_wait_for_a_quiet_moment_and_flush_before_power_off(monkeypat
         app.key_save.changed()
         app.flush_for_power_off()
         assert writes[-1] == key_save.FLUSH_TIMEOUT_S
-        wall = await _open_wall(app)
-        await press(app, "enter")
-        assert isinstance(app.top, SaveWall) and len(saves.list_saves("art")) == 1, "a full USB takes no new saves"
-        wall.close()
+        await type_text(app, "z")
+        await _save(app)
+        assert len(saves.list_saves("art")) == 1, "a full USB takes no new saves"
     run(go())

@@ -48,7 +48,7 @@ export interface Piece { id: string; label: string; count: number }
 // What the parent has put in so far, for the summary and the download gate.
 export function pieces(): Piece[] {
   return [
-    { id: "photos", label: "photos", count: draft.pictures.length },
+    { id: "pictures", label: "pictures", count: draft.pictures.length },
     { id: "letter_recordings", label: "letters in your voice", count: Object.keys(draft.letters).length },
     { id: "phrases", label: "phrases in your voice", count: draft.phrases.length },
     { id: "words", label: "words", count: draft.words.length },

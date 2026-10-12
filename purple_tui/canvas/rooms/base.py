@@ -1,5 +1,5 @@
 """What every canvas room is. The app, the Esc menu, the status strip, and the
-save wall read a room's identity from these attributes; adding a room is one
+Open library read a room's identity from these attributes; adding a room is one
 subclass plus a line in rooms/__init__.py. guides/canvas-architecture.md."""
 
 

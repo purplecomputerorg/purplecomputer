@@ -46,6 +46,7 @@ def make_pack(root: Path, pack_id: str = "the-tests-pack", fmt: int | None = 1, 
     write_wav(c / "voice" / "hi_there.wav")
     (c / "pictures").mkdir()
     (c / "pictures" / "palm.json").write_text(json.dumps({"name": "palm", "ops": [[43, 0, "#ffffff"], [44, 1, "#fefefe"]]}))
+    (c / "pictures" / "grandmas-dog.json").write_text(json.dumps({"name": "Grandma's dog", "ops": [[0, 0, "#000000"]]}))
     (c / "rooms").mkdir()
     (c / "rooms" / "farm.py").write_text('from purple import *\n\ndef on_key(key):\n    show("🐄")\n    say("cow")\n')
     (c / "rooms" / "farm.blocks.json").write_text("{}")
@@ -77,7 +78,8 @@ class TestLoader:
         assert [(i.id, i.name, i.path) for i in packs.instruments] == [("kitchen", "Kitchen", c / "kitchen")]
         assert packs.instrument_dir("kitchen") == c / "kitchen"
         assert packs.instrument_dir("marimba") is None
-        assert [(p.name, p.ops) for p in packs.pictures] == [("palm", [(43, 0, "#ffffff"), (44, 1, "#fefefe")])]
+        assert [(p.name, p.title, p.ops) for p in packs.pictures] == [
+            ("grandmas-dog", "Grandma's dog", [(0, 0, "#000000")]), ("palm", "Palm", [(43, 0, "#ffffff"), (44, 1, "#fefefe")])]
         assert [(r.name, r.title, r.path) for r in packs.rooms] == [("farm", "Farm", c / "rooms" / "farm.py")]
 
     def test_room_with_a_syntax_error_is_refused_by_the_installer(self, tmp_path):

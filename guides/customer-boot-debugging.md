@@ -104,7 +104,7 @@ repeats collapsed.
 - **`debug mode: on, P held at start: yes`** in the header: the customer held P
   and the initramfs saw it, so the screen showed the kernel log.
 - **`purple-initramfs: copying the system`** followed by
-  `THE USB STICK COULD NOT BE READ after N bytes`: the RAM copy hit a bad
+  `THE PURPLE KEY COULD NOT BE READ after N bytes`: the RAM copy hit a bad
   read at that offset. Compare with the failing sectors in the dmesg lines.
 - **The file still says "This stick has not been started yet":** the kernel
   never found the stick, or the stick does not accept writes. Ask for a video

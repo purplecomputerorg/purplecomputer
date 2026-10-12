@@ -7,7 +7,7 @@ import { draft, type Draft } from "./state";
 export { manifest } from "@sdk/pack";
 
 export async function packSpec(d: Draft = draft): Promise<PackSpec> {
-  const pictures = await Promise.all(d.pictures.map(async (p) => ({ name: p.name, ops: p.ops, png: await previewPng(p.cells) })));
+  const pictures = await Promise.all(d.pictures.map(async (p) => ({ name: p.name, title: p.title, ops: p.ops, png: await previewPng(p.cells) })));
   // A family's own words come first in autocomplete, after the words Purple already ranks.
   const ranked = [...new Set([...d.ranked, ...d.words.map((w) => w.word).filter((w) => !isCoreRanked(w))])];
   return { ...d, pictures, ranked, rooms: d.rooms.map((r) => ({ name: r.name, source: r.source, blocks: r.blocks })) };

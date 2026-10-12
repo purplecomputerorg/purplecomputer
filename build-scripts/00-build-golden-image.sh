@@ -1224,9 +1224,9 @@ JOURNAL
     cp /purple-src/scripts/purple-speech-probe.py "$MOUNT_DIR/usr/local/bin/purple-speech-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-speech-probe"
 
-    # Family packs from a USB stick labeled PURPLE_UPDATE: udev starts the
-    # templated unit, which mounts the stick read-only and runs
-    # purple_tui.usb_updater. Any other stick is untouched. See
+    # Family packs from any USB drive, the Purple Key included: udev starts
+    # the templated unit, which mounts the drive read-only and runs
+    # purple_tui.usb_updater when it has packs on it. See
     # studio/PACK_FORMAT.md, "Where packs live".
     mkdir -p "$MOUNT_DIR/etc/udev/rules.d"
     cp /purple-src/config/udev/99-purple-update.rules "$MOUNT_DIR/etc/udev/rules.d/"

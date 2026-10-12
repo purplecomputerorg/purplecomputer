@@ -47,7 +47,7 @@ export function colorsView(): View {
       oninput: (e: Event) => edit((t) => (t.colors[role] = (e.target as HTMLInputElement).value), false),
       onchange: () => render(),
     }),
-    h("span", {}, label, role in theme().colors ? h("button", { class: "linkbtn dim small", onclick: (e: Event) => { e.preventDefault(); edit((t) => delete t.colors[role]); } }, " auto") : null));
+    h("span", {}, label, role in theme().colors ? h("button", { class: "linkbtn dim small", onclick: (e: Event) => { e.preventDefault(); edit((t) => delete t.colors[role]); } }, "undo") : null));
 
   function render() {
     const t = theme();
@@ -65,14 +65,11 @@ export function colorsView(): View {
             onchange: () => render(),
           })),
           "Any color")),
-      h("details", { class: "more-options" }, h("summary", {}, "Text colors"),
-        h("p", { class: "dim small" }, "Purple picks text that's easy to read on your screen color. Change any of it here."),
-        h("div", { class: "wells" }, ...TEXT_ROLES.map(well))),
 
       h("h3", {}, "Paint colors and stickers"),
       h("p", { class: "dim small" }, "Each letter row paints its own color, the same color as its sticker."),
       ...ROWS.map(([key, label, keys]) => h("div", { class: "card row-pick" },
-        h("div", { class: "row between" }, h("strong", {}, label), h("div", { class: "sticker-row" }, ...keys.map((k) => sticker(k)))),
+        h("strong", {}, label), h("div", { class: "sticker-row" }, ...keys.map((k) => sticker(k))),
         h("div", { class: "hues" }, ...HUES.map((hue) => h("button", {
           class: "hue", title: `${hue}°`, "aria-pressed": String(hue === t.hues[key]), style: `background:${hslToHex(hue, 0.75, 0.55)}`,
           onclick: () => edit((n) => (n.hues[key] = hue)),
@@ -82,9 +79,11 @@ export function colorsView(): View {
         h("span", { class: "sticker-row tiny" }, ...["1", "q", "a", "z"].map((k) => sticker(k, PURPLE_STICKERS))),
         h("button", { class: "linkbtn small", onclick: () => edit((n) => (n.hues = { ...DEFAULT_THEME.hues })) }, "Match them again")),
 
-      h("details", { class: "more-options" }, h("summary", {}, "Every screen color"),
-        h("div", { class: "wells" }, ...SCREEN_ROLES.map(well))),
-      draft.theme ? h("p", {}, h("button", { class: "linkbtn dim", onclick: () => set(structuredClone(DEFAULT_THEME)) }, "Back to Purple's colors")) : null,
+      h("details", { class: "more-options" }, h("summary", {}, "Change one color at a time"),
+        h("p", { class: "dim small" }, "Purple works these out from your screen color, so they stay easy to read. Change any one here."),
+        h("h4", {}, "Words"), h("div", { class: "wells" }, ...TEXT_ROLES.map(well)),
+        h("h4", {}, "Screen"), h("div", { class: "wells" }, ...SCREEN_ROLES.map(well))),
+      draft.theme ? h("p", {}, h("button", { class: "linkbtn dim", onclick: () => set(structuredClone(DEFAULT_THEME)) }, "Undo all my color changes")) : null,
     ));
   }
   render();

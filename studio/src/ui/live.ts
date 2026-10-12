@@ -5,7 +5,6 @@ import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { announceKey } from "../keys";
 import { buildPack } from "../pack";
-import { EXAMPLES, examplePicture } from "../photo";
 import { draft } from "../state";
 import { h } from "./dom";
 import { tryHint } from "./playable";
@@ -30,7 +29,7 @@ class LiveScreen {
   readonly element: HTMLElement;
   private frame = h("iframe", { class: "live-frame", src: "purple.html", title: "Purple", tabindex: -1 });
   private poster = h("img", { class: "live-poster", alt: "" });
-  private status = h("span", {}, "Starting Purple");
+  private status = h("span", {}, "Loading Purple");
   private hint = tryHint("button", "then use the keyboard, like on Purple");
   private zoomed = true;
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
@@ -64,6 +63,7 @@ class LiveScreen {
   // Any change to the draft: rebuild the pack once edits settle.
   changed(): void {
     clearTimeout(this.timer);
+    this.busy(true);
     this.timer = window.setTimeout(() => void this.sync(), SETTLE_MS);
   }
 
@@ -86,11 +86,10 @@ class LiveScreen {
 
   private async sync(): Promise<void> {
     // Rooms stay out: Purple runs them as a separate process, which a browser can't; the Rooms
-    // page previews them itself. Studio's example pictures ride along so the Pictures page can show any.
-    const extra = EXAMPLES.filter((e) => !draft.pictures.some((p) => p.name === e.name));
-    const live = { ...draft, rooms: [], pictures: [...draft.pictures, ...(await Promise.all(extra.map(examplePicture)))] };
+    // page previews them itself.
+    const live = { ...draft, rooms: [] };
     const key = JSON.stringify(live, (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
-    if (key === this.sent) return;
+    if (key === this.sent) return this.busy(false);
     this.sent = key;
     const pack = new Uint8Array(await (await buildPack(undefined, live)).arrayBuffer());
     this.post({ type: "load", pack, setup: this.setup });
@@ -98,8 +97,8 @@ class LiveScreen {
 
   private onMessage(m: FromFrame): void {
     if (m.type === "hello") this.hello();
-    if (m.type === "status") this.status.textContent = m.text.replace(/…$/, "");
     if (m.type === "failed") { this.status.textContent = "Purple couldn't start here"; console.warn("Purple failed:", m.text); }
+    if (m.type === "loaded") this.busy(false);
     if (m.type === "loaded" && !this.ready) {
       this.ready = true;
       this.element.classList.add("ready");
@@ -111,6 +110,12 @@ class LiveScreen {
     if (m.type === "place") this.moved(m.place);
   }
 
+  // Between an edit and Purple restarting with it, the spinner says so.
+  private busy(on: boolean): void {
+    if (this.ready) this.status.textContent = "Updating Purple";
+    this.element.classList.toggle("busy", on);
+  }
+
   private moved(place: Place): void {
     const same = place.room === this.place.room && place.menu === this.place.menu;
     this.place = place;
@@ -118,10 +123,10 @@ class LiveScreen {
     if (!same) this.onMove();
   }
 
-  // The whole screen, or on a phone the close-up; menus show whole, since they sit in the middle.
+  // The whole screen, or on a phone the close-up; menus and pictures show whole.
   private reframe(): void {
     const { room, menu, at } = this.place;
-    const zoom = PHONE.matches && !menu ? ZOOM[room] : null;
+    const zoom = PHONE.matches && !menu && !(room === "art" && this.setup.picture) ? ZOOM[room] : null;
     this.zoomButton.hidden = !zoom;
     this.zoomButton.textContent = this.zoomed ? "Whole screen" : "Zoom in";
     const size = zoom && this.zoomed ? 1 / zoom.scale : 1;

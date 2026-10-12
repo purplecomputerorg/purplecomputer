@@ -21,7 +21,7 @@ from ...music_constants import (
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..panels import CodePanel, LoopPanel, SpaceHold
-from ..sounds import SPEAKABLE_KEYS as _SPEAKABLE_KEYS, SoundBank
+from ..sounds import SoundBank
 from ..ui import draw_label
 from .base import Room
 
@@ -168,7 +168,7 @@ class MusicRoom(Room):
         self._note_labels.clear()
 
     def _play_key(self, key: str, mode: str, instrument: int | None = None):
-        is_letters_layer = mode == MODE_LETTERS and key in _SPEAKABLE_KEYS
+        is_letters_layer = mode == MODE_LETTERS and key in self.sounds.letters()
         scale = 0.2 if is_letters_layer else 1.0
         self.play_sound_with_instrument(key, self.instrument_index if instrument is None else instrument, scale)
         if is_letters_layer:

@@ -21,6 +21,6 @@ describe("sound naming matches purple_tui", () => {
 
   it("frequencies and keys", () => {
     expect(noteFrequency("A", 4)).toBeCloseTo(440);
-    expect(LETTER_KEYS.length).toBe(36);
+    expect(LETTER_KEYS.length).toBe(40);
   });
 });

@@ -9,7 +9,7 @@ import pygame
 from .. import palette as P
 from .. import printing
 from ..constants import ICON_ROBOT
-from ..content import display_name, get_content
+from ..content import get_content
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from . import saves
 from .saves import fit
@@ -48,7 +48,7 @@ class PictureTile:
         return self.app.save_artwork(self)
 
     def when(self) -> str:
-        name = display_name(self.picture.name)
+        name = self.picture.title
         return f"{ICON_HOME} {name if len(name) <= LABEL_CHARS else name[:LABEL_CHARS - 1] + '…'}"
 
 

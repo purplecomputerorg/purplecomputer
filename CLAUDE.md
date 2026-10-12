@@ -85,7 +85,7 @@ Boot hang diagnostics: see `guides/boot-hang-debugging.md`. `purple_tui/boot_log
 
 User-facing messages: simple, friendly, no jargon. Clear next steps, not error explanations. Add `(Technical: ...)` for known root causes. Use `SUPPORT_EMAIL` from `purple_tui/constants.py`.
 
-**Writing style:** No em-dashes or spaced dashes. Use colons, commas, or periods instead.
+**Writing style:** No em-dashes or spaced dashes. Use colons, commas, or periods instead. Purple's own USB drive is the "Purple Key"; any other is a "USB drive". Never "USB stick" in anything a customer reads.
 
 ---
 

@@ -40,7 +40,7 @@ async def restart():
 
 def setup(room, letters=False, instrument=None, picture=None):
     """The room a Studio page shows: Music in Say Letters or playing an instrument, or Art with a
-    pack picture painted on it, the way Art's Open paints one."""
+    picture's paint ops on it, the way Art's Open paints one."""
     while _app.top:
         _app.pop(_app.top)
     if room != _app.active_room:
@@ -50,10 +50,8 @@ def setup(room, letters=False, instrument=None, picture=None):
         music.letters_mode = letters
         music.set_instrument_by_name(instrument or "marimba")
     if picture:
-        found = next((p for p in content.get_content().pictures if p.name == picture), None)
-        if found:
-            from purple_tui.canvas.secret_doodle import paint_cells
-            paint_cells(_app, found.ops)
+        from purple_tui.canvas.secret_doodle import paint_cells
+        paint_cells(_app, picture)
     _app.invalidate()
     return place()
 

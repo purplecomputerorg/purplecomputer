@@ -815,13 +815,13 @@ main() {
 
             # A reinstall the parent chose to keep brings back the earlier
             # install's settings and Time Travel history, plus the saves made
-            # on the USB stick. Otherwise the live session comes over whole
+            # on the Purple Key. Otherwise the live session comes over whole
             # (settings, so first boot doesn't chime again, history and saves).
             # PURPLE_LIVE_SETTINGS alone is what the Textual UI passes.
             if [ -n "$PURPLE_KEEP_DIR" ] && [ -d "$PURPLE_KEEP_DIR/config" ]; then
                 carry_over "$PURPLE_KEEP_DIR/config/." "Earlier install's settings and history"
                 if [ -n "$PURPLE_LIVE_CONFIG" ] && [ -d "$PURPLE_LIVE_CONFIG/saves" ]; then
-                    carry_over "$PURPLE_LIVE_CONFIG/saves" "Saved work from the USB stick"
+                    carry_over "$PURPLE_LIVE_CONFIG/saves" "Saved work from the Purple Key"
                 fi
             elif [ -n "$PURPLE_LIVE_CONFIG" ] && [ -d "$PURPLE_LIVE_CONFIG" ]; then
                 carry_over "$PURPLE_LIVE_CONFIG/." "Live settings, history and saves"

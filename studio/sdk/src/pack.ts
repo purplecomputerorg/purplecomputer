@@ -2,13 +2,14 @@
 // in studio/PACK_FORMAT.md; this is the one place that knows the file layout.
 import exported from "./purple/export.json";
 import { type PaintOp } from "./purple/art";
-import { SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
+import { LETTER_FILES, SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
 import { SYNTH_RATE, renderNote, type BaseName, type Params } from "./purple/synth";
 import { themeJson, type Theme } from "./purple/theme";
 import { gzip, tar, type TarEntry } from "./tar";
 import { encodeWav, type Clip } from "./wav";
 
-export interface PackPicture { name: string; ops: PaintOp[]; png?: Uint8Array }
+// title: the name as the family typed it, which Purple shows as is; name is the file name.
+export interface PackPicture { name: string; title?: string; ops: PaintOp[]; png?: Uint8Array }
 export interface PackInstrument { name: string; base: BaseName; params: Params }
 // content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Blockly workspace it came from rides beside it.
 export interface PackRoom { name: string; source: string; blocks?: unknown }
@@ -65,11 +66,11 @@ const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
 export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) => void): Promise<TarEntry[]> {
   const entries: TarEntry[] = [json("manifest.json", manifest(spec)), ...emojiEntries(spec)];
 
-  for (const [key, clip] of Object.entries(spec.letters)) entries.push({ path: `content/letters/${key}.wav`, data: encodeWav(clip) });
+  for (const [key, clip] of Object.entries(spec.letters)) entries.push({ path: `content/letters/${LETTER_FILES[key] ?? key}.wav`, data: encodeWav(clip) });
   for (const p of spec.phrases) entries.push({ path: `content/voice/${voiceClipFilename(p.text)}`, data: encodeWav(p.clip) });
 
   for (const pic of spec.pictures) {
-    entries.push(json(`content/pictures/${pic.name}.json`, { name: pic.name, ops: pic.ops }));
+    entries.push(json(`content/pictures/${pic.name}.json`, { name: pic.title ?? pic.name, ops: pic.ops }));
     if (pic.png) entries.push({ path: `content/pictures/${pic.name}.png`, data: pic.png });
   }
 

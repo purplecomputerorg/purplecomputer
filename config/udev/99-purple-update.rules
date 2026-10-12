@@ -1,3 +1,5 @@
-# Purple Computer: auto-detect USB update drives
-# When a USB drive labeled PURPLE_UPDATE is inserted, trigger the update service.
-ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="PURPLE_UPDATE", TAG+="systemd", ENV{SYSTEMD_WANTS}="purple-usb-update@%k.service"
+# Purple Computer: family packs from any USB drive, the Purple Key included.
+# Each FAT, exFAT or NTFS partition on a USB drive starts the update service,
+# which installs any .purplepack files at its top level and leaves everything
+# else alone. PURPLE_BOOT and PURPLE_EFI are Purple's own system partitions.
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_FS_TYPE}=="vfat|exfat|ntfs", ENV{ID_FS_LABEL}!="PURPLE_BOOT|PURPLE_EFI", TAG+="systemd", ENV{SYSTEMD_WANTS}+="purple-usb-update@%k.service"

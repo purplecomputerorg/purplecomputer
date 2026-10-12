@@ -1,11 +1,12 @@
 import dinosaur from "./assets/dinosaur.svg";
 import dog from "./assets/dog.jpg";
-import earthrise from "./assets/earthrise.jpg";
+import saturn from "./assets/saturn.jpg";
 import greatWave from "./assets/great-wave.jpg";
 import house from "./assets/sample-drawing.svg";
+import { roomTitle } from "@sdk/pack";
 import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "@sdk/purple/art";
 
-export interface Picture { name: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string }
+export interface Picture { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string }
 
 const hex = (r: number, g: number, b: number) =>
   "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
@@ -41,19 +42,22 @@ export function downsample(img: ImageData, cols: number, rows: number): string[]
   return cells;
 }
 
+// A picture's name is its file name in the pack; Purple shows its title as typed, or else the name tidied.
+export const slug = (text: string) => text.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "picture";
+export const pictureTitle = (p: { name: string; title?: string }) => p.title || roomTitle(p.name);
+
 export async function pictureFromFile(file: File): Promise<Picture> {
-  const name = file.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "picture";
-  return pictureFromBitmap(await createImageBitmap(file), name, URL.createObjectURL(file));
+  return pictureFromBitmap(await createImageBitmap(file), slug(file.name.replace(/\.[^.]+$/, "")), URL.createObjectURL(file));
 }
 
-// Studio's examples, painted the same way as a family's pictures. Purple shows one while the
-// family has none of their own; one goes in the pack only if they pick it.
+// Studio's examples, painted the same way as a family's pictures. One goes in the pack only if
+// the family adds it.
 export interface Example { name: string; src: string; alt: string; credit?: string }
 export const EXAMPLES: Example[] = [
   { name: "our-house", src: house, alt: "A drawing of a house, a sun, and a tree" },
   { name: "dinosaur", src: dinosaur, alt: "A dinosaur to color in" },
   { name: "dog", src: dog, alt: "A black dog looking up" },
-  { name: "earthrise", src: earthrise, alt: "The Earth rising over the Moon", credit: "NASA, from Apollo 8 in 1968" },
+  { name: "saturn", src: saturn, alt: "Saturn and its rings", credit: "NASA, from the Cassini spacecraft" },
   { name: "great-wave", src: greatWave, alt: "A giant wave curling over boats", credit: "Katsushika Hokusai, around 1831" },
 ];
 const examples = new Map<string, Promise<Picture>>();

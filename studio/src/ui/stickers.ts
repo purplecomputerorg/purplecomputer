@@ -10,6 +10,7 @@ const SHIFT: Record<string, string> = { "1": "!", "2": "@", "3": "#", "4": "$", 
 const LABEL: Record<string, string> = { "=": "+", "/": "÷" };
 
 export const PURPLE_STICKERS = KEY_COLORS;
+export const keyLabel = (key: string) => LABEL[key] ?? key.toUpperCase();
 
 export function stickerColors(): Record<string, string> {
   return draft.theme ? { ...KEY_COLORS, ...rowColors(draft.theme.hues) } : KEY_COLORS;
@@ -22,7 +23,7 @@ export function sticker(key: string, colors = stickerColors()): HTMLElement {
   const shift = SHIFT[key];
   return h("span", { class: "sticker", style: `--key:${bg};--ink:${ink(bg)}` },
     shift ? h("small", {}, shift) : null,
-    h("b", {}, LABEL[key] ?? key.toUpperCase()));
+    h("b", {}, keyLabel(key)));
 }
 
 export const hasSticker = (key: string) => key in KEY_COLORS;

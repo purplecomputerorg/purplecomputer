@@ -30,8 +30,8 @@ interface Section {
 }
 
 const SECTIONS: Section[] = [
-  { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or your kid's drawing, painted in the Art room", view: picturesView, count: () => draft.pictures.length },
-  { id: "voice", label: "Voice", icon: "🎙️", blurb: "Your voice saying the letters", view: voiceView, count: () => Object.keys(draft.letters).length + draft.phrases.length },
+  { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or your kid's drawing, for them to paint on top of", view: picturesView, count: () => draft.pictures.length },
+  { id: "voice", label: "Voice", icon: "🎙️", blurb: "Your voice on the keys, saying anything you like", view: voiceView, count: () => Object.keys(draft.letters).length + draft.phrases.length },
   { id: "words", label: "Words", icon: "🐶", blurb: "Your words, each with its own emoji", view: wordsView, count: () => draft.words.length },
   { id: "instruments", label: "Instruments", icon: "🎹", blurb: "A sound of your own for the Music room", view: instrumentsView, count: () => draft.instruments.length },
   { id: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView, count: () => draft.rooms.length },
@@ -55,7 +55,7 @@ function welcomeView(): View {
       h("p", { class: "serif" }, "The dog on the canvas. Grandma saying the letters. A room where C is for cow."),
       h("div", { class: "cards" }, ...SECTIONS.map((s) =>
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
-      h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB stick. Nothing here leaves this computer."),
+      h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB drive. Nothing here leaves this computer."),
     ),
     live: { room: "play" },
     previewTitle: "This is Purple",

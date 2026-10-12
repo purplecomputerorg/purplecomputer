@@ -4,8 +4,9 @@ import exported from "./export.json";
 
 const { music, voice } = exported;
 
-// packs/core-sounds/content/letters/<key>.wav: one clip per key, lowercase filename.
-export const LETTER_KEYS: string[] = voice.letter_keys;
+// canvas/sounds.CLIP_NAMES: content/letters/<name>.wav, one clip per grid key, any of them.
+export const LETTER_FILES: Record<string, string> = voice.letter_files;
+export const LETTER_KEYS: string[] = Object.keys(LETTER_FILES);
 export const CLIP_SAMPLE_RATE: number = voice.sample_rate;
 
 // tts.voice_clip_filename

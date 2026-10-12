@@ -167,9 +167,9 @@ fi
 if [ ! -f /casper/vmlinuz$purple_variant ]; then
     clear
     echo ""
-    echo "    So sorry! This Purple USB stick is missing a file"
+    echo "    So sorry! This Purple Key is missing a file"
     echo "    it needs for this computer, so Purple cannot start."
-    echo "    (Technical: /casper/vmlinuz$purple_variant is not on the stick.)"
+    echo "    (Technical: /casper/vmlinuz$purple_variant is not on the Key.)"
     echo ""
     echo "    Email support@purplecomputer.org and we will send"
     echo "    a replacement. Happy to help!"
@@ -286,17 +286,17 @@ purple_squashfs_to_ram() {
         return 0
     fi
     mkdir -p "$ram" && mount -t tmpfs -o size=${need}k tmpfs "$ram" || return 0
-    purple_say "copying the system ($(( need / 1024 )) MB) from the USB stick into memory..."
+    purple_say "copying the system ($(( need / 1024 )) MB) from the Purple Key into memory..."
     t0=$(cut -d. -f1 /proc/uptime)
     if dd if="$src/filesystem.squashfs" of="$ram/filesystem.squashfs" bs=1048576; then
         for f in "$src"/*; do
             case "$f" in */filesystem.squashfs|*/vmlinuz*|*/initrd*) ;; *) cp -a "$f" "$ram/" ;; esac
         done
         mount -o bind "$ram" "$src"
-        purple_say "copy done in $(( $(cut -d. -f1 /proc/uptime) - t0 ))s, the stick is no longer read for the system"
+        purple_say "copy done in $(( $(cut -d. -f1 /proc/uptime) - t0 ))s, the Purple Key is no longer read for the system"
         purple_install_image_to_ram "$1/purple/purple-os.img.zst"
     else
-        purple_say "THE USB STICK COULD NOT BE READ after $(stat -c %s "$ram/filesystem.squashfs") bytes of the system image, continuing from the stick"
+        purple_say "THE PURPLE KEY COULD NOT BE READ after $(stat -c %s "$ram/filesystem.squashfs") bytes of the system image, continuing from the Key"
         umount "$ram"
     fi
 }

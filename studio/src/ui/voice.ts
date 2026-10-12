@@ -3,13 +3,14 @@ import { play } from "../audio";
 import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
 import { changed, draft } from "../state";
 import { h, pageKeys } from "./dom";
-import { sticker } from "./stickers";
+import { keyLabel, sticker } from "./stickers";
 import { liveScreen } from "./live";
 import { recordControl } from "./record";
 import type { View } from "./view";
 
-// The keys that have a voice clip, laid out like the keyboard.
+// The keys a recording can go on, laid out like the keyboard.
 const KEY_ROWS = [PERCUSSION_ROW, ...GRID_ROWS].map((row) => row.filter((k) => LETTER_KEYS.includes(k)));
+const nextToRecord = () => KEY_ROWS.flat().find((k) => !(k in draft.letters));
 
 const tabs = (which: "letters" | "phrases") => h("div", { class: "tabs", role: "tablist" },
   h("a", { class: "tab", href: "#voice", "aria-selected": String(which === "letters") }, "Letters and numbers"),
@@ -20,10 +21,11 @@ const clipActions = (clip: Clip, onRemove: () => void) => h("div", { class: "row
   h("button", { class: "linkbtn dim small", onclick: onRemove }, "Remove"));
 
 function lettersView(): View {
-  let current = LETTER_KEYS.find((k) => !(k in draft.letters)) ?? "a";
+  let current = nextToRecord() ?? "1";
   const keys = h("div", { class: "keyboard" });
-  const big = h("div", { class: "big-letter" });
-  const count = h("p", { class: "dim" });
+  const now = h("div", { class: "voice-key" });
+  const prompt = h("p", { class: "voice-prompt" });
+  const count = h("p", { class: "voice-count" });
   const actions = h("div");
 
   const select = (k: string) => {
@@ -33,14 +35,16 @@ function lettersView(): View {
   function render() {
     keys.replaceChildren(...KEY_ROWS.map((row) => h("div", { class: "r" }, ...row.map((k) =>
       h("button", { class: ["vkey", k in draft.letters && "done", k === current && "current"].filter(Boolean).join(" "), "aria-label": k, onclick: () => select(k) }, sticker(k))))));
-    big.textContent = current;
-    count.textContent = `${Object.keys(draft.letters).length} of ${LETTER_KEYS.length} recorded. Keys you skip keep Purple's voice.`;
+    now.replaceChildren(sticker(current));
     const clip = draft.letters[current];
+    prompt.replaceChildren(clip ? h("span", {}, h("b", {}, keyLabel(current)), " has your recording. Record again to change it.") : h("span", {}, "What should ", h("b", {}, keyLabel(current)), " say?"));
+    const done = Object.keys(draft.letters).length;
+    count.textContent = done ? `${done} key${done === 1 ? "" : "s"} recorded` : "";
     actions.replaceChildren(clip ? clipActions(clip, () => { delete draft.letters[current]; changed(); render(); }) : "");
   }
   const onClip = (clip: Clip) => {
     draft.letters[current] = clip;
-    current = LETTER_KEYS.find((k) => !(k in draft.letters)) ?? current;
+    current = nextToRecord() ?? current;
     changed();
     render();
   };
@@ -58,15 +62,17 @@ function lettersView(): View {
       "section",
       {},
       tabs("letters"),
-      h("p", { class: "lead" }, "In the Music room, every key can say its own name. Record yours: pick a key, press Record, say it, press Stop."),
-      h("div", { class: "card voice-card" }, keys, h("div", { class: "voice-now" }, big, h("div", { class: "stack" }, recordControl(onClip), actions))),
-      count,
-      h("p", { class: "dim small" }, "Tip: type a key on your keyboard to jump to it. Studio moves to the next key after each recording."),
+      h("p", { class: "lead" }, "In the Music room's Say Letters, each key plays what you record for it. Its name, \"D is for Dad,\" a sneeze, a song: anything goes."),
+      h("div", { class: "card voice-card" },
+        keys,
+        h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, recordControl(onClip), actions)),
+        count),
+      h("p", { class: "dim small" }, "Letters and numbers you skip say their own names in Purple's voice; the other keys stay quiet until you give them something. Type a key on your keyboard to jump to it."),
     ),
     live: { room: "music", letters: true },
     keys: () => { const mine = Object.keys(draft.letters).slice(0, 5); return mine.length ? mine : [..."abcde"]; },
     previewTitle: "What your kid hears",
-    caption: "Purple's Music room, saying letters. Keys you recorded say them in your voice.",
+    caption: "Purple's Music room in Say Letters. Keys you recorded play what you said.",
     cleanup: unlisten,
   };
 }

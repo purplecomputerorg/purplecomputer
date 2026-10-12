@@ -48,6 +48,11 @@ class Picture:
     """A pack picture: content/pictures/<name>.json, paint ops for the Art canvas."""
     name: str
     ops: list[tuple[int, int, str]]
+    label: str = ""  # the name as the family typed it, apostrophes and all
+
+    @property
+    def title(self) -> str:
+        return self.label[:24] or display_name(self.name)
 
 
 def display_name(slug: str) -> str:
@@ -334,7 +339,9 @@ class ContentManager:
             data = _read_json(spec)
             ops = data.get("ops") if isinstance(data, dict) else None
             if isinstance(ops, list) and all(_is_paint_op(op) for op in ops):
-                self.pictures.append(Picture(spec.stem, [(x, y, c) for x, y, c in ops]))
+                label = data.get("name")
+                label = label.strip() if isinstance(label, str) and label != spec.stem else ""
+                self.pictures.append(Picture(spec.stem, [(x, y, c) for x, y, c in ops], label))
 
     def pack_dirs(self, sub: str) -> list[Path]:
         """content/<sub>/ in every user pack that has one, last installed first,

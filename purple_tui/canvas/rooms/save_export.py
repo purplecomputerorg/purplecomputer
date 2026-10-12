@@ -1,7 +1,7 @@
-"""Parent Menu: copy every save to a USB stick as printable pictures.
+"""Parent Menu: copy every save to a USB drive as printable pictures.
 
 Pictures land in a "Purple Computer" folder, one subfolder per room, named
-by when they were saved. A picture already on the stick is not copied again.
+by when they were saved. A picture already on the drive is not copied again.
 """
 
 import json
@@ -23,7 +23,7 @@ _FILESYSTEMS = {"vfat", "exfat", "ntfs"}
 
 
 def find_stick() -> tuple:
-    """(device, mountpoint or None) for a plugged-in USB stick that isn't a Purple one, else (None, None)."""
+    """(device, mountpoint or None) for a plugged-in USB drive that isn't a Purple Key, else (None, None)."""
     try:
         out = subprocess.run(["lsblk", "-J", "-p", "-o", "NAME,TRAN,FSTYPE,LABEL,MOUNTPOINT"],
                              capture_output=True, text=True, timeout=10).stdout
@@ -63,7 +63,7 @@ class SaveExportScreen(Dialog):
 
     def __init__(self, app):
         super().__init__(app)
-        self.body_lines = ["Looking for a USB stick..."]
+        self.body_lines = ["Looking for a USB drive..."]
         self.done = False
 
     def on_open(self):
@@ -93,8 +93,8 @@ class SaveExportScreen(Dialog):
     def _work(self):
         dev, mounted = find_stick()
         if dev is None:
-            return self._say("Plug in a USB stick, then try again.", "",
-                             "(Technical: no FAT, exFAT or NTFS USB stick found.)", done=True)
+            return self._say("Plug in a USB drive, then try again.", "",
+                             "(Technical: no FAT, exFAT or NTFS USB drive found.)", done=True)
         self._say("Copying pictures...")
         mnt = mounted or MOUNT
         try:
@@ -105,13 +105,13 @@ class SaveExportScreen(Dialog):
             copied = export_saves(Path(mnt), self._page)
             os.sync()
         except (OSError, subprocess.SubprocessError, pygame.error) as e:
-            return self._say("Couldn't copy to that USB stick.", "", f"(Technical: {e})", done=True)
+            return self._say("Couldn't copy to that USB drive.", "", f"(Technical: {e})", done=True)
         finally:
             if not mounted:
                 subprocess.run(["sudo", "umount", MOUNT], capture_output=True, timeout=30)
         if copied:
             self._say(f"Copied {copied} picture{'s' if copied != 1 else ''}.", "",
-                      f'They are in the "{FOLDER}" folder.', "You can unplug the USB stick now.", done=True)
+                      f'They are in the "{FOLDER}" folder.', "You can unplug the USB drive now.", done=True)
         else:
             self._say("Nothing new to copy.", "", "Saved work you haven't copied yet goes over next time.", done=True)
 

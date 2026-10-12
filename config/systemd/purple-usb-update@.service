@@ -1,27 +1,24 @@
 [Unit]
-Description=Purple Computer USB Update (%i)
+Description=Purple Computer: packs from a USB drive (%i)
 After=local-fs.target
-# A stick present at boot is installed before Purple starts, so the packs are
-# there on the first screen. A stick plugged in later waits for a restart.
+# A drive present at boot is read before Purple starts, so the packs are
+# there on the first screen. A drive plugged in later waits for a restart.
 Before=purple-x11.service
 
 [Service]
 Type=oneshot
-TimeoutStartSec=120
+# A drive that won't mount or read must not hold Purple's start for long.
+TimeoutStartSec=60
 
-# Mount the stick read-only with nothing on it runnable, install its packs
-# into the purple user's ~/.purple/packs, unmount.
-ExecStartPre=/bin/mkdir -p /mnt/purple-update
-ExecStartPre=/bin/mount -o ro,nosuid,nodev,noexec /dev/%i /mnt/purple-update
-ExecStart=/usr/bin/python3 -m purple_tui.usb_updater /mnt/purple-update
-ExecStopPost=/bin/umount /mnt/purple-update
-ExecStopPost=/bin/rmdir /mnt/purple-update
+# Mount the drive read-only with nothing on it runnable, install any packs
+# into the purple user's ~/.purple/packs, unmount. A drive with no packs on
+# it never starts Python.
+ExecStartPre=/bin/mkdir -p /run/purple-update/%i
+ExecStartPre=/bin/mount -o ro,nosuid,nodev,noexec /dev/%i /run/purple-update/%i
+ExecStart=/bin/sh -c 'ls /run/purple-update/%i/*.purplepack >/dev/null 2>&1 || exit 0; exec /usr/bin/python3 -m purple_tui.usb_updater /run/purple-update/%i'
+ExecStopPost=-/bin/umount /run/purple-update/%i
+ExecStopPost=-/bin/rmdir /run/purple-update/%i
 
 # Root: the mount, plus chowning the installed packs to the purple user.
 User=root
-
-# Set PYTHONPATH so the module can be found
 Environment=PYTHONPATH=/opt/purple
-
-# Clean up mount on failure
-SuccessExitStatus=0

@@ -10,7 +10,8 @@ import pygame
 from ..mixer import mixer_generation, mixer_ready_for_play
 from ..music_constants import ALL_KEYS, PERCUSSION
 
-SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
+# Every grid key can have a recording; the ones that can't be a file name are spelled out.
+CLIP_NAMES = {k: {";": "semicolon", ",": "comma", ".": "period", "/": "slash"}.get(k, k.lower()) for k in ALL_KEYS}
 DRUM_KEYS = {name: digit for digit, name in PERCUSSION.items()}
 
 
@@ -82,6 +83,6 @@ class SoundBank:
             dirs.append(core_sounds() / "letters")
             found = {}
             for d in reversed([d for d in dirs if d.exists()]):
-                found.update(_load_dir(d, [k.lower() for k in SPEAKABLE_KEYS]))
-            return {k: found[k.lower()] for k in SPEAKABLE_KEYS if k.lower() in found}
+                found.update(_load_dir(d, CLIP_NAMES.values()))
+            return {k: found[n] for k, n in CLIP_NAMES.items() if n in found}
         return self._get("letters", load)

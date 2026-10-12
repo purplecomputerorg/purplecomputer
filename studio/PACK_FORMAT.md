@@ -39,7 +39,7 @@ Everything below `content/` that is not listed here is ignored.
 
 ### letters/<key>.wav
 
-`a.wav` through `z.wav` and `0.wav` through `9.wav`, lowercase, one per key. 22050 Hz, mono, 16-bit PCM, the numbers Piper writes for the core clips. The Music room's Say Letters mode searches user packs first, then `letters-kid/` when Kid Voice is on, then the core `letters/`, per key, so a pack that records only some keys falls back for the others.
+One clip per Music grid key, any of them: `a.wav` through `z.wav` and `0.wav` through `9.wav`, lowercase, plus `semicolon.wav`, `comma.wav`, `period.wav` and `slash.wav` (the names in `canvas/sounds.CLIP_NAMES`). The clip can be anything, not just the key's name. 22050 Hz, mono, 16-bit PCM, the numbers Piper writes for the core clips. The Music room's Say Letters mode searches user packs first, then `letters-kid/` when Kid Voice is on, then the core `letters/`, per key, so a pack that records only some keys falls back for the others; the four punctuation keys have no core clip and stay plain notes unless a pack gives them one. The Textual UI reads only the letters and numbers.
 
 ### voice/<phrase>.wav
 
@@ -51,7 +51,7 @@ Filename is `text.strip().lower().replace(" ", "_") + ".wav"`, the rule in `tts.
 { "name": "palm", "ops": [[43, 0, "#ffffff"], [44, 0, "#fefefe"]] }
 ```
 
-`ops` is a `[x, y, "#rrggbb"]` paint-op list on the canvas UI's 56 by 24 Art grid of square cells, the photo fitted and centered; Purple paints each op on its cell. Every op must be on the grid. The Art room's Open (Esc, O) lists them after the kid's saves; choosing one paints it onto a fresh canvas as a new Time Travel step. `<name>.png` is a preview for people; Purple does not open it.
+`name` is what the kid sees in Open, exactly as the family typed it ("Grandma's dog"), cut to 24 characters; when it is missing or the same as the file name, Purple tidies the file name instead (`palm` shows as Palm). `ops` is a `[x, y, "#rrggbb"]` paint-op list on the canvas UI's 56 by 24 Art grid of square cells, the photo fitted and centered; Purple paints each op on its cell. Every op must be on the grid. The Art room's Open (Esc, O) lists them after the kid's saves; choosing one paints it onto a fresh canvas as a new Time Travel step. `<name>.png` is a preview for people; Purple does not open it.
 
 ### instruments/<name>.json and <name>/<pitch>.wav
 
@@ -101,15 +101,15 @@ Studio writes the whole palette, derived from one color the parent picks (`sdk/s
 - Built-in: `packs/`, copied to `/opt/purple/packs/` at image build.
 - User: `~/.purple/packs/<id>/` of the `purple` user. Loaded after the built-ins, in name order, so a later pack wins any per-file lookup.
 
-**PURPLE_UPDATE stick.** A USB stick whose filesystem label is `PURPLE_UPDATE` is the delivery channel. `config/udev/99-purple-update.rules` starts `config/systemd/purple-usb-update@.service` for it, which mounts the stick read-only with `nosuid,nodev,noexec`, runs `purple_tui.usb_updater`, and unmounts. The updater installs every `*.purplepack` in the stick's top directory into the purple user's packs, replacing a pack with the same id, and appends a line per pack to `/var/log/purple/usb-update.log`. Sticks with any other label are never touched. The unit orders itself before `purple-x11.service`, so a stick present at boot is installed before the first screen; a stick plugged in later is installed on the spot but the running app only reads packs at startup, so it takes effect at the next start. On a live-booted Key `$HOME` is tmpfs, so the packs vanish at shutdown and come back at the next boot from the stick, which is the intended way to use a pack from the Key.
+**Any USB drive.** `config/udev/99-purple-update.rules` starts `config/systemd/purple-usb-update@.service` for every FAT, exFAT or NTFS partition on a USB drive, the Purple Key's own PURPLEUSB partition included; there is no label to set. The unit mounts it read-only with `nosuid,nodev,noexec` under `/run/purple-update/<device>`, and if `*.purplepack` files sit in its top directory runs `purple_tui.usb_updater`, then unmounts. A drive without packs never starts Python. The updater installs each pack into the purple user's packs, replacing a pack with the same id, and appends a line per pack to `/var/log/purple/usb-update.log`. The unit orders itself before `purple-x11.service`, so a drive present at boot is installed before the first screen; one plugged in later is installed on the spot, but the running app only reads packs at startup, so it takes effect at the next start. On a live-booted Key `$HOME` is tmpfs, so the packs vanish at shutdown and come back at the next boot from the Key itself.
 
-**By hand.** On an installed Purple, from the parent menu's terminal: mount the stick and run `python3 -m purple_tui.usb_updater /mnt/stick`, or unpack the tar into `~/.purple/packs/<id>/` yourself.
+**By hand.** On an installed Purple, from the parent menu's terminal: mount the drive and run `python3 -m purple_tui.usb_updater /mnt/drive`, or unpack the tar into `~/.purple/packs/<id>/` yourself.
 
 **From a development checkout.** `just python scripts/purplepack.py install my-pack.purplepack --replace`, or `--packs-dir` to install somewhere else.
 
 ## What the installer checks
 
-`check_pack` runs on every install, from the stick or by hand, and the pack is refused with the first few problems listed if any of these fail:
+`check_pack` runs on every install, from a USB drive or by hand, and the pack is refused with the first few problems listed if any of these fail:
 
 - manifest present and valid as above; `format` not newer than this build reads
 - no `.py` files except `rooms/<name>.py`, no `.pyc`, `.pyo`, `.pyw`, and no extensionless or `.sh` file whose first line mentions python

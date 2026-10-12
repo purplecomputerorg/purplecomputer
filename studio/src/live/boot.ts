@@ -1,5 +1,6 @@
 // Purple itself in the browser: Purple's own Python and pygame canvas UI, run by Pyodide on this
 // page and drawn into a canvas. purple.zip is built by scripts/studio_bundle.py.
+import type { PaintOp } from "@sdk/purple/art";
 import browserShim from "./browser.py?raw";
 import controller from "./live.py?raw";
 
@@ -42,7 +43,8 @@ function say(text: string): Promise<void> {
 export type Room = "play" | "music" | "art" | "blocks";
 // at: the room's cursor, as fractions of the screen (see place() in live.py).
 export interface Place { room: Room; menu: boolean; at: [number, number] | null }
-export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: string }
+// picture: paint ops for the Art canvas, painted as Art's Open paints a pack picture.
+export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: PaintOp[] }
 
 export interface LivePurple {
   // Installs a .purplepack (null: none) and starts Purple again so it reads it.

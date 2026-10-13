@@ -265,11 +265,13 @@ class BlocksRoom:
         self._advance(self._cursor_y())
 
     def _mix_into_last(self, held_key: str) -> bool:
-        """A chord: the block the held key just dropped takes the new color mixed in."""
+        """A chord: the block the held key just dropped takes the new color
+        mixed in. Holding on, each next key mixes in too."""
         if not self._last or self._last[1] != held_key or self._last[0] not in self._blocks:
             return False
         pos = self._last[0]
         self._color = self._blocks[pos] = mix_colors_paint([self._blocks[pos], self._color])
+        self._last = (pos, self._key)
         self.app.set_legend(self._color, visible=True)
         self._changed()
         return True

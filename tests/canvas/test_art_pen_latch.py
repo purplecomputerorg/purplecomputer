@@ -164,3 +164,21 @@ def test_draw_path_without_pen_callback_is_safe():
         player = PlaybackPlayer(dispatch_action=dispatch, is_art_paint_mode=lambda: True)
         await player._draw_path(DrawPath(directions=['right'], delay_per_step=0.0, pause_after=0.0))
     _run(_test())
+
+
+def test_a_chord_mixes_into_the_cell_the_held_letter_painted():
+    from purple_tui.canvas.harness import press
+    from purple_tui.color_mixing import mix_colors_paint
+    from purple_tui.palette import get_key_color
+
+    async def _test():
+        app, canvas = _art()
+        canvas._cursor_x = canvas._cursor_y = 5
+        await press(app, "b")
+        await press(app, "g", char_held="b")
+        await press(app, "r", char_held="g")
+        two = mix_colors_paint([get_key_color("b"), get_key_color("g")])
+        mixed = mix_colors_paint([two, get_key_color("r")])
+        assert canvas._grid[(5, 5)][2] == mixed and (6, 5) not in canvas._grid
+        assert canvas.brush_color == mixed and (canvas._cursor_x, canvas._cursor_y) == (6, 5)
+    _run(_test())

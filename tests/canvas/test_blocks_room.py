@@ -239,6 +239,17 @@ def test_chord_mixes_into_the_block_the_held_key_dropped():
     run(go())
 
 
+def test_a_chord_keeps_mixing_while_letters_stay_held():
+    async def go():
+        app, room = _blocks()
+        await press(app, "b")
+        await press(app, "g", char_held="b")
+        await press(app, "r", char_held="g")    # the keyboard reports the newest held letter
+        two = mix_colors_paint([get_key_color("b"), get_key_color("g")])
+        assert room._blocks == {(5, 5, 0): mix_colors_paint([two, get_key_color("r")])}
+    run(go())
+
+
 def test_keyboard_reports_the_still_held_letter_and_shift():
     sm = KeyboardStateMachine()
     down = lambda code: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=time.monotonic()))

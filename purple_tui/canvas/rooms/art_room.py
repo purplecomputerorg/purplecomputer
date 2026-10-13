@@ -31,7 +31,7 @@ HINTS = {
     "littles": "Type to paint!",
     "pen": "Pen is down! Arrows paint a trail. Space lifts the pen.",
     "erase": "Erasing! Arrows clear a trail.",
-    "paint": "Type to paint! Every letter is a color. Space puts the pen down.",
+    "paint": "Type to paint! Hold two letters to mix. Space puts the pen down.",
     "write": "Type to write! Arrow keys move. Enter for a new line.",
 }
 
@@ -254,7 +254,9 @@ class ArtRoom:
         self._dirty = None
 
     def _paint_at_cursor(self):
-        pos = (self._cursor_x, self._cursor_y)
+        self._paint_at((self._cursor_x, self._cursor_y))
+
+    def _paint_at(self, pos):
         cell = self._grid.get(pos)
         color = mix_colors_paint([self._get_cell_bg(pos), self._last_key_color]) if pos in self._painted_positions else self._last_key_color
         self._painted_positions.add(pos)
@@ -397,6 +399,17 @@ class ArtRoom:
             self._last_key_char, self._last_key_color = brush
         self._paint_at_cursor()
 
+    def _mix_into_last(self, held_key: str, char: str) -> bool:
+        """A chord: the cell the held key just painted takes this key's color
+        mixed in, and the brush becomes the mix. Holding on, each next key
+        mixes in too."""
+        pos = self._last_paint_pos
+        if pos is None or self._last_key_char != held_key or not self._select_brush(char):
+            return False
+        self._paint_at(pos)
+        self.set_brush_color(self._grid[pos][2], char)
+        return True
+
     def _select_brush(self, char: str) -> bool:
         """Set the brush from a key; False when the key has no color."""
         brush = brush_for_key(char)
@@ -512,7 +525,9 @@ class ArtRoom:
                 char = UNSHIFT_MAP[char]
             if open_color_wheel(self, char):
                 return
-            if self._select_brush(char) and not action.shift_held:
+            held = brush_for_key(action.char_held) if action.char_held else None
+            mixed = bool(held) and not action.shift_held and self._mix_into_last(held[0], char)
+            if not mixed and self._select_brush(char) and not action.shift_held:
                 self._paint_at_cursor()
                 self._advance_after_stamp(direction)
                 if char.isalpha():

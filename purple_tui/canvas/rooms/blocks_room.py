@@ -604,8 +604,9 @@ class BlocksRoom:
         """A blinking glass column from the ceiling down onto the see-through
         landing block, with its shadow on whatever it would land on; then the
         faded rows in front; then a patch of ceiling fading out around the
-        column, the column's edges faint through it, and a wire box around the
-        landing block on top of everything."""
+        column, the column's edges faint through it, its outline on down to the
+        floor through any blocks below, and a wire box around the landing block
+        on top of everything."""
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
         layer = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
@@ -619,6 +620,8 @@ class BlocksRoom:
         layer.fill((0, 0, 0, 0))                # draw calls replace pixels rather than blend, so the see-through top goes on fresh
         self._ceiling_patch(layer, vx, vz, 0.3 if y == HEIGHT - 1 else 1)   # faint when the box is up against it
         self._outline(layer, column, edge // 3)
+        if y:                                   # the column carries on down through whatever is below, to the floor
+            self._outline(layer, self._faces(*self._corner(vx, vz, y), levels=y)[1:], edge * 3 // 4, fill)
         self._cage(layer, vx, vz, y)
         self._pointer(layer, vx, vz, y)
         g.surface.blit(layer, (ox, oy))

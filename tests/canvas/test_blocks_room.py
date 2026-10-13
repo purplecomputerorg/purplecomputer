@@ -1,11 +1,12 @@
 """Blocks room: letters and Space drop blocks into the cursor's column, Enter
 walks the cursor's height up and starts over from the floor (not while held),
 Shift with Up or Down moves it either way, that height carries to other
-columns, Backspace eats down the column then steps left, a chord mixes the
-second key's color into the block the first one dropped, holding a letter or
-Space while arrowing lays a line, Tab flips to the back with arrows still
-moving the way they point, rows in front of the cursor's row fade when they hide it, and the
-Esc picker reaches the room with 4."""
+columns, a letter landing on a block paint-mixes into it, Backspace eats down
+the column then steps left, a chord mixes the second key's color into the
+block the first one dropped, holding a letter or Space while arrowing lays a
+line, Tab flips to the back with arrows still moving the way they point, rows
+in front of the cursor's row fade when they hide it, and the Esc picker reaches
+the room with 4."""
 
 import time
 
@@ -123,6 +124,30 @@ def test_backspace_steps_over_empty_columns_and_stops_at_the_edge():
         await press(app, "backspace")
         await press(app, "backspace")
         assert room._x == 0
+    run(go())
+
+
+def test_stacking_up_to_a_floating_block_mixes_into_it_then_carries_on():
+    async def go():
+        app, room = _blocks()
+        room._blocks[(5, 5, 2)] = get_key_color("b")
+        await type_text(app, "gg")
+        assert room._cursor_y() == 2
+        await press(app, "g")
+        assert room._blocks[(5, 5, 2)] == mix_colors_paint([get_key_color("b"), get_key_color("g")])
+        await press(app, "g")
+        assert (5, 5, 3) in room._blocks and len(room._blocks) == 4
+    run(go())
+
+
+def test_laying_a_line_mixes_into_blocks_at_its_height():
+    async def go():
+        app, room = _blocks()
+        room._blocks[(6, 5, 0)] = get_key_color("b")
+        await press(app, "right", char_held="g")
+        await press(app, "right", char_held="g")
+        assert room._blocks == {(6, 5, 0): mix_colors_paint([get_key_color("b"), get_key_color("g")]),
+                                (7, 5, 0): get_key_color("g")}
     run(go())
 
 

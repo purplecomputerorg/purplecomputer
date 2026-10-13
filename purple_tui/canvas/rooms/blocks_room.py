@@ -4,9 +4,10 @@ cursor's column. Enter walks the cursor up a level at a time, starting over
 at the floor after a pause at the top, and Shift with Up or Down moves it
 either way; that height stays put as the arrows move, for building sideways.
 Backspace takes blocks off the column top down from the cursor, then carries
-on into the column to its left. Holding one letter while pressing another
-mixes the two colors, and Backslash opens the color wheel. Tab flips to the
-back side."""
+on into the column to its left. A letter landing on a block, as a stack
+reaches a floating one or a line crosses one, paint-mixes into it, and
+holding one letter while pressing another mixes the two colors. Backslash
+opens the color wheel and Tab flips to the back side."""
 
 import math
 import time
@@ -59,6 +60,7 @@ class BlocksRoom:
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
         self._last = None             # (pos, key) of the block just dropped
+        self._next = None             # the cell above it, where the next letter goes, even onto a floating block
         self._fade_from = self._fade_start = self._fade_timer = None
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
@@ -118,7 +120,7 @@ class BlocksRoom:
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
         self._back = bool(state.get("back", False))
-        self._last = None
+        self._last = self._next = None
         self._changed()
 
     def clear(self):
@@ -135,14 +137,21 @@ class BlocksRoom:
         return [y for y in ys if (self._x, self._z, y) not in self._blocks]
 
     def _cursor_y(self) -> int:
-        """The first free level at or above the chosen height, so the cursor never sits inside a block."""
+        """Right above the block just dropped while still on its column, so a
+        stack never skips past a floating block; otherwise the first free level
+        at or above the chosen height."""
+        if self._next and self._next[:2] == (self._x, self._z):
+            return self._next[2]
         return next(iter(self._free(range(self._hover, HEIGHT))), HEIGHT)
 
-    def _place(self):
-        y = self._cursor_y()
+    def _place(self, y=None):
+        """A block at height y (the cursor's by default), paint-mixed into one already there."""
+        y = self._cursor_y() if y is None else y
         if y < HEIGHT:
-            self._blocks[(self._x, self._z, y)] = self._color
-            self._last = ((self._x, self._z, y), self._key)
+            pos = (self._x, self._z, y)
+            old = self._blocks.get(pos)
+            self._blocks[pos] = mix_colors_paint([old, self._color]) if old else self._color
+            self._last, self._next = (pos, self._key), (self._x, self._z, y + 1)
             self._changed()
 
     def _mix_into_last(self, held_key: str) -> bool:
@@ -157,7 +166,7 @@ class BlocksRoom:
 
     def _step_height(self, rise: int, wrap: bool = False):
         """The next free level up or down; with `wrap`, past the top starts over from the floor."""
-        y = self._cursor_y()
+        y, self._next = self._cursor_y(), None
         free = self._free(range(y + rise, HEIGHT if rise > 0 else -1, rise))
         if not free and wrap:
             free = self._free(range(HEIGHT))
@@ -168,6 +177,7 @@ class BlocksRoom:
         """Backspace: the highest block below the cursor goes, and the cursor
         drops to its spot. With none left there, step left and take that column's top."""
         below = [y for y in self._column() if y < self._cursor_y()]
+        self._next = None
         if not below:
             if not self._move("left"):
                 return
@@ -202,6 +212,7 @@ class BlocksRoom:
         if not (0 <= vx < WIDTH and 0 <= vz < DEPTH):
             return False
         self._x, self._z = self._view(vx, vz)
+        self._next = None
         return True
 
     def _view(self, x: int, z: int) -> tuple:
@@ -279,7 +290,7 @@ class BlocksRoom:
                 if not self._move(direction):
                     break
                 if laying:
-                    self._place()
+                    self._place(self._hover)        # a line keeps its height, mixing into blocks in its way
 
     # ---------------------------------------------------------------- geometry
     def _metrics(self):

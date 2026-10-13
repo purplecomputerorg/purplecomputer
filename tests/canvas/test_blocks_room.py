@@ -1,10 +1,10 @@
-"""Blocks room: letters and Space drop blocks on top of the cursor's column,
-Enter lifts the block just dropped and Backspace lowers then removes it (or
-moves the empty cursor when away from it), a chord mixes the second key's
-color into the block the first one dropped, holding a letter or Space while
-arrowing lays a line, Tab flips to the back with arrows still moving the way
-they point, blocks in front of the cursor's column turn see-through, and the
-Esc picker reaches the room with 4."""
+"""Blocks room: letters and Space drop blocks into the cursor's column, Enter
+walks the cursor's height up and back down and that height carries to other
+columns, Backspace eats down the column then steps left, a chord mixes the
+second key's color into the block the first one dropped, holding a letter or
+Space while arrowing lays a line, Tab flips to the back with arrows still
+moving the way they point, blocks in front of the cursor's column turn
+see-through, and the Esc picker reaches the room with 4."""
 
 import time
 
@@ -51,46 +51,64 @@ def test_column_stops_at_the_height_limit():
     run(go())
 
 
-def test_enter_lifts_the_block_just_dropped_and_backspace_lowers_then_removes_it():
+def test_enter_walks_up_to_the_top_then_back_down():
     async def go():
         app, room = _blocks()
         await press(app, "a")
-        await press(app, "enter")
-        await press(app, "enter")
-        assert list(room._blocks) == [(5, 5, 2)]
-        await press(app, "backspace")
-        assert list(room._blocks) == [(5, 5, 1)]
-        await press(app, "backspace")
-        await press(app, "backspace")
-        assert not room._blocks
+        expected = list(range(2, HEIGHT)) + list(range(HEIGHT - 2, 0, -1)) + [2, 3]   # never into the block at 0
+        heights = []
+        for _ in expected:
+            await press(app, "enter")
+            heights.append(room._cursor_y())
+        assert heights == expected
+        assert list(room._blocks) == [(5, 5, 0)]
     run(go())
 
 
-def test_lifted_height_carries_to_the_next_column():
+def test_chosen_height_stays_while_walking():
     async def go():
         app, room = _blocks()
-        await press(app, "a")
         for _ in range(3):
             await press(app, "enter")
+        await press(app, "right")
+        await press(app, "right")
+        await type_text(app, "qq")
+        assert (7, 5, 3) in room._blocks and (7, 5, 4) in room._blocks
         await press(app, "right", char_held="q")
-        await press(app, "right", char_held="q")
-        assert (6, 5, 3) in room._blocks and (7, 5, 3) in room._blocks
+        assert (8, 5, 3) in room._blocks
     run(go())
 
 
-def test_away_from_the_last_block_enter_and_backspace_move_the_cursor():
+def test_backspace_eats_down_from_the_cursor_then_steps_left():
     async def go():
         app, room = _blocks()
-        await type_text(app, "aa")
-        await press(app, "left")
-        await press(app, "enter")
-        await press(app, "enter")
-        assert room._cursor_y() == 2
-        await press(app, "backspace")
-        assert room._cursor_y() == 1 and len(room._blocks) == 2
+        await type_text(app, "aaa")
         await press(app, "right")
-        await press(app, "backspace")       # resting on a column: removes its top
-        assert len(room._blocks) == 1
+        await type_text(app, "aa")
+        await press(app, "enter")
+        await press(app, "enter")
+        await type_text(app, "b")               # floating above the column
+        await press(app, "enter")
+        await press(app, "enter")
+        await press(app, "enter")
+        await press(app, "backspace")           # the floating block first, the one nearest below
+        assert (6, 5, 4) not in room._blocks and room._cursor_y() == 4
+        await press(app, "backspace")
+        await press(app, "backspace")
+        assert not any(x == 6 for x, _, _ in room._blocks) and room._x == 6
+        await press(app, "backspace")           # column empty: on to the left, from its top
+        assert room._x == 5 and (5, 5, 2) not in room._blocks and len(room._blocks) == 2
+    run(go())
+
+
+def test_backspace_steps_over_empty_columns_and_stops_at_the_edge():
+    async def go():
+        app, room = _blocks()
+        room._x = 1
+        await press(app, "backspace")
+        await press(app, "backspace")
+        await press(app, "backspace")
+        assert room._x == 0
     run(go())
 
 
@@ -198,7 +216,7 @@ def test_timeline_round_trip():
         room.clear()
         assert not room.has_content() and room._hover == 0 and not room._back
         room.restore_timeline_state(state)
-        assert len(room._blocks) == 3 and room._hover == 3 and (room._x, room._z) == (5, 5) and room._back
+        assert len(room._blocks) == 3 and room._hover == 4 and (room._x, room._z) == (5, 5) and room._back
     run(go())
 
 

@@ -1,12 +1,13 @@
-"""Blocks room: letters and Space drop blocks into the cursor's column, Enter
-walks the cursor's height up and starts over from the floor (not while held),
-Shift with Up or Down moves it either way, that height carries to other
-columns, a letter landing on a block paint-mixes into it, Backspace eats down
-the column then steps left, a chord mixes the second key's color into the
-block the first one dropped, holding a letter or Space while arrowing lays a
-line, Tab flips to the back with arrows still moving the way they point, rows
-in front of the cursor's row fade when they hide it, and the Esc picker reaches
-the room with 4."""
+"""Blocks room: letters and Space drop blocks at the cursor and move on the
+way it last went (along an arrow, or up after Enter), Enter walks the
+cursor's height up and starts over from the floor (not while held), Shift
+with Up or Down moves it either way, that height carries to other columns, a
+letter landing on a block paint-mixes into it, Backspace eats down the column
+then steps left, a chord mixes the second key's color into the block the first
+one dropped, holding a letter or Space while arrowing lays a line, Tab flips
+to the back with arrows still moving the way they point, rows in front of the
+cursor's row fade when they hide it, and the Esc picker reaches the room with
+4."""
 
 import time
 
@@ -45,11 +46,28 @@ def test_held_letter_repeats_do_not_stack():
     run(go())
 
 
-def test_column_stops_at_the_height_limit():
+def test_at_the_top_letters_mix_into_the_top_block():
     async def go():
         app, room = _blocks()
-        await type_text(app, "a" * (HEIGHT + 3))
+        await type_text(app, "a" * HEIGHT)
+        assert room._cursor_y() == HEIGHT - 1
+        await press(app, "b")
         assert len(room._blocks) == HEIGHT
+        assert room._blocks[(5, 5, HEIGHT - 1)] == mix_colors_paint([get_key_color("a"), get_key_color("b")])
+        app._draw()                             # the cursor still draws, on the top block
+    run(go())
+
+
+def test_typing_builds_the_way_the_cursor_last_moved():
+    async def go():
+        app, room = _blocks()
+        await press(app, "right")
+        await type_text(app, "abc")
+        assert set(room._blocks) == {(6, 5, 0), (7, 5, 0), (8, 5, 0)} and room._x == 9
+        await press(app, "enter")               # first Enter only turns typing upward
+        assert room._cursor_y() == 0
+        await type_text(app, "ab")
+        assert {(9, 5, 0), (9, 5, 1)} <= set(room._blocks)
     run(go())
 
 
@@ -88,9 +106,9 @@ def test_chosen_height_stays_while_walking():
         await press(app, "right")
         await press(app, "right")
         await type_text(app, "qq")
-        assert (7, 5, 3) in room._blocks and (7, 5, 4) in room._blocks
+        assert (7, 5, 3) in room._blocks and (8, 5, 3) in room._blocks and room._x == 9
         await press(app, "right", char_held="q")
-        assert (8, 5, 3) in room._blocks
+        assert (10, 5, 3) in room._blocks
     run(go())
 
 
@@ -99,6 +117,7 @@ def test_backspace_eats_down_from_the_cursor_then_steps_left():
         app, room = _blocks()
         await type_text(app, "aaa")
         await press(app, "right")
+        await press(app, "enter")               # stack here rather than along
         await type_text(app, "aa")
         await press(app, "enter")
         await press(app, "enter")

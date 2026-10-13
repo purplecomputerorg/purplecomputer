@@ -1,8 +1,11 @@
 """Blocks room: a floor seen from above and in front, where every letter (or
 Space, in the current color) drops a block of its sticker color into the
-cursor's column. Enter walks the cursor up a level at a time, starting over
-at the floor after a pause at the top, and Shift with Up or Down moves it
-either way; that height stays put as the arrows move, for building sideways.
+cursor's column, then moves on the way the cursor last went: along an arrow,
+or up after Enter or Shift+Up/Down. Enter (once already going up) walks the
+cursor up a level at a time, starting over at the floor after a pause at the
+top, and Shift with Up or Down moves it either way; that height stays put as
+the arrows move, for building sideways. At the top, letters mix into the top
+block.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. A letter landing on a block, as a stack
 reaches a floating one or a line crosses one, paint-mixes into it, and
@@ -38,7 +41,8 @@ SHADOW_ALPHA = 140
 STEM_ALPHA, STEM_DARKEN = 150, 0.35   # the line from a floating block down to its shadow
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
-HINT = "Type to build! Enter or Shift+Up/Down for height."
+RISE = "rise"
+HINT = "Type to build the way you last moved! Enter goes up."
 MIX_HINT = "Hold two letters to mix"
 
 
@@ -73,7 +77,8 @@ class BlocksRoom:
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
         self._last = None             # (pos, key) of the block just dropped
-        self._next = None             # the cell above it, where the next letter goes, even onto a floating block
+        self._next = None             # where the next letter goes after it, even onto a floating block
+        self._dir = RISE              # the way typing builds: RISE, or the last arrow
         self._fade_from = self._fade_start = self._fade_timer = None
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
@@ -134,6 +139,7 @@ class BlocksRoom:
         self._hover = state.get("hover", 0)
         self._back = bool(state.get("back", False))
         self._last = self._next = None
+        self._dir = RISE
         self._changed()
 
     def clear(self):
@@ -150,22 +156,29 @@ class BlocksRoom:
         return [y for y in ys if (self._x, self._z, y) not in self._blocks]
 
     def _cursor_y(self) -> int:
-        """Right above the block just dropped while still on its column, so a
-        stack never skips past a floating block; otherwise the first free level
-        at or above the chosen height."""
+        """Where the block just dropped sent it, so a stack never skips past a
+        floating block; otherwise the first free level at or above the chosen
+        height. Never above the top level: a full column puts it on the top block."""
         if self._next and self._next[:2] == (self._x, self._z):
             return self._next[2]
-        return next(iter(self._free(range(self._hover, HEIGHT))), HEIGHT)
+        return next(iter(self._free(range(self._hover, HEIGHT))), HEIGHT - 1)
 
     def _place(self, y=None):
         """A block at height y (the cursor's by default), paint-mixed into one already there."""
         y = self._cursor_y() if y is None else y
-        if y < HEIGHT:
-            pos = (self._x, self._z, y)
-            old = self._blocks.get(pos)
-            self._blocks[pos] = mix_colors_paint([old, self._color]) if old else self._color
-            self._last, self._next = (pos, self._key), (self._x, self._z, y + 1)
-            self._changed()
+        pos = (self._x, self._z, y)
+        old = self._blocks.get(pos)
+        self._blocks[pos] = mix_colors_paint([old, self._color]) if old else self._color
+        self._last, self._next = (pos, self._key), (self._x, self._z, min(y + 1, HEIGHT - 1))
+        self._changed()
+
+    def _build(self):
+        """A typed block, then on to the next spot the way the cursor last went, at the same height."""
+        y = self._cursor_y()
+        self._place(y)
+        if self._dir != RISE:
+            self._move(self._dir)
+            self._next = (self._x, self._z, y)
 
     def _mix_into_last(self, held_key: str) -> bool:
         """A chord: the block the held key just dropped takes the new color mixed in."""
@@ -187,9 +200,9 @@ class BlocksRoom:
             self._hover = free[0]
 
     def _erase(self):
-        """Backspace: the highest block below the cursor goes, and the cursor
+        """Backspace: the highest block at or below the cursor goes, and the cursor
         drops to its spot. With none left there, step left and take that column's top."""
-        below = [y for y in self._column() if y < self._cursor_y()]
+        below = [y for y in self._column() if y <= self._cursor_y()]
         self._next = None
         if not below:
             if not self._move("left"):
@@ -275,11 +288,13 @@ class BlocksRoom:
             return
         held = brush_for_key(action.char_held) if action.char_held else None
         if not (held and self._mix_into_last(held[0])):
-            self._place()
+            self._build()
 
     def _control(self, name: str, is_repeat: bool = False):
         if name == "space":
-            self._place()
+            self._build()
+        elif name == "enter" and self._dir != RISE:
+            self._dir = RISE                            # first, just turn typing upward
         elif name == "enter":
             self._step_height(1, wrap=not is_repeat)    # a held Enter stops at the top
         elif name == "backspace":
@@ -289,8 +304,10 @@ class BlocksRoom:
 
     def _navigate(self, action):
         if action.shift_held and action.direction in ("up", "down"):
+            self._dir = RISE
             self._step_height(STEPS[action.direction][1])
             return
+        self._dir = action.direction
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
             self._arrow_repeat_count += 1
         else:
@@ -304,6 +321,7 @@ class BlocksRoom:
                     break
                 if laying:
                     self._place(self._hover)        # a line keeps its height, mixing into blocks in its way
+                    self._next = (self._x, self._z, self._hover)
 
     # ---------------------------------------------------------------- geometry
     def _metrics(self):
@@ -414,7 +432,7 @@ class BlocksRoom:
     def _front_covers_cursor(self) -> bool:
         """Whether a nearer block sits over the landing block (a hidden shadow or thread doesn't count)."""
         vx, vz = self._view(self._x, self._z)
-        spot = self._sprite_rect(vx, vz, min(self._cursor_y(), HEIGHT - 1))
+        spot = self._sprite_rect(vx, vz, self._cursor_y())
         spot.inflate_ip(2 * CAGE_PAD * self._c, 2 * CAGE_PAD * self._c)
         return any(b[1] < vz and self._sprite_rect(*b[:3]).colliderect(spot) for b in self._placed())
 
@@ -579,17 +597,16 @@ class BlocksRoom:
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
         layer = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
-        column = self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT - min(y + 1, HEIGHT))
+        column = self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT - 1 - y)
         fill, edge = (40, 150) if self._blink_on else (16, 70)
         self._outline(layer, column, edge, fill)
-        if y < HEIGHT:
-            self._shadow(layer, vx, vz, self._ground(y), y, self._color)
-            layer.blit(self._sprite(self._color, 170 if self._blink_on else 100, vz), self._sprite_rect(vx, vz, y))
+        self._shadow(layer, vx, vz, self._ground(y), y, self._color)
+        layer.blit(self._sprite(self._color, 170 if self._blink_on else 100, vz), self._sprite_rect(vx, vz, y))
         layer.blit(front, (0, 0))
         self._ceiling_patch(layer, vx, vz)
         self._outline(layer, column, edge // 3)
-        if y < HEIGHT:
-            self._cage(layer, vx, vz, y)
+        self._cage(layer, vx, vz, y)
+        self._pointer(layer, vx, vz, y)
         g.surface.blit(layer, (ox, oy))
 
     def _outline(self, layer, polys, edge, fill=0):
@@ -618,3 +635,18 @@ class BlocksRoom:
                 if sum(m != n for m, n in zip(p, q)) == 1:
                     ends = [self._corner(vx + a, vz + b, y + h) for a, b, h in (p, q)]
                     pygame.draw.line(layer, (*rgb(P.TEXT), 90 if hidden in (p, q) else 230), *ends, 1 if hidden in (p, q) else 2)
+
+    def _pointer(self, layer, vx, vz, y):
+        """An arrow from the top of the wire box the way the next typed block goes."""
+        dx, dz, dy = (0, 0, 1.2) if self._dir == RISE else (*STEPS[self._dir], 0)
+        top = y + 1 + CAGE_PAD
+        start = self._corner(vx + 0.5, vz + 0.5, top)
+        end = self._corner(vx + 0.5 + 1.3 * dx, vz + 0.5 + 1.3 * dz, top + dy)
+        ux, uy = end[0] - start[0], end[1] - start[1]
+        n = math.hypot(ux, uy) or 1
+        ux, uy, head = ux / n, uy / n, max(5, self._c * 0.32)
+        tip = [end, (end[0] - head * (ux - uy * 0.6), end[1] - head * (uy + ux * 0.6)),
+               (end[0] - head * (ux + uy * 0.6), end[1] - head * (uy - ux * 0.6))]
+        width = max(2, round(self._c * 0.08))
+        pygame.draw.line(layer, (*rgb(P.TEXT), 240), start, (end[0] - ux * head * 0.5, end[1] - uy * head * 0.5), width)
+        pygame.draw.polygon(layer, (*rgb(P.TEXT), 240), tip)

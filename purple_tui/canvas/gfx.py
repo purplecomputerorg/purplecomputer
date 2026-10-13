@@ -28,6 +28,7 @@ import pygame  # noqa: E402
 from ..palette import NAMED_COLORS, rgb
 
 FONT_DIR = Path(__file__).parent / "fonts"
+IMAGE_DIR = Path(__file__).parent / "images"
 FACES = {
     "sans": "IBMPlexSans-Regular.ttf",
     "sans-bold": "IBMPlexSans-SemiBold.ttf",
@@ -192,6 +193,7 @@ class Gfx:
         self._fonts = {}
         self._text = _Cache()
         self._emoji = _Cache()
+        self._images = _Cache()
         self._coverage: dict = {}
         self._probes: dict = {}
         self._emoji_font = self._load_emoji_font()
@@ -248,6 +250,14 @@ class Gfx:
             size = (max(1, round(native.get_width() * scale)), target_h)
             return pygame.transform.smoothscale(native, size)
         return self._emoji.get_or((text, px), make)
+
+    def image(self, name: str, height: int) -> pygame.Surface:
+        """A picture from images/, scaled to height (cached)."""
+        def make():
+            native = pygame.image.load(str(IMAGE_DIR / name))
+            w = max(1, round(native.get_width() * height / native.get_height()))
+            return pygame.transform.smoothscale(native, (w, height))
+        return self._images.get_or((name, height), make)
 
     def text(self, text: str, px: int, face: str = "sans", color="#ffffff", _raw=False, track: float = 0) -> pygame.Surface:
         """One line of text as a surface (cached). Emoji inside go through the

@@ -199,6 +199,16 @@ def test_rows_in_front_fade_only_when_they_hide_the_landing_spot():
     run(go())
 
 
+def test_a_front_block_over_only_the_thread_stays_solid():
+    async def go():
+        app, room = _blocks()
+        room._blocks.update({(6, 2, y): "#ff0000" for y in range(4)})
+        room._z, room._hover = 6, 8
+        app._draw()
+        assert room._front.get_bounding_rect().w and room._front.get_alpha() == 255
+    run(go())
+
+
 def test_flip_keeps_blocks_and_arrows_follow_the_screen():
     async def go():
         app, room = _blocks()

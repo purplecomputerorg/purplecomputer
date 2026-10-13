@@ -11,6 +11,7 @@ opens the color wheel and Tab flips to the back side."""
 
 import math
 import time
+from functools import cache
 
 import pygame
 
@@ -30,14 +31,26 @@ FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
 TURN_S = 0.5
 TURN_MAX_BLOCKS = 400
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
-FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this when they hide the landing spot
+FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this when they hide the landing block
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the floor color
 SHADOW_ALPHA = 140
+STEM_ALPHA, STEM_DARKEN = 150, 0.35   # the line from a floating block down to its shadow
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 HINT = "Type to build! Enter or Shift+Up/Down for height."
 MIX_HINT = "Hold two letters to mix"
+
+
+@cache
+def haze(color, row: int) -> tuple:
+    return mix(color, CANVAS_BG, DEPTH_FADE * row / (DEPTH - 1))
+
+
+@cache
+def tint(color, toward: str, t: float) -> tuple:
+    """`mix`, remembered: the half turn asks for the same few shades every frame."""
+    return mix(color, toward, t)
 
 
 class BlocksRoom:
@@ -334,7 +347,7 @@ class BlocksRoom:
                 dz, hy, sx, _ = self._metrics()
                 s = pygame.Surface((self._c + sx + 1, dz + hy + 1), pygame.SRCALPHA)
                 if row is not None:
-                    color = mix(color, CANVAS_BG, DEPTH_FADE * row / (DEPTH - 1))
+                    color = haze(color, row)
                 for poly, shade in zip(self._faces(0, dz), (mix(color, "#ffffff", 0.22), rgb(color), mix(color, "#000000", 0.32))):
                     pygame.draw.polygon(s, shade, poly)
                     pygame.draw.polygon(s, rgb(P.LINE), poly, 1)
@@ -350,7 +363,7 @@ class BlocksRoom:
             pygame.draw.polygon(s, (0, 0, 0, SHADOW_ALPHA), self._faces(0, dz + gap * hy)[0])
             cx, cy = (self._c + sx) / 2, dz / 2 + gap * hy
             if gap:
-                pygame.draw.line(s, (*rgb(color), 220), (cx, cy), (cx, cy - gap * hy), 2)
+                pygame.draw.line(s, (*mix(color, "#000000", STEM_DARKEN), STEM_ALPHA), (cx, cy), (cx, cy - gap * hy), 2)
             self._sprites[key] = s
         return self._sprites[key]
 
@@ -399,10 +412,9 @@ class BlocksRoom:
         return self._scene, self._front
 
     def _front_covers_cursor(self) -> bool:
-        """Whether a nearer block sits over the landing block, its shadow or the thread between them."""
+        """Whether a nearer block sits over the landing block (a hidden shadow or thread doesn't count)."""
         vx, vz = self._view(self._x, self._z)
-        y = min(self._cursor_y(), HEIGHT - 1)
-        spot = self._sprite_rect(vx, vz, y).union(self._sprite_rect(vx, vz, self._ground(y) - 1))
+        spot = self._sprite_rect(vx, vz, min(self._cursor_y(), HEIGHT - 1))
         spot.inflate_ip(2 * CAGE_PAD * self._c, 2 * CAGE_PAD * self._c)
         return any(b[1] < vz and self._sprite_rect(*b[:3]).colliderect(spot) for b in self._placed())
 
@@ -479,9 +491,9 @@ class BlocksRoom:
     def _draw_turning(self, g, ox, oy, p):
         """One frame of the half turn: the world spun about the floor's center
         and drawn through the same slanted projection as the resting view, so
-        both ends land exactly on the front and back pictures. Flat faces, no
-        checkerboard, since nothing holds still long enough to see it. Zooms out
-        mid-turn so the long floor, end-on, still fits."""
+        both ends land exactly on the front and back pictures, checkerboard,
+        haze, shadows and all; only the cursor sits it out. Zooms out mid-turn
+        so the long floor, end-on, still fits."""
         dz, hy, sx, slab = self._metrics()
         c = self._c
         angle = math.pi * ((p * p * (3 - 2 * p)) + (0 if self._back else 1))
@@ -507,7 +519,7 @@ class BlocksRoom:
                              (0, 1, ((1, 1), (0, 1))), (-1, 0, ((0, 1), (0, 0)))):
             rnx, rnz = nx * cos - nz * sin, nx * sin + nz * cos
             if rnz - ROW_SKEW * rnx < 0:
-                sides.append((quad, 0.32 * max(0.0, rnx)))
+                sides.append((quad, round(0.32 * max(0.0, rnx), 2)))   # rounded so `tint` remembers few shades
 
         def box(x0, y0, z0, x1, y1, z1, top, side, seam=None):
             pts = []
@@ -521,21 +533,42 @@ class BlocksRoom:
                     pygame.draw.polygon(g.surface, seam, poly, 1)
 
         slab_bg, seam = mix(CANVAS_BG, "#000000", 0.4), rgb(P.LINE)
-        box(0, -SLAB / BLOCK_RISE, 0, WIDTH, 0, DEPTH, rgb(CANVAS_BG), lambda dark: mix(slab_bg, "#000000", dark))
-        shades: dict = {}
-
-        def shade(color, dark):
-            if (color, dark) not in shades:
-                shades[(color, dark)] = mix(color, "#000000", dark)
-            return shades[(color, dark)]
-
-        def depth(b):
-            (x, z, y), _ = b
+        box(0, -SLAB / BLOCK_RISE, 0, WIDTH, 0, DEPTH, rgb(CANVAS_BG), lambda dark: tint(slab_bg, "#000000", dark))
+        tiles = rgb(CANVAS_BG), rgb(CANVAS_ALT)
+        for x in range(WIDTH):
+            for z in range(DEPTH):
+                pygame.draw.polygon(g.surface, tiles[(x + z) % 2], [at(x, 0, z), at(x + 1, 0, z), at(x + 1, 0, z + 1), at(x, 0, z + 1)])
+        def depth(x, z, y):
             dx, dz_ = x + 0.5 - cx, z + 0.5 - cz
             return (dx * sin + dz_ * cos) - ROW_SKEW * (dx * cos - dz_ * sin) - y * ROW_DEPTH / BLOCK_RISE
 
-        for (x, z, y), color in sorted(self._blocks.items(), key=depth, reverse=True):
-            box(x, y, z, x + 1, y + 1, z + 1, mix(color, "#ffffff", 0.22), lambda dark, col=color: shade(col, dark), seam)
+        def row(x, z):
+            """The view row a world cell is passing through, for its haze."""
+            return min(DEPTH - 1, max(0, round((x + 0.5 - cx) * sin + (z + 0.5 - cz) * cos + cz - 0.5)))
+
+        def top(x, z, y):
+            """Color of the surface at height y over (x, z): a block's top face or a floor tile."""
+            below = self._blocks.get((x, z, y - 1))
+            return tint(haze(below, row(x, z)), "#ffffff", 0.22) if below else tiles[(x + z) % 2]
+
+        def block(x, z, y, color):
+            hazed = haze(color, row(x, z))
+            box(x, y, z, x + 1, y + 1, z + 1, tint(hazed, "#ffffff", 0.22), lambda dark: tint(hazed, "#000000", dark), seam)
+
+        def shadow(x, z, y, ground, color):
+            pygame.draw.polygon(g.surface, tint(top(x, z, ground), "#000000", SHADOW_ALPHA / 255),
+                                [at(x, ground, z), at(x + 1, ground, z), at(x + 1, ground, z + 1), at(x, ground, z + 1)])
+            line = tint(tint(haze(color, row(x, z)), "#000000", STEM_DARKEN), CANVAS_BG, 1 - STEM_ALPHA / 255)
+            pygame.draw.line(g.surface, line, at(x + 0.5, ground, z + 0.5), at(x + 0.5, y, z + 0.5), 2)
+
+        items = []
+        for (x, z, y), color in self._blocks.items():
+            items.append((depth(x, z, y), block, (x, z, y, color)))
+            if y and (x, z, y - 1) not in self._blocks:
+                ground = max((h + 1 for h in range(y) if (x, z, h) in self._blocks), default=0)
+                items.append((depth(x, z, ground - 1) - 1e-6, shadow, (x, z, y, ground, color)))
+        for _, paint, args in sorted(items, key=lambda i: i[0], reverse=True):
+            paint(*args)
 
     def _draw_cursor(self, g, ox, oy, front):
         """A blinking glass column from the ceiling down onto the see-through

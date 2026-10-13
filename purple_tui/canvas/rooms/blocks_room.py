@@ -30,7 +30,10 @@ TURN_S = 0.5
 TURN_MAX_BLOCKS = 400
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
 FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this, so its row is the front one
-PLATE_ALPHA = {0: 60, 1: 26, 2: 10}     # the cursor's height, by squared distance from its column
+CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
+DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the floor color
+SHADOW_ALPHA = 140
+CAGE_PAD = 0.18               # in cells: the wire box around the landing block
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 HINT = "Type to build! Enter or Shift+Up/Down for height."
 MIX_HINT = "Hold two letters to mix"
@@ -309,20 +312,32 @@ class BlocksRoom:
         return pygame.Rect(px, py - dz, self._c + sx + 1, dz + hy + 1)
 
     # ---------------------------------------------------------------- drawing
-    def _sprite(self, color: str, alpha: int = 255) -> pygame.Surface:
-        key = (color, self._c, alpha)
+    def _sprite(self, color: str, alpha: int = 255, row=None) -> pygame.Surface:
+        """A block; with `row`, hazed toward the floor color the farther back it sits."""
+        key = (color, self._c, alpha, row)
         if key not in self._sprites:
             if alpha < 255:
-                s = self._sprite(color).copy()
+                s = self._sprite(color, row=row).copy()
                 s.set_alpha(alpha)
             else:
                 dz, hy, sx, _ = self._metrics()
                 s = pygame.Surface((self._c + sx + 1, dz + hy + 1), pygame.SRCALPHA)
+                if row is not None:
+                    color = mix(color, CANVAS_BG, DEPTH_FADE * row / (DEPTH - 1))
                 for poly, shade in zip(self._faces(0, dz), (mix(color, "#ffffff", 0.22), rgb(color), mix(color, "#000000", 0.32))):
                     pygame.draw.polygon(s, shade, poly)
                     pygame.draw.polygon(s, rgb(P.LINE), poly, 1)
             self._sprites[key] = s
         return self._sprites[key]
+
+    def _shadow_sprite(self) -> pygame.Surface:
+        """A dark square laid on a block's top face, positioned like that block's sprite."""
+        if (None, self._c) not in self._sprites:
+            dz, hy, sx, _ = self._metrics()
+            s = pygame.Surface((self._c + sx + 1, dz + hy + 1), pygame.SRCALPHA)
+            pygame.draw.polygon(s, (0, 0, 0, SHADOW_ALPHA), self._faces(0, dz)[0])
+            self._sprites[(None, self._c)] = s
+        return self._sprites[(None, self._c)]
 
     def _scene_size(self) -> tuple:
         dz, hy, sx, slab = self._metrics()
@@ -375,10 +390,18 @@ class BlocksRoom:
     def _composite(self) -> pygame.Surface:
         return self._stack(self._scene_surfaces()[0].copy(), [b for b in self._placed() if b[1] < self._scene_row])
 
-    def _stack(self, s, placed) -> pygame.Surface:
-        """Far rows first, left to right, bottom up, so nearer faces paint over farther ones."""
-        for vx, vz, y, color in sorted(placed, key=lambda b: (-b[1], b[0], b[2])):
-            s.blit(self._sprite(color), self._sprite_rect(vx, vz, y))
+    def _stack(self, s, placed, haze: bool = True) -> pygame.Surface:
+        """Far rows first, left to right, bottom up, so nearer faces paint over
+        farther ones. A floating block's shadow goes right after whatever it falls on."""
+        occupied = {b[:3] for b in placed}
+        items = []
+        for vx, vz, y, color in placed:
+            items.append(((-vz, vx, y, 1), self._sprite(color, row=vz if haze else None), (vx, vz, y)))
+            if y and (vx, vz, y - 1) not in occupied:
+                ground = max((h + 1 for h in range(y) if (vx, vz, h) in occupied), default=0)
+                items.append(((-vz, vx, ground - 1, 2), self._shadow_sprite(), (vx, vz, ground - 1)))
+        for _, sprite, cell in sorted(items, key=lambda i: i[0]):
+            s.blit(sprite, self._sprite_rect(*cell))
         return s
 
     def _fit(self, w, h) -> int:
@@ -392,7 +415,7 @@ class BlocksRoom:
         self._c, self._sprites = self._fit(*size), {}
         try:
             floor = self._build_floor(paper.WHITE, "#f1f1f1", "#e4e4e4", "#c8c8c8", "#b4b4b4")
-            return self._stack(floor, self._placed())
+            return self._stack(floor, self._placed(), haze=False)
         finally:
             self._c, self._sprites = screen
 
@@ -487,39 +510,55 @@ class BlocksRoom:
             box(x, y, z, x + 1, y + 1, z + 1, mix(color, "#ffffff", 0.22), lambda dark, col=color: shade(col, dark), seam)
 
     def _draw_cursor(self, g, ox, oy, front):
-        """A blinking glass column over the cursor's cell, the landing block's
-        shadow on whatever it would land on, a plate fading out around it at
-        its height, and the see-through block itself; then the faded rows in
-        front, and the landing block's outline on top of everything."""
+        """A blinking glass column from the ceiling down onto the see-through
+        landing block, with its shadow on whatever it would land on; then the
+        faded rows in front; then a patch of ceiling fading out around the
+        column, the column's edges faint through it, and a wire box around the
+        landing block on top of everything."""
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
         layer = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
+        column = self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT - min(y + 1, HEIGHT))
         fill, edge = (40, 150) if self._blink_on else (16, 70)
-        for poly in self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT):
-            pygame.draw.polygon(layer, (*rgb(self._color), fill), poly)
-            pygame.draw.polygon(layer, (*rgb(P.TEXT), edge), poly, 1)
+        self._outline(layer, column, edge, fill)
         if y < HEIGHT:
             self._shadow(layer, vx, vz, y)
-            self._plate(layer, vx, vz, y)
-            layer.blit(self._sprite(self._color, 170 if self._blink_on else 100), self._sprite_rect(vx, vz, y))
+            layer.blit(self._sprite(self._color, 170 if self._blink_on else 100, vz), self._sprite_rect(vx, vz, y))
         layer.blit(front, (0, 0))
+        self._ceiling_patch(layer, vx, vz)
+        self._outline(layer, column, edge // 3)
         if y < HEIGHT:
-            for poly in self._faces(*self._corner(vx, vz, y + 1)):
-                pygame.draw.polygon(layer, rgb(P.TEXT), poly, 2)
+            self._cage(layer, vx, vz, y)
         g.surface.blit(layer, (ox, oy))
 
-    def _shadow(self, layer, vx, vz, y):
-        """A dark square on the floor or block under the landing spot, and a thread down to it when it floats."""
-        ground = max((h + 1 for h in self._column() if h < y), default=0)
-        top, _, _ = self._faces(*self._corner(vx, vz, ground))
-        pygame.draw.polygon(layer, (0, 0, 0, 110), top)
-        if ground < y:
-            cx = (top[0][0] + top[2][0]) / 2
-            cy = (top[0][1] + top[2][1]) / 2
-            pygame.draw.line(layer, (*rgb(P.TEXT), 110), (cx, cy), (cx, cy - (y - ground) * self._metrics()[1]), 1)
+    def _outline(self, layer, polys, edge, fill=0):
+        for poly in polys:
+            if fill:
+                pygame.draw.polygon(layer, (*rgb(self._color), fill), poly)
+            pygame.draw.polygon(layer, (*rgb(P.TEXT), edge), poly, 1)
 
-    def _plate(self, layer, vx, vz, y):
+    def _shadow(self, layer, vx, vz, y):
+        """The landing block's shadow, and a thread down to it when it floats."""
+        ground = max((h + 1 for h in self._column() if h < y), default=0)
+        layer.blit(self._shadow_sprite(), self._sprite_rect(vx, vz, ground - 1))
+        if ground < y:
+            hy = self._metrics()[1]
+            cx, cy = self._corner(vx + 0.5, vz + 0.5, ground)
+            pygame.draw.line(layer, (*rgb(P.TEXT), 110), (cx, cy), (cx, cy - (y - ground) * hy), 1)
+
+    def _ceiling_patch(self, layer, vx, vz):
         cells = [(dx, dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1) if 0 <= vx + dx < WIDTH and 0 <= vz + dz < DEPTH]
         for dx, dz in cells:
-            top, _, _ = self._faces(*self._corner(vx + dx, vz + dz, y))
-            pygame.draw.polygon(layer, (*rgb(P.TEXT), PLATE_ALPHA[dx * dx + dz * dz]), top)
+            top, _, _ = self._faces(*self._corner(vx + dx, vz + dz, HEIGHT))
+            pygame.draw.polygon(layer, (*rgb(P.TEXT), CEILING_ALPHA[dx * dx + dz * dz]), top)
+
+    def _cage(self, layer, vx, vz, y):
+        """Twelve wire edges a little outside the landing block, the three hidden ones fainter."""
+        lo, hi = -CAGE_PAD, 1 + CAGE_PAD
+        corners = [(a, b, h) for a in (lo, hi) for b in (lo, hi) for h in (lo, hi)]
+        hidden = (lo, hi, lo)                           # back, left, bottom: behind the block
+        for i, p in enumerate(corners):
+            for q in corners[i + 1:]:
+                if sum(m != n for m, n in zip(p, q)) == 1:
+                    ends = [self._corner(vx + a, vz + b, y + h) for a, b, h in (p, q)]
+                    pygame.draw.line(layer, (*rgb(P.TEXT), 90 if hidden in (p, q) else 230), *ends, 1 if hidden in (p, q) else 2)

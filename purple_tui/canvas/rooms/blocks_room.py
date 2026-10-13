@@ -605,8 +605,8 @@ class BlocksRoom:
         landing block, with its shadow on whatever it would land on; then the
         faded rows in front; then a patch of ceiling fading out around the
         column, the column's edges faint through it, its outline on down to the
-        floor through any blocks below, and a wire box around the landing block
-        on top of everything."""
+        floor through any blocks below, a ring around each block in it, and a
+        wire box around the landing block on top of everything."""
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
         layer = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
@@ -622,6 +622,9 @@ class BlocksRoom:
         self._outline(layer, column, edge // 3)
         if y:                                   # the column carries on down through whatever is below, to the floor
             self._outline(layer, self._faces(*self._corner(vx, vz, y), levels=y)[1:], edge * 3 // 4, fill)
+        for h in self._column():                # its blocks, ringed so they read as part of it among many columns
+            for poly in self._faces(*self._corner(vx, vz, h + 1)):
+                pygame.draw.polygon(layer, (*rgb(P.TEXT), 220 if self._blink_on else 120), poly, 2)
         self._cage(layer, vx, vz, y)
         self._pointer(layer, vx, vz, y)
         g.surface.blit(layer, (ox, oy))

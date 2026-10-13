@@ -1,13 +1,15 @@
 """Art room: a grid of square cells. Every letter paints its sticker color,
-Backslash opens the color wheel, Space puts the pen down so arrows draw,
+Backslash opens the color wheel, Space puts the brush down so arrows draw,
 holding Backspace makes arrows erase, Tab switches to writing letters, and
 hold Space opens the Logo-style code line."""
 
+import math
 import time
 
 import pygame
 
 from ... import palette as P
+from ...audio import play_safe
 from ...code_runner import ArtCodeRunner
 from ...constants import ICON_ROBOT
 from ...color_mixing import mix_colors_paint
@@ -26,12 +28,15 @@ HOLD_ACCEL_MULTIPLIER = 6
 CANVAS_BG = "#221440"
 CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
 TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
+BRUSH_LEAN = (0.5, -0.866)          # handle up and to the right, the way a right hand holds it
+BRUSH_FLOAT = 0.7                   # cells the lifted brush hovers above its shadow
+LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three quick frames
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
 HINTS = {
     "littles": "Type to paint!",
-    "pen": "Pen is down! Arrows paint a trail. Space lifts the pen.",
+    "pen": "Brush is down! Arrows paint a trail. Space lifts the brush.",
     "erase": "Erasing! Arrows clear a trail.",
-    "paint": "Type to paint! Hold two letters to mix. Space puts the pen down.",
+    "paint": "Type to paint! Hold two letters to mix. Space puts the brush down.",
     "write": "Type to write! Arrow keys move. Enter for a new line.",
 }
 
@@ -53,34 +58,84 @@ def brush_for_key(char: str):
     return None
 
 
-def _brush_tip(c: int, color: str, tip, arrow: bool) -> pygame.Surface:
-    """A 2c square centered on the cursor cell, drawn 4x and smoothed down:
-    tip is "ring" (pen up), "dot" (pen down), "erase" (a hollow square over
-    the cell) or None; arrow adds a chevron pointing right."""
+def _brush_shape(at, length: float, width: float, blunt: float, u: float) -> tuple:
+    """Bristles, ferrule and handle as polygons, tip first along the lean."""
+    n = 10
+    side = [(length * i / n, blunt + (width / 2 - blunt) * (i / n) ** 0.6) for i in range(n + 1)]
+    bristles = [at(a, w) for a, w in side] + [at(a, -w) for a, w in reversed(side)]
+    f0, f1, h1 = length, length + 0.3 * u, length + 1.55 * u
+    ferrule = [at(f0, width * 0.42), at(f1, width * 0.36), at(f1, -width * 0.36), at(f0, -width * 0.42)]
+    handle = [at(f1, 0.15 * u), at(h1, 0.1 * u), at(h1, -0.1 * u), at(f1, -0.15 * u)]
+    return bristles, ferrule, handle, at(h1, 0)
+
+
+def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame.Surface:
+    """A 6c square centered on the cursor cell, drawn 4x and smoothed down.
+    tip "brush" is a paintbrush in the brush color: lift 1 floats it above a
+    shadow on the cell (pen up), lift 0 presses its splayed bristles into the
+    cell (pen down). "erase" is a hollow square over the cell. arrow_turn, when
+    not None, adds a chevron turned that many degrees from pointing right."""
     s = 4
-    size, mid = 2 * c * s, c * s
-    surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    r = round(c * s * (0.42 if tip == "dot" else 0.38))
-    edge = max(s, round(c * s * 0.05))
-    band = max(2 * s, round(c * s * 0.13))
-    if tip == "ring":
-        pygame.draw.circle(surf, rgb(TIP_EDGE), (mid, mid), r + edge, band + 2 * edge)
-        pygame.draw.circle(surf, rgb(color), (mid, mid), r, band)
-    elif tip == "dot":
-        pygame.draw.circle(surf, rgb(TIP_EDGE), (mid, mid), r + edge)
-        pygame.draw.circle(surf, rgb(P.TEXT), (mid, mid), r)
-        pygame.draw.circle(surf, rgb(color), (mid, mid), r - max(s, round(c * s * 0.08)))
+    u = c * s
+    mid = 3 * u
+    surf = pygame.Surface((2 * mid, 2 * mid), pygame.SRCALPHA)
+    edge = max(s, round(u * 0.06))
+    if tip == "brush":
+        press = 1 - lift
+        if lift:
+            shadow = pygame.Rect(0, 0, round(u * 0.8), round(u * 0.36))
+            shadow.center = (mid, mid + round(u * 0.15))
+            pygame.draw.ellipse(surf, (*rgb(TIP_EDGE), round(200 * lift)), shadow)
+        tx, ty = mid, mid + u * (0.3 - BRUSH_FLOAT * lift)
+        (dx, dy), (px, py) = BRUSH_LEAN, (-BRUSH_LEAN[1], BRUSH_LEAN[0])
+        at = lambda a, b: (tx + dx * a + px * b, ty + dy * a + py * b)
+        bristles, ferrule, handle, end = _brush_shape(
+            at, u * (1.0 - 0.2 * press), u * (0.55 + 0.3 * press), u * 0.12 * press, u)
+        r_end = round(u * 0.12)
+        pygame.draw.circle(surf, rgb(TIP_EDGE), end, r_end + edge)
+        parts = ((handle, P.ACCENT), (ferrule, P.TEXT), (bristles, color))
+        for poly, _ in parts:
+            pygame.draw.polygon(surf, rgb(TIP_EDGE), poly, 2 * edge)
+        for poly, fill in parts:
+            pygame.draw.polygon(surf, rgb(fill), poly)
+        pygame.draw.circle(surf, rgb(P.ACCENT), end, r_end)
     elif tip == "erase":
-        box = pygame.Rect(0, 0, c * s, c * s)
+        box = pygame.Rect(0, 0, u, u)
         box.center = (mid, mid)
+        band = max(2 * s, round(u * 0.13))
         pygame.draw.rect(surf, rgb(TIP_EDGE), box.inflate(2 * edge, 2 * edge), band + 2 * edge)
         pygame.draw.rect(surf, rgb(P.TEXT), box, band)
-    if arrow:
-        x0, h = mid + max(r, round(c * s * 0.42)) + edge, round(c * s * 0.24)
-        tri = [(x0, mid - h), (x0 + round(h * 1.3), mid), (x0, mid + h)]
-        pygame.draw.polygon(surf, rgb(color), tri)
+    if arrow_turn is not None:
+        x0, h = round(u * 0.65), round(u * 0.32)
+        a = math.radians(arrow_turn)
+        turn = lambda x, y: (mid + x * math.cos(a) + y * math.sin(a), mid - x * math.sin(a) + y * math.cos(a))
+        tri = [turn(x0, -h), turn(x0 + h * 1.3, 0), turn(x0, h)]
+        fill = color if tip else P.TEXT
+        pygame.draw.polygon(surf, rgb(fill), tri)
         pygame.draw.polygon(surf, rgb(TIP_EDGE), tri, edge)
-    return pygame.transform.smoothscale(surf, (2 * c, 2 * c))
+    return pygame.transform.smoothscale(surf, (6 * c, 6 * c))
+
+
+def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
+    """The cursor's brush, cropped and sized for the header beside Paint."""
+    c = max(3, round(h / 2.6))
+    surf = _brush_tip(c, color, "brush", None, lift)
+    return surf.subsurface(round(2.5 * c), 0, round(2.2 * c), round(3.6 * c)).copy()
+
+
+_brush_sounds: dict = {}
+
+
+def _play_brush_sound(down: bool):
+    """A low marimba tok when the brush touches down, a higher one as it lifts."""
+    if down not in _brush_sounds:
+        from .music_room import _find_sound, _load, _sounds_path
+        path = _find_sound(_sounds_path() / "marimba", "c4" if down else "g4")
+        _brush_sounds[down] = sound = _load(path) if path else None
+        if sound:
+            sound.set_volume(0.25)
+    if _brush_sounds[down]:
+        play_safe(_brush_sounds[down])
 
 
 class ArtRoom:
@@ -105,6 +160,8 @@ class ArtRoom:
         self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""
         self._pen_down = False
+        self._lift = 1.0              # the brush's height: 1 up, 0 pressed down; eases on Space
+        self._lift_timer = None
         self._code_mode = False
         self._heading = "right"
         self._use_heading_cursor = False
@@ -282,8 +339,18 @@ class ArtRoom:
         self._pen_down = down
         if down:
             self._paint_at_cursor()
+        if self._lift_timer is None:
+            self._lift_timer = self.app.timers.every(LIFT_FRAME, self._step_lift)
         self._restart_blink()
         self._post_paint_mode_changed()
+
+    def _step_lift(self):
+        target = 0.0 if self._pen_down else 1.0
+        self._lift = target if abs(target - self._lift) <= LIFT_STEP else self._lift + math.copysign(LIFT_STEP, target - self._lift)
+        if self._lift == target:
+            self._lift_timer.stop()
+            self._lift_timer = None
+        self.app.invalidate()
 
     def set_code_mode(self, on: bool):
         self._code_mode = on
@@ -458,6 +525,7 @@ class ArtRoom:
     def _space(self, arrow_held):
         if self._paint_mode:
             self._set_pen(not self._pen_down)
+            _play_brush_sound(self._pen_down)
             if self._pen_down and arrow_held:
                 self._advance_after_stamp(arrow_held)
             elif not self._pen_down:
@@ -646,12 +714,11 @@ class ArtRoom:
         if not self._paint_mode and self._blink_on:  # underline caret: the next letter lands in this cell
             bar = max(2, c // 4)
             g.rect(P.ACCENT, (x, y + c - bar, c, bar))
-        tip = "erase" if self._erasing else ("dot" if self._pen_down else "ring") if self._paint_mode else None
-        heading = self._heading if self._use_heading_cursor else None
-        if tip or heading:
-            color = self._last_key_color if self._paint_mode else P.TEXT
-            key = (c, color, tip, heading)
-            sprite = self._tips.get_or(key, lambda: pygame.transform.rotate(_brush_tip(c, color, tip, bool(heading)), HEADING_TURNS.get(heading, 0)))
+        tip = "erase" if self._erasing else "brush" if self._paint_mode else None
+        turn = HEADING_TURNS[self._heading] if self._use_heading_cursor else None
+        if tip or turn is not None:
+            key = (c, self._last_key_color, tip, turn, round(self._lift, 2))
+            sprite = self._tips.get_or(key, lambda: _brush_tip(*key))
             g.surface.blit(sprite, sprite.get_rect(center=(x + c // 2, y + c // 2)))
 
     def _draw_header(self, g, r):
@@ -660,5 +727,6 @@ class ArtRoom:
         if self.app._littles_mode:
             draw_label(g, "Paint" if self._paint_mode else "Write", g.vh(1.9), r.centerx, r.centery, P.TEXT, anchor="center")
             return
+        icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
         draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self._last_key_color,
-                         "to write" if self._paint_mode else "to paint")
+                         "to write" if self._paint_mode else "to paint", icon)

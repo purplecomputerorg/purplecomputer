@@ -182,3 +182,15 @@ def test_a_chord_mixes_into_the_cell_the_held_letter_painted():
         assert canvas._grid[(5, 5)][2] == mixed and (6, 5) not in canvas._grid
         assert canvas.brush_color == mixed and (canvas._cursor_x, canvas._cursor_y) == (6, 5)
     _run(_test())
+
+
+def test_brush_eases_down_and_up_then_rests():
+    async def _test():
+        app, canvas = _art()
+        await _tap(canvas)
+        await asyncio.sleep(0.2)
+        assert canvas._lift == 0.0 and canvas._lift_timer is None
+        await _tap(canvas)
+        await asyncio.sleep(0.2)
+        assert canvas._lift == 1.0 and canvas._lift_timer is None
+    _run(_test())

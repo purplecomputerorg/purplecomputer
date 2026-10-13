@@ -15,7 +15,7 @@ from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, TURN_MAX_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
-from purple_tui.keyboard import KeyboardStateMachine
+from purple_tui.keyboard import KeyboardStateMachine, NavigationAction
 from purple_tui.palette import get_key_color
 
 
@@ -74,6 +74,37 @@ def test_typing_goes_right_by_default_and_wraps_like_lines_of_text():
         room._x, room._z = WIDTH - 2, DEPTH - 1
         await type_text(app, "abc")
         assert {(WIDTH - 2, DEPTH - 1, 0), (WIDTH - 1, DEPTH - 1, 0), (0, 0, 1)} == set(room._blocks)
+    run(go())
+
+
+def test_walking_into_a_wall_turns_typing_along_it_instead_of_wrapping():
+    async def go():
+        app, room = _blocks()
+        for _ in range(DEPTH):
+            await press(app, "down")
+        assert room._dir == "right"
+        await type_text(app, "ab")
+        assert {(5, 0, 0), (6, 0, 0)} == set(room._blocks)
+    run(go())
+
+
+def test_in_the_right_hand_corner_typing_turns_left():
+    async def go():
+        app, room = _blocks()
+        room._x = WIDTH - 1
+        await press(app, "right")
+        await type_text(app, "ab")
+        assert {(WIDTH - 1, 5, 0), (WIDTH - 2, 5, 0)} == set(room._blocks)
+    run(go())
+
+
+def test_shift_up_to_the_ceiling_turns_typing_right():
+    async def go():
+        app, room = _blocks()
+        for _ in range(HEIGHT):
+            await app._dispatch_keyboard_action(NavigationAction(direction="up", shift_held=True))
+        await type_text(app, "ab")
+        assert {(5, 5, HEIGHT - 1), (6, 5, HEIGHT - 1)} == set(room._blocks)
     run(go())
 
 

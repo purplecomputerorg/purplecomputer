@@ -226,8 +226,7 @@ class BlocksRoom:
 
     def _advance(self, y: int):
         """On from the cursor's column at height y the way it last went, wrapping at the walls like lines of text."""
-        vx, vz = self._view(self._x, self._z)
-        pos = {"x": vx, "z": vz, "y": y}
+        pos = self._spot(y)
         for axis, step in WRAP[self._dir]:
             pos[axis] += step
             if 0 <= pos[axis] < SIZE[axis]:
@@ -235,6 +234,20 @@ class BlocksRoom:
             pos[axis] = 0 if step > 0 else SIZE[axis] - 1
         self._x, self._z = self._view(pos["x"], pos["z"])
         self._next = (self._x, self._z, pos["y"])
+
+    def _spot(self, y=None) -> dict:
+        """The cursor in view coordinates, at height y or its own."""
+        vx, vz = self._view(self._x, self._z)
+        return {"x": vx, "z": vz, "y": self._cursor_y() if y is None else y}
+
+    def _face(self, way: str):
+        """Typing goes the way the cursor walked, unless a wall is right there,
+        since the kid walked to it on purpose: then along it, right, or left
+        in the right-hand corner. Wrapping is for runs typing carries to a wall."""
+        def room_ahead(w):
+            axis, step = WRAP[w][0]
+            return 0 <= self._spot()[axis] + step < SIZE[axis]
+        self._dir = next((w for w in (way, "right", "left") if room_ahead(w)), way)
 
     # What code drives: the same moves as the keys, minus the echo.
     def set_way(self, way: str):
@@ -402,10 +415,9 @@ class BlocksRoom:
     def _navigate(self, action):
         if action.shift_held and action.direction in ("up", "down"):
             self.echo.flush()
-            self._dir = RISE if action.direction == "up" else SINK
             self._step_height(STEPS[action.direction][1])
+            self._face(RISE if action.direction == "up" else SINK)
             return
-        self._dir = action.direction
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
             self._arrow_repeat_count += 1
         else:
@@ -423,6 +435,7 @@ class BlocksRoom:
                     self._lay(direction)
                     self._place(self._hover)        # a line keeps its height, mixing into blocks in its way
                     self._next = (self._x, self._z, self._hover)
+        self._face(action.direction)
 
     # ---------------------------------------------------------------- geometry
     def _metrics(self):

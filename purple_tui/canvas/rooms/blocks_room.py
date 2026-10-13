@@ -29,6 +29,7 @@ FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
 TURN_S = 0.5
 TURN_MAX_BLOCKS = 400
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
+CUT_PAD = 0.5                 # cells the cutaway reaches past the cursor's column on each side
 XRAY_EDGE_ALPHA = 80          # edges left of the blocks cut away in front of the cursor's column
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -308,9 +309,12 @@ class BlocksRoom:
         px, py = self._corner(vx, vz, y + 1)
         return pygame.Rect(px, py - dz, self._c + sx + 1, dz + hy + 1)
 
-    def _column_rect(self) -> pygame.Rect:
+    def _cut_outline(self) -> list:
+        """Screen outline of the cursor's column, widened by CUT_PAD."""
         vx, vz = self._view(self._x, self._z)
-        return self._sprite_rect(vx, vz, HEIGHT - 1).union(self._sprite_rect(vx, vz, 0))
+        x0, z0, x1, z1 = vx - CUT_PAD, vz - CUT_PAD, vx + 1 + CUT_PAD, vz + 1 + CUT_PAD
+        return [self._corner(x0, z0, 0), self._corner(x1, z0, 0), self._corner(x1, z1, 0),
+                self._corner(x1, z1, HEIGHT), self._corner(x0, z1, HEIGHT), self._corner(x0, z0, HEIGHT)]
 
     # ---------------------------------------------------------------- drawing
     def _sprite(self, color: str, alpha: int = 255) -> pygame.Surface:
@@ -357,10 +361,11 @@ class BlocksRoom:
         return [(*self._view(x, z), y, color) for (x, z, y), color in self._blocks.items()]
 
     def _xray(self) -> list:
-        """Blocks nearer the viewer than the cursor's column that cover it on
-        screen: left out of the cached scene and drawn over the cursor."""
+        """Blocks nearer the viewer than the cursor's column that reach its
+        cutaway on screen: left out of the cached scene and drawn over the cursor."""
         cvz = self._view(self._x, self._z)[1]
-        col = self._column_rect()
+        xs, ys = zip(*self._cut_outline())
+        col = pygame.Rect(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
         return [b for b in self._placed() if b[1] < cvz and self._sprite_rect(*b[:3]).colliderect(col)]
 
     def _scene_surface(self, xray) -> pygame.Surface:
@@ -489,7 +494,7 @@ class BlocksRoom:
     def _draw_cursor(self, g, ox, oy, xray):
         """A blinking glass column over the cursor's cell with a see-through
         block where the next one will land. Blocks in front of it are cut away
-        inside the column's outline, down to faint edges. On top, a patch of
+        a little past the column's outline, down to faint edges. On top, a patch of
         ceiling fading out around the column, the column's edges faint through
         it, and the landing block's outline."""
         vx, vz = self._view(self._x, self._z)
@@ -501,7 +506,7 @@ class BlocksRoom:
         if y < HEIGHT:
             layer.blit(self._sprite(self._color, 170 if self._blink_on else 100), self._sprite_rect(vx, vz, y))
         if xray:
-            layer.blit(self._cut_away(xray, column), (0, 0))
+            layer.blit(self._cut_away(xray), (0, 0))
         self._ceiling_patch(layer, vx, vz)
         self._outline(layer, column, edge // 3)
         if y < HEIGHT:
@@ -515,16 +520,17 @@ class BlocksRoom:
                 pygame.draw.polygon(layer, (*rgb(self._color), fill), poly)
             pygame.draw.polygon(layer, (*rgb(P.TEXT), edge), poly, 1)
 
-    def _cut_away(self, xray, column) -> pygame.Surface:
+    def _cut_away(self, xray) -> pygame.Surface:
         """The blocks in front, painted solid as one picture outside the
-        column's outline and as bare edges inside it."""
+        cutaway and as bare edges inside it."""
         size = self._scene_size()
         solid, edges = self._stack(pygame.Surface(size, pygame.SRCALPHA), xray), pygame.Surface(size, pygame.SRCALPHA)
         for vx, vz, y, _ in xray:
             for poly in self._faces(*self._corner(vx, vz, y + 1)):
                 pygame.draw.polygon(edges, (*rgb(P.TEXT), XRAY_EDGE_ALPHA), poly, 1)
-        solid.blit(self._mask(column, 0, 255), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        edges.blit(self._mask(column, 255, 0), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        cut = [self._cut_outline()]
+        solid.blit(self._mask(cut, 0, 255), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        edges.blit(self._mask(cut, 255, 0), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         solid.blit(edges, (0, 0))
         return solid
 

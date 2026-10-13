@@ -1,7 +1,8 @@
 """Blocks room: a floor seen from above and in front, where every letter (or
 Space, in the current color) drops a block of its sticker color into the
-cursor's column. Enter walks the cursor up a level at a time and back down,
-and that height stays put as the arrows move, for building sideways.
+cursor's column. Enter walks the cursor up a level at a time, starting over
+at the floor after a pause at the top, and Shift with Up or Down moves it
+either way; that height stays put as the arrows move, for building sideways.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors, and Backslash opens the color wheel. Tab flips to the
@@ -28,10 +29,10 @@ FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
 TURN_S = 0.5
 TURN_MAX_BLOCKS = 400
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
-XRAY_ALPHA = 130
+XRAY_ALPHA = 70               # what's left of the blocks in front, where they cover the cursor's column
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
-HINT = "Type to build! Enter moves up and down."
+HINT = "Type to build! Enter or Shift+Up/Down for height."
 MIX_HINT = "Hold two letters to mix"
 
 
@@ -52,7 +53,6 @@ class BlocksRoom:
         self._x, self._z = WIDTH // 2, DEPTH // 2
         self._back = False
         self._hover = 0               # chosen cursor height; 0 = resting on the column
-        self._rise = 1                # which way Enter walks the height
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
         self._last = None             # (pos, key) of the block just dropped
@@ -114,7 +114,6 @@ class BlocksRoom:
         self._x, self._z = state.get("cursor", [WIDTH // 2, DEPTH // 2])
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._rise = 1
         self._back = bool(state.get("back", False))
         self._last = None
         self._changed()
@@ -153,14 +152,14 @@ class BlocksRoom:
         self._changed()
         return True
 
-    def _step_height(self):
-        """Enter: the next free level the way the cursor is heading, turning back at the floor and the top."""
+    def _step_height(self, rise: int, wrap: bool = False):
+        """The next free level up or down; with `wrap`, past the top starts over from the floor."""
         y = self._cursor_y()
-        for rise in (self._rise, -self._rise):
-            free = self._free(range(y + rise, HEIGHT if rise > 0 else -1, rise))
-            if free:
-                self._rise, self._hover = rise, free[0]
-                return
+        free = self._free(range(y + rise, HEIGHT if rise > 0 else -1, rise))
+        if not free and wrap:
+            free = self._free(range(HEIGHT))
+        if free:
+            self._hover = free[0]
 
     def _erase(self):
         """Backspace: the highest block below the cursor goes, and the cursor
@@ -235,7 +234,7 @@ class BlocksRoom:
     async def handle(self, action):
         if isinstance(action, ControlAction):
             if action.is_down and (not action.is_repeat or action.action in ("backspace", "enter")):
-                self._control(action.action)
+                self._control(action.action, action.is_repeat)
         elif isinstance(action, NavigationAction):
             self._navigate(action)
         elif isinstance(action, CharacterAction) and not action.is_repeat:
@@ -251,17 +250,20 @@ class BlocksRoom:
         if not (held and self._mix_into_last(held[0])):
             self._place()
 
-    def _control(self, name: str):
+    def _control(self, name: str, is_repeat: bool = False):
         if name == "space":
             self._place()
         elif name == "enter":
-            self._step_height()
+            self._step_height(1, wrap=not is_repeat)    # a held Enter stops at the top
         elif name == "backspace":
             self._erase()
         elif name == "tab":
             self._flip()
 
     def _navigate(self, action):
+        if action.shift_held and action.direction in ("up", "down"):
+            self._step_height(STEPS[action.direction][1])
+            return
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
             self._arrow_repeat_count += 1
         else:
@@ -356,7 +358,7 @@ class BlocksRoom:
 
     def _xray(self) -> list:
         """Blocks nearer the viewer than the cursor's column that cover it on
-        screen: left out of the cached scene and drawn see-through over the cursor."""
+        screen: left out of the cached scene and drawn over the cursor."""
         cvz = self._view(self._x, self._z)[1]
         col = self._column_rect()
         return [b for b in self._placed() if b[1] < cvz and self._sprite_rect(*b[:3]).colliderect(col)]
@@ -373,10 +375,10 @@ class BlocksRoom:
         xray = self._xray()
         return self._stack(self._scene_surface(xray).copy(), xray)
 
-    def _stack(self, s, placed, alpha: int = 255) -> pygame.Surface:
+    def _stack(self, s, placed) -> pygame.Surface:
         """Far rows first, left to right, bottom up, so nearer faces paint over farther ones."""
         for vx, vz, y, color in sorted(placed, key=lambda b: (-b[1], b[0], b[2])):
-            s.blit(self._sprite(color, alpha), self._sprite_rect(vx, vz, y))
+            s.blit(self._sprite(color), self._sprite_rect(vx, vz, y))
         return s
 
     def _fit(self, w, h) -> int:
@@ -410,8 +412,7 @@ class BlocksRoom:
         p = self._fade_progress()
         if p is None:
             g.surface.blit(scene, (ox, oy))
-            self._draw_cursor(g, ox, oy)
-            g.surface.blit(self._stack(pygame.Surface(scene.get_size(), pygame.SRCALPHA), xray, XRAY_ALPHA), (ox, oy))
+            self._draw_cursor(g, ox, oy, xray)
         elif self._fade_from is not None:
             g.surface.blit(scene, (ox, oy))
             self._fade_from.set_alpha(round(255 * (1 - p)))
@@ -485,26 +486,42 @@ class BlocksRoom:
         for (x, z, y), color in sorted(self._blocks.items(), key=depth, reverse=True):
             box(x, y, z, x + 1, y + 1, z + 1, mix(color, "#ffffff", 0.22), lambda dark, col=color: shade(col, dark), seam)
 
-    def _draw_cursor(self, g, ox, oy):
-        """A blinking glass column over the cursor's cell, under a patch of
-        ceiling that fades out around it, and in the column a see-through block
-        where the next one will land."""
+    def _draw_cursor(self, g, ox, oy, xray):
+        """A blinking glass column over the cursor's cell with a see-through
+        block where the next one will land, then the blocks in front of it,
+        faint only where they cover the column, then a patch of ceiling that
+        fades out around the column and the landing block's outline on top."""
         vx, vz = self._view(self._x, self._z)
-        glass = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
-        for dx in (-1, 0, 1):
-            for dz in (-1, 0, 1):
-                if 0 <= vx + dx < WIDTH and 0 <= vz + dz < DEPTH:
-                    top, _, _ = self._faces(*self._corner(vx + dx, vz + dz, HEIGHT))
-                    pygame.draw.polygon(glass, (*rgb(P.TEXT), CEILING_ALPHA[dx * dx + dz * dz]), top)
+        layer = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
+        column = self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT)
         fill, edge = (40, 150) if self._blink_on else (16, 70)
-        for poly in self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT):
-            pygame.draw.polygon(glass, (*rgb(self._color), fill), poly)
-            pygame.draw.polygon(glass, (*rgb(P.TEXT), edge), poly, 1)
-        g.surface.blit(glass, (ox, oy))
+        for poly in column:
+            pygame.draw.polygon(layer, (*rgb(self._color), fill), poly)
+            pygame.draw.polygon(layer, (*rgb(P.TEXT), edge), poly, 1)
         y = self._cursor_y()
-        if y >= HEIGHT:
-            return
-        r = self._sprite_rect(vx, vz, y)
-        g.surface.blit(self._sprite(self._color, 170 if self._blink_on else 100), (ox + r.x, oy + r.y))
-        for poly in self._faces(*self._corner(vx, vz, y + 1)):
-            pygame.draw.polygon(g.surface, rgb(P.TEXT), [(px + ox, py + oy) for px, py in poly], 2)
+        if y < HEIGHT:
+            layer.blit(self._sprite(self._color, 170 if self._blink_on else 100), self._sprite_rect(vx, vz, y))
+        if xray:
+            layer.blit(self._front_blocks(xray, column), (0, 0))
+        self._ceiling_patch(layer, vx, vz)
+        if y < HEIGHT:
+            for poly in self._faces(*self._corner(vx, vz, y + 1)):
+                pygame.draw.polygon(layer, rgb(P.TEXT), poly, 2)
+        g.surface.blit(layer, (ox, oy))
+
+    def _front_blocks(self, xray, column) -> pygame.Surface:
+        """Painted solid as one picture, then thinned inside the column's outline,
+        so overlapping blocks don't show through each other."""
+        front = self._stack(pygame.Surface(self._scene_size(), pygame.SRCALPHA), xray)
+        window = pygame.Surface(front.get_size(), pygame.SRCALPHA)
+        window.fill((255, 255, 255, 255))
+        for poly in column:
+            pygame.draw.polygon(window, (255, 255, 255, XRAY_ALPHA), poly)
+        front.blit(window, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        return front
+
+    def _ceiling_patch(self, layer, vx, vz):
+        cells = [(dx, dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1) if 0 <= vx + dx < WIDTH and 0 <= vz + dz < DEPTH]
+        for dx, dz in cells:
+            top, _, _ = self._faces(*self._corner(vx + dx, vz + dz, HEIGHT))
+            pygame.draw.polygon(layer, (*rgb(P.TEXT), CEILING_ALPHA[dx * dx + dz * dz]), top)

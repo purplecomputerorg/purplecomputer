@@ -1,5 +1,6 @@
 """Blocks room: letters and Space drop blocks into the cursor's column, Enter
-walks the cursor's height up and back down and that height carries to other
+walks the cursor's height up and starts over from the floor (not while held),
+Shift with Up or Down moves it either way, that height carries to other
 columns, Backspace eats down the column then steps left, a chord mixes the
 second key's color into the block the first one dropped, holding a letter or
 Space while arrowing lays a line, Tab flips to the back with arrows still
@@ -51,17 +52,30 @@ def test_column_stops_at_the_height_limit():
     run(go())
 
 
-def test_enter_walks_up_to_the_top_then_back_down():
+def test_enter_walks_up_and_starts_over_from_the_floor():
+    async def go():
+        app, room = _blocks()
+        await type_text(app, "aaa")                 # the cursor starts at 3
+        for y in range(4, HEIGHT):
+            await press(app, "enter", is_repeat=y > 4)
+            assert room._cursor_y() == y
+        await press(app, "enter", is_repeat=True)   # held: sticks at the top
+        assert room._cursor_y() == HEIGHT - 1
+        await press(app, "enter")                   # pressed again: the lowest free level
+        assert room._cursor_y() == 3 and len(room._blocks) == 3
+    run(go())
+
+
+def test_shift_up_and_down_move_the_height_and_stop_at_the_ends():
     async def go():
         app, room = _blocks()
         await press(app, "a")
-        expected = list(range(2, HEIGHT)) + list(range(HEIGHT - 2, 0, -1)) + [2, 3]   # never into the block at 0
-        heights = []
-        for _ in expected:
-            await press(app, "enter")
-            heights.append(room._cursor_y())
-        assert heights == expected
-        assert list(room._blocks) == [(5, 5, 0)]
+        for _ in range(HEIGHT + 2):
+            await press(app, "up", shift_held=True)
+        assert room._cursor_y() == HEIGHT - 1 and (room._x, room._z) == (5, 5)
+        for _ in range(HEIGHT + 2):
+            await press(app, "down", shift_held=True)
+        assert room._cursor_y() == 1                # rests on the block at 0
     run(go())
 
 
@@ -121,11 +135,13 @@ def test_chord_mixes_into_the_block_the_held_key_dropped():
     run(go())
 
 
-def test_keyboard_reports_the_still_held_letter():
+def test_keyboard_reports_the_still_held_letter_and_shift():
     sm = KeyboardStateMachine()
     down = lambda code: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=time.monotonic()))
     assert down(KeyCode.KEY_B)[0].char_held is None
     assert down(KeyCode.KEY_Y)[0].char_held == "b"
+    down(KeyCode.KEY_LEFTSHIFT)
+    assert down(KeyCode.KEY_UP)[0].shift_held
 
 
 def test_holding_a_letter_or_space_while_arrowing_lays_a_line():

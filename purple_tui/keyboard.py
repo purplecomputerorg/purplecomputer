@@ -643,6 +643,7 @@ class NavigationAction(KeyAction):
     is_repeat: bool = False  # Is this a key repeat?
     other_arrows_held: set = field(default_factory=set)  # Other arrow directions currently held
     char_held: str | None = None  # Character key held when this action fired
+    shift_held: bool = False  # Was physical shift held?
 
 
 @dataclass
@@ -825,7 +826,9 @@ class KeyboardStateMachine:
                 is_repeat=is_repeat,
                 other_arrows_held=other_arrows,
                 char_held=self._held_char,
+                shift_held=self._shift_held,
             ))
+            self._shift_used_for_char |= self._shift_held
             return actions
 
         # Handle other control keys (repeats allowed)

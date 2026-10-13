@@ -577,12 +577,11 @@ class MusicRoom:
             self._stop_loop()
 
     def hold_progress(self):
-        p = self.space.progress()
-        if p is not None:
-            return p, "Code"
-        if self._enter_down_at is not None and self.enter_hold.is_pending:
-            return min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD), "Loop"
-        return None
+        if self._enter_down_at is not None and self.enter_hold.is_pending and \
+                (self.loop.state != IDLE or self.app._music_looping_enabled):
+            doing = "record a loop" if self.loop.state == IDLE else "stop the loop"
+            return min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD), f"Keep holding Enter to {doing}"
+        return self.space.status(self.code_panel is not None)
 
     def cursor_fraction(self, vp):
         return None

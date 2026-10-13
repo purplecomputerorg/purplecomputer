@@ -183,8 +183,7 @@ class ArtRoom:
         self.app.invalidate()
 
     def hold_progress(self):
-        p = self.space.progress()
-        return (p, "Code") if p is not None else None
+        return self.space.status(self.code_panel is not None)
 
     def cursor_fraction(self, vp):
         return ((self._origin[0] + self._cursor_x * self._cell - vp.x) / vp.w,

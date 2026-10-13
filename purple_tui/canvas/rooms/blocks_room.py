@@ -156,8 +156,7 @@ class BlocksRoom:
         self.app.invalidate()
 
     def hold_progress(self):
-        p = self.space.progress()
-        return (p, "Code") if p is not None else None
+        return self.space.status(self.code_panel is not None)
 
     def _blink(self):
         self._blink_on = not self._blink_on

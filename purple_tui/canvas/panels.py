@@ -248,6 +248,11 @@ class SpaceHold:
             self._ring = None
         self.app.invalidate()
 
+    def status(self, panel_open: bool):
+        """(fraction, what letting it fill does) while Space is held, else None."""
+        p = self.progress()
+        return None if p is None else (p, f"Keep holding Space to {'close' if panel_open else 'write'} code")
+
     def progress(self):
         if self._down_at is None or not self.hold.is_pending:
             return None
@@ -275,12 +280,13 @@ class CodePanel:
         self._back = 0     # how far up the room's code lines ↑ has stepped
 
     def _layout(self, g) -> tuple:
-        """(margin, input px, box height, sub px, gap, cards height) in pixels."""
-        px = g.vh(2.6)
-        return g.vh(1.3), px, round(px * 1.9), g.vh(1.9), g.vh(0.7), g.vh(9)
+        """(margin, input px, box height, sub px, gap, cards height), sized to
+        the viewport like the rooms are."""
+        px = g.em(1.2)
+        return g.em(0.6), px, round(px * 1.9), g.em(0.85), g.em(0.35), g.em(4.2)
 
     def side_width(self, g) -> int:
-        return g.vw(21)
+        return g.em(16)
 
     def height(self, g) -> int:
         m, _, box_h, sub_px, gap, cards_h = self._layout(g)
@@ -366,56 +372,79 @@ class CodePanel:
 
     def draw(self, g, rect):
         m, px, box_h, sub_px, gap, cards_h = self._layout(g)
-        x, w = rect.x + g.vw(1), rect.w - g.vw(2)
-        y = rect.y + m
-        box = self.field.draw_boxed(g, x, y, w, px, "Code", PLACEHOLDER)
+        x, w = rect.x + g.em(0.8), rect.w - g.em(1.6)
+        box = self.field.draw_boxed(g, x, rect.y + m, w, px, "Code", PLACEHOLDER)
         y = box.bottom + gap
         sub_x = box.x + round(px * 0.55)
-        note = g.draw_text(f"{ICON_ROBOT} Hold Space: close code", sub_px, x + w, y, "mono", P.DIM, anchor="topright")
-        g.draw_markup(self._sub(), sub_px, sub_x, y, "mono", P.MUTED, note.x - g.vw(2) - sub_x, dim_to=P.SURFACE)
+        g.draw_markup(self._sub(), sub_px, sub_x, y, "mono", P.MUTED, x + w - sub_x, dim_to=P.SURFACE)
         y += g.line_height(sub_px, "mono") + gap
         self._draw_cards(g, pygame.Rect(box.x, y, x + w - box.x, cards_h))
+        self._draw_close_hint(g, pygame.Rect(x, y, box.x - x - g.em(0.4), cards_h))
+
+    def _draw_close_hint(self, g, rect):
+        """Under the label, beside the cards: how to put the code line away."""
+        px = g.em(0.75)
+        lines = [ICON_ROBOT, "Hold Space", "to close"]
+        lh = g.line_height(px, "mono")
+        y = rect.centery - lh * len(lines) // 2
+        for line in lines:
+            g.draw_text(line, px, rect.centerx, y, "mono", P.DIM, anchor="midtop")
+            y += lh
 
     def _draw_cards(self, g, area):
         n = len(self.recipes)
         if not n:
             return
-        gap = g.vw(1)
+        gap = g.em(0.6)
         cw = (area.w - (n - 1) * gap) // n
         for i, (code, color, rows) in enumerate(self.recipes):
             card = pygame.Rect(area.x + i * (cw + gap), area.y, cw, area.h)
             picked = i == self.card
             g.rect(P.FIELD, card, radius=g.em(0.4))
             g.rect(P.ACCENT if picked else P.LINE, card, width=3 if picked else 1, radius=g.em(0.4))
-            pad, px = g.vh(1.2), g.vh(1.75)
+            pad, px = g.em(0.55), g.em(0.78)
             pic = pygame.Rect(card.x + pad, card.y + pad, card.h - 2 * pad, card.h - 2 * pad)
             draw_picture(g, rows, color, pic)
             tx = pic.right + pad
             text_h = g.markup_size(code, px, "mono", card.right - pad - tx)[1]
             g.draw_markup(code, px, tx, card.centery - text_h // 2, "mono", P.TEXT if picked else P.MUTED, card.right - pad - tx)
 
-
     def draw_side(self, g, rect):
-        """The word guide, top down until it runs out of room. A line whose
+        """The word guide, top down until it runs out of room. A note that
+        won't fit beside its example goes on the line under it. A line whose
         word is in the code being typed lights up."""
-        g.rect(P.LINE, (rect.x, rect.y + g.vh(2), 1, rect.h - g.vh(4)))
+        g.rect(P.LINE, (rect.x, rect.y + g.em(0.9), 1, rect.h - g.em(1.8)))
         typed = set(self.field.value.lower().split())
-        x, w = rect.x + g.vw(1.2), rect.w - g.vw(2.2)
-        head_px, px = g.vh(1.6), g.vh(1.85)
-        y = rect.y + g.vh(2)
+        x, w = rect.x + g.em(0.95), rect.w - g.em(1.7)
+        head_px, px = g.em(0.72), g.em(0.82)
+        lh = g.line_height(px, "mono")
+        bottom = rect.bottom - g.em(0.45)
+        y = rect.y + g.em(0.9)
         for heading, rows in GUIDE[self.room]:
-            if y + g.line_height(head_px, "mono") + g.line_height(px, "mono") > rect.bottom - g.vh(1):
+            if y + g.line_height(head_px, "mono") + lh > bottom:
                 break
-            y += g.draw_text(heading, head_px, x, y, "mono-bold", P.ACCENT).h + g.vh(0.3)
+            y += g.draw_text(heading, head_px, x, y, "mono-bold", P.ACCENT).h + g.em(0.13)
             for code, gloss in rows:
-                markup = (_colors_markup() if code == COLORS else code) + (f"  [dim]{gloss}[/]" if gloss else "")
-                h = g.markup_size(markup, px, "mono", w)[1]
-                if y + h > rect.bottom - g.vh(1):
+                lines = _guide_lines(g, code, gloss, px, w)
+                h = sum(g.markup_size(line, px, "mono", w)[1] for line in lines)
+                if y + h > bottom:
                     break
                 if code.split()[0] in typed:
-                    g.rect(P.FIELD, (x - g.vw(0.4), y - 2, w + g.vw(0.8), h + 4), radius=g.vh(0.6))
-                y += g.draw_markup(markup, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
-            y += g.vh(1.4)
+                    g.rect(P.FIELD, (x - g.em(0.3), y - 2, w + g.em(0.6), h + 4), radius=g.em(0.27))
+                for line in lines:
+                    y += g.draw_markup(line, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
+            y += g.em(0.6)
+
+
+def _guide_lines(g, code: str, gloss: str, px: int, w: int) -> list:
+    """An example and its note as one line, or two when they don't fit side by side."""
+    text = _colors_markup() if code == COLORS else code
+    if not gloss:
+        return [text]
+    one = f"{text}  [dim]{gloss}[/]"
+    if g.markup_size(one, px, "mono")[0] <= w:
+        return [one]
+    return [text, f"  [dim]{gloss}[/]"]
 
 
 @cache

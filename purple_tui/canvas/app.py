@@ -38,7 +38,7 @@ from ..keyboard import (
 from ..palette import ROW_LEGEND_COLORS
 from ..timeline import RoomTimeline
 from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
-from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
+from .ui import HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ("blocks", "Blocks"))
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
@@ -1345,9 +1345,11 @@ class PurpleApp:
             if content.w < vp.w:
                 self._panel.draw_side(g, pygame.Rect(content.right, content.y, vp.right - content.right, content.h))
         hold = self.hold_progress()
-        if hold and hold[0] > 0.12:
-            strip_h = g.vh(4.5)
-            draw_hold_bar(g, pygame.Rect(content.x, content.bottom - strip_h, content.w, strip_h), hold[0], hold[1])
+        if hold and hold[0] > HOLD_QUIET:
+            # over the open panel, or the room's whole footer, so nothing peeks out around it
+            strip = pygame.Rect(vp.x, content.bottom, vp.w, vp.bottom - content.bottom) if self._panel else \
+                pygame.Rect(vp.x, vp.bottom - g.em(4.5), vp.w, g.em(4.5))
+            draw_hold_bar(g, strip, (hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1])
         g.surface.set_clip(None)
         self._draw_legend(frame)
         self._draw_status(frame)

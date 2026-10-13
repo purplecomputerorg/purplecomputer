@@ -234,3 +234,39 @@ def test_code_opens_a_word_guide_beside_the_room(name):
         assert narrowed.w == full.w - room.code_panel.side_width(app.g)
         app._draw()
     run(go())
+
+
+def test_holding_space_says_what_a_full_hold_does():
+    from purple_tui.keyboard import ControlAction
+
+    async def go():
+        app, art = await _room("art")
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
+        await asyncio.sleep(0.3)
+        assert art.hold_progress()[1] == "Keep holding Space to write code"
+        await asyncio.sleep(0.7)
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
+        assert art.code_panel is not None
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
+        await asyncio.sleep(0.3)
+        assert art.hold_progress()[1] == "Keep holding Space to close code"
+        app._draw()
+    run(go())
+
+
+def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
+    from purple_tui.keyboard import ControlAction
+
+    async def go():
+        app, music = await _room("music")
+        app._music_looping_enabled = True
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
+        await asyncio.sleep(0.3)
+        assert music.hold_progress()[1] == "Keep holding Enter to record a loop"
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
+        app._music_looping_enabled = False
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
+        await asyncio.sleep(0.3)
+        assert music.hold_progress() is None
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
+    run(go())

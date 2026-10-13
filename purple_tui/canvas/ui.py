@@ -528,20 +528,29 @@ def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=P.PR
         g.rect(color, (x, y, max(h, int(w * min(1.0, fraction))), h))
 
 
+HOLD_QUIET = 0.35   # of a hold: before this, nothing shows, so a tap never flashes the bar
+
+
 def draw_hold_bar(g: Gfx, rect: pygame.Rect, progress: float, label: str):
-    """Progress for a hold gesture, drawn over the hint strip at the bottom of
-    the viewport: a label and a segmented bar that fills left to right."""
+    """A hold gesture under way, over the bottom of the viewport: a pill that
+    fills as the hold goes on, saying what a full one does. The words turn
+    dark where the fill has reached them."""
     g.rect(P.SURFACE, rect)
-    px = g.vh(2.0)
-    seg_w, seg_h, n = g.vw(1.1), g.vh(1.4), 12
-    lab = g.text(label, px, "mono-bold", P.PRIMARY)
-    total = lab.get_width() + px + n * seg_w + (n - 1) * (seg_w // 3)
-    x = rect.centerx - total // 2
-    g.surface.blit(lab, lab.get_rect(midleft=(x, rect.centery)))
-    x += lab.get_width() + px
-    for i in range(n):
-        g.rect(P.PRIMARY if i < round(progress * n) else P.LINE, (x, rect.centery - seg_h // 2, seg_w, seg_h))
-        x += seg_w + seg_w // 3
+    g.rect(P.LINE, (rect.x + g.em(1), rect.y, rect.w - g.em(2), 1))
+    px = g.em(0.95)
+    pill = pygame.Rect(0, 0, g.measure(label, px, "mono-bold")[0] + g.em(3), round(px * 2.4))
+    pill.center = rect.center
+    r = pill.h // 2
+    g.rect(P.FIELD, pill, radius=r)
+    fill = pygame.Rect(pill.x, pill.y, round(pill.w * progress), pill.h)
+    if fill.w:
+        g.rect(P.PRIMARY, (pill.x, pill.y, max(fill.w, pill.h), pill.h), radius=r)
+    g.rect(P.LINE, pill, width=1, radius=r)
+    clip = g.surface.get_clip()
+    for ink, area in ((P.TEXT, pill), (P.BG, fill.clip(clip))):
+        g.surface.set_clip(area.clip(clip))
+        g.draw_text(label, px, pill.centerx, pill.centery, "mono-bold", ink, anchor="center")
+    g.surface.set_clip(clip)
 
 
 def is_char(action, ch: str | None = None) -> bool:

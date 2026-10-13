@@ -815,6 +815,8 @@ class PurpleApp:
             elif action.action == "escape":
                 self._escape_consumed_by_mode = True
                 self._cancel_time_travel()
+            elif action.action == "tab" and (turn := getattr(self.rooms[self._time_travel["room"]], "turn_around", None)):
+                turn()                          # a view, not history: look at any moment from either side
 
     # ------------------------------------------------------------------ volume
     def _effective_volume(self) -> int:

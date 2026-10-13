@@ -135,7 +135,7 @@ class BlocksRoom:
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
         state = {f"b:{x},{z},{y}": color for (x, z, y), color in self._blocks.items()}
-        state.update(cursor=[self._x, self._z], color=self._color, hover=self._hover, back=self._back)
+        state.update(cursor=[self._x, self._z], color=self._color, hover=self._hover)   # front or back is just a view
         return state
 
     def restore_timeline_state(self, state: dict):
@@ -143,7 +143,6 @@ class BlocksRoom:
         self._x, self._z = state.get("cursor", [WIDTH // 2, DEPTH // 2])
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._back = bool(state.get("back", False))
         self._last = self._next = None
         self._dir = "right"
         self._changed()
@@ -258,8 +257,11 @@ class BlocksRoom:
         return (WIDTH - 1 - x, DEPTH - 1 - z) if self._back else (x, z)
 
     # ---------------------------------------------------------------- flipping
-    def _flip(self):
-        """Turn around: a live half turn, or a crossfade when the build is too big to redraw every frame."""
+    def turn_around(self):
+        """Tab, here or in Time Travel: a live half turn, or a crossfade when the
+        build is too big to redraw every frame. One at a time."""
+        if self._fade_progress() is not None:
+            return
         self._fade_from = self._composite() if self._c and len(self._blocks) > TURN_MAX_BLOCKS else None
         self._back = not self._back
         self._fade_start = time.monotonic()
@@ -311,8 +313,8 @@ class BlocksRoom:
             self._step_height(1, wrap=not is_repeat)    # a held Enter stops at the top
         elif name == "backspace":
             self._erase()
-        elif name == "tab" and self._fade_progress() is None:   # one turn at a time
-            self._flip()
+        elif name == "tab":
+            self.turn_around()
 
     def _navigate(self, action):
         if action.shift_held and action.direction in ("up", "down"):

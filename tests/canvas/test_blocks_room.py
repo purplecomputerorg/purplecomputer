@@ -317,12 +317,28 @@ def test_timeline_round_trip():
         app, room = _blocks()
         await type_text(app, "qwe")
         await press(app, "enter")
-        await press(app, "tab")
         state = room.timeline_state()
         room.clear()
-        assert not room.has_content() and room._hover == 0 and not room._back
+        assert not room.has_content() and room._hover == 0
+        await press(app, "tab")
         room.restore_timeline_state(state)
-        assert len(room._blocks) == 3 and room._hover == 4 and (room._x, room._z) == (5, 5) and room._back
+        assert len(room._blocks) == 3 and room._hover == 4 and (room._x, room._z) == (5, 5)
+        assert room._back                       # front or back is the viewer's, not the history's
+    run(go())
+
+
+def test_tab_turns_around_while_time_traveling(monkeypatch, tmp_path):
+    monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+
+    async def go():
+        app, room = _blocks()
+        await type_text(app, "ab")
+        app._start_time_travel()
+        app._step_time_travel(-1)
+        await press(app, "tab")
+        assert room._back and app._time_travel is not None
+        app._cancel_time_travel()
+        assert room._back and len(room._blocks) == 2
     run(go())
 
 

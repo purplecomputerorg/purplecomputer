@@ -50,6 +50,31 @@ RECIPES = {
         ("right hello", "", ["hello"]),
     ],
 }
+# The side column: words to use, a section at a time, each an example and a
+# few words on what it does. COLORS lists the color words in their colors.
+COLORS = "colors"
+GUIDE = {
+    'art': [
+        ("Colors", [(COLORS, "or dark blue")]),
+        ("Move", [("right 5", "→ five steps"), ("up 3", "↑ three steps")]),
+        ("Turn", [("forward 6", "the way it points"), ("spin", "turn to the right"), ("turn left", "")]),
+        ("Again", [("repeat 4 ...", "do it four times")]),
+        ("Letters", [("paint hi", "a color per letter"), ("write hi", "real letters")]),
+    ],
+    'music': [
+        ("Notes", [("asdf", "play those keys"), ("1234", "drums")]),
+        ("Speed", [("fast asdf", "quick"), ("slow asdf", "slow")]),
+        ("Sound", [("choose ukulele", ""), ("choose accordion", ""), ("choose glockenspiel", "")]),
+        ("Again", [("repeat 3 asdf", "three times")]),
+        ("Say", [("letters on", "keys say letters")]),
+    ],
+    'blocks': [
+        ("Colors", [(COLORS, "or dark blue")]),
+        ("Build", [("right 5", "a row →"), ("up 4", "a tower ↑"), ("back 3", "away from you"), ("front 3", "toward you")]),
+        ("Letters", [("right hi", "a block per letter")]),
+        ("Again", [("repeat 4 right 1 up 1", "stairs")]),
+    ],
+}
 PLACEHOLDER = "Type code, or press ↓ to try one"
 HUES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'brown']
 SEPARATORS = ",.;|"           # they split a code line, so an echo leaves them out
@@ -254,6 +279,9 @@ class CodePanel:
         px = g.vh(2.6)
         return g.vh(1.3), px, round(px * 1.9), g.vh(1.9), g.vh(0.7), g.vh(9)
 
+    def side_width(self, g) -> int:
+        return g.vw(21)
+
     def height(self, g) -> int:
         m, _, box_h, sub_px, gap, cards_h = self._layout(g)
         return 2 * m + box_h + gap + g.line_height(sub_px, "mono") + gap + cards_h
@@ -365,6 +393,35 @@ class CodePanel:
             tx = pic.right + pad
             text_h = g.markup_size(code, px, "mono", card.right - pad - tx)[1]
             g.draw_markup(code, px, tx, card.centery - text_h // 2, "mono", P.TEXT if picked else P.MUTED, card.right - pad - tx)
+
+
+    def draw_side(self, g, rect):
+        """The word guide, top down until it runs out of room. A line whose
+        word is in the code being typed lights up."""
+        g.rect(P.LINE, (rect.x, rect.y + g.vh(2), 1, rect.h - g.vh(4)))
+        typed = set(self.field.value.lower().split())
+        x, w = rect.x + g.vw(1.2), rect.w - g.vw(2.2)
+        head_px, px = g.vh(1.6), g.vh(1.85)
+        y = rect.y + g.vh(2)
+        for heading, rows in GUIDE[self.room]:
+            if y + g.line_height(head_px, "mono") + g.line_height(px, "mono") > rect.bottom - g.vh(1):
+                break
+            y += g.draw_text(heading, head_px, x, y, "mono-bold", P.ACCENT).h + g.vh(0.3)
+            for code, gloss in rows:
+                markup = (_colors_markup() if code == COLORS else code) + (f"  [dim]{gloss}[/]" if gloss else "")
+                h = g.markup_size(markup, px, "mono", w)[1]
+                if y + h > rect.bottom - g.vh(1):
+                    break
+                if code.split()[0] in typed:
+                    g.rect(P.FIELD, (x - g.vw(0.4), y - 2, w + g.vw(0.8), h + 4), radius=g.vh(0.6))
+                y += g.draw_markup(markup, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
+            y += g.vh(1.4)
+
+
+@cache
+def _colors_markup() -> str:
+    content = get_content()
+    return " ".join(f"[{content.get_color(n)}]{n}[/]" for n in HUES + ['white'] if n != 'brown')
 
 
 def draw_picture(g, rows: list, color: str, rect: pygame.Rect):

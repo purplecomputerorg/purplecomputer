@@ -1322,10 +1322,11 @@ class PurpleApp:
         return vp.inflate(2 * self.g.vh(FRAME_GAP_VH), 2 * self.g.vh(FRAME_GAP_VH))
 
     def content_rect(self, vp: pygame.Rect) -> pygame.Rect:
-        """Room drawing area: the viewport minus any bottom panel."""
+        """Room drawing area: the viewport minus any bottom panel and its side column."""
         inner = vp.copy()
         if self._panel is not None:
             inner.height -= self._panel.height(self.g)
+            inner.width -= getattr(self._panel, "side_width", lambda g: 0)(self.g)
         return inner
 
     def _draw(self):
@@ -1340,7 +1341,9 @@ class PurpleApp:
         g.surface.set_clip(frame.inflate(-4, -4))
         self.room.draw(g, content)
         if self._panel is not None:
-            self._panel.draw(g, pygame.Rect(content.x, content.bottom, content.w, self._panel.height(g)))
+            self._panel.draw(g, pygame.Rect(vp.x, content.bottom, vp.w, self._panel.height(g)))
+            if content.w < vp.w:
+                self._panel.draw_side(g, pygame.Rect(content.right, content.y, vp.right - content.right, content.h))
         hold = self.hold_progress()
         if hold and hold[0] > 0.12:
             strip_h = g.vh(4.5)

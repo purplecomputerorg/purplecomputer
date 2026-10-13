@@ -117,7 +117,9 @@ Hold gestures for Space (code panel) and Enter (loop station) show a bar
 `panels.SpaceHold` holds the tap versus hold policy Music, Art and Blocks
 share (rooms with `HAS_CODE`). Their code panel opens holding `panels.Echo`'s
 code for the newest stroke drawn or played by hand, and ↓ steps into
-`panels.RECIPES`, finished programs drawn as small pictures.
+`panels.RECIPES`, finished programs drawn as small pictures. A panel with
+`side_width` also gets a column beside the room: the code panel puts
+`panels.GUIDE` there, the words of each room with one example apiece.
 
 ## Overlays
 

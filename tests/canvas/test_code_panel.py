@@ -221,3 +221,16 @@ def test_blocks_hold_space_opens_code_and_tab_still_turns():
 
 def test_color_name_keeps_grays_gray():
     assert [color_name(c) for c in ("#F5F5F5", "#808080", "#1A1A1A")] == ["white", "gray", "black"]
+
+
+@pytest.mark.parametrize("name", ["art", "music", "blocks"])
+def test_code_opens_a_word_guide_beside_the_room(name):
+    async def go():
+        app, room = await _room(name)
+        vp = app._viewport_rect()
+        full = app.content_rect(vp)
+        room.open_code_panel()
+        narrowed = app.content_rect(vp)
+        assert narrowed.w == full.w - room.code_panel.side_width(app.g)
+        app._draw()
+    run(go())

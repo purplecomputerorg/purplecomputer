@@ -41,7 +41,13 @@ SHADOW_ALPHA = 140
 STEM_ALPHA, STEM_DARKEN = 150, 0.35   # the line from a floating block down to its shadow
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
-RISE = "rise"
+RISE, SINK = "rise", "sink"
+SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
+# Where typing goes next, by way: along the first axis; off its end, back to
+# its start and one step along the second (a new line); off that, the third.
+WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), ("y", 1)),
+        "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
+        RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
 HINT = "Type to build the way you last moved! Enter goes up."
 MIX_HINT = "Hold two letters to mix"
 
@@ -78,7 +84,7 @@ class BlocksRoom:
         self._key = ""
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where the next letter goes after it, even onto a floating block
-        self._dir = RISE              # the way typing builds: RISE, or the last arrow
+        self._dir = "right"           # the way typing builds: a key of WRAP
         self._fade_from = self._fade_start = self._fade_timer = None
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
@@ -139,7 +145,7 @@ class BlocksRoom:
         self._hover = state.get("hover", 0)
         self._back = bool(state.get("back", False))
         self._last = self._next = None
-        self._dir = RISE
+        self._dir = "right"
         self._changed()
 
     def clear(self):
@@ -169,16 +175,22 @@ class BlocksRoom:
         pos = (self._x, self._z, y)
         old = self._blocks.get(pos)
         self._blocks[pos] = mix_colors_paint([old, self._color]) if old else self._color
-        self._last, self._next = (pos, self._key), (self._x, self._z, min(y + 1, HEIGHT - 1))
+        self._last = (pos, self._key)
         self._changed()
 
     def _build(self):
-        """A typed block, then on to the next spot the way the cursor last went, at the same height."""
+        """A typed block, then on to the next cell the way the cursor last went, wrapping at the walls like lines of text."""
         y = self._cursor_y()
         self._place(y)
-        if self._dir != RISE:
-            self._move(self._dir)
-            self._next = (self._x, self._z, y)
+        vx, vz = self._view(self._x, self._z)
+        pos = {"x": vx, "z": vz, "y": y}
+        for axis, step in WRAP[self._dir]:
+            pos[axis] += step
+            if 0 <= pos[axis] < SIZE[axis]:
+                break
+            pos[axis] = 0 if step > 0 else SIZE[axis] - 1
+        self._x, self._z = self._view(pos["x"], pos["z"])
+        self._next = (self._x, self._z, pos["y"])
 
     def _mix_into_last(self, held_key: str) -> bool:
         """A chord: the block the held key just dropped takes the new color mixed in."""
@@ -299,12 +311,12 @@ class BlocksRoom:
             self._step_height(1, wrap=not is_repeat)    # a held Enter stops at the top
         elif name == "backspace":
             self._erase()
-        elif name == "tab":
+        elif name == "tab" and self._fade_progress() is None:   # one turn at a time
             self._flip()
 
     def _navigate(self, action):
         if action.shift_held and action.direction in ("up", "down"):
-            self._dir = RISE
+            self._dir = RISE if action.direction == "up" else SINK
             self._step_height(STEPS[action.direction][1])
             return
         self._dir = action.direction
@@ -603,7 +615,9 @@ class BlocksRoom:
         self._shadow(layer, vx, vz, self._ground(y), y, self._color)
         layer.blit(self._sprite(self._color, 170 if self._blink_on else 100, vz), self._sprite_rect(vx, vz, y))
         layer.blit(front, (0, 0))
-        self._ceiling_patch(layer, vx, vz)
+        g.surface.blit(layer, (ox, oy))
+        layer.fill((0, 0, 0, 0))                # draw calls replace pixels rather than blend, so the see-through top goes on fresh
+        self._ceiling_patch(layer, vx, vz, 0.3 if y == HEIGHT - 1 else 1)   # faint when the box is up against it
         self._outline(layer, column, edge // 3)
         self._cage(layer, vx, vz, y)
         self._pointer(layer, vx, vz, y)
@@ -619,11 +633,11 @@ class BlocksRoom:
         """The level the cursor's block would rest on below height y."""
         return max((h + 1 for h in self._column() if h < y), default=0)
 
-    def _ceiling_patch(self, layer, vx, vz):
+    def _ceiling_patch(self, layer, vx, vz, strength=1.0):
         cells = [(dx, dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1) if 0 <= vx + dx < WIDTH and 0 <= vz + dz < DEPTH]
         for dx, dz in cells:
             top, _, _ = self._faces(*self._corner(vx + dx, vz + dz, HEIGHT))
-            pygame.draw.polygon(layer, (*rgb(P.TEXT), CEILING_ALPHA[dx * dx + dz * dz]), top)
+            pygame.draw.polygon(layer, (*rgb(P.TEXT), round(CEILING_ALPHA[dx * dx + dz * dz] * strength)), top)
 
     def _cage(self, layer, vx, vz, y):
         """Twelve wire edges a little outside the landing block, the three hidden ones fainter."""
@@ -637,11 +651,12 @@ class BlocksRoom:
                     pygame.draw.line(layer, (*rgb(P.TEXT), 90 if hidden in (p, q) else 230), *ends, 1 if hidden in (p, q) else 2)
 
     def _pointer(self, layer, vx, vz, y):
-        """An arrow from the top of the wire box the way the next typed block goes."""
-        dx, dz, dy = (0, 0, 1.2) if self._dir == RISE else (*STEPS[self._dir], 0)
-        top = y + 1 + CAGE_PAD
+        """An arrow out of the wire box (its top, or its bottom going down) the way the next typed block goes."""
+        axis, step = WRAP[self._dir][0]
+        d = {a: (step if a == axis else 0) for a in SIZE}
+        top = y - CAGE_PAD if self._dir == SINK else y + 1 + CAGE_PAD
         start = self._corner(vx + 0.5, vz + 0.5, top)
-        end = self._corner(vx + 0.5 + 1.3 * dx, vz + 0.5 + 1.3 * dz, top + dy)
+        end = self._corner(vx + 0.5 + 1.3 * d["x"], vz + 0.5 + 1.3 * d["z"], top + 1.2 * d["y"])
         ux, uy = end[0] - start[0], end[1] - start[1]
         n = math.hypot(ux, uy) or 1
         ux, uy, head = ux / n, uy / n, max(5, self._c * 0.32)

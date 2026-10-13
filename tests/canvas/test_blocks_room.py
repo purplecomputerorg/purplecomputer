@@ -12,7 +12,7 @@ cursor's row fade when they hide it, and the Esc picker reaches the room with
 import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.blocks_room import FRONT_ALPHA, HEIGHT, TURN_MAX_BLOCKS, TURN_S, WIDTH
+from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, TURN_MAX_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import KeyboardStateMachine
@@ -24,6 +24,7 @@ def _blocks():
     app.action_switch_room("blocks")
     room = app.rooms["blocks"]
     room._x, room._z = 5, 5
+    room._dir = RISE                        # most tests stack; typing to the right is tested on its own
     return app, room
 
 
@@ -46,15 +47,43 @@ def test_held_letter_repeats_do_not_stack():
     run(go())
 
 
-def test_at_the_top_letters_mix_into_the_top_block():
+def test_stacking_past_the_top_starts_the_next_column_from_the_floor():
     async def go():
         app, room = _blocks()
-        await type_text(app, "a" * HEIGHT)
+        await type_text(app, "a" * (HEIGHT + 1))
+        assert all((5, 5, y) in room._blocks for y in range(HEIGHT)) and (6, 5, 0) in room._blocks
+    run(go())
+
+
+def test_a_full_column_puts_the_cursor_on_its_top_block():
+    async def go():
+        app, room = _blocks()
+        room._blocks.update({(5, 5, y): "#ff0000" for y in range(HEIGHT)})
         assert room._cursor_y() == HEIGHT - 1
         await press(app, "b")
-        assert len(room._blocks) == HEIGHT
-        assert room._blocks[(5, 5, HEIGHT - 1)] == mix_colors_paint([get_key_color("a"), get_key_color("b")])
-        app._draw()                             # the cursor still draws, on the top block
+        assert room._blocks[(5, 5, HEIGHT - 1)] == mix_colors_paint(["#ff0000", get_key_color("b")])
+        app._draw()
+    run(go())
+
+
+def test_typing_goes_right_by_default_and_wraps_like_lines_of_text():
+    async def go():
+        app = make_app()
+        app.action_switch_room("blocks")
+        room = app.rooms["blocks"]
+        room._x, room._z = WIDTH - 2, DEPTH - 1
+        await type_text(app, "abc")
+        assert {(WIDTH - 2, DEPTH - 1, 0), (WIDTH - 1, DEPTH - 1, 0), (0, 0, 1)} == set(room._blocks)
+    run(go())
+
+
+def test_shift_down_builds_downward():
+    async def go():
+        app, room = _blocks()
+        room._hover = 3
+        await press(app, "down", shift_held=True)
+        await type_text(app, "ab")
+        assert set(room._blocks) == {(5, 5, 2), (5, 5, 1)}
     run(go())
 
 
@@ -239,6 +268,9 @@ def test_flip_keeps_blocks_and_arrows_follow_the_screen():
         after = room._view(room._x, room._z)
         assert (after[0] - before[0], after[1] - before[1]) == (1, 0)
         assert room._x == 4
+        await press(app, "tab")                 # mid-turn: ignored
+        assert room._back
+        room._fade_start = None
         await press(app, "tab")
         assert not room._back
     run(go())

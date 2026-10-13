@@ -29,9 +29,8 @@ FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
 TURN_S = 0.5
 TURN_MAX_BLOCKS = 400
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
-CUT_PAD = 0.5                 # cells the cutaway reaches past the cursor's column on each side
-XRAY_EDGE_ALPHA = 80          # edges left of the blocks cut away in front of the cursor's column
-CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
+FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this, so its row is the front one
+PLATE_ALPHA = {0: 60, 1: 26, 2: 10}     # the cursor's height, by squared distance from its column
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 HINT = "Type to build! Enter or Shift+Up/Down for height."
 MIX_HINT = "Hold two letters to mix"
@@ -40,10 +39,10 @@ MIX_HINT = "Hold two letters to mix"
 class BlocksRoom:
     """Blocks live in a dict keyed by world (x, z, y), y up. Drawing and the
     arrows work in view coordinates, which are world (x, z) mirrored when the
-    room shows its back. The floor and blocks render into one cached surface,
-    rebuilt when a block changes, the room flips, or the blocks in front of
-    the cursor change; the cursor is drawn over it, and those blocks over
-    the cursor, see-through."""
+    room shows its back. The floor and blocks render into two cached surfaces
+    split at the cursor's row, rebuilt when a block changes, the room flips or
+    the cursor changes rows: the rows from the cursor's back, solid, then the
+    cursor, then the rows in front of it, faded."""
 
     name = "blocks"
     LANDSCAPE = True
@@ -65,7 +64,7 @@ class BlocksRoom:
         self._c = 0
         self._origin = (0, 0)
         self._floor = self._scene = None
-        self._scene_xray = None
+        self._front = self._scene_row = None
         self._sprites: dict = {}
 
     # ---------------------------------------------------------------- lifecycle
@@ -309,13 +308,6 @@ class BlocksRoom:
         px, py = self._corner(vx, vz, y + 1)
         return pygame.Rect(px, py - dz, self._c + sx + 1, dz + hy + 1)
 
-    def _cut_outline(self) -> list:
-        """Screen outline of the cursor's column, widened by CUT_PAD."""
-        vx, vz = self._view(self._x, self._z)
-        x0, z0, x1, z1 = vx - CUT_PAD, vz - CUT_PAD, vx + 1 + CUT_PAD, vz + 1 + CUT_PAD
-        return [self._corner(x0, z0, 0), self._corner(x1, z0, 0), self._corner(x1, z1, 0),
-                self._corner(x1, z1, HEIGHT), self._corner(x0, z1, HEIGHT), self._corner(x0, z0, HEIGHT)]
-
     # ---------------------------------------------------------------- drawing
     def _sprite(self, color: str, alpha: int = 255) -> pygame.Surface:
         key = (color, self._c, alpha)
@@ -360,25 +352,28 @@ class BlocksRoom:
     def _placed(self) -> list:
         return [(*self._view(x, z), y, color) for (x, z, y), color in self._blocks.items()]
 
-    def _xray(self) -> list:
-        """Blocks nearer the viewer than the cursor's column that reach its
-        cutaway on screen: left out of the cached scene and drawn over the cursor."""
-        cvz = self._view(self._x, self._z)[1]
-        xs, ys = zip(*self._cut_outline())
-        col = pygame.Rect(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
-        return [b for b in self._placed() if b[1] < cvz and self._sprite_rect(*b[:3]).colliderect(col)]
+    def _scene_surfaces(self) -> tuple:
+        """(floor with the cursor's row marked plus the blocks from that row back, faded blocks in front of it)."""
+        row = self._view(self._x, self._z)[1]
+        if self._scene is None or self._scene.get_size() != self._scene_size() or row != self._scene_row:
+            self._scene_row = row
+            back = [b for b in self._placed() if b[1] >= row]
+            self._scene = self._stack(self._mark_row(self._floor_surface().copy(), row), back)
+            self._front = self._stack(pygame.Surface(self._scene_size(), pygame.SRCALPHA),
+                                      [b for b in self._placed() if b[1] < row])
+            self._front.set_alpha(FRONT_ALPHA)
+        return self._scene, self._front
 
-    def _scene_surface(self, xray) -> pygame.Surface:
-        """Floor plus every block not in `xray`."""
-        hidden = frozenset(b[:3] for b in xray)
-        if self._scene is None or self._scene.get_size() != self._scene_size() or hidden != self._scene_xray:
-            self._scene_xray = hidden
-            self._scene = self._stack(self._floor_surface().copy(), [b for b in self._placed() if b[:3] not in hidden])
-        return self._scene
+    def _mark_row(self, s, row) -> pygame.Surface:
+        stripe = pygame.Surface(s.get_size(), pygame.SRCALPHA)
+        for x in range(WIDTH):
+            top, _, _ = self._faces(*self._corner(x, row, 0))
+            pygame.draw.polygon(stripe, (*rgb(P.TEXT), 22), top)
+        s.blit(stripe, (0, 0))
+        return s
 
     def _composite(self) -> pygame.Surface:
-        xray = self._xray()
-        return self._stack(self._scene_surface(xray).copy(), xray)
+        return self._stack(self._scene_surfaces()[0].copy(), [b for b in self._placed() if b[1] < self._scene_row])
 
     def _stack(self, s, placed) -> pygame.Surface:
         """Far rows first, left to right, bottom up, so nearer faces paint over farther ones."""
@@ -409,17 +404,17 @@ class BlocksRoom:
         c = self._fit(area.w, area.h)
         if c != self._c:
             self._c, self._sprites, self._scene = c, {}, None
-        xray = self._xray()
-        scene = self._scene_surface(xray)
+        scene, front = self._scene_surfaces()
         ox = area.x + (area.w - scene.get_width()) // 2
         oy = area.y + (area.h - scene.get_height()) // 2
         self._origin = (ox, oy)
         p = self._fade_progress()
         if p is None:
             g.surface.blit(scene, (ox, oy))
-            self._draw_cursor(g, ox, oy, xray)
+            self._draw_cursor(g, ox, oy, front)
         elif self._fade_from is not None:
             g.surface.blit(scene, (ox, oy))
+            g.surface.blit(front, (ox, oy))
             self._fade_from.set_alpha(round(255 * (1 - p)))
             g.surface.blit(self._fade_from, (ox, oy))
         else:
@@ -491,59 +486,40 @@ class BlocksRoom:
         for (x, z, y), color in sorted(self._blocks.items(), key=depth, reverse=True):
             box(x, y, z, x + 1, y + 1, z + 1, mix(color, "#ffffff", 0.22), lambda dark, col=color: shade(col, dark), seam)
 
-    def _draw_cursor(self, g, ox, oy, xray):
-        """A blinking glass column over the cursor's cell with a see-through
-        block where the next one will land. Blocks in front of it are cut away
-        a little past the column's outline, down to faint edges. On top, a patch of
-        ceiling fading out around the column, the column's edges faint through
-        it, and the landing block's outline."""
+    def _draw_cursor(self, g, ox, oy, front):
+        """A blinking glass column over the cursor's cell, the landing block's
+        shadow on whatever it would land on, a plate fading out around it at
+        its height, and the see-through block itself; then the faded rows in
+        front, and the landing block's outline on top of everything."""
         vx, vz = self._view(self._x, self._z)
-        layer = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
-        column = self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT)
-        fill, edge = (40, 150) if self._blink_on else (16, 70)
-        self._outline(layer, column, edge, fill)
         y = self._cursor_y()
+        layer = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
+        fill, edge = (40, 150) if self._blink_on else (16, 70)
+        for poly in self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT):
+            pygame.draw.polygon(layer, (*rgb(self._color), fill), poly)
+            pygame.draw.polygon(layer, (*rgb(P.TEXT), edge), poly, 1)
         if y < HEIGHT:
+            self._shadow(layer, vx, vz, y)
+            self._plate(layer, vx, vz, y)
             layer.blit(self._sprite(self._color, 170 if self._blink_on else 100), self._sprite_rect(vx, vz, y))
-        if xray:
-            layer.blit(self._cut_away(xray), (0, 0))
-        self._ceiling_patch(layer, vx, vz)
-        self._outline(layer, column, edge // 3)
+        layer.blit(front, (0, 0))
         if y < HEIGHT:
             for poly in self._faces(*self._corner(vx, vz, y + 1)):
                 pygame.draw.polygon(layer, rgb(P.TEXT), poly, 2)
         g.surface.blit(layer, (ox, oy))
 
-    def _outline(self, layer, polys, edge, fill=0):
-        for poly in polys:
-            if fill:
-                pygame.draw.polygon(layer, (*rgb(self._color), fill), poly)
-            pygame.draw.polygon(layer, (*rgb(P.TEXT), edge), poly, 1)
+    def _shadow(self, layer, vx, vz, y):
+        """A dark square on the floor or block under the landing spot, and a thread down to it when it floats."""
+        ground = max((h + 1 for h in self._column() if h < y), default=0)
+        top, _, _ = self._faces(*self._corner(vx, vz, ground))
+        pygame.draw.polygon(layer, (0, 0, 0, 110), top)
+        if ground < y:
+            cx = (top[0][0] + top[2][0]) / 2
+            cy = (top[0][1] + top[2][1]) / 2
+            pygame.draw.line(layer, (*rgb(P.TEXT), 110), (cx, cy), (cx, cy - (y - ground) * self._metrics()[1]), 1)
 
-    def _cut_away(self, xray) -> pygame.Surface:
-        """The blocks in front, painted solid as one picture outside the
-        cutaway and as bare edges inside it."""
-        size = self._scene_size()
-        solid, edges = self._stack(pygame.Surface(size, pygame.SRCALPHA), xray), pygame.Surface(size, pygame.SRCALPHA)
-        for vx, vz, y, _ in xray:
-            for poly in self._faces(*self._corner(vx, vz, y + 1)):
-                pygame.draw.polygon(edges, (*rgb(P.TEXT), XRAY_EDGE_ALPHA), poly, 1)
-        cut = [self._cut_outline()]
-        solid.blit(self._mask(cut, 0, 255), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        edges.blit(self._mask(cut, 255, 0), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        solid.blit(edges, (0, 0))
-        return solid
-
-    def _mask(self, polys, inside: int, outside: int) -> pygame.Surface:
-        """White with alpha `inside` within the polygons and `outside` elsewhere, for multiplying alpha."""
-        m = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
-        m.fill((255, 255, 255, outside))
-        for poly in polys:
-            pygame.draw.polygon(m, (255, 255, 255, inside), poly)
-        return m
-
-    def _ceiling_patch(self, layer, vx, vz):
+    def _plate(self, layer, vx, vz, y):
         cells = [(dx, dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1) if 0 <= vx + dx < WIDTH and 0 <= vz + dz < DEPTH]
         for dx, dz in cells:
-            top, _, _ = self._faces(*self._corner(vx + dx, vz + dz, HEIGHT))
-            pygame.draw.polygon(layer, (*rgb(P.TEXT), CEILING_ALPHA[dx * dx + dz * dz]), top)
+            top, _, _ = self._faces(*self._corner(vx + dx, vz + dz, y))
+            pygame.draw.polygon(layer, (*rgb(P.TEXT), PLATE_ALPHA[dx * dx + dz * dz]), top)

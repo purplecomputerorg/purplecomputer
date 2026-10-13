@@ -4,8 +4,8 @@ Shift with Up or Down moves it either way, that height carries to other
 columns, Backspace eats down the column then steps left, a chord mixes the
 second key's color into the block the first one dropped, holding a letter or
 Space while arrowing lays a line, Tab flips to the back with arrows still
-moving the way they point, blocks in front of the cursor's column turn
-see-through, and the Esc picker reaches the room with 4."""
+moving the way they point, rows in front of the cursor's row fade, and the
+Esc picker reaches the room with 4."""
 
 import time
 
@@ -156,17 +156,18 @@ def test_holding_a_letter_or_space_while_arrowing_lays_a_line():
     run(go())
 
 
-def test_blocks_in_front_of_the_cursor_turn_see_through():
+def test_rows_in_front_of_the_cursor_fade():
     async def go():
         app, room = _blocks()
-        room._x, room._z = 5, 2
+        room._z = 2
         await type_text(app, "aaaa")
-        room._x, room._z = 5, 6
+        room._z = 6
+        await press(app, "enter")               # floating, so the shadow hangs a thread
         app._draw()
-        assert room._scene_xray and all(vz == 2 for _, vz, _ in room._scene_xray)
-        room._x, room._z = 20, 10
+        assert room._front.get_bounding_rect().w
+        room._z = 2
         app._draw()
-        assert not room._scene_xray
+        assert not room._front.get_bounding_rect().w
     run(go())
 
 

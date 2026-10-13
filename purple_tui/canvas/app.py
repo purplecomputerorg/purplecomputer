@@ -378,7 +378,7 @@ class PurpleApp:
         self.room.on_enter()
         self.timeline_restore(room_name)
         if self._code_panel_active:
-            if room_name in ("music", "art"):
+            if getattr(self.room, "HAS_CODE", False):
                 self.room.open_code_panel()
             else:
                 self._code_panel_active = False
@@ -414,8 +414,16 @@ class PurpleApp:
     def run_code(self, room: str, lines: list):
         """Run code-panel lines against a room; the last correction lands in the panel's recall hint."""
         self._stop_code_execution()
-        self._code_lines[room] = (self._code_lines[room] + lines)[-MAX_CODE_LINES:]
+        self.add_code_lines(room, lines)
         self._code_task = asyncio.create_task(self.rooms[room].run_code(lines))
+
+    def add_code_lines(self, room: str, lines: list):
+        """A line just like the newest one isn't kept twice, so ↑ never repeats itself."""
+        kept = self._code_lines[room]
+        for line in lines:
+            if not kept or kept[-1] != line:
+                kept = kept + [line]
+        self._code_lines[room] = kept[-MAX_CODE_LINES:]
 
     def code_lines(self, room: str) -> list:
         return self._code_lines[room]

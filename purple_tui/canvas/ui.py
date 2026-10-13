@@ -155,7 +155,7 @@ class TextField:
     # --- autocomplete (logic unchanged from CodeInput) ---
     def _check_autocomplete(self):
         self.matches, self.match_index, self.exact_display = [], 0, ""
-        if not self._autocomplete_fn:
+        if not self._autocomplete_fn or not self.value.strip():
             return
         text = self.value.lower()
         m = re.search(r'([a-z]+)$', text)
@@ -227,6 +227,21 @@ class TextField:
         g.rect(P.CARET, (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05)))
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
+    def draw_boxed(self, g: Gfx, x: int, y: int, width: int, px: int, label: str, placeholder: str = "") -> pygame.Rect:
+        """The label, then a box out to `width` holding the text, with
+        `placeholder` faint inside while it is empty. Returns the box."""
+        label_px, gap, pad = round(px * 1.15), round(px * 1.1), round(px * 0.55)
+        tx = self.text_x(g, x, px, label, label_px, gap)
+        box = pygame.Rect(tx - pad, y, x + width - tx + pad, round(px * 1.9))
+        g.rect(P.FIELD, box, radius=round(px * 0.4))
+        g.rect(P.LINE, box, width=1, radius=round(px * 0.4))
+        ty = box.centery - g.line_height(px, "mono") // 2
+        if placeholder and not self.value:
+            hx = tx + px
+            g.draw_text(_fit(g, placeholder, px, box.right - pad - hx), px, hx, ty, "mono", P.DIM)
+        self.draw(g, x, ty, box.right - pad - x, px, label, label_px, gap)
+        return box
+
     def _visible_slice(self, g, px, avail):
         """Keep the cursor on screen for long lines by scrolling the start."""
         if g.measure(self.value, px, "mono")[0] <= avail or not self.value:
@@ -247,6 +262,13 @@ class TextField:
 
 def _truncate(text: str) -> str:
     return text[:MAX_RECALL_LEN - 1] + "…" if len(text) > MAX_RECALL_LEN else text
+
+
+def _fit(g: Gfx, text: str, px: int, avail: int) -> str:
+    """`text` cut with an ellipsis to fit `avail` pixels of the mono face."""
+    while text and g.measure(text, px, "mono")[0] > avail:
+        text = text[:-2] + "…"
+    return text
 
 
 class HintRotator:

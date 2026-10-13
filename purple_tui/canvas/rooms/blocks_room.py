@@ -10,8 +10,10 @@ Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. A letter landing on a block, as a stack
 reaches a floating one or a line crosses one, paint-mixes into it, and
 holding one letter while pressing another mixes the two colors. Backslash
-opens the color wheel and Tab flips to the back side."""
+opens the color wheel, Tab flips to the back side, and holding Space opens
+the code line."""
 
+import asyncio
 import math
 import time
 from functools import cache
@@ -20,13 +22,16 @@ import pygame
 
 from ... import palette as P
 from ...color_mixing import mix_colors_paint
+from ...constants import ICON_ROBOT
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import DEFAULT_BRUSH_COLOR
 from .. import paper
 from ..color_wheel import open_on as open_color_wheel
 from ..gfx import mix, rgb
+from ..panels import CodePanel, Echo, SpaceHold
 from ..ui import draw_mode_switch
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
+from .blocks_code import WORDS, BlocksCodeRunner
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 WIDTH, DEPTH, HEIGHT = 30, 12, 12
@@ -73,6 +78,7 @@ class BlocksRoom:
 
     name = "blocks"
     LANDSCAPE = True
+    HAS_CODE = True
 
     def __init__(self, app):
         self.app = app
@@ -95,6 +101,9 @@ class BlocksRoom:
         self._floor = self._scene = None
         self._front = self._scene_row = None
         self._sprites: dict = {}
+        self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
+        self.echo = Echo()
+        self.code_panel = None
 
     # ---------------------------------------------------------------- lifecycle
     def on_enter(self):
@@ -103,6 +112,7 @@ class BlocksRoom:
             self._blink_timer = self.app.timers.every(0.4, self._blink)
 
     def on_leave(self):
+        self.code_panel = None
         if self._blink_timer:
             self._blink_timer.stop()
             self._blink_timer = None
@@ -111,13 +121,43 @@ class BlocksRoom:
         pass
 
     def open_code_panel(self):
-        pass
+        if self.code_panel is None and self.app._code_panel_enabled:
+            self.code_panel = CodePanel(self.app, "blocks", self.echo.take())
+            self.app.set_panel(self.code_panel)
 
     def close_code_panel(self):
-        pass
+        if self.code_panel is not None:
+            self.code_panel = None
+            self.app.set_panel(None)
+
+    def _space_hold_fired(self):
+        if self.code_panel is None:
+            self.open_code_panel()
+        else:
+            self.close_code_panel()
+
+    def _space_tap(self):
+        if self.code_panel is not None:
+            self.code_panel.field.insert(" ")
+        else:
+            self._control("space")
+        self.app.invalidate()
+
+    async def run_code(self, lines: list):
+        try:
+            runner = BlocksCodeRunner(self)
+            await runner.run(lines)
+            if runner.corrections and self.code_panel:
+                self.code_panel.set_correction(*runner.corrections[-1])
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+        self.app.invalidate()
 
     def hold_progress(self):
-        return None
+        p = self.space.progress()
+        return (p, "Code") if p is not None else None
 
     def _blink(self):
         self._blink_on = not self._blink_on
@@ -145,6 +185,7 @@ class BlocksRoom:
         self._hover = state.get("hover", 0)
         self._last = self._next = None
         self._dir = "right"
+        self.echo.reset()
         self._changed()
 
     def clear(self):
@@ -178,9 +219,13 @@ class BlocksRoom:
         self._changed()
 
     def _build(self):
-        """A typed block, then on to the next cell the way the cursor last went, wrapping at the walls like lines of text."""
+        """A typed block, then on to the next cell the way the cursor last went."""
         y = self._cursor_y()
         self._place(y)
+        self._advance(y)
+
+    def _advance(self, y: int):
+        """On from the cursor's column at height y the way it last went, wrapping at the walls like lines of text."""
         vx, vz = self._view(self._x, self._z)
         pos = {"x": vx, "z": vz, "y": y}
         for axis, step in WRAP[self._dir]:
@@ -190,6 +235,21 @@ class BlocksRoom:
             pos[axis] = 0 if step > 0 else SIZE[axis] - 1
         self._x, self._z = self._view(pos["x"], pos["z"])
         self._next = (self._x, self._z, pos["y"])
+
+    # What code drives: the same moves as the keys, minus the echo.
+    def set_way(self, way: str):
+        self._dir = way
+
+    build = _build
+
+    def build_letter(self, ch: str) -> bool:
+        if not self._set_color(ch):
+            return False
+        self._build()
+        return True
+
+    def skip(self):
+        self._advance(self._cursor_y())
 
     def _mix_into_last(self, held_key: str) -> bool:
         """A chord: the block the held key just dropped takes the new color mixed in."""
@@ -286,6 +346,16 @@ class BlocksRoom:
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
+        if isinstance(action, ControlAction) and action.action == "space" and self.space.route(action):
+            return
+        self.space.other_key()
+        if self.code_panel is not None:
+            result = await self.code_panel.handle(action)
+            if result == "tab_fallthrough":
+                self.turn_around()
+            elif result == "close":
+                self.close_code_panel()
+            return
         if isinstance(action, ControlAction):
             if action.is_down and (not action.is_repeat or action.action in ("backspace", "enter")):
                 self._control(action.action, action.is_repeat)
@@ -301,11 +371,24 @@ class BlocksRoom:
         if open_color_wheel(self, char) or not self._set_color(char) or action.shift_held:
             return
         held = brush_for_key(action.char_held) if action.char_held else None
-        if not (held and self._mix_into_last(held[0])):
-            self._build()
+        if held and self._mix_into_last(held[0]):
+            return
+        if char.isalpha():
+            self.echo.letter(WORDS[self._dir], char)
+        else:
+            self.echo.flush()       # a digit would read as a count
+        self._build()
+
+    def _lay(self, way: str):
+        """A block in the brush color, written down as code too."""
+        self.echo.color(self._color)
+        self.echo.step(WORDS[way])
 
     def _control(self, name: str, is_repeat: bool = False):
+        if name != "space":
+            self.echo.flush()
         if name == "space":
+            self._lay(self._dir)
             self._build()
         elif name == "enter" and self._dir != RISE:
             self._dir = RISE                            # first, just turn typing upward
@@ -318,6 +401,7 @@ class BlocksRoom:
 
     def _navigate(self, action):
         if action.shift_held and action.direction in ("up", "down"):
+            self.echo.flush()
             self._dir = RISE if action.direction == "up" else SINK
             self._step_height(STEPS[action.direction][1])
             return
@@ -328,12 +412,15 @@ class BlocksRoom:
             self._arrow_repeat_dir = action.direction
             self._arrow_repeat_count = 1 if action.is_repeat else 0
         laying = (bool(action.char_held) and self._set_color(action.char_held)) or action.space_held
+        if not laying:
+            self.echo.flush()
         fast = not laying and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(HOLD_ACCEL_MULTIPLIER if fast else 1):
                 if not self._move(direction):
                     break
                 if laying:
+                    self._lay(direction)
                     self._place(self._hover)        # a line keeps its height, mixing into blocks in its way
                     self._next = (self._x, self._z, self._hover)
 
@@ -495,7 +582,8 @@ class BlocksRoom:
         pad, gap = g.em(0.7), g.em(0.5)
         inner = rect.inflate(-2 * pad, -2 * pad)
         chrome_h = g.line_height(g.vh(1.9), "mono") + g.em(0.4)
-        area = inner.inflate(0, -2 * (chrome_h + gap))
+        foot_h = 0 if self.app._panel is not None else chrome_h + gap
+        area = pygame.Rect(inner.x, inner.y + chrome_h + gap, inner.w, inner.h - chrome_h - gap - foot_h)
         c = self._fit(area.w, area.h)
         if c != self._c:
             self._c, self._sprites, self._scene = c, {}, None
@@ -516,9 +604,11 @@ class BlocksRoom:
             self._draw_turning(g, ox, oy, p)
         draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
                          1 if self._back else 0, self._color, "to turn around")
-        foot_y = inner.bottom - chrome_h // 2
-        g.draw_text(HINT, g.vh(1.9), inner.x, foot_y, "mono", P.DIM, anchor="midleft")
-        g.draw_text(MIX_HINT, g.vh(1.9), inner.right, foot_y, "mono", P.DIM, anchor="midright")
+        if foot_h:
+            foot_y = inner.bottom - chrome_h // 2
+            right = f"{MIX_HINT}    {ICON_ROBOT} Hold Space: write code" if self.app._code_panel_enabled else MIX_HINT
+            g.draw_text(HINT, g.vh(1.9), inner.x, foot_y, "mono", P.DIM, anchor="midleft")
+            g.draw_text(right, g.vh(1.9), inner.right, foot_y, "mono", P.DIM, anchor="midright")
 
     def _draw_turning(self, g, ox, oy, p):
         """One frame of the half turn: the world spun about the floor's center

@@ -21,7 +21,7 @@ from ...music_constants import (
 )
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
-from ..panels import CodePanel, LoopPanel, SpaceHold
+from ..panels import CodePanel, Echo, LoopPanel, SpaceHold
 from ..ui import draw_label
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -34,6 +34,7 @@ WAVEFRONT_COLOR = "#7a5aa6"
 PITCH_TRANSITION_DURATION = 0.25
 LETTERS_SAME_KEY_DEBOUNCE_S = 0.40
 LETTERS_CROSS_KEY_DEBOUNCE_S = 0.20
+ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
 NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit"
 
 
@@ -58,6 +59,7 @@ def _load(path) -> pygame.mixer.Sound | None:
 
 class MusicRoom:
     LANDSCAPE = True
+    HAS_CODE = True
     name = "music"
 
     def __init__(self, app):
@@ -83,6 +85,7 @@ class MusicRoom:
         self._last_letter_key = None
         self._last_letter_press_t = float("-inf")
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
+        self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
         self._enter_down_at = None
         self._enter_ring = None
@@ -133,6 +136,7 @@ class MusicRoom:
             if key.startswith("k:") and key[2:] in self.color_state:
                 self.color_state[key[2:]] = int(val)
         self._transition = None
+        self.echo.reset()
         self.app.invalidate()
 
     def clear(self):
@@ -407,7 +411,7 @@ class MusicRoom:
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled and self.loop.state == IDLE:
             self.cleanup_sounds()
-            self.code_panel = CodePanel(self.app, "music")
+            self.code_panel = CodePanel(self.app, "music", self.echo.take())
             self.app.set_panel(self.code_panel)
 
     def close_code_panel(self):
@@ -502,6 +506,7 @@ class MusicRoom:
                     self._stop_loop()
                     self.app._escape_consumed_by_mode = True
                 elif action.action == "tab":
+                    self.echo.flush()
                     if self.loop.state != IDLE:
                         self._stop_loop()
                     else:
@@ -529,6 +534,7 @@ class MusicRoom:
             mode = self._current_mode()
             self.loop.record_event(lookup, mode, instrument=self.instrument_index)
             self._hit(lookup, mode)
+            self.echo.letter("", lookup.lower())
 
     def _handle_enter(self, action):
         if self.enter_hold.fired:
@@ -545,6 +551,8 @@ class MusicRoom:
             self._stop_enter_ring()
             if self.enter_hold.on_up():
                 self.instrument_index = (self.instrument_index + 1) % len(INSTRUMENTS)
+                self.echo.flush()
+                self.echo.word(f"choose {INSTRUMENTS[self.instrument_index][0]}")
                 self.app.invalidate()
 
     def _flush_enter(self):

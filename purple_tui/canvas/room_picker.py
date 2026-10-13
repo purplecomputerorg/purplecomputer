@@ -29,7 +29,7 @@ class RoomPicker(Overlay):
         super().__init__(app)
         self.row = ROWS
         self.col = [o[0] for o in ROOM_OPTIONS].index(app.active_room)
-        self.code_row = app.active_room in ("music", "art") and (app._code_panel_active or app._code_panel_enabled)
+        self.code_row = getattr(app.room, "HAS_CODE", False) and (app._code_panel_active or app._code_panel_enabled)
         self.extras = ["volume", "clear", "time_travel", "save", "print"]
         self.printer = printing.status()
 

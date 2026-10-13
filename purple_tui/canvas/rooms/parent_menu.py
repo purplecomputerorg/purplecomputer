@@ -225,7 +225,7 @@ class _YesNo(Picker):
 
 class CodePanelScreen(_YesNo):
     title = "Allow Code Space"
-    DESCRIPTION = "Allow older kids to write code in Music and Art by holding the space button"
+    DESCRIPTION = "Allow older kids to write code in Music, Art and Blocks by holding the space button"
 
     @staticmethod
     def getter():

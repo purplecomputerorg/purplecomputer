@@ -114,7 +114,10 @@ key events into the same `RawKeyEvent`s.
 
 Hold gestures for Space (code panel) and Enter (loop station) show a bar
 (`ui.draw_hold_bar`); the Esc hold for the Parent Menu shows nothing.
-`panels.SpaceHold` holds the tap versus hold policy Music and Art share.
+`panels.SpaceHold` holds the tap versus hold policy Music, Art and Blocks
+share (rooms with `HAS_CODE`). Their code panel opens holding `panels.Echo`'s
+code for the newest stroke drawn or played by hand, and ↓ steps into
+`panels.RECIPES`, finished programs drawn as small pictures.
 
 ## Overlays
 

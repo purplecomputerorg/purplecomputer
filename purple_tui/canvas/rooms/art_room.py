@@ -16,7 +16,7 @@ from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationA
 from .. import paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import open_on as open_color_wheel
-from ..panels import CodePanel, SpaceHold
+from ..panels import CodePanel, Echo, SpaceHold
 from ..ui import draw_label, draw_mode_switch
 
 COLS, ROWS = 56, 24
@@ -89,6 +89,7 @@ class ArtRoom:
 
     name = "art"
     LANDSCAPE = True
+    HAS_CODE = True
     canvas_width = COLS
     canvas_height = ROWS
     _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
@@ -117,6 +118,7 @@ class ArtRoom:
         self._blink_timer = None
         self._tips = _Cache()
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
+        self.echo = Echo()
         self.code_panel = None
         self._cell = 10
         self._origin = (0, 0)
@@ -210,6 +212,7 @@ class ArtRoom:
         self._paint_mode = bool(state.get("paint", True))
         self._set_pen(False)
         self._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
+        self.echo.reset()
         self._post_paint_mode_changed()
 
     def clear(self):
@@ -224,6 +227,7 @@ class ArtRoom:
         self._heading = "right"
         self._use_heading_cursor = False
         self._last_key_color = DEFAULT_BRUSH_COLOR
+        self.echo.reset()
         self._post_paint_mode_changed()
 
     def has_content(self) -> bool:
@@ -362,7 +366,13 @@ class ArtRoom:
             self._cursor_x = COLS - 1
         self._erase_at_cursor()
 
-    def _erase_at_cursor(self):
+    def _paint_stroke(self, direction: str):
+        """One cell of an arrow trail, written down as code too."""
+        self._paint_at_cursor()
+        self.echo.color(self._last_key_color)
+        self.echo.step(direction)
+
+    def _erase_at_cursor(self, _direction=None):
         pos = (self._cursor_x, self._cursor_y)
         if pos in self._grid:
             self._del_cell(pos)
@@ -398,7 +408,7 @@ class ArtRoom:
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
             self._set_pen(False)
-            self.code_panel = CodePanel(self.app, "art")
+            self.code_panel = CodePanel(self.app, "art", self.echo.take())
             self.set_code_mode(True)
             self.app.set_panel(self.code_panel)
 
@@ -438,8 +448,11 @@ class ArtRoom:
             self._set_pen(not self._pen_down)
             if self._pen_down and arrow_held:
                 self._advance_after_stamp(arrow_held)
+            elif not self._pen_down:
+                self.echo.flush()
         else:
             self.type_char(" ")
+            self.echo.letter("write", " ")
         self.app.invalidate()
 
     async def handle(self, action):
@@ -464,6 +477,8 @@ class ArtRoom:
                     self.app.invalidate()
                 return
             a = action.action
+            if a in ("tab", "backspace") or (a == "enter" and not self._paint_mode):
+                self.echo.flush()
             if a == "space":
                 if not (self._paint_mode and action.is_repeat):
                     self._space(action.arrow_held)
@@ -491,6 +506,7 @@ class ArtRoom:
             direction = action.arrow_held or "right"
             if not self._paint_mode:
                 self.type_char(char)
+                self.echo.letter("write", char)
                 return
             if action.shift_held and char in UNSHIFT_MAP:
                 char = UNSHIFT_MAP[char]
@@ -499,6 +515,10 @@ class ArtRoom:
             if self._select_brush(char) and not action.shift_held:
                 self._paint_at_cursor()
                 self._advance_after_stamp(direction)
+                if char.isalpha():
+                    self.echo.letter(direction, char)
+                else:
+                    self.echo.flush()   # a digit would read as a distance
             self._restart_blink()
             self.app.invalidate()
 
@@ -515,14 +535,16 @@ class ArtRoom:
         if action.direction in ("up", "down") and prior_post_stamp_x is not None and not action.char_held:
             self._cursor_x = prior_post_stamp_x
         paint_each_step = self._paint_mode and not self._erasing and (self._pen_down or bool(action.char_held))
-        trail = self._erase_at_cursor if self._erasing else self._paint_at_cursor if paint_each_step else None
+        trail = self._erase_at_cursor if self._erasing else self._paint_stroke if paint_each_step else None
+        if trail != self._paint_stroke:
+            self.echo.flush()
         steps = HOLD_ACCEL_MULTIPLIER if (not trail and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD) else 1
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(steps):
                 if not self._move_in_direction(direction):
                     break
                 if trail:
-                    trail()
+                    trail(direction)
         self._restart_blink()
         self.app.invalidate()
 

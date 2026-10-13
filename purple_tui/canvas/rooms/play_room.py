@@ -288,23 +288,13 @@ class PlayRoom:
         pad = em(1.6)
         x = rect.x + pad
         width = rect.w - 2 * pad
-        line_px = em(1.05)
-        bottom = rect.bottom - em(1.4)
-        g.draw_text(self.hints.current, em(0.95), x, bottom, "mono", P.DIM, anchor="bottomleft")
-        bottom -= g.line_height(em(0.95), "mono") + em(1.1)
-        sub = self.field.autocomplete_markup or \
-            f"[dim]{self.field.recall_text() or 'Type a word, then press Enter'}[/]"
-        sub_h = g.line_height(em(0.92), "mono")
-        gap = em(1.15)  # 0.55em from the arrow to the field, 0.6em of field padding
-        sub_x = self.field.text_x(g, x, line_px, label_px=em(1.2), gap=gap)
-        g.draw_markup(sub, em(0.92), sub_x, bottom - sub_h, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
-        bottom -= sub_h + em(0.4)
-        box = pygame.Rect(sub_x - em(0.6), bottom - em(2.0), 0, em(2.0))
-        box.w = min(rect.right - pad - box.x, em(21))
-        g.rect(P.FIELD, box, radius=em(0.42))
-        g.rect(P.LINE, box, width=1, radius=em(0.42))
-        line_h = g.line_height(line_px, "mono")
-        self.field.draw(g, x, box.centery - line_h // 2, box.right - x, line_px, label_px=em(1.2), gap=gap)
+        line_px, sub_px = em(1.35), em(0.95)
+        sub_h = g.line_height(sub_px, "mono")
+        bottom = rect.bottom - em(1.2) - sub_h
+        sub = self.field.autocomplete_markup or f"[dim]{self.field.recall_text()}[/]"
+        box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type", self.hints.current)
+        sub_x = box.x + round(line_px * 0.55)
+        g.draw_markup(sub, sub_px, sub_x, bottom, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
         top_limit = rect.y + em(1)
         base = box.y - em(1)
         viewport = base - top_limit

@@ -29,7 +29,7 @@ FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
 TURN_S = 0.5
 TURN_MAX_BLOCKS = 400
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
-FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this, so its row is the front one
+FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this when they hide the landing spot
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the floor color
 SHADOW_ALPHA = 140
@@ -330,14 +330,22 @@ class BlocksRoom:
             self._sprites[key] = s
         return self._sprites[key]
 
-    def _shadow_sprite(self) -> pygame.Surface:
-        """A dark square laid on a block's top face, positioned like that block's sprite."""
-        if (None, self._c) not in self._sprites:
+    def _shadow_sprite(self, gap: int, color: str) -> pygame.Surface:
+        """A dark square on the surface below a floating block, and a line in the block's color up to it."""
+        key = ("shadow", self._c, gap, color)
+        if key not in self._sprites:
             dz, hy, sx, _ = self._metrics()
-            s = pygame.Surface((self._c + sx + 1, dz + hy + 1), pygame.SRCALPHA)
-            pygame.draw.polygon(s, (0, 0, 0, SHADOW_ALPHA), self._faces(0, dz)[0])
-            self._sprites[(None, self._c)] = s
-        return self._sprites[(None, self._c)]
+            s = pygame.Surface((self._c + sx + 1, dz + hy + 1 + gap * hy), pygame.SRCALPHA)
+            pygame.draw.polygon(s, (0, 0, 0, SHADOW_ALPHA), self._faces(0, dz + gap * hy)[0])
+            cx, cy = (self._c + sx) / 2, dz / 2 + gap * hy
+            if gap:
+                pygame.draw.line(s, (*rgb(color), 220), (cx, cy), (cx, cy - gap * hy), 2)
+            self._sprites[key] = s
+        return self._sprites[key]
+
+    def _shadow(self, s, vx, vz, ground, y, color):
+        r = self._sprite_rect(vx, vz, ground - 1)
+        s.blit(self._shadow_sprite(y - ground, color), (r.x, r.y - (y - ground) * self._metrics()[1]))
 
     def _scene_size(self) -> tuple:
         dz, hy, sx, slab = self._metrics()
@@ -376,8 +384,16 @@ class BlocksRoom:
             self._scene = self._stack(self._mark_row(self._floor_surface().copy(), row), back)
             self._front = self._stack(pygame.Surface(self._scene_size(), pygame.SRCALPHA),
                                       [b for b in self._placed() if b[1] < row])
-            self._front.set_alpha(FRONT_ALPHA)
+        self._front.set_alpha(FRONT_ALPHA if self._front_covers_cursor() else 255)
         return self._scene, self._front
+
+    def _front_covers_cursor(self) -> bool:
+        """Whether a nearer block sits over the landing block, its shadow or the thread between them."""
+        vx, vz = self._view(self._x, self._z)
+        y = min(self._cursor_y(), HEIGHT - 1)
+        spot = self._sprite_rect(vx, vz, y).union(self._sprite_rect(vx, vz, self._ground(y) - 1))
+        spot.inflate_ip(2 * CAGE_PAD * self._c, 2 * CAGE_PAD * self._c)
+        return any(b[1] < vz and self._sprite_rect(*b[:3]).colliderect(spot) for b in self._placed())
 
     def _mark_row(self, s, row) -> pygame.Surface:
         stripe = pygame.Surface(s.get_size(), pygame.SRCALPHA)
@@ -396,12 +412,13 @@ class BlocksRoom:
         occupied = {b[:3] for b in placed}
         items = []
         for vx, vz, y, color in placed:
-            items.append(((-vz, vx, y, 1), self._sprite(color, row=vz if haze else None), (vx, vz, y)))
+            sprite, rect = self._sprite(color, row=vz if haze else None), self._sprite_rect(vx, vz, y)
+            items.append(((-vz, vx, y, 1), lambda sprite=sprite, rect=rect: s.blit(sprite, rect)))
             if y and (vx, vz, y - 1) not in occupied:
                 ground = max((h + 1 for h in range(y) if (vx, vz, h) in occupied), default=0)
-                items.append(((-vz, vx, ground - 1, 2), self._shadow_sprite(), (vx, vz, ground - 1)))
-        for _, sprite, cell in sorted(items, key=lambda i: i[0]):
-            s.blit(sprite, self._sprite_rect(*cell))
+                items.append(((-vz, vx, ground - 1, 2), lambda vx=vx, vz=vz, g=ground, y=y, c=color: self._shadow(s, vx, vz, g, y, c)))
+        for _, paint in sorted(items, key=lambda i: i[0]):
+            paint()
         return s
 
     def _fit(self, w, h) -> int:
@@ -522,7 +539,7 @@ class BlocksRoom:
         fill, edge = (40, 150) if self._blink_on else (16, 70)
         self._outline(layer, column, edge, fill)
         if y < HEIGHT:
-            self._shadow(layer, vx, vz, y)
+            self._shadow(layer, vx, vz, self._ground(y), y, self._color)
             layer.blit(self._sprite(self._color, 170 if self._blink_on else 100, vz), self._sprite_rect(vx, vz, y))
         layer.blit(front, (0, 0))
         self._ceiling_patch(layer, vx, vz)
@@ -537,14 +554,9 @@ class BlocksRoom:
                 pygame.draw.polygon(layer, (*rgb(self._color), fill), poly)
             pygame.draw.polygon(layer, (*rgb(P.TEXT), edge), poly, 1)
 
-    def _shadow(self, layer, vx, vz, y):
-        """The landing block's shadow, and a thread down to it when it floats."""
-        ground = max((h + 1 for h in self._column() if h < y), default=0)
-        layer.blit(self._shadow_sprite(), self._sprite_rect(vx, vz, ground - 1))
-        if ground < y:
-            hy = self._metrics()[1]
-            cx, cy = self._corner(vx + 0.5, vz + 0.5, ground)
-            pygame.draw.line(layer, (*rgb(P.TEXT), 110), (cx, cy), (cx, cy - (y - ground) * hy), 1)
+    def _ground(self, y: int) -> int:
+        """The level the cursor's block would rest on below height y."""
+        return max((h + 1 for h in self._column() if h < y), default=0)
 
     def _ceiling_patch(self, layer, vx, vz):
         cells = [(dx, dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1) if 0 <= vx + dx < WIDTH and 0 <= vz + dz < DEPTH]

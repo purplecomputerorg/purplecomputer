@@ -4,13 +4,13 @@ Shift with Up or Down moves it either way, that height carries to other
 columns, Backspace eats down the column then steps left, a chord mixes the
 second key's color into the block the first one dropped, holding a letter or
 Space while arrowing lays a line, Tab flips to the back with arrows still
-moving the way they point, rows in front of the cursor's row fade, and the
+moving the way they point, rows in front of the cursor's row fade when they hide it, and the
 Esc picker reaches the room with 4."""
 
 import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.blocks_room import HEIGHT, TURN_MAX_BLOCKS, TURN_S, WIDTH
+from purple_tui.canvas.rooms.blocks_room import FRONT_ALPHA, HEIGHT, TURN_MAX_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import KeyboardStateMachine
@@ -156,7 +156,7 @@ def test_holding_a_letter_or_space_while_arrowing_lays_a_line():
     run(go())
 
 
-def test_rows_in_front_of_the_cursor_fade():
+def test_rows_in_front_fade_only_when_they_hide_the_landing_spot():
     async def go():
         app, room = _blocks()
         room._z = 2
@@ -164,8 +164,11 @@ def test_rows_in_front_of_the_cursor_fade():
         room._z = 6
         await press(app, "enter")               # floating, so the shadow hangs a thread
         app._draw()
-        assert room._front.get_bounding_rect().w
-        room._z = 2
+        assert room._front.get_bounding_rect().w and room._front.get_alpha() == FRONT_ALPHA
+        room._x = 20                            # the same row, clear of those blocks
+        app._draw()
+        assert room._front.get_alpha() == 255
+        room._x, room._z = 5, 2
         app._draw()
         assert not room._front.get_bounding_rect().w
     run(go())

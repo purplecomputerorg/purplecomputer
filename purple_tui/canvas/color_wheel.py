@@ -1,7 +1,8 @@
 """Color wheel for Art and Blocks: Backslash opens a disc of every hue, white at
 the center to dark at the rim. Arrows move a dot over it and the brush takes
 the color under the dot; Space or Enter keeps it, Esc puts the old one back,
-and any other key keeps it and goes on to the room."""
+and any other key keeps it and goes on to the room. Each room's wheel reopens
+on the last color kept from it, so a stray key never loses a hard-won pick."""
 
 import colorsys
 import functools
@@ -13,7 +14,7 @@ from .. import palette as P
 from ..color_mixing import rgb_to_hex
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from .gfx import rgb
-from .ui import Overlay
+from .ui import Overlay, arrow_key_metrics, arrow_keys_size, draw_arrow_keys, draw_keycap
 
 OPEN_KEY = "\\"
 HUES, RINGS = 36, 7          # ring 0 is the white center
@@ -21,7 +22,6 @@ LIGHT, DARK, SAT = 0.85, 0.22, 0.7
 STEP = 0.5 / RINGS           # dot travel per arrow press, in disc radii
 REACH = (RINGS - 0.5) / RINGS
 MOVES = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
-HINT = "Arrows pick. Space keeps it."
 
 
 def wheel_color(hue: int, ring: int) -> str:
@@ -82,7 +82,10 @@ class ColorWheel(Overlay):
         super().__init__(app)
         self.room = room
         self._was = room.brush_color
-        self._x, self._y = _spot(self._was)
+        spot = getattr(room, "wheel_spot", None)
+        self._x, self._y = spot or _spot(self._was)
+        if spot:
+            self._move([])
 
     async def handle(self, action):
         if isinstance(action, NavigationAction):
@@ -92,6 +95,8 @@ class ColorWheel(Overlay):
             return
         if isinstance(action, ControlAction) and action.action == "escape":
             self.room.set_brush_color(self._was)
+        elif self.room.brush_color != self._was:
+            self.room.wheel_spot = (self._x, self._y)
         self.close()
         passes_on = isinstance(action, CharacterAction) and action.char != OPEN_KEY or \
             isinstance(action, ControlAction) and action.action in ("backspace", "tab")
@@ -110,7 +115,8 @@ class ColorWheel(Overlay):
     def draw(self, g):
         vp = self.app._viewport_rect()
         d, pad, px = round(vp.h * 0.6), g.em(1.0), g.vh(1.9)
-        box = pygame.Rect(0, 0, d + 2 * pad, d + 2 * pad + g.line_height(px, "mono"))
+        keys_w, keys_h = arrow_keys_size(g, px)
+        box = pygame.Rect(0, 0, d + 2 * pad, d + 2 * pad + keys_h)
         box.centery = vp.centery
         if self.app._get_cursor_position()[0] < 0.5:
             box.right = vp.right - pad
@@ -125,4 +131,7 @@ class ColorWheel(Overlay):
         pygame.draw.circle(g.surface, rgb(P.ON_PRIMARY), (cx, cy), dot + max(2, dot // 2))
         pygame.draw.circle(g.surface, rgb(P.TEXT), (cx, cy), dot + max(1, dot // 4))
         pygame.draw.circle(g.surface, rgb(self.room.brush_color), (cx, cy), dot)
-        g.draw_text(HINT, px, box.centerx, box.bottom - pad // 2 - g.line_height(px, "mono") // 2, "mono", P.MUTED, anchor="center")
+        space_w = g.measure("Space", px, "mono")[0] + round(px * 1.4)
+        x = box.centerx - (keys_w + px + space_w) // 2
+        y = box.bottom - pad // 2 - arrow_key_metrics(g, px)[1] // 2
+        draw_keycap(g, "Space", px, draw_arrow_keys(g, px, x, y).right + round(px * 1.7), y)

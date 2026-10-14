@@ -1,7 +1,7 @@
 """Backslash opens the color wheel in Art and Blocks: arrows move the dot and
 the brush follows it, Space keeps the color, Esc puts the old one back, any
-other key keeps it and reaches the room, and a wheel color paints like a
-letter color. Also Art's eraser: holding Backspace makes arrows clear a trail."""
+other key keeps it and reaches the room, the wheel reopens on the last color
+kept in that room, and a wheel color paints like a letter color. Also Art's eraser: holding Backspace makes arrows clear a trail."""
 
 from purple_tui.canvas.color_wheel import ColorWheel, _cell, _spot, wheel_color
 from purple_tui.canvas.harness import make_app, press, run
@@ -49,6 +49,38 @@ def test_a_letter_closes_the_wheel_and_paints():
         await press(app, "g")
         assert app.top is None and room.brush_color == get_key_color("g")
         assert len(room._painted_positions) == 1
+    run(go())
+
+
+def test_the_wheel_reopens_on_the_last_kept_color_per_room():
+    async def go():
+        app, art = _room("art")
+        await press(app, "\\")
+        await press(app, "up")
+        await press(app, "left")
+        picked = art.brush_color
+        await press(app, "g")
+        assert art.brush_color == get_key_color("g")
+        await press(app, "\\")
+        assert art.brush_color == picked
+        await press(app, "space")
+        app.action_switch_room("blocks")
+        blocks = app.rooms["blocks"]
+        was = blocks.brush_color
+        await press(app, "\\")
+        assert blocks.brush_color == was
+    run(go())
+
+
+def test_escape_does_not_remember_the_color():
+    async def go():
+        app, room = _room("art")
+        await press(app, "r")
+        await press(app, "\\")
+        await press(app, "down")
+        await press(app, "escape")
+        await press(app, "\\")
+        assert room.brush_color == get_key_color("r")
     run(go())
 
 

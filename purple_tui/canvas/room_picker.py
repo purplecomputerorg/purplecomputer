@@ -13,7 +13,7 @@ from . import key_save
 from .paper import can_print
 from .rooms.blocks_room import ICON_CUBE
 from .save_wall import ICON_SAVE
-from .ui import Dialog, Overlay, Picker, draw_keycap, draw_scrim
+from .ui import Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_scrim
 
 ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art"),
                 ("blocks", ICON_CUBE, "Blocks")]
@@ -184,17 +184,11 @@ class RoomPicker(Overlay):
         return ICON_PRINTER, PRINTER_LABELS[self.printer], "", True
 
     def _draw_arrow_cluster(self, g, cx, y):
-        """Inverted-T keycaps beside their label, [↑] floating over [↓]."""
-        px, space = g.em(0.9), g.em(0.35)
-        key_w = g.measure("↓", px, "mono")[0] + round(px * 1.4)
+        px = g.em(0.9)
         label_w = g.measure("Arrows move", px, "mono")[0]
-        x = cx - (label_w + g.em(0.9) + 3 * key_w + 2 * space) // 2
+        x = cx - (label_w + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
         x = g.draw_text("Arrows move", px, x, y, "mono", P.MUTED, anchor="midleft").right + g.em(0.9)
-        boxes = []
-        for glyph in "←↓→":
-            boxes.append(draw_keycap(g, glyph, px, x, y, color=P.ACCENT))
-            x = boxes[-1].right + space
-        draw_keycap(g, "↑", px, boxes[1].centerx, y - boxes[1].h - space, anchor="center", color=P.ACCENT)
+        draw_arrow_keys(g, px, x, y, color=P.ACCENT)
 
     def _card(self, g, r, on):
         if on:

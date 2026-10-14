@@ -504,6 +504,28 @@ def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", co
     return box
 
 
+def arrow_key_metrics(g: Gfx, px: int) -> tuple:
+    w, h = g.measure("↓", px, "mono")
+    return w + round(px * 1.4), h + round(px * 0.56), round(px * 0.2)
+
+
+def arrow_keys_size(g: Gfx, px: int) -> tuple:
+    key_w, key_h, space = arrow_key_metrics(g, px)
+    return 3 * key_w + 2 * space, 2 * key_h + space
+
+
+def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Rect:
+    """Inverted-T keycaps, [↑] floating over [↓]; (x, y) is the bottom row's
+    midleft. Returns the cluster's rect."""
+    key_w, key_h, space = arrow_key_metrics(g, px)
+    mid = x + key_w // 2 + key_w + space
+    for i, glyph in enumerate("←↓→"):
+        draw_keycap(g, glyph, px, mid + (i - 1) * (key_w + space), y, anchor="center", color=color)
+    draw_keycap(g, "↑", px, mid, y - key_h - space, anchor="center", color=color)
+    w, h = arrow_keys_size(g, px)
+    return pygame.Rect(x, y + key_h // 2 - h, w, h)
+
+
 def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str, tab_hint: str, icon=None):
     """Two mode labels (active one in inverse video) with the brush swatch, or
     an icon standing in for it, and the color wheel's keycap beside them, and

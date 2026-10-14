@@ -59,18 +59,33 @@ def brush_for_key(char: str):
     return None
 
 
-def _brush_shape(at, length: float, width: float, blunt: float, u: float) -> tuple:
-    """Bristles, ferrule and handle as polygons, tip first along the lean."""
-    n, belly, half, neck = 16, 0.4, width / 2, width * 0.36
-    side = [(length * t, blunt + (half - blunt) * math.sin(math.pi / 2 * t / belly) if t < belly
-             else half - (half - neck) * ((t - belly) / (1 - belly)) ** 2)
-            for t in (i / n for i in range(n + 1))]
-    bristles = [at(a, w) for a, w in side] + [at(a, -w) for a, w in reversed(side)]
-    strands = [(at(length * 0.35, width * k), at(length, width * k * 0.8)) for k in (-0.2, 0, 0.2)]
-    f0, f1, h1 = length, length + 0.3 * u, length + 1.55 * u
-    ferrule = [at(f0, width * 0.42), at(f1, width * 0.36), at(f1, -width * 0.36), at(f0, -width * 0.42)]
-    handle = [at(f1, 0.15 * u), at(h1, 0.1 * u), at(h1, -0.1 * u), at(f1, -0.15 * u)]
-    return bristles, strands, ferrule, handle, at(h1, 0)
+def _brush_shape(at, u: float, press: float) -> tuple:
+    """Bristles, sheen, ferrule and handle as polygons, tip first along the lean.
+    Pressing splays the bristles and bends their tip off sideways, the way a
+    brush flattens against paper."""
+    n, belly = 20, 0.42
+    length, half, bend = u * (1.15 - 0.2 * press), u * (0.4 + 0.12 * press), u * 0.6 * press
+    tip_r, neck = u * (0.01 + 0.08 * press), u * 0.21
+    width = lambda t: (tip_r + (half - tip_r) * math.sin(math.pi / 2 * t / belly) if t < belly
+                       else half - (half - neck) * ((t - belly) / (1 - belly)) ** 2)
+    dx, dy = BRUSH_LEAN
+    paper = at(0, 0)[1] + u * (0.5 - 0.45 * press)
+
+    def side(t, k):
+        x, y = at(length * t, 0)
+        tx_, ty_ = dx * length + 2 * bend * (1 - t), dy * length
+        m = math.hypot(tx_, ty_)
+        w = width(t) * k
+        return x - bend * (1 - t) ** 2 - ty_ / m * w, min(paper, y + tx_ / m * w)
+
+    ts = [i / n for i in range(n + 1)]
+    bristles = [side(t, 1) for t in ts] + [side(t, -1) for t in reversed(ts)]
+    sheen = [side(t, -0.45) for t in ts[4:15]]
+    f0, f1, h1 = length, length + 0.32 * u, length + 1.6 * u
+    ferrule = [at(f0, neck * 1.15), at(f1, neck * 0.95), at(f1, -neck * 0.95), at(f0, -neck * 1.15)]
+    stations = ((f1, 0.12), (f1 + 0.35 * u, 0.16), (h1, 0.07))
+    handle = [at(a, w * u) for a, w in stations] + [at(a, -w * u) for a, w in reversed(stations)]
+    return bristles, sheen, ferrule, handle, at(h1, 0)
 
 
 def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame.Surface:
@@ -91,12 +106,11 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame
             ring.center = (mid, mid + round(u * 0.15))
             pygame.draw.ellipse(surf, (*rgb(TIP_EDGE), alpha), ring.inflate(2 * edge, 2 * edge), band + 2 * edge)
             pygame.draw.ellipse(surf, (*rgb(color), alpha), ring, band)
-        tx, ty = mid, mid + u * (0.3 - BRUSH_FLOAT * lift)
+        tx, ty = mid + u * 0.3 * press, mid + u * (0.3 - BRUSH_FLOAT * lift)
         (dx, dy), (px, py) = BRUSH_LEAN, (-BRUSH_LEAN[1], BRUSH_LEAN[0])
         at = lambda a, b: (tx + dx * a + px * b, ty + dy * a + py * b)
-        bristles, strands, ferrule, handle, end = _brush_shape(
-            at, u * (1.1 - 0.2 * press), u * (0.62 + 0.25 * press), u * (0.06 + 0.14 * press), u)
-        r_end = round(u * 0.12)
+        bristles, sheen, ferrule, handle, end = _brush_shape(at, u, press)
+        r_end = round(u * 0.08)
         pygame.draw.circle(surf, rgb(TIP_EDGE), end, r_end + edge)
         parts = ((handle, P.ACCENT), (ferrule, P.TEXT), (bristles, color))
         for poly, _ in parts:
@@ -104,9 +118,7 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame
         for poly, fill in parts:
             pygame.draw.polygon(surf, rgb(fill), poly)
         pygame.draw.circle(surf, rgb(P.ACCENT), end, r_end)
-        shade = mix_colors_paint([color, TIP_EDGE])
-        for a, b in strands:
-            pygame.draw.line(surf, rgb(shade), a, b, edge)
+        pygame.draw.lines(surf, rgb(mix_colors_paint([color, "#FFFFFF"])), False, sheen, 2 * edge)
     elif tip == "erase":
         box = pygame.Rect(0, 0, u, u)
         box.center = (mid, mid)

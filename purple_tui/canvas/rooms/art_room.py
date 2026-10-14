@@ -29,7 +29,8 @@ CANVAS_BG = "#221440"
 CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
 TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
 BRUSH_LEAN = (0.5, -0.866)          # handle up and to the right, the way a right hand holds it
-BRUSH_FLOAT = 0.7                   # cells the lifted brush hovers above its shadow
+BRUSH_FLOAT = 1.0                   # cells the lifted brush hovers above its ring
+SPRITE_HALF = 3.5                   # cells from the cursor cell's center to the sprite's edge
 LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three quick frames
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
 HINTS = {
@@ -60,37 +61,41 @@ def brush_for_key(char: str):
 
 def _brush_shape(at, length: float, width: float, blunt: float, u: float) -> tuple:
     """Bristles, ferrule and handle as polygons, tip first along the lean."""
-    n = 10
-    side = [(length * i / n, blunt + (width / 2 - blunt) * (i / n) ** 0.6) for i in range(n + 1)]
+    n, belly, half, neck = 16, 0.4, width / 2, width * 0.36
+    side = [(length * t, blunt + (half - blunt) * math.sin(math.pi / 2 * t / belly) if t < belly
+             else half - (half - neck) * ((t - belly) / (1 - belly)) ** 2)
+            for t in (i / n for i in range(n + 1))]
     bristles = [at(a, w) for a, w in side] + [at(a, -w) for a, w in reversed(side)]
+    strands = [(at(length * 0.35, width * k), at(length, width * k * 0.8)) for k in (-0.2, 0, 0.2)]
     f0, f1, h1 = length, length + 0.3 * u, length + 1.55 * u
     ferrule = [at(f0, width * 0.42), at(f1, width * 0.36), at(f1, -width * 0.36), at(f0, -width * 0.42)]
     handle = [at(f1, 0.15 * u), at(h1, 0.1 * u), at(h1, -0.1 * u), at(f1, -0.15 * u)]
-    return bristles, ferrule, handle, at(h1, 0)
+    return bristles, strands, ferrule, handle, at(h1, 0)
 
 
 def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame.Surface:
-    """A 6c square centered on the cursor cell, drawn 4x and smoothed down.
+    """A 7c square centered on the cursor cell, drawn 4x and smoothed down.
     tip "brush" is a paintbrush in the brush color: lift 1 floats it above a
-    shadow on the cell (pen up), lift 0 presses its splayed bristles into the
+    ring on the cell (pen up), lift 0 presses its splayed bristles into the
     cell (pen down). "erase" is a hollow square over the cell. arrow_turn, when
     not None, adds a chevron turned that many degrees from pointing right."""
     s = 4
     u = c * s
-    mid = 3 * u
+    mid = round(SPRITE_HALF * u)
     surf = pygame.Surface((2 * mid, 2 * mid), pygame.SRCALPHA)
     edge = max(s, round(u * 0.06))
     if tip == "brush":
         press = 1 - lift
         if lift:
-            shadow = pygame.Rect(0, 0, round(u * 0.8), round(u * 0.36))
-            shadow.center = (mid, mid + round(u * 0.15))
-            pygame.draw.ellipse(surf, (*rgb(TIP_EDGE), round(200 * lift)), shadow)
+            ring, band, alpha = pygame.Rect(0, 0, round(u * 0.9), round(u * 0.42)), max(2 * s, round(u * 0.09)), round(255 * lift)
+            ring.center = (mid, mid + round(u * 0.15))
+            pygame.draw.ellipse(surf, (*rgb(TIP_EDGE), alpha), ring.inflate(2 * edge, 2 * edge), band + 2 * edge)
+            pygame.draw.ellipse(surf, (*rgb(color), alpha), ring, band)
         tx, ty = mid, mid + u * (0.3 - BRUSH_FLOAT * lift)
         (dx, dy), (px, py) = BRUSH_LEAN, (-BRUSH_LEAN[1], BRUSH_LEAN[0])
         at = lambda a, b: (tx + dx * a + px * b, ty + dy * a + py * b)
-        bristles, ferrule, handle, end = _brush_shape(
-            at, u * (1.0 - 0.2 * press), u * (0.55 + 0.3 * press), u * 0.12 * press, u)
+        bristles, strands, ferrule, handle, end = _brush_shape(
+            at, u * (1.1 - 0.2 * press), u * (0.62 + 0.25 * press), u * (0.06 + 0.14 * press), u)
         r_end = round(u * 0.12)
         pygame.draw.circle(surf, rgb(TIP_EDGE), end, r_end + edge)
         parts = ((handle, P.ACCENT), (ferrule, P.TEXT), (bristles, color))
@@ -99,6 +104,9 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame
         for poly, fill in parts:
             pygame.draw.polygon(surf, rgb(fill), poly)
         pygame.draw.circle(surf, rgb(P.ACCENT), end, r_end)
+        shade = mix_colors_paint([color, TIP_EDGE])
+        for a, b in strands:
+            pygame.draw.line(surf, rgb(shade), a, b, edge)
     elif tip == "erase":
         box = pygame.Rect(0, 0, u, u)
         box.center = (mid, mid)
@@ -113,14 +121,14 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame
         fill = color if tip else P.TEXT
         pygame.draw.polygon(surf, rgb(fill), tri)
         pygame.draw.polygon(surf, rgb(TIP_EDGE), tri, edge)
-    return pygame.transform.smoothscale(surf, (6 * c, 6 * c))
+    return pygame.transform.smoothscale(surf, (2 * mid // s, 2 * mid // s))
 
 
 def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
     """The cursor's brush, cropped and sized for the header beside Paint."""
     c = max(3, round(h / 2.6))
     surf = _brush_tip(c, color, "brush", None, lift)
-    return surf.subsurface(round(2.5 * c), 0, round(2.2 * c), round(3.6 * c)).copy()
+    return surf.subsurface(round((SPRITE_HALF - 0.5) * c), round((SPRITE_HALF - 3.3) * c), round(2.2 * c), round(3.8 * c)).copy()
 
 
 _brush_sounds: dict = {}

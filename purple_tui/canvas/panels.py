@@ -232,10 +232,12 @@ class SpaceHold:
             self.on_tap()
         return True
 
-    def other_key(self):
+    def other_key(self, flush: bool = True):
+        """flush False drops the pending tap: Space was held as a modifier."""
         if self.hold.on_other_key():
             self._stop_ring()
-            self.on_tap()
+            if flush:
+                self.on_tap()
 
     def _fire(self):
         self._stop_ring()

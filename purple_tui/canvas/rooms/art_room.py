@@ -36,7 +36,7 @@ HINTS = {
     "littles": "Type to paint!",
     "pen": "Brush is down! Arrows paint a trail. Space lifts the brush.",
     "erase": "Erasing! Arrows clear a trail.",
-    "paint": "Type to paint! Hold two letters to mix. Space puts the brush down.",
+    "paint": "Type to paint! Hold two letters to mix. Hold Space and move to paint a trail.",
     "write": "Type to write! Arrow keys move. Enter for a new line.",
 }
 
@@ -166,6 +166,7 @@ class ArtRoom:
         self._pen_down = False
         self._lift = 1.0              # the brush's height: 1 up, 0 pressed down; eases on Space
         self._lift_timer = None
+        self._pen_at_press = self._dragged = False   # holding Space while moving lowers the brush until release
         self._code_mode = False
         self._heading = "right"
         self._use_heading_cursor = False
@@ -538,9 +539,19 @@ class ArtRoom:
             self.echo.letter("write", " ")
         self.app.invalidate()
 
+    def _space_press(self, down: bool):
+        if down:
+            self._pen_at_press, self._dragged = self._pen_down, False
+        elif self._dragged and not self._pen_at_press:
+            self._set_pen(False)
+            self.echo.flush()
+
     async def handle(self, action):
-        if isinstance(action, ControlAction) and action.action == "space" and self.space.route(action):
-            return
+        if isinstance(action, ControlAction) and action.action == "space":
+            if not action.is_repeat:
+                self._space_press(action.is_down)
+            if self.space.route(action):
+                return
         if self.code_panel is not None:
             self.space.other_key()
             result = await self.code_panel.handle(action)
@@ -549,7 +560,8 @@ class ArtRoom:
             elif result == "close":
                 self.close_code_panel()
             return
-        self.space.other_key()
+        dragging = self._paint_mode and isinstance(action, NavigationAction) and action.space_held
+        self.space.other_key(flush=not dragging)
         prior_post_stamp_x = self._post_stamp_x
         self._post_stamp_x = None
         if isinstance(action, ControlAction):
@@ -619,6 +631,9 @@ class ArtRoom:
                 self._paint_at_cursor()
         if action.direction in ("up", "down") and prior_post_stamp_x is not None and not action.char_held:
             self._cursor_x = prior_post_stamp_x
+        if self._paint_mode and action.space_held and not self._erasing:
+            self._dragged = True
+            self._set_pen(True)
         paint_each_step = self._paint_mode and not self._erasing and (self._pen_down or bool(action.char_held))
         trail = self._erase_at_cursor if self._erasing else self._paint_stroke if paint_each_step else None
         if trail != self._paint_stroke:

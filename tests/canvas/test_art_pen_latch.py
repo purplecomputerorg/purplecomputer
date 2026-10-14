@@ -107,7 +107,7 @@ def test_hold_opens_code_panel_and_lifts_pen():
 
 def test_code_panel_disabled_space_is_immediate():
     """With Code Space off there is no tap-or-hold ambiguity: Space reaches the
-    canvas at once, so hold-space-then-arrows still paints."""
+    canvas at once, so a tap latches and hold-space-then-arrows paints until release."""
     async def _test():
         app, canvas = _art()
         app._code_panel_enabled = False
@@ -116,14 +116,41 @@ def test_code_panel_disabled_space_is_immediate():
         assert canvas._pen_down
         await canvas.handle(_space(is_repeat=True))
         assert canvas._pen_down
-        await canvas.handle(NavigationAction(direction='right'))
+        await canvas.handle(NavigationAction(direction='right', space_held=True))
         assert (6, 5) in canvas._painted_positions
         await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
         assert canvas.code_panel is None
         await canvas.handle(_space(is_down=False))
-        assert canvas._pen_down
-        await canvas.handle(_space())
         assert not canvas._pen_down
+        await _tap(canvas)
+        assert canvas._pen_down
+    _run(_test())
+
+
+def test_holding_space_while_moving_paints_until_release():
+    async def _test():
+        app, canvas = _art()
+        canvas._cursor_x = canvas._cursor_y = 5
+        await canvas.handle(_space())
+        await canvas.handle(NavigationAction(direction='right', space_held=True))
+        assert canvas._pen_down and {(5, 5), (6, 5)} <= canvas._painted_positions
+        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
+        assert canvas.code_panel is None
+        await canvas.handle(_space(is_down=False))
+        assert not canvas._pen_down
+        await canvas.handle(NavigationAction(direction='right'))
+        assert (7, 5) not in canvas._painted_positions
+    _run(_test())
+
+
+def test_holding_space_while_moving_keeps_a_latched_brush_down():
+    async def _test():
+        app, canvas = _art()
+        await _tap(canvas)
+        await canvas.handle(_space())
+        await canvas.handle(NavigationAction(direction='right', space_held=True))
+        await canvas.handle(_space(is_down=False))
+        assert canvas._pen_down
     _run(_test())
 
 

@@ -795,12 +795,13 @@ class PurpleApp:
         self.timeline_capture_now(room)
 
     def _step_time_travel(self, delta: int):
+        from .panels import stops
         tt = self._time_travel
         tl = self._timelines[tt["room"]]
-        index = max(0, min(len(tl) - 1, tt["index"] + delta))
-        if index == tt["index"]:
+        ahead = [s for s in stops(tl.times(), time.time()) if (s - tt["index"]) * delta > 0]
+        if not ahead:
             return
-        tt["index"] = index
+        index = tt["index"] = min(ahead, key=lambda s: abs(s - tt["index"]))
         try:
             self.apply_room_state(tt["room"], tl.state_at(index))
         except Exception:

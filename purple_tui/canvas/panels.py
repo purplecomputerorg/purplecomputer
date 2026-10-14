@@ -87,6 +87,7 @@ _DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
 _MAX_CONTEXT_RESULTS = 7
 SESSION_GAP_S = 20 * 60   # a pause this long starts a new stretch on the Time Travel track
 MAX_STRETCHES = 7
+OLD_STRETCH_STOPS = 5
 
 
 def keyword_autocomplete(room: str):
@@ -523,16 +524,16 @@ class TimeTravelBar:
         now = time.time()
         pad, cy = g.em(2), rect.y + g.vh(3)
         when = "Now" if index == len(times) - 1 else time_ago(times[index], now)
-        g.draw_text(f"{ICON_TIME_TRAVEL}  Time Travel", g.vh(2.1), rect.x + pad, cy, "sans-heavy", P.ACCENT, anchor="midleft")
-        g.draw_text(when, g.vh(2.6), rect.centerx, cy, "sans-heavy", P.TEXT, anchor="center")
-        g.draw_text("Enter: keep this      Esc: never mind", g.vh(1.8), rect.right - pad, cy, "sans", P.MUTED, anchor="midright")
+        g.draw_text(f"{ICON_TIME_TRAVEL}  Time Travel", g.vh(2.1), rect.x + pad, cy, "mono-heavy", P.ACCENT, anchor="midleft")
+        g.draw_text(when, g.vh(2.6), rect.centerx, cy, "mono-heavy", P.TEXT, anchor="center")
+        g.draw_text("Enter: keep this    Esc: never mind", g.vh(1.8), rect.right - pad, cy, "mono", P.MUTED, anchor="midright")
         track = pygame.Rect(rect.x + pad, rect.y + g.vh(5.2), rect.w - 2 * pad, g.vh(3))
         labels = self._draw_track(g, track, index, times, stretches(times, now))
         last_left = track.right
         for label, left, right, here in reversed(labels):   # newest first, so Today always fits
-            r = g.text(label, g.vh(1.7), "sans").get_rect(midtop=((left + right) // 2, track.bottom + g.vh(0.4)))
+            r = g.text(label, g.vh(1.7), "mono").get_rect(midtop=((left + right) // 2, track.bottom + g.vh(0.4)))
             if r.right < last_left - g.em(1) and r.x >= track.x:
-                g.draw_text(label, g.vh(1.7), r.x, r.y, "sans-bold" if here else "sans", P.MUTED if here else P.DIM)
+                g.draw_text(label, g.vh(1.7), r.x, r.y, "mono-bold" if here else "mono", P.MUTED if here else P.DIM)
                 last_left = r.x
 
     def _draw_track(self, g, track, index, times, runs) -> list:
@@ -545,7 +546,7 @@ class TimeTravelBar:
         for d, x, on in ((-1, a, live[0]), (1, track.w * k - a, live[1])):
             pygame.draw.polygon(surf, rgb(P.ACCENT if on else P.FIELD), [(x + d * a, cy), (x - d * a * 0.7, cy - a), (x - d * a * 0.7, cy + a)])
         x0, x1 = 2 * a + g.em(1.5) * k, track.w * k - 2 * a - g.em(1.5) * k
-        gap = g.em(2) * k
+        gap = g.em(1.2) * k
         weights = [(1 + math.log2(end - begin)) * (2 if label == "Today" else 1) for begin, end, label in runs]
         unit = (x1 - x0 - gap * (len(runs) - 1)) / sum(weights)
         x, knob_x, days = x0, x0, []
@@ -558,9 +559,6 @@ class TimeTravelBar:
             past = span.w if index >= end - 1 else knob_x - span.x if index >= begin else 0
             if past:
                 pygame.draw.rect(surf, rgb(P.LINE), (span.x, span.y, max(bar, past), bar), border_radius=bar // 2)
-            if begin:
-                for i in (-1, 0, 1):
-                    pygame.draw.circle(surf, rgb(P.DIM), (round(x - gap / 2 + i * bar * 0.9), cy), bar // 4)
             here = begin <= index < end
             if days and days[-1][0] == label:
                 days[-1] = (label, days[-1][1], span.right // k, days[-1][3] or here)
@@ -578,12 +576,17 @@ def _ago(n: int, unit: str) -> str:
 
 
 def day_label(t, now) -> str:
-    days = 99 if t is None else (date.fromtimestamp(now) - date.fromtimestamp(t)).days
+    if t is None:
+        return "Earlier"
+    days = (date.fromtimestamp(now) - date.fromtimestamp(t)).days
     if days <= 0:
         return "Today"
     if days == 1:
         return "Yesterday"
-    return _ago(days, "day") if days < 7 else "Long ago"
+    for limit, unit, size in ((7, "day", 1), (60, "week", 7), (365, "month", 30)):
+        if days < limit:
+            return _ago(days // size, unit)
+    return _ago(days // 365, "year")
 
 
 def time_ago(t, now) -> str:
@@ -610,3 +613,16 @@ def stretches(times, now) -> list:
         oldest = runs.pop(0)
         runs[0][0] = oldest[0]
     return runs
+
+
+def stops(times, now) -> list:
+    """The steps ← and → land on: every step of the newest stretch, but only a
+    few evenly spaced ones (always its last) in each older one, so the knob
+    crosses old history in a handful of presses."""
+    runs = stretches(times, now)
+    marks = {0, *range(runs[-1][0], runs[-1][1])}
+    for begin, end, _ in runs[:-1]:
+        n = end - begin
+        k = min(n, OLD_STRETCH_STOPS)
+        marks.update(begin + (j + 1) * n // k - 1 for j in range(k))
+    return sorted(marks)

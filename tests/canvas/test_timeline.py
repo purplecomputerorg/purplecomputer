@@ -126,7 +126,7 @@ class TestTimeTravelTrack:
         assert [label for *_, label in panels.stretches(times, NOW)] == ["Yesterday", "Today"]
 
     def test_unstamped_steps_are_one_old_stretch(self):
-        assert panels.stretches([None, None, NOW], NOW) == [[0, 2, "Long ago"], [2, 3, "Today"]]
+        assert panels.stretches([None, None, NOW], NOW) == [[0, 2, "Earlier"], [2, 3, "Today"]]
 
     def test_oldest_stretches_merge_down_to_the_cap(self):
         times = [NOW - i * panels.SESSION_GAP_S * 2 for i in range(20, 0, -1)]
@@ -139,7 +139,16 @@ class TestTimeTravelTrack:
         assert panels.time_ago(NOW - 60, NOW) == "1 minute ago"
         assert panels.time_ago(NOW - 5 * 3600, NOW) == "5 hours ago"
         assert panels.time_ago(NOW - 3 * 86400, NOW) == "3 days ago"
-        assert panels.time_ago(None, NOW) == "Long ago"
+        assert panels.time_ago(NOW - 20 * 86400, NOW) == "2 weeks ago"
+        assert panels.time_ago(NOW - 100 * 86400, NOW) == "3 months ago"
+        assert panels.time_ago(None, NOW) == "Earlier"
+
+    def test_old_stretches_have_few_stops_and_the_newest_has_all(self):
+        times = [NOW - 86400] * 40 + [NOW - 30] * 6
+        marks = panels.stops(times, NOW)
+        assert marks[0] == 0 and 39 in marks
+        assert len([m for m in marks if m < 40]) <= panels.OLD_STRETCH_STOPS + 1
+        assert marks[-6:] == list(range(40, 46))
 
     def test_draws_any_history(self):
         async def scenario():

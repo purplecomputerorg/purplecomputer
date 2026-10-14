@@ -274,10 +274,8 @@ def test_holding_a_letter_or_space_while_arrowing_lays_a_line():
 def test_rows_in_front_fade_only_when_they_hide_the_landing_spot():
     async def go():
         app, room = _blocks()
-        room._z = 2
-        await type_text(app, "aaaa")
-        room._z = 6
-        await press(app, "enter")               # floating, so the shadow hangs a thread
+        room._blocks.update({(15, 4, y): "#ff0000" for y in range(3)})
+        room._x, room._z = 15, 6
         app._draw()
         assert room._front.get_bounding_rect().w and room._front.get_alpha() == FRONT_ALPHA
         room._x = 20                            # the same row, clear of those blocks
@@ -286,6 +284,16 @@ def test_rows_in_front_fade_only_when_they_hide_the_landing_spot():
         room._x, room._z = 5, 2
         app._draw()
         assert not room._front.get_bounding_rect().w
+    run(go())
+
+
+def test_building_backward_keeps_the_block_just_laid_solid():
+    async def go():
+        app, room = _blocks()
+        await press(app, "up")
+        await type_text(app, "aaa")
+        app._draw()
+        assert room._front.get_bounding_rect().w and room._front.get_alpha() == 255
     run(go())
 
 

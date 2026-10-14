@@ -542,10 +542,10 @@ class BlocksRoom:
         return self._scene, self._front
 
     def _front_covers_cursor(self) -> bool:
-        """Whether a nearer block sits over the landing block (a hidden shadow or thread doesn't count)."""
+        """Whether a nearer block hides the landing block's top; any block just in front hides its front face."""
         vx, vz = self._view(self._x, self._z)
-        spot = self._sprite_rect(vx, vz, self._cursor_y())
-        spot.inflate_ip(2 * CAGE_PAD * self._c, 2 * CAGE_PAD * self._c)
+        xs, ys = zip(*self._faces(*self._corner(vx, vz, self._cursor_y() + 1))[0])
+        spot = pygame.Rect(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)).inflate(-2, -2)
         return any(b[1] < vz and self._sprite_rect(*b[:3]).colliderect(spot) for b in self._placed())
 
     def _mark_row(self, s, row) -> pygame.Surface:

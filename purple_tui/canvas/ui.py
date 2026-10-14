@@ -211,11 +211,11 @@ class TextField:
         return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + (gap if gap is not None else px // 2)
 
     def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Type", label_px: int | None = None,
-             gap: int | None = None, trace: str = "", under=P.SURFACE) -> pygame.Rect:
+             gap: int | None = None, ideas: tuple = (), under=P.SURFACE) -> pygame.Rect:
         """'Label →  text▌' in the mono face; returns the rect used.
         label_px lets the label sit a step larger than the typed text; gap
         sets the space between label and text (a boxed field needs more).
-        While the text is the start of `trace`, the rest shows faint after
+        While the text starts one of `ideas`, the rest shows faint after
         the caret; `under` is the ground the caret cuts its letter out of."""
         mid = y + g.line_height(px, "mono") // 2
         g.draw_text(f"{label} →", label_px or px, x, mid, "mono-bold", P.ACCENT, anchor="midleft")
@@ -226,23 +226,24 @@ class TextField:
         if self._validator:
             self._underline(g, shown, px, tx, y)
         cx = tx + g.measure(before, px, "mono")[0] if before else tx
-        rest = self.trace_rest(trace) if start == 0 else ""
+        rest = self.trace_rest(ideas) if start == 0 else ""
         g.draw_text(rest, px, cx, y, "mono", P.DIM)
         g.rect(P.CARET, (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05)))
         g.draw_text(rest[:1], px, cx, y, "mono", under)
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
-    def trace_rest(self, trace: str) -> str:
-        """What is left of `trace` to type, when the text so far starts it."""
+    def trace_rest(self, ideas) -> str:
+        """What is left to type of the first idea the text so far starts."""
         v = self.value
-        if not v or self.cursor != len(v) or not trace.lower().startswith(v.lower()):
+        if not v or self.cursor != len(v):
             return ""
-        return trace[len(v):]
+        return next((i[len(v):] for i in ideas if i.lower().startswith(v.lower())), "")
 
     def draw_boxed(self, g: Gfx, x: int, y: int, width: int, px: int, label: str, placeholder: str = "",
-                   trace: str = "") -> pygame.Rect:
+                   ideas: tuple = ()) -> pygame.Rect:
         """The label, then a box out to `width` holding the text, with
-        `placeholder` faint inside while it is empty. Returns the box."""
+        `placeholder` faint inside while it is empty and `ideas` as chips on
+        its right until the text reaches them. Returns the box."""
         label_px, gap, pad = round(px * 1.15), round(px * 1.1), round(px * 0.55)
         tx = self.text_x(g, x, px, label, label_px, gap)
         box = pygame.Rect(tx - pad, y, x + width - tx + pad, round(px * 1.9))
@@ -252,8 +253,32 @@ class TextField:
         if placeholder and not self.value:
             hx = tx + px
             g.draw_text(_fit(g, placeholder, px, box.right - pad - hx), px, hx, ty, "mono", P.DIM)
-        self.draw(g, x, ty, box.right - pad - x, px, label, label_px, gap, trace, P.FIELD)
+        self.draw(g, x, ty, box.right - pad - x, px, label, label_px, gap, ideas, P.FIELD)
+        if ideas:
+            typed = self.value + self.trace_rest(ideas)
+            self._draw_ideas(g, ideas, tx + g.measure(typed, px, "mono")[0] + px, box, pad, px)
         return box
+
+    def _draw_ideas(self, g: Gfx, ideas, left: int, box: pygame.Rect, pad: int, px: int):
+        """'Try' then the ideas as chips, flush right in the box; the first
+        ones drop out as the text grows toward them."""
+        cpx = round(px * 0.75)
+        cpad, gap = round(cpx * 0.7), round(cpx * 0.5)
+        try_w = g.measure("Try", cpx, "sans-bold")[0]
+        chips = [(i, g.measure(i, cpx)[0] + 2 * cpad) for i in ideas]
+        while chips and box.right - pad - try_w - sum(w + gap for _, w in chips) < left:
+            chips.pop(0)
+        if not chips:
+            return
+        x = box.right - pad - try_w - sum(w + gap for _, w in chips)
+        g.draw_text("Try", cpx, x, box.centery, "sans-bold", P.DIM, anchor="midleft")
+        x += try_w + gap
+        h = round(cpx * 1.6)
+        for idea, w in chips:
+            chip = pygame.Rect(x, box.centery - h // 2, w, h)
+            g.rect(P.SURFACE, chip, radius=h // 2)
+            g.draw_text(idea, cpx, chip.centerx, chip.centery, "sans", P.MUTED, anchor="center")
+            x += w + gap
 
     def _visible_slice(self, g, px, avail):
         """Keep the cursor on screen for long lines by scrolling the start."""

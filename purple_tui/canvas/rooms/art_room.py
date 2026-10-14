@@ -11,11 +11,10 @@ import pygame
 
 from ... import palette as P
 from ...code_runner import ArtCodeRunner
-from ...constants import ICON_ROBOT
 from ...color_mixing import mix_colors_paint
 from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
-from .. import paper
+from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import can_open as can_open_wheel, open_on as open_color_wheel
 from ..panels import CodePanel, Echo, SpaceHold
@@ -37,7 +36,7 @@ HINTS = {
     "littles": "Type to paint!",
     "pen": "Brush is down! Arrows paint a trail. Space lifts the brush.",
     "erase": "Erasing! Arrows clear a trail.",
-    "paint": "Type to paint! Hold two letters to mix. Hold Space and move to paint a trail.",
+    "paint": "Type to paint! Hold Space and move to paint a trail.",
     "write": "Type to write! Arrow keys move. Enter for a new line.",
 }
 
@@ -179,6 +178,7 @@ class ArtRoom:
         self._paint_mode = True
         self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""
+        self._last_mix = None         # color_recipe.made() for the mix just made, until the next brush
         self._ink = None              # ABC letters' color from the wheel; None: light, or black/white over paint
         self._wheel_spots = {}        # per mode
         self._pen_down = False
@@ -257,7 +257,7 @@ class ArtRoom:
 
     def set_brush_color(self, color: str, key: str = ""):
         if self._paint_mode:
-            self._last_key_char, self._last_key_color = key, color
+            self._last_key_char, self._last_key_color, self._last_mix = key, color, None
         else:
             self._ink = None if color == P.TEXT else color
         self._post_paint_mode_changed()
@@ -292,7 +292,7 @@ class ArtRoom:
     def restore_timeline_state(self, state: dict):
         self._grid.clear()
         self._painted_positions.clear()
-        self._last_paint_pos = None
+        self._last_paint_pos = self._last_mix = None
         for key, val in state.items():
             if key.startswith("c:"):
                 x, y = (int(n) for n in key[2:].split(","))
@@ -510,8 +510,10 @@ class ArtRoom:
         pos = self._last_paint_pos
         if pos is None or self._last_key_char != held_key or not self._select_brush(char):
             return False
+        before = self._grid[pos][2]
         self._paint_at(pos)
         self.set_brush_color(self._grid[pos][2], char)
+        self._last_mix = color_recipe.made(held_key, before, char, self._grid[pos][2])
         return True
 
     def _select_brush(self, char: str) -> bool:
@@ -699,12 +701,18 @@ class ArtRoom:
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
         self._draw_letters(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
+        held = chrome_h and self._paint_mode and self._last_paint_pos and color_recipe.held_key(self.app, self._last_key_char)
+        if held:
+            x, y = self._last_paint_pos
+            cell = pygame.Rect(ox + x * c, oy + y * c, c, c)
+            color_recipe.draw_hold_badge(g, held, g.vh(1.9), cell, pygame.Rect(ox, oy, c * COLS, c * ROWS))
         if chrome_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             key = "littles" if self.app._littles_mode else self._hint_key()
             g.draw_text(HINTS[key], g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
-            if self.app._code_panel_enabled and not self.app._littles_mode:
-                g.draw_text(f"{ICON_ROBOT} Hold Space: write code", g.vh(1.9), foot.right, foot.centery, "mono", P.DIM, anchor="midright")
+            if not self.app._littles_mode:
+                color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled,
+                                           self._paint_mode and color_recipe.hint_row(self._last_key_char, self._last_mix))
 
     def _hint_key(self) -> str:
         if self._erasing:

@@ -1016,6 +1016,11 @@ class KeyboardStateMachine:
         return self._space_held
 
     @property
+    def held_char(self) -> str | None:
+        """The character key most recently pressed, while it is still down."""
+        return self._held_char
+
+    @property
     def backslash_held(self) -> bool:
         """True when backslash key is physically held."""
         return self._backslash_press_time is not None

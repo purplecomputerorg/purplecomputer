@@ -22,10 +22,9 @@ import pygame
 
 from ... import palette as P
 from ...color_mixing import mix_colors_paint
-from ...constants import ICON_ROBOT
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import DEFAULT_BRUSH_COLOR
-from .. import paper
+from .. import color_recipe, paper
 from ..color_wheel import can_open as can_open_wheel, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo, SpaceHold
@@ -55,7 +54,6 @@ WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), (
         "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
         RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
 HINT = "Type to build the way you last moved! Enter goes up."
-MIX_HINT = "Hold two letters to mix"
 
 
 @cache
@@ -90,6 +88,7 @@ class BlocksRoom:
         self._hover = 0               # chosen cursor height; 0 = resting on the column
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
+        self._last_mix = None         # color_recipe.made() for the mix just made, until the next brush
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where the next letter goes after it, even onto a floating block
         self._dir = "right"           # the way typing builds: a key of WRAP
@@ -184,7 +183,7 @@ class BlocksRoom:
         self._x, self._z = state.get("cursor", [WIDTH // 2, DEPTH // 2])
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._last = self._next = None
+        self._last = self._next = self._last_mix = None
         self._dir = "right"
         self.echo.reset()
         self._changed()
@@ -270,8 +269,9 @@ class BlocksRoom:
         mixed in. Holding on, each next key mixes in too."""
         if not self._last or self._last[1] != held_key or self._last[0] not in self._blocks:
             return False
-        pos = self._last[0]
-        self._color = self._blocks[pos] = mix_colors_paint([self._blocks[pos], self._color])
+        pos, before = self._last[0], self._blocks[self._last[0]]
+        self._color = self._blocks[pos] = mix_colors_paint([before, self._color])
+        self._last_mix = color_recipe.made(held_key, before, self._key, self._color)
         self._last = (pos, self._key)
         self.app.set_legend(self._color, visible=True)
         self._changed()
@@ -309,7 +309,7 @@ class BlocksRoom:
         return self._color
 
     def set_brush_color(self, color: str, key: str = ""):
-        self._key, self._color = key, color
+        self._key, self._color, self._last_mix = key, color, None
         self.app.set_legend(color, visible=True)
 
     def _set_color(self, char: str):
@@ -606,15 +606,23 @@ class BlocksRoom:
         if p is None:
             g.surface.blit(scene, (ox, oy))
             self._draw_cursor(g, ox, oy, front)
+            self._draw_hold_badge(g, ox, oy, area)
         else:
             self._draw_turning(g, ox, oy, p)
         draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
                          1 if self._back else 0, self._color, "to turn around", wheel=can_open_wheel(self))
         if foot_h:
-            foot_y = inner.bottom - chrome_h // 2
-            right = f"{MIX_HINT}    {ICON_ROBOT} Hold Space: write code" if self.app._code_panel_enabled else MIX_HINT
-            g.draw_text(HINT, g.vh(1.9), inner.x, foot_y, "mono", P.DIM, anchor="midleft")
-            g.draw_text(right, g.vh(1.9), inner.right, foot_y, "mono", P.DIM, anchor="midright")
+            foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
+            g.draw_text(HINT, g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
+            color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._last_mix))
+
+    def _draw_hold_badge(self, g, ox, oy, area):
+        held = self._last and self.app._panel is None and color_recipe.held_key(self.app, self._last[1])
+        if held:
+            bx, bz, by = self._last[0]
+            x, y = self._corner(*self._view(bx, bz), by + 1)
+            top = pygame.Rect(ox + x, oy + y - self._metrics()[0], self._c, self._metrics()[0])
+            color_recipe.draw_hold_badge(g, held, g.vh(1.9), top, area)
 
     def _draw_turning(self, g, ox, oy, p):
         """One frame of the half turn: the world spun about the floor's center

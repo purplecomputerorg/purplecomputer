@@ -49,6 +49,7 @@ ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  �
                "blocks": "Arrows move  ← ↑ ↓ →"}
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
+LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
 CARET_BLINK_S = 0.53          # the classic terminal half-second
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
 SIDE_MARGIN_VW = 6            # air beside the frame; the sticker legend sits in the right one
@@ -117,6 +118,7 @@ class PurpleApp:
         self._escape_hold_timer = None
         self._escape_down_at = None
         self._backslash_hold_timer = None
+        self._held_char = self.held_letter = self._letter_hold_timer = None
         self._sticky_shift_timer = None
         self._evdev_reader = self._power_button_reader = self._lid_switch_reader = None
         self._frame_stats = FrameStats(self.g)
@@ -472,6 +474,20 @@ class PurpleApp:
         elif not sm.backslash_held and self._backslash_hold_timer is not None:
             self._backslash_hold_timer.stop()
             self._backslash_hold_timer = None
+        if sm.held_char != self._held_char:
+            self._track_letter_hold(sm.held_char)
+
+    def _track_letter_hold(self, char):
+        """`held_letter` is the character key down for LETTER_HOLD or longer, else None."""
+        if self._letter_hold_timer:
+            self._letter_hold_timer.stop()
+        self._held_char, self.held_letter = char, None
+        self._letter_hold_timer = self.timers.after(LETTER_HOLD, self._letter_held) if char else None
+        self.invalidate()
+
+    def _letter_held(self):
+        self.held_letter, self._letter_hold_timer = self._held_char, None
+        self.invalidate()
 
     async def _dispatch_keyboard_action(self, action):
         self._frame_stats.key()

@@ -35,9 +35,8 @@ from .blocks_code import WORDS, BlocksCodeRunner
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 WIDTH, DEPTH, HEIGHT = 30, 12, 12
-FLIP_S = 0.22                 # crossfade, for builds too big to turn smoothly
 TURN_S = 0.5
-TURN_MAX_BLOCKS = 400
+TURN_DETAIL_BLOCKS = 600     # visible blocks; past this the half turn drops seams and shadows
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
 FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this when they hide the landing block
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
@@ -91,7 +90,7 @@ class BlocksRoom:
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where the next letter goes after it, even onto a floating block
         self._dir = "right"           # the way typing builds: a key of WRAP
-        self._fade_from = self._fade_start = self._fade_timer = None
+        self._fade_start = self._fade_timer = None
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
         self._blink_on = True
@@ -332,11 +331,9 @@ class BlocksRoom:
 
     # ---------------------------------------------------------------- flipping
     def turn_around(self):
-        """Tab, here or in Time Travel: a live half turn, or a crossfade when the
-        build is too big to redraw every frame. One at a time."""
+        """Tab, here or in Time Travel: a live half turn, one at a time."""
         if self._fade_progress() is not None:
             return
-        self._fade_from = self._composite() if self._c and len(self._blocks) > TURN_MAX_BLOCKS else None
         self._back = not self._back
         self._fade_start = time.monotonic()
         if self._fade_timer is None:
@@ -346,13 +343,13 @@ class BlocksRoom:
     def _fade_tick(self):
         if self._fade_progress() is None:
             self._fade_timer.stop()
-            self._fade_timer = self._fade_from = None
+            self._fade_timer = None
         self.app.invalidate()
 
     def _fade_progress(self):
         if self._fade_start is None:
             return None
-        p = (time.monotonic() - self._fade_start) / (FLIP_S if self._fade_from is not None else TURN_S)
+        p = (time.monotonic() - self._fade_start) / TURN_S
         if p >= 1:
             self._fade_start = None
             return None
@@ -559,9 +556,6 @@ class BlocksRoom:
         s.blit(stripe, (0, 0))
         return s
 
-    def _composite(self) -> pygame.Surface:
-        return self._stack(self._scene_surfaces()[0].copy(), [b for b in self._placed() if b[1] < self._scene_row])
-
     def _stack(self, s, placed, haze: bool = True) -> pygame.Surface:
         """Far rows first, left to right, bottom up, so nearer faces paint over
         farther ones. A floating block's shadow goes right after whatever it falls on."""
@@ -609,11 +603,6 @@ class BlocksRoom:
         if p is None:
             g.surface.blit(scene, (ox, oy))
             self._draw_cursor(g, ox, oy, front)
-        elif self._fade_from is not None:
-            g.surface.blit(scene, (ox, oy))
-            g.surface.blit(front, (ox, oy))
-            self._fade_from.set_alpha(round(255 * (1 - p)))
-            g.surface.blit(self._fade_from, (ox, oy))
         else:
             self._draw_turning(g, ox, oy, p)
         draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
@@ -650,26 +639,31 @@ class BlocksRoom:
             return (center[0] + (x - cx) * ex[0] + (z - cz) * ez[0],
                     center[1] + (x - cx) * ex[1] + (z - cz) * ez[1] - y * hy)
 
-        sides = []                                      # (corner offsets, darkness) for the sides facing the viewer
+        sides = []                                      # (normal, corner offsets, darkness) for the sides facing the viewer
         for nx, nz, quad in ((0, -1, ((0, 0), (1, 0))), (1, 0, ((1, 0), (1, 1))),
                              (0, 1, ((1, 1), (0, 1))), (-1, 0, ((0, 1), (0, 0)))):
             rnx, rnz = nx * cos - nz * sin, nx * sin + nz * cos
             if rnz - ROW_SKEW * rnx < 0:
-                sides.append((quad, round(0.32 * max(0.0, rnx), 2)))   # rounded so `tint` remembers few shades
+                sides.append(((nx, nz), quad, round(0.32 * max(0.0, rnx), 2)))   # rounded so `tint` remembers few shades
 
-        def box(x0, y0, z0, x1, y1, z1, top, side, seam=None):
-            pts = []
-            for (ax, az), (bx, bz) in (q for q, _ in sides):
-                pts.append([at(x0 + (x1 - x0) * ax, y0, z0 + (z1 - z0) * az), at(x0 + (x1 - x0) * bx, y0, z0 + (z1 - z0) * bz),
-                            at(x0 + (x1 - x0) * bx, y1, z0 + (z1 - z0) * bz), at(x0 + (x1 - x0) * ax, y1, z0 + (z1 - z0) * az)])
-            pts.append([at(x0, y1, z0), at(x1, y1, z0), at(x1, y1, z1), at(x0, y1, z1)])
-            for poly, color in zip(pts, [side(dark) for _, dark in sides] + [top]):
-                pygame.draw.polygon(g.surface, color, poly)
-                if seam:
-                    pygame.draw.polygon(g.surface, seam, poly, 1)
+        def shape(w, h, d):
+            """A w by h by d box's visible faces as (normal, screen offsets from its low corner, darkness); (0, 0) is the top."""
+            def off(x, y, z):
+                return x * ex[0] + z * ez[0], x * ex[1] + z * ez[1] - y * hy
+            return [(n, [off(w * ax, 0, d * az), off(w * bx, 0, d * bz), off(w * bx, h, d * bz), off(w * ax, h, d * az)], dark)
+                    for n, ((ax, az), (bx, bz)), dark in sides] + [((0, 0), [off(0, h, 0), off(w, h, 0), off(w, h, d), off(0, h, d)], None)]
+
+        def box(x, y, z, faces, top, side, seam=None, shown=None):
+            px, py = at(x, y, z)
+            for n, offsets, dark in faces:
+                if shown is None or n in shown:
+                    poly = [(px + a, py + b) for a, b in offsets]
+                    pygame.draw.polygon(g.surface, top if dark is None else side(dark), poly)
+                    if seam:
+                        pygame.draw.polygon(g.surface, seam, poly, 1)
 
         slab_bg, seam = mix(CANVAS_BG, "#000000", 0.4), rgb(P.LINE)
-        box(0, -SLAB / BLOCK_RISE, 0, WIDTH, 0, DEPTH, rgb(CANVAS_BG), lambda dark: tint(slab_bg, "#000000", dark))
+        box(0, -SLAB / BLOCK_RISE, 0, shape(WIDTH, SLAB / BLOCK_RISE, DEPTH), rgb(CANVAS_BG), lambda dark: tint(slab_bg, "#000000", dark))
         tiles = rgb(CANVAS_BG), rgb(CANVAS_ALT)
         for x in range(WIDTH):
             for z in range(DEPTH):
@@ -687,9 +681,11 @@ class BlocksRoom:
             below = self._blocks.get((x, z, y - 1))
             return tint(haze(below, row(x, z)), "#ffffff", 0.22) if below else tiles[(x + z) % 2]
 
-        def block(x, z, y, color):
+        cube = shape(1, 1, 1)
+
+        def block(x, z, y, color, shown):
             hazed = haze(color, row(x, z))
-            box(x, y, z, x + 1, y + 1, z + 1, tint(hazed, "#ffffff", 0.22), lambda dark: tint(hazed, "#000000", dark), seam)
+            box(x, y, z, cube, tint(hazed, "#ffffff", 0.22), lambda dark: tint(hazed, "#000000", dark), seam, shown)
 
         def shadow(x, z, y, ground, color):
             pygame.draw.polygon(g.surface, tint(top(x, z, ground), "#000000", SHADOW_ALPHA / 255),
@@ -699,12 +695,23 @@ class BlocksRoom:
 
         items = []
         for (x, z, y), color in self._blocks.items():
-            items.append((depth(x, z, y), block, (x, z, y, color)))
+            shown = [n for n, _, _ in cube if (x + n[0], z + n[1], y + (n == (0, 0))) not in self._blocks]
+            if shown:                                   # a face against a neighbor is hidden by it
+                items.append((depth(x, z, y), block, (x, z, y, color, shown)))
+        if len(items) > TURN_DETAIL_BLOCKS:
+            seam = None                                 # too many to draw in full every frame: plain shapes only
+        else:
+            items += self._turning_shadows(depth, shadow)
+        for _, paint, args in sorted(items, key=lambda i: i[0], reverse=True):
+            paint(*args)
+
+    def _turning_shadows(self, depth, shadow) -> list:
+        items = []
+        for (x, z, y), color in self._blocks.items():
             if y and (x, z, y - 1) not in self._blocks:
                 ground = max((h + 1 for h in range(y) if (x, z, h) in self._blocks), default=0)
                 items.append((depth(x, z, ground - 1) - 1e-6, shadow, (x, z, y, ground, color)))
-        for _, paint, args in sorted(items, key=lambda i: i[0], reverse=True):
-            paint(*args)
+        return items
 
     def _draw_cursor(self, g, ox, oy, front):
         """A blinking glass column from the ceiling down onto the see-through

@@ -12,7 +12,7 @@ cursor's row fade when they hide it, and the Esc picker reaches the room with
 import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, TURN_MAX_BLOCKS, TURN_S, WIDTH
+from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import KeyboardStateMachine, NavigationAction
@@ -324,7 +324,6 @@ def test_turn_draws_and_stops_its_timer():
         await type_text(app, "abc")
         app._draw()
         await press(app, "tab")
-        assert room._fade_from is None          # small build: a live turn, not a crossfade
         for p in (0.25, 0.5, 0.75):
             room._fade_start = time.monotonic() - TURN_S * p
             app._draw()
@@ -335,14 +334,15 @@ def test_turn_draws_and_stops_its_timer():
     run(go())
 
 
-def test_big_builds_crossfade_instead_of_turning():
+def test_big_builds_still_turn():
     async def go():
         app, room = _blocks()
-        room._blocks = {(x % WIDTH, x // WIDTH % 12, x // (WIDTH * 12)): "#ff0000" for x in range(TURN_MAX_BLOCKS + 1)}
-        app._draw()
+        room._blocks = {(x, z, y): "#ff0000" for x in range(WIDTH) for z in range(DEPTH) for y in range(HEIGHT)}
+        assert len(room._blocks) > TURN_DETAIL_BLOCKS
         await press(app, "tab")
-        assert room._fade_from is not None
+        room._fade_start = time.monotonic() - TURN_S * 0.5
         app._draw()
+        assert room._fade_progress() is not None
     run(go())
 
 

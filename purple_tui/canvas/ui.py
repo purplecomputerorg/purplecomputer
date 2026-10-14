@@ -567,6 +567,25 @@ def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Re
     return pygame.Rect(x, y + key_h // 2 - h, w, h)
 
 
+def _draw_wheel_chip(g: Gfx, px: int, right: int, cy: int):
+    """'[\\] (wheel) Colors' in one pill, the key a solid keycap so it reads as press-me."""
+    from .color_wheel import OPEN_KEY, disc
+    pad = round(px * 0.35)
+    kw, kh = g.measure(OPEN_KEY, px, "mono-bold")
+    key = pygame.Rect(0, 0, kw + round(px * 1.4), kh + round(px * 0.56))
+    dot = disc(round(px * 1.3))
+    label_w = g.measure("Colors", px, "mono")[0]
+    pill = pygame.Rect(0, 0, pad + key.w + px // 2 + dot.get_width() + px // 2 + label_w + px, key.h + 2 * pad)
+    pill.midright = (right, cy)
+    g.rect(P.FIELD, pill, radius=pill.h // 2)
+    g.rect(P.LINE, pill, width=1, radius=pill.h // 2)
+    key.midleft = (pill.x + pad, cy)
+    g.rect(P.TEXT, key, radius=round(px * 0.5))
+    g.draw_text(OPEN_KEY, px, key.centerx, key.centery, "mono-bold", P.SURFACE, anchor="center")
+    x = g.surface.blit(dot, dot.get_rect(midleft=(key.right + px // 2, cy))).right + px // 2
+    g.draw_text("Colors", px, x, cy, "mono", P.TEXT, anchor="midleft")
+
+
 def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str | None, tab_hint: str,
                      icon=None, wheel: bool = False):
     """Two mode labels (active one in inverse video) with the brush swatch, or
@@ -580,15 +599,13 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     if icon:
         left = g.surface.blit(icon, icon.get_rect(midright=(left, cy))).x
     elif swatch:
-        sw = round(r.h * 0.5)
+        sw = round(px * 2.1)
         left -= sw
-        g.rect(swatch, (left, cy - sw // 2, sw, sw))
+        dot = pygame.Rect(left, cy - sw // 2, sw, sw)
+        g.rect(swatch, dot.inflate(-6, -6), radius=sw)
+        g.rect(P.TEXT, dot, width=2, radius=sw)
     if wheel:
-        from .color_wheel import OPEN_KEY, disc
-        left = g.draw_text("Colors", px, left - 2 * px, cy, "mono", P.MUTED, anchor="midright").x - px // 2
-        dot = disc(round(px * 1.2))
-        left = g.surface.blit(dot, dot.get_rect(midright=(left, cy))).x
-        draw_keycap(g, OPEN_KEY, px, left - int(px * 0.9), cy, anchor="midright")
+        _draw_wheel_chip(g, px, left - round(px * 1.6), cy)
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
         x += w + px

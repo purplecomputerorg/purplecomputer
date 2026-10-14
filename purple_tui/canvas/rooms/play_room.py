@@ -1,13 +1,15 @@
 """Play room: type a word, a sum, a color, and it comes to life. History
 scrolls up; the line you're typing shows a rotating set of ideas to try."""
 
+import re
+
 import pygame
 
 from ... import palette as P
 from ...constants import ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ...content import get_content
 from .. import paper
-from ..gfx import is_emoji, strip_markup
+from ..gfx import is_emoji, mix, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
 from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
@@ -34,6 +36,80 @@ PLAY_IDEAS = [
 TIMELINE_MAX_ENTRIES = 100
 MAX_HISTORY = 60
 SPEECH_ICONS = {"generating": "··", "playing": ICON_VOLUME_HIGH, "filtered": ICON_VOLUME_OFF}
+ABACUS_MARK = "\x1e"
+ABACUS_RE = re.compile(r"\x1e(\d+) (.*?)\x1e")
+ABACUS_SLOTS = 12  # 9 beads plus the gap they slide across
+
+
+class PlayEvaluator(SimpleEvaluator):
+    """Hands big counts to the room as a marked abacus to draw; the text rows
+    only line up in a terminal's fixed cells."""
+
+    def _format_number_with_dots(self, num, show_label=True, expression="", bead="●"):
+        n = int(num) if float(num).is_integer() else 0
+        if not self.INLINE_MAX < n < 10 ** len(self.ABACUS_COLORS):
+            return super()._format_number_with_dots(num, show_label, expression, bead)
+        rods = f"{ABACUS_MARK}{n} {bead}{ABACUS_MARK}"
+        return f"{self._format_number(num)}\n{rods}" if show_label else rods
+
+
+def answer_parts(markup: str) -> list:
+    """An answer's markup runs, with each abacus as an (n, bead) tuple."""
+    parts = ABACUS_RE.split(markup)
+    out = []
+    for i in range(0, len(parts), 3):
+        if text := parts[i].strip("\n"):
+            out.append(text)
+        if i + 1 < len(parts):
+            out.append((int(parts[i + 1]), parts[i + 2]))
+    return out
+
+
+def abacus_rows(n: int) -> list:
+    """(place name, digit, color) per rod, the biggest place on top."""
+    digits = str(n)
+    places = range(len(digits) - 1, -1, -1)
+    return [(SimpleEvaluator.PLACE_NAMES[10 ** p], int(d), SimpleEvaluator.ABACUS_COLORS[p])
+            for p, d in zip(places, digits)]
+
+
+def abacus_size(g, n: int) -> tuple:
+    slot, bar = g.em(1.8), g.em(0.45)
+    return slot, bar, len(str(n)) * slot + 2 * bar
+
+
+def draw_abacus(g, n: int, bead: str, x: int, y: int, frame, ground):
+    """A framed abacus: counted beads slid left, the rest waiting right,
+    the place names before each rod and its digit after it."""
+    rows = abacus_rows(n)
+    slot, bar, h = abacus_size(g, n)
+    px = g.em(1.3)
+    label_w = max(g.measure(name, px, "mono-bold")[0] for name, _, _ in rows)
+    box = pygame.Rect(x + label_w + g.em(0.9), y, ABACUS_SLOTS * slot + 2 * bar, h)
+    rod_h, bead_h = max(2, g.em(0.15)), g.em(1.25)
+    for i, (name, digit, color) in enumerate(rows):
+        cy = y + bar + i * slot + slot // 2
+        g.draw_text(name, px, box.x - g.em(0.9), cy, "mono-bold", color, anchor="midright")
+        g.rect(mix(frame, ground, 0.35), (box.x, cy - rod_h // 2, box.w, rod_h))
+        for k in range(9):
+            at = k if k < digit else k + ABACUS_SLOTS - 9
+            cell = pygame.Rect(box.x + bar + at * slot, cy - slot // 2, slot, slot)
+            draw_bead(g, bead if k < digit else None, color, cell, bead_h, mix(frame, ground, 0.78))
+        g.draw_text(str(digit), px, box.right + g.em(0.9), cy, "mono-bold", color, anchor="midleft")
+    g.rect(frame, box, width=bar, radius=bar)
+
+
+def draw_bead(g, bead, color, cell, h, idle):
+    """bead None is one not yet counted; a color block becomes a bead of its color."""
+    hexes = re.findall(r"\[on (#[0-9a-fA-F]{6})\]", bead or "")
+    if bead and bead != "●" and strip_markup(bead).strip():
+        w, bh = g.markup_size(bead, g.em(1.1), "mono-bold")
+        g.draw_markup(bead, g.em(1.1), cell.centerx - w // 2, cell.centery - bh // 2, "mono-bold")
+        return
+    pill = pygame.Rect(0, 0, cell.w - g.em(0.2), h)
+    pill.center = cell.center
+    fill = idle if bead is None else hexes[0] if hexes else color
+    g.rect(fill, pill, radius=h // 2)
 
 
 def _play_validator(word: str) -> bool:
@@ -73,7 +149,7 @@ class PlayRoom:
 
     def __init__(self, app):
         self.app = app
-        self.evaluator = SimpleEvaluator()
+        self.evaluator = PlayEvaluator()
         self.field = TextField(_play_autocomplete, validator=_play_validator)
         self.hints = HintRotator(PLAY_IDEAS)
         self.history: list = []
@@ -339,10 +415,17 @@ class PlayRoom:
         icon = SPEECH_ICONS.get(e.speech, "")
         return g.em(0.1) + (g.measure(icon, g.em(1.05), "mono-bold")[0] + g.em(0.5) if icon else 0)
 
+    def _part_height(self, g, e, part, width) -> int:
+        if isinstance(part, tuple):
+            return abacus_size(g, part[0])[2]
+        return g.markup_size(part, self._answer_px(g, e), "mono-bold", width, self._row_gap(g))[1]
+
     def _entry_height(self, g, e, width) -> int:
         if e.kind == "ask":
             return g.line_height(g.em(1.05), "mono")
-        return g.markup_size(e.markup, self._answer_px(g, e), "mono-bold", width - self._answer_indent(g, e), self._row_gap(g))[1]
+        width -= self._answer_indent(g, e)
+        parts = answer_parts(e.markup)
+        return sum(self._part_height(g, e, p, width) for p in parts) + self._row_gap(g) * (len(parts) - 1)
 
     def _draw_entry(self, g, e, x, y, width, ink=None):
         """ink is (text, muted, ground); the screen's tokens unless printing."""
@@ -356,8 +439,14 @@ class PlayRoom:
         if icon:
             g.draw_text(icon, g.em(1.05), x + g.em(0.1), y, "mono-bold", text)
         indent = self._answer_indent(g, e)
-        g.draw_markup(e.markup, self._answer_px(g, e), x + indent, y, "mono-bold", text, width - indent,
-                      dim_to=ground, line_gap=self._row_gap(g))
+        x, width = x + indent, width - indent
+        for part in answer_parts(e.markup):
+            if isinstance(part, tuple):
+                draw_abacus(g, *part, x, y, muted, ground)
+            else:
+                g.draw_markup(part, self._answer_px(g, e), x, y, "mono-bold", text, width,
+                              dim_to=ground, line_gap=self._row_gap(g))
+            y += self._part_height(g, e, part, width) + self._row_gap(g)
 
     def paper(self, g, size):
         """The newest asks and answers that fit the page, oldest at the top,

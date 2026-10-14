@@ -2,7 +2,7 @@
 
 Each room's state is a flat JSON dict (str keys). Steps are stored as NDJSON:
 a full snapshot line {"s": {...}} or a delta line {"d": {changed}, "r": [removed]}
-against the previous step. Replaying the file yields the room's latest state,
+against the previous step, each stamped with the wall-clock second it was taken ("t"). Replaying the file yields the room's latest state,
 which is how rooms are restored after a restart; scrubbing to any step replays
 from the nearest snapshot line.
 
@@ -14,6 +14,7 @@ PURPLE_TIMELINE_DIR points somewhere, so previews and tests stay deterministic.
 
 import json
 import os
+import time
 from pathlib import Path
 
 MAX_FILE_BYTES = 2_000_000
@@ -76,6 +77,11 @@ class RoomTimeline:
         self.load()
         return dict(self._tip) if self._tip is not None else None
 
+    def times(self) -> list:
+        """When each step was taken (epoch seconds), None for steps from before stamping."""
+        self.load()
+        return [step.get("t") for step in self._steps]
+
     def state_at(self, index: int) -> dict:
         """Replay to the state after step `index` (from the nearest snapshot)."""
         self.load()
@@ -101,6 +107,7 @@ class RoomTimeline:
                        if k not in self._tip or self._tip[k] != v}
             removed = [k for k in self._tip if k not in state]
             step = {"d": changed, "r": removed}
+        step["t"] = round(time.time())
         self._steps.append(step)
         self._tip = dict(state)
         self._append_to_disk(step)
@@ -122,7 +129,7 @@ class RoomTimeline:
     def _compact(self) -> None:
         """Drop the oldest half of history and rewrite the file atomically."""
         cut = len(self._steps) // 2
-        kept = [{"s": self.state_at(cut)}] + self._steps[cut + 1:]
+        kept = [{"s": self.state_at(cut), "t": self._steps[cut].get("t")}] + self._steps[cut + 1:]
         self._steps = kept
         path = self._path()
         if path is None:

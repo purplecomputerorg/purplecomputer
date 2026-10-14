@@ -5,8 +5,10 @@ kid does by hand.
 """
 
 import colorsys
+import math
 import re
 import time
+from datetime import date
 from functools import cache
 
 import pygame
@@ -83,7 +85,8 @@ _INSTRUMENT_NAMES = ['marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', '
 _INSTRUMENT_PREFIX = re.compile(r'.*\b(?:choose|select|use|play|instrument)\s+\S*$', re.IGNORECASE)
 _DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
 _MAX_CONTEXT_RESULTS = 7
-MAX_DOTS = 24
+SESSION_GAP_S = 20 * 60   # a pause this long starts a new stretch on the Time Travel track
+MAX_STRETCHES = 7
 
 
 def keyword_autocomplete(room: str):
@@ -501,34 +504,109 @@ class LoopPanel:
 
 
 class TimeTravelBar:
+    """Every step on one track, split into stretches where the kid took a
+    break. A stretch is as wide as the log of its steps (today's twice that),
+    so months of old history never crowd out today; the words say how long
+    ago it really was."""
     kind = "time"
 
     def __init__(self, app):
         self.app = app
 
     def height(self, g) -> int:
-        return g.vh(13)
-
-    def dots_markup(self) -> str:
-        """One dot per step over a window of the newest MAX_DOTS steps."""
-        index, total = self.app.time_travel_position()
-        count = min(total, MAX_DOTS)
-        start = min(max(0, total - count), index)
-        filled = index - start + 1 if total else 0
-        track = ("● " * filled + "○ " * (count - filled)).rstrip()
-        if start > 0:
-            track = f"[dim]⋯[/] {track}"
-        if start + count < total:
-            track = f"{track} [dim]⋯[/]"
-        left = "[dim]◀ back in time[/]" if index <= 0 else "◀ back in time"
-        right = "[dim]forward ▶[/]" if index >= total - 1 else "forward ▶"
-        return f"{left}   {track}   {right}"
+        return g.vh(11)
 
     def draw(self, g, rect):
-        cx = rect.centerx
-        g.draw_text(f"{ICON_TIME_TRAVEL} Time Travel", g.vh(2.6), cx, rect.y + g.vh(1.5), "mono-heavy", P.TEXT, anchor="midtop")
-        px = g.vh(2.4)
-        markup = self.dots_markup()
-        w = g.markup_size(markup, px)[0]
-        g.draw_markup(markup, px, cx - w // 2, rect.y + g.vh(5.5), "mono-bold", P.PRIMARY, dim_to=P.SURFACE)
-        g.draw_text("Enter: keep this    Esc: never mind", g.vh(1.9), cx, rect.bottom - g.vh(1.4), "mono", P.MUTED, anchor="midbottom")
+        index, times = self.app.time_travel_position()
+        if not times:
+            return
+        now = time.time()
+        pad, cy = g.em(2), rect.y + g.vh(3)
+        when = "Now" if index == len(times) - 1 else time_ago(times[index], now)
+        g.draw_text(f"{ICON_TIME_TRAVEL}  Time Travel", g.vh(2.1), rect.x + pad, cy, "sans-heavy", P.ACCENT, anchor="midleft")
+        g.draw_text(when, g.vh(2.6), rect.centerx, cy, "sans-heavy", P.TEXT, anchor="center")
+        g.draw_text("Enter: keep this      Esc: never mind", g.vh(1.8), rect.right - pad, cy, "sans", P.MUTED, anchor="midright")
+        track = pygame.Rect(rect.x + pad, rect.y + g.vh(5.2), rect.w - 2 * pad, g.vh(3))
+        labels = self._draw_track(g, track, index, times, stretches(times, now))
+        last_left = track.right
+        for label, left, right, here in reversed(labels):   # newest first, so Today always fits
+            r = g.text(label, g.vh(1.7), "sans").get_rect(midtop=((left + right) // 2, track.bottom + g.vh(0.4)))
+            if r.right < last_left - g.em(1) and r.x >= track.x:
+                g.draw_text(label, g.vh(1.7), r.x, r.y, "sans-bold" if here else "sans", P.MUTED if here else P.DIM)
+                last_left = r.x
+
+    def _draw_track(self, g, track, index, times, runs) -> list:
+        """The arrows, stretches and knob, drawn big and scaled down smooth.
+        Returns each day's (label, left, right, holds the knob) span."""
+        k = 3
+        surf = pygame.Surface((track.w * k, track.h * k), pygame.SRCALPHA)
+        cy, a, bar, knob = track.h * k // 2, g.vh(1) * k, g.vh(0.9) * k, g.vh(1.25) * k
+        live = (index > 0, index < len(times) - 1)
+        for d, x, on in ((-1, a, live[0]), (1, track.w * k - a, live[1])):
+            pygame.draw.polygon(surf, rgb(P.ACCENT if on else P.FIELD), [(x + d * a, cy), (x - d * a * 0.7, cy - a), (x - d * a * 0.7, cy + a)])
+        x0, x1 = 2 * a + g.em(1.5) * k, track.w * k - 2 * a - g.em(1.5) * k
+        gap = g.em(2) * k
+        weights = [(1 + math.log2(end - begin)) * (2 if label == "Today" else 1) for begin, end, label in runs]
+        unit = (x1 - x0 - gap * (len(runs) - 1)) / sum(weights)
+        x, knob_x, days = x0, x0, []
+        for (begin, end, label), w in zip(runs, weights):
+            span = pygame.Rect(round(x), cy - bar // 2, round(w * unit), bar)
+            steps = end - begin
+            if begin <= index < end:
+                knob_x = span.centerx if steps == 1 else span.x + bar // 2 + (span.w - bar) * (index - begin) // (steps - 1)
+            pygame.draw.rect(surf, rgb(P.FIELD), span, border_radius=bar // 2)
+            past = span.w if index >= end - 1 else knob_x - span.x if index >= begin else 0
+            if past:
+                pygame.draw.rect(surf, rgb(P.LINE), (span.x, span.y, max(bar, past), bar), border_radius=bar // 2)
+            if begin:
+                for i in (-1, 0, 1):
+                    pygame.draw.circle(surf, rgb(P.DIM), (round(x - gap / 2 + i * bar * 0.9), cy), bar // 4)
+            here = begin <= index < end
+            if days and days[-1][0] == label:
+                days[-1] = (label, days[-1][1], span.right // k, days[-1][3] or here)
+            else:
+                days.append((label, span.x // k, span.right // k, here))
+            x += w * unit + gap
+        pygame.draw.circle(surf, rgb(P.ON_PRIMARY), (knob_x, cy), knob + k * 2)
+        pygame.draw.circle(surf, rgb(P.TEXT), (knob_x, cy), knob)
+        g.surface.blit(pygame.transform.smoothscale(surf, track.size), track)
+        return [(label, track.x + left, track.x + right, here) for label, left, right, here in days]
+
+
+def _ago(n: int, unit: str) -> str:
+    return f"{n} {unit}{'' if n == 1 else 's'} ago"
+
+
+def day_label(t, now) -> str:
+    days = 99 if t is None else (date.fromtimestamp(now) - date.fromtimestamp(t)).days
+    if days <= 0:
+        return "Today"
+    if days == 1:
+        return "Yesterday"
+    return _ago(days, "day") if days < 7 else "Long ago"
+
+
+def time_ago(t, now) -> str:
+    day = day_label(t, now)
+    if day != "Today":
+        return day
+    secs = now - t
+    if secs < 60:
+        return "Just now"
+    return _ago(int(secs // 60), "minute") if secs < 3600 else _ago(int(secs // 3600), "hour")
+
+
+def stretches(times, now) -> list:
+    """[begin, end, day label] runs of steps, split at long pauses and new days,
+    the oldest merged together until there are at most MAX_STRETCHES."""
+    runs = []
+    for i, t in enumerate(times):
+        label, prev = day_label(t, now), times[i - 1] if i else None
+        if runs and runs[-1][2] == label and (t is None or prev is None or t - prev < SESSION_GAP_S):
+            runs[-1][1] = i + 1
+        else:
+            runs.append([i, i + 1, label])
+    while len(runs) > MAX_STRETCHES:
+        oldest = runs.pop(0)
+        runs[0][0] = oldest[0]
+    return runs

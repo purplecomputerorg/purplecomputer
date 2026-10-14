@@ -99,50 +99,55 @@ class TestRoomTimeline:
         assert len(lines) == 2
         assert "s" in json.loads(lines[0])
         parsed = json.loads(lines[1])
+        assert parsed.pop("t") > 0
         assert parsed == {"d": {"b": 2}, "r": ["a"]}
 
 
 # ---------------------------------------------------------------------------
-# Time Travel bar dot track
+# Time Travel bar track
 # ---------------------------------------------------------------------------
 
+from datetime import datetime
 from types import SimpleNamespace
 
 from purple_tui.canvas import panels
 from purple_tui.canvas.harness import make_app, run, type_text
 
+NOW = datetime(2026, 10, 13, 15, 0).timestamp()
 
-class TestTimeTravelDots:
-    def _markup(self, index, total):
-        bar = panels.TimeTravelBar(SimpleNamespace(time_travel_position=lambda: (index, total)))
-        return bar.dots_markup()
 
-    def test_short_history_is_one_dot_per_step(self):
-        markup = self._markup(2, 3)
-        assert markup.count("●") == 3
-        assert "○" not in markup
-        assert "⋯" not in markup
-        assert "forward" in markup and "back in time" in markup
+class TestTimeTravelTrack:
+    def test_a_long_pause_starts_a_new_stretch(self):
+        times = [NOW - 3600, NOW - 3590, NOW - 60, NOW - 50, NOW - 40]
+        assert panels.stretches(times, NOW) == [[0, 2, "Today"], [2, 5, "Today"]]
 
-    def test_each_step_back_clears_exactly_one_dot(self):
-        total = panels.MAX_DOTS * 4
-        for presses in range(1, 4):
-            markup = self._markup(total - 1 - presses, total)
-            assert markup.count("○") == presses
+    def test_a_new_day_starts_a_new_stretch(self):
+        times = [NOW - 86400, NOW - 10]
+        assert [label for *_, label in panels.stretches(times, NOW)] == ["Yesterday", "Today"]
 
-    def test_long_history_shows_more_marker(self):
-        markup = self._markup(99, 100)
-        assert markup.count("●") == panels.MAX_DOTS
-        assert "⋯" in markup
+    def test_unstamped_steps_are_one_old_stretch(self):
+        assert panels.stretches([None, None, NOW], NOW) == [[0, 2, "Long ago"], [2, 3, "Today"]]
 
-    def test_window_slides_when_scrubbed_past_left_edge(self):
-        markup = self._markup(10, 100)
-        assert markup.count("●") == 1
-        assert markup.count("⋯") == 2
+    def test_oldest_stretches_merge_down_to_the_cap(self):
+        times = [NOW - i * panels.SESSION_GAP_S * 2 for i in range(20, 0, -1)]
+        runs = panels.stretches(times, NOW)
+        assert len(runs) == panels.MAX_STRETCHES
+        assert runs[0][0] == 0 and runs[-1] == [19, 20, "Today"]
 
-    def test_endpoints_are_dimmed(self):
-        assert "[dim]◀ back in time[/]" in self._markup(0, 5)
-        assert "[dim]forward ▶[/]" in self._markup(4, 5)
+    def test_time_ago_words(self):
+        assert panels.time_ago(NOW - 20, NOW) == "Just now"
+        assert panels.time_ago(NOW - 60, NOW) == "1 minute ago"
+        assert panels.time_ago(NOW - 5 * 3600, NOW) == "5 hours ago"
+        assert panels.time_ago(NOW - 3 * 86400, NOW) == "3 days ago"
+        assert panels.time_ago(None, NOW) == "Long ago"
+
+    def test_draws_any_history(self):
+        async def scenario():
+            app = make_app()
+            for index, times in ((0, [NOW]), (3, [None] * 5 + [NOW - 86400 * 2, NOW - 100, NOW])):
+                bar = panels.TimeTravelBar(SimpleNamespace(time_travel_position=lambda: (index, times)))
+                bar.draw(app.g, app._viewport_rect())
+        run(scenario())
 
 
 def test_art_state_round_trip():

@@ -808,8 +808,9 @@ class PurpleApp:
         self.invalidate()
 
     def time_travel_position(self):
+        """The step on show and when each step was taken."""
         tt = self._time_travel
-        return (tt["index"], len(self._timelines[tt["room"]])) if tt else (0, 0)
+        return (tt["index"], self._timelines[tt["room"]].times()) if tt else (0, [])
 
     async def _handle_time_travel_action(self, action):
         if isinstance(action, NavigationAction):

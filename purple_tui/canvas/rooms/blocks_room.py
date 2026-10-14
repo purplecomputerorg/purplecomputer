@@ -44,6 +44,8 @@ DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the fl
 SHADOW_ALPHA = 140
 STEM_ALPHA, STEM_DARKEN = 150, 0.35   # the line from a floating block down to its shadow
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
+# The direction arrow as (along, across) points in cells, from the box center outward.
+POINTER = ((0.1, -0.09), (0.75, -0.09), (0.75, -0.3), (1.2, 0), (0.75, 0.3), (0.75, 0.09), (0.1, 0.09))
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
@@ -727,7 +729,13 @@ class BlocksRoom:
         fill, edge = (40, 150) if self._blink_on else (16, 70)
         self._outline(layer, column, edge, fill)
         self._shadow(layer, vx, vz, self._ground(y), y, self._color)
+        d = self._step()
+        ghost, behind = self._ghost(vx + d["x"], vz + d["z"], y + d["y"]), d["z"] > d["x"] + d["y"]
+        if behind:
+            layer.blit(ghost, (0, 0))
         layer.blit(self._sprite(self._color, 170 if self._blink_on else 100, vz), self._sprite_rect(vx, vz, y))
+        if not behind:
+            layer.blit(ghost, (0, 0))
         layer.blit(front, (0, 0))
         g.surface.blit(layer, (ox, oy))
         layer.fill((0, 0, 0, 0))                # draw calls replace pixels rather than blend, so the see-through top goes on fresh
@@ -769,18 +777,24 @@ class BlocksRoom:
                     ends = [self._corner(vx + a, vz + b, y + h) for a, b, h in (p, q)]
                     pygame.draw.line(layer, (*rgb(P.TEXT), 90 if hidden in (p, q) else 230), *ends, 1 if hidden in (p, q) else 2)
 
-    def _pointer(self, layer, vx, vz, y):
-        """An arrow out of the wire box (its top, or its bottom going down) the way the next typed block goes."""
+    def _step(self) -> dict:
         axis, step = WRAP[self._dir][0]
-        d = {a: (step if a == axis else 0) for a in SIZE}
-        top = y - CAGE_PAD if self._dir == SINK else y + 1 + CAGE_PAD
-        start = self._corner(vx + 0.5, vz + 0.5, top)
-        end = self._corner(vx + 0.5 + 1.3 * d["x"], vz + 0.5 + 1.3 * d["z"], top + 1.2 * d["y"])
-        ux, uy = end[0] - start[0], end[1] - start[1]
-        n = math.hypot(ux, uy) or 1
-        ux, uy, head = ux / n, uy / n, max(5, self._c * 0.32)
-        tip = [end, (end[0] - head * (ux - uy * 0.6), end[1] - head * (uy + ux * 0.6)),
-               (end[0] - head * (ux + uy * 0.6), end[1] - head * (uy - ux * 0.6))]
-        width = max(2, round(self._c * 0.08))
-        pygame.draw.line(layer, (*rgb(P.TEXT), 240), start, (end[0] - ux * head * 0.5, end[1] - uy * head * 0.5), width)
-        pygame.draw.polygon(layer, (*rgb(P.TEXT), 240), tip)
+        return {a: (step if a == axis else 0) for a in SIZE}
+
+    def _ghost(self, vx, vz, y) -> pygame.Surface:
+        """A faint box where the next typed block goes, on its own surface so it blends."""
+        ghost = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
+        if 0 <= vx < WIDTH and 0 <= vz < DEPTH and 0 <= y < HEIGHT:
+            self._outline(ghost, self._faces(*self._corner(vx, vz, y + 1)), 160, 70)
+        return ghost
+
+    def _pointer(self, layer, vx, vz, y):
+        """An arrow out of the wire box's top (or bottom, going down) the way
+        the next typed block goes, laid flat in the scene so depth foreshortens it."""
+        d = self._step()
+        across = {"x": 0, "z": 1} if d["x"] else {"x": 1, "z": 0}
+        base = y - CAGE_PAD if self._dir == SINK else y + 1 + CAGE_PAD
+        arrow = [self._corner(vx + 0.5 + u * d["x"] + v * across["x"], vz + 0.5 + u * d["z"] + v * across["z"], base + u * d["y"])
+                 for u, v in POINTER]
+        pygame.draw.polygon(layer, (*rgb(P.TEXT), 240), arrow)
+        pygame.draw.polygon(layer, (*rgb(CANVAS_BG), 200), arrow, 1)

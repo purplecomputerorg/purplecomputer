@@ -1,5 +1,6 @@
 """Art room: a grid of square cells. Every letter paints its sticker color,
-Backslash opens the color wheel, Space puts the brush down so arrows draw,
+Backslash opens the color wheel (for the brush, or in ABC for the letters),
+Space puts the brush down so arrows draw,
 holding Backspace makes arrows erase, Tab switches to writing letters, and
 hold Space opens the Logo-style code line."""
 
@@ -16,7 +17,7 @@ from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from .. import paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
-from ..color_wheel import open_on as open_color_wheel
+from ..color_wheel import can_open as can_open_wheel, open_on as open_color_wheel
 from ..panels import CodePanel, Echo, SpaceHold
 from ..ui import draw_label, draw_mode_switch
 
@@ -149,6 +150,7 @@ class ArtRoom:
     name = "art"
     LANDSCAPE = True
     HAS_CODE = True
+    wheel_ready = True
     canvas_width = COLS
     canvas_height = ROWS
     _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
@@ -163,6 +165,8 @@ class ArtRoom:
         self._paint_mode = True
         self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""
+        self._ink = None              # ABC letters' color from the wheel; None: light, or black/white over paint
+        self._wheel_spots = {}        # per mode
         self._pen_down = False
         self._lift = 1.0              # the brush's height: 1 up, 0 pressed down; eases on Space
         self._lift_timer = None
@@ -234,11 +238,23 @@ class ArtRoom:
 
     @property
     def brush_color(self) -> str:
-        return self._last_key_color
+        """In ABC the wheel's 'brush' is the letters' ink."""
+        return self._last_key_color if self._paint_mode else self._ink or P.TEXT
 
     def set_brush_color(self, color: str, key: str = ""):
-        self._last_key_char, self._last_key_color = key, color
+        if self._paint_mode:
+            self._last_key_char, self._last_key_color = key, color
+        else:
+            self._ink = None if color == P.TEXT else color
         self._post_paint_mode_changed()
+
+    @property
+    def wheel_spot(self):
+        return self._wheel_spots.get(self._paint_mode)
+
+    @wheel_spot.setter
+    def wheel_spot(self, spot):
+        self._wheel_spots[self._paint_mode] = spot
 
     def _post_paint_mode_changed(self):
         self.app.set_legend(self._last_key_color if self._paint_mode else None, visible=True)
@@ -255,7 +271,8 @@ class ArtRoom:
     def timeline_state(self) -> dict:
         state = {f"c:{x},{y}": [ch, fg, bg, 1 if (x, y) in self._painted_positions else 0]
                  for (x, y), (ch, fg, bg) in self._grid.items()}
-        state.update(cursor=[self._cursor_x, self._cursor_y], paint=self._paint_mode, color=self._last_key_color)
+        state.update(cursor=[self._cursor_x, self._cursor_y], paint=self._paint_mode, color=self._last_key_color,
+                     ink=self._ink)
         return state
 
     def restore_timeline_state(self, state: dict):
@@ -273,6 +290,7 @@ class ArtRoom:
         self._paint_mode = bool(state.get("paint", True))
         self._set_pen(False)
         self._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
+        self._ink = state.get("ink")
         self.echo.reset()
         self._post_paint_mode_changed()
 
@@ -288,6 +306,7 @@ class ArtRoom:
         self._heading = "right"
         self._use_heading_cursor = False
         self._last_key_color = DEFAULT_BRUSH_COLOR
+        self._ink = None
         self.echo.reset()
         self._post_paint_mode_changed()
 
@@ -422,7 +441,7 @@ class ArtRoom:
         self._last_key_char = char
         self._last_key_color = get_key_color(char)
         bg = self._get_cell_bg(pos)
-        self._set_cell(pos, char, _contrast_text_color(bg) if pos in self._painted_positions else P.TEXT, bg)
+        self._set_cell(pos, char, self._ink or (_contrast_text_color(bg) if pos in self._painted_positions else P.TEXT), bg)
         self._post_stamp_x = self._cursor_x
         if direction == "right" and self._cursor_x >= COLS - 1:
             self._new_line()
@@ -599,13 +618,13 @@ class ArtRoom:
             self._backspace_repeat_count = 0
             char = action.char
             direction = action.arrow_held or "right"
+            if self._paint_mode and action.shift_held and char in UNSHIFT_MAP:
+                char = UNSHIFT_MAP[char]
+            if open_color_wheel(self, char):
+                return
             if not self._paint_mode:
                 self.type_char(char)
                 self.echo.letter("write", char)
-                return
-            if action.shift_held and char in UNSHIFT_MAP:
-                char = UNSHIFT_MAP[char]
-            if open_color_wheel(self, char):
                 return
             held = brush_for_key(action.char_held) if action.char_held else None
             mixed = bool(held) and not action.shift_held and self._mix_into_last(held[0], char)
@@ -746,5 +765,5 @@ class ArtRoom:
             draw_label(g, "Paint" if self._paint_mode else "Write", g.vh(1.9), r.centerx, r.centery, P.TEXT, anchor="center")
             return
         icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
-        draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self._last_key_color,
-                         "to write" if self._paint_mode else "to paint", icon)
+        draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self.brush_color,
+                         "to write" if self._paint_mode else "to paint", icon, can_open_wheel(self))

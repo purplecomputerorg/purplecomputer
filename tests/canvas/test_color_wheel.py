@@ -1,11 +1,13 @@
 """Backslash opens the color wheel in Art and Blocks: arrows move the dot and
 the brush follows it, Space keeps the color, Esc puts the old one back, any
 other key keeps it and reaches the room, the wheel reopens on the last color
-kept in that room, and a wheel color paints like a letter color. Also Art's eraser: holding Backspace makes arrows clear a trail."""
+kept in that room, a wheel color paints like a letter color, the Esc menu
+opens it too, and in ABC it colors the letters typed next. Also Art's eraser: holding Backspace makes arrows clear a trail."""
 
 from purple_tui.canvas.color_wheel import ColorWheel, _cell, _spot, wheel_color
 from purple_tui.canvas.harness import make_app, press, run
 from purple_tui.keyboard import ControlAction
+from purple_tui import palette as P
 from purple_tui.palette import get_key_color
 
 
@@ -101,12 +103,8 @@ def test_the_dot_starts_on_the_brush_color():
         assert wheel_color(*_cell(*_spot(wheel_color(hue, ring)))) == wheel_color(hue, ring)
 
 
-def test_backslash_writes_in_abc_and_does_nothing_in_littles():
+def test_backslash_does_nothing_in_littles():
     async def go():
-        app, room = _room("art")
-        await press(app, "tab")
-        await press(app, "\\")
-        assert app.top is None and room._grid[(0, 0)][0] == "\\"
         app, room = _room("blocks")
         app._littles_mode = True
         await press(app, "\\")
@@ -131,4 +129,34 @@ def test_held_backspace_erases_along_the_arrows():
         assert sorted(x for x, _ in room._painted_positions) == [0, 1, 5]
         await press(app, "left")
         assert sorted(x for x, _ in room._painted_positions) == [0, 1, 5]
+    run(go())
+
+
+def test_the_esc_menu_opens_the_wheel():
+    async def go():
+        for name, keys, offered in (("art", [], True), ("blocks", [], True), ("art", ["tab"], True)):
+            app, room = _room(name)
+            for k in keys:
+                await press(app, k)
+            await press(app, "escape")
+            assert ("colors" in app.top.tools) == offered
+            await press(app, "\\")
+            assert isinstance(app.top, ColorWheel) == offered
+    run(go())
+
+
+def test_in_abc_the_wheel_colors_the_letters():
+    async def go():
+        app, room = _room("art")
+        await press(app, "tab")
+        await press(app, "\\")
+        await press(app, "down")
+        await press(app, "down")
+        ink = room.brush_color
+        assert ink != P.TEXT
+        await press(app, "space")
+        await press(app, "h")
+        await press(app, "|")
+        cells = sorted((x, ch, fg) for (x, _), (ch, fg, _) in room._grid.items())
+        assert [(ch, fg) for _, ch, fg in cells] == [("h", ink), ("|", ink)]
     run(go())

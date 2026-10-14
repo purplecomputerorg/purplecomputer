@@ -47,8 +47,8 @@ def _spot(color: str) -> tuple:
     return d * math.sin(a), -d * math.cos(a)
 
 
-@functools.lru_cache(maxsize=2)
-def _disc(d: int) -> pygame.Surface:
+@functools.lru_cache(maxsize=4)
+def disc(d: int) -> pygame.Surface:
     """Pies from the rim inward, each ring painted over the last, drawn 2x and smoothed down."""
     s = 2
     big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)
@@ -64,9 +64,13 @@ def _disc(d: int) -> pygame.Surface:
     return pygame.transform.smoothscale(big, (d, d))
 
 
-def open_on(room, char: str) -> bool:
+def can_open(room) -> bool:
+    return getattr(room, "wheel_ready", False) and not room.app._littles_mode
+
+
+def open_on(room, char: str = OPEN_KEY) -> bool:
     """Backslash opens the wheel over the room; True when it did."""
-    if char != OPEN_KEY or room.app._littles_mode:
+    if char != OPEN_KEY or not can_open(room):
         return False
     room.app.push(ColorWheel(room.app, room))
     return True
@@ -125,7 +129,7 @@ class ColorWheel(Overlay):
         radius = g.em(0.6)
         g.rect(P.SURFACE, box, radius=radius)
         g.rect(P.LINE, box, width=1, radius=radius)
-        g.surface.blit(_disc(d), (box.x + pad, box.y + pad))
+        g.surface.blit(disc(d), (box.x + pad, box.y + pad))
         cx, cy = box.x + pad + d / 2 + self._x * d / 2, box.y + pad + d / 2 + self._y * d / 2
         dot = max(4, d // 28)
         pygame.draw.circle(g.surface, rgb(P.ON_PRIMARY), (cx, cy), dot + max(2, dot // 2))

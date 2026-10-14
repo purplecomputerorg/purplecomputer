@@ -264,20 +264,20 @@ class TextField:
         ones drop out as the text grows toward them."""
         cpx = round(px * 0.75)
         cpad, gap = round(cpx * 0.7), round(cpx * 0.5)
-        try_w = g.measure("Try", cpx, "sans-bold")[0]
-        chips = [(i, g.measure(i, cpx)[0] + 2 * cpad) for i in ideas]
+        try_w = g.measure("Try", cpx, "mono-bold")[0]
+        chips = [(i, g.measure(i, cpx, "mono")[0] + 2 * cpad) for i in ideas]
         while chips and box.right - pad - try_w - sum(w + gap for _, w in chips) < left:
             chips.pop(0)
         if not chips:
             return
         x = box.right - pad - try_w - sum(w + gap for _, w in chips)
-        g.draw_text("Try", cpx, x, box.centery, "sans-bold", P.DIM, anchor="midleft")
+        g.draw_text("Try", cpx, x, box.centery, "mono-bold", P.DIM, anchor="midleft")
         x += try_w + gap
         h = round(cpx * 1.6)
         for idea, w in chips:
             chip = pygame.Rect(x, box.centery - h // 2, w, h)
             g.rect(P.SURFACE, chip, radius=h // 2)
-            g.draw_text(idea, cpx, chip.centerx, chip.centery, "sans", P.MUTED, anchor="center")
+            g.draw_text(idea, cpx, chip.centerx, chip.centery, "mono", P.MUTED, anchor="center")
             x += w + gap
 
     def _visible_slice(self, g, px, avail):
@@ -563,20 +563,28 @@ def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Re
     return pygame.Rect(x, y + key_h // 2 - h, w, h)
 
 
-def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str, tab_hint: str, icon=None):
+def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str | None, tab_hint: str,
+                     icon=None, wheel: bool = False):
     """Two mode labels (active one in inverse video) with the brush swatch, or
-    an icon standing in for it, and the color wheel's keycap beside them, and
-    the Tab keycap with what it switches to on the right."""
+    an icon standing in for it, beside them; '[\\] Colors' further left while
+    the color wheel opens; the Tab keycap with what it switches to on the right."""
     px = g.vh(1.9)
     cy = r.centery
     widths = [g.measure(t, px, "mono-bold")[0] + px for t in labels]
     x = r.centerx - (sum(widths) + px) // 2
-    sw = icon.get_width() if icon else round(r.h * 0.5)
+    left = x - px
     if icon:
-        g.surface.blit(icon, icon.get_rect(midright=(x - px, cy)))
-    else:
-        g.rect(swatch, (x - px - sw, cy - sw // 2, sw, sw))
-    draw_keycap(g, "\\", px, x - px - sw - int(px * 0.9), cy, anchor="midright")
+        left = g.surface.blit(icon, icon.get_rect(midright=(left, cy))).x
+    elif swatch:
+        sw = round(r.h * 0.5)
+        left -= sw
+        g.rect(swatch, (left, cy - sw // 2, sw, sw))
+    if wheel:
+        from .color_wheel import OPEN_KEY, disc
+        left = g.draw_text("Colors", px, left - 2 * px, cy, "mono", P.MUTED, anchor="midright").x - px // 2
+        dot = disc(round(px * 1.2))
+        left = g.surface.blit(dot, dot.get_rect(midright=(left, cy))).x
+        draw_keycap(g, OPEN_KEY, px, left - int(px * 0.9), cy, anchor="midright")
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
         x += w + px

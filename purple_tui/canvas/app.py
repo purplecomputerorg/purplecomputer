@@ -581,6 +581,9 @@ class PurpleApp:
             self.push(SaveWall(self))
         elif result.get("print"):
             self.action_print()
+        elif result.get("colors"):
+            from .color_wheel import open_on
+            open_on(self.room)
 
     def _check_printer(self):
         """A toast when a printer is plugged in, gets ready, turns out not to work, or goes."""

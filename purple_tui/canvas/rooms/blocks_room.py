@@ -26,7 +26,7 @@ from ...constants import ICON_ROBOT
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import DEFAULT_BRUSH_COLOR
 from .. import paper
-from ..color_wheel import open_on as open_color_wheel
+from ..color_wheel import can_open as can_open_wheel, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo, SpaceHold
 from ..ui import draw_mode_switch
@@ -80,6 +80,7 @@ class BlocksRoom:
     name = "blocks"
     LANDSCAPE = True
     HAS_CODE = True
+    wheel_ready = True
 
     def __init__(self, app):
         self.app = app
@@ -608,7 +609,7 @@ class BlocksRoom:
         else:
             self._draw_turning(g, ox, oy, p)
         draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
-                         1 if self._back else 0, self._color, "to turn around")
+                         1 if self._back else 0, self._color, "to turn around", wheel=can_open_wheel(self))
         if foot_h:
             foot_y = inner.bottom - chrome_h // 2
             right = f"{MIX_HINT}    {ICON_ROBOT} Hold Space: write code" if self.app._code_panel_enabled else MIX_HINT

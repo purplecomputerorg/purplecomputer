@@ -211,10 +211,12 @@ class TextField:
         return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + (gap if gap is not None else px // 2)
 
     def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Type", label_px: int | None = None,
-             gap: int | None = None) -> pygame.Rect:
+             gap: int | None = None, trace: str = "", under=P.SURFACE) -> pygame.Rect:
         """'Label →  text▌' in the mono face; returns the rect used.
         label_px lets the label sit a step larger than the typed text; gap
-        sets the space between label and text (a boxed field needs more)."""
+        sets the space between label and text (a boxed field needs more).
+        While the text is the start of `trace`, the rest shows faint after
+        the caret; `under` is the ground the caret cuts its letter out of."""
         mid = y + g.line_height(px, "mono") // 2
         g.draw_text(f"{label} →", label_px or px, x, mid, "mono-bold", P.ACCENT, anchor="midleft")
         tx = self.text_x(g, x, px, label, label_px, gap)
@@ -224,10 +226,21 @@ class TextField:
         if self._validator:
             self._underline(g, shown, px, tx, y)
         cx = tx + g.measure(before, px, "mono")[0] if before else tx
+        rest = self.trace_rest(trace) if start == 0 else ""
+        g.draw_text(rest, px, cx, y, "mono", P.DIM)
         g.rect(P.CARET, (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05)))
+        g.draw_text(rest[:1], px, cx, y, "mono", under)
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
-    def draw_boxed(self, g: Gfx, x: int, y: int, width: int, px: int, label: str, placeholder: str = "") -> pygame.Rect:
+    def trace_rest(self, trace: str) -> str:
+        """What is left of `trace` to type, when the text so far starts it."""
+        v = self.value
+        if not v or self.cursor != len(v) or not trace.lower().startswith(v.lower()):
+            return ""
+        return trace[len(v):]
+
+    def draw_boxed(self, g: Gfx, x: int, y: int, width: int, px: int, label: str, placeholder: str = "",
+                   trace: str = "") -> pygame.Rect:
         """The label, then a box out to `width` holding the text, with
         `placeholder` faint inside while it is empty. Returns the box."""
         label_px, gap, pad = round(px * 1.15), round(px * 1.1), round(px * 0.55)
@@ -239,7 +252,7 @@ class TextField:
         if placeholder and not self.value:
             hx = tx + px
             g.draw_text(_fit(g, placeholder, px, box.right - pad - hx), px, hx, ty, "mono", P.DIM)
-        self.draw(g, x, ty, box.right - pad - x, px, label, label_px, gap)
+        self.draw(g, x, ty, box.right - pad - x, px, label, label_px, gap, trace, P.FIELD)
         return box
 
     def _visible_slice(self, g, px, avail):
@@ -272,7 +285,7 @@ def _fit(g: Gfx, text: str, px: int, avail: int) -> str:
 
 
 class HintRotator:
-    """The 'Try: ...' line that advances on Enter and every minute."""
+    """The suggestion that advances on Enter and every minute, unless held."""
 
     CYCLE_SECONDS = 60
 
@@ -281,11 +294,10 @@ class HintRotator:
         self.index = 0
         self._stamp = time.monotonic()
 
-    @property
-    def current(self) -> str:
+    def current(self, hold: bool = False):
         if not self.hints:
             return ""
-        if time.monotonic() - self._stamp > self.CYCLE_SECONDS:
+        if not hold and time.monotonic() - self._stamp > self.CYCLE_SECONDS:
             self.advance()
         return self.hints[self.index]
 

@@ -1,5 +1,5 @@
 """Play room: type a word, a sum, a color, and it comes to life. History
-scrolls up; the line you're typing sits above the rotating 'Try:' hint."""
+scrolls up; under the line you're typing sits a rotating idea card."""
 
 import pygame
 
@@ -14,22 +14,15 @@ from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
 from ..ui import MATH_OPERATORS, HintRotator, TextField
 
 PAPER_ZOOM = 1.6
-PLAY_HINTS = [
-    "Try: cat  •  2 + 2  •  trex!",
-    "Try: say hi  (or hello!, both speak aloud)  •  red sun",
-    "Try: red + blue!  •  5 dinos",
-    "Try: asdfghjkl  •  say yellow",
-    "Try: three cats!  •  pink fish",
-    "Try: say 4 + 3 cats  •  red + yellow!",
-    "Try: I love trex  •  blue frog!",
-    "Try: 4 birds + 2 owls  •  say purple  (speaks out loud)",
-    "Try: cat times 5  •  light pink unicorn!",
-    "Try: I have 5 dinos!  •  say 5 x 5 ducks",
-    "Try: pink + purple  •  dark green trex!",
-    "Try: say wow!  •  2 red, 3 blue",
-    "Try: orange + white  •  rainbow mermaid!  (end with ! to speak it)",
-    "Try: 20 19 18 17...  •  bright blue dinosaur!",
-    "Try: dinos ... 5  •  2 4 6 8...",
+PLAY_IDEAS = [
+    ("🐱", "cat"), ("🔢", "2 + 2"), ("🦖", "trex!"), ("👋", "say hi"), ("🌞", "red sun"),
+    ("🟣", "red + blue!"), ("🦕", "5 dinos"), ("🌈", "asdfghjkl"), ("🟡", "say yellow"),
+    ("🐱", "three cats!"), ("🐟", "pink fish"), ("🐱", "say 4 + 3 cats"), ("🟠", "red + yellow!"),
+    ("🦖", "I love trex"), ("🐸", "blue frog!"), ("🦉", "4 birds + 2 owls"), ("🟣", "say purple"),
+    ("🐱", "cat times 5"), ("🦄", "light pink unicorn!"), ("🦕", "I have 5 dinos!"),
+    ("🦆", "say 5 x 5 ducks"), ("🌸", "pink + purple"), ("🦖", "dark green trex!"), ("🤩", "say wow!"),
+    ("🔴", "2 red, 3 blue"), ("🍑", "orange + white"), ("🌈", "rainbow mermaid!"),
+    ("🔢", "20 19 18 17..."), ("🦕", "bright blue dinosaur!"), ("🦕", "dinos ... 5"), ("🔢", "2 4 6 8..."),
 ]
 TIMELINE_MAX_ENTRIES = 100
 MAX_HISTORY = 60
@@ -75,7 +68,7 @@ class PlayRoom:
         self.app = app
         self.evaluator = SimpleEvaluator()
         self.field = TextField(_play_autocomplete, validator=_play_validator)
-        self.hints = HintRotator(PLAY_HINTS)
+        self.hints = HintRotator(PLAY_IDEAS)
         self.history: list = []
         self.scroll = 0                  # px of history hidden below the bottom (scrolled up)
         self._timeline_entries: list = []
@@ -292,9 +285,11 @@ class PlayRoom:
         sub_h = g.line_height(sub_px, "mono")
         bottom = rect.bottom - em(1.2) - sub_h
         sub = self.field.autocomplete_markup or f"[dim]{self.field.recall_text()}[/]"
-        box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type", self.hints.current)
+        emoji, idea = self.hints.current(hold=bool(self.field.value))
+        box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type", trace=idea)
         sub_x = box.x + round(line_px * 0.55)
-        g.draw_markup(sub, sub_px, sub_x, bottom, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
+        card = self._draw_idea(g, emoji, idea, box.right, bottom + sub_h // 2, sub_px)
+        g.draw_markup(sub, sub_px, sub_x, bottom, "mono", P.MUTED, card.x - em(1) - sub_x, dim_to=P.SURFACE)
         top_limit = rect.y + em(1)
         base = box.y - em(1)
         viewport = base - top_limit
@@ -317,6 +312,18 @@ class PlayRoom:
             track = pygame.Rect(rect.right - em(0.5) - w, top_limit, w, viewport)
             g.rect(P.BG, track, radius=w // 2)
             g.rect(P.FIELD, scroll_thumb(track, viewport, total, self.scroll, em(1.5)), radius=w // 2)
+
+    def _draw_idea(self, g, emoji, idea, right, mid, px) -> pygame.Rect:
+        """A pill ending at `right`: the picture it makes, the words to type,
+        and a speaker when it talks."""
+        speaks = parse_speech_trigger(idea)[0]
+        label = f"{emoji}  {idea}" + (f"  {ICON_VOLUME_HIGH}" if speaks else "")
+        w, h = g.measure(label, px)
+        pad_x, pad_y = round(px * 0.9), round(px * 0.15)
+        pill = pygame.Rect(right - w - 2 * pad_x, mid - h // 2 - pad_y, w + 2 * pad_x, h + 2 * pad_y)
+        g.rect(P.LINE, pill, width=1, radius=pill.h // 2)
+        g.draw_text(label, px, pill.centerx, pill.centery, "sans", P.MUTED, anchor="center")
+        return pill
 
     def _answer_px(self, g, e) -> int:
         """Only a small all-emoji answer earns the big size; text stays a

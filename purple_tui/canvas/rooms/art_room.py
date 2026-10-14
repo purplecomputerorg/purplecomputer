@@ -9,7 +9,6 @@ import time
 import pygame
 
 from ... import palette as P
-from ...audio import play_safe
 from ...code_runner import ArtCodeRunner
 from ...constants import ICON_ROBOT
 from ...color_mixing import mix_colors_paint
@@ -141,21 +140,6 @@ def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
     c = max(3, round(h / 2.6))
     surf = _brush_tip(c, color, "brush", None, lift)
     return surf.subsurface(round((SPRITE_HALF - 0.5) * c), round((SPRITE_HALF - 3.3) * c), round(2.2 * c), round(3.8 * c)).copy()
-
-
-_brush_sounds: dict = {}
-
-
-def _play_brush_sound(down: bool):
-    """A low marimba tok when the brush touches down, a higher one as it lifts."""
-    if down not in _brush_sounds:
-        from .music_room import _find_sound, _load, _sounds_path
-        path = _find_sound(_sounds_path() / "marimba", "c4" if down else "g4")
-        _brush_sounds[down] = sound = _load(path) if path else None
-        if sound:
-            sound.set_volume(0.25)
-    if _brush_sounds[down]:
-        play_safe(_brush_sounds[down])
 
 
 class ArtRoom:
@@ -545,7 +529,6 @@ class ArtRoom:
     def _space(self, arrow_held):
         if self._paint_mode:
             self._set_pen(not self._pen_down)
-            _play_brush_sound(self._pen_down)
             if self._pen_down and arrow_held:
                 self._advance_after_stamp(arrow_held)
             elif not self._pen_down:

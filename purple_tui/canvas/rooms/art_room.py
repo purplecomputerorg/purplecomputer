@@ -88,6 +88,19 @@ def _brush_shape(at, u: float, press: float) -> tuple:
     return bristles, sheen, ferrule, handle, at(h1, 0)
 
 
+def _dash_outline(surf, mid: int, u: float, edge: int, color: str, alpha: int):
+    """Thin dashes around the cursor cell, the square the brush will paint."""
+    lo, hi, n = mid - u / 2, mid + u / 2, 3
+    seg, w = u / (2 * n - 1), max(2, round(u * 0.035))
+    for (x0, y0), (x1, y1) in (((lo, lo), (hi, lo)), ((hi, lo), (hi, hi)), ((hi, hi), (lo, hi)), ((lo, hi), (lo, lo))):
+        dx, dy = (x1 - x0) / u, (y1 - y0) / u
+        for i in range(n):
+            a, b = 2 * i * seg, (2 * i + 1) * seg
+            line = ((x0 + dx * a, y0 + dy * a), (x0 + dx * b, y0 + dy * b))
+            pygame.draw.line(surf, (*rgb(TIP_EDGE), alpha), *line, w + edge)
+            pygame.draw.line(surf, (*rgb(color), alpha), *line, w)
+
+
 def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame.Surface:
     """A 7c square centered on the cursor cell, drawn 4x and smoothed down.
     tip "brush" is a paintbrush in the brush color: lift 1 floats it above a
@@ -104,6 +117,7 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame
         if lift:
             ring, band, alpha = pygame.Rect(0, 0, round(u * 0.9), round(u * 0.42)), max(2 * s, round(u * 0.09)), round(255 * lift)
             ring.center = (mid, mid + round(u * 0.3))
+            _dash_outline(surf, mid, u, edge, color, alpha)
             pygame.draw.ellipse(surf, (*rgb(TIP_EDGE), alpha), ring.inflate(2 * edge, 2 * edge), band + 2 * edge)
             pygame.draw.ellipse(surf, (*rgb(color), alpha), ring, band)
         tx, ty = mid + u * 0.3 * press, mid + u * (0.3 - BRUSH_FLOAT * lift)

@@ -28,7 +28,7 @@ CANVAS_BG = "#221440"
 CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
 TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
 BRUSH_LEAN = (0.5, -0.866)          # handle up and to the right, the way a right hand holds it
-BRUSH_FLOAT = 1.0                   # cells the lifted brush hovers above its ring
+BRUSH_FLOAT = 0.35                  # cells the lifted brush hovers above its ring
 SPRITE_HALF = 3.5                   # cells from the cursor cell's center to the sprite's edge
 LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three quick frames
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
@@ -102,7 +102,7 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame
         press = 1 - lift
         if lift:
             ring, band, alpha = pygame.Rect(0, 0, round(u * 0.9), round(u * 0.42)), max(2 * s, round(u * 0.09)), round(255 * lift)
-            ring.center = (mid, mid + round(u * 0.15))
+            ring.center = (mid, mid + round(u * 0.3))
             pygame.draw.ellipse(surf, (*rgb(TIP_EDGE), alpha), ring.inflate(2 * edge, 2 * edge), band + 2 * edge)
             pygame.draw.ellipse(surf, (*rgb(color), alpha), ring, band)
         tx, ty = mid + u * 0.3 * press, mid + u * (0.3 - BRUSH_FLOAT * lift)

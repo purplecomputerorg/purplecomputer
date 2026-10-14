@@ -228,8 +228,12 @@ class TextField:
         cx = tx + g.measure(before, px, "mono")[0] if before else tx
         rest = self.trace_rest(ideas) if start == 0 else ""
         g.draw_text(rest, px, cx, y, "mono", P.DIM)
-        g.rect(P.CARET, (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05)))
-        g.draw_text(rest[:1], px, cx, y, "mono", under)
+        caret = (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05))
+
+        def draw_caret():
+            g.rect(P.CARET, caret)
+            g.draw_text(rest[:1], px, cx, y, "mono", under)
+        g.draw_caret(caret, draw_caret)
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
     def trace_rest(self, ideas) -> str:

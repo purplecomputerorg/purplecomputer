@@ -49,6 +49,7 @@ ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  �
                "blocks": "Arrows move  ← ↑ ↓ →"}
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
+CARET_BLINK_S = 0.53          # the classic terminal half-second
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
 SIDE_MARGIN_VW = 6            # air beside the frame; the sticker legend sits in the right one
 TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
@@ -225,6 +226,7 @@ class PurpleApp:
         self._usb_text = None
         self._usb_timer = self.timers.every(1.0, self._tick_usb) if is_live_boot() else None
         self._battery_timer = self.timers.every(30.0, self.invalidate)
+        self.timers.every(CARET_BLINK_S / 4, lambda: self.g.blink(CARET_BLINK_S))
         boot_log.heartbeat("main loop ready")
         try:
             await self._render_loop()
@@ -1336,6 +1338,7 @@ class PurpleApp:
 
     def _draw(self):
         g = self.g
+        g.caret = None
         g.fill(P.BG)
         vp = self._viewport_rect()
         frame = self._frame_rect(vp)

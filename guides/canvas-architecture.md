@@ -19,7 +19,9 @@ the response is.
 
 Design rules, in priority order:
 
-1. Motion only in response to a key. Nothing moves on an idle screen.
+1. Motion only in response to a key. Nothing moves on an idle screen, except
+   the text caret, which blinks by swapping its own pixels (`Gfx.blink`), never
+   by repainting the frame.
 2. Text and emoji render smoothly at native resolution, any size per element.
 3. A grid exists only where the grid is the content: Music tiles, Art cells,
    the Blocks floor.

@@ -15,6 +15,7 @@ Markup is the small subset of Rich's syntax the rooms already speak:
 
 import os
 import re
+import time
 from collections import OrderedDict
 from contextlib import contextmanager
 from pathlib import Path
@@ -190,6 +191,7 @@ class Gfx:
         self.w, self.h = self.surface.get_size()
         self.all_caps = False
         self.dirty = True
+        self.caret = None             # [rect, pixels without, pixels with, shown, since] for the frame on screen
         self._fonts = {}
         self._text = _Cache()
         self._emoji = _Cache()
@@ -460,12 +462,35 @@ class Gfx:
         return (max((w for w, _, _ in lines), default=0), sum(h for _, h, _ in lines) + line_gap * (len(lines) - 1))
 
     # ----- frame -----
-    def present(self):
+    def present(self, rect=None):
         if self._kms:
             self._kms.present()
         elif not self.headless:
-            pygame.display.flip()
-        self.dirty = False
+            pygame.display.update(rect) if rect else pygame.display.flip()
+        if rect is None:
+            self.dirty = False
+
+    def draw_caret(self, rect, draw):
+        """Run draw() and keep the pixels under rect both ways, so blink() can
+        swap them without repainting the frame."""
+        rect = pygame.Rect(rect).clip(self.surface.get_rect())
+        off = self.surface.subsurface(rect).copy()
+        draw()
+        self.caret = [rect, off, self.surface.subsurface(rect).copy(), True, time.monotonic()]
+
+    def blink(self, period: float):
+        """Toggle the caret once it has held still for `period`. Skipped when a
+        redraw is due or something was painted over it after it was drawn."""
+        c = self.caret
+        if not c or self.dirty or time.monotonic() - c[4] < period:
+            return
+        rect, off, on, shown, _ = c
+        if pygame.image.tobytes(self.surface.subsurface(rect), "RGB") != pygame.image.tobytes(on if shown else off, "RGB"):
+            self.caret = None
+            return
+        self.surface.blit(off if shown else on, rect)
+        c[3], c[4] = not shown, time.monotonic()
+        self.present(rect)
 
     def save(self, path: str):
         pygame.image.save(self.surface, path)

@@ -101,11 +101,11 @@ def _dash_outline(surf, mid: int, u: float, edge: int, color: str, alpha: int):
             pygame.draw.line(surf, (*rgb(color), alpha), *line, w)
 
 
-def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground: bool = True) -> pygame.Surface:
+def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground="cell") -> pygame.Surface:
     """A 7c square centered on the cursor cell, drawn 4x and smoothed down.
     tip "brush" is a paintbrush in the brush color: lift 1 floats it above a
     ring on the cell (pen up), lift 0 presses its splayed bristles into the
-    cell (pen down); ground False leaves off the ring and dashed cell. "erase"
+    cell (pen down); ground "ring" leaves off the dashed cell, None the ring too. "erase"
     is a hollow square over the cell. arrow_turn, when not None, adds a chevron turned that many degrees from pointing right."""
     s = 4
     u = c * s
@@ -117,7 +117,8 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground: b
         if lift and ground:
             ring, band, alpha = pygame.Rect(0, 0, round(u * 0.9), round(u * 0.42)), max(2 * s, round(u * 0.09)), round(255 * lift)
             ring.center = (mid, mid + round(u * 0.3))
-            _dash_outline(surf, mid, u, edge, color, alpha)
+            if ground == "cell":
+                _dash_outline(surf, mid, u, edge, color, alpha)
             pygame.draw.ellipse(surf, (*rgb(TIP_EDGE), alpha), ring.inflate(2 * edge, 2 * edge), band + 2 * edge)
             pygame.draw.ellipse(surf, (*rgb(color), alpha), ring, band)
         tx, ty = mid + u * 0.3 * press, mid + u * (0.3 - BRUSH_FLOAT * lift)
@@ -151,11 +152,13 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground: b
 
 
 def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
-    """The cursor brush's bristles and ferrule, no handle, cropped to their ink."""
-    surf = _brush_tip(max(3, round(h / 1.4)), color, "brush", None, lift, ground=False)
-    ink = surf.get_bounding_rect()
-    ink.h, ink.bottom = round(ink.h * BRUSH_HEAD), ink.bottom
-    head = surf.subsurface(ink)
+    """The cursor brush's bristles and ferrule over its ring, no handle, cropped to their ink."""
+    c = max(3, round(h / 1.4))
+    ink = _brush_tip(c, color, "brush", None, lift, ground=None).get_bounding_rect()
+    surf = _brush_tip(c, color, "brush", None, lift, ground="ring")
+    full = surf.get_bounding_rect()
+    top = ink.bottom - round(ink.h * BRUSH_HEAD)
+    head = surf.subsurface(pygame.Rect(full.x, top, full.w, full.bottom - top))
     return head.subsurface(head.get_bounding_rect()).copy()
 
 

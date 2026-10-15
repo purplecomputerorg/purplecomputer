@@ -570,13 +570,10 @@ def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Re
 
 @functools.lru_cache(maxsize=8)
 def _swatch_dot(color: str, d: int) -> pygame.Surface:
-    """A color dot in a light ring, drawn 4x and smoothed down so the edges stay clean."""
+    """A color dot drawn 4x and smoothed down so the edge stays clean."""
     s = 4
     big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)
-    c = d * s / 2
-    pygame.draw.circle(big, rgb(P.TEXT), (c, c), c)
-    pygame.draw.circle(big, (0, 0, 0, 0), (c, c), c - 2 * s)
-    pygame.draw.circle(big, rgb(color), (c, c), c - 3 * s)
+    pygame.draw.circle(big, rgb(color), (d * s / 2, d * s / 2), d * s / 2)
     return pygame.transform.smoothscale(big, (d, d))
 
 

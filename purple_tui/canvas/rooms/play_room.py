@@ -12,7 +12,7 @@ from .. import paper
 from ..gfx import is_emoji, mix, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
-from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger, speakables_for
+from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
 from ..ui import MATH_OPERATORS, HintRotator, TextField
 
 PAPER_ZOOM = 1.6
@@ -112,6 +112,28 @@ def draw_bead(g, bead, color, cell, h, idle):
     g.rect(fill, pill, radius=h // 2)
 
 
+def speech_marks(text: str) -> list:
+    """Spans of what makes a line talk: each `!` and a say/talk/speak first word."""
+    marks = [(m.start(), m.end()) for m in re.finditer("!", text)]
+    m = re.match(r"\s*([A-Za-z]+)", text)
+    if m and parse_speech_trigger(m.group(1))[0]:
+        marks.append(m.span(1))
+    return sorted(marks)
+
+
+def toggled_say(value: str, cursor: int) -> tuple:
+    """(value, cursor) with `say ` added to a quiet line, or every speech mark taken off a talking one."""
+    marks = speech_marks(value)
+    if not marks:
+        return "say " + value, cursor + 4
+    for a, b in reversed(marks):
+        if value[a] != "!":
+            b += len(value[b:]) - len(value[b:].lstrip())
+        value = value[:a] + value[b:]
+        cursor -= max(0, min(cursor, b) - a)
+    return value, cursor
+
+
 def _play_validator(word: str) -> bool:
     return get_content().is_valid_word(word)
 
@@ -150,7 +172,7 @@ class PlayRoom:
     def __init__(self, app):
         self.app = app
         self.evaluator = PlayEvaluator()
-        self.field = TextField(_play_autocomplete, validator=_play_validator)
+        self.field = TextField(_play_autocomplete, validator=_play_validator, marks=speech_marks)
         self.hints = HintRotator(PLAY_IDEAS)
         self.history: list = []
         self.scroll = 0                  # px of history hidden below the bottom (scrolled up)
@@ -297,22 +319,9 @@ class PlayRoom:
             self.app.timers.after(1.5, lambda: self._set_speech(entry, ""))
 
     def _speak_sequence(self, pairs: list, entries: list):
-        spoken = dict(pair_speakables(self.evaluator, pairs))
-        self._say([(spoken[i], e) for i, e in enumerate(entries) if i in spoken])
-
-    def say_line(self):
-        """Tab: say the typed line without submitting it, or replay the last one."""
-        typed = self.field.value.strip()
-        text = typed or self.field.last_command
-        if not text:
-            return
-        entry = None if typed or not self.history else self.history[-1]
-        phrases = speakables_for(self.evaluator, parse_speech_trigger(text)[1])
-        self._say([(p, entry) for p in phrases])
-
-    def _say(self, items: list):
-        """Speak (phrase, entry) pairs in order, lighting each entry's speaker as it plays."""
         from ...tts import speak_many
+        spoken = dict(pair_speakables(self.evaluator, pairs))
+        items = [(spoken[i], e) for i, e in enumerate(entries) if i in spoken]
         if not items:
             return
 
@@ -347,7 +356,7 @@ class PlayRoom:
                 return
             a = action.action
             if a == "tab" and not action.is_repeat:
-                f.accept_autocomplete() or self.say_line()
+                f.accept_autocomplete() or f.set(*toggled_say(f.value, f.cursor))
             elif a == "space":
                 if not action.is_repeat:
                     f.insert(" ")
@@ -380,9 +389,11 @@ class PlayRoom:
         line_px, sub_px = em(1.35), em(0.95)
         sub_h = g.line_height(sub_px, "mono")
         bottom = rect.bottom - em(1.2) - sub_h
-        sub = self.field.autocomplete_markup if self.field.matches else self._say_hint()
+        talks = bool(speech_marks(self.field.value))
+        sub = self.field.autocomplete_markup if self.field.matches else self._say_hint(talks)
         ideas = self.hints.current(hold=bool(self.field.value))
-        box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type", ideas=ideas)
+        box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type",
+                                    ideas=ideas, badge=ICON_VOLUME_HIGH if talks else "")
         sub_x = box.x + round(line_px * 0.55)
         g.draw_markup(sub, sub_px, sub_x, bottom, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
         top_limit = rect.y + em(1)
@@ -408,10 +419,9 @@ class PlayRoom:
             g.rect(P.BG, track, radius=w // 2)
             g.rect(P.FIELD, scroll_thumb(track, viewport, total, self.scroll, em(1.5)), radius=w // 2)
 
-    def _say_hint(self) -> str:
+    def _say_hint(self, talks: bool) -> str:
         f = self.field
-        say = "⇥ Tab: say it" if f.value.strip() or f.last_command else ""
-        dim = [f"[dim]{t}[/]" for t in (f.recall_text(), say) if t]
+        dim = [f"[dim]{t}[/]" for t in (f.recall_text(), "⇥ Tab: quiet" if talks else "⇥ Tab: say it") if t]
         return "   ".join(filter(None, [f.autocomplete_markup, *dim]))
 
     def _answer_px(self, g, e) -> int:
@@ -446,6 +456,15 @@ class PlayRoom:
         parts = answer_parts(e.markup)
         return sum(self._part_height(g, e, p, width) for p in parts) + self._row_gap(g) * (len(parts) - 1)
 
+    def _first_row_height(self, g, e, width) -> int:
+        """The answer's first row, so its speaker sits level with it."""
+        part = next(iter(answer_parts(e.markup)), "")
+        if isinstance(part, tuple):
+            slot, bar, _ = abacus_size(g, part[0])
+            return slot + 2 * bar
+        lines = g.layout(part, self._answer_px(g, e), "mono-bold", P.TEXT, width)
+        return lines[0][1] if lines else 0
+
     def _draw_entry(self, g, e, x, y, width, ink=None):
         """ink is (text, muted, ground); the screen's tokens unless printing."""
         text, muted, ground = ink or (P.TEXT, P.MUTED, P.SURFACE)
@@ -455,9 +474,10 @@ class PlayRoom:
             g.draw_text(e.markup, px, r.right, y, "mono", muted)
             return
         icon = SPEECH_ICONS.get(e.speech, "")
-        if icon:
-            g.draw_text(icon, g.em(1.05), x + g.em(0.1), y, "mono-bold", text)
         indent = self._answer_indent(g, e)
+        if icon:
+            mid = y + self._first_row_height(g, e, width - indent) // 2
+            g.draw_text(icon, g.em(1.05), x + g.em(0.1), mid, "mono-bold", text, anchor="midleft")
         x, width = x + indent, width - indent
         for part in answer_parts(e.markup):
             if isinstance(part, tuple):

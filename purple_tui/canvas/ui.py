@@ -12,7 +12,7 @@ import time
 import pygame
 
 from .. import palette as P
-from .gfx import Gfx, rgb
+from .gfx import Gfx, mix, rgb
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 
 # ----------------------------------------------------------------------------
@@ -90,12 +90,13 @@ class TextField:
     """One-line editable text with a cursor, word underlining, and
     autocomplete suggestions of (word, color_hex, emoji)."""
 
-    def __init__(self, autocomplete_fn=None, validator=None, context_autocomplete=False):
+    def __init__(self, autocomplete_fn=None, validator=None, context_autocomplete=False, marks=None):
         self.value = ""
         self.cursor = 0
         self._autocomplete_fn = autocomplete_fn
         self._validator = validator
         self._context = context_autocomplete
+        self._marks = marks  # value -> [(start, end)] spans drawn as accent pills
         self.matches: list = []
         self.match_index = 0
         self.exact_display = ""
@@ -226,6 +227,8 @@ class TextField:
         g.draw_text(shown, px, tx, y, "mono", P.TEXT)
         if self._validator:
             self._underline(g, shown, px, tx, y)
+        if self._marks:
+            self._draw_marks(g, shown, start, px, tx, y)
         cx = tx + g.measure(before, px, "mono")[0] if before else tx
         rest = self.trace_rest(ideas) if start == 0 else ""
         lh = g.line_height(px, "mono")
@@ -245,37 +248,41 @@ class TextField:
         return next((i[len(v):] for i in ideas if i.lower().startswith(v.lower())), "")
 
     def draw_boxed(self, g: Gfx, x: int, y: int, width: int, px: int, label: str, placeholder: str = "",
-                   ideas: tuple = ()) -> pygame.Rect:
+                   ideas: tuple = (), badge: str = "") -> pygame.Rect:
         """The label, then a box out to `width` holding the text, with
-        `placeholder` faint inside while it is empty and `ideas` as chips on
-        its right until the text reaches them. Returns the box."""
+        `placeholder` faint inside while it is empty, `badge` (an icon) at
+        its right end, and `ideas` as chips before it until the text reaches
+        them. Returns the box."""
         label_px, gap, pad = round(px * 1.15), round(px * 1.1), round(px * 0.55)
         tx = self.text_x(g, x, px, label, label_px, gap)
         box = pygame.Rect(tx - pad, y, x + width - tx + pad, round(px * 1.9))
         g.rect(P.FIELD, box, radius=round(px * 0.4))
         g.rect(P.LINE, box, width=1, radius=round(px * 0.4))
         ty = box.centery - g.line_height(px, "mono") // 2
+        right = box.right - pad
+        if badge:
+            right = g.draw_text(badge, px, right, box.centery, "mono-bold", P.ACCENT, anchor="midright").x - pad
         if placeholder and not self.value:
             hx = tx + px
-            g.draw_text(_fit(g, placeholder, px, box.right - pad - hx), px, hx, ty, "mono", P.DIM)
-        self.draw(g, x, ty, box.right - pad - x, px, label, label_px, gap, ideas)
+            g.draw_text(_fit(g, placeholder, px, right - hx), px, hx, ty, "mono", P.DIM)
+        self.draw(g, x, ty, right - x, px, label, label_px, gap, ideas)
         if ideas:
             typed = self.value + self.trace_rest(ideas)
-            self._draw_ideas(g, ideas, tx + g.measure(typed, px, "mono")[0] + px, box, pad, px)
+            self._draw_ideas(g, ideas, tx + g.measure(typed, px, "mono")[0] + px, box, right, px)
         return box
 
-    def _draw_ideas(self, g: Gfx, ideas, left: int, box: pygame.Rect, pad: int, px: int):
-        """'Try' then the ideas as chips, flush right in the box; the first
+    def _draw_ideas(self, g: Gfx, ideas, left: int, box: pygame.Rect, right: int, px: int):
+        """'Try' then the ideas as chips, flush against `right`; the first
         ones drop out as the text grows toward them."""
         cpx = round(px * 0.75)
         cpad, gap = round(cpx * 0.7), round(cpx * 0.5)
         try_w = g.measure("Try", cpx, "mono-bold")[0]
         chips = [(i, g.measure(i, cpx, "mono")[0] + 2 * cpad) for i in ideas]
-        while chips and box.right - pad - try_w - sum(w + gap for _, w in chips) < left:
+        while chips and right - try_w - sum(w + gap for _, w in chips) < left:
             chips.pop(0)
         if not chips:
             return
-        x = box.right - pad - try_w - sum(w + gap for _, w in chips)
+        x = right - try_w - sum(w + gap for _, w in chips)
         g.draw_text("Try", cpx, x, box.centery, "mono-bold", P.DIM, anchor="midleft")
         x += try_w + gap
         h = round(cpx * 1.6)
@@ -293,6 +300,16 @@ class TextField:
         fit = max(8, avail // cw)
         start = max(0, self.cursor - fit + 1)
         return self.value[start:start + fit], start
+
+    def _draw_marks(self, g, shown, start, px, tx, y):
+        lh = g.line_height(px, "mono")
+        for a, b in self._marks(self.value):
+            a, b = max(a - start, 0), min(b - start, len(shown))
+            if a < b:
+                x0 = tx + g.measure(shown[:a], px, "mono")[0]
+                w = g.measure(shown[a:b], px, "mono")[0]
+                g.rect(mix(P.FIELD, P.PRIMARY, 0.35), (x0 - px // 12, y, w + px // 6, lh), radius=lh // 4)
+                g.draw_text(shown[a:b], px, x0, y, "mono", P.ACCENT)
 
     def _underline(self, g, shown, px, tx, y):
         lh = g.line_height(px, "mono")

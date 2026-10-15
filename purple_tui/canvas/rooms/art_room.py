@@ -16,7 +16,7 @@ from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
-from ..color_wheel import can_open as can_open_wheel, open_on as open_color_wheel
+from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo, SpaceHold
 from ..ui import draw_label, draw_mode_switch
 
@@ -794,4 +794,4 @@ class ArtRoom:
             return
         icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
         draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self.brush_color,
-                         "to write" if self._paint_mode else "to paint", icon, can_open_wheel(self))
+                         "to write" if self._paint_mode else "to paint", icon, wheel_chip(self))

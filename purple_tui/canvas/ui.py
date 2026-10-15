@@ -590,8 +590,9 @@ def _swatch_dot(color: str, d: int) -> pygame.Surface:
     return pygame.transform.smoothscale(big, (d, d))
 
 
-def _draw_wheel_chip(g: Gfx, px: int, right: int, cy: int):
-    """'[\\] (wheel) Colors' in one pill, the key a solid keycap so it reads as press-me."""
+def _draw_wheel_chip(g: Gfx, px: int, right: int, cy: int, on: bool):
+    """'[\\] (wheel) Colors' in one pill, the key a solid keycap so it reads as
+    press-me; on = the wheel is up, so the pill wears the selection plate."""
     from .color_wheel import OPEN_KEY, disc
     pad = round(px * 0.35)
     kw, kh = g.measure(OPEN_KEY, px, "mono-bold")
@@ -601,20 +602,22 @@ def _draw_wheel_chip(g: Gfx, px: int, right: int, cy: int):
     pill = pygame.Rect(0, 0, pad + key.w + px // 2 + dot.get_width() + px // 2 + label_w + px, key.h + 2 * pad)
     pill.midright = (right, cy)
     radius = round(px * 0.5)
-    g.rect(P.FIELD, pill, radius=radius + pad)
-    g.rect(P.LINE, pill, width=1, radius=radius + pad)
+    ink, cap = (P.ON_PRIMARY, P.PRIMARY) if on else (P.TEXT, P.SURFACE)
+    g.rect(P.PRIMARY if on else P.FIELD, pill, radius=radius + pad)
+    if not on:
+        g.rect(P.LINE, pill, width=1, radius=radius + pad)
     key.midleft = (pill.x + pad, cy)
-    g.rect(P.TEXT, key, radius=radius)
-    g.draw_text(OPEN_KEY, px, key.centerx, key.centery, "mono-bold", P.SURFACE, anchor="center")
+    g.rect(ink, key, radius=radius)
+    g.draw_text(OPEN_KEY, px, key.centerx, key.centery, "mono-bold", cap, anchor="center")
     x = g.surface.blit(dot, dot.get_rect(midleft=(key.right + px // 2, cy))).right + px // 2
-    g.draw_text("Colors", px, x, cy, "mono", P.TEXT, anchor="midleft")
+    g.draw_text("Colors", px, x, cy, "mono-bold" if on else "mono", ink, anchor="midleft")
 
 
 def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str | None, tab_hint: str,
-                     icon=None, wheel: bool = False):
+                     icon=None, wheel: str | None = None):
     """Two mode labels (active one in inverse video) with the brush swatch, or
     an icon standing in for it, beside them; '[\\] Colors' further left while
-    the color wheel opens; the Tab keycap with what it switches to on the right."""
+    the color wheel opens (wheel from color_wheel.chip); the Tab keycap with what it switches to on the right."""
     px = g.vh(1.9)
     cy = r.centery
     widths = [g.measure(t, px, "mono-bold")[0] + px for t in labels]
@@ -626,7 +629,7 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
         dot = _swatch_dot(swatch, round(px * 2.1))
         left = g.surface.blit(dot, dot.get_rect(midright=(left, cy))).x
     if wheel:
-        _draw_wheel_chip(g, px, left - round(px * 1.6), cy)
+        _draw_wheel_chip(g, px, left - round(px * 1.6), cy, wheel == "open")
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
         x += w + px

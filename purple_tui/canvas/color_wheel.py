@@ -68,6 +68,13 @@ def can_open(room) -> bool:
     return getattr(room, "wheel_ready", False) and not room.app._littles_mode
 
 
+def chip(room) -> str | None:
+    """How the header's '[\\] Colors' chip shows: None hidden, "open" lit while the wheel is up."""
+    if room.app.has_overlay(ColorWheel):
+        return "open"
+    return "ready" if can_open(room) else None
+
+
 def open_on(room, char: str = OPEN_KEY) -> bool:
     """Backslash opens the wheel over the room; True when it did."""
     if char != OPEN_KEY or not can_open(room):

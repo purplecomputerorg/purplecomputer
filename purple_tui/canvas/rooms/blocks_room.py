@@ -25,7 +25,7 @@ from ...color_mixing import mix_colors_paint
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import DEFAULT_BRUSH_COLOR
 from .. import color_recipe, paper
-from ..color_wheel import can_open as can_open_wheel, open_on as open_color_wheel
+from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo, SpaceHold
 from ..ui import draw_mode_switch
@@ -610,7 +610,7 @@ class BlocksRoom:
         else:
             self._draw_turning(g, ox, oy, p)
         draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
-                         1 if self._back else 0, self._color, "to turn around", wheel=can_open_wheel(self))
+                         1 if self._back else 0, self._color, "to turn around", wheel=wheel_chip(self))
         if foot_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             g.draw_text(HINT, g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")

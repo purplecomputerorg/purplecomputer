@@ -12,7 +12,7 @@ from .. import paper
 from ..gfx import is_emoji, mix, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
-from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
+from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger, speakables_for
 from ..ui import MATH_OPERATORS, HintRotator, TextField
 
 PAPER_ZOOM = 1.6
@@ -297,16 +297,29 @@ class PlayRoom:
             self.app.timers.after(1.5, lambda: self._set_speech(entry, ""))
 
     def _speak_sequence(self, pairs: list, entries: list):
-        from ...tts import speak_many
         spoken = dict(pair_speakables(self.evaluator, pairs))
-        items = [(spoken[i], e) for i, e in enumerate(entries) if i in spoken]
+        self._say([(spoken[i], e) for i, e in enumerate(entries) if i in spoken])
+
+    def say_line(self):
+        """Tab: say the typed line without submitting it, or replay the last one."""
+        typed = self.field.value.strip()
+        text = typed or self.field.last_command
+        if not text:
+            return
+        entry = None if typed or not self.history else self.history[-1]
+        phrases = speakables_for(self.evaluator, parse_speech_trigger(text)[1])
+        self._say([(p, entry) for p in phrases])
+
+    def _say(self, items: list):
+        """Speak (phrase, entry) pairs in order, lighting each entry's speaker as it plays."""
+        from ...tts import speak_many
         if not items:
             return
 
         def on_playing(i):
-            self.app.call_from_thread(self._set_speech, items[i][1], "playing")
             if i:
                 self.app.call_from_thread(self._set_speech, items[i - 1][1], "")
+            self.app.call_from_thread(self._set_speech, items[i][1], "playing")
 
         def on_done():
             for _, e in items:
@@ -333,8 +346,8 @@ class PlayRoom:
             if not action.is_down:
                 return
             a = action.action
-            if a == "tab":
-                f.accept_autocomplete()
+            if a == "tab" and not action.is_repeat:
+                f.accept_autocomplete() or self.say_line()
             elif a == "space":
                 if not action.is_repeat:
                     f.insert(" ")
@@ -367,7 +380,7 @@ class PlayRoom:
         line_px, sub_px = em(1.35), em(0.95)
         sub_h = g.line_height(sub_px, "mono")
         bottom = rect.bottom - em(1.2) - sub_h
-        sub = self.field.autocomplete_markup or f"[dim]{self.field.recall_text()}[/]"
+        sub = self.field.autocomplete_markup if self.field.matches else self._say_hint()
         ideas = self.hints.current(hold=bool(self.field.value))
         box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type", ideas=ideas)
         sub_x = box.x + round(line_px * 0.55)
@@ -394,6 +407,12 @@ class PlayRoom:
             track = pygame.Rect(rect.right - em(0.5) - w, top_limit, w, viewport)
             g.rect(P.BG, track, radius=w // 2)
             g.rect(P.FIELD, scroll_thumb(track, viewport, total, self.scroll, em(1.5)), radius=w // 2)
+
+    def _say_hint(self) -> str:
+        f = self.field
+        say = "⇥ Tab: say it" if f.value.strip() or f.last_command else ""
+        dim = [f"[dim]{t}[/]" for t in (f.recall_text(), say) if t]
+        return "   ".join(filter(None, [f.autocomplete_markup, *dim]))
 
     def _answer_px(self, g, e) -> int:
         """Only a small all-emoji answer earns the big size; text stays a

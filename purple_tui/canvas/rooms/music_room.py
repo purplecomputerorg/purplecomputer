@@ -22,7 +22,7 @@ from ...music_constants import (
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..panels import CodePanel, Echo, LoopPanel, SpaceHold
-from ..ui import draw_label
+from ..ui import draw_label, draw_mode_switch
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
@@ -593,7 +593,7 @@ class MusicRoom:
         em = g.em
         head_h, hint_h = em(4.3), em(3.9)
         pad = em(1.6)
-        self._draw_header(g, pygame.Rect(rect.x + pad, rect.y, rect.w - 2 * pad, head_h))
+        self._draw_header(g, rect)
         grid = pygame.Rect(rect.x + pad, rect.y + head_h, rect.w - 2 * pad, rect.h - head_h - hint_h)
         self._draw_grid(g, grid)
         if self.app._panel is None:
@@ -607,25 +607,29 @@ class MusicRoom:
     def _hint_text(self) -> str:
         if self.app._littles_mode:
             return "Enter: instrument"
-        parts = ["Space: hide notes" if self.show_labels else "Space: notes",
-                 "Tab: stop letters" if self.letters_mode else "Tab: say letters",
-                 "Enter: instrument"]
+        parts = ["Space: hide notes" if self.show_labels else "Space: notes"]
         if self.app._music_looping_enabled:
             parts.append("Hold Enter: loop")
         return "   ".join(parts)
 
-    def _draw_header(self, g, r):
-        """One quiet plate naming the current layer, and the key on the right.
-        Arrows for the key live in the status strip, not here."""
-        px = g.em(1.0)
-        cy = r.y + g.em(1.9)
-        plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {INSTRUMENTS[self.instrument_index][1]}"
+    def _draw_header(self, g, rect):
+        """The same header as Art and Blocks: the instrument as an Enter chip,
+        the Sounds / ABC switch, the Tab keycap on the right."""
+        instrument = INSTRUMENTS[self.instrument_index][1]
         if self.app._littles_mode:
-            draw_label(g, plate, px, r.centerx, cy, P.TEXT, anchor="center", on=True)
+            plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {instrument}"
+            draw_label(g, plate, g.em(1.0), rect.centerx, rect.y + g.em(1.9), P.TEXT, anchor="center", on=True)
             return
-        draw_label(g, plate, px, r.x, cy, on=True)
-        root = self.root_index if self.app._music_key_switching_enabled else DEFAULT_ROOT_INDEX
-        g.draw_text(f"Key of {FRIENDLY_KEY_NAMES[root]}", px, r.right, cy, "mono", P.DIM, anchor="midright")
+        bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
+        bar.h = g.line_height(g.vh(1.9), "mono") + g.em(0.4)
+        draw_mode_switch(g, bar, ("Sounds", "ABC"), 1 if self.letters_mode else 0, None,
+                         "to play sounds" if self.letters_mode else "to say letters",
+                         chip=("Enter", ICON_MUSIC, instrument, False))
+
+    def arrow_hint(self) -> str:
+        if not self.app._music_key_switching_enabled:
+            return f"Key of {FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]}"
+        return f"Arrows change key: {FRIENDLY_KEY_NAMES[self.root_index]}  ← →"
 
     def paper(self, g, size):
         """The kid's colors on the keyboard grid; quiet keys print as outlined letters."""

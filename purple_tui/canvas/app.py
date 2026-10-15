@@ -45,7 +45,7 @@ PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
 PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
                 printing.READY: "The printer is ready. Press Esc, then P"}
 ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE, "blocks": ICON_CUBE}
-ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  ← →", "art": "Arrows move  ← ↑ ↓ →",
+ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "art": "Arrows move  ← ↑ ↓ →",
                "blocks": "Arrows move  ← ↑ ↓ →"}
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
@@ -1435,7 +1435,8 @@ class PurpleApp:
             draw_label(g, label, px, x + w // 2, y, P.MUTED, anchor="center", on=rid == self.active_room)
             x += w + gap
         if right is None:
-            right = ARROW_HINTS[self.active_room]
+            hint = getattr(self.room, "arrow_hint", None)
+            right = hint() if hint else ARROW_HINTS[self.active_room]
             if self._effective_volume() == 0:
                 right = f"{ICON_VOLUME_OFF}  " + right
         g.draw_text(right, px, frame.right, y, "mono", P.DIM, anchor="midright")

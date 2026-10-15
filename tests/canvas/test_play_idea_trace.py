@@ -1,16 +1,16 @@
 from purple_tui.canvas.ui import HintRotator, TextField
 
 
-def test_trace_shows_the_rest_only_while_the_text_starts_the_idea():
+def test_traced_idea_only_while_the_text_starts_it():
     f = TextField()
-    assert f.trace_rest(("cat", "trex!")) == ""
+    assert f.traced(("cat", "trex!")) == ""
     f.set("TR")
-    assert f.trace_rest(("cat", "trex!")) == "ex!"
+    assert f.traced(("cat", "trex!")) == "trex!"
     f.set("tra")
-    assert f.trace_rest(("cat", "trex!")) == ""
+    assert f.traced(("cat", "trex!")) == ""
     f.set("tr")
     f.move(-1)
-    assert f.trace_rest(("cat", "trex!")) == ""
+    assert f.traced(("cat", "trex!")) == ""
 
 
 def test_held_idea_does_not_rotate_mid_typing():

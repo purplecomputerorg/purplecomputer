@@ -213,12 +213,10 @@ class TextField:
         return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + (gap if gap is not None else px // 2)
 
     def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Type", label_px: int | None = None,
-             gap: int | None = None, ideas: tuple = (), arrow: str = "→") -> pygame.Rect:
+             gap: int | None = None, arrow: str = "→") -> pygame.Rect:
         """'Label →  text▌' in the mono face; returns the rect used.
         label_px lets the label sit a step larger than the typed text; gap
-        sets the space between label and text (a boxed field needs more).
-        While the text starts one of `ideas`, the rest shows after the
-        caret as dotted tracing letters."""
+        sets the space between label and text (a boxed field needs more)."""
         mid = y + g.line_height(px, "mono") // 2
         lpx = label_px or px
         head = g.draw_text(f"{label} ", lpx, x, mid, "mono-bold", P.ACCENT, anchor="midleft").right
@@ -234,26 +232,23 @@ class TextField:
         if self._marks:
             self._draw_marks(g, shown, start, px, tx, y)
         cx = tx + g.measure(before, px, "mono")[0] if before else tx
-        rest = self.trace_rest(ideas) if start == 0 else ""
         caret = (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05))
-        if rest:
-            _draw_dotted(g, rest, px, cx, y, mix(P.MUTED, P.TEXT, 0.5))
-            caret = (cx - px // 16, caret[1], max(2, px // 8), caret[3])  # a bar, so no untyped letter is covered
         g.draw_caret(caret, lambda: g.rect(P.CARET, caret))
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
-    def trace_rest(self, ideas) -> str:
-        """What is left to type of the first idea the text so far starts."""
+    def traced(self, ideas) -> str:
+        """The first idea the text so far starts, if any."""
         v = self.value
         if not v or self.cursor != len(v):
             return ""
-        return next((i[len(v):] for i in ideas if i.lower().startswith(v.lower())), "")
+        return next((i for i in ideas if i.lower().startswith(v.lower())), "")
 
     def draw_boxed(self, g: Gfx, x: int, y: int, width: int, px: int, label: str, placeholder: str = "",
                    ideas: tuple = (), arrow: str = "→") -> pygame.Rect:
         """The label, then a box out to `width` holding the text, with
         `placeholder` faint inside while it is empty and `ideas` as chips on
-        its right until the text reaches them. Returns the box."""
+        its right until the text reaches them; the chip being typed lights
+        up as it is. Returns the box."""
         label_px, gap, pad = round(px * 1.15), round(px * 1.1), round(px * 0.55)
         tx = self.text_x(g, x, px, label, label_px, gap)
         box = pygame.Rect(tx - pad, y, x + width - tx + pad, round(px * 1.9))
@@ -264,19 +259,19 @@ class TextField:
         if placeholder and not self.value:
             hx = tx + px
             g.draw_text(_fit(g, placeholder, px, right - hx), px, hx, ty, "mono", P.DIM)
-        self.draw(g, x, ty, right - x, px, label, label_px, gap, ideas, arrow)
+        self.draw(g, x, ty, right - x, px, label, label_px, gap, arrow)
         if ideas:
-            typed = self.value + self.trace_rest(ideas)
-            self._draw_ideas(g, ideas, tx + g.measure(typed, px, "mono")[0] + px, box, right, px)
+            self._draw_ideas(g, ideas, tx + g.measure(self.value, px, "mono")[0] + px, box, right, px)
         return box
 
     def _draw_ideas(self, g: Gfx, ideas, left: int, box: pygame.Rect, right: int, px: int):
         """'Try' then the ideas as chips, flush against `right`; the first
-        ones drop out as the text grows toward them."""
+        ones drop out as the text grows toward them, the one being typed last."""
         cpx = round(px * 0.75)
         cpad, gap = round(cpx * 0.7), round(cpx * 0.5)
         try_w = g.measure("Try", cpx, "mono-bold")[0]
-        chips = [(i, g.measure(i, cpx, "mono")[0] + 2 * cpad) for i in ideas]
+        typing = self.traced(ideas)
+        chips = [(i, g.measure(i, cpx, "mono")[0] + 2 * cpad) for i in sorted(ideas, key=lambda i: i == typing)]
         while chips and right - try_w - sum(w + gap for _, w in chips) < left:
             chips.pop(0)
         if not chips:
@@ -288,7 +283,9 @@ class TextField:
         for idea, w in chips:
             chip = pygame.Rect(x, box.centery - h // 2, w, h)
             g.rect(P.SURFACE, chip, radius=h // 2)
-            g.draw_text(idea, cpx, chip.centerx, chip.centery, "mono", P.MUTED, anchor="center")
+            done = len(self.value) if idea == typing else 0
+            tx = g.draw_text(idea[:done], cpx, chip.x + cpad, chip.centery, "mono", P.CARET, anchor="midleft").right if done else chip.x + cpad
+            g.draw_text(idea[done:], cpx, tx, chip.centery, "mono", P.MUTED, anchor="midleft")
             x += w + gap
 
     def _visible_slice(self, g, px, avail):
@@ -321,61 +318,6 @@ class TextField:
 
 def _truncate(text: str) -> str:
     return text[:MAX_RECALL_LEN - 1] + "…" if len(text) > MAX_RECALL_LEN else text
-
-
-def _draw_dotted(g: Gfx, text: str, px: int, x: int, y: int, color):
-    """`text` in the mono face as dots along each letter's strokes, like a
-    tracing worksheet."""
-    r = max(1.2, px * 0.05)
-    for i, ch in enumerate(text):
-        left = x + g.measure(text[:i], px, "mono")[0]
-        for dx, dy in _glyph_dots(g, ch, px, g.all_caps):
-            pygame.draw.circle(g.surface, rgb(color), (left + dx, y + dy), r)
-
-
-_RING = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1))
-
-
-@functools.lru_cache(maxsize=512)
-def _glyph_dots(g: Gfx, ch: str, px: int, caps: bool) -> tuple:
-    """Evenly spaced points along `ch`'s centerline; `caps` keys the cache."""
-    if not ch.strip():
-        return ()
-    ink = pygame.mask.from_surface(g.text(ch, px, "mono"), 127)
-    on = _thin({(x, y) for y in range(ink.get_size()[1]) for x in range(ink.get_size()[0]) if ink.get_at((x, y))})
-    step = max(3.0, px * 0.12)
-    out, seen = [], set()
-    ends_first = sorted(on, key=lambda p: (sum((p[0] + dx, p[1] + dy) in on for dx, dy in _RING) != 1, p[1], p[0]))
-    for s in ends_first:
-        stack = [(s, step)]
-        while stack:
-            p, run = stack.pop()
-            if p in seen:
-                continue
-            seen.add(p)
-            if run >= step and all((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 >= (step * 0.7) ** 2 for q in out):
-                out.append(p)
-                run = 0
-            stack += [((p[0] + dx, p[1] + dy), run + (dx * dx + dy * dy) ** 0.5) for dx, dy in _RING
-                      if (p[0] + dx, p[1] + dy) in on]
-    return tuple(out)
-
-
-def _thin(on: set) -> set:
-    """Zhang-Suen thinning: the set of ink pixels worn down to 1px strokes."""
-    changed = True
-    while changed:
-        changed = False
-        for tests in (((0, 2, 4), (2, 4, 6)), ((0, 2, 6), (0, 4, 6))):
-            drop = set()
-            for x, y in on:
-                n = [(x + dx, y + dy) in on for dx, dy in _RING]
-                crossings = sum(not n[m] and n[(m + 1) % 8] for m in range(8))
-                if 2 <= sum(n) <= 6 and crossings == 1 and not any(all(n[m] for m in t) for t in tests):
-                    drop.add((x, y))
-            on -= drop
-            changed |= bool(drop)
-    return on
 
 
 def _fit(g: Gfx, text: str, px: int, avail: int) -> str:

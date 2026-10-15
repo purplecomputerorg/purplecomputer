@@ -11,6 +11,7 @@ from purple_tui.canvas.rooms.play_room import speech_marks, toggled_say
     ("say cat", [(0, 3)]),
     ("talk to me!", [(0, 4), (10, 11)]),
     ("cat! dog!", [(3, 4), (8, 9)]),
+    ("wow!!!", [(3, 6)]),
     ("I say hi", []),
 ])
 def test_speech_marks_find_what_makes_a_line_talk(text, marks):

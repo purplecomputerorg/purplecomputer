@@ -114,7 +114,7 @@ def draw_bead(g, bead, color, cell, h, idle):
 
 def speech_marks(text: str) -> list:
     """Spans of what makes a line talk: each `!` and a say/talk/speak first word."""
-    marks = [(m.start(), m.end()) for m in re.finditer("!", text)]
+    marks = [m.span() for m in re.finditer("!+", text)]
     m = re.match(r"\s*([A-Za-z]+)", text)
     if m and parse_speech_trigger(m.group(1))[0]:
         marks.append(m.span(1))
@@ -393,7 +393,7 @@ class PlayRoom:
         sub = self.field.autocomplete_markup if self.field.matches else self._say_hint(talks)
         ideas = self.hints.current(hold=bool(self.field.value))
         box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type",
-                                    ideas=ideas, badge=ICON_VOLUME_HIGH if talks else "")
+                                    ideas=ideas, arrow=ICON_VOLUME_HIGH if talks else "→")
         sub_x = box.x + round(line_px * 0.55)
         g.draw_markup(sub, sub_px, sub_x, bottom, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
         top_limit = rect.y + em(1)

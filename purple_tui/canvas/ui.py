@@ -213,14 +213,18 @@ class TextField:
         return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + (gap if gap is not None else px // 2)
 
     def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Type", label_px: int | None = None,
-             gap: int | None = None, ideas: tuple = ()) -> pygame.Rect:
+             gap: int | None = None, ideas: tuple = (), arrow: str = "→") -> pygame.Rect:
         """'Label →  text▌' in the mono face; returns the rect used.
         label_px lets the label sit a step larger than the typed text; gap
         sets the space between label and text (a boxed field needs more).
         While the text starts one of `ideas`, the rest shows after the
         caret as dotted tracing letters."""
         mid = y + g.line_height(px, "mono") // 2
-        g.draw_text(f"{label} →", label_px or px, x, mid, "mono-bold", P.ACCENT, anchor="midleft")
+        lpx = label_px or px
+        head = g.draw_text(f"{label} ", lpx, x, mid, "mono-bold", P.ACCENT, anchor="midleft").right
+        cell = g.measure("→", lpx, "mono-bold")[0]
+        apx = min(lpx, lpx * cell * 3 // 2 // max(1, g.measure(arrow, lpx, "mono-bold")[0]))
+        g.draw_text(arrow, apx, head + cell // 2, mid, "mono-bold", P.ACCENT, anchor="center")
         tx = self.text_x(g, x, px, label, label_px, gap)
         shown, start = self._visible_slice(g, px, width - (tx - x) - px)
         before = shown[:self.cursor - start]
@@ -246,11 +250,10 @@ class TextField:
         return next((i[len(v):] for i in ideas if i.lower().startswith(v.lower())), "")
 
     def draw_boxed(self, g: Gfx, x: int, y: int, width: int, px: int, label: str, placeholder: str = "",
-                   ideas: tuple = (), badge: str = "") -> pygame.Rect:
+                   ideas: tuple = (), arrow: str = "→") -> pygame.Rect:
         """The label, then a box out to `width` holding the text, with
-        `placeholder` faint inside while it is empty, `badge` (an icon) at
-        its right end, and `ideas` as chips before it until the text reaches
-        them. Returns the box."""
+        `placeholder` faint inside while it is empty and `ideas` as chips on
+        its right until the text reaches them. Returns the box."""
         label_px, gap, pad = round(px * 1.15), round(px * 1.1), round(px * 0.55)
         tx = self.text_x(g, x, px, label, label_px, gap)
         box = pygame.Rect(tx - pad, y, x + width - tx + pad, round(px * 1.9))
@@ -258,12 +261,10 @@ class TextField:
         g.rect(P.LINE, box, width=1, radius=round(px * 0.4))
         ty = box.centery - g.line_height(px, "mono") // 2
         right = box.right - pad
-        if badge:
-            right = g.draw_text(badge, px, right, box.centery, "mono-bold", P.ACCENT, anchor="midright").x - pad
         if placeholder and not self.value:
             hx = tx + px
             g.draw_text(_fit(g, placeholder, px, right - hx), px, hx, ty, "mono", P.DIM)
-        self.draw(g, x, ty, right - x, px, label, label_px, gap, ideas)
+        self.draw(g, x, ty, right - x, px, label, label_px, gap, ideas, arrow)
         if ideas:
             typed = self.value + self.trace_rest(ideas)
             self._draw_ideas(g, ideas, tx + g.measure(typed, px, "mono")[0] + px, box, right, px)
@@ -306,7 +307,7 @@ class TextField:
             if a < b:
                 x0 = tx + g.measure(shown[:a], px, "mono")[0]
                 w = g.measure(shown[a:b], px, "mono")[0]
-                g.rect(mix(P.FIELD, P.PRIMARY, 0.35), (x0 - px // 12, y, w + px // 6, lh), radius=lh // 4)
+                g.rect(mix(P.FIELD, P.PRIMARY, 0.35), (x0 - px // 12, y + lh // 10, w + px // 6, lh - lh // 5), radius=px // 6)
                 g.draw_text(shown[a:b], px, x0, y, "mono", P.ACCENT)
 
     def _underline(self, g, shown, px, tx, y):

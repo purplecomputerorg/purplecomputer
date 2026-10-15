@@ -29,6 +29,7 @@ CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
 TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
 BRUSH_LEAN = (0.5, -0.866)          # handle up and to the right, the way a right hand holds it
 BRUSH_FLOAT = 0.35                  # cells the lifted brush hovers above its ring
+BRUSH_HEAD = 0.55                   # of the brush's height from the tip: bristles and ferrule, no handle
 SPRITE_HALF = 3.5                   # cells from the cursor cell's center to the sprite's edge
 LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three quick frames
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
@@ -100,12 +101,12 @@ def _dash_outline(surf, mid: int, u: float, edge: int, color: str, alpha: int):
             pygame.draw.line(surf, (*rgb(color), alpha), *line, w)
 
 
-def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame.Surface:
+def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground: bool = True) -> pygame.Surface:
     """A 7c square centered on the cursor cell, drawn 4x and smoothed down.
     tip "brush" is a paintbrush in the brush color: lift 1 floats it above a
     ring on the cell (pen up), lift 0 presses its splayed bristles into the
-    cell (pen down). "erase" is a hollow square over the cell. arrow_turn, when
-    not None, adds a chevron turned that many degrees from pointing right."""
+    cell (pen down); ground False leaves off the ring and dashed cell. "erase"
+    is a hollow square over the cell. arrow_turn, when not None, adds a chevron turned that many degrees from pointing right."""
     s = 4
     u = c * s
     mid = round(SPRITE_HALF * u)
@@ -113,7 +114,7 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame
     edge = max(s, round(u * 0.06))
     if tip == "brush":
         press = 1 - lift
-        if lift:
+        if lift and ground:
             ring, band, alpha = pygame.Rect(0, 0, round(u * 0.9), round(u * 0.42)), max(2 * s, round(u * 0.09)), round(255 * lift)
             ring.center = (mid, mid + round(u * 0.3))
             _dash_outline(surf, mid, u, edge, color, alpha)
@@ -150,10 +151,12 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0) -> pygame
 
 
 def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
-    """The cursor's brush, cropped and sized for the header beside Paint."""
-    c = max(3, round(h / 2.6))
-    surf = _brush_tip(c, color, "brush", None, lift)
-    return surf.subsurface(round((SPRITE_HALF - 0.5) * c), round((SPRITE_HALF - 3.3) * c), round(2.2 * c), round(3.8 * c)).copy()
+    """The cursor brush's bristles and ferrule, no handle, cropped to their ink."""
+    surf = _brush_tip(max(3, round(h / 1.4)), color, "brush", None, lift, ground=False)
+    ink = surf.get_bounding_rect()
+    ink.h, ink.bottom = round(ink.h * BRUSH_HEAD), ink.bottom
+    head = surf.subsurface(ink)
+    return head.subsurface(head.get_bounding_rect()).copy()
 
 
 class ArtRoom:

@@ -5,6 +5,7 @@ Nothing here knows about rooms. Screens compose these and draw with Gfx.
 """
 
 import asyncio
+import functools
 import re
 import time
 
@@ -567,6 +568,18 @@ def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Re
     return pygame.Rect(x, y + key_h // 2 - h, w, h)
 
 
+@functools.lru_cache(maxsize=8)
+def _swatch_dot(color: str, d: int) -> pygame.Surface:
+    """A color dot in a light ring, drawn 4x and smoothed down so the edges stay clean."""
+    s = 4
+    big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)
+    c = d * s / 2
+    pygame.draw.circle(big, rgb(P.TEXT), (c, c), c)
+    pygame.draw.circle(big, (0, 0, 0, 0), (c, c), c - 2 * s)
+    pygame.draw.circle(big, rgb(color), (c, c), c - 3 * s)
+    return pygame.transform.smoothscale(big, (d, d))
+
+
 def _draw_wheel_chip(g: Gfx, px: int, right: int, cy: int):
     """'[\\] (wheel) Colors' in one pill, the key a solid keycap so it reads as press-me."""
     from .color_wheel import OPEN_KEY, disc
@@ -577,10 +590,11 @@ def _draw_wheel_chip(g: Gfx, px: int, right: int, cy: int):
     label_w = g.measure("Colors", px, "mono")[0]
     pill = pygame.Rect(0, 0, pad + key.w + px // 2 + dot.get_width() + px // 2 + label_w + px, key.h + 2 * pad)
     pill.midright = (right, cy)
-    g.rect(P.FIELD, pill, radius=pill.h // 2)
-    g.rect(P.LINE, pill, width=1, radius=pill.h // 2)
+    radius = round(px * 0.5)
+    g.rect(P.FIELD, pill, radius=radius + pad)
+    g.rect(P.LINE, pill, width=1, radius=radius + pad)
     key.midleft = (pill.x + pad, cy)
-    g.rect(P.TEXT, key, radius=round(px * 0.5))
+    g.rect(P.TEXT, key, radius=radius)
     g.draw_text(OPEN_KEY, px, key.centerx, key.centery, "mono-bold", P.SURFACE, anchor="center")
     x = g.surface.blit(dot, dot.get_rect(midleft=(key.right + px // 2, cy))).right + px // 2
     g.draw_text("Colors", px, x, cy, "mono", P.TEXT, anchor="midleft")
@@ -599,11 +613,8 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     if icon:
         left = g.surface.blit(icon, icon.get_rect(midright=(left, cy))).x
     elif swatch:
-        sw = round(px * 2.1)
-        left -= sw
-        dot = pygame.Rect(left, cy - sw // 2, sw, sw)
-        g.rect(swatch, dot.inflate(-6, -6), radius=sw)
-        g.rect(P.TEXT, dot, width=2, radius=sw)
+        dot = _swatch_dot(swatch, round(px * 2.1))
+        left = g.surface.blit(dot, dot.get_rect(midright=(left, cy))).x
     if wheel:
         _draw_wheel_chip(g, px, left - round(px * 1.6), cy)
     for i, (label, w) in enumerate(zip(labels, widths)):

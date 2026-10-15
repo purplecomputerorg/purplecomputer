@@ -212,12 +212,12 @@ class TextField:
         return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + (gap if gap is not None else px // 2)
 
     def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Type", label_px: int | None = None,
-             gap: int | None = None, ideas: tuple = (), under=P.SURFACE) -> pygame.Rect:
+             gap: int | None = None, ideas: tuple = ()) -> pygame.Rect:
         """'Label →  text▌' in the mono face; returns the rect used.
         label_px lets the label sit a step larger than the typed text; gap
         sets the space between label and text (a boxed field needs more).
-        While the text starts one of `ideas`, the rest shows faint after
-        the caret; `under` is the ground the caret cuts its letter out of."""
+        While the text starts one of `ideas`, the rest shows after the
+        caret: the next letter lit with the caret under it, then dotted."""
         mid = y + g.line_height(px, "mono") // 2
         g.draw_text(f"{label} →", label_px or px, x, mid, "mono-bold", P.ACCENT, anchor="midleft")
         tx = self.text_x(g, x, px, label, label_px, gap)
@@ -228,13 +228,13 @@ class TextField:
             self._underline(g, shown, px, tx, y)
         cx = tx + g.measure(before, px, "mono")[0] if before else tx
         rest = self.trace_rest(ideas) if start == 0 else ""
-        g.draw_text(rest, px, cx, y, "mono", P.DIM)
+        lh = g.line_height(px, "mono")
         caret = (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05))
-
-        def draw_caret():
-            g.rect(P.CARET, caret)
-            g.draw_text(rest[:1], px, cx, y, "mono", under)
-        g.draw_caret(caret, draw_caret)
+        if rest:
+            g.draw_text(rest[0], px, cx, y, "mono", P.CARET)
+            _draw_dotted(g, rest[1:], px, cx + g.measure(rest[0], px, "mono")[0], y, P.TEXT)
+            caret = (cx, y + lh, caret[2], max(3, px // 10))
+        g.draw_caret(caret, lambda: g.rect(P.CARET, caret))
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
     def trace_rest(self, ideas) -> str:
@@ -258,7 +258,7 @@ class TextField:
         if placeholder and not self.value:
             hx = tx + px
             g.draw_text(_fit(g, placeholder, px, box.right - pad - hx), px, hx, ty, "mono", P.DIM)
-        self.draw(g, x, ty, box.right - pad - x, px, label, label_px, gap, ideas, P.FIELD)
+        self.draw(g, x, ty, box.right - pad - x, px, label, label_px, gap, ideas)
         if ideas:
             typed = self.value + self.trace_rest(ideas)
             self._draw_ideas(g, ideas, tx + g.measure(typed, px, "mono")[0] + px, box, pad, px)
@@ -305,6 +305,18 @@ class TextField:
 
 def _truncate(text: str) -> str:
     return text[:MAX_RECALL_LEN - 1] + "…" if len(text) > MAX_RECALL_LEN else text
+
+
+def _draw_dotted(g: Gfx, text: str, px: int, x: int, y: int, color):
+    """`text` in the mono face showing only through a staggered grid of
+    pixels, like letters on a tracing worksheet."""
+    s = g.text(text, px, "mono", color).copy()
+    mask = pygame.Surface(s.get_size(), pygame.SRCALPHA)
+    for my in range(0, s.get_height(), 2):
+        for mx in range(my // 2 % 2, s.get_width(), 2):
+            mask.set_at((mx, my), (255, 255, 255, 255))
+    s.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    g.surface.blit(s, (x, y))
 
 
 def _fit(g: Gfx, text: str, px: int, avail: int) -> str:

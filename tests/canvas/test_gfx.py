@@ -1,6 +1,7 @@
 """The renderer's text pipeline: markup parsing, emoji splitting, wrapping."""
 
 import pytest
+import pygame
 
 from purple_tui.canvas.gfx import Gfx, is_emoji, parse_markup, split_runs, strip_markup
 from purple_tui.palette import contrast_text
@@ -104,3 +105,12 @@ def test_caret_painted_over_stops_blinking():
     g.dirty = False
     g.blink(0)
     assert g.caret is None and g.surface.get_at((12, 12))[:3] == (255, 0, 0)
+
+
+def test_caret_outside_a_shrunk_window_stops_blinking():
+    g = Gfx(size=(100, 100), headless=True)
+    g.draw_caret((80, 80, 5, 5), lambda: g.rect("#ffffff", (80, 80, 5, 5)))
+    g.surface = pygame.Surface((50, 50))
+    g.dirty = False
+    g.blink(0)
+    assert g.caret is None

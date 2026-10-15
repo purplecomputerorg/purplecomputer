@@ -485,7 +485,8 @@ class Gfx:
         if not c or self.dirty or time.monotonic() - c[4] < period:
             return
         rect, off, on, shown, _ = c
-        if pygame.image.tobytes(self.surface.subsurface(rect), "RGB") != pygame.image.tobytes(on if shown else off, "RGB"):
+        # A VM window can shrink under us before its resize event is handled
+        if not self.surface.get_rect().contains(rect) or pygame.image.tobytes(self.surface.subsurface(rect), "RGB") != pygame.image.tobytes(on if shown else off, "RGB"):
             self.caret = None
             return
         self.surface.blit(off if shown else on, rect)

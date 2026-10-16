@@ -25,6 +25,8 @@ _defaults = {
     "kid_letters": False,        # Use the recorded kid-voice clips for A-Z letter names (gated behind the secret menu)
     "secret_unlocked": False,    # Family secret menu revealed via the Ctrl+codeword gesture
     "voice": "natural",          # Which synthesizer speaks: "natural" (Piper) or "quick" (flite)
+    "language": "en",            # Interface language code (a language pack), "en" = English
+    "second_language": None,     # Language Play shows and says beside English words; None = off
 }
 
 
@@ -194,4 +196,26 @@ def get_voice() -> str:
 def set_voice(pref: str) -> None:
     settings = load_settings()
     settings["voice"] = pref
+    save_settings(settings)
+
+
+def get_language() -> str:
+    """The interface language's code; "en" is English, the built-in text."""
+    return load_settings()["language"]
+
+
+def set_language(code: str) -> None:
+    settings = load_settings()
+    settings["language"] = code
+    save_settings(settings)
+
+
+def get_second_language() -> str | None:
+    """The language Play shows and says next to English words, or None."""
+    return load_settings()["second_language"]
+
+
+def set_second_language(code: str | None) -> None:
+    settings = load_settings()
+    settings["second_language"] = code
     save_settings(settings)

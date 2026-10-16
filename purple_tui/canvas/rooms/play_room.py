@@ -5,6 +5,7 @@ import re
 
 import pygame
 
+from ... import i18n
 from ... import palette as P
 from ...constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ...content import get_content
@@ -150,6 +151,37 @@ def _play_autocomplete(last_word: str, full_text: str = "") -> list:
     return [(w, c, e) for w, c, e in content.search_words(last_word)]
 
 
+def echo_markup(text: str) -> tuple:
+    """(markup, spoken) for the second language's words for the English ones typed:
+    '🐶 perro', or '🐶 狗 gǒu' with the reading dim. Empty when nothing matches."""
+    lang, content = i18n.second_language(), get_content()
+    if lang is None:
+        return "", ""
+    shown, spoken = [], []
+    for token in dict.fromkeys(t.lower() for t in re.findall(r"[^\W\d_]+", text)):
+        hit = i18n.echo(lang, token)
+        if not hit or hit[0] in spoken:
+            continue
+        word, reading = hit
+        color = content.exact_color(token)
+        picture = content.exact_emoji(token) or (f"[on {color}]   [/]" if color else "")
+        shown.append(" ".join(filter(None, [picture, word, f"[dim]{reading}[/]" if reading else ""])))
+        spoken.append(word)
+    return "   ".join(shown), " ".join(spoken)
+
+
+def typing_language():
+    """The language whose words the number keys pick while typing its spelling (pinyin)."""
+    return next((lang for lang in i18n.active_languages() if lang.input), None)
+
+
+def pinyin_candidates(value: str, cursor: int) -> tuple:
+    """(start of the pinyin run before the cursor, its characters) or (cursor, [])."""
+    lang = typing_language()
+    m = re.search(r"[a-z]+$", value[:cursor]) if lang and cursor == len(value) else None
+    return (m.start(), i18n.candidates(lang, m.group())) if m else (cursor, [])
+
+
 def scroll_thumb(track, viewport: int, total: int, hidden: int, min_h: int) -> pygame.Rect:
     """Where the thumb sits on the track: content is `total` tall, the window
     shows `viewport` of it ending `hidden` px above the bottom."""
@@ -270,6 +302,9 @@ class PlayRoom(Room):
             return
         result = self.evaluator.evaluate(eval_text)
         entry = self._display_result(result) if result else None
+        echo, echo_spoken = echo_markup(eval_text)
+        if echo:
+            self._add("answer", echo)
         self.field.remember(input_text)
         correction = self.evaluator._last_math_correction
         if not correction:
@@ -281,7 +316,7 @@ class PlayRoom(Room):
         from ...tts import _dbg
         _dbg(f"submit raw={input_text!r} force_speak={force_speak} result_len={len(result or '')}")
         if force_speak:
-            self._speak(eval_text, result, entry)
+            self._speak(eval_text, result, entry, echo_spoken)
         self.app.invalidate()
 
     # ---------------------------------------------------------------- speech
@@ -290,15 +325,17 @@ class PlayRoom(Room):
             entry.speech = state
             self.app.invalidate()
 
-    def _speak(self, input_text: str, result: str, entry):
-        from ...tts import _dbg, speak
+    def _speak(self, input_text: str, result: str, entry, echo: str = ""):
+        """The answer, then the second language's words for it."""
+        from ...tts import _dbg, speak_many
         speakable = self.evaluator._make_speakable(input_text, result)
         _dbg(f"speakable len={len(speakable)} head={speakable[:60]!r}")
         if not speakable:
             return
-        started = speak(speakable,
-                        on_playing=lambda: self.app.call_from_thread(self._set_speech, entry, "playing"),
-                        on_done=lambda: self.app.call_from_thread(self._set_speech, entry, ""))
+        texts = [speakable] + ([(echo, i18n.second_language())] if echo else [])
+        started = speak_many(texts,
+                             on_playing=lambda i: self.app.call_from_thread(self._set_speech, entry, "playing"),
+                             on_done=lambda: self.app.call_from_thread(self._set_speech, entry, ""))
         _dbg(f"speak started={started}")
         if not started:
             self._set_speech(entry, "filtered")
@@ -360,7 +397,11 @@ class PlayRoom(Room):
                 f.clear()
             return
         if isinstance(action, CharacterAction) and not action.is_repeat:
-            if action.char in MATH_OPERATORS:
+            start, picks = pinyin_candidates(f.value, f.cursor)
+            if action.char.isdigit() and 0 < int(action.char) <= len(picks):
+                pick = picks[int(action.char) - 1]
+                f.set(f.value[:start] + pick, start + len(pick))
+            elif action.char in MATH_OPERATORS:
                 f.insert_operator(action.char)
             else:
                 f.insert(action.char)
@@ -379,8 +420,9 @@ class PlayRoom(Room):
         ideas = self.hints.current(hold=bool(self.field.value))
         box = self.field.draw_boxed(g, x, bottom - em(0.9) - round(line_px * 1.9), width, line_px, "Type",
                                     ideas=ideas, arrow=ICON_VOLUME_HIGH if talks else "→")
+        picks = self._picks_markup()
         self.field.draw_sub(g, box.x + round(line_px * 0.55), bottom, sub_px, "{Enter} go" if self.field.value.strip() else "",
-                            "{Tab} quiet" if talks else "{Tab} say it")
+                            "{Tab} quiet" if talks else "{Tab} say it", hint=(picks, "") if picks else None)
         top_limit = rect.y + em(1)
         base = box.y - em(1)
         viewport = base - top_limit
@@ -404,6 +446,12 @@ class PlayRoom(Room):
             g.rect(P.BG, track, radius=w // 2)
             g.rect(P.FIELD, scroll_thumb(track, viewport, total, self.scroll, em(1.5)), radius=w // 2)
 
+    def _picks_markup(self) -> str:
+        """The characters the typed pinyin could be, numbered for the keys that pick them."""
+        _, picks = pinyin_candidates(self.field.value, self.field.cursor)
+        emoji = get_content().exact_emoji
+        return "   ".join(f"[bold {P.TEXT}]{i}[/] [{P.TEXT}]{emoji(w) or ''}{w}[/]" for i, w in enumerate(picks, 1))
+
     def _answer_px(self, g, e) -> int:
         """Only a small all-emoji answer earns the big size; text stays a
         step above the ask line so it reads as the computer's voice."""
@@ -423,7 +471,7 @@ class PlayRoom(Room):
     def _part_height(self, g, e, part, width) -> int:
         if isinstance(part, tuple):
             return abacus_size(g, part[0])[2]
-        return g.markup_size(part, self._answer_px(g, e), "mono-bold", width, self._row_gap(g))[1]
+        return g.markup_size(part, self._answer_px(g, e), "mono-bold", width, self._row_gap(g), tr=False)[1]
 
     def _entry_height(self, g, e, width) -> int:
         if e.kind == "ask":
@@ -437,7 +485,7 @@ class PlayRoom(Room):
         if isinstance(part, tuple):
             slot, bar, _ = abacus_size(g, part[0])
             return slot + 2 * bar
-        lines = g.layout(part, self._answer_px(g, e), "mono-bold", P.TEXT, width)
+        lines = g.layout(part, self._answer_px(g, e), "mono-bold", P.TEXT, width, tr=False)
         return lines[0][1] if lines else 0
 
     def _draw_entry(self, g, e, x, y, width, ink=None):
@@ -446,7 +494,7 @@ class PlayRoom(Room):
         if e.kind == "ask":
             px = g.em(1.05)
             r = g.draw_text("Type → ", px, x, y, "mono-bold", muted)
-            g.draw_text(e.markup, px, r.right, y, "mono", muted)
+            g.draw_text(e.markup, px, r.right, y, "mono", muted, tr=False)
             return
         icon = SPEECH_ICONS.get(e.speech, "")
         if icon:
@@ -458,7 +506,7 @@ class PlayRoom(Room):
                 draw_abacus(g, *part, x, y, muted, ground)
             else:
                 g.draw_markup(part, self._answer_px(g, e), x, y, "mono-bold", text, width,
-                              dim_to=ground, line_gap=self._row_gap(g))
+                              dim_to=ground, line_gap=self._row_gap(g), tr=False)
             y += self._part_height(g, e, part, width) + self._row_gap(g)
 
     def paper(self, g, size, on_screen=False):

@@ -219,6 +219,7 @@ class ContentManager:
         for pack_dir in _pack_dirs(self.packs_dir):
             self._load_pack(pack_dir, user=True)
 
+        self._load_language_words()
         self._loaded = True
         self._build_prefix_indexes()
         self._build_fuzzy_forms()
@@ -330,6 +331,16 @@ class ContentManager:
             "wisteria": "#C9A0DC",
             "heather": "#B7A2C7",
         }
+
+    def _load_language_words(self) -> None:
+        """Words in the parent's languages make the same emoji and colors as
+        their English, without taking over an English word."""
+        from .i18n import active_languages, aliases
+        for lang in active_languages():
+            for typed, english in aliases(lang).items():
+                for table in (self.emojis, self.colors):
+                    if english in table and typed not in self.emojis and typed not in self.colors:
+                        table[typed] = table[english]
 
     def _load_pack(self, pack_dir: Path, user: bool = False) -> None:
         """Load content from a single pack directory"""

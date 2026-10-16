@@ -85,7 +85,7 @@ class TestQuickVoice:
 
     def test_natural_without_piper_falls_through_to_flite(self, flite, monkeypatch):
         monkeypatch.setattr(tts, "_voice_pref", tts.VOICE_NATURAL)
-        monkeypatch.setattr(tts, "_synthesize_piper", lambda text, path: False)
+        monkeypatch.setattr(tts, "_synthesize_piper", lambda text, path, *model: False)
         path = tts._synthesize_to_cache("apple.", tts.VOICE_NATURAL)
         assert path == tts._cache_path("apple.", tts.VOICE_QUICK)
         assert len(flite) == 1
@@ -117,9 +117,9 @@ def test_worker_process_serves_requests(monkeypatch):
     import io
     from purple_tui import tts_worker
     synths, written = [], []
-    monkeypatch.setattr(tts, "load_voice", lambda: _fake_voice(synths))
-    monkeypatch.setattr(tts, "_make_synth_config", lambda: None)
-    monkeypatch.setattr(tts, "synthesize_to_file", lambda voice, text, path: written.append((text, path)) or True)
+    monkeypatch.setattr(tts, "load_voice", lambda *model: _fake_voice(synths))
+    monkeypatch.setattr(tts, "_make_synth_config", lambda *model: None)
+    monkeypatch.setattr(tts, "synthesize_to_file", lambda voice, text, path, *model: written.append((text, path)) or True)
     replies = io.StringIO()
     tts_worker.serve(io.StringIO("/tmp/a.wav\tapple.\n/tmp/b.wav\tbanana.\n"), replies)
     assert replies.getvalue() == "ready\nok\nok\n"

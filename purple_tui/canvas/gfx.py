@@ -26,6 +26,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 os.environ.setdefault("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
 import pygame  # noqa: E402
 
+from .. import i18n
 from ..palette import NAMED_COLORS, rgb
 
 FONT_DIR = Path(__file__).parent / "fonts"
@@ -42,7 +43,8 @@ FACES = {
     "nerd": "SymbolsNerdFontMono-Regular.ttf",  # mono-tinted UI icon glyphs
     "symbols": "DejaVuSans.ttf",  # fallback for glyphs the faces above lack
 }
-# A char the requested face lacks falls through this chain, in order.
+# A char the requested face lacks falls through this chain, in order; language
+# pack fonts (Chinese) join it before DejaVu, which stays the last resort.
 FALLBACK_FACES = ("nerd", "symbols")
 EMOJI_FONT_PATHS = [
     os.environ.get("PURPLE_EMOJI_FONT", ""),
@@ -63,6 +65,8 @@ _EMOJI_RE = re.compile(
     "(?:‍[☀-➿\U0001F000-\U0001FAFF][️\U0001F3FB-\U0001F3FF]*)*)+"
 )
 _TAG_RE = re.compile(r"\\\[|\[(/?)([^\[\]]*)\]")
+# Wrap points: runs of space, and between any two Chinese characters.
+_BREAK_RE = re.compile(r"(\s+|[\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef])")
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 def hexcolor(color) -> str:
@@ -203,6 +207,9 @@ class Gfx:
         self._coverage: dict = {}
         self._probes: dict = {}
         self._emoji_font = self._load_emoji_font()
+        for name, path in i18n.fonts():
+            FACES[name] = str(path)
+        self._fallbacks = FALLBACK_FACES[:-1] + tuple(n for n, _ in i18n.fonts()) + FALLBACK_FACES[-1:]
 
     def resize(self):
         """Follow the window when the X screen changes size under us (a VM
@@ -265,10 +272,14 @@ class Gfx:
             return pygame.transform.smoothscale(native, (w, height))
         return self._images.get_or((name, height), make)
 
-    def text(self, text: str, px: int, face: str = "sans", color="#ffffff", _raw=False, track: float = 0) -> pygame.Surface:
+    def text(self, text: str, px: int, face: str = "sans", color="#ffffff", _raw=False, track: float = 0,
+             tr: bool = True) -> pygame.Surface:
         """One line of text as a surface (cached). Emoji inside go through the
-        emoji font; ALL CAPS is applied here so every caller inherits it.
-        track spaces letters apart by that fraction of px (chrome labels)."""
+        emoji font; translation and ALL CAPS are applied here so every caller
+        inherits them (tr=False for what a kid typed). track spaces letters
+        apart by that fraction of px (chrome labels)."""
+        if tr and not _raw:
+            text = i18n.translate(text)
         if self.all_caps and not _raw:
             text = text.upper()
         key = (text, px, face, hexcolor(color), track)
@@ -322,10 +333,10 @@ class Gfx:
         (nerd icons, then DejaVu symbols). Spaces stay on the requested face."""
         if ch.isspace() or self._covers(face, ch):
             return face
-        for fb in FALLBACK_FACES:
+        for fb in self._fallbacks:
             if fb != face and self._covers(fb, ch):
                 return fb
-        return FALLBACK_FACES[-1]
+        return self._fallbacks[-1]
 
     def _split_faces(self, face: str, text: str) -> list:
         """Split text into maximal (run, face) pairs by resolved face."""
@@ -340,8 +351,8 @@ class Gfx:
             cur = rf
         return out + [(buf, cur)] if buf else out
 
-    def measure(self, text: str, px: int, face: str = "sans", track: float = 0) -> tuple:
-        return self.text(text, px, face, track=track).get_size()
+    def measure(self, text: str, px: int, face: str = "sans", track: float = 0, tr: bool = True) -> tuple:
+        return self.text(text, px, face, track=track, tr=tr).get_size()
 
     def line_height(self, px: int, face: str = "sans") -> int:
         return self.font(face, px).get_linesize()
@@ -353,17 +364,18 @@ class Gfx:
     def rect(self, color, rect, width=0, radius=0):
         pygame.draw.rect(self.surface, rgb(color), rect, width, border_radius=radius)
 
-    def draw_text(self, text, px, x, y, face="sans", color="#ffffff", anchor="topleft", bg=None, pad=0, track: float = 0) -> pygame.Rect:
+    def draw_text(self, text, px, x, y, face="sans", color="#ffffff", anchor="topleft", bg=None, pad=0, track: float = 0,
+                  tr: bool = True) -> pygame.Rect:
         """Blit one line. anchor is any pygame.Rect attribute name (topleft,
         center, midtop, topright, midleft, ...). bg paints a box behind it."""
-        s = self.text(text, px, face, color, track=track)
+        s = self.text(text, px, face, color, track=track, tr=tr)
         r = s.get_rect(**{anchor: (x, y)})
         if bg is not None:
             self.rect(bg, r.inflate(pad * 2, pad * 2))
         self.surface.blit(s, r)
         return r
 
-    def layout(self, markup: str, px: int, face="sans", color="#ffffff", max_width=None, dim_to=None) -> list:
+    def layout(self, markup: str, px: int, face="sans", color="#ffffff", max_width=None, dim_to=None, tr=True) -> list:
         """Markup -> lines of placed pieces, word-wrapped to max_width and
         broken at newlines. Each line is (width, height, [(surface, x, bg)]).
         A whitespace-only span with a background is a color swatch and is
@@ -371,6 +383,8 @@ class Gfx:
         lines, and one holding a single letter or emoji is a square tile, so
         letter blocks line up in columns when they wrap. dim_to is the
         background dim text fades toward."""
+        if tr:
+            markup = i18n.translate(markup)
         pieces = []
         for chunk, style in parse_markup(markup):
             fg = style.get("fg", color)
@@ -386,7 +400,7 @@ class Gfx:
                 elif bg:
                     pieces.append((part, f, fg, bg, part.isspace()))
                 else:
-                    pieces.extend((w, f, fg, bg, False) for w in re.split(r"(\s+)", part) if w)
+                    pieces.extend((w, f, fg, bg, False) for w in _BREAK_RE.split(part) if w)
         lines, cur, cur_w = [], [], 0
         line_h = self.line_height(px, face)
 
@@ -414,7 +428,7 @@ class Gfx:
                 cur_w += s.get_width()
                 continue
             for part in self._split_to_fit(word, px, f, fg, max_width):
-                s = self.text(part, px, f, fg)
+                s = self.text(part, px, f, fg, tr=False)
                 if max_width and cur and cur_w + s.get_width() > max_width and not (part.isspace() and not bg):
                     flush()
                 if not cur and part.isspace() and not bg:
@@ -426,26 +440,27 @@ class Gfx:
         return lines
 
     def _tile(self, ch, px, face, color, side):
-        s = self.text(ch, px, face, color)
+        s = self.text(ch, px, face, color, tr=False)
         side = max(side, s.get_width())
         tile = pygame.Surface((side, side), pygame.SRCALPHA)
         tile.blit(s, ((side - s.get_width()) // 2, (side - s.get_height()) // 2))
         return tile
 
     def _split_to_fit(self, word, px, face, color, max_width):
-        if not max_width or self.text(word, px, face, color).get_width() <= max_width:
+        if not max_width or self.text(word, px, face, color, tr=False).get_width() <= max_width:
             return [word]
         out, buf = [], ""
         for unit, _ in _units(word):
-            if buf and self.text(buf + unit, px, face, color).get_width() > max_width:
+            if buf and self.text(buf + unit, px, face, color, tr=False).get_width() > max_width:
                 out.append(buf)
                 buf = ""
             buf += unit
         return out + [buf] if buf else out
 
-    def draw_markup(self, markup, px, x, y, face="sans", color="#ffffff", max_width=None, align="left", dim_to=None, line_gap=0) -> int:
+    def draw_markup(self, markup, px, x, y, face="sans", color="#ffffff", max_width=None, align="left", dim_to=None, line_gap=0,
+                    tr=True) -> int:
         """Draw wrapped markup at (x, y); returns the height used."""
-        lines = self.layout(markup, px, face, color, max_width, dim_to)
+        lines = self.layout(markup, px, face, color, max_width, dim_to, tr)
         top = y
         for w, h, pieces in lines:
             off = 0
@@ -461,8 +476,8 @@ class Gfx:
             y += h + line_gap
         return y - top
 
-    def markup_size(self, markup, px, face="sans", max_width=None, line_gap=0) -> tuple:
-        lines = self.layout(markup, px, face, "#ffffff", max_width)
+    def markup_size(self, markup, px, face="sans", max_width=None, line_gap=0, tr=True) -> tuple:
+        lines = self.layout(markup, px, face, "#ffffff", max_width, tr=tr)
         return (max((w for w, _, _ in lines), default=0), sum(h for _, h, _ in lines) + line_gap * (len(lines) - 1))
 
     # ----- frame -----

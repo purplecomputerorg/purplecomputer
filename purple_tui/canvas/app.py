@@ -1395,7 +1395,7 @@ class PurpleApp:
             draw_hold_bar(g, strip, (hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1])
         g.surface.set_clip(None)
         esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
-        if self._legend_visible:
+        if self._legend_visible and not self._code_panel_active:   # keys type code there, not colors
             self._draw_legend(frame, esc_pill.bottom if esc_pill else g.h - g.vh(2))
         for o in self._overlays:
             o.draw(g)
@@ -1466,7 +1466,7 @@ class PurpleApp:
             draw_label(g, label, px, x + w // 2, y, P.MUTED, anchor="center", on=rid == self.active_room)
             x += w + gap
         if right is None:
-            hint = getattr(self.room, "arrow_hint", None)
+            hint = getattr(self._panel, "arrow_hint", None) or getattr(self.room, "arrow_hint", None)
             right = hint() if hint else ARROW_HINTS[self.active_room]
             if self._effective_volume() == 0:
                 right = f"{ICON_VOLUME_OFF}  " + right

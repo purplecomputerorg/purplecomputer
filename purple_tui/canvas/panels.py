@@ -427,6 +427,11 @@ class CodePanel:
             f.insert(action.char)
         return None
 
+    def arrow_hint(self) -> str:
+        if self.card is not None:
+            return f"Arrows pick  {LEFT} {RIGHT}   Back  {UP}"
+        return f"Your code  {UP}   Examples  {DOWN}"
+
     def _choose(self, i: int):
         self.card = i
         self.field.set(self.recipes[i][0])

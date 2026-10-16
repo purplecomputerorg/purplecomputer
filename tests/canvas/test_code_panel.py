@@ -157,6 +157,26 @@ def test_up_leaves_the_cards_and_typing_edits_the_recipe():
     run(go())
 
 
+def test_open_code_hides_the_color_legend_and_names_its_arrows(monkeypatch):
+    async def go():
+        app, art = await _room("art")
+        drawn = []
+        monkeypatch.setattr(app, "_draw_legend", lambda *a: drawn.append(True))
+        app._draw()
+        assert drawn
+        art.open_code_panel()
+        drawn.clear()
+        app._draw()
+        assert not drawn
+        assert "Examples" in art.code_panel.arrow_hint()
+        await press(app, "down")
+        assert "pick" in art.code_panel.arrow_hint()
+        art.close_code_panel()
+        app._draw()
+        assert drawn
+    run(go())
+
+
 def test_tab_on_an_empty_code_line_does_not_crash():
     async def go():
         app, art = await _room("art")

@@ -1019,7 +1019,7 @@ def _term_rc() -> str:
 def _xterm_cmd() -> list:
     return [
         "xterm",
-        "-fa", "IBM Plex Mono", "-fs", "14",
+        "-fa", "IBM Plex Mono", "-fs", "18",
         "-bg", P.BG, "-fg", "#ffffff", "-b", "24",
         "-title", "Purple Terminal",
         "-e", "bash", "--rcfile", _term_rc(),

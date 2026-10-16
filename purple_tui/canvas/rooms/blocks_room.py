@@ -739,13 +739,7 @@ class BlocksRoom:
         fill, edge = (40, 150) if self._blink_on else (16, 70)
         self._outline(layer, column, edge, fill)
         self._shadow(layer, vx, vz, self._ground(y), y, self._color)
-        d = self._step()
-        ghost, behind = self._ghost(vx + d["x"], vz + d["z"], y + d["y"]), d["z"] > d["x"] + d["y"]
-        if behind:
-            layer.blit(ghost, (0, 0))
         layer.blit(self._sprite(self._color, 170 if self._blink_on else 100, vz), self._sprite_rect(vx, vz, y))
-        if not behind:
-            layer.blit(ghost, (0, 0))
         layer.blit(front, (0, 0))
         g.surface.blit(layer, (ox, oy))
         layer.fill((0, 0, 0, 0))                # draw calls replace pixels rather than blend, so the see-through top goes on fresh
@@ -790,13 +784,6 @@ class BlocksRoom:
     def _step(self) -> dict:
         axis, step = WRAP[self._dir][0]
         return {a: (step if a == axis else 0) for a in SIZE}
-
-    def _ghost(self, vx, vz, y) -> pygame.Surface:
-        """A faint box where the next typed block goes, on its own surface so it blends."""
-        ghost = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
-        if 0 <= vx < WIDTH and 0 <= vz < DEPTH and 0 <= y < HEIGHT:
-            self._outline(ghost, self._faces(*self._corner(vx, vz, y + 1)), 160, 70)
-        return ghost
 
     def _pointer(self, layer, vx, vz, y):
         """An arrow out of the wire box's top (or bottom, going down) the way

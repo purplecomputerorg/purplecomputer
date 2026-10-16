@@ -32,9 +32,10 @@ Design rules, in priority order:
    video: one selection idiom everywhere. Parent Menu section headers are
    Plex Mono Italic, dim. Dialog bodies, panels, system screens and the
    Music key letters are mono too, so the whole screen reads as one
-   terminal; Plex Sans is bundled only for glyph fallbacks. UI icons are
-   mono-tinted Nerd Font glyphs (`ICON_*`) that take the text color; full
-   color is reserved for the kid's own output.
+   terminal. Figtree (the landing site's body font) is the sans, kept for
+   the few places a welcome reads better than a terminal, like the
+   live-boot welcome. UI icons are mono-tinted Nerd Font glyphs (`ICON_*`)
+   that take the text color; full color is reserved for the kid's own output.
 5. Corners are gently rounded, sized in `g.em` straight from the design
    mock: stage and cards 0.6em, pills 0.5em, Music keys 0.42em, the Play
    field 0.4em, menu rows 0.35em. Art cells stay hard-edged (the grid is

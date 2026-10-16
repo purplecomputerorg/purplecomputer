@@ -2,7 +2,10 @@
 
 Vendored from IBM's Plex release and Google Fonts, all under the SIL Open Font License 1.1.
 
-- IBM Plex Sans (Regular 400, SemiBold 600, Bold 700): replies, dialog body text, tiles.
+- Figtree (Regular 400, SemiBold 600, Bold 700): the sans face, for system screens like the
+  live-boot welcome, glosses and family room text. The landing site's body font, so screen,
+  site and box match. Static instances of the Google Fonts variable build, cut with
+  `fonttools varLib.instancer Figtree[wght].ttf wght=400` (and 600, 700).
 - IBM Plex Mono (Regular 400, SemiBold 600, Bold 700, Italic 400): the prompt line, code,
   every piece of chrome (titles, room tabs, keycaps, hints), and the menus (Parent Menu
   and Picker option lists). Plex is IBM's own face, so the DOS-era callback is literal, and

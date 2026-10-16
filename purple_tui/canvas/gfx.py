@@ -31,9 +31,9 @@ from ..palette import NAMED_COLORS, rgb
 FONT_DIR = Path(__file__).parent / "fonts"
 IMAGE_DIR = Path(__file__).parent / "images"
 FACES = {
-    "sans": "IBMPlexSans-Regular.ttf",
-    "sans-bold": "IBMPlexSans-SemiBold.ttf",
-    "sans-heavy": "IBMPlexSans-Bold.ttf",
+    "sans": "Figtree-Regular.ttf",
+    "sans-bold": "Figtree-SemiBold.ttf",
+    "sans-heavy": "Figtree-Bold.ttf",
     "mono": "IBMPlexMono-Regular.ttf",
     "mono-bold": "IBMPlexMono-SemiBold.ttf",
     "mono-heavy": "IBMPlexMono-Bold.ttf",

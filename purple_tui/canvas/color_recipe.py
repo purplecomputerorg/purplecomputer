@@ -73,9 +73,14 @@ def draw_recipe(g, terms, result, px: int, x: int, y: int, anchor="midright", in
             g.rect(P.LINE, cap, width=1, radius=round(px * 0.5))
             g.draw_text(text, px, cap.centerx, cap.centery, "mono", ink, anchor="center")
         else:
-            g.rect(fill, cap, radius=round(px * 0.5) if text else h // 2)
-            g.draw_text(text, px, cap.centerx, cap.centery, "mono-bold", P.ON_PRIMARY if P.luminance(fill) > 0.5 else "#FFFFFF", anchor="center")
+            draw_color_cap(g, text, fill, cap, px, radius=None if text else h // 2)
     return box
+
+
+def draw_color_cap(g, text: str, fill: str, cap: pygame.Rect, px: int, radius: int | None = None):
+    """A keycap filled with its sticker color, the letter in whichever ink reads on it."""
+    g.rect(fill, cap, radius=round(px * 0.5) if radius is None else radius)
+    g.draw_text(text, px, cap.centerx, cap.centery, "mono-bold", P.ON_PRIMARY if P.luminance(fill) > 0.5 else "#FFFFFF", anchor="center")
 
 
 def hint_row(key: str, last: tuple | None) -> dict:

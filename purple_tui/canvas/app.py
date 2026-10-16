@@ -28,16 +28,17 @@ from ..constants import (
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
     is_usb_cached, is_usb_needed, is_usb_present,
 )
-from .gfx import Gfx, rgb
+from .gfx import Gfx
 from .rooms.blocks_room import ICON_CUBE
 from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
 from ..keyboard import (
     CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction, RoomAction,
     detect_keyboard_mode,
 )
-from ..palette import ROW_LEGEND_COLORS
+from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from ..timeline import RoomTimeline
 from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
+from .color_recipe import draw_color_cap
 from .ui import HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ("blocks", "Blocks"))
@@ -52,11 +53,14 @@ BACKSLASH_HOLD = 3.0
 LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
 CARET_BLINK_S = 0.53          # the classic terminal half-second
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
-SIDE_MARGIN_VW = 6            # air beside the frame; the sticker legend sits in the right one
+SIDE_MARGIN_VW = 6            # air beside the frame
 TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
 STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
 STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the TUI's room bar
 TIMELINE_DEBOUNCE_S = 3.0
+LEGEND_KEY_VH = 2.35          # pitch of the sticker keyboard in the bottom-left corner
+LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 0.75), (ZXCV_ROW, 1.25))   # with real stagger
+_KEY_FOR_COLOR = {get_key_color(k): k for row, _ in LEGEND_ROWS for k in row}
 TIMELINE_MAX_WAIT_S = 15.0
 MAX_CODE_LINES = 200          # code lines kept with a room's state (Time Travel, saves)
 
@@ -154,7 +158,7 @@ class PurpleApp:
         self.rooms = {"play": PlayRoom(self), "music": MusicRoom(self), "art": ArtRoom(self), "blocks": BlocksRoom(self)}
         self.active_room = "play"
         self._panel = None          # bottom panel drawn inside the viewport: code / loop / time
-        self._legend_row = -1
+        self._legend_key = None
         self._legend_visible = True
         self._computer_name = None
         self._frame_note = None
@@ -386,7 +390,7 @@ class PurpleApp:
                 self.room.open_code_panel()
             else:
                 self._code_panel_active = False
-        self._legend_row = -1
+        self._legend_key = None
         self._legend_visible = room_name != "music"
         self._update_shift_indicator()
         self.invalidate()
@@ -398,9 +402,8 @@ class PurpleApp:
         self.invalidate()
 
     def set_legend(self, color: str | None, visible: bool = True):
-        from ..palette import get_legend_row_from_color
         self._legend_visible = visible
-        self._legend_row = get_legend_row_from_color(color) if color else -1
+        self._legend_key = _KEY_FOR_COLOR.get(color)
         self.invalidate()
 
     def _silence_music(self):
@@ -1375,8 +1378,9 @@ class PurpleApp:
                 pygame.Rect(vp.x, vp.bottom - g.em(4.5), vp.w, g.em(4.5))
             draw_hold_bar(g, strip, (hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1])
         g.surface.set_clip(None)
-        self._draw_legend(frame)
-        self._draw_status(frame)
+        if self._legend_visible:
+            self._draw_legend(frame)
+        self._draw_status(frame, left="" if self._legend_visible else None)
         for o in self._overlays:
             o.draw(g)
         self._draw_toasts()
@@ -1398,20 +1402,18 @@ class PurpleApp:
             g.draw_text(right, px, frame.right, y, "mono", P.MUTED, anchor="midright")
 
     def _draw_legend(self, frame):
-        """Sticker colors per keyboard row beside the viewport; a triangle
-        points at the row of the last key."""
-        if not self._legend_visible:
-            return
+        """A tiny keyboard in the sticker colors, so a kid without stickers can
+        find a color before pressing; the last key wears a ring."""
         g = self.g
-        sw, sh = g.vw(0.7), g.vh(2.2)
-        x = frame.right + g.vw(0.5)
-        y = frame.bottom - 4 * sh
-        for r, shades in enumerate(ROW_LEGEND_COLORS):
-            for i, color in enumerate(shades):
-                g.rect(color, (x + i * sw, y + r * sh, sw, sh))
-        if self._legend_row >= 0:
-            tx, ty, t = x + 3 * sw + g.vw(0.25), y + self._legend_row * sh + sh // 2, g.vh(0.7)
-            pygame.draw.polygon(g.surface, rgb(P.TEXT), [(tx, ty), (tx + t, ty - t), (tx + t, ty + t)])
+        pitch = g.vh(LEGEND_KEY_VH)
+        size, px = pitch - g.vh(0.4), round(pitch * 0.5)
+        top = g.h - g.vh(0.8) - 4 * pitch
+        for r, (row, stagger) in enumerate(LEGEND_ROWS):
+            for i, key in enumerate(row):
+                cap = pygame.Rect(frame.x + round((stagger + i) * pitch), top + r * pitch, size, size)
+                draw_color_cap(g, key.upper(), get_key_color(key), cap, px, radius=size // 5)
+                if key == self._legend_key:
+                    g.rect(P.TEXT, cap.inflate(4, 4), width=2, radius=size // 4)
 
     def _draw_status(self, frame, left=None, right=None, tabs=True):
         """The strip under the viewport: keyboard note, the Esc pill and room

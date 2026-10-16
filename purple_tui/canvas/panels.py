@@ -133,7 +133,7 @@ _TAKES_A_WAY = {"turn", "face", "brush", "pen"}
 
 
 def guide_topic(room: str, text: str):
-    """(heading, rows) for the last word in `text` that has a topic, else None.
+    """(heading, rows, word) for the last word in `text` that has a topic, else None.
     The way after turn, face or brush belongs to that word: "brush up" is Brush."""
     from ..color_mixing import COLOR_ADJECTIVES
     words = text.lower().split()
@@ -143,7 +143,7 @@ def guide_topic(room: str, text: str):
         is_color = word in COLOR_ADJECTIVES or get_content().exact_color(word)
         for triggers, heading, rows in TOPICS[room]:
             if word in triggers.split() or (is_color and triggers == COLORS):
-                return heading, rows
+                return heading, rows, word
     return None
 
 
@@ -503,17 +503,18 @@ class CodePanel:
         y = rect.y + g.em(0.9)
         if not topic:
             y += g.draw_markup(GUIDE_HINT, head_px, x, y, "sans", P.MUTED, w) + g.em(0.5)
-        for heading, rows in [topic] if topic else GUIDE[self.room]:
+        word = topic[2] if topic else None
+        for heading, rows in [topic[:2]] if topic else GUIDE[self.room]:
             if y + g.line_height(head_px, "sans") + g.line_height(px, "mono") > bottom:
                 break
-            y += g.draw_text(heading, head_px, x, y, "sans-bold", P.ACCENT).h + g.em(0.1)
+            y += g.draw_text(heading, head_px, x, y, "sans-bold", P.ACCENT).h + g.em(0.3)
             for code, gloss in rows:
                 if code in (COLORS, ALL_COLORS):
                     h = g.draw_markup(self.colors if code == COLORS else self.all_colors, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
                 elif y + (h := _example_height(g, code, gloss, px, w)) > bottom:
                     break
                 else:
-                    _draw_example(g, code, gloss, px, x, y, w)
+                    _draw_example(g, code, gloss, px, x, y, w, word)
                 y += h + g.em(0.12)
             y += g.em(0.4)
 
@@ -532,12 +533,17 @@ def _example_height(g, code, gloss, px, w) -> int:
     return chip[1] if beside else chip[1] + g.em(0.1) + g.markup_size(gloss, gpx, "sans", w)[1]
 
 
-def _draw_example(g, code, gloss, px, x, y, w):
+def _draw_example(g, code, gloss, px, x, y, w, word=None):
+    """`word`, the one being typed, is lit wherever the example uses it."""
     chip, gpx, beside = _example_layout(g, code, gloss, px, w)
     box = pygame.Rect((x, y), chip)
+    words = code.split(" ")
+    lit = word in words
     g.rect(P.FIELD, box, radius=g.em(0.25))
-    g.rect(P.HAIR, box, width=1, radius=g.em(0.25))
-    g.draw_text(code, px, box.centerx, box.centery, "mono", P.TEXT, anchor="center")
+    g.rect(P.ACCENT if lit else P.HAIR, box, width=2 if lit else 1, radius=g.em(0.25))
+    markup = " ".join(f"[bold {P.ACCENT}]{c}[/]" if c == word else c for c in words)
+    tw, th = g.markup_size(markup, px, "mono")
+    g.draw_markup(markup, px, box.centerx - tw // 2, box.centery - th // 2, "mono", P.TEXT)
     if gloss:
         gx, gy = (box.right + g.em(0.5), box.centery - g.line_height(gpx, "sans") // 2) if beside else (x + g.em(0.2), box.bottom + g.em(0.1))
         g.draw_markup(gloss, gpx, gx, gy, "sans", P.MUTED, x + w - gx)

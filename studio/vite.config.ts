@@ -11,6 +11,8 @@ const pyodideDir = resolve(here, "node_modules/pyodide");
 // threads start from the file the runtime is in.
 const ortDir = resolve(here, "node_modules/onnxruntime-web/dist");
 const ORT_FILES = ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm"];
+// Blockly's icons and sounds, which it would otherwise fetch from static.blockly.com.
+const blocklyMedia = resolve(here, "node_modules/blockly/media");
 // espeak-ng's source offer, served beside the voice (see vendor/espeak-ng/README.md).
 const espeakDir = resolve(here, "vendor/espeak-ng");
 const ESPEAK_SOURCE = ["README.md", "espeak_bridge.c", "build.sh"];
@@ -46,6 +48,7 @@ function pyodideAssets(): Plugin {
       serve("/pyodide", [pyodideDir, join(cacheDir, "pyodide")]);
       serve("/purple", [cacheDir]);
       serve("/ort", [ortDir], (f) => ORT_FILES.includes(f));
+      serve("/blockly", [blocklyMedia]);
       serve("/voice/espeak-ng", [espeakDir], (f) => ESPEAK_SOURCE.includes(f));
       serve("/voice", [join(cacheDir, "voice")]);
     },
@@ -61,6 +64,7 @@ function pyodideAssets(): Plugin {
       copyAll(join(cacheDir, "pyodide"), resolve(here, "dist/pyodide"), (f) => f.endsWith(".whl"));
       copyAll(cacheDir, resolve(here, "dist/purple"), (f) => /^(purple\.zip|poster-.*\.png)$/.test(f));
       copyAll(ortDir, resolve(here, "dist/ort"), (f) => ORT_FILES.includes(f));
+      copyAll(blocklyMedia, resolve(here, "dist/blockly"), () => true);
       if (existsSync(join(cacheDir, "voice"))) cpSync(join(cacheDir, "voice"), resolve(here, "dist/voice"), { recursive: true });
       copyAll(espeakDir, resolve(here, "dist/voice/espeak-ng"), (f) => ESPEAK_SOURCE.includes(f));
     },
@@ -73,8 +77,8 @@ function pyodideAssets(): Plugin {
 export const CSP = [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self'",
   "img-src 'self' data: blob:",
   "media-src 'self' data: blob:",
   "connect-src 'self'",
@@ -84,7 +88,7 @@ export const CSP = [
   "form-action 'none'",
 ].join("; ");
 const LIVE_CSP = CSP.replace("'wasm-unsafe-eval'", "'wasm-unsafe-eval' 'unsafe-eval'");
-const TYPES: Record<string, string> = { wasm: "application/wasm", json: "application/json", zip: "application/zip", whl: "application/zip", js: "text/javascript", mjs: "text/javascript", md: "text/plain; charset=utf-8", c: "text/plain; charset=utf-8", sh: "text/plain; charset=utf-8" };
+const TYPES: Record<string, string> = { svg: "image/svg+xml", mp3: "audio/mpeg", gif: "image/gif", png: "image/png", cur: "image/x-icon", wasm: "application/wasm", json: "application/json", zip: "application/zip", whl: "application/zip", js: "text/javascript", mjs: "text/javascript", md: "text/plain; charset=utf-8", c: "text/plain; charset=utf-8", sh: "text/plain; charset=utf-8" };
 const HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",

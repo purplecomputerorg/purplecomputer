@@ -1,3 +1,4 @@
+import "./fonts";
 import "./styles.css";
 import logo from "../../assets/logo.svg";
 import { allPieces, onChange, pieces } from "./state";
@@ -7,6 +8,7 @@ import { downloadView } from "./ui/download";
 import { formatView, installView } from "./ui/install";
 import { instrumentsView } from "./ui/instrument";
 import { picturesView } from "./ui/pictures";
+import { privacyView, staysHere } from "./ui/privacy";
 import { pythonView } from "./ui/python";
 import { EXAMPLES } from "./examples";
 import { addRoom } from "./pybridge";
@@ -41,6 +43,7 @@ const MORE: [id: string, label: string, view: (item: string | null) => View][] =
   ["guide", "Room guide", guideView],
   ["python", "Python console", pythonView],
   ["format", "What is in the file", formatView],
+  ["privacy", "Your privacy", privacyView],
 ];
 const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
 
@@ -54,7 +57,8 @@ function welcomeView(): View {
       h("p", { class: "serif" }, "The dog on the canvas. Grandma saying the letters. A room where C is for cow."),
       h("div", { class: "cards" }, ...SECTIONS.map((s) =>
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
-      h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB drive. Nothing here leaves this computer."),
+      h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB drive."),
+      staysHere("Everything happens in this browser, on this computer. Nothing you add is uploaded, and nothing is tracked."),
     ),
     live: { room: "play" },
     previewTitle: "This is Purple",
@@ -95,7 +99,8 @@ const stageTitle = h("h3");
 const stageCaption = h("p", { class: "caption" });
 // Purple's voice runs espeak-ng, which is GPL: its source goes wherever the voice does.
 const voiceCredit = h("p", { class: "dim small" }, "Purple's voice is Piper, which reads words with espeak-ng (GPL-3.0, ", h("a", { href: "voice/espeak-ng/README.md", target: "_blank" }, "source"), ").");
-const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, voiceCredit));
+const stageStays = staysHere("This Purple runs in your browser. What you try on it stays on this computer.");
+const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays, voiceCredit));
 const body = h("div", { class: "body" }, main, stage);
 app.append(top, body);
 

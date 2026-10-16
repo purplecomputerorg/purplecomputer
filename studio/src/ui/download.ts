@@ -1,6 +1,7 @@
 import { buildPack, packFilename } from "../pack";
 import { addAll, changed, draft, pieces, tryingPieces } from "../state";
 import { clear, field, h } from "./dom";
+import { staysHere } from "./privacy";
 import type { View } from "./view";
 
 export function downloadView(): View {
@@ -48,6 +49,7 @@ export function downloadView(): View {
       "section",
       {},
       h("p", { class: "lead" }, "Everything you added to your Purple goes into one file."),
+      staysHere("The file is made right here in your browser and saved to this computer. No copy goes anywhere else."),
       h("div", { class: "card" }, field("Your family's name", nameIn), summary),
       trying,
       h("div", { class: "row", style: "margin-top:22px" }, button),

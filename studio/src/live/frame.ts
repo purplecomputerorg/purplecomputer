@@ -4,6 +4,7 @@
 import { browserKey } from "../keys";
 import { roomGuests } from "../rooms/guests";
 import { bootPurple, type LivePurple, type Place, type RoomSetup } from "./boot";
+import { onVoiceNote } from "./piper";
 
 export type ToFrame =
   | { type: "load"; pack: Uint8Array | null; setup: RoomSetup }
@@ -16,6 +17,7 @@ export type View = [number, number, number, number];
 export type FromFrame =
   | { type: "hello" }
   | { type: "status"; text: string }
+  | { type: "voice"; text: string | null }
   | { type: "loaded" }
   | { type: "failed"; text: string }
   | { type: "focus"; on: boolean }
@@ -33,6 +35,7 @@ Object.assign(globalThis, {
   purpleRoomGuest: roomGuests((text) => post({ type: "print", text })),
   purpleRoomProblem: (text: string, line: number | null) => post({ type: "problem", text, line: line ?? null }),
 });
+onVoiceNote((text) => post({ type: "voice", text }));
 canvas.addEventListener("focus", () => post({ type: "focus", on: true }));
 canvas.addEventListener("blur", () => post({ type: "focus", on: false }));
 addEventListener("keydown", (e) => {

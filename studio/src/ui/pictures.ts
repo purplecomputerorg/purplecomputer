@@ -3,6 +3,7 @@ import { EXAMPLES, examplePicture, pictureFromFile, type Example, type Picture }
 import { changed, draft, freeName, titleOf, withSample } from "../state";
 import { field, h } from "./dom";
 import { liveScreen } from "./live";
+import { staysHere } from "./privacy";
 import { tryBar } from "./trybar";
 import type { View } from "./view";
 
@@ -64,6 +65,7 @@ function more(current: Picture | null): HTMLElement[] {
     h("div", {}, h("h3", {}, "On your Purple"), kept.length ? theirs(kept, current?.name ?? null) : h("p", { class: "dim small" }, "Nothing yet. Add your own, or try one of ours.")),
     ...(trying.length ? [h("h3", {}, "Trying"), theirs(trying, current?.name ?? null)] : []),
     h("h3", {}, "Add your own"), dropZone(),
+    staysHere("Your pictures are turned into paintings right here in your browser. They are never uploaded."),
     h("h3", {}, "Try one of ours"),
     h("div", { class: "photo-list" }, ...EXAMPLES.map((e) => thumb(titleOf(e), e.src, current?.sourceUrl === e.src,
       { href: "#pictures", onclick: (ev: Event) => { ev.preventDefault(); void tryExample(e); } }))),

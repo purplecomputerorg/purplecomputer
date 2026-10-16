@@ -6,6 +6,7 @@ import { h, pageKeys } from "./dom";
 import { keyLabel, sticker } from "./stickers";
 import { addAllBar, keepButton, tryBar } from "./trybar";
 import { liveScreen } from "./live";
+import { staysHere } from "./privacy";
 import { recordControl } from "./record";
 import type { View } from "./view";
 
@@ -70,6 +71,7 @@ function lettersView(): View {
         h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, recordControl(onClip), actions))),
       pending,
       h("p", { class: "dim small" }, "Letters and numbers you skip say their own names in Purple's voice; the other keys stay quiet until you give them something. Type a key on your keyboard to jump to it."),
+      voiceStays(),
     ),
     live: { room: "music", letters: true },
     keys: () => { const mine = Object.keys(draft.letters).slice(0, 5); return mine.length ? mine : [..."abcde"]; },
@@ -78,6 +80,8 @@ function lettersView(): View {
     cleanup: unlisten,
   };
 }
+
+const voiceStays = () => staysHere("Your recordings stay in this browser. Nobody else hears them unless you share the file.");
 
 function phrasesView(): View {
   const list = h("div", { class: "stack" });
@@ -113,6 +117,7 @@ function phrasesView(): View {
       list,
       h("div", { class: "card" }, h("div", { class: "phrase-new" }, text, record), status),
       h("p", { class: "dim small" }, "Capitals and spacing don't matter. Anything you haven't recorded, Purple says in its own voice."),
+      voiceStays(),
     ),
     live: { room: "play" },
     previewTitle: "What your kid hears",

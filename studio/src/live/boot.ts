@@ -30,10 +30,19 @@ function drawEmoji(text: string, px: number): ImageData {
   return ctx.getImageData(0, 0, width, px);
 }
 
+// Only voices on this machine: Chrome's "Google" voices send the text to Google.
+function localVoice(): SpeechSynthesisVoice | undefined {
+  const voices = speechSynthesis.getVoices().filter((v) => v.localService);
+  return voices.find((v) => v.default) ?? voices.find((v) => v.lang.startsWith("en")) ?? voices[0];
+}
+
 // Resolves when the browser's voice finishes, so a spoken sequence keeps its gaps.
 function say(text: string): Promise<void> {
   return new Promise((done) => {
+    const voice = localVoice();
+    if (!voice) return done();
     const u = new SpeechSynthesisUtterance(text);
+    u.voice = voice;
     u.rate = 0.95;
     u.onend = u.onerror = () => done();
     speechSynthesis.speak(u);

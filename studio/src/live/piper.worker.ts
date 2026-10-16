@@ -14,16 +14,37 @@ const TERMINATORS: Record<number, string> = { [40 | 0x80000]: ".", [20 | 0x1000 
   [45 | 0x3000 | 0x80000]: "!", [30 | 0x40000]: ":", [30 | 0x1000 | 0x40000]: ";" };
 const SENTENCE_END = 0x80000;
 
+// Read in chunks so Studio can say how long the voice has left to load.
+async function download(url: string): Promise<Uint8Array<ArrayBuffer>> {
+  const res = await fetch(url);
+  if (!res.ok || !res.body) throw new Error(`${url}: ${res.status}`);
+  const total = +(res.headers.get("Content-Length") ?? 0);
+  const chunks: Uint8Array[] = [];
+  let loaded = 0;
+  let told = 0;
+  for (const reader = res.body.getReader(); ;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+    if (performance.now() - told > 250) {
+      told = performance.now();
+      self.postMessage({ progress: [loaded, total] });
+    }
+  }
+  const all = new Uint8Array(loaded);
+  chunks.reduce((at, c) => (all.set(c, at), at + c.length), 0);
+  return all;
+}
+
 // The model is the one big file, kept in the Cache API so a later visit doesn't download it again.
 async function cached(url: string): Promise<Uint8Array> {
   const cache = await caches.open(CACHE);
-  let res = await cache.match(url);
-  if (!res) {
-    res = await fetch(url);
-    if (!res.ok) throw new Error(`${url}: ${res.status}`);
-    await cache.put(url, res.clone());
-  }
-  return new Uint8Array(await res.arrayBuffer());
+  const hit = await cache.match(url);
+  if (hit) return new Uint8Array(await hit.arrayBuffer());
+  const data = await download(url);
+  await cache.put(url, new Response(data));
+  return data;
 }
 const bytes = async (url: string) => new Uint8Array(await (await fetch(url)).arrayBuffer());
 

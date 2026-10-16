@@ -40,6 +40,7 @@ class LiveScreen {
   private poster = h("img", { class: "live-poster", alt: "" });
   private status = h("span", {}, "Loading Purple");
   private hint = tryHint("then use the keyboard, like on Purple");
+  private voiceNote = h("div", { class: "voice-loading", hidden: true });
   private zoomed = true;
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
   // Set by Studio: Purple moved to another room, or opened or closed a menu.
@@ -58,7 +59,7 @@ class LiveScreen {
 
   constructor() {
     this.hint.onclick = () => this.focus();
-    this.element = h("div", { class: "screen-wrap live" }, this.frame, this.poster, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton);
+    this.element = h("div", { class: "screen-wrap live" }, this.frame, this.poster, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote);
     PHONE.addEventListener("change", () => this.reframe());
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
@@ -118,6 +119,7 @@ class LiveScreen {
     }
     if (m.type === "focus") this.element.classList.toggle("focused", m.on);
     if (m.type === "focus" && m.on) this.element.classList.add("tried");
+    if (m.type === "voice") { this.voiceNote.textContent = m.text; this.voiceNote.hidden = !m.text; }
     if (m.type === "keydown") announceKey(m.key);
     if (m.type === "place") this.moved(m.place);
     if (m.type === "print") this.onPrint(m.text);

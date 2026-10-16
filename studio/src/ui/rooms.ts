@@ -151,7 +151,7 @@ function editor(room: RoomDraft): View {
     if (room.template) return void panes.blocks.replaceChildren(templateForm(room.template, fromForm));
     panes.blocks.replaceChildren(room.blocks ? workspaceDiv : detached);
     if (room.blocks && !ws) {
-      ws = Blockly.inject(workspaceDiv, { toolbox: TOOLBOX, renderer: "zelos", zoom: { controls: true, wheel: false, startScale: 0.85 }, trashcan: true, move: { scrollbars: true, drag: true, wheel: true } });
+      ws = Blockly.inject(workspaceDiv, { media: "blockly/", toolbox: TOOLBOX, renderer: "zelos", zoom: { controls: true, wheel: false, startScale: 0.85 }, trashcan: true, move: { scrollbars: true, drag: true, wheel: true } });
       ws.setTheme(Blockly.registry.getObject(Blockly.registry.Type.THEME, "purple") as Blockly.Theme);
       Blockly.serialization.workspaces.load(room.blocks as object, ws);
       ws.addChangeListener((e: Blockly.Events.Abstract) => { if (!e.isUiEvent) fromBlocks(); });

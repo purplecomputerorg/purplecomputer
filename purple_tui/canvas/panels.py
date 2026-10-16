@@ -22,7 +22,7 @@ from ..loop_station import LOOPING, RECORDING
 from ..music_constants import GRID_KEYS
 from ..palette import get_key_color
 from .gfx import rgb
-from .ui import DOWN, LEFT, RIGHT, UP, TextField, draw_bar, draw_key_hint, hold_status, keycap_size
+from .ui import DOWN, LEFT, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, hold_status, keycap_size
 
 ROOM_KEYWORDS = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
@@ -69,10 +69,10 @@ COLORS, ALL_COLORS = "colors", "all colors"
 GUIDE = {
     'art': [
         ("Colors", [(COLORS, "")]),
-        ("Move", [("right 5", f"{RIGHT} five steps"), ("up 3", f"{UP} three steps")]),
-        ("Turn", [("forward 6", "the way it points"), ("turn", "a turn to the right")]),
-        ("Again", [("repeat 4 ...", "do it four times")]),
-        ("Letters", [("asdf", "a color per key"), ("write hi", "real letters")]),
+        ("Move", [("right 5", RIGHT), ("up 3", UP)]),
+        ("Turn", [("turn", TURN), ("forward 6", "where it points")]),
+        ("Again", [("repeat 4 right 2 up 2", "")]),
+        ("Letters", [("write hi", "")]),
     ],
     'music': [
         ("Notes", [("asdf", "play those keys"), ("1234", "drums")]),
@@ -89,7 +89,6 @@ GUIDE = {
         ("Again", [("repeat 4 right 1 up 1", "stairs")]),
     ],
 }
-GUIDE_HINT = "Type a word to see more about it"
 # What the side column shows instead while the code holds one of a topic's
 # words: (words, heading, rows). COLORS stands for any color word.
 _COLOR_TOPIC = ("Colors", [(ALL_COLORS, ""), ("color mint", "switch colors"), ("dark blue", "or light, bright, pale, neon")])
@@ -506,8 +505,6 @@ class CodePanel:
         head_px, px = g.em(0.72), g.em(0.82)
         bottom = rect.bottom - g.em(0.45)
         y = rect.y + g.em(0.9)
-        if not topic:
-            y += g.draw_markup(GUIDE_HINT, head_px, x, y, "sans", P.MUTED, w) + g.em(0.5)
         word = topic[2] if topic else None
         for heading, rows in [topic[:2]] if topic else GUIDE[self.room]:
             code, gloss = rows[0]

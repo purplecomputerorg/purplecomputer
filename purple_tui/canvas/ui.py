@@ -18,6 +18,7 @@ from ..keyboard import CharacterAction, ControlAction, NavigationAction
 
 # nf-md-arrow_*_bold: big heads stay readable at hint size, unlike Plex's or DejaVu's arrows.
 LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"
+TURN = "\U000F0467"   # nf-md-rotate_right
 MOVE_HINT = f"Arrows move  {LEFT} {UP} {DOWN} {RIGHT}"
 
 # ----------------------------------------------------------------------------

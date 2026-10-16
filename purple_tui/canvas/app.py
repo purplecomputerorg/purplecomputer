@@ -48,6 +48,8 @@ PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printe
 ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE, "blocks": ICON_CUBE}
 ARROW_HINTS = {"play": f"Arrows scroll  {UP} {DOWN}", "art": f"Arrows move  {LEFT} {UP} {DOWN} {RIGHT}",
                "blocks": f"Arrows move  {LEFT} {UP} {DOWN} {RIGHT}"}
+ARROW_GLYPHS = {"left": LEFT, "up": UP, "down": DOWN, "right": RIGHT}
+ARROW_LIT_S = 0.35            # outlasts the 250ms key-repeat delay, so a held arrow stays lit
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
 LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
@@ -123,6 +125,7 @@ class PurpleApp:
         self._escape_hold_timer = None
         self._escape_down_at = None
         self._backslash_hold_timer = None
+        self._lit_arrow = self._lit_arrow_timer = None
         self._held_char = self.held_letter = self._letter_hold_timer = None
         self._sticky_shift_timer = None
         self._evdev_reader = self._power_button_reader = self._lid_switch_reader = None
@@ -497,6 +500,8 @@ class PurpleApp:
         self._frame_stats.key()
         self._record_user_activity()
         self.invalidate()
+        if isinstance(action, NavigationAction):
+            self._light_arrow(action.direction)
         if isinstance(action, RoomAction):
             if action.room == "parent":
                 self.action_parent_menu()
@@ -547,6 +552,16 @@ class PurpleApp:
             return
         await self.room.handle(action)
         self._timeline_touch()
+
+    def _light_arrow(self, direction):
+        if self._lit_arrow_timer:
+            self._lit_arrow_timer.stop()
+        self._lit_arrow = direction
+        self._lit_arrow_timer = self.timers.after(ARROW_LIT_S, self._unlight_arrow)
+
+    def _unlight_arrow(self):
+        self._lit_arrow = self._lit_arrow_timer = None
+        self.invalidate()
 
     def _start_escape_hold_timer(self):
         self._cancel_escape_hold_timer()
@@ -1455,7 +1470,10 @@ class PurpleApp:
             right = hint() if hint else ARROW_HINTS[self.active_room]
             if self._effective_volume() == 0:
                 right = f"{ICON_VOLUME_OFF}  " + right
-        g.draw_text(right, px, frame.right, y, "mono", P.DIM, anchor="midright")
+        if glyph := ARROW_GLYPHS.get(self._lit_arrow):
+            right = right.replace(glyph, f"[{P.ACCENT}]{glyph}[/]")
+        w, h = g.markup_size(right, px, "mono")
+        g.draw_markup(right, px, frame.right - w, y - h // 2, "mono", P.DIM)
         return esc_pill
 
     def _draw_toasts(self):

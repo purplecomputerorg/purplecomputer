@@ -233,14 +233,35 @@ class CodePanelScreen(_YesNo):
         return get_code_panel()
 
 
-class FamilyRoomsScreen(_YesNo):
-    title = "Show Family Rooms"
-    DESCRIPTION = "Show the rooms from your Purple Studio pack in the Esc menu"
+def _room_state(room, on: dict) -> str:
+    if on.get(room.key) == room.digest:
+        return "on"
+    return "changed" if room.key in on else "off"
 
-    @staticmethod
-    def getter():
-        from ...settings import get_family_rooms
-        return get_family_rooms()
+
+class FamilyRoomsScreen(Picker):
+    """Each room from a pack, turned on one at a time. A room that changes after it was turned
+    on (a new pack with the same name, say) waits here until it's turned on again."""
+    title = "Family Rooms"
+    DESCRIPTION = "Rooms from Purple Studio. Only the ones you turn on show in the Esc menu."
+    NOTES = {"on": "On: in the Esc menu", "changed": "Changed since you turned it on: off for now", "off": "Off"}
+
+    def __init__(self, app):
+        super().__init__(app, self._options())
+
+    def _options(self) -> list:
+        from ...content import get_content
+        from ...settings import get_rooms_on
+        on = get_rooms_on()
+        return [(r, r.title, self.NOTES[_room_state(r, on)]) for r in get_content().rooms] + [(None, "Done")]
+
+    def _on_confirm(self, room):
+        if room is None:
+            return self.close(True)
+        from ...settings import get_rooms_on, set_room_on
+        set_room_on(room.key, None if _room_state(room, get_rooms_on()) == "on" else room.digest)
+        self.options = self._options()
+        self.app.invalidate()
 
 
 class MusicLoopingScreen(_YesNo):
@@ -1139,14 +1160,18 @@ def _is_dev_environment() -> bool:
     return bool(os.environ.get("PURPLE_TEST_BATTERY")) or (Path(__file__).parents[3] / ".git").is_dir()
 
 
-def _family_rooms_label(on: bool) -> str:
-    return "Show Family Rooms: Yes" if on else "Show Family Rooms: No"
+def _family_rooms_label() -> str:
+    from ...content import get_content
+    from ...settings import get_rooms_on
+    on = get_rooms_on()
+    rooms = get_content().rooms
+    return f"Family Rooms: {sum(_room_state(r, on) == 'on' for r in rooms)} of {len(rooms)} On"
 
 
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
     from ...content import get_content
-    from ...settings import (get_all_caps, get_code_panel, get_family_rooms, get_littles_mode, get_music_key_switching,
+    from ...settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
                             get_music_looping, get_parent_pin, get_secret_unlocked, get_voice, get_volume_lock)
     items = [("menu-help", "Help & Videos")]
     if is_live_boot():
@@ -1162,7 +1187,7 @@ def _get_menu_items(app) -> list:
         items.append(("menu-music-looping", "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"))
         items.append(("menu-music-key-switching", "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"))
         if get_content().rooms:
-            items.append(("menu-family-rooms", _family_rooms_label(get_family_rooms())))
+            items.append(("menu-family-rooms", _family_rooms_label()))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
     items.append(("menu-export", "Copy Saved Work to USB"))
     items.append(("sec-av", "Sound & Display"))
@@ -1309,12 +1334,7 @@ class ParentMenu(Overlay):
         self.app.push(CodePanelScreen(self.app), on_close=apply)
 
     def _open_family_rooms(self):
-        def apply(v):
-            if v is not CANCELLED:
-                from ...settings import set_family_rooms
-                set_family_rooms(v)
-                self._relabel("menu-family-rooms", _family_rooms_label(v))
-        self.app.push(FamilyRoomsScreen(self.app), on_close=apply)
+        self.app.push(FamilyRoomsScreen(self.app), on_close=lambda _: self._relabel("menu-family-rooms", _family_rooms_label()))
 
     def _open_music_looping(self):
         def apply(v):

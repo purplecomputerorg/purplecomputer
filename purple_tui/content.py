@@ -9,6 +9,7 @@ Provides a stable interface for modes to access content from purplepacks:
 Purplepacks are content-only (JSON + assets) - NO executable Python code.
 """
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -41,6 +42,28 @@ class Room:
     @property
     def title(self) -> str:
         return display_name(self.name)
+
+    @property
+    def pack(self) -> str:
+        return self.path.parents[2].name
+
+    @property
+    def lib(self) -> Path | None:
+        """The pack's own purple.py, the room library it was built with."""
+        lib = self.path.parent / ROOM_LIB
+        return lib if lib.is_file() else None
+
+    @property
+    def key(self) -> str:
+        return f"{self.pack}/{self.name}"
+
+    @property
+    def digest(self) -> str:
+        """What a parent turns on: the room and its library, so any change waits for them again."""
+        h = hashlib.sha256(self.path.read_bytes())
+        if self.lib:
+            h.update(self.lib.read_bytes())
+        return h.hexdigest()[:16]
 
 
 @dataclass
@@ -718,7 +741,8 @@ class ContentManager:
         return bool(self.exact_emoji(word) or self.exact_color(word))
 
 
-ROOM_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+ROOM_NAME = re.compile(r"^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$")  # purple.py is the pack's room library
+ROOM_LIB = "purple.py"
 
 
 def room_files(content_dir: Path) -> list[Path]:

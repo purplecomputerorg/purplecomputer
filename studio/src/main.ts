@@ -14,7 +14,7 @@ import { guideView } from "./ui/guide";
 import { typingKeys } from "./keys";
 import type { Room } from "./live/boot";
 import { Laptop } from "./ui/laptop";
-import { MOUSE, liveScreen } from "./ui/live";
+import { liveScreen } from "./ui/live";
 import { roomsView } from "./ui/rooms";
 import { voiceView } from "./ui/voice";
 import { wordsView } from "./ui/words";
@@ -66,13 +66,11 @@ const app = document.getElementById("app")!;
 const top = h("header", { class: "topbar" });
 const main = h("main", { class: "main" });
 const live = liveScreen();
-// The laptop and the live Purple inside it stay put for the whole visit (moving an iframe reloads
-// it); a page's own preview, the room stage, takes the screen in its place.
+// The laptop and the live Purple inside it stay put for the whole visit (moving an iframe reloads it).
 let tapTarget: ((key: string) => void) | null = null;
-const engage = () => (current?.live ? live.engage() : MOUSE.matches && current?.preview?.focus?.());
+const engage = () => current?.live && live.engage();
 const laptop = new Laptop((key) => { tapTarget?.(key); engage(); });
-const previewSlot = h("div", { class: "screen-slot" });
-laptop.screen.append(live.element, previewSlot);
+laptop.screen.append(live.element);
 
 // On a phone, under the laptop: Purple's rooms to switch between, and a few keys for the room it's in.
 const ROOMS: [Room, string][] = [["play", "💬 Play"], ["music", "🎵 Music"], ["art", "🎨 Art"], ["blocks", "🧊 Blocks"]];
@@ -89,7 +87,7 @@ function renderPhoneBar() {
     onclick: () => { live.show(room === page?.room ? page : { room }); engage(); },
   }, label)));
   const { room, menu } = live.place;
-  const keys = !page ? (v?.preview?.press ? [...ARROWS, "space"] : []) : menu ? [...ARROWS, "enter"] : (room === page.room && v?.keys?.()) || TRAY[room];
+  const keys = !page ? [] : menu ? [...ARROWS, "enter"] : (room === page.room && v?.keys?.()) || TRAY[room];
   laptop.paint(page ? [...keys, "escape"] : keys);
 }
 live.onMove = renderPhoneBar;
@@ -126,21 +124,18 @@ function renderTop() {
 
 function renderStage() {
   const v = current;
-  body.classList.toggle("no-stage", !v?.live && !v?.preview);
+  body.classList.toggle("no-stage", !v?.live);
   live.element.hidden = !v?.live;
-  previewSlot.replaceChildren(v?.preview?.element ?? "");
-  previewSlot.hidden = !v?.preview;
   stageTitle.textContent = v?.previewTitle ?? "What your kid sees";
   stageCaption.textContent = v?.caption ?? "";
   voiceCredit.hidden = !v?.live;
   if (v?.live) live.show(v.live);
   renderPhoneBar();
-  tapTarget = v?.live ? (key) => live.key(key) : v?.preview?.press ? (key) => v.preview!.press!(key) : null;
+  tapTarget = v?.live ? (key) => live.key(key) : null;
 }
 
 function route() {
   current?.cleanup?.();
-  current?.preview?.dispose();
   const [sec, item] = parseHash();
   const section = SECTIONS.find((s) => s.id === sec);
   const view = section ? section.view(item) : PAGES[sec] ? PAGES[sec](item) : welcomeView();
@@ -157,7 +152,7 @@ function route() {
 // ?sample seeds a room so a screenshot or a demo lands on a filled editor.
 if (new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name, EXAMPLES[0].source);
 
-onChange(() => { renderTop(); renderPhoneBar(); current?.preview?.redraw?.(); live.changed(); });
+onChange(() => { renderTop(); renderPhoneBar(); live.changed(); });
 window.addEventListener("hashchange", route);
 window.addEventListener("beforeunload", (e) => allPieces().some((p) => p.items.length) && e.preventDefault());
 route();

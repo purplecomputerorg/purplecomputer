@@ -14,8 +14,7 @@ def _no_thread(self):
 threading.Thread.start = _no_thread
 
 
-# No users in a browser: the family-room user Purple looks up doesn't exist, the same as on a dev
-# machine without it.
+# No users in a browser: tts looks up its own home directory.
 def _stub_pwd():
     import sys
     import types
@@ -178,3 +177,36 @@ def _patch_present():
 
 
 _patch_present()
+
+
+# Family rooms: Purple's own FamilyRoom runs here, with the room in a Web Worker instead of a process
+# (studio/src/rooms/guests.ts), and tells the Rooms page why a room stopped.
+def _patch_family_rooms():
+    from js import purpleRoomGuest, purpleRoomProblem
+    from pyodide.ffi import create_proxy
+    from purple_tui.canvas.rooms import family_room
+
+    class JsGuest:
+        def __init__(self, start, on_line):
+            self._on_line = create_proxy(on_line)
+            self._id = purpleRoomGuest.start(self._on_line)
+            purpleRoomGuest.send(self._id, start)
+
+        def send(self, line):
+            purpleRoomGuest.send(self._id, line)
+
+        def stop(self):
+            purpleRoomGuest.stop(self._id)
+            self._on_line.destroy()
+
+    broken = family_room.FamilyRoom._broken
+
+    def report(self, why, line=None):
+        broken(self, why, line)
+        purpleRoomProblem(why, line)
+
+    family_room.Guest = JsGuest
+    family_room.FamilyRoom._broken = report
+
+
+_patch_family_rooms()

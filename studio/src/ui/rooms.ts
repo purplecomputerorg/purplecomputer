@@ -2,11 +2,11 @@ import * as Blockly from "blockly";
 import { ROOM_NAME, roomTitle } from "@sdk/pack";
 import { BLANK_BLOCKS, TOOLBOX, defineBlocks, sourceFromBlocks, toPython } from "../blocks";
 import { EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
+import type { RoomSetup } from "../live/boot";
 import { addRoom } from "../pybridge";
-import type { Problem } from "../rooms/host";
 import { changed, draft, freeName, type RoomDraft } from "../state";
 import { field, h } from "./dom";
-import { RoomStage } from "./roomstage";
+import { liveScreen, type RoomProblem } from "./live";
 import { tryBar } from "./trybar";
 import { templateForm } from "./templateform";
 import type { View } from "./view";
@@ -17,7 +17,7 @@ function list(): View {
   const open = (base: string, source: string, made: Pick<RoomDraft, "blocks" | "template">) => {
     const name = freeName(nameIn.value || base, (n) => draft.rooms.some((r) => r.name === n));
     if (!ROOM_NAME.test(name)) {
-      status.textContent = "Use letters, numbers, and dashes for the name.";
+      status.textContent = "Use letters, numbers, and dashes for the name (Purple is taken).";
       return;
     }
     addRoom(name, source, made);
@@ -50,14 +50,14 @@ function list(): View {
 const choice = (icon: string, label: string, about: string, go: () => void) =>
   h("button", { class: "pick", onclick: go }, h("span", { class: "pick-icon" }, icon), h("b", {}, label), h("span", {}, about));
 
-function problemBox(): { element: HTMLElement; show(p: Problem | null): void } {
+function problemBox(): { element: HTMLElement; show(p: RoomProblem | null): void } {
   const element = h("div", { class: "problem", hidden: true });
   return {
     element,
     show(p) {
       element.hidden = !p;
       if (!p) return;
-      const where = p.setup ? "Can't preview here" : p.line ? `Line ${p.line}` : "The room stopped";
+      const where = p.line ? `Line ${p.line}` : "The room stopped";
       const copy = `${where}: ${p.text}`;
       element.replaceChildren(
         h("div", { class: "row between" }, h("strong", { class: "where" }, where), h("button", { class: "linkbtn dim small", onclick: () => navigator.clipboard?.writeText(copy) }, "Copy the error")),
@@ -71,11 +71,15 @@ function editor(room: RoomDraft): View {
   defineBlocks();
   const problems = problemBox();
   const out = h("pre", { class: "console" });
-  const stage = new RoomStage(room.name, {
-    problem: (p) => problems.show(p),
-    print: (t) => { out.textContent = (out.textContent + t + "\n").split("\n").slice(-40).join("\n"); },
-  });
-  const restart = () => { out.textContent = ""; stage.run(room.source); };
+  const live = liveScreen();
+  // The room opens over Play on the real Purple, as the Esc menu opens it on a laptop.
+  const setup: RoomSetup = { room: "play", family: { name: room.name, source: room.source } };
+  const restart = () => {
+    out.textContent = "";
+    problems.show(null);
+    setup.family = { name: room.name, source: room.source };
+    live.show(setup);
+  };
   let timer = 0;
   const later = (ms: number) => { clearTimeout(timer); timer = window.setTimeout(restart, ms); };
 
@@ -170,21 +174,27 @@ function editor(room: RoomDraft): View {
       {},
       tryBar(room, remove),
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, tabs.blocks, tabs.python),
-        h("button", { class: "btn small", onclick: () => { restart(); stage.focus(); } }, "▶ Play from the start")),
+        h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),
       panes.blocks,
       panes.python,
       problems.element,
       out,
       h("p", { class: "dim small" }, "What a room can call is on the ", h("a", { href: "#guide" }, "Room guide"), "."),
     ),
-    preview: stage,
-    caption: "Your room, running. Here the voice is your browser's; on Purple it's Purple's own.",
+    live: setup,
+    caption: "Your room, running on the real Purple. Esc leaves it, as on Purple; ▶ starts it again.",
     mounted: () => {
       showTab(room.blocks || room.template ? "blocks" : "python");
-      restart();
-      stage.focus();
+      live.onPrint = (t) => { out.textContent = (out.textContent + t + "\n").split("\n").slice(-40).join("\n"); };
+      live.onProblem = (p) => problems.show(p);
+      live.focus();
     },
-    cleanup: () => { clearTimeout(timer); ws?.dispose(); ws = null; },
+    cleanup: () => {
+      clearTimeout(timer);
+      ws?.dispose();
+      ws = null;
+      live.onPrint = live.onProblem = () => {};
+    },
   };
 }
 

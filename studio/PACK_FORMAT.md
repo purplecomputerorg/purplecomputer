@@ -2,7 +2,7 @@
 
 A `.purplepack` is a gzipped tar of `manifest.json` and a `content/` directory, the same thing `just build-packs` produces for `packs/core-emoji`. This page is the format as Purple reads it: which files the rooms look at, what each must contain, how a pack gets onto a machine, and what the installer refuses. The one section at the end marked **proposed** is a file Studio writes that nothing reads yet.
 
-Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple_tui/pack_manager.py` (`check_pack`, `PackInstaller`). Rooms: `purple_tui/roomkit/` and `purple_tui/canvas/rooms/program_room.py`, described in `guides/family-rooms.md`. USB channel: `purple_tui/usb_updater.py`. Command line: `scripts/purplepack.py`. A TypeScript library that builds all of this without Studio's UI: `studio/sdk/`.
+Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple_tui/pack_manager.py` (`check_pack`, `PackInstaller`). Rooms: `purple_tui/roomkit/` and `purple_tui/canvas/rooms/family_room.py`, described in `guides/family-rooms.md`. USB channel: `purple_tui/usb_updater.py`. Command line: `scripts/purplepack.py`. A TypeScript library that builds all of this without Studio's UI: `studio/sdk/`.
 
 ## manifest.json
 
@@ -20,7 +20,7 @@ Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple
 - `id`, `name`, `version`, `type` are required. `id` is the directory name the pack installs under, so it must be a single plain path segment. `version` must be `x.y.z`. `description` and `author` are optional.
 - `type` must be one of `emoji`, `sounds`, `stories`; only `emoji` dispatches to anything in the loader. Studio always declares `emoji`. The directories below are read from every user pack regardless of type.
 - `format` is the layout version, `1` today and the default when absent. `content.PACK_FORMAT` is the newest a build reads; a pack declaring a higher one is skipped whole rather than half-loaded, and the installer refuses it with a message that says so.
-- An `entrypoint` key, or any `.py` file anywhere in the pack, makes the installer refuse the pack. Packs are data.
+- An `entrypoint` key, or any `.py` file anywhere in the pack outside the rooms below, makes the installer refuse the pack. Packs are data.
 
 ## What each file is
 
@@ -76,11 +76,15 @@ def on_key(key):
     play("C4")
 ```
 
-A family-made room: a Python file that runs as a guest. Purple starts it in a process of its own, as a user that can't touch anything else on the machine, and the room can only ask Purple to show, say, and play things over a pipe. A room that errors, hangs, or floods is ended and shows a calm "this room needs fixing" card. The room picker (a tap of Esc) grows a row of these; Esc always leaves. `<name>` is lowercase letters, digits, and dashes, and the picker shows it title-cased (`dinosaur-trivia` becomes Dinosaur Trivia).
+A family-made room: a Python file that runs as a guest. Purple starts it in a sealed process of its own that can't touch anything else on the machine, and the room can only answer Purple's events with what to show and play. A room that errors, hangs, or asks for too much is ended and shows a calm "this room needs fixing" card. Once a parent turns a room on in the Parent Menu's Family Rooms list, the room picker (a tap of Esc) shows it in a row of family rooms; Esc always leaves. `<name>` is lowercase letters, digits, and dashes, never `purple`, and the picker shows it title-cased (`dinosaur-trivia` becomes Dinosaur Trivia).
 
 What a room can call, the keys it receives, and the message protocol are in `guides/family-rooms.md`; `purple_tui/roomkit/purple.py` is the module itself. Studio runs the same file in its preview, so what a parent tries there is what the kid gets.
 
 Studio saves the Blockly workspace a room was built from beside it as `<name>.blocks.json`, which Purple ignores; it is there so the room can be reopened for editing.
+
+### rooms/purple.py
+
+The library the pack's rooms import as `purple`: the copy of `purple_tui/roomkit/purple.py` Studio had when it built the pack. Purple runs the rooms on it, so a pack made by a newer Studio brings its newer library to an older Purple; a pack without one runs on the copy Purple was built with. It runs in the same sealed process as the room, never in Purple itself.
 
 ### theme.json
 
@@ -112,13 +116,13 @@ Studio writes the whole palette, derived from one color the parent picks (`sdk/s
 `check_pack` runs on every install, from a USB drive or by hand, and the pack is refused with the first few problems listed if any of these fail:
 
 - manifest present and valid as above; `format` not newer than this build reads
-- no `.py` files except `rooms/<name>.py`, no `.pyc`, `.pyo`, `.pyw`, and no extensionless or `.sh` file whose first line mentions python
+- no `.py` files except `rooms/<name>.py` and `rooms/purple.py`, no `.pyc`, `.pyo`, `.pyw`, and no extensionless or `.sh` file whose first line mentions python
 - no absolute paths, no `..` segments, no symlinks or hard links in the archive
 - `emoji.json` and `synonyms.json`, if present, are JSON objects mapping strings to non-empty strings
 - every file in `letters/` and `voice/` is a WAV at 22050 Hz, mono, 16-bit
 - every `instruments/<name>.json` names a known base, has only that base's parameters with numeric values, and has a `content/<name>/` directory whose WAVs are 44100 Hz, mono, 16-bit
 - every `pictures/<name>.json` has an `ops` list of `[x, y, "#rrggbb"]` on the canvas
-- every `rooms/<name>.py` has a valid name and is UTF-8 text
+- every `rooms/<name>.py`, and `rooms/purple.py`, has a valid name, is UTF-8 text that compiles, and is at most 64 KB
 
 `scripts/purplepack.py check` runs the same function on a directory or a `.purplepack`.
 

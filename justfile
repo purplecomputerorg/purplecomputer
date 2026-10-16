@@ -413,6 +413,10 @@ studio-test:
     cd studio && npm install --no-audit --no-fund
     cd studio && npx tsc --noEmit && npx vitest run
 
+# This checkout's room library and rooms on the Purple a release shipped, so Studio never breaks rooms on Keys already out there
+room-compat ref="release/2.x":
+    scripts/room_compat.sh {{ref}}
+
 # Regenerate the facts Studio imports from Purple (constants and reference synth renders)
 studio-fixtures:
     {{venv}}/bin/python scripts/export_studio.py

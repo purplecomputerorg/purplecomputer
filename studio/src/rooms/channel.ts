@@ -2,7 +2,8 @@
 // can block on it (purple.ask and the event loop are blocking reads). Layout: [state, length]
 // as Int32, then UTF-8 bytes. state 0 = empty, 1 = full.
 const HEADER = 8;
-export const CHANNEL_BYTES = 1 << 16;
+// The start event carries a room and its library, JSON-escaped: room for the 64 KB room cap twice over.
+export const CHANNEL_BYTES = 1 << 19;
 
 export const newChannel = () => new SharedArrayBuffer(HEADER + CHANNEL_BYTES);
 

@@ -4,6 +4,7 @@ import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
 import { packSpec } from "../src/pack";
 import type { Draft } from "../src/state";
+import roomLibrary from "../../purple_tui/roomkit/purple.py?raw";
 
 const base: PackSpec = { familyName: "", pictures: [], letters: {}, phrases: [], words: [], synonyms: [], ranked: [], instruments: [], rooms: [], theme: null };
 const draftBase: Draft = { ...base, letters: {}, pictures: [], rooms: [], colors: {} };
@@ -43,16 +44,18 @@ describe("pack assembly", () => {
     expect((await buildEntries(spec)).map((e) => e.path)).toEqual(["manifest.json", "content/emoji.json", "content/rankings.txt"]);
   });
 
-  it("writes a room's Python next to the blocks it came from", async () => {
+  it("writes a room's Python next to the blocks it came from, and the library it runs on", async () => {
     const source = "from purple import *\nshow('🐄')";
     const spec: PackSpec = { ...base, rooms: [{ name: "farm", source, blocks: { blocks: { languageVersion: 0, blocks: [] } } }] };
     const entries = await buildEntries(spec);
-    expect(entries.map((e) => e.path)).toEqual(["manifest.json", "content/rooms/farm.py", "content/rooms/farm.blocks.json"]);
-    expect(new TextDecoder().decode(entries[1].data)).toBe(source + "\n");
+    expect(entries.map((e) => e.path)).toEqual(["manifest.json", "content/rooms/purple.py", "content/rooms/farm.py", "content/rooms/farm.blocks.json"]);
+    expect(new TextDecoder().decode(entries[1].data)).toBe(roomLibrary);
+    expect(new TextDecoder().decode(entries[2].data)).toBe(source + "\n");
   });
 
   it("refuses a room name Purple would not load, and titles rooms the way Purple does", async () => {
     await expect(buildEntries({ ...base, rooms: [{ name: "Big Farm", source: "" }] })).rejects.toThrow(/lowercase/);
+    await expect(buildEntries({ ...base, rooms: [{ name: "purple", source: "" }] })).rejects.toThrow(/not purple/);
     expect(roomTitle("dinosaur-trivia")).toBe("Dinosaur Trivia");
     expect(roomTitle("snake2go_fast")).toBe("Snake2Go Fast");
   });

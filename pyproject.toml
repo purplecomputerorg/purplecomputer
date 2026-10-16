@@ -7,3 +7,4 @@ select = ["F"]  # pyflakes only: undefined names, unused imports, etc.
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["F811"]  # allow fixture redefinition
+"tests/rooms/*" = ["F403", "F405"]  # family rooms start with `from purple import *`

@@ -21,10 +21,11 @@ FAMILY_LABEL_CHARS = 12
 
 
 def family_rooms() -> list:
-    """Rooms from installed packs, unless the parent turned them off."""
+    """Rooms from installed packs that a parent turned on, unchanged since."""
     from ..content import get_content
-    from ..settings import get_family_rooms
-    return get_content().rooms[:MAX_FAMILY_ROOMS] if get_family_rooms() else []
+    from ..settings import get_rooms_on
+    on = get_rooms_on()
+    return [r for r in get_content().rooms if on.get(r.key) == r.digest][:MAX_FAMILY_ROOMS]
 
 
 def _short(title: str) -> str:

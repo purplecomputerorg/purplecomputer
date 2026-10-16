@@ -101,7 +101,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .laptop-lid { position: relative; padding: 2.4% 2.4% 2.8%; border-radius: 16px 16px 4px 4px; background: linear-gradient(#34333b, #1f1e24); box-shadow: inset 0 1px 0 #4a4952, 0 18px 40px rgba(53, 42, 74, 0.18); }
 .laptop-camera { position: absolute; top: 1%; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #0c0c0f; box-shadow: 0 0 0 1px #2c2b32; }
 .laptop-screen { position: relative; aspect-ratio: 1366 / 768; overflow: hidden; background: #000; border-radius: 3px; }
-.laptop-screen > .screen-wrap, .laptop-screen > .screen-slot, .screen-slot > .screen-wrap { position: absolute; inset: 0; }
+.laptop-screen > .screen-wrap { position: absolute; inset: 0; }
 .laptop-screen [hidden] { display: none !important; }
 /* Depth is in laptop widths (cqw), so the tilt looks the same at any size. The lid is as wide as
    the keyboard's back edge, and the near edge comes out wider, as it does on a real laptop seen
@@ -289,12 +289,9 @@ pre.console:empty { display: none; }
 .emoji-big { font-size: 22px; vertical-align: middle; }
 label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; height: 16px; }
 
-/* Playable previews */
-.playable { outline: none; cursor: pointer; }
+/* "Click to try it" over the live Purple */
 .playable-hint { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: rgba(20, 10, 35, 0.5); color: #fff; font-size: 13px; transition: opacity 0.15s; }
 .playable-hint strong { font-size: 20px; }
-.playable:focus .playable-hint { opacity: 0; pointer-events: none; }
-.playable:focus { box-shadow: inset 0 0 0 3px var(--magenta); }
 
 /* Pick cards: the welcome page and the ways to start a room */
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }

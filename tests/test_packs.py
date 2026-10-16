@@ -96,6 +96,17 @@ class TestLoader:
         assert any("Not_A_Name.py: packs may not contain code" in p for p in problems)
         assert not any("farm.py" in p for p in problems)
 
+    def test_the_room_library_rides_beside_the_rooms_and_is_not_a_room(self, tmp_path):
+        d = make_pack(tmp_path)
+        lib = d / "content" / "rooms" / "purple.py"
+        lib.write_text("def run(start):\n    pass\n")
+        assert check_pack(d) == []
+        cm = ContentManager(packs_dir=tmp_path)
+        cm.load_all()
+        assert [(r.name, r.lib, r.key) for r in cm.rooms] == [("farm", lib, "the-tests-pack/farm")]
+        lib.write_text("def run(start)\n")
+        assert any("rooms/purple.py: line 1" in p for p in check_pack(d))
+
     def test_pack_instruments_follow_the_built_ins(self, packs):
         assert instruments() == INSTRUMENTS + [("kitchen", "Kitchen")]
 

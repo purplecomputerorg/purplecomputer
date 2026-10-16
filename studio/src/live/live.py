@@ -9,17 +9,23 @@ from purple_tui import content
 from purple_tui.canvas.app import PurpleApp
 from purple_tui.canvas.press import press
 from purple_tui.pack_manager import PackInstaller
+from purple_tui.settings import set_room_on
 
 PACKS = Path.home() / ".purple" / "packs"
+TRYING = Path("/tmp/studio-trying/content/rooms")
 _app = None
 _task = None
 
 
 def install(path):
+    """Also turns on every room in it: the parent made them, here in Studio."""
     shutil.rmtree(PACKS, ignore_errors=True)
     if path:
         ok, message = PackInstaller(PACKS).install_pack(Path(path), replace=True)
         print(f"[studio] {message}")
+    content._content = None
+    for room in content.get_content().rooms:
+        set_room_on(room.key, room.digest)
 
 
 async def restart():
@@ -38,9 +44,10 @@ async def restart():
         await asyncio.sleep(0.01)
 
 
-def setup(room, letters=False, instrument=None, picture=None):
-    """The room a Studio page shows: Music in Say Letters or playing an instrument, or Art with a
-    picture's paint ops on it, the way Art's Open paints one."""
+def setup(room, letters=False, instrument=None, picture=None, family=None):
+    """The room a Studio page shows: Music in Say Letters or playing an instrument, Art with a
+    picture's paint ops on it, the way Art's Open paints one, or a family room being tried, opened
+    over the room the way the Esc menu opens one."""
     while _app.top:
         _app.pop(_app.top)
     if room != _app.active_room:
@@ -52,6 +59,12 @@ def setup(room, letters=False, instrument=None, picture=None):
     if picture:
         from purple_tui.canvas.secret_doodle import paint_cells
         paint_cells(_app, picture)
+    if family:
+        from purple_tui.canvas.rooms.family_room import FamilyRoom
+        TRYING.mkdir(parents=True, exist_ok=True)
+        path = TRYING / f"{family['name']}.py"
+        path.write_text(family["source"])
+        _app.push(FamilyRoom(_app, content.Room(family["name"], path)))
     _app.invalidate()
     return place()
 

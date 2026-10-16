@@ -1,14 +1,10 @@
-// What Studio itself makes audible (the room stage, the instrument sliders): synth notes, the core
-// percussion clips, and the browser's voice standing in for Purple's.
-import { PURPLE, SYNTH_RATE, defaults, noteFrequency, renderNote, type BaseName, type Params } from "@sdk";
+// What Studio itself makes audible outside the live Purple: synth notes for the instrument sliders.
+import { SYNTH_RATE, defaults, noteFrequency, renderNote, type BaseName, type Params } from "@sdk";
 import { GRID_ROWS, INSTRUMENTS, pitchFor } from "@sdk/purple/sounds";
-import { audioContext, clipToBuffer, playBuffer } from "./audio";
+import { clipToBuffer, playBuffer } from "./audio";
 import { draft } from "./state";
 
-const DRUM_URLS = import.meta.glob("../../packs/core-sounds/content/[0-9].ogg", { eager: true, query: "?url", import: "default" }) as Record<string, string>;
-const DRUM_KEYS: Record<string, string> = PURPLE.room.drum_keys;
 const notes = new Map<string, AudioBuffer>();
-const drums = new Map<string, Promise<AudioBuffer | null>>();
 
 export function voiceFor(instrument: string): { base: BaseName; params: Params } {
   const inst = draft.instruments.find((i) => i.name === instrument);
@@ -37,23 +33,3 @@ export function playGridKey(instrument: string, key: string): boolean {
   playNote(instrument, note, octave);
   return true;
 }
-
-export function playDrum(nameOrDigit: string): void {
-  const digit = nameOrDigit in DRUM_KEYS ? nameOrDigit : Object.entries(DRUM_KEYS).find(([, n]) => n === nameOrDigit.toLowerCase())?.[0];
-  if (!digit) return;
-  if (!drums.has(digit)) {
-    const url = Object.entries(DRUM_URLS).find(([path]) => path.endsWith(`/${digit}.ogg`))?.[1];
-    drums.set(digit, url ? fetch(url).then((r) => r.arrayBuffer()).then((b) => audioContext().decodeAudioData(b)).catch(() => null) : Promise.resolve(null));
-  }
-  void drums.get(digit)!.then((buffer) => buffer && playBuffer(buffer));
-}
-
-export function say(text: string): void {
-  if (!("speechSynthesis" in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.95;
-  speechSynthesis.speak(u);
-}
-
-export const hush = () => ("speechSynthesis" in window) && speechSynthesis.cancel();

@@ -7,7 +7,16 @@ import { announceKey } from "../keys";
 import { buildPack } from "../pack";
 import { draft } from "../state";
 import { h } from "./dom";
-import { tryHint } from "./playable";
+
+// Covers Purple while it isn't getting keys. Once someone has played with it (the screen marked
+// "tried"), it shrinks to a small reminder, since they already know how.
+function tryHint(hint: string): HTMLElement {
+  return h("button", { class: "playable-hint", type: "button" },
+    h("strong", {}, "Click to try it"), h("span", {}, hint), h("em", {}, "Click to type here"));
+}
+
+// Why a family room stopped, as Purple's FamilyRoom put it.
+export interface RoomProblem { text: string; line: number | null }
 
 const poster = (room: string) => new URL(`purple/poster-${room}.png`, document.baseURI).href;
 // Quiet time after the last edit before the pack is rebuilt and Purple restarts with it.
@@ -22,7 +31,7 @@ const ZOOM: Record<Room, { scale: number; at?: [number, number] }> = {
 };
 // The same test as the phone rules in styles.css.
 export const PHONE = matchMedia("(max-width: 700px), (max-height: 500px) and (pointer: coarse)");
-export const MOUSE = matchMedia("(pointer: fine)");
+const MOUSE = matchMedia("(pointer: fine)");
 const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
 
 class LiveScreen {
@@ -30,11 +39,14 @@ class LiveScreen {
   private frame = h("iframe", { class: "live-frame", src: "purple.html", title: "Purple", tabindex: -1 });
   private poster = h("img", { class: "live-poster", alt: "" });
   private status = h("span", {}, "Loading Purple");
-  private hint = tryHint("button", "then use the keyboard, like on Purple");
+  private hint = tryHint("then use the keyboard, like on Purple");
   private zoomed = true;
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
   // Set by Studio: Purple moved to another room, or opened or closed a menu.
   onMove = () => {};
+  // Set by the Rooms page: a family room's print() output, and why one stopped.
+  onPrint = (_text: string) => {};
+  onProblem = (_p: RoomProblem) => {};
   place: Place = { room: "play", menu: false, at: null };
   private ready = false;
   private setup: RoomSetup = { room: "play" };
@@ -85,10 +97,9 @@ class LiveScreen {
   }
 
   private async sync(): Promise<void> {
-    // Rooms stay out: Purple runs them as a separate process, which a browser can't; the Rooms
-    // page previews them itself. Pictures being tried are painted straight on the screen, so Open
-    // lists only the added ones.
-    const live = { ...draft, rooms: [], pictures: draft.pictures.filter((p) => p.kept) };
+    // The room being tried opens straight on the screen (RoomSetup.family), so the Esc menu lists
+    // only the added ones, as Open does pictures.
+    const live = { ...draft, rooms: draft.rooms.filter((r) => r.kept), pictures: draft.pictures.filter((p) => p.kept) };
     const key = JSON.stringify(live, (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
     if (key === this.sent) return this.busy(false);
     this.sent = key;
@@ -109,6 +120,8 @@ class LiveScreen {
     if (m.type === "focus" && m.on) this.element.classList.add("tried");
     if (m.type === "keydown") announceKey(m.key);
     if (m.type === "place") this.moved(m.place);
+    if (m.type === "print") this.onPrint(m.text);
+    if (m.type === "problem") this.onProblem({ text: m.text, line: m.line });
   }
 
   // Between an edit and Purple restarting with it, the spinner says so.

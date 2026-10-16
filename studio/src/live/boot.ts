@@ -45,7 +45,8 @@ export type Room = "play" | "music" | "art" | "blocks";
 // at: the room's cursor, as fractions of the screen (see place() in live.py).
 export interface Place { room: Room; menu: boolean; at: [number, number] | null }
 // picture: paint ops for the Art canvas, painted as Art's Open paints a pack picture.
-export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: PaintOp[] }
+// family: a family room opened over the room, as the Esc menu opens one.
+export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: PaintOp[]; family?: { name: string; source: string } }
 
 export interface LivePurple {
   // Installs a .purplepack (null: none) and starts Purple again so it reads it.

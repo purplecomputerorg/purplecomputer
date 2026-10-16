@@ -7,7 +7,8 @@ Handles installation of content purplepacks. These are CONTENT ONLY:
 - stories packs (text + audio)
 
 The one exception to content-only is content/rooms/<name>.py, a family room,
-which Purple only ever runs as a guest in its own process and user (see
+and content/rooms/purple.py, the library those rooms run on. Purple only ever
+runs them as a guest in a sealed process of their own (see
 guides/family-rooms.md). Any other code in a pack is refused.
 
 The pack layout, and what the runtime reads from it, is written up in
@@ -22,7 +23,7 @@ import wave
 from pathlib import Path
 from typing import Optional
 
-from .content import PACK_FORMAT, ROOM_NAME, read_manifest
+from .content import PACK_FORMAT, ROOM_LIB, ROOM_NAME, read_manifest
 
 # Valid content-only pack types (no executable code)
 VALID_PACK_TYPES = ['emoji', 'sounds', 'stories']
@@ -143,7 +144,7 @@ def check_pack(pack_dir: Path) -> list[str]:
 
 
 def _is_room_file(pack_dir: Path, path: Path) -> bool:
-    return path.parent == pack_dir / 'content' / 'rooms' and path.suffix == '.py' and bool(ROOM_NAME.match(path.stem))
+    return path.parent == pack_dir / 'content' / 'rooms' and path.suffix == '.py' and (bool(ROOM_NAME.match(path.stem)) or path.name == ROOM_LIB)
 
 
 def room_source_problem(path: Path) -> str | None:
@@ -161,7 +162,9 @@ def room_source_problem(path: Path) -> str | None:
 
 def _check_rooms(content: Path) -> list[str]:
     from .content import room_files
-    return [f"content/rooms/{p}" for path in room_files(content) if (p := room_source_problem(path))]
+    lib = content / 'rooms' / ROOM_LIB
+    files = room_files(content) + ([lib] if lib.is_file() else [])
+    return [f"content/rooms/{p}" for path in files if (p := room_source_problem(path))]
 
 
 def _check_word_maps(content: Path) -> list[str]:

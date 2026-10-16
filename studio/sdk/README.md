@@ -8,7 +8,7 @@ It is a directory, not a published package. Import it as `@sdk` inside Studio (a
 
 | Module | What it gives you |
 | --- | --- |
-| `pack` | `buildPack(spec)` and `buildEntries(spec)`: a `PackSpec` (family name, words, synonyms, rankings, letter and phrase clips, pictures, instruments, rooms, theme) in, a gzipped tar out, in the layout Purple's installer accepts. `manifest`, `packId`, `slug`. |
+| `pack` | `buildPack(spec)` and `buildEntries(spec)`: a `PackSpec` (family name, words, synonyms, rankings, letter and phrase clips, pictures, instruments, rooms, theme) in, a gzipped tar out, in the layout Purple's installer accepts, with the room library beside any rooms. `manifest`, `packId`, `slug`. |
 | `purple/synth` | Purple's four instrument generators with every keyword parameter, and `renderNote(base, params, freq)`. Held to the Python to within one sample by `tests/synth.test.ts`. |
 | `purple/art` | Viewport and canvas sizes, `fitToCanvas`, `generateRowGradient`, key colors, `cellsToOps`. |
 | `purple/sounds` | `parseNote`, letter keys, clip sample rate, `voiceClipFilename`, `pitchFilename`, `pitchFor`, `noteFrequency`, the reachable pitch set. |
@@ -38,11 +38,11 @@ const blob = await buildPack(spec, (msg) => console.log(msg));
 
 ## Running a room outside Purple
 
-A room is Python that imports `purple_tui/roomkit/purple.py`. Any host sets `purple._send` (gets one message dict) and `purple._recv` (blocks, returns one event dict) and calls `purple.run(source)`; `guides/family-rooms.md` has the protocol. Purple's host is `purple_tui/canvas/rooms/program_room.py`; Studio's is `studio/src/rooms/` (Pyodide in a Web Worker, the page side in `host.ts`).
+A room is Python that imports `purple_tui/roomkit/purple.py`. `roomkit/runner.py`'s `serve(recv_line, send_line)` runs one: the first line in is the start event, carrying the room and the library, and after that each event line gets one reply line back; `guides/family-rooms.md` has the protocol. Purple's host is `purple_tui/canvas/rooms/family_room.py`. Studio runs that same host in its live Purple, with the room in a Web Worker (`studio/src/rooms/`).
 
 ## Staying honest
 
 - `export.json` is generated. Do not edit it; change Purple and run `just studio-fixtures`.
 - `tests/golden.json` holds Python's synth renders. The SDK tests fail when the port drifts.
-- Rooms are Python, run by `purple_tui/roomkit/purple.py` itself, so the SDK only packs them (`content/rooms/<name>.py`).
+- Rooms are Python, run by `purple_tui/roomkit/purple.py` itself, so the SDK only packs them (`content/rooms/<name>.py`) along with that file (`content/rooms/purple.py`).
 - The pack layout has a `format` version in the manifest. Purple skips packs newer than it reads.

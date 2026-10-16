@@ -7,6 +7,7 @@ import { SYNTH_RATE, renderNote, type BaseName, type Params } from "./purple/syn
 import { themeJson, type Theme } from "./purple/theme";
 import { gzip, tar, type TarEntry } from "./tar";
 import { encodeWav, type Clip } from "./wav";
+import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 
 // title: the name as the family typed it, which Purple shows as is; name is the file name.
 export interface PackPicture { name: string; title?: string; ops: PaintOp[]; png?: Uint8Array }
@@ -34,7 +35,8 @@ const text = (path: string, body: string): TarEntry => ({ path, data: enc.encode
 const json = (path: string, value: unknown) => text(path, JSON.stringify(value, null, 2) + "\n");
 
 export const slug = (s: string) => s.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-export const ROOM_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+// purple is taken: content/rooms/purple.py is the library the pack's rooms run on.
+export const ROOM_NAME = /^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$/;
 // content.display_name: what Purple shows for a room called `name`.
 export const roomTitle = (name: string) =>
   name.replace(/[-_]/g, " ").trim().replace(/[a-zA-Z]+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).slice(0, 24);
@@ -84,8 +86,10 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
     }
   }
 
+  // The rooms run on the library they were made with, whichever Purple they land on.
+  if (spec.rooms.length) entries.push(text("content/rooms/purple.py", roomLibrary));
   for (const room of spec.rooms) {
-    if (!ROOM_NAME.test(room.name)) throw new Error(`A room name must be lowercase letters, digits, and dashes: ${room.name}`);
+    if (!ROOM_NAME.test(room.name)) throw new Error(`A room name must be lowercase letters, digits, and dashes, and not purple: ${room.name}`);
     entries.push(text(`content/rooms/${room.name}.py`, room.source.endsWith("\n") ? room.source : room.source + "\n"));
     if (room.blocks) entries.push(json(`content/rooms/${room.name}.blocks.json`, room.blocks));
   }

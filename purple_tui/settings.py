@@ -17,7 +17,7 @@ _defaults = {
     "code_panel": True,          # Whether the code panel can be opened (space hold)
     "music_looping": True,       # Whether music room loop recording can be triggered (enter hold)
     "music_key_switching": True, # Whether music room key switching (arrows) is enabled
-    "family_rooms": True,        # Whether rooms from installed packs show in the Esc menu
+    "rooms_on": {},              # Family rooms a parent turned on: "pack/room" -> Room.digest of what they turned on
     "all_caps": False,           # Whether all rendered text is uppercased at render time
     "volume_level": None,        # Last volume anyone set (0-100), restored on restart; None until then
     "volume_lock": None,         # Parent ceiling: None = no limit, 0-100 = loudest the kid can pick (0 = Silent Mode, keys disabled)
@@ -86,13 +86,15 @@ def set_code_panel(enabled: bool) -> None:
     save_settings(settings)
 
 
-def get_family_rooms() -> bool:
-    return load_settings()["family_rooms"]
+def get_rooms_on() -> dict:
+    on = load_settings()["rooms_on"]
+    return on if isinstance(on, dict) else {}
 
 
-def set_family_rooms(enabled: bool) -> None:
+def set_room_on(key: str, digest: str | None) -> None:
+    """digest None turns the room off."""
     settings = load_settings()
-    settings["family_rooms"] = enabled
+    settings["rooms_on"] = {k: v for k, v in get_rooms_on().items() if k != key} | ({key: digest} if digest else {})
     save_settings(settings)
 
 

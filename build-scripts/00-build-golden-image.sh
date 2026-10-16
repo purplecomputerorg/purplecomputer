@@ -1065,9 +1065,10 @@ purple ALL=(ALL) NOPASSWD: ALL
 SUDOERS
     chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-nopasswd"
 
-    # purple may start exactly this command as purple-room (canvas/rooms/family_room.py)
+    # purple may start exactly the sealed room launcher, with no arguments (canvas/rooms/family_room.py)
+    install -m 755 /purple-src/scripts/purple-room-run.sh "$MOUNT_DIR/usr/local/bin/purple-room-run"
     cat > "$MOUNT_DIR/etc/sudoers.d/purple-room" <<'SUDOERS'
-purple ALL=(purple-room) NOPASSWD: /usr/bin/python3 -I -S /opt/purple/purple_tui/roomkit/runner.py
+purple ALL=(root) NOPASSWD: /usr/local/bin/purple-room-run ""
 SUDOERS
     chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-room"
     # A broken sudoers file would break every sudo, shutdown included: fail the build instead

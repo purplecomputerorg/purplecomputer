@@ -1,10 +1,14 @@
-"""A family room: a pack's content/rooms/<name>.py, run as a guest in its own
-process (roomkit/runner.py, as the purple-room user on the ISO) and drawn by
-Purple from the messages it sends. It opens over the current room, so Esc
-lands the kid back where they were. Protocol and safety: guides/family-rooms.md."""
+"""A family room: a pack's content/rooms/<name>.py, run as a guest in a sealed
+process of its own and drawn by Purple from its replies. Purple sends one event
+at a time (start, key, tick) and the room answers each with one reply: the
+whole scene as shapes, sounds, when to tick next, and what to remember. All
+the room ideas (text, the grid, ask, timers) live in the guest library,
+roomkit/purple.py, which the pack carries, so this side never needs to grow.
+It opens over the current room, so Esc lands the kid back where they were.
+Protocol and safety: guides/family-rooms.md."""
 
 import json
-import pwd
+import math
 import re
 import subprocess
 import sys
@@ -19,37 +23,152 @@ from ... import tts
 from ...audio import play_safe
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...music_constants import instruments, pitch_filename
-from ...roomkit.purple import H, W
+from ...timeline import state_dir
 from ..sounds import SoundBank
-from ..ui import Overlay, TextField
+from ..theme import ROLES
+from ..ui import Overlay
 
 ICON_FAMILY = "\U000F0827"  # nf-md-home_heart
+API = 1
+SIZE = (240, 120)           # the room's surface; the viewport is 2:1 on every machine
 RUNNER = Path(__file__).parents[2] / "roomkit" / "runner.py"
-ROOM_USER = "purple-room"
+BUILTIN_LIB = RUNNER.parent / "purple.py"
+RUN_ROOM = Path("/usr/local/bin/purple-room-run")   # the ISO's sealed launcher (scripts/purple-room-run.sh)
 START_TIMEOUT_S = 8.0       # python3 startup on the slowest laptops, plus the room's top level
 STEP_TIMEOUT_S = 3.0
-MAX_MESSAGES_PER_STEP = 2000
-MAX_LINE_CHARS = 4096
-MAX_TIMERS = 32
-BACKGROUND_MIN_GAP_S = 0.3
+MAX_REPLY_CHARS = 256 * 1024
+MAX_SHAPES = 1000
+MAX_SOUNDS = 8
+TEXT_MAX = 200
+KEEP_MAX_BYTES = 4096
+MIN_WAKE_S, MAX_WAKE_S = 1 / 30, 3600
+PAUSED_RECHECK_S = 0.5
 IDLE_PAUSE_S = 180
-LINES_KEPT = 5
 QUEUE_MAX = 8
+# Flashes: the scene shrunk to these tiles; a change that moves at least FLASH_AREA of them by
+# FLASH_DELTA in luminance shows at most once per FLASH_GAP_S (WCAG 2.3.1's three per second).
+FLASH_TILES = (16, 8)
+FLASH_DELTA = 0.1
+FLASH_AREA = 0.25
+FLASH_GAP_S = 1 / 3
 _NOTE = re.compile(r"^([A-Ga-g])(#?)(\d)$")
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+_ram_keeps: dict = {}
 
 
 def command() -> list:
-    """The ISO has a purple-room user and a sudoers rule for exactly this line; a dev machine runs the room as itself."""
+    """The ISO seals the room with purple-room-run; a dev machine runs it as itself."""
+    if RUN_ROOM.exists():
+        return ["sudo", "-n", str(RUN_ROOM)]
+    return [sys.executable, "-I", "-S", str(RUNNER)]
+
+
+class ProcessGuest:
+    """The room's process. Writes the start line, then hands each reply line to on_line on its
+    reader thread, and None when the process ends."""
+
+    def __init__(self, start: str, on_line):
+        self._stopped = False
+        self._proc = subprocess.Popen(command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                      stderr=subprocess.DEVNULL, text=True, encoding="utf-8", cwd="/",
+                                      start_new_session=True)
+        threading.Thread(target=self._read, args=(start, on_line), daemon=True, name="family-room").start()
+
+    def _read(self, start, on_line):
+        self.send(start)  # here, so a big room can't stall the screen on a full pipe
+        for line in iter(lambda: self._proc.stdout.readline(MAX_REPLY_CHARS), ""):
+            if self._stopped:
+                return
+            on_line(line)
+        if not self._stopped:
+            on_line(None)
+
+    def send(self, line: str):
+        try:
+            self._proc.stdin.write(line + "\n")
+            self._proc.stdin.flush()
+        except (OSError, ValueError):
+            pass
+
+    def stop(self):
+        """Closing stdin is what ends a sealed room (runner._watch); the kill covers the rest."""
+        self._stopped = True
+        try:
+            self._proc.stdin.close()
+        except (OSError, ValueError):
+            pass
+        if self._proc.poll() is None:
+            self._proc.kill()
+
+
+Guest = ProcessGuest  # Studio swaps in its Web Worker (studio/src/live/browser.py)
+
+
+def _keep_path(room) -> Path | None:
+    base = state_dir("rooms", "PURPLE_ROOMS_DIR")
+    return base / room.pack / f"{room.name}.json" if base else None
+
+
+def load_keep(room) -> dict:
+    path = _keep_path(room)
     try:
-        pwd.getpwnam(ROOM_USER)
-    except KeyError:
-        return [sys.executable, "-I", "-S", str(RUNNER)]
-    return ["sudo", "-n", "-u", ROOM_USER, "/usr/bin/python3", "-I", "-S", str(RUNNER)]
+        data = json.loads(path.read_text()) if path else _ram_keeps.get(room.key, {})
+    except (OSError, ValueError):
+        data = {}
+    return data if isinstance(data, dict) else {}
 
 
-def _text(msg: dict, field: str = "text") -> str:
-    return str(msg.get(field, ""))[:200]
+def save_keep(room, keep: dict):
+    path = _keep_path(room)
+    if path is None:
+        _ram_keeps[room.key] = keep
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(keep))
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def _num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _color(v) -> str | None:
+    return v if isinstance(v, str) and (_HEX.match(v) or v in ROLES) else None
+
+
+def _shape(s) -> tuple | None:
+    """A shape from a reply, checked; None for anything malformed or unknown, which is skipped."""
+    if not isinstance(s, list) or not s:
+        return None
+    kind, a = s[0], s[1:]
+    if kind == "rect" and len(a) >= 5 and all(map(_num, a[:4])) and _color(a[4]):
+        return ("rect", *map(float, a[:4]), a[4], float(a[5]) if len(a) > 5 and _num(a[5]) else 0.0)
+    if kind == "text" and len(a) >= 4 and all(map(_num, a[:3])):
+        color = _color(a[4]) if len(a) > 4 else "text"
+        return ("text", *map(float, a[:3]), str(a[3])[:TEXT_MAX], color or "text", "left" if a[5:6] == ["left"] else "center")
+    return None
+
+
+def _paint(color: str) -> str:
+    return getattr(P, color.upper()) if color in ROLES else color
+
+
+def _luminance(c) -> float:
+    lin = [(v / 255 / 12.92) if v <= 10 else ((v / 255 + 0.055) / 1.055) ** 2.4 for v in c[:3]]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def _thumb(surface) -> list:
+    small = pygame.transform.smoothscale(surface, FLASH_TILES)
+    return [_luminance(small.get_at((x, y))) for y in range(FLASH_TILES[1]) for x in range(FLASH_TILES[0])]
+
+
+def _flashes(a: list, b: list) -> bool:
+    return sum(abs(x - y) > FLASH_DELTA for x, y in zip(a, b)) >= FLASH_AREA * len(a)
 
 
 class FamilyRoom(Overlay):
@@ -59,22 +178,20 @@ class FamilyRoom(Overlay):
         super().__init__(app)
         self.room = room
         self.sounds = SoundBank()
-        self.field = TextField()
-        self._proc = None
-        self._timers: dict = {}
-        self._watchdog = None
-        self._bg_timer = None
+        self._guest = self._token = None
+        self._wake = self._watchdog = self._flash_timer = None
+        self._keep, self._keep_dirty = load_keep(room), False
         self._last_key = time.monotonic()
         self._resting = False
         self._reset()
 
     def _reset(self):
-        self.bg = self._bg_wanted = P.SURFACE
-        self.big, self.lines, self.cells = "", [], {}
-        self.prompt = None          # set while the room waits in ask()
-        self.over = None            # game_over text
-        self.fault = None           # why the room was stopped
-        self._busy, self._queue, self._count = True, [], 0
+        self.scene: list = []        # what's on screen, as checked shapes
+        self.fault = None            # why the room was stopped
+        self._surface = self._thumb = self._pending = None
+        self._last_flash = -math.inf
+        self._busy, self._queue = True, []
+        self._t0, self._paused, self._paused_at = time.monotonic(), 0.0, None
 
     # ---------------------------------------------------------------- process
     def on_open(self):
@@ -88,46 +205,30 @@ class FamilyRoom(Overlay):
         self._reset()
         try:
             source = self.room.path.read_text(encoding="utf-8")
-            self._proc = subprocess.Popen(command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                          stderr=subprocess.DEVNULL, text=True, encoding="utf-8", cwd="/",
-                                          start_new_session=True)
+            lib = (self.room.lib or BUILTIN_LIB).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as e:
+            return self._broken(f"could not read it: {e}")
+        start = {"ev": "start", "t": 0, "api": API, "size": list(SIZE), "keep": self._keep, "lib": lib, "source": source}
+        token = self._token = object()
+        try:
+            self._guest = Guest(json.dumps(start, ensure_ascii=False),
+                                lambda line: self.app.call_from_thread(self._reply, token, line))
+        except OSError as e:
             return self._broken(f"could not start: {e}")
-        threading.Thread(target=self._read, args=(self._proc, source), daemon=True, name=f"room-{self.room.name}").start()
         self._arm(START_TIMEOUT_S)
         self.app.invalidate()
 
     def _stop(self):
-        for t in [*self._timers.values(), self._watchdog, self._bg_timer]:
+        for t in (self._wake, self._watchdog, self._flash_timer):
             if t:
                 t.stop()
-        self._timers.clear()
-        self._watchdog = self._bg_timer = None
-        proc, self._proc = self._proc, None
-        if proc and proc.poll() is None:
-            proc.kill()
-
-    def _read(self, proc, source: str):
-        """Reader thread: hands over the source (a big file can't stall the UI on a full pipe),
-        then passes each message line to the UI thread."""
-        self._write({"source": source}, proc)
-        for line in iter(lambda: proc.stdout.readline(MAX_LINE_CHARS), ""):
-            if proc is not self._proc:
-                return
-            try:
-                msg = json.loads(line) if line.endswith("\n") else {"cmd": "error", "text": "a message was too long"}
-            except ValueError:
-                msg = {"cmd": "error", "text": "a message was garbled"}
-            self.app.call_from_thread(self._receive, proc, msg if isinstance(msg, dict) else {})
-        if proc is self._proc:
-            self.app.call_from_thread(self._receive, proc, {"cmd": "exit"})
-
-    def _write(self, msg: dict, proc=None):
-        try:
-            (proc or self._proc).stdin.write(json.dumps(msg, ensure_ascii=False) + "\n")
-            (proc or self._proc).stdin.flush()
-        except (AttributeError, OSError, ValueError):
-            pass
+        self._wake = self._watchdog = self._flash_timer = None
+        guest, self._guest, self._token = self._guest, None, None
+        if guest:
+            guest.stop()
+        if self._keep_dirty:
+            save_keep(self.room, self._keep)
+            self._keep_dirty = False
 
     def _arm(self, seconds: float):
         if self._watchdog:
@@ -137,149 +238,164 @@ class FamilyRoom(Overlay):
     def _broken(self, why: str, line=None):
         self._stop()
         self.fault = f"{why} (line {line})" if isinstance(line, int) else why
-        self.prompt = None
         self.app.invalidate()
 
     # ---------------------------------------------------------------- events in
+    def _clock(self) -> float:
+        return time.monotonic() - self._t0 - self._paused
+
     def _send(self, event: dict):
-        if self._proc is None:
+        if self._guest is None:
             return
-        if self._busy or self.prompt is not None:
+        if self._busy:
             if event["ev"] == "key" and len(self._queue) < QUEUE_MAX:
                 self._queue.append(event)
             return
-        self._busy, self._count = True, 0
+        if self._paused_at is not None:
+            self._paused += time.monotonic() - self._paused_at
+            self._paused_at = None
+        self._busy = True
         self._arm(STEP_TIMEOUT_S)
-        self._write(event)
+        self._guest.send(json.dumps({**event, "t": round(self._clock(), 3)}, ensure_ascii=False))
 
-    def _tick(self, n: int):
-        covered = self.app.top is not self
+    def _tick(self):
+        """The room's wake time came. Its clock stops while a menu covers it or the kid has
+        stepped away; it looks again shortly, without drawing anything."""
+        self._wake = None
         idle = time.monotonic() - self._last_key > IDLE_PAUSE_S
         if idle and not self._resting:
             self._resting = True
             self.app.invalidate()
-        if not (covered or idle or self._busy or self.prompt is not None):
-            self._send({"ev": "tick", "id": n})
-
-    # ---------------------------------------------------------------- messages out
-    def _receive(self, proc, msg: dict):
-        if proc is not self._proc:
+        if idle or self.app.top is not self:
+            if self._paused_at is None:
+                self._paused_at = time.monotonic()
+            self._wake = self.app.timers.after(PAUSED_RECHECK_S, self._tick)
             return
-        self._count += 1
-        if self._count > MAX_MESSAGES_PER_STEP:
-            return self._broken("it sent too many messages at once")
-        handler = self._HANDLERS.get(msg.get("cmd"))
-        if handler:
-            handler(self, msg)
-            self.app.invalidate()
+        self._send({"ev": "tick"})
 
-    def _on_show(self, msg):
-        self.big = _text(msg)
+    # ---------------------------------------------------------------- replies
+    def _reply(self, token, line):
+        if token is not self._token:
+            return
+        if line is None:
+            return self._broken("it stopped")
+        if not self._busy:
+            return self._broken("it spoke out of turn")
+        if not line.endswith("\n"):
+            return self._broken("its reply was too long")
+        try:
+            reply = json.loads(line)
+        except ValueError:
+            reply = None
+        if not isinstance(reply, dict):
+            return self._broken("its reply was garbled")
+        if isinstance(reply.get("error"), dict):
+            return self._broken(str(reply["error"].get("text", ""))[:300], reply["error"].get("line"))
+        problem = self._apply(reply)
+        if problem:
+            return self._broken(problem)
+        self._busy = False
+        self._watchdog.stop()
+        if self._queue:
+            self._send(self._queue.pop(0))
 
-    def _on_write(self, msg):
-        self.lines = (self.lines + [_text(msg)])[-LINES_KEPT:]
+    def _apply(self, reply: dict) -> str | None:
+        """Unknown fields, shapes, and sounds are skipped, so a newer library still runs here."""
+        if "scene" in reply:
+            scene = reply["scene"]
+            if not isinstance(scene, list) or len(scene) > MAX_SHAPES:
+                return "it drew too much at once"
+            self._show([s for s in map(_shape, scene) if s])
+        sounds = reply.get("sounds")
+        for sound in sounds[:MAX_SOUNDS] if isinstance(sounds, list) else []:
+            self._play(sound)
+        if "keep" in reply:
+            keep = reply["keep"]
+            if not isinstance(keep, dict) or len(json.dumps(keep).encode()) > KEEP_MAX_BYTES:
+                return "it tried to remember too much"
+            self._keep, self._keep_dirty = keep, True
+        if self._wake:
+            self._wake.stop()
+            self._wake = None
+        if _num(reply.get("wake")):
+            self._wake = self.app.timers.after(min(max(MIN_WAKE_S, reply["wake"]), MAX_WAKE_S), self._tick)
+        return None
 
-    def _on_clear(self, msg):
-        self.big, self.lines, self.cells = "", [], {}
+    def _show(self, scene: list):
+        if scene == (self._pending if self._pending is not None else self.scene):
+            return
+        self._pending = scene
+        if self._flash_timer is None:
+            self._present()
 
-    def _on_background(self, msg):
-        if isinstance(msg.get("color"), str) and _HEX.match(msg["color"]):
-            self._bg_wanted = msg["color"]
-            if self._bg_timer is None:
-                self._apply_background()
+    def _present(self):
+        """Puts the newest scene up, unless it would make a fourth flash this second; then it
+        waits, and whatever is newest by then goes up."""
+        self._flash_timer = None
+        scene, self._pending = self._pending, None
+        if scene is None:
+            return
+        surface = self._render(scene, self.app._viewport_rect().size)
+        thumb = _thumb(surface)
+        if self._thumb is not None and _flashes(self._thumb, thumb):
+            wait = self._last_flash + FLASH_GAP_S - time.monotonic()
+            if wait > 0:
+                self._pending = scene
+                self._flash_timer = self.app.timers.after(wait, self._present)
+                return
+            self._last_flash = time.monotonic()
+        self.scene, self._surface, self._thumb = scene, surface, thumb
+        self.app.invalidate()
 
-    def _apply_background(self):
-        """At most one color change per BACKGROUND_MIN_GAP_S, so no room can strobe."""
-        self._bg_timer = None
-        if self._bg_wanted != self.bg:
-            self.bg = self._bg_wanted
-            self._bg_timer = self.app.timers.after(BACKGROUND_MIN_GAP_S, self._apply_background)
-            self.app.invalidate()
+    def _render(self, scene: list, size) -> pygame.Surface:
+        """The scene drawn once, at the viewport's size; every frame after just copies it."""
+        g = self.app.g
+        surface = pygame.Surface(size, depth=32)
+        surface.fill(P.SURFACE)
+        k = size[0] / SIZE[0]
+        for kind, x, y, *rest in scene:
+            if kind == "rect":
+                w, h, color, radius = rest
+                box = pygame.Rect(round(x * k), round(y * k), max(1, round(w * k)), max(1, round(h * k)))
+                pygame.draw.rect(surface, _paint(color), box, border_radius=max(0, round(radius * k)))
+                continue
+            px, text, color, align = rest
+            x, y, px = x * k, y * k, max(6, round(px * k))
+            room = size[0] - x if align == "left" else 2 * min(x, size[0] - x)
+            img = g.text(text, px, "sans", _paint(color))
+            if room > 0 and img.get_width() > room:
+                img = g.text(text, max(6, int(px * room / img.get_width())), "sans", _paint(color))
+            surface.blit(img, img.get_rect(midleft=(x, y)) if align == "left" else img.get_rect(center=(x, y)))
+        return surface
 
     def _audible(self) -> bool:
         return self.app._effective_volume() > 0
 
-    def _on_say(self, msg):
-        if self._audible():
-            tts.speak(_text(msg))
-
-    def _on_play(self, msg):
-        m = _NOTE.match(str(msg.get("note", "")))
-        wanted = str(msg.get("instrument", "")).lower()
-        inst = next((i for i, n in instruments() if wanted in (i.lower(), n.lower())), instruments()[0][0])
-        sound = m and self.sounds.instrument(inst).get(pitch_filename(m[1].upper() + m[2], int(m[3])))
-        if sound and self._audible():
-            play_safe(sound)
-
-    def _on_drum(self, msg):
-        sound = self.sounds.drum(str(msg.get("name", "")))
-        if sound and self._audible():
-            play_safe(sound)
-
-    def _on_cell(self, msg):
-        x, y, thing = msg.get("x"), msg.get("y"), msg.get("thing")
-        if isinstance(x, int) and isinstance(y, int) and 0 <= x < W and 0 <= y < H:
-            if thing is None:
-                self.cells.pop((x, y), None)
-            else:
-                self.cells[(x, y)] = str(thing)[:8]
-
-    def _on_grid_clear(self, msg):
-        self.cells = {}
-
-    def _on_timer(self, msg):
-        n, seconds = msg.get("id"), msg.get("seconds")
-        if not isinstance(n, int) or not isinstance(seconds, (int, float)) or len(self._timers) >= MAX_TIMERS:
+    def _play(self, sound):
+        if not isinstance(sound, list) or len(sound) < 2 or not self._audible():
             return
-        self._on_stop(msg)
-        start = self.app.timers.after if msg["cmd"] == "after" else self.app.timers.every
-        self._timers[n] = start(min(max(0.1, seconds), 3600), lambda: self._tick(n))
-
-    def _on_stop(self, msg):
-        if t := self._timers.pop(msg.get("id"), None):
-            t.stop()
-
-    def _on_ask(self, msg):
-        self.prompt = _text(msg, "prompt")
-        self.field.clear()
-        self._busy = False
-        if self._watchdog:
-            self._watchdog.stop()
-
-    def _on_game_over(self, msg):
-        self._stop()
-        self.over = _text(msg) or "Press a key to play again"
-
-    def _on_done(self, msg):
-        self._busy = False
-        if self._watchdog:
-            self._watchdog.stop()
-        if self._queue:
-            self._send(self._queue.pop(0))
-
-    def _on_error(self, msg):
-        self._broken(_text(msg), msg.get("line"))
-
-    def _on_exit(self, msg):
-        if self.over is None and self.fault is None:
-            self._broken("it stopped")
-
-    _HANDLERS = {"show": _on_show, "write": _on_write, "clear": _on_clear, "background": _on_background,
-                 "say": _on_say, "play": _on_play, "drum": _on_drum, "cell": _on_cell, "grid_clear": _on_grid_clear,
-                 "every": _on_timer, "after": _on_timer, "stop": _on_stop, "ask": _on_ask,
-                 "game_over": _on_game_over, "done": _on_done, "error": _on_error, "exit": _on_exit}
+        kind, *args = [str(a)[:TEXT_MAX] for a in sound]
+        if kind == "say":
+            tts.speak(args[0])
+        elif kind == "note" and (m := _NOTE.match(args[0])):
+            wanted = args[1].lower() if len(args) > 1 else ""
+            inst = next((i for i, n in instruments() if wanted in (i.lower(), n.lower())), instruments()[0][0])
+            if clip := self.sounds.instrument(inst).get(pitch_filename(m[1].upper() + m[2], int(m[3]))):
+                play_safe(clip)
+        elif kind == "drum" and (clip := self.sounds.drum(args[0])):
+            play_safe(clip)
 
     # ---------------------------------------------------------------- keys
     @staticmethod
-    def _key_name(action):
+    def _key_event(action) -> dict | None:
         if getattr(action, "is_repeat", False):
             return None
         if isinstance(action, CharacterAction) and len(action.char) == 1:
-            return action.char.lower()
+            return {"ev": "key", "key": action.char.lower(), "char": action.char}
         if isinstance(action, NavigationAction):
-            return action.direction
+            return {"ev": "key", "key": action.direction}
         if isinstance(action, ControlAction) and action.is_down and action.action in ("space", "enter", "backspace"):
-            return action.action
+            return {"ev": "key", "key": action.action}
         return None
 
     async def handle(self, action):
@@ -287,30 +403,14 @@ class FamilyRoom(Overlay):
             if not action.is_down:
                 self.close()  # on release, so a hold still reaches the parent menu
             return
-        key = self._key_name(action)
-        if key is None or self.fault:
+        event = self._key_event(action)
+        if event is None or self.fault:
             return
         self._last_key = time.monotonic()
-        self._resting = False
-        if self.over is not None:
-            return self._start()
-        if self.prompt is not None:
-            return self._type(action, key)
-        self._send({"ev": "key", "key": key})
-
-    def _type(self, action, key: str):
-        if key == "enter":
-            text, self.prompt = self.field.value, None
-            self._busy, self._count = True, 0
-            self._arm(STEP_TIMEOUT_S)
-            self._write({"ev": "answer", "text": text[:200]})
-        elif key == "backspace":
-            self.field.backspace()
-        elif key == "space":
-            self.field.insert(" ")
-        elif isinstance(action, CharacterAction):
-            self.field.insert(action.char)
-        self.app.invalidate()
+        if self._resting:
+            self._resting = False
+            self.app.invalidate()
+        self._send(event)
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g):
@@ -319,49 +419,19 @@ class FamilyRoom(Overlay):
         vp = app._viewport_rect()
         frame = app._frame_rect(vp)
         app._draw_title(frame, f"{ICON_FAMILY} {self.room.title}")
-        g.rect(self.bg, frame, radius=g.em(0.6))
+        g.rect(P.SURFACE, frame, radius=g.em(0.6))
         g.rect(P.LINE, frame, width=1, radius=g.em(0.6))
-        g.surface.set_clip(frame.inflate(-4, -4))
         if self.fault:
             self._draw_fault(g, vp)
-        else:
-            (self._draw_grid if self.cells else self._draw_words)(g, vp)
-            self._draw_footer(g, vp)
-        g.surface.set_clip(None)
+        elif self.scene:
+            if self._surface is None or self._surface.get_size() != vp.size:
+                self._surface = self._render(self.scene, vp.size)
+            g.surface.blit(self._surface, vp.topleft)
+        if self._resting and not self.fault:
+            px = int(vp.h * 0.05)
+            g.draw_text("Resting. Press a key to keep going", px, vp.centerx, vp.bottom - px * 2.2, "mono", P.MUTED,
+                        anchor="midtop", bg=P.SURFACE, pad=px // 3)
         app._draw_status(frame, right="Esc leaves", tabs=False)
-
-    def _draw_grid(self, g, vp):
-        cell = min(vp.w // W, vp.h // H)
-        ox, oy = vp.centerx - cell * W // 2, vp.centery - cell * H // 2
-        for (x, y), thing in self.cells.items():
-            r = pygame.Rect(ox + x * cell, oy + y * cell, cell, cell)
-            if _HEX.match(thing):
-                g.rect(thing, r.inflate(-2, -2), radius=max(2, cell // 8))
-            else:
-                g.draw_text(thing, int(cell * 0.78), r.centerx, r.centery, "sans", P.TEXT, anchor="center")
-
-    def _draw_words(self, g, vp):
-        y = vp.y + vp.h * 0.36
-        if self.big:
-            px = int(vp.h * 0.24)
-            while px > 16 and g.measure(self.big, px)[0] > vp.w * 0.9:
-                px = int(px * 0.85)
-            g.draw_text(self.big, px, vp.centerx, y, "sans", P.TEXT, anchor="center")
-        px = int(vp.h * 0.055)
-        for i, line in enumerate(self.lines):
-            g.draw_text(line, px, vp.centerx, vp.y + vp.h * 0.6 + i * px * 1.35, "sans", P.TEXT, anchor="midtop")
-
-    def _draw_footer(self, g, vp):
-        px = int(vp.h * 0.05)
-        y = vp.bottom - px * 2.2
-        if self.prompt is not None:
-            if self.prompt:
-                g.draw_text(self.prompt, px, vp.x + px, y - px * 1.5, "sans", P.MUTED, anchor="topleft")
-            self.field.draw(g, vp.x + px, y, vp.w - 2 * px, px, label="Answer")
-        elif self.over is not None:
-            g.draw_text(self.over, px, vp.centerx, y, "mono-bold", P.ACCENT, anchor="midtop")
-        elif self._resting:
-            g.draw_text("Resting. Press a key to keep going", px, vp.centerx, y, "mono", P.MUTED, anchor="midtop")
 
     def _draw_fault(self, g, vp):
         px = int(vp.h * 0.06)

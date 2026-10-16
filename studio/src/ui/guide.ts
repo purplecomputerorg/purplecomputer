@@ -29,6 +29,7 @@ const SECTIONS: Section[] = [
       ["grid.get(x, y), grid.erase(x, y), grid.clear()", "Look at a square, empty one, or empty them all. grid.random_empty() picks an empty square."],
       ["every(seconds, fn)", "Calls fn over and over, that many seconds apart. after(seconds, fn) calls it once. Both give back a timer you can .stop()."],
       ["game_over(text)", "Stops the timers and shows text. The next key starts the room over from the top."],
+      ["keep[\"best\"] = 12", "keep remembers things for next time, like a best score or a name: put words and numbers in it, and they're there when your kid comes back."],
     ],
   },
   {
@@ -42,7 +43,7 @@ const SECTIONS: Section[] = [
   {
     heading: "Making it feel like Purple",
     items: [
-      ["Calm", "Nothing flashing, nothing rushing. Purple is a quiet place."],
+      ["Calm", "Nothing flashing, nothing rushing. Purple is a quiet place, and it slows down any room that flashes the screen."],
       ["Every key does something", "Little kids press everything. Make any key do something pleasant, even if it is just a sound or a color."],
       ["No scores needed", "Playing is the point. Scores, timers, and losing are optional, and usually better left out."],
       ["Pictures over words for little ones", "Kids who don't read yet should be able to enjoy the room without reading. Emoji, sounds, and colors carry it."],
@@ -51,7 +52,7 @@ const SECTIONS: Section[] = [
   },
   {
     heading: "If something breaks",
-    text: "The preview on the right stops and shows which line of the file the problem is on, with the error Python gave. Fix that line, or press Restart. On Purple, a broken room shows a calm \"this room needs fixing\" card, and the rest of the computer keeps working.",
+    text: "The Purple on the right shows a calm \"this room needs fixing\" card, just as the real one would, and Studio shows which line of the file the problem is on, with the error Python gave. Fix that line, or press Play from the start. On Purple, the rest of the computer keeps working.",
   },
 ];
 

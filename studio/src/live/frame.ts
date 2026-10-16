@@ -2,6 +2,7 @@
 // postMessage. Kept in its own page because pygame's WebAssembly build needs eval, which
 // Studio's own pages forbid.
 import { browserKey } from "../keys";
+import { roomGuests } from "../rooms/guests";
 import { bootPurple, type LivePurple, type Place, type RoomSetup } from "./boot";
 
 export type ToFrame =
@@ -19,12 +20,19 @@ export type FromFrame =
   | { type: "failed"; text: string }
   | { type: "focus"; on: boolean }
   | { type: "keydown"; key: string }
-  | { type: "place"; place: Place };
+  | { type: "place"; place: Place }
+  | { type: "print"; text: string }
+  | { type: "problem"; text: string; line: number | null };
 
 // SDL draws into #canvas, kept off screen; #screen is what people see, at its own pixel size.
 const sdl = document.getElementById("canvas") as HTMLCanvasElement;
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
 const post = (m: FromFrame) => parent.postMessage(m, location.origin);
+// For Purple's FamilyRoom (browser.py): rooms run in workers from this page.
+Object.assign(globalThis, {
+  purpleRoomGuest: roomGuests((text) => post({ type: "print", text })),
+  purpleRoomProblem: (text: string, line: number | null) => post({ type: "problem", text, line: line ?? null }),
+});
 canvas.addEventListener("focus", () => post({ type: "focus", on: true }));
 canvas.addEventListener("blur", () => post({ type: "focus", on: false }));
 addEventListener("keydown", (e) => {

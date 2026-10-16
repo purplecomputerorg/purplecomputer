@@ -477,11 +477,11 @@ class CodePanel:
         picked = self.card == self.CLOSE
         g.rect(P.FIELD, rect, radius=g.em(0.4))
         g.rect(P.ACCENT if picked else P.LINE, rect, width=3 if picked else 1, radius=g.em(0.4))
-        px, key_px = g.em(0.95), g.em(0.75)
-        key_px = min(key_px, key_px * (rect.w - g.em(0.5)) // keycap_size(g, "hold Space", key_px)[0])
+        px, key_px = g.em(0.78), g.em(0.6)
+        key_px = min(key_px, key_px * (rect.w - g.em(1.1)) // keycap_size(g, "hold Space", key_px)[0])
         ink = P.TEXT if picked else P.MUTED
-        g.draw_text(f"{ICON_ROBOT} Close", px, rect.centerx, rect.centery - g.em(0.6), "mono-bold", ink, anchor="center")
-        draw_key_hint(g, "{hold Space}", key_px, rect.centerx, rect.centery + g.em(0.75), anchor="center")
+        g.draw_text("Close", px, rect.centerx, rect.centery - g.em(0.5), "mono-bold", ink, anchor="center")
+        draw_key_hint(g, "{hold Space}", key_px, rect.centerx, rect.centery + g.em(0.55), anchor="center")
 
     def _draw_cards(self, g, area):
         n = len(self.recipes)

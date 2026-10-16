@@ -195,6 +195,21 @@ def test_open_code_hides_the_color_legend_and_names_its_arrows(monkeypatch):
     run(go())
 
 
+@pytest.mark.parametrize("name", ["art", "music"])
+def test_open_code_hides_the_room_header_key_chips(name, monkeypatch):
+    async def go():
+        app, room = await _room(name)
+        drawn = []
+        monkeypatch.setattr(room, "_draw_header", lambda *a: drawn.append(True))
+        app._draw()
+        assert drawn
+        room.open_code_panel()
+        drawn.clear()
+        app._draw()
+        assert not drawn
+    run(go())
+
+
 def test_tab_on_an_empty_code_line_does_not_crash():
     async def go():
         app, art = await _room("art")

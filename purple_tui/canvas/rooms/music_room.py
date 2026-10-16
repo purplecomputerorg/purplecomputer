@@ -528,11 +528,13 @@ class MusicRoom(Room):
         if self._is_noscreen:
             return self._draw_noscreen(g, rect)
         em = g.em
-        head_h = em(4.3)
         panel = self.app._panel
         hint_h = em(FOOTER_EM) if panel is None else 0 if isinstance(panel, LoopPanel) else em(1.0)
         pad = em(1.6)
-        self._draw_header(g, rect)
+        # The header's key chips don't apply while typing code.
+        head_h = em(1.0) if self.code_panel is not None else em(4.3)
+        if self.code_panel is None:
+            self._draw_header(g, rect)
         grid = pygame.Rect(rect.x + pad, rect.y + head_h, rect.w - 2 * pad, rect.h - head_h - hint_h)
         self._draw_grid(g, grid)
         if self.app._panel is None:

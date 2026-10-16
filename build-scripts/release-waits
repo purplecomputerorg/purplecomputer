@@ -36,3 +36,5 @@ ee4404d printing, main only
 105415b flash tooling on the build machine, never in an ISO
 6b5f78f canvas Play layout, main only
 899d97f canvas layout, main only
+df184b1 Textual code panel close via arrows, reverted by 511676b
+511676b reverts df184b1, nothing to ship

@@ -4,6 +4,8 @@ cycle screen. Full-screen overlays; any key wakes or dismisses as noted."""
 import os
 import time
 
+import pygame
+
 from ... import backlight
 from ... import palette as P
 from ...constants import (ICON_BATTERY_MED, ICON_HARDDISK, ICON_HOURGLASS, ICON_KEYBOARD, ICON_LAPTOP, ICON_PLUG, ICON_USB,
@@ -175,7 +177,7 @@ class ByeScreen(FullScreen):
 
 class LiveBootSplash(FullScreen):
     _NOTES = [(ICON_KEYBOARD, "Purple is keyboard only, on purpose. Kids explore by typing."),
-              (ICON_USB, "You're running from the Purple Key. If the computer turns off, you'll need it to start again."),
+              (ICON_USB, "You're running from the Purple Key, so you'll need it to start Purple again."),
               (ICON_HARDDISK, "To install Purple and keep it, hold Esc to open the Parent Menu.")]
     _AUDIO_WARNING = (ICON_VOLUME_OFF, "Sound is not working on this computer. Plug in a USB audio adapter, "
                                        "or open the Parent Menu to see Support info.")
@@ -183,23 +185,30 @@ class LiveBootSplash(FullScreen):
 
     def draw(self, g):
         g.fill(self.bg)
-        px, icon_w, gap = g.em(0.95), g.em(2.2), g.em(1.1)
-        w = min(g.vw(84), g.em(44))
+        u = max(g.em(1), g.vh(2.3))  # g.em follows width alone, which leaves 4:3 screens with tiny text
+
+        def em(n):
+            return round(u * n)
+
+        px, icon_w, gap, pad = em(1.0), em(2.4), em(1.0), em(1.6)
         notes = self._NOTES + ([self._AUDIO_WARNING] if self.status else [])
-        heights = [g.markup_size(text, px, "sans", w - icon_w)[1] for _, text in notes]
-        bot_h, title_px = g.vh(16), g.em(1.7)
-        total = bot_h + g.em(1.5) + g.line_height(title_px, "sans-bold") + g.em(2.2) + sum(heights) + gap * (len(notes) - 1)
-        y = max(g.em(1), (g.h - total) // 2 - g.em(1))
+        sizes = [g.markup_size(text, px, "sans", min(g.vw(90), em(42)) - icon_w - 2 * pad) for _, text in notes]
+        card = pygame.Rect(0, 0, icon_w + max(w for w, _ in sizes) + 2 * pad, sum(h for _, h in sizes) + gap * (len(notes) - 1) + 2 * pad)
+        bot_h, title_px, hint_px = g.vh(15), em(1.8), em(1.0)
+        title_h, hint_h = g.line_height(title_px, "sans-bold"), g.line_height(hint_px, "sans")
+        y = max(em(1), (g.h - (bot_h + em(1.4) + title_h + em(1.8) + card.h + em(2.4) + hint_h)) // 2)
         bot = g.image("bot.png", bot_h)
         g.surface.blit(bot, bot.get_rect(midtop=(g.w // 2, y)))
-        y += bot_h + g.em(1.5)
-        y += g.draw_text("Welcome to Purple Computer!", title_px, g.w // 2, y, "sans-bold", P.ACCENT, anchor="midtop").h + g.em(2.2)
-        x = (g.w - w) // 2
-        for (icon, text), h in zip(notes, heights):
-            g.draw_text(icon, px, x + icon_w // 2, y + g.line_height(px, "sans") // 2, "nerd", P.MUTED, anchor="center")
-            g.draw_markup(text, px, x + icon_w, y, "sans", P.TEXT, w - icon_w)
+        y += bot_h + em(1.4)
+        g.draw_text("Welcome to Purple Computer!", title_px, g.w // 2, y, "sans-bold", P.ACCENT, anchor="midtop")
+        card.midtop = (g.w // 2, y + title_h + em(1.8))
+        g.rect(P.SURFACE, card, radius=em(0.8))
+        y = card.y + pad
+        for (icon, text), (w, h) in zip(notes, sizes):
+            g.draw_text(icon, px, card.x + pad + icon_w // 2 - em(0.4), y + g.line_height(px, "sans") // 2, "nerd", P.ACCENT, anchor="center")
+            g.draw_markup(text, px, card.x + pad + icon_w, y, "sans", P.TEXT, card.w - icon_w - 2 * pad)
             y += h + gap
-        g.draw_text(self.hint, g.em(0.85), g.w // 2, g.h - g.em(2.5), "mono", P.MUTED, anchor="midbottom")
+        g.draw_text(self.hint, hint_px, g.w // 2, card.bottom + em(2.4), "sans", P.TEXT, anchor="midtop")
 
     def on_open(self):
         self._timer = self.app.timers.every(0.25, self._refresh)

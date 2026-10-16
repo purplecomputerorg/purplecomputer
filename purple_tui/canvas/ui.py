@@ -415,23 +415,27 @@ class Dialog(Overlay):
 
     def body_height(self, g: Gfx) -> int:
         px = g.em(0.98)
-        return sum(g.markup_size(line or " ", px, "mono", self.box_width(g) - 2 * g.vw(3))[1] for line in self.body_lines)
+        return sum(g.markup_size(line or " ", px, "mono", self.inner_width(g))[1] for line in self.body_lines)
 
     def box_width(self, g: Gfx) -> int:
         return g.vw(self.width_pct)
+
+    def inner_width(self, g: Gfx) -> int:
+        """The width draw_body gets; measure body text against this."""
+        return self.box_width(g) - 2 * g.vw(3)
 
     def draw(self, g: Gfx):
         if self.scrim:
             draw_scrim(g)
         pad = g.em(1.2)
-        hint_h = g.line_height(g.em(0.85), "mono") if self.hint else 0
+        hint_h = g.markup_size(self.hint, g.em(0.85), "mono", self.inner_width(g))[1] if self.hint else 0
         body_h = self.body_height(g)
         w = self.box_width(g)
         h = window_title_height(g, self.title) + pad + body_h + (pad // 2 if self.hint else 0) + hint_h + pad
         box = pygame.Rect(0, 0, w, h)
         box.center = (g.w // 2, g.h // 2)
         y = draw_window(g, box, self.title) + pad
-        inner = pygame.Rect(box.x + g.vw(3), y, w - 2 * g.vw(3), body_h)
+        inner = pygame.Rect(box.x + g.vw(3), y, self.inner_width(g), body_h)
         self.draw_body(g, inner)
         if self.hint:
             g.draw_markup(self.hint, g.em(0.85), inner.x, box.bottom - pad - hint_h, "mono", P.MUTED, inner.w, "center", P.SURFACE)
@@ -465,7 +469,7 @@ class Picker(Dialog):
         return g.em(3.2) if any(len(o) == 3 for o in self.options) else g.em(1.9)
 
     def body_height(self, g: Gfx) -> int:
-        desc = g.markup_size(self.DESCRIPTION, g.em(0.92), "mono", self.box_width(g))[1] + g.em(0.8) if self.DESCRIPTION else 0
+        desc = g.markup_size(self.DESCRIPTION, g.em(0.92), "mono", self.inner_width(g))[1] + g.em(0.8) if self.DESCRIPTION else 0
         return desc + len(self.options) * (self.option_height(g) + g.em(0.3))
 
     def draw_body(self, g: Gfx, rect: pygame.Rect):

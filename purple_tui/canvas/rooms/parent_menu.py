@@ -581,7 +581,7 @@ class _Entry(Dialog):
         self._error = ""
 
     def _field_y(self, g):
-        return g.markup_size(self._description, g.em(0.92), "mono", self.box_width(g) - 2 * g.vw(3), g.vh(0.4))[1] + g.em(1.4)
+        return g.markup_size(self._description, g.em(0.92), "mono", self.inner_width(g), g.vh(0.4))[1] + g.em(1.4)
 
     def body_height(self, g):
         return self._field_y(g) + field_height(g.em(1.05)) + g.em(0.8)

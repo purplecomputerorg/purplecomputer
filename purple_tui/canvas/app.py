@@ -173,8 +173,9 @@ class PurpleApp:
     # ------------------------------------------------------------------ settings
     def _load_settings(self):
         from ..settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
-                               get_music_looping, get_volume_level, get_volume_lock)
+                               get_music_looping, get_rooms_off, get_volume_level, get_volume_lock)
         self.g.all_caps = get_all_caps()
+        self._rooms_off = set(get_rooms_off())
         saved_volume = get_volume_level()
         self._volume_chosen = saved_volume is not None
         self.volume_level = VOLUME_DEFAULT if saved_volume is None else snap_volume(saved_volume)
@@ -188,6 +189,7 @@ class PurpleApp:
             self._code_panel_enabled = get_code_panel()
             self._music_looping_enabled = get_music_looping()
             self._music_key_switching_enabled = get_music_key_switching()
+            self.active_room = self.kid_rooms[0]
 
     # ------------------------------------------------------------------ lifecycle
     def run(self):
@@ -374,9 +376,25 @@ class PurpleApp:
     def room(self):
         return self.rooms[self.active_room]
 
+    @property
+    def kid_rooms(self) -> list:
+        """Room names a kid can go to, in tab order. Littles Mode's one room ignores what a parent turned off."""
+        rooms = [r for r in self.rooms if self._littles_mode or r not in self._rooms_off]
+        return rooms or list(self.rooms)
+
+    def set_room_off(self, name: str, off: bool):
+        from ..settings import set_room_off
+        set_room_off(name, off)
+        self._rooms_off = self._rooms_off - {name} | ({name} if off else set())
+        self._leave_closed_room()
+
+    def _leave_closed_room(self):
+        if self.active_room not in self.kid_rooms:
+            self.action_switch_room(self.kid_rooms[0])
+
     def action_switch_room(self, room_name: str):
-        if room_name not in self.rooms:
-            room_name = "play"
+        if room_name not in self.kid_rooms:
+            room_name = self.kid_rooms[0]
         if self._time_travel is not None:
             self._cancel_time_travel()
         if room_name == self.active_room:
@@ -745,6 +763,7 @@ class PurpleApp:
             self._code_panel_enabled = get_code_panel()
             self._music_looping_enabled = get_music_looping()
             self._music_key_switching_enabled = get_music_key_switching()
+            self._leave_closed_room()
         self.rooms["music"].on_littles_change()
         self.invalidate()
 
@@ -1533,7 +1552,7 @@ class PurpleApp:
         largest text up to em(0.92) at which the corners and the centered Esc
         pill and room tabs fit the frame side by side."""
         g = self.g
-        names = [(rid, f"{r.icon} {r.label}") for rid, r in self.rooms.items()] if tabs else []
+        names = [(rid, f"{self.rooms[rid].icon} {self.rooms[rid].label}") for rid in self.kid_rooms] if tabs else []
         reserve = self._legend_width() if self._legend_visible and not self._code_panel_active else 0
 
         def widths(px):

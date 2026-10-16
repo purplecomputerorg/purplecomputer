@@ -17,6 +17,7 @@ _defaults = {
     "code_panel": True,          # Whether the code panel can be opened (space hold)
     "music_looping": True,       # Whether music room loop recording can be triggered (enter hold)
     "music_key_switching": True, # Whether music room key switching (arrows) is enabled
+    "rooms_off": [],             # Built-in rooms a parent turned off, hidden from the Esc menu
     "rooms_on": {},              # Family rooms a parent turned on: "pack/room" -> Room.digest of what they turned on
     "all_caps": False,           # Whether all rendered text is uppercased at render time
     "volume_level": None,        # Last volume anyone set (0-100), restored on restart; None until then
@@ -83,6 +84,17 @@ def get_code_panel() -> bool:
 def set_code_panel(enabled: bool) -> None:
     settings = load_settings()
     settings["code_panel"] = enabled
+    save_settings(settings)
+
+
+def get_rooms_off() -> list:
+    off = load_settings()["rooms_off"]
+    return off if isinstance(off, list) else []
+
+
+def set_room_off(name: str, off: bool) -> None:
+    settings = load_settings()
+    settings["rooms_off"] = [r for r in get_rooms_off() if r != name] + ([name] if off else [])
     save_settings(settings)
 
 

@@ -234,6 +234,35 @@ class CodePanelScreen(_YesNo):
         return get_code_panel()
 
 
+class RoomsScreen(Picker):
+    """Each built-in room, on or off. The last room on stays on."""
+    title = "Rooms"
+    DESCRIPTION = "Only the rooms you turn on show in the Esc menu."
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.options = self._options()
+
+    def _options(self) -> list:
+        on = self.app.kid_rooms
+        def note(name):
+            return "Off" if name not in on else "On: the last room stays on" if len(on) == 1 else "On"
+        return [(name, r.label, note(name)) for name, r in self.app.rooms.items()] + [(None, "Done")]
+
+    def _on_confirm(self, name):
+        if name is None:
+            return self.close(True)
+        on = self.app.kid_rooms
+        if on != [name]:
+            self.app.set_room_off(name, name in on)
+            self.options = self._options()
+            self.app.invalidate()
+
+
+def _rooms_label(app) -> str:
+    return f"Rooms: {len(app.kid_rooms)} of {len(app.rooms)} On"
+
+
 def _room_state(room, on: dict) -> str:
     if on.get(room.key) == room.digest:
         return "on"
@@ -1190,6 +1219,7 @@ def _get_menu_items(app) -> list:
     names = {"music": "Music", "music_noscreen": "No-Screen Music", "art": "Art"}
     items.append(("menu-littles", f"Littles Mode: {names.get(littles, littles.title())}" if littles else "Littles Mode: Off"))
     if not littles:
+        items.append(("menu-rooms", _rooms_label(app)))
         items.append(("menu-code-panel", "Allow Code Space: Yes" if get_code_panel() else "Allow Code Space: No"))
         items.append(("menu-music-looping", "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"))
         items.append(("menu-music-key-switching", "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"))
@@ -1306,7 +1336,7 @@ class ParentMenu(Overlay):
             return
         handler = {
             "menu-littles": self._open_littles_mode, "menu-code-panel": self._open_code_panel,
-            "menu-family-rooms": self._open_family_rooms,
+            "menu-rooms": self._open_rooms, "menu-family-rooms": self._open_family_rooms,
             "menu-music-looping": self._open_music_looping, "menu-music-key-switching": self._open_music_key_switching,
             "menu-all-caps": self._open_all_caps, "menu-secret": self._open_secret_menu,
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),
@@ -1339,6 +1369,9 @@ class ParentMenu(Overlay):
                 self.app.room.close_code_panel()
             self._relabel("menu-code-panel", "Allow Code Space: Yes" if v else "Allow Code Space: No")
         self.app.push(CodePanelScreen(self.app), on_close=apply)
+
+    def _open_rooms(self):
+        self.app.push(RoomsScreen(self.app), on_close=lambda _: self._relabel("menu-rooms", _rooms_label(self.app)))
 
     def _open_family_rooms(self):
         self.app.push(FamilyRoomsScreen(self.app), on_close=lambda _: self._relabel("menu-family-rooms", _family_rooms_label()))

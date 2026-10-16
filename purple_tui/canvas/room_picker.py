@@ -47,9 +47,9 @@ def _row_width(n: int, card) -> float:
 class RoomPicker(Overlay):
     def __init__(self, app):
         super().__init__(app)
-        self.options = list(app.rooms.values())
+        self.options = [app.rooms[r] for r in app.kid_rooms]
         self.row = ROWS
-        self.col = list(app.rooms).index(app.active_room)
+        self.col = app.kid_rooms.index(app.active_room)
         code = app.room.has_code_panel and (app._code_panel_active or app._code_panel_enabled)
         self.tools = (["code"] if code else []) + (["colors"] if color_wheel.can_open(app.room) else []) \
             + ["time_travel", "save", "open", "print", "clear"]

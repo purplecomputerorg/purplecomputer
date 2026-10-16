@@ -39,15 +39,15 @@ from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from ..timeline import RoomTimeline
 from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
 from .color_recipe import draw_color_cap
-from .ui import HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
+from .ui import DOWN, LEFT, RIGHT, UP, HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ("blocks", "Blocks"))
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
 PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
                 printing.READY: "The printer is ready. Press Esc, then P"}
 ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE, "blocks": ICON_CUBE}
-ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "art": "Arrows move  ← ↑ ↓ →",
-               "blocks": "Arrows move  ← ↑ ↓ →"}
+ARROW_HINTS = {"play": f"Arrows scroll  {UP} {DOWN}", "art": f"Arrows move  {LEFT} {UP} {DOWN} {RIGHT}",
+               "blocks": f"Arrows move  {LEFT} {UP} {DOWN} {RIGHT}"}
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
 LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
@@ -1408,12 +1408,16 @@ class PurpleApp:
         g = self.g
         px = g.vh(LEGEND_TEXT_VH)
         size = round(px * 1.35)
-        pitch = size + 1
-        top = g.h - g.vh(1.5) - 4 * pitch
+        pitch = size + max(2, g.vh(0.25))
+        top = g.h - g.vh(STATUS_TEXT_VH) - (4 * pitch - (pitch - size)) // 2   # centered on the room tabs' line
         popped = None
+        pad = g.vh(0.6)
+        board = pygame.Rect(frame.x, top, round(12.5 * pitch) - (pitch - size), 4 * pitch - (pitch - size))
+        g.rect(P.HAIR, board.inflate(2 * pad, 2 * pad).move(pad, 0), width=1, radius=pad + size // 4)
+        board.x += pad
         for r, (row, stagger) in enumerate(LEGEND_ROWS):
             for i, key in enumerate(row):
-                cap = pygame.Rect(frame.x + round((stagger + i) * pitch), top + r * pitch, size, size)
+                cap = pygame.Rect(board.x + round((stagger + i) * pitch), top + r * pitch, size, size)
                 if key == self._legend_key:
                     popped = key, cap
                 else:

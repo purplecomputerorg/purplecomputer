@@ -9,13 +9,13 @@ from ... import palette as P
 from ... import printing
 from ...constants import SUPPORT_EMAIL
 from ...keyboard import ControlAction, NavigationAction
-from ..ui import Dialog, Picker
+from ..ui import DOWN, UP, Dialog, Picker
 
 SCROLL_LINES = 5
 
 
 class _ScrollablePage(Dialog):
-    hint = "▲ ▼ scroll   Esc back"
+    hint = f"{UP} {DOWN} scroll   Esc back"
     width_pct = 80
 
     def __init__(self, app):
@@ -87,7 +87,7 @@ class SoundCheckScreen(_ScrollablePage):
 
 class SupportInfoScreen(Picker):
     title = "Support info"
-    hint = "▲ ▼ choose   Enter open   Esc back"
+    hint = f"{UP} {DOWN} choose   Enter open   Esc back"
     OPTIONS = [(DeviceInfoScreen, "Device info"), (AudioInfoScreen, "Audio info"), (SoundCheckScreen, "Sound check")]
 
     def __init__(self, app):

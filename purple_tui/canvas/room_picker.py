@@ -14,7 +14,7 @@ from . import color_wheel, key_save
 from .paper import can_print
 from .rooms.blocks_room import ICON_CUBE
 from .save_wall import ICON_SAVE
-from .ui import Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_scrim
+from .ui import DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_scrim
 
 ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art"),
                 ("blocks", ICON_CUBE, "Blocks")]
@@ -215,7 +215,7 @@ class RoomPicker(Overlay):
 
 class VolumeModal(Dialog):
     title = "Volume"
-    hint = "◀ ▶ ▲ ▼ adjust   Enter close"
+    hint = f"{LEFT} {RIGHT} {UP} {DOWN} adjust   Enter close"
     width_pct = 40
 
     def body_height(self, g):

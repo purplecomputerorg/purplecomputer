@@ -20,7 +20,7 @@ from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationActi
 from ..loop_station import LOOPING, RECORDING
 from ..palette import get_key_color
 from .gfx import rgb
-from .ui import TextField, draw_bar
+from .ui import DOWN, LEFT, RIGHT, UP, TextField, draw_bar
 
 ROOM_KEYWORDS = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat',
@@ -77,7 +77,7 @@ GUIDE = {
         ("Again", [("repeat 4 right 1 up 1", "stairs")]),
     ],
 }
-PLACEHOLDER = "Type code, or press ↓ to try one"
+PLACEHOLDER = f"Type code, or press {DOWN} to try one"
 HUES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'brown']
 SEPARATORS = ",.;|"           # they split a code line, so an echo leaves them out
 ECHO_MAX = 40
@@ -371,7 +371,7 @@ class CodePanel:
 
     def _sub(self) -> str:
         if self.card is not None:
-            return "[dim]← → pick one    Enter: run it    ↑ back to typing[/]"
+            return f"[dim]{LEFT} {RIGHT} pick one    Enter: run it    {UP} back to typing[/]"
         if self.note[0] and self.field.value == self.note[0]:
             return f"[dim]{self.note[1]}[/]"
         return self.field.autocomplete_markup or f"[dim]{self.field.recall_text()}[/]"

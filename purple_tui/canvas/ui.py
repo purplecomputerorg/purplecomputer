@@ -16,6 +16,9 @@ from ..constants import ICON_ROBOT
 from .gfx import Gfx, mix, rgb
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 
+# Heavy arrows: Plex's ← → ↑ ↓ are too thin to read at hint size.
+LEFT, UP, DOWN, RIGHT = "⬅⬆⬇➡"
+
 # ----------------------------------------------------------------------------
 # Timers (asyncio-backed; HoldOrTap needs an object with .stop())
 # ----------------------------------------------------------------------------
@@ -434,7 +437,7 @@ class Picker(Dialog):
     """Vertical option list: up/down wrap, Enter confirms, Esc cancels.
     Options are (value, label) or (value, label, description)."""
 
-    hint = "▲ ▼ choose   Enter confirm   Esc cancel"
+    hint = f"{UP} {DOWN} choose   Enter confirm   Esc cancel"
     width_pct = 44
     OPTIONS: list = []
     DESCRIPTION = ""
@@ -564,7 +567,7 @@ def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", co
 
 
 def arrow_key_metrics(g: Gfx, px: int) -> tuple:
-    w, h = g.measure("↓", px, "mono")
+    w, h = g.measure(DOWN, px, "mono")
     return w + round(px * 1.4), h + round(px * 0.56), round(px * 0.2)
 
 
@@ -574,13 +577,13 @@ def arrow_keys_size(g: Gfx, px: int) -> tuple:
 
 
 def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Rect:
-    """Inverted-T keycaps, [↑] floating over [↓]; (x, y) is the bottom row's
+    """Inverted-T keycaps, up floating over down; (x, y) is the bottom row's
     midleft. Returns the cluster's rect."""
     key_w, key_h, space = arrow_key_metrics(g, px)
     mid = x + key_w // 2 + key_w + space
-    for i, glyph in enumerate("←↓→"):
+    for i, glyph in enumerate((LEFT, DOWN, RIGHT)):
         draw_keycap(g, glyph, px, mid + (i - 1) * (key_w + space), y, anchor="center", color=color)
-    draw_keycap(g, "↑", px, mid, y - key_h - space, anchor="center", color=color)
+    draw_keycap(g, UP, px, mid, y - key_h - space, anchor="center", color=color)
     w, h = arrow_keys_size(g, px)
     return pygame.Rect(x, y + key_h // 2 - h, w, h)
 

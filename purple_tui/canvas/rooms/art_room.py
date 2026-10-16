@@ -35,9 +35,9 @@ LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three 
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
 HINTS = {
     "littles": "Type to paint!",
-    "pen": "Brush is down! Arrows paint a trail. {Space} lifts the brush.",
+    "pen": "Brush down! Arrows paint. {Space} lifts it.",
     "erase": "Erasing! Arrows clear a trail.",
-    "paint": "Type to paint! Hold {Space} and move to paint a trail.",
+    "paint": "Type to paint! {Space} puts the brush down.",
     "write": "Type to write! Arrow keys move. {Enter} for a new line.",
 }
 

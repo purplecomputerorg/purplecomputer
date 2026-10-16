@@ -22,7 +22,7 @@ from ...music_constants import (
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..panels import CodePanel, Echo, LoopPanel, SpaceHold
-from ..ui import CODE_HINT, draw_key_hint, draw_label, draw_mode_switch
+from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
@@ -624,7 +624,7 @@ class MusicRoom:
     def arrow_hint(self) -> str:
         if not self.app._music_key_switching_enabled:
             return f"Key of {FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]}"
-        return f"Arrows change key: {FRIENDLY_KEY_NAMES[self.root_index]}  ← →"
+        return f"Arrows change key: {FRIENDLY_KEY_NAMES[self.root_index]}  {LEFT} {RIGHT}"
 
     def paper(self, g, size):
         """The kid's colors on the keyboard grid; quiet keys print as outlined letters."""

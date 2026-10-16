@@ -609,4 +609,4 @@ class MusicRoom(Room):
         cy = rect.centery
         if self._noscreen_dot:
             g.draw_text("●", g.vh(6), rect.centerx, cy - g.vh(10), "sans-heavy", self._noscreen_dot, anchor="center")
-        g.draw_markup(NOSCREEN_TEXT, g.vh(2.8), rect.x, cy - g.vh(4), "mono-bold", P.MUTED, rect.w, "center", P.SURFACE, g.vh(0.6))
+        g.draw_markup(NOSCREEN_TEXT, g.vh(1.9), rect.x, cy - g.vh(3), "mono", P.DIM, rect.w, "center", P.SURFACE, g.vh(0.5))

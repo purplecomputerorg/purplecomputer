@@ -596,7 +596,8 @@ class MusicRoom:
         if self._is_noscreen:
             return self._draw_noscreen(g, rect)
         em = g.em
-        head_h, hint_h = em(4.3), em(3.9)
+        head_h = em(4.3)
+        hint_h = em(1.0) if self.app._panel is not None else em(3.9)
         pad = em(1.6)
         self._draw_header(g, rect)
         grid = pygame.Rect(rect.x + pad, rect.y + head_h, rect.w - 2 * pad, rect.h - head_h - hint_h)

@@ -283,6 +283,10 @@ class MusicRoom:
             self._transition_timer = self.app.timers.every(0.03, self._transition_tick)
         self.app.invalidate()
 
+    def set_key(self, root_index: int):
+        if self.app._music_key_switching_enabled and root_index != self.root_index:
+            self.shift_root(root_index, 1 if root_index > self.root_index else -1)
+
     def _transition_tick(self):
         if self._transition and time.monotonic() - self._transition["start"] >= PITCH_TRANSITION_DURATION:
             self._transition = None
@@ -456,6 +460,7 @@ class MusicRoom:
                 color_fn=self.next_color,
                 flash_fn=self.flash_note,
                 set_letters_fn=lambda on: setattr(self, "letters_mode", on),
+                set_key_fn=self.set_key,
             )
             await runner.run(lines, self._current_mode())
             if runner.corrections and self.code_panel:

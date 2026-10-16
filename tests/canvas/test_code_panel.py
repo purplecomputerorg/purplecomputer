@@ -270,3 +270,9 @@ def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
         assert music.hold_progress() is None
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
     run(go())
+
+
+def test_music_recipe_pictures_put_higher_notes_higher():
+    from purple_tui.canvas.panels import _melody
+    assert _melody("asd") == ["..d", ".s.", "a.."]
+    assert _melody("asas") == [".s.s", "a.a."]

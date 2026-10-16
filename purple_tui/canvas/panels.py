@@ -19,32 +19,44 @@ from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_LOOP, ICON_ROBOT, ICON_TIME_
 from ..content import get_content
 from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ..loop_station import LOOPING, RECORDING
+from ..music_constants import CHROMATIC_NOTE_NAMES, GRID_KEYS, pitch_for
 from ..palette import get_key_color
 from .gfx import rgb
 from .ui import DOWN, LEFT, RIGHT, UP, TextField, draw_bar
 
 ROOM_KEYWORDS = {
-    'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat',
+    'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
               'marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', 'piano', 'electric'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step', 'turn', 'color',
             'paint', 'write', 'lift', 'pen', 'penup', 'pendown', 'repeat'],
     'blocks': ['left', 'right', 'up', 'down', 'back', 'front', 'forward', 'go', 'repeat'],
 }
+
+
+def _melody(notes: str) -> list:
+    """Music's picture: a cell per note left to right, higher up the higher it sounds."""
+    def pitch(ch):
+        r, c = next((r, row.index(ch.upper())) for r, row in enumerate(GRID_KEYS) if ch.upper() in row)
+        name, octave = pitch_for(r - 1, c, 0, 0)
+        return 12 * octave + CHROMATIC_NOTE_NAMES.index(name)
+    heights = [pitch(ch) for ch in notes]
+    return ["".join(ch if h == level else "." for ch, h in zip(notes, heights)) for level in sorted(set(heights), reverse=True)]
+
+
 # Finished programs to pick with ↓, each with a picture of what it makes:
-# rows of cells, '#' in the recipe's color, a letter in that key's color
-# (Music's notes, wrapped into a block).
+# rows of cells, '#' in the recipe's color, a letter in that key's color.
 RECIPES = {
     'art': [
+        ("asdfghjkl", "", ["asdfghjkl"]),
         ("red repeat 4 forward 6 spin", "#ED1C24", ["#######", "#.....#", "#.....#", "#.....#", "#.....#", "#.....#", "#######"]),
         ("blue repeat 4 right 2 down 2", "#1F75FE", ["###......", "..#......", "..###....", "....#....", "....###..", "......#..", "......###", "........#"]),
-        ("paint hello", "", ["hello"]),
         ("green repeat 3 up 3 right 2 down 3 right 2", "#48D370", ["###.###.###.", "#.#.#.#.#.#.", "#.#.#.#.#.#.", "#.###.###.##"]),
     ],
     'music': [
-        ("asdfghjkl", "", ["asd", "fgh", "jkl"]),
-        ("fast qwertyuiop", "", ["qwert", "yuiop"]),
-        ("repeat 3 asdf", "", ["asdf", "asdf", "asdf"]),
-        ("choose ukulele zxcvbnm", "", ["zxcv", "bnm."]),
+        ("asdfghjkl", "", _melody("asdfghjkl")),
+        ("fast qwertyuiop", "", _melody("qwertyuiop")),
+        ("repeat 3 asdf", "", _melody("asdf" * 3)),
+        ("choose ukulele zxcvbnm", "", _melody("zxcvbnm")),
     ],
     'blocks': [
         ("red up 5", "#ED1C24", ["#", "#", "#", "#", "#"]),
@@ -62,12 +74,13 @@ GUIDE = {
         ("Move", [("right 5", f"{RIGHT} five steps"), ("up 3", f"{UP} three steps")]),
         ("Turn", [("forward 6", "the way it points"), ("spin", "turn to the right"), ("turn left", "")]),
         ("Again", [("repeat 4 ...", "do it four times")]),
-        ("Letters", [("paint hi", "a color per letter"), ("write hi", "real letters")]),
+        ("Letters", [("asdf", "a color per key"), ("write hi", "real letters")]),
     ],
     'music': [
         ("Notes", [("asdf", "play those keys"), ("1234", "drums")]),
         ("Speed", [("fast asdf", "quick"), ("slow asdf", "slow")]),
-        ("Sound", [("choose ukulele", ""), ("choose accordion", ""), ("choose glockenspiel", "")]),
+        ("Sound", [("choose ukulele", "or marimba, accordion, glockenspiel")]),
+        ("Key", [("key g", "same keys, new notes: c g d f b flat")]),
         ("Again", [("repeat 3 asdf", "three times")]),
         ("Say", [("letters on", "keys say letters")]),
     ],

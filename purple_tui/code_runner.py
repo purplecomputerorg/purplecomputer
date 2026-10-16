@@ -231,18 +231,20 @@ class MusicCodeRunner:
         (re.compile(r'^letters\s+(\S+)\s*$', re.I), '_do_letters'),
         (re.compile(r'^(?:choose|instrument|select|use)\s+(.+)$', re.I), '_do_instrument'),
         (re.compile(r'^play\s+(.+)$', re.I), '_do_play'),
+        (re.compile(r'^key\s+(?:of\s+)?(.+?)\s*$', re.I), '_do_key'),
     ]
 
     # Command keywords for fuzzy matching
     _KEYWORD_VOCAB = ['letters', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
 
     def __init__(self, play_key_fn, set_instrument_fn=None,
-                 color_fn=None, flash_fn=None, set_letters_fn=None):
+                 color_fn=None, flash_fn=None, set_letters_fn=None, set_key_fn=None):
         self.play_key = play_key_fn
         self.set_instrument = set_instrument_fn
         self.color_fn = color_fn
         self.flash_fn = flash_fn
         self.set_letters = set_letters_fn
+        self.set_key = set_key_fn
         self.corrections: list[tuple[str, str]] = []
         self._original_text: str = ""
         self._correction_final: str = ""
@@ -408,6 +410,19 @@ class MusicCodeRunner:
             return True
         # Not an instrument: play as notes
         await self._play_notes(arg)
+        return True
+
+    async def _do_key(self, m) -> bool | None:
+        """key g: the same keys play in another friendly key. Without a
+        set_key_fn the words play as notes, as they always did."""
+        if not self.set_key:
+            await self._play_notes(m.group(0))
+            return True
+        from .music_constants import FRIENDLY_KEY_NAMES
+        name = re.sub(r'^bb$|\s*flat$', lambda f: 'b♭' if f.group(0) == 'bb' else '♭', m.group(1).lower())
+        names = [n.lower() for n in FRIENDLY_KEY_NAMES]
+        if name in names:
+            self.set_key(names.index(name))
         return True
 
     async def _play_notes(self, text: str) -> None:

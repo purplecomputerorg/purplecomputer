@@ -55,8 +55,8 @@ TITLE_STRIP_VH = 8            # air above the frame: computer name, title, batte
 STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
 STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the TUI's room bar
 TIMELINE_DEBOUNCE_S = 3.0
-LEGEND_TEXT_VH = 1.15         # letter size on the sticker keyboard in the bottom-left corner
-LEGEND_POP = 1.45             # the last key pressed grows by this much
+LEGEND_KEY_VH = 1.3           # key size on the sticker keyboard in the bottom-left corner
+LEGEND_POP_VH = 1.67          # letter size on the last key pressed, which pops out to fit it
 LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 1), (ZXCV_ROW, 1.5))   # even half-key stagger
 TIMELINE_MAX_WAIT_S = 15.0
 MAX_CODE_LINES = 200          # code lines kept with a room's state (Time Travel, saves)
@@ -1468,22 +1468,22 @@ class PurpleApp:
             g.draw_text(right, px, frame.right, y, "mono", P.MUTED, anchor="midright")
 
     def _legend_metrics(self) -> tuple:
-        """(letter px, key size, key pitch, outline pad) of the sticker keyboard."""
+        """(key size, key pitch, outline pad) of the sticker keyboard."""
         g = self.g
-        px = g.vh(LEGEND_TEXT_VH)
-        size = round(px * 1.35)
-        return px, size, size + max(2, g.vh(0.25)), g.vh(0.6)
+        size = g.vh(LEGEND_KEY_VH)
+        return size, size + max(2, g.vh(0.25)), g.vh(0.6)
 
     def _legend_width(self) -> int:
-        _, size, pitch, pad = self._legend_metrics()
+        size, pitch, pad = self._legend_metrics()
         return round(12.5 * pitch) - (pitch - size) + 2 * pad
 
     def _draw_legend(self, frame, bottom: int):
         """A tiny keyboard in the sticker colors, so a kid without stickers can
-        find a color before pressing; the last key pops out bigger. Its
+        find a color before pressing; only the last key, popped out bigger,
+        shows its letter. Its
         outline's bottom edge sits at `bottom`."""
         g = self.g
-        px, size, pitch, pad = self._legend_metrics()
+        size, pitch, pad = self._legend_metrics()
         board = pygame.Rect(frame.x + pad, 0, round(12.5 * pitch) - (pitch - size), 4 * pitch - (pitch - size))
         board.bottom = bottom - pad
         g.rect(P.HAIR, board.inflate(2 * pad, 2 * pad), width=1, radius=pad + size // 4)
@@ -1494,12 +1494,14 @@ class PurpleApp:
                 if key == self._legend_key:
                     popped = key, cap
                 else:
-                    draw_color_cap(g, _KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), cap, px, radius=size // 5)
+                    g.rect(get_key_color(key), cap, radius=size // 5)
         if popped:
             key, cap = popped
-            big = cap.inflate(round(size * (LEGEND_POP - 1)), round(size * (LEGEND_POP - 1)))
+            px = g.vh(LEGEND_POP_VH)
+            big = pygame.Rect(0, 0, round(px * 1.35), round(px * 1.35))
+            big.center = cap.center
             g.rect(P.BG, big.inflate(4, 4), radius=big.w // 4)
-            draw_color_cap(g, _KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), big, round(px * LEGEND_POP), radius=big.w // 5)
+            draw_color_cap(g, _KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), big, px, radius=big.w // 5)
 
     def _draw_status(self, frame, left=None, right=None, tabs=True):
         """The strip under the viewport: keyboard note, the Esc pill and room

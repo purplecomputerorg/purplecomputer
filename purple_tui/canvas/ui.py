@@ -197,17 +197,26 @@ class TextField:
         self.matches, self.exact_display = [], ""
         return True
 
-    @property
-    def autocomplete_markup(self) -> str:
-        if self.exact_display or not self.matches:
-            return self.exact_display
-        return self.match_words + "   [dim]⇥ Tab[/]"
+    def sub_hint(self, *keys: str) -> tuple:
+        """(lead markup, key hint) for the line under the field: the words Tab
+        would finish, else what the typed word makes and what Enter brings back."""
+        if self.matches:
+            return self.match_words, "{Tab}"
+        return self.exact_display, "   ".join(filter(None, [self.recall_text(keycap=True), *keys]))
+
+    def draw_sub(self, g: Gfx, x: int, y: int, px: int, *keys: str, hint: tuple | None = None):
+        """The line under the field; `hint` is a (lead, keys) pair in place of sub_hint's."""
+        lead, keys = hint or self.sub_hint(*keys)
+        if lead:
+            g.draw_markup(lead, px, x, y, "mono", P.MUTED)
+            x += g.markup_size(lead, px, "mono")[0] + 2 * px
+        draw_key_hint(g, keys, px, x, y + g.line_height(px, "mono") // 2, color=P.MUTED)
 
     @property
     def match_words(self) -> str:
         parts = []
         for word, color_hex, emoji in self.matches:
-            s = f"[dim]{word}[/]"
+            s = word
             if emoji:
                 s += f" {emoji}"
             if color_hex:

@@ -349,7 +349,7 @@ class CodePanel:
         self.field = TextField(keyword_autocomplete(room), validator=lambda w: w.lower() in keywords, context_autocomplete=True)
         if prefill:
             self.field.set(prefill)
-        self.note = (prefill, "That's the code for what you just made! Enter does it again, or type something new.")
+        self.note = (prefill, "Your code!  {Enter} again")
         self._replace = bool(prefill)   # the first letter typed starts fresh, like selected text
         self.recipes = RECIPES[room]
         self.card = None   # index of the picked recipe card while ↓ is in the cards
@@ -414,7 +414,7 @@ class CodePanel:
                 self.app.run_code(self.room, [text])
                 if from_card:
                     f.set(text)     # a recipe stays in the line, to change a number and run again
-                    self.note = (text, "Now change a number and press Enter again!")
+                    self.note = (text, "Change a number, then {Enter}")
             elif action.action == "backspace":
                 f.backspace()
             elif action.action == "space":
@@ -452,22 +452,23 @@ class CodePanel:
         self._back = max(0, min(len(lines), self._back + step))
         self.field.set(lines[-self._back] if self._back else "")
 
-    def _sub(self) -> str:
+    def _sub(self) -> str | None:
+        """The key hint under the line when the cards or a note own it, else None."""
         if self.card == self.CLOSE:
-            return f"[dim]Enter: put the code away    {RIGHT} examples    {UP} back to typing[/]"
+            return "{Enter} close"
         if self.card is not None:
-            return f"[dim]{LEFT} {RIGHT} pick one    Enter: run it    {UP} back to typing[/]"
+            return "{Enter} run it"
         if self.note[0] and self.field.value == self.note[0]:
-            return f"[dim]{self.note[1]}[/]"
-        return self.field.autocomplete_markup or f"[dim]{self.field.recall_text()}[/]"
+            return self.note[1]
+        return None
 
     def draw(self, g, rect):
         m, px, box_h, sub_px, gap, cards_h = self._layout(g)
         x, w = rect.x + g.em(0.8), rect.w - g.em(1.6)
         box = self.field.draw_boxed(g, x, rect.y + m, w, px, "Code", PLACEHOLDER)
         y = box.bottom + gap
-        sub_x = box.x + round(px * 0.55)
-        g.draw_markup(self._sub(), sub_px, sub_x, y, "mono", P.MUTED, x + w - sub_x, dim_to=P.SURFACE)
+        sub = self._sub()
+        self.field.draw_sub(g, box.x + round(px * 0.55), y, sub_px, hint=sub and ("", sub))
         y += g.line_height(sub_px, "mono") + gap
         self._draw_cards(g, pygame.Rect(box.x, y, x + w - box.x, cards_h))
         self._draw_close_hint(g, pygame.Rect(x, y, box.x - x - g.em(0.4), cards_h))
@@ -511,16 +512,16 @@ class CodePanel:
         g.rect(P.LINE, (rect.x, rect.y + g.em(0.9), 1, rect.h - g.em(1.8)))
         topic = guide_topic(self.room, self.field.value)
         x, w = rect.x + g.em(0.95), rect.w - g.em(1.7)
-        head_px, px = g.em(0.72), g.em(0.82)
+        head_px, px = g.em(0.9), g.em(0.82)
         bottom = rect.bottom - g.em(0.45)
         y = rect.y + g.em(0.9)
         word = topic[2] if topic else None
         for heading, rows in [topic[:2]] if topic else GUIDE[self.room]:
             code, gloss = rows[0]
             first_h = g.line_height(px, "mono") if code in (COLORS, ALL_COLORS) else _example_height(g, code, gloss, px, w)
-            if y + g.line_height(head_px, "sans") + g.em(0.3) + first_h > bottom:
+            if y + g.line_height(head_px, "mono-heavy") + g.em(0.35) + first_h > bottom:
                 break
-            y += g.draw_text(heading, head_px, x, y, "sans-bold", P.ACCENT).h + g.em(0.3)
+            y += g.draw_text(heading, head_px, x, y, "mono-heavy", P.ACCENT).h + g.em(0.35)
             for code, gloss in rows:
                 if code in (COLORS, ALL_COLORS):
                     h = g.draw_markup(self.colors if code == COLORS else self.all_colors, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
@@ -529,7 +530,7 @@ class CodePanel:
                 else:
                     _draw_example(g, code, gloss, px, x, y, w, word)
                 y += h + g.em(0.12)
-            y += g.em(0.4)
+            y += g.em(0.6)
 
 
 def _example_layout(g, code: str, gloss: str, px: int, w: int) -> tuple:

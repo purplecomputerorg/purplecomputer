@@ -47,10 +47,12 @@ class PlayEvaluator(SimpleEvaluator):
 
     def _format_number_with_dots(self, num, show_label=True, expression="", bead="●"):
         n = int(num) if float(num).is_integer() else 0
-        if not self.INLINE_MAX < n < 10 ** len(self.ABACUS_COLORS):
-            return super()._format_number_with_dots(num, show_label, expression, bead)
-        rods = f"{ABACUS_MARK}{n} {bead}{ABACUS_MARK}"
-        return f"{self._format_number(num)}\n{rods}" if show_label else rods
+        if self.INLINE_MAX < n < 10 ** len(self.ABACUS_COLORS):
+            rods = f"{ABACUS_MARK}{n} {bead}{ABACUS_MARK}"
+            return f"{self._format_number(num)}\n{rods}" if show_label else rods
+        out = super()._format_number_with_dots(num, show_label, expression, bead)
+        # A thin space, not a mono cell, so a row of dots reads as one group.
+        return re.sub("● ", "●\u2009", out) if bead == "●" else out
 
 
 def answer_parts(markup: str) -> list:
@@ -74,39 +76,38 @@ def abacus_rows(n: int) -> list:
 
 
 def abacus_size(g, n: int) -> tuple:
-    slot, bar = g.em(1.8), g.em(0.45)
+    slot, bar = g.em(1.45), g.em(0.1)
     return slot, bar, len(str(n)) * slot + 2 * bar
 
 
 def draw_abacus(g, n: int, bead: str, x: int, y: int, frame, ground):
-    """A framed abacus: counted beads slid left, the rest waiting right,
+    """Bare rods: counted beads slid left, the rest waiting right,
     the place names before each rod and its digit after it."""
     rows = abacus_rows(n)
     slot, bar, h = abacus_size(g, n)
-    px = g.em(1.3)
+    px, step = g.em(1.3), g.em(1.35)
     label_w = max(g.measure(name, px, "mono-bold")[0] for name, _, _ in rows)
-    box = pygame.Rect(x + label_w + g.em(0.9), y, ABACUS_SLOTS * slot + 2 * bar, h)
-    rod_h, bead_h = max(2, g.em(0.15)), g.em(1.25)
+    box = pygame.Rect(x + label_w + g.em(0.9), y, ABACUS_SLOTS * step, h)
+    rod_h, bead_h = max(2, g.em(0.12)), g.em(0.85)
     for i, (name, digit, color) in enumerate(rows):
         cy = y + bar + i * slot + slot // 2
         g.draw_text(name, px, box.x - g.em(0.9), cy, "mono-bold", color, anchor="midright")
         g.rect(mix(frame, ground, 0.35), (box.x, cy - rod_h // 2, box.w, rod_h))
         for k in range(9):
             at = k if k < digit else k + ABACUS_SLOTS - 9
-            cell = pygame.Rect(box.x + bar + at * slot, cy - slot // 2, slot, slot)
+            cell = pygame.Rect(box.x + at * step, cy - slot // 2, step, slot)
             draw_bead(g, bead if k < digit else None, color, cell, bead_h, mix(frame, ground, 0.78))
         g.draw_text(str(digit), px, box.right + g.em(0.9), cy, "mono-bold", color, anchor="midleft")
-    g.rect(frame, box, width=bar, radius=bar)
 
 
 def draw_bead(g, bead, color, cell, h, idle):
     """bead None is one not yet counted; a color block becomes a bead of its color."""
     hexes = re.findall(r"\[on (#[0-9a-fA-F]{6})\]", bead or "")
     if bead and bead != "●" and strip_markup(bead).strip():
-        w, bh = g.markup_size(bead, g.em(1.1), "mono-bold")
-        g.draw_markup(bead, g.em(1.1), cell.centerx - w // 2, cell.centery - bh // 2, "mono-bold")
+        w, bh = g.markup_size(bead, g.em(0.95), "mono-bold")
+        g.draw_markup(bead, g.em(0.95), cell.centerx - w // 2, cell.centery - bh // 2, "mono-bold")
         return
-    pill = pygame.Rect(0, 0, cell.w - g.em(0.2), h)
+    pill = pygame.Rect(0, 0, cell.w - g.em(0.4), h)
     pill.center = cell.center
     fill = idle if bead is None else hexes[0] if hexes else color
     g.rect(fill, pill, radius=h // 2)

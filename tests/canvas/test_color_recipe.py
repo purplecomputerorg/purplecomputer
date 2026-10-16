@@ -36,20 +36,3 @@ def test_held_letter_shows_only_after_the_hold_and_clears_on_release():
         await _key(app, KeyCode.KEY_R, False)
         assert app.held_letter is None
     run(go())
-
-
-def test_a_chord_records_the_mix_until_the_next_letter():
-    async def go():
-        for room_name in ("art", "blocks"):
-            app = make_app()
-            app.action_switch_room(room_name)
-            room = app.rooms[room_name]
-            await _tap(app, KeyCode.KEY_R)
-            await _key(app, KeyCode.KEY_R, True)
-            await _tap(app, KeyCode.KEY_F)
-            await _key(app, KeyCode.KEY_R, False)
-            red, yellow = get_key_color("r"), get_key_color("f")
-            assert room._last_mix == ([("r", red), ("f", yellow)], mix_colors_paint([red, yellow])), room_name
-            await _tap(app, KeyCode.KEY_C)
-            assert room._last_mix is None, room_name
-    run(go())

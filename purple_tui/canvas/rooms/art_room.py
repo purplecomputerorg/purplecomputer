@@ -184,7 +184,6 @@ class ArtRoom:
         self._paint_mode = True
         self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""
-        self._last_mix = None         # color_recipe.made() for the mix just made, until the next brush
         self._ink = None              # ABC letters' color from the wheel; None: light, or black/white over paint
         self._wheel_spots = {}        # per mode
         self._pen_down = False
@@ -263,7 +262,7 @@ class ArtRoom:
 
     def set_brush_color(self, color: str, key: str = ""):
         if self._paint_mode:
-            self._last_key_char, self._last_key_color, self._last_mix = key, color, None
+            self._last_key_char, self._last_key_color = key, color
         else:
             self._ink = None if color == P.TEXT else color
         self._post_paint_mode_changed()
@@ -298,7 +297,7 @@ class ArtRoom:
     def restore_timeline_state(self, state: dict):
         self._grid.clear()
         self._painted_positions.clear()
-        self._last_paint_pos = self._last_mix = None
+        self._last_paint_pos = None
         for key, val in state.items():
             if key.startswith("c:"):
                 x, y = (int(n) for n in key[2:].split(","))
@@ -516,10 +515,8 @@ class ArtRoom:
         pos = self._last_paint_pos
         if pos is None or self._last_key_char != held_key or not self._select_brush(char):
             return False
-        before = self._grid[pos][2]
         self._paint_at(pos)
         self.set_brush_color(self._grid[pos][2], char)
-        self._last_mix = color_recipe.made(held_key, before, char, self._grid[pos][2])
         return True
 
     def _select_brush(self, char: str) -> bool:
@@ -718,7 +715,7 @@ class ArtRoom:
             draw_key_hint(g, HINTS[key], g.vh(1.9), foot.x, foot.centery)
             if not self.app._littles_mode:
                 color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled,
-                                           self._paint_mode and color_recipe.hint_row(self._last_key_char, self._last_mix))
+                                           self._paint_mode and color_recipe.hint_row(self._last_key_char))
 
     def _hint_key(self) -> str:
         if self._erasing:

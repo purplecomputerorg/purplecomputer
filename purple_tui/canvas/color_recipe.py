@@ -1,7 +1,7 @@
 """Mixing paint, drawn as a sum of keycaps in their sticker colors, so a kid
 who can't read yet sees that one key and another make a third color. Art and
-Blocks show an example in the hint row (or the mix just made, in its real
-colors), and a '[R] + [?]' badge over the spot a held letter would mix into."""
+Blocks show an example in the hint row, and a '[R] + [?]' badge over the
+spot a held letter would mix into."""
 
 import pygame
 
@@ -31,11 +31,6 @@ def example(key: str) -> tuple:
     return terms, mix_colors_paint([c for _, c in terms])
 
 
-def made(held: str, before: str, added: str, after: str) -> tuple:
-    """(terms, result) for a mix just made; the first term is the held key only if it was still its own color."""
-    return [(held if before == get_key_color(held) else "", before), (added, get_key_color(added))], after
-
-
 def _pieces(terms, result, lead: str) -> list:
     """(text, fill) pieces: fill "" is a plain word, None an empty keycap."""
     out = [(lead, "")] if lead else []
@@ -58,7 +53,7 @@ def recipe_size(g, terms, result, px: int, lead: str = "") -> tuple:
 
 def draw_recipe(g, terms, result, px: int, x: int, y: int, anchor="midright", ink=P.MUTED, lead: str = "") -> pygame.Rect:
     """`terms` are (key, color) keycaps, a None color an empty keycap for the
-    key still to come; '= result' follows as a round blob when given."""
+    key still to come; '= result' follows as a blank keycap of the mixed color when given."""
     pieces = _pieces(terms, result, lead)
     ws, h, gap = _widths(g, pieces, px)
     box = pygame.Rect((0, 0), recipe_size(g, terms, result, px, lead))
@@ -73,7 +68,7 @@ def draw_recipe(g, terms, result, px: int, x: int, y: int, anchor="midright", in
             g.rect(P.LINE, cap, width=1, radius=round(px * 0.5))
             g.draw_text(text, px, cap.centerx, cap.centery, "mono", ink, anchor="center")
         else:
-            draw_color_cap(g, text, fill, cap, px, radius=None if text else h // 2)
+            draw_color_cap(g, text, fill, cap, px)
     return box
 
 
@@ -83,10 +78,8 @@ def draw_color_cap(g, text: str, fill: str, cap: pygame.Rect, px: int, radius: i
     g.draw_text(text, px, cap.centerx, cap.centery, "mono-bold", P.ON_PRIMARY if P.luminance(fill) > 0.5 else "#FFFFFF", anchor="center")
 
 
-def hint_row(key: str, last: tuple | None) -> dict:
-    """draw_recipe's arguments for the hint row: the mix just made, else an example."""
-    if last:
-        return dict(terms=last[0], result=last[1], ink=P.TEXT)
+def hint_row(key: str) -> dict:
+    """draw_recipe's arguments for the hint row's example."""
     terms, result = example(key)
     return dict(terms=terms, result=result, lead="Hold", ink=P.DIM)
 

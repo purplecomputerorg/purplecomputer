@@ -88,7 +88,6 @@ class BlocksRoom:
         self._hover = 0               # chosen cursor height; 0 = resting on the column
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
-        self._last_mix = None         # color_recipe.made() for the mix just made, until the next brush
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where the next letter goes after it, even onto a floating block
         self._dir = "right"           # the way typing builds: a key of WRAP
@@ -186,7 +185,7 @@ class BlocksRoom:
         self._x, self._z = min(max(x, 0), WIDTH - 1), min(max(z, 0), DEPTH - 1)
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._last = self._next = self._last_mix = None
+        self._last = self._next = None
         self._dir = "right"
         self.echo.reset()
         self._changed()
@@ -272,9 +271,8 @@ class BlocksRoom:
         mixed in. Holding on, each next key mixes in too."""
         if not self._last or self._last[1] != held_key or self._last[0] not in self._blocks:
             return False
-        pos, before = self._last[0], self._blocks[self._last[0]]
-        self._color = self._blocks[pos] = mix_colors_paint([before, self._color])
-        self._last_mix = color_recipe.made(held_key, before, self._key, self._color)
+        pos = self._last[0]
+        self._color = self._blocks[pos] = mix_colors_paint([self._blocks[pos], self._color])
         self._last = (pos, self._key)
         self.app.set_legend(self._color, visible=True)
         self._changed()
@@ -312,7 +310,7 @@ class BlocksRoom:
         return self._color
 
     def set_brush_color(self, color: str, key: str = ""):
-        self._key, self._color, self._last_mix = key, color, None
+        self._key, self._color = key, color
         self.app.set_legend(color, visible=True)
 
     def _set_color(self, char: str):
@@ -617,7 +615,7 @@ class BlocksRoom:
         if foot_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             draw_key_hint(g, HINT, g.vh(1.9), foot.x, foot.centery)
-            color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._last_mix))
+            color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key))
 
     def _draw_hold_badge(self, g, ox, oy, area):
         held = self._last and self.app._panel is None and color_recipe.held_key(self.app, self._last[1])

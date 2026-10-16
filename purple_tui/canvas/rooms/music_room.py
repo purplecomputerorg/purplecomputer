@@ -11,7 +11,7 @@ import pygame
 from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
-from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_MUSIC
+from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import mixer_generation, mixer_ready_for_play, warm_mixer
@@ -22,7 +22,7 @@ from ...music_constants import (
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..panels import CodePanel, Echo, LoopPanel, SpaceHold
-from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch
+from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hold_status
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
@@ -585,7 +585,8 @@ class MusicRoom:
         if self._enter_down_at is not None and self.enter_hold.is_pending and \
                 (self.loop.state != IDLE or self.app._music_looping_enabled):
             doing = "record a loop" if self.loop.state == IDLE else "stop the loop"
-            return min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD), f"Keep holding Enter to {doing}"
+            return hold_status(min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD),
+                               "Enter", ICON_LOOP, doing)
         return self.space.status(self.code_panel is not None)
 
     def cursor_fraction(self, vp):

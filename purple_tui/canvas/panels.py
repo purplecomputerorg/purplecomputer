@@ -22,7 +22,7 @@ from ..loop_station import LOOPING, RECORDING
 from ..music_constants import GRID_KEYS
 from ..palette import get_key_color
 from .gfx import rgb
-from .ui import DOWN, LEFT, RIGHT, UP, TextField, draw_bar
+from .ui import DOWN, LEFT, RIGHT, UP, TextField, draw_bar, hold_status
 
 ROOM_KEYWORDS = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
@@ -323,9 +323,9 @@ class SpaceHold:
         self.app.invalidate()
 
     def status(self, panel_open: bool):
-        """(fraction, what letting it fill does) while Space is held, else None."""
+        """ui.hold_status while Space is held, else None."""
         p = self.progress()
-        return None if p is None else (p, f"Keep holding Space to {'close' if panel_open else 'write'} code")
+        return None if p is None else hold_status(p, "Space", ICON_ROBOT, f"{'close' if panel_open else 'write'} code")
 
     def progress(self):
         if self._down_at is None or not self.hold.is_pending:

@@ -39,7 +39,7 @@ from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from ..timeline import RoomTimeline
 from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
 from .color_recipe import draw_color_cap
-from .ui import DOWN, LEFT, RIGHT, UP, HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
+from .ui import DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ("blocks", "Blocks"))
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
@@ -114,6 +114,8 @@ class PurpleApp:
         self._volume_lock = None
         self._brightness_hint_showing = False
         self._toasts: list[Toast] = []
+        self._hold_nudge = None
+        self._hold_nudge_timer = None
         self._overlays: list[Overlay] = []
         self._littles_mode = None
         self._code_panel_enabled = True
@@ -497,6 +499,24 @@ class PurpleApp:
         self.invalidate()
 
     async def _dispatch_keyboard_action(self, action):
+        before = self.hold_progress()
+        await self._dispatch_action(action)
+        if before and before[0] > HOLD_QUIET and self.hold_progress() is None and \
+                isinstance(action, ControlAction) and action.action in ("space", "enter") and not action.is_down:
+            self._show_hold_nudge(before[2])
+
+    def _show_hold_nudge(self, text):
+        """A hold let go after its bar showed: say what holding on would have done."""
+        if self._hold_nudge_timer:
+            self._hold_nudge_timer.stop()
+        self._hold_nudge = text
+        self._hold_nudge_timer = self.timers.after(HOLD_NUDGE_SECONDS, self._clear_hold_nudge)
+
+    def _clear_hold_nudge(self):
+        self._hold_nudge = self._hold_nudge_timer = None
+        self.invalidate()
+
+    async def _dispatch_action(self, action):
         self._frame_stats.key()
         self._record_user_activity()
         self.invalidate()
@@ -1388,11 +1408,13 @@ class PurpleApp:
             if content.w < vp.w:
                 self._panel.draw_side(g, pygame.Rect(content.right, content.y, vp.right - content.right, content.h))
         hold = self.hold_progress()
-        if hold and hold[0] > HOLD_QUIET:
+        bar = ((hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1]) if hold and hold[0] > HOLD_QUIET else \
+            (0, self._hold_nudge) if self._hold_nudge and not hold else None
+        if bar:
             # over the open panel, or the room's whole footer, so nothing peeks out around it
             strip = pygame.Rect(vp.x, content.bottom, vp.w, vp.bottom - content.bottom) if self._panel else \
                 pygame.Rect(vp.x, vp.bottom - g.em(4.5), vp.w, g.em(4.5))
-            draw_hold_bar(g, strip, (hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1])
+            draw_hold_bar(g, strip, *bar)
         g.surface.set_clip(None)
         esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
         if self._legend_visible and not self._code_panel_active:   # keys type code there, not colors

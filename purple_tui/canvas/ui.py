@@ -729,6 +729,12 @@ def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=P.PR
 
 
 HOLD_QUIET = 0.35   # of a hold: before this, nothing shows, so a tap never flashes the bar
+HOLD_NUDGE_SECONDS = 1.5
+
+
+def hold_status(fraction: float, key: str, icon: str, verb: str) -> tuple:
+    """(fraction, bar label, hint left up when the hold is let go early)."""
+    return fraction, f"{icon} {verb[0].upper()}{verb[1:]}", f"Hold {key} longer to {verb}"
 
 
 def draw_hold_bar(g: Gfx, rect: pygame.Rect, progress: float, label: str):

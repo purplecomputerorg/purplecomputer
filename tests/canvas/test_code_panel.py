@@ -6,6 +6,7 @@ import asyncio
 import pytest
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
+from purple_tui.constants import ICON_LOOP, ICON_ROBOT
 from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name
 from purple_tui.keyboard import NavigationAction
 from purple_tui.palette import get_key_color
@@ -263,13 +264,30 @@ def test_holding_space_says_what_a_full_hold_does():
         app, art = await _room("art")
         await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
         await asyncio.sleep(0.3)
-        assert art.hold_progress()[1] == "Keep holding Space to write code"
+        assert art.hold_progress()[1] == f"{ICON_ROBOT} Write code"
         await asyncio.sleep(0.7)
         await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
         assert art.code_panel is not None
         await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
         await asyncio.sleep(0.3)
-        assert art.hold_progress()[1] == "Keep holding Space to close code"
+        assert art.hold_progress()[1] == f"{ICON_ROBOT} Close code"
+        app._draw()
+    run(go())
+
+
+def test_letting_go_of_a_shown_hold_leaves_a_hint_a_tap_does_not():
+    from purple_tui.keyboard import ControlAction
+
+    async def go():
+        app, art = await _room("art")
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
+        assert app._hold_nudge is None
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
+        await asyncio.sleep(0.5)
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
+        assert art.code_panel is None
+        assert app._hold_nudge == "Hold Space longer to write code"
         app._draw()
     run(go())
 
@@ -282,7 +300,7 @@ def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
         app._music_looping_enabled = True
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
         await asyncio.sleep(0.3)
-        assert music.hold_progress()[1] == "Keep holding Enter to record a loop"
+        assert music.hold_progress()[1] == f"{ICON_LOOP} Record a loop"
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
         app._music_looping_enabled = False
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))

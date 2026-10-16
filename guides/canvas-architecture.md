@@ -115,7 +115,8 @@ is no evdev (`PURPLE_NO_EVDEV=1`, macOS), `sdl_input.pump` turns the window's
 key events into the same `RawKeyEvent`s.
 
 Hold gestures for Space (code panel) and Enter (loop station) show a bar
-(`ui.draw_hold_bar`); the Esc hold for the Parent Menu shows nothing.
+(`ui.draw_hold_bar`), and one let go early leaves a
+"Hold Space longer to ..." hint up for a moment; the Esc hold for the Parent Menu shows nothing.
 `panels.SpaceHold` holds the tap versus hold policy Music, Art and Blocks
 share (rooms with `HAS_CODE`). Their code panel opens holding `panels.Echo`'s
 code for the newest stroke drawn or played by hand, and ↓ steps into

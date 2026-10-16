@@ -912,7 +912,7 @@ class SimpleEvaluator:
     def _chunk_words(self, words: list[str]) -> list[str]:
         """Single source of truth for grouping space-separated words into
         semantic units. A unit is [count] [adjective... color]* [noun]: the
-        count binds to the noun if present, else multiplies the trailing color.
+        count binds to the noun if present, else multiplies the color after it.
         Color modifiers are emitted before their noun so the color-as-adjective
         renderer can attach them ("2 bright red dogs" -> ["bright red", "2 dogs"]).
         """
@@ -969,13 +969,13 @@ class SimpleEvaluator:
                 i += 1
                 continue
 
-            groups.extend(color_chunks)
             if noun:
+                groups.extend(color_chunks)
                 groups.append(f"{count} {noun}" if count else noun)
             elif count and color_chunks:
-                groups[-1] = f"{count} {color_chunks[-1]}"
-            elif count:
-                groups.append(count)
+                groups.extend([f"{count} {color_chunks[0]}"] + color_chunks[1:])
+            else:
+                groups.extend(color_chunks or [count])
             i = j
 
         return groups
@@ -1243,11 +1243,12 @@ class SimpleEvaluator:
         """Parse color term -> list of hex colors (repeated for multiplication)."""
         term = self._normalize_mult(term.strip()).lower()
 
-        # "N color", "N * M color", "6 / 2 color"
+        # "N color", "N * M color", "6 / 2 color", "N dark color"
         words = term.split()
         count, j = self._take_count(words, 0)
-        if count is not None and len(words) - j == 1 and 1 <= int(count) <= 20:
-            if h := self._get_color(words[j]):
+        if count is not None and j < len(words) and 1 <= int(count) <= 20:
+            rest = " ".join(words[j:])
+            if h := self._get_color(rest) or (self.content.get_modified_color(rest) or [None])[0]:
                 return [h] * int(count)
 
         # "color * N"

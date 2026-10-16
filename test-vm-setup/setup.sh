@@ -167,15 +167,15 @@ xsetroot -solid "#2d1b4e"
 matchbox-window-manager -use_titlebar no &
 sleep 0.5
 
-# Launch Alacritty
-exec alacritty
+# Launch Alacritty (args, e.g. `-e cmd`, come from startx-purple)
+exec alacritty "$@"
 XINITRC
 chmod +x ~/.xinitrc
 
 # startx wrapper: always uses our .xinitrc (Ubuntu's system xinitrc ignores it)
 sudo tee /usr/local/bin/startx-purple > /dev/null << 'SPX'
 #!/bin/bash
-exec /usr/bin/startx "$HOME/.xinitrc"
+exec /usr/bin/startx "$HOME/.xinitrc" "$@"
 SPX
 sudo chmod +x /usr/local/bin/startx-purple
 

@@ -326,13 +326,13 @@ class PlayRoom(Room):
             self.app.invalidate()
 
     def _speak(self, input_text: str, result: str, entry, echo: str = ""):
-        """The answer, then the second language's words for it."""
+        """The answer in the interface language, then the second language's words for it."""
         from ...tts import _dbg, speak_many
         speakable = self.evaluator._make_speakable(input_text, result)
         _dbg(f"speakable len={len(speakable)} head={speakable[:60]!r}")
         if not speakable:
             return
-        texts = [speakable] + ([(echo, i18n.second_language())] if echo else [])
+        texts = [i18n.speech_item(speakable)] + ([(echo, i18n.second_language())] if echo else [])
         started = speak_many(texts,
                              on_playing=lambda i: self.app.call_from_thread(self._set_speech, entry, "playing"),
                              on_done=lambda: self.app.call_from_thread(self._set_speech, entry, ""))
@@ -356,7 +356,7 @@ class PlayRoom(Room):
         def on_done():
             for _, e in items:
                 self.app.call_from_thread(self._set_speech, e, "")
-        if not speak_many([s for s, _ in items], on_playing=on_playing, on_done=on_done):
+        if not speak_many([i18n.speech_item(s) for s, _ in items], on_playing=on_playing, on_done=on_done):
             for _, e in items:
                 self._set_speech(e, "filtered")
                 self.app.timers.after(1.5, lambda e=e: self._set_speech(e, ""))

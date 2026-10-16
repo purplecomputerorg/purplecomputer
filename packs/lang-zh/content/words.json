@@ -1,219 +1,273 @@
 {
  "cat": [
   "猫",
-  "māo"
+  "māo",
+  "只"
  ],
  "dog": [
   "狗",
-  "gǒu"
+  "gǒu",
+  "只"
  ],
  "elephant": [
   "大象",
-  "dà xiàng"
+  "dà xiàng",
+  "头"
  ],
  "lion": [
   "狮子",
-  "shī zi"
+  "shī zi",
+  "只"
  ],
  "tiger": [
   "老虎",
-  "lǎo hǔ"
+  "lǎo hǔ",
+  "只"
  ],
  "bear": [
   "熊",
-  "xióng"
+  "xióng",
+  "只"
  ],
  "panda": [
   "熊猫",
-  "xióng māo"
+  "xióng māo",
+  "只"
  ],
  "koala": [
   "考拉",
-  "kǎo lā"
+  "kǎo lā",
+  "只"
  ],
  "pig": [
   "猪",
-  "zhū"
+  "zhū",
+  "只"
  ],
  "cow": [
   "牛",
-  "niú"
+  "niú",
+  "头"
  ],
  "horse": [
   "马",
-  "mǎ"
+  "mǎ",
+  "匹"
  ],
  "unicorn": [
   "独角兽",
-  "dú jiǎo shòu"
+  "dú jiǎo shòu",
+  "只"
  ],
  "rabbit": [
   "兔子",
-  "tù zi"
+  "tù zi",
+  "只"
  ],
  "mouse": [
   "老鼠",
-  "lǎo shǔ"
+  "lǎo shǔ",
+  "只"
  ],
  "hamster": [
   "仓鼠",
-  "cāng shǔ"
+  "cāng shǔ",
+  "只"
  ],
  "fox": [
   "狐狸",
-  "hú li"
+  "hú li",
+  "只"
  ],
  "monkey": [
   "猴子",
-  "hóu zi"
+  "hóu zi",
+  "只"
  ],
  "chicken": [
   "鸡",
-  "jī"
+  "jī",
+  "只"
  ],
  "penguin": [
   "企鹅",
-  "qǐ é"
+  "qǐ é",
+  "只"
  ],
  "bird": [
   "鸟",
-  "niǎo"
+  "niǎo",
+  "只"
  ],
  "duck": [
   "鸭子",
-  "yā zi"
+  "yā zi",
+  "只"
  ],
  "owl": [
   "猫头鹰",
-  "māo tóu yīng"
+  "māo tóu yīng",
+  "只"
  ],
  "frog": [
   "青蛙",
-  "qīng wā"
+  "qīng wā",
+  "只"
  ],
  "turtle": [
   "乌龟",
-  "wū guī"
+  "wū guī",
+  "只"
  ],
  "snake": [
   "蛇",
-  "shé"
+  "shé",
+  "条"
  ],
  "dinosaur": [
   "恐龙",
-  "kǒng lóng"
+  "kǒng lóng",
+  "只"
  ],
  "trex": [
   "霸王龙",
-  "bà wáng lóng"
+  "bà wáng lóng",
+  "只"
  ],
  "whale": [
   "鲸鱼",
-  "jīng yú"
+  "jīng yú",
+  "头"
  ],
  "dolphin": [
   "海豚",
-  "hǎi tún"
+  "hǎi tún",
+  "只"
  ],
  "fish": [
   "鱼",
-  "yú"
+  "yú",
+  "条"
  ],
  "octopus": [
   "章鱼",
-  "zhāng yú"
+  "zhāng yú",
+  "只"
  ],
  "butterfly": [
   "蝴蝶",
-  "hú dié"
+  "hú dié",
+  "只"
  ],
  "bee": [
   "蜜蜂",
-  "mì fēng"
+  "mì fēng",
+  "只"
  ],
  "ladybug": [
   "瓢虫",
-  "piáo chóng"
+  "piáo chóng",
+  "只"
  ],
  "snail": [
   "蜗牛",
-  "wō niú"
+  "wō niú",
+  "只"
  ],
  "crab": [
   "螃蟹",
-  "páng xiè"
+  "páng xiè",
+  "只"
  ],
  "bug": [
   "虫子",
-  "chóng zi"
+  "chóng zi",
+  "只"
  ],
  "zebra": [
   "斑马",
-  "bān mǎ"
+  "bān mǎ",
+  "只"
  ],
  "giraffe": [
   "长颈鹿",
-  "cháng jǐng lù"
+  "cháng jǐng lù",
+  "只"
  ],
  "hippo": [
   "河马",
-  "hé mǎ"
+  "hé mǎ",
+  "头"
  ],
  "gorilla": [
   "大猩猩",
-  "dà xīng xing"
+  "dà xīng xing",
+  "只"
  ],
  "wolf": [
   "狼",
-  "láng"
+  "láng",
+  "只"
  ],
  "deer": [
   "鹿",
-  "lù"
+  "lù",
+  "只"
  ],
  "sheep": [
   "羊",
-  "yáng"
+  "yáng",
+  "只"
  ],
  "goat": [
   "山羊",
-  "shān yáng"
+  "shān yáng",
+  "只"
  ],
  "camel": [
   "骆驼",
-  "luò tuo"
+  "luò tuo",
+  "匹"
  ],
  "kangaroo": [
   "袋鼠",
-  "dài shǔ"
+  "dài shǔ",
+  "只"
  ],
  "sloth": [
   "树懒",
-  "shù lǎn"
+  "shù lǎn",
+  "只"
  ],
  "hedgehog": [
   "刺猬",
-  "cì wei"
+  "cì wei",
+  "只"
  ],
  "raccoon": [
   "浣熊",
-  "huàn xióng"
+  "huàn xióng",
+  "只"
  ],
  "squirrel": [
   "松鼠",
-  "sōng shǔ"
+  "sōng shǔ",
+  "只"
  ],
  "bat": [
   "蝙蝠",
-  "biān fú"
+  "biān fú",
+  "只"
  ],
  "seal": [
   "海豹",
-  "hǎi bào"
+  "hǎi bào",
+  "只"
  ],
  "shark": [
   "鲨鱼",
-  "shā yú"
+  "shā yú",
+  "条"
  ],
  "jellyfish": [
   "水母",
@@ -221,87 +275,108 @@
  ],
  "starfish": [
   "海星",
-  "hǎi xīng"
+  "hǎi xīng",
+  "只"
  ],
  "shrimp": [
   "虾",
-  "xiā"
+  "xiā",
+  "只"
  ],
  "lobster": [
   "龙虾",
-  "lóng xiā"
+  "lóng xiā",
+  "只"
  ],
  "squid": [
   "鱿鱼",
-  "yóu yú"
+  "yóu yú",
+  "条"
  ],
  "ant": [
   "蚂蚁",
-  "mǎ yǐ"
+  "mǎ yǐ",
+  "只"
  ],
  "spider": [
   "蜘蛛",
-  "zhī zhū"
+  "zhī zhū",
+  "只"
  ],
  "scorpion": [
   "蝎子",
-  "xiē zi"
+  "xiē zi",
+  "只"
  ],
  "mosquito": [
   "蚊子",
-  "wén zi"
+  "wén zi",
+  "只"
  ],
  "cricket": [
   "蟋蟀",
-  "xī shuài"
+  "xī shuài",
+  "只"
  ],
  "worm": [
   "虫子",
-  "chóng zi"
+  "chóng zi",
+  "条"
  ],
  "parrot": [
   "鹦鹉",
-  "yīng wǔ"
+  "yīng wǔ",
+  "只"
  ],
  "flamingo": [
   "火烈鸟",
-  "huǒ liè niǎo"
+  "huǒ liè niǎo",
+  "只"
  ],
  "peacock": [
   "孔雀",
-  "kǒng què"
+  "kǒng què",
+  "只"
  ],
  "swan": [
   "天鹅",
-  "tiān é"
+  "tiān é",
+  "只"
  ],
  "rooster": [
   "公鸡",
-  "gōng jī"
+  "gōng jī",
+  "只"
  ],
  "turkey": [
   "火鸡",
-  "huǒ jī"
+  "huǒ jī",
+  "只"
  ],
  "eagle": [
   "老鹰",
-  "lǎo yīng"
+  "lǎo yīng",
+  "只"
  ],
  "dove": [
   "鸽子",
-  "gē zi"
+  "gē zi",
+  "只"
  ],
  "crocodile": [
   "鳄鱼",
-  "è yú"
+  "è yú",
+  "条"
  ],
  "lizard": [
   "蜥蜴",
-  "xī yì"
+  "xī yì",
+  "只"
  ],
  "dragon": [
   "龙",
-  "lóng"
+  "lóng",
+  "条"
  ],
  "fairy": [
   "仙女",
@@ -453,43 +528,53 @@
  ],
  "star": [
   "星星",
-  "xīng xing"
+  "xīng xing",
+  "颗"
  ],
  "rainbow": [
   "彩虹",
-  "cǎi hóng"
+  "cǎi hóng",
+  "道"
  ],
  "cloud": [
   "云",
-  "yún"
+  "yún",
+  "朵"
  ],
  "rain": [
   "雨",
-  "yǔ"
+  "yǔ",
+  "场"
  ],
  "snow": [
   "雪",
-  "xuě"
+  "xuě",
+  "场"
  ],
  "snowflake": [
   "雪花",
-  "xuě huā"
+  "xuě huā",
+  "片"
  ],
  "flower": [
   "花",
-  "huā"
+  "huā",
+  "朵"
  ],
  "tree": [
   "树",
-  "shù"
+  "shù",
+  "棵"
  ],
  "plant": [
   "植物",
-  "zhí wù"
+  "zhí wù",
+  "棵"
  ],
  "leaf": [
   "叶子",
-  "yè zi"
+  "yè zi",
+  "片"
  ],
  "mushroom": [
   "蘑菇",
@@ -497,71 +582,88 @@
  ],
  "rose": [
   "玫瑰",
-  "méi gui"
+  "méi gui",
+  "朵"
  ],
  "sunflower": [
   "向日葵",
-  "xiàng rì kuí"
+  "xiàng rì kuí",
+  "朵"
  ],
  "tulip": [
   "郁金香",
-  "yù jīn xiāng"
+  "yù jīn xiāng",
+  "朵"
  ],
  "blossom": [
   "花朵",
-  "huā duǒ"
+  "huā duǒ",
+  "朵"
  ],
  "mountain": [
   "山",
-  "shān"
+  "shān",
+  "座"
  ],
  "volcano": [
   "火山",
-  "huǒ shān"
+  "huǒ shān",
+  "座"
  ],
  "beach": [
   "沙滩",
-  "shā tān"
+  "shā tān",
+  "片"
  ],
  "island": [
   "岛",
-  "dǎo"
+  "dǎo",
+  "座"
  ],
  "ocean": [
   "大海",
-  "dà hǎi"
+  "dà hǎi",
+  "片"
  ],
  "desert": [
   "沙漠",
-  "shā mò"
+  "shā mò",
+  "片"
  ],
  "forest": [
   "森林",
-  "sēn lín"
+  "sēn lín",
+  "片"
  ],
  "cactus": [
   "仙人掌",
-  "xiān rén zhǎng"
+  "xiān rén zhǎng",
+  "棵"
  ],
  "tornado": [
   "龙卷风",
-  "lóng juǎn fēng"
+  "lóng juǎn fēng",
+  "场"
  ],
  "wind": [
   "风",
-  "fēng"
+  "fēng",
+  "阵"
  ],
  "ice": [
   "冰",
-  "bīng"
+  "bīng",
+  "块"
  ],
  "web": [
   "蜘蛛网",
-  "zhī zhū wǎng"
+  "zhī zhū wǎng",
+  "张"
  ],
  "planet": [
   "星球",
-  "xīng qiú"
+  "xīng qiú",
+  "颗"
  ],
  "ufo": [
   "飞碟",
@@ -569,7 +671,8 @@
  ],
  "comet": [
   "彗星",
-  "huì xīng"
+  "huì xīng",
+  "颗"
  ],
  "earth": [
   "地球",
@@ -585,7 +688,8 @@
  ],
  "banana": [
   "香蕉",
-  "xiāng jiāo"
+  "xiāng jiāo",
+  "根"
  ],
  "orange": [
   "橙子",
@@ -593,11 +697,13 @@
  ],
  "grape": [
   "葡萄",
-  "pú tao"
+  "pú tao",
+  "颗"
  ],
  "strawberry": [
   "草莓",
-  "cǎo méi"
+  "cǎo méi",
+  "颗"
  ],
  "watermelon": [
   "西瓜",
@@ -609,7 +715,8 @@
  ],
  "cherry": [
   "樱桃",
-  "yīng tao"
+  "yīng tao",
+  "颗"
  ],
  "lemon": [
   "柠檬",
@@ -633,7 +740,8 @@
  ],
  "blueberry": [
   "蓝莓",
-  "lán méi"
+  "lán méi",
+  "颗"
  ],
  "pear": [
   "梨",
@@ -649,7 +757,8 @@
  ],
  "hotdog": [
   "热狗",
-  "rè gǒu"
+  "rè gǒu",
+  "根"
  ],
  "taco": [
   "塔可",
@@ -657,11 +766,13 @@
  ],
  "fries": [
   "薯条",
-  "shǔ tiáo"
+  "shǔ tiáo",
+  "根"
  ],
  "popcorn": [
   "爆米花",
-  "bào mǐ huā"
+  "bào mǐ huā",
+  "颗"
  ],
  "pretzel": [
   "椒盐卷饼",
@@ -677,15 +788,18 @@
  ],
  "cheese": [
   "奶酪",
-  "nǎi lào"
+  "nǎi lào",
+  "块"
  ],
  "bacon": [
   "培根",
-  "péi gēn"
+  "péi gēn",
+  "片"
  ],
  "pancake": [
   "煎饼",
-  "jiān bing"
+  "jiān bing",
+  "张"
  ],
  "icecream": [
   "冰淇淋",
@@ -697,15 +811,18 @@
  ],
  "cookie": [
   "饼干",
-  "bǐng gān"
+  "bǐng gān",
+  "块"
  ],
  "candy": [
   "糖果",
-  "táng guǒ"
+  "táng guǒ",
+  "颗"
  ],
  "chocolate": [
   "巧克力",
-  "qiǎo kè lì"
+  "qiǎo kè lì",
+  "块"
  ],
  "donut": [
   "甜甜圈",
@@ -725,11 +842,13 @@
  ],
  "carrot": [
   "胡萝卜",
-  "hú luó bo"
+  "hú luó bo",
+  "根"
  ],
  "corn": [
   "玉米",
-  "yù mǐ"
+  "yù mǐ",
+  "根"
  ],
  "broccoli": [
   "西兰花",
@@ -749,31 +868,38 @@
  ],
  "garlic": [
   "大蒜",
-  "dà suàn"
+  "dà suàn",
+  "头"
  ],
  "milk": [
   "牛奶",
-  "niú nǎi"
+  "niú nǎi",
+  "杯"
  ],
  "juice": [
   "果汁",
-  "guǒ zhī"
+  "guǒ zhī",
+  "杯"
  ],
  "coffee": [
   "咖啡",
-  "kā fēi"
+  "kā fēi",
+  "杯"
  ],
  "tea": [
   "茶",
-  "chá"
+  "chá",
+  "杯"
  ],
  "peanut": [
   "花生",
-  "huā shēng"
+  "huā shēng",
+  "颗"
  ],
  "lollipop": [
   "棒棒糖",
-  "bàng bàng táng"
+  "bàng bàng táng",
+  "根"
  ],
  "sandwich": [
   "三明治",
@@ -781,27 +907,33 @@
  ],
  "soup": [
   "汤",
-  "tāng"
+  "tāng",
+  "碗"
  ],
  "noodle": [
   "面条",
-  "miàn tiáo"
+  "miàn tiáo",
+  "碗"
  ],
  "pasta": [
   "意大利面",
-  "yì dà lì miàn"
+  "yì dà lì miàn",
+  "碗"
  ],
  "rice": [
   "米饭",
-  "mǐ fàn"
+  "mǐ fàn",
+  "碗"
  ],
  "water": [
   "水",
-  "shuǐ"
+  "shuǐ",
+  "杯"
  ],
  "heart": [
   "爱心",
-  "ài xīn"
+  "ài xīn",
+  "颗"
  ],
  "ball": [
   "球",
@@ -813,27 +945,33 @@
  ],
  "gift": [
   "礼物",
-  "lǐ wù"
+  "lǐ wù",
+  "份"
  ],
  "book": [
   "书",
-  "shū"
+  "shū",
+  "本"
  ],
  "pencil": [
   "铅笔",
-  "qiān bǐ"
+  "qiān bǐ",
+  "支"
  ],
  "crayon": [
   "蜡笔",
-  "là bǐ"
+  "là bǐ",
+  "支"
  ],
  "art": [
   "画画",
-  "huà huà"
+  "huà huà",
+  "幅"
  ],
  "music": [
   "音乐",
-  "yīn yuè"
+  "yīn yuè",
+  "首"
  ],
  "drum": [
   "鼓",
@@ -841,71 +979,88 @@
  ],
  "guitar": [
   "吉他",
-  "jí tā"
+  "jí tā",
+  "把"
  ],
  "piano": [
   "钢琴",
-  "gāng qín"
+  "gāng qín",
+  "架"
  ],
  "rocket": [
   "火箭",
-  "huǒ jiàn"
+  "huǒ jiàn",
+  "枚"
  ],
  "car": [
   "汽车",
-  "qì chē"
+  "qì chē",
+  "辆"
  ],
  "bus": [
   "公交车",
-  "gōng jiāo chē"
+  "gōng jiāo chē",
+  "辆"
  ],
  "train": [
   "火车",
-  "huǒ chē"
+  "huǒ chē",
+  "列"
  ],
  "airplane": [
   "飞机",
-  "fēi jī"
+  "fēi jī",
+  "架"
  ],
  "boat": [
   "船",
-  "chuán"
+  "chuán",
+  "艘"
  ],
  "bike": [
   "自行车",
-  "zì xíng chē"
+  "zì xíng chē",
+  "辆"
  ],
  "house": [
   "房子",
-  "fáng zi"
+  "fáng zi",
+  "座"
  ],
  "castle": [
   "城堡",
-  "chéng bǎo"
+  "chéng bǎo",
+  "座"
  ],
  "tent": [
   "帐篷",
-  "zhàng peng"
+  "zhàng peng",
+  "顶"
  ],
  "school": [
   "学校",
-  "xué xiào"
+  "xué xiào",
+  "所"
  ],
  "headphones": [
   "耳机",
-  "ěr jī"
+  "ěr jī",
+  "副"
  ],
  "phone": [
   "手机",
-  "shǒu jī"
+  "shǒu jī",
+  "部"
  ],
  "camera": [
   "相机",
-  "xiàng jī"
+  "xiàng jī",
+  "台"
  ],
  "computer": [
   "电脑",
-  "diàn nǎo"
+  "diàn nǎo",
+  "台"
  ],
  "clock": [
   "钟",
@@ -913,31 +1068,38 @@
  ],
  "lamp": [
   "灯",
-  "dēng"
+  "dēng",
+  "盏"
  ],
  "key": [
   "钥匙",
-  "yào shi"
+  "yào shi",
+  "把"
  ],
  "umbrella": [
   "雨伞",
-  "yǔ sǎn"
+  "yǔ sǎn",
+  "把"
  ],
  "glasses": [
   "眼镜",
-  "yǎn jìng"
+  "yǎn jìng",
+  "副"
  ],
  "hat": [
   "帽子",
-  "mào zi"
+  "mào zi",
+  "顶"
  ],
  "shoe": [
   "鞋",
-  "xié"
+  "xié",
+  "只"
  ],
  "boots": [
   "靴子",
-  "xuē zi"
+  "xuē zi",
+  "双"
  ],
  "shirt": [
   "衬衫",
@@ -945,11 +1107,13 @@
  ],
  "pants": [
   "裤子",
-  "kù zi"
+  "kù zi",
+  "条"
  ],
  "dress": [
   "裙子",
-  "qún zi"
+  "qún zi",
+  "条"
  ],
  "coat": [
   "外套",
@@ -957,27 +1121,33 @@
  ],
  "scarf": [
   "围巾",
-  "wéi jīn"
+  "wéi jīn",
+  "条"
  ],
  "gloves": [
   "手套",
-  "shǒu tào"
+  "shǒu tào",
+  "副"
  ],
  "socks": [
   "袜子",
-  "wà zi"
+  "wà zi",
+  "双"
  ],
  "cap": [
   "帽子",
-  "mào zi"
+  "mào zi",
+  "顶"
  ],
  "tie": [
   "领带",
-  "lǐng dài"
+  "lǐng dài",
+  "条"
  ],
  "ring": [
   "戒指",
-  "jiè zhi"
+  "jiè zhi",
+  "枚"
  ],
  "purse": [
   "包包",
@@ -989,19 +1159,23 @@
  ],
  "scissors": [
   "剪刀",
-  "jiǎn dāo"
+  "jiǎn dāo",
+  "把"
  ],
  "hammer": [
   "锤子",
-  "chuí zi"
+  "chuí zi",
+  "把"
  ],
  "wrench": [
   "扳手",
-  "bān shou"
+  "bān shou",
+  "把"
  ],
  "teddy": [
   "小熊",
-  "xiǎo xióng"
+  "xiǎo xióng",
+  "只"
  ],
  "puzzle": [
   "拼图",
@@ -1009,11 +1183,13 @@
  ],
  "dice": [
   "骰子",
-  "tóu zi"
+  "tóu zi",
+  "颗"
  ],
  "kite": [
   "风筝",
-  "fēng zheng"
+  "fēng zheng",
+  "只"
  ],
  "slide": [
   "滑梯",
@@ -1029,11 +1205,13 @@
  ],
  "sword": [
   "剑",
-  "jiàn"
+  "jiàn",
+  "把"
  ],
  "shield": [
   "盾牌",
-  "dùn pái"
+  "dùn pái",
+  "面"
  ],
  "bell": [
   "铃铛",
@@ -1041,11 +1219,13 @@
  ],
  "door": [
   "门",
-  "mén"
+  "mén",
+  "扇"
  ],
  "bed": [
   "床",
-  "chuáng"
+  "chuáng",
+  "张"
  ],
  "bath": [
   "浴缸",
@@ -1057,27 +1237,33 @@
  ],
  "soap": [
   "肥皂",
-  "féi zào"
+  "féi zào",
+  "块"
  ],
  "candle": [
   "蜡烛",
-  "là zhú"
+  "là zhú",
+  "根"
  ],
  "map": [
   "地图",
-  "dì tú"
+  "dì tú",
+  "张"
  ],
  "chair": [
   "椅子",
-  "yǐ zi"
+  "yǐ zi",
+  "把"
  ],
  "rock": [
   "石头",
-  "shí tou"
+  "shí tou",
+  "块"
  ],
  "wood": [
   "木头",
-  "mù tou"
+  "mù tou",
+  "块"
  ],
  "bubble": [
   "泡泡",
@@ -1089,11 +1275,13 @@
  ],
  "window": [
   "窗户",
-  "chuāng hu"
+  "chuāng hu",
+  "扇"
  ],
  "broom": [
   "扫帚",
-  "sào zhou"
+  "sào zhou",
+  "把"
  ],
  "bucket": [
   "水桶",
@@ -1101,15 +1289,18 @@
  ],
  "ladder": [
   "梯子",
-  "tī zi"
+  "tī zi",
+  "把"
  ],
  "mirror": [
   "镜子",
-  "jìng zi"
+  "jìng zi",
+  "面"
  ],
  "feather": [
   "羽毛",
-  "yǔ máo"
+  "yǔ máo",
+  "根"
  ],
  "wheel": [
   "轮子",
@@ -1117,59 +1308,73 @@
  ],
  "spoon": [
   "勺子",
-  "sháo zi"
+  "sháo zi",
+  "把"
  ],
  "fork": [
   "叉子",
-  "chā zi"
+  "chā zi",
+  "把"
  ],
  "toothbrush": [
   "牙刷",
-  "yá shuā"
+  "yá shuā",
+  "把"
  ],
  "helicopter": [
   "直升机",
-  "zhí shēng jī"
+  "zhí shēng jī",
+  "架"
  ],
  "tractor": [
   "拖拉机",
-  "tuō lā jī"
+  "tuō lā jī",
+  "辆"
  ],
  "ambulance": [
   "救护车",
-  "jiù hù chē"
+  "jiù hù chē",
+  "辆"
  ],
  "firetruck": [
   "消防车",
-  "xiāo fáng chē"
+  "xiāo fáng chē",
+  "辆"
  ],
  "police": [
   "警车",
-  "jǐng chē"
+  "jǐng chē",
+  "辆"
  ],
  "taxi": [
   "出租车",
-  "chū zū chē"
+  "chū zū chē",
+  "辆"
  ],
  "truck": [
   "卡车",
-  "kǎ chē"
+  "kǎ chē",
+  "辆"
  ],
  "scooter": [
   "滑板车",
-  "huá bǎn chē"
+  "huá bǎn chē",
+  "辆"
  ],
  "motorcycle": [
   "摩托车",
-  "mó tuō chē"
+  "mó tuō chē",
+  "辆"
  ],
  "ship": [
   "轮船",
-  "lún chuán"
+  "lún chuán",
+  "艘"
  ],
  "canoe": [
   "独木舟",
-  "dú mù zhōu"
+  "dú mù zhōu",
+  "艘"
  ],
  "soccer": [
   "足球",
@@ -1361,7 +1566,8 @@
  ],
  "fire": [
   "火",
-  "huǒ"
+  "huǒ",
+  "团"
  ],
  "sparkle": [
   "闪闪",
@@ -1373,27 +1579,33 @@
  ],
  "crown": [
   "皇冠",
-  "huáng guān"
+  "huáng guān",
+  "顶"
  ],
  "gem": [
   "宝石",
-  "bǎo shí"
+  "bǎo shí",
+  "颗"
  ],
  "medal": [
   "奖牌",
-  "jiǎng pái"
+  "jiǎng pái",
+  "枚"
  ],
  "trophy": [
   "奖杯",
-  "jiǎng bēi"
+  "jiǎng bēi",
+  "座"
  ],
  "flag": [
   "旗子",
-  "qí zi"
+  "qí zi",
+  "面"
  ],
  "lightning": [
   "闪电",
-  "shǎn diàn"
+  "shǎn diàn",
+  "道"
  ],
  "skull": [
   "骷髅",
@@ -1401,7 +1613,8 @@
  ],
  "eye": [
   "眼睛",
-  "yǎn jing"
+  "yǎn jing",
+  "只"
  ],
  "brain": [
   "大脑",
@@ -1409,11 +1622,13 @@
  ],
  "tooth": [
   "牙齿",
-  "yá chǐ"
+  "yá chǐ",
+  "颗"
  ],
  "bone": [
   "骨头",
-  "gǔ tou"
+  "gǔ tou",
+  "根"
  ],
  "nose": [
   "鼻子",
@@ -1421,35 +1636,43 @@
  ],
  "tongue": [
   "舌头",
-  "shé tou"
+  "shé tou",
+  "条"
  ],
  "ear": [
   "耳朵",
-  "ěr duo"
+  "ěr duo",
+  "只"
  ],
  "mouth": [
   "嘴巴",
-  "zuǐ ba"
+  "zuǐ ba",
+  "张"
  ],
  "hand": [
   "手",
-  "shǒu"
+  "shǒu",
+  "只"
  ],
  "foot": [
   "脚",
-  "jiǎo"
+  "jiǎo",
+  "只"
  ],
  "leg": [
   "腿",
-  "tuǐ"
+  "tuǐ",
+  "条"
  ],
  "arm": [
   "胳膊",
-  "gē bo"
+  "gē bo",
+  "条"
  ],
  "muscle": [
   "肌肉",
-  "jī ròu"
+  "jī ròu",
+  "块"
  ],
  "circle": [
   "圆形",
@@ -1489,7 +1712,8 @@
  ],
  "present": [
   "礼物",
-  "lǐ wù"
+  "lǐ wù",
+  "份"
  ],
  "firework": [
   "烟花",

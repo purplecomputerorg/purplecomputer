@@ -2,8 +2,10 @@
 
 Purple ships Spanish (`packs/lang-es`) and Mandarin Chinese, Simplified (`packs/lang-zh`), as language packs. A parent picks two things in the parent menu:
 
-- **Language**: the interface (menus, hints, messages) in that language.
-- **Second Language**: Play shows and says that language's word next to the English ones a kid types (`dog` gives 🐶 and "🐶 perro" or "🐶 狗 gǒu"), and understands words typed in it (`perro`, `gou`, `狗`).
+- **Language**: the interface (menus, hints, messages) in that language, and Play's voice: Play says its answers in it (see Speech).
+- **Second Language**: Play shows and says that language's word next to the words a kid types (`dog` gives 🐶 and "🐶 perro" or "🐶 狗 gǒu"), and understands words typed in it (`perro`, `gou`, `狗`). When the Language isn't English, English is a choice here too.
+
+Both languages' words type the same emoji and colors as their English. When a word is in both the Language and English (Spanish `papa` is potato, English `papa` is dad), the Language wins; a second language never takes an English word.
 
 Canvas UI only. The Textual UI stays English.
 
@@ -33,6 +35,16 @@ Keeping up: `just python scripts/i18n_strings.py` counts what each pack is missi
 `speech_filter.filter_speech` checks each installed pack's `blocked.txt` before the English list, so a Spanish or Chinese word is silenced even when the kid's settings are English. The Chinese typing dictionary drops the same words (`scripts/build_lang_zh.py` reads `blocked.txt`, plus a wider list of things typing shouldn't offer). `tests/canvas/test_languages.py` checks that every Play word in every pack can still be said, which is how a collision like Spanish "fucsia" against the English list gets caught. To edit a list, decode it, change it, and encode it again (`base64 -d` / `base64`).
 
 ## Speech
+
+Play works in English inside; only its spoken line is translated, by `i18n.spoken`, from the pack's `language.json` `speech` object:
+
+- `words`: Play's English joining words (`plus`, `divided by`, `equals`, `what is`...) in the language.
+- Known words become the pack's word; a word typed in the language stays as typed. Anything else (names, sentences) is left for the language's voice to read.
+- A number before a thing is said with `count`, a template over `{n}`, `{word}`, `{plural}` and `{measure}`: Spanish `"{n} {plural}"` ("2 perros"), Mandarin `"{n}{measure}{word}"` ("两只狗"). `numbers` respells a number there (Mandarin 2 is 两).
+- `plural`: `[regex, replacement]` rules tried in order on the first word ("estrellas de mar"); they also make the plural forms Play understands typed.
+- `measure`: the default counting word; a word's own goes third in its `words.json` entry (`"dog": ["狗", "gǒu", "只"]`).
+
+Numbers stay digits: each voice reads them in its own language.
 
 Each pack names a Piper model (`es_MX-ald-medium`, `zh_CN-huayan-medium`, about 63 MB each, downloaded by the image build and `scripts/install_piper_voice.sh`). The speech worker loads a language's model on first use and keeps it. There is no flite fallback for other languages: no Piper means no speech in them. The Mandarin voice's tones come from espeak-ng's phonemizer; have a native speaker listen before relying on it.
 

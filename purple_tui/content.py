@@ -333,14 +333,20 @@ class ContentManager:
         }
 
     def _load_language_words(self) -> None:
-        """Words in the parent's languages make the same emoji and colors as
-        their English, without taking over an English word."""
-        from .i18n import active_languages, aliases
+        """Words in the parent's languages make the same emoji and colors as their
+        English. Only the interface language takes over an English word it shares."""
+        from .i18n import active_languages, aliases, interface_language
+        main = interface_language()
         for lang in active_languages():
             for typed, english in aliases(lang).items():
-                for table in (self.emojis, self.colors):
-                    if english in table and typed not in self.emojis and typed not in self.colors:
-                        table[typed] = table[english]
+                tables = [t for t in (self.emojis, self.colors) if english in t]
+                if typed == english or not tables or (lang is not main and (typed in self.emojis or typed in self.colors)):
+                    continue
+                values = [(t, t[english]) for t in tables]
+                self.emojis.pop(typed, None)
+                self.colors.pop(typed, None)
+                for t, value in values:
+                    t[typed] = value
 
     def _load_pack(self, pack_dir: Path, user: bool = False) -> None:
         """Load content from a single pack directory"""

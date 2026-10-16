@@ -27,7 +27,7 @@ _defaults = {
     "secret_unlocked": False,    # Family secret menu revealed via the Ctrl+codeword gesture
     "voice": "natural",          # Which synthesizer speaks: "natural" (Piper) or "quick" (flite)
     "language": "en",            # Interface language code (a language pack), "en" = English
-    "second_language": None,     # Language Play shows and says beside English words; None = off
+    "second_language": None,     # Language Play shows and says beside typed words; None = off
 }
 
 
@@ -223,7 +223,7 @@ def set_language(code: str) -> None:
 
 
 def get_second_language() -> str | None:
-    """The language Play shows and says next to English words, or None."""
+    """The language Play shows and says beside typed words ("en" when the interface isn't English), or None."""
     return load_settings()["second_language"]
 
 

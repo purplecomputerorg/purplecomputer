@@ -370,9 +370,9 @@
   "\nArrows change key  [←][→]": "\nFlechas cambian el tono  [←][→]",
   "Language": "Idioma",
   "English": "English",
-  "The language Purple's menus and messages are in": "El idioma de los menús y mensajes de Purple",
+  "The language Purple's menus, messages, and voice are in": "El idioma de los menús, mensajes y voz de Purple",
   "Second Language": "Segundo idioma",
-  "Play shows and says words in this language next to English": "Juega muestra y dice palabras en este idioma junto al inglés",
+  "Play shows and says words in this language too": "Juega también muestra y dice palabras en este idioma",
   "Language: {0}": "Idioma: {0}",
   "Second Language: {0}": "Segundo idioma: {0}"
 }

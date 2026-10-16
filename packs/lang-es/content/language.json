@@ -1,1 +1,4 @@
-{"code": "es", "name": "Español", "english_name": "Spanish", "voice": "es_MX-ald-medium"}
+{"code": "es", "name": "Español", "english_name": "Spanish", "voice": "es_MX-ald-medium",
+ "speech": {"words": {"plus": "más", "minus": "menos", "times": "por", "divided by": "entre", "equals": "es igual a", "and": "y", "what is": "cuánto es"},
+            "count": "{n} {plural}",
+            "plural": [["z$", "ces"], ["ús$", "uses"], ["és$", "eses"], ["s$", "s"], ["ón$", "ones"], ["án$", "anes"], ["ín$", "ines"], ["[aeiouáéíóú]$", "\\g<0>s"], ["$", "es"]]}}

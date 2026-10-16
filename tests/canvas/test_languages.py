@@ -2,6 +2,7 @@
 language beside English words in Play, and pinyin picked with the number keys."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -13,11 +14,14 @@ from purple_tui.canvas.ui import TextField
 from purple_tui.pack_manager import check_pack
 
 
-def make_pack(root, code, strings=None, words=None, typing=None, voice=None):
+SPANISH_SPEECH = json.loads((Path(__file__).resolve().parents[2] / "packs/lang-es/content/language.json").read_text())["speech"]
+
+
+def make_pack(root, code, strings=None, words=None, typing=None, voice=None, speech=None):
     pack = root / f"lang-{code}"
     (pack / "content").mkdir(parents=True)
     (pack / "manifest.json").write_text(json.dumps({"id": pack.name, "name": code, "version": "1.0.0", "type": "language"}))
-    files = {"language.json": {"code": code, "name": code.upper(), "english_name": code, "voice": voice},
+    files = {"language.json": {"code": code, "name": code.upper(), "english_name": code, "voice": voice, "speech": speech or {}},
              "strings.json": strings or {}, "words.json": words or {}, "input.json": typing or {}}
     for name, data in files.items():
         (pack / "content" / name).write_text(json.dumps(data, ensure_ascii=False))
@@ -34,7 +38,7 @@ def langs(tmp_path, monkeypatch):
                                             "Hold {0} longer to {1}": "Mantén {0} para {1}", "Off": "No", "Save": "Guardar",
                                             "Clear a Room": "Borrar un cuarto",
                                             "Type": "Escribe"},
-                   words={"dog": "perro", "red": "rojo", "mouse": "ratón"})
+                   words={"dog": "perro", "red": "rojo", "mouse": "ratón", "potato": "papa"}, speech=SPANISH_SPEECH)
     zh = make_pack(tmp_path, "zh", words={"dog": ["狗", "gǒu"], "panda": ["熊猫", "xióng māo"]},
                    typing={"gou": ["够", "狗", "沟"], "ni": ["你", "呢"]})
     monkeypatch.setattr(i18n, "_languages", {"es": i18n.load_language(es), "zh": i18n.load_language(zh)})
@@ -129,6 +133,68 @@ def test_play_adds_the_echo_line_and_says_it_in_the_second_language(langs, monke
         assert [e.markup for e in room.history][-1].endswith("perro")
         assert said[-1][-1] == ("perro", i18n.languages()["es"])
     run(go())
+
+
+def test_the_interface_language_takes_over_a_word_it_shares_with_english(langs):
+    c = content.get_content()
+    i18n.set_languages("en", "es")
+    assert c.exact_emoji("papa") == c.exact_emoji("dad")
+    i18n.set_languages("es", None)
+    assert c.exact_emoji("papa") == c.exact_emoji("potato")
+
+
+def test_english_is_a_second_language_only_beside_another(langs):
+    async def go():
+        app = make_app()
+        assert i18n.ENGLISH not in [o[0] for o in SecondLanguageScreen(app).options]
+        i18n.set_languages("es", None)
+        assert [o[0] for o in SecondLanguageScreen(app).options] == [None, i18n.ENGLISH, "zh"]
+    run(go())
+    i18n.set_languages("es", i18n.ENGLISH)
+    dog = content.get_content().exact_emoji("dog")
+    assert echo_markup("perros dog hola") == (f"{dog} dog", "dog")
+
+
+def test_play_speaks_in_the_interface_language(langs, monkeypatch):
+    said = []
+    monkeypatch.setattr(tts, "speak_many", lambda texts, **kw: said.append(texts) or True)
+    es = i18n.languages()["es"]
+    monkeypatch.setattr(es, "voice", "es-voice")
+    i18n.set_languages("es", i18n.ENGLISH)
+
+    async def go():
+        app = make_app()
+        app.action_switch_room("play")
+        await type_text(app, "say perro")
+        await press(app, "enter")
+        assert said[-1] == [("perro", es), ("dog", i18n.ENGLISH_LANGUAGE)]
+    run(go())
+
+
+@pytest.mark.parametrize("code, line, out", [
+    ("es", "dog plus perro equals 2 dogs", "perro más perro es igual a 2 perros"),
+    ("es", "what is 10 divided by 2 equals 5", "cuánto es 10 entre 2 es igual a 5"),
+    ("es", "1 fish and 3 fish and 2 mice", "1 pez y 3 peces y 2 ratones"),
+    ("es", "2 starfish", "2 estrellas de mar"),
+    ("es", "hello papa", "hello papa"),
+    ("zh", "dog plus 狗 equals 2 dogs", "狗 加 狗 等于 两只狗"),
+    ("zh", "3 trees and 3 apples", "3棵树 和 3个苹果"),
+])
+def test_the_spoken_line_is_said_in_the_language(shipped, code, line, out):
+    assert i18n.spoken(shipped[code], line) == out
+
+
+def test_english_and_chinese_text_pick_their_own_voice(langs, monkeypatch):
+    clips, engines = [], []
+    monkeypatch.setattr(tts, "_ensure_mixer", lambda: True)
+    monkeypatch.setattr(tts, "_get_voice_clip", lambda text: clips.append(text))
+    monkeypatch.setattr(tts, "_get_cached", lambda text, engine: engines.append(engine) or "cached")
+    monkeypatch.setattr(tts, "_play_clip", lambda path, *a: path == "cached")
+    monkeypatch.setattr(tts, "find_voice_model", lambda model=None: "model")
+    monkeypatch.setattr(i18n.languages()["zh"], "voice", "zh-voice")
+    assert tts._speak_sync("dog", tts._speech_id, lang=i18n.ENGLISH_LANGUAGE)
+    assert tts._speak_sync("狗", tts._speech_id, lang=i18n.languages()["es"])
+    assert clips == ["dog"] and engines[-1] == tts._LANG_ENGINE + "zh-voice"
 
 
 def test_number_keys_pick_the_character_for_typed_pinyin(langs):

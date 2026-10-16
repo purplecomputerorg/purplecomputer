@@ -358,7 +358,7 @@ class VoiceScreen(Picker):
 
 class LanguageScreen(Picker):
     title = "Language"
-    DESCRIPTION = "The language Purple's menus and messages are in"
+    DESCRIPTION = "The language Purple's menus, messages, and voice are in"
     escape_value = CANCELLED
 
     def __init__(self, app):
@@ -370,11 +370,12 @@ class LanguageScreen(Picker):
 
 class SecondLanguageScreen(Picker):
     title = "Second Language"
-    DESCRIPTION = "Play shows and says words in this language next to English"
+    DESCRIPTION = "Play shows and says words in this language too"
     escape_value = CANCELLED
 
     def __init__(self, app):
-        langs = i18n.languages().values()
+        main = i18n.interface_language()
+        langs = ([i18n.ENGLISH_LANGUAGE] if main else []) + [lang for lang in i18n.languages().values() if lang is not main]
         super().__init__(app, [(None, "Off")] + [(lang.code, lang.name, lang.english_name) for lang in langs])
         current = i18n.second_language()
         self.selected = next((i for i, o in enumerate(self.options) if current and o[0] == current.code), 0)

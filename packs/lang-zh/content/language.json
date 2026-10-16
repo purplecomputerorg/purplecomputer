@@ -1,1 +1,3 @@
-{"code": "zh", "name": "中文", "english_name": "Mandarin Chinese", "voice": "zh_CN-huayan-medium", "font": "NotoSansSC-Purple.ttf"}
+{"code": "zh", "name": "中文", "english_name": "Mandarin Chinese", "voice": "zh_CN-huayan-medium", "font": "NotoSansSC-Purple.ttf",
+ "speech": {"words": {"plus": "加", "minus": "减", "times": "乘", "divided by": "除以", "equals": "等于", "and": "和", "what is": ""},
+            "count": "{n}{measure}{word}", "measure": "个", "numbers": {"2": "两"}}}

@@ -795,8 +795,8 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None, lang=Non
         _dbg("speak_sync: mixer unavailable")
         return False
 
-    from .i18n import speech_language
-    lang = lang or speech_language(text)
+    from .i18n import ENGLISH, speech_language
+    lang = speech_language(text) or (lang if lang and lang.code != ENGLISH else None)
     if lang is not None:
         if not lang.voice or find_voice_model(lang.voice) is None:
             _dbg(f"speak_sync: no voice for {lang.code}")

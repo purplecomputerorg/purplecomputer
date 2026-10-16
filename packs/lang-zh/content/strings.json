@@ -395,9 +395,9 @@
   "\nArrows change key  [←][→]": "\n方向键换调  [←][→]",
   "Language": "语言",
   "English": "English",
-  "The language Purple's menus and messages are in": "Purple 的菜单和提示用的语言",
+  "The language Purple's menus, messages, and voice are in": "Purple 的菜单、提示和声音用的语言",
   "Second Language": "第二语言",
-  "Play shows and says words in this language next to English": "在“玩”里，英文旁边会显示并说出这个语言的词",
+  "Play shows and says words in this language too": "“玩”里也会显示并说出这个语言的词",
   "Language: {0}": "语言：{0}",
   "Second Language: {0}": "第二语言：{0}"
 }

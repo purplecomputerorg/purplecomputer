@@ -22,7 +22,7 @@ from ..loop_station import LOOPING, RECORDING
 from ..music_constants import GRID_KEYS
 from ..palette import get_key_color
 from .gfx import rgb
-from .ui import DOWN, LEFT, RIGHT, UP, TextField, draw_bar, hold_status
+from .ui import DOWN, LEFT, RIGHT, UP, TextField, draw_bar, draw_key_hint, hold_status, keycap_size
 
 ROOM_KEYWORDS = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
@@ -465,11 +465,12 @@ class CodePanel:
     def _draw_close_hint(self, g, rect):
         """Under the label, beside the cards: how to put the code line away."""
         px = g.em(0.75)
-        lines = [ICON_ROBOT, "Hold Space", "to close"]
-        lh = g.line_height(px, "mono")
-        y = rect.centery - lh * len(lines) // 2
+        px = min(px, px * rect.w // keycap_size(g, "hold Space", px)[0])
+        lines = [ICON_ROBOT, "{hold Space}", "to close"]
+        lh = max(g.line_height(px, "mono"), keycap_size(g, "X", px)[1])
+        y = rect.centery - lh * (len(lines) - 1) // 2
         for line in lines:
-            g.draw_text(line, px, rect.centerx, y, "mono", P.DIM, anchor="midtop")
+            draw_key_hint(g, line, px, rect.centerx, y, anchor="center")
             y += lh
 
     def _draw_cards(self, g, area):

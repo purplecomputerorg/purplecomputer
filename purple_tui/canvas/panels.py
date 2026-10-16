@@ -43,7 +43,7 @@ def _keys(notes: str) -> list:
 RECIPES = {
     'art': [
         ("asdfghjkl", "", ["asdfghjkl"]),
-        ("red repeat 4 forward 6 spin", "#ED1C24", ["#######", "#.....#", "#.....#", "#.....#", "#.....#", "#.....#", "#######"]),
+        ("red repeat 4 forward 6 turn", "#ED1C24", ["#######", "#.....#", "#.....#", "#.....#", "#.....#", "#.....#", "#######"]),
         ("blue repeat 4 right 2 down 2", "#1F75FE", ["###......", "..#......", "..###....", "....#....", "....###..", "......#..", "......###", "........#"]),
         ("green repeat 3 up 3 right 2 down 3 right 2", "#48D370", ["###.###.###.", "#.#.#.#.#.#.", "#.#.#.#.#.#.", "#.###.###.##"]),
     ],
@@ -68,7 +68,7 @@ GUIDE = {
     'art': [
         ("Colors", [(COLORS, "")]),
         ("Move", [("right 5", f"{RIGHT} five steps"), ("up 3", f"{UP} three steps")]),
-        ("Turn", [("forward 6", "the way it points"), ("spin", "turn to the right")]),
+        ("Turn", [("forward 6", "the way it points"), ("turn", "a turn to the right")]),
         ("Again", [("repeat 4 ...", "do it four times")]),
         ("Letters", [("asdf", "a color per key"), ("write hi", "real letters")]),
     ],
@@ -97,11 +97,11 @@ TOPICS = {
         ("right left up down", "Move", [("right 5", f"{RIGHT} five steps"), ("left 5", f"{LEFT} five steps"), ("up 3", f"{UP} three steps"),
                                         ("down 3", f"{DOWN} three steps"), ("right", "one step"), ("red right 5 blue down 3", "")]),
         ("turn spin rotate face forward go move walk step back backward around", "Turn and go",
-         [("forward 6", "the way it points"), ("turn left", ""), ("turn right", ""), ("turn around", ""), ("spin", "turn to the right"),
+         [("forward 6", "the way it points"), ("turn left", ""), ("turn right", ""), ("turn around", ""), ("turn", "a turn to the right"),
           ("face up", "point up"), ("back 3", "go backwards"), ("go 4", "same as forward")]),
         ("brush pen lift penup pendown", "Brush", [("brush up", "move without painting"), ("brush down", "paint again"),
                                                    ("lift", "brush up, or down again"), ("right 2 brush up right 3", "leaves a gap")]),
-        ("repeat", "Again", [("repeat 4 forward 6 spin", "a square")] + _AGAIN_ROWS),
+        ("repeat", "Again", [("repeat 4 forward 6 turn", "a square")] + _AGAIN_ROWS),
         ("paint write", "Letters", [("asdf", "a color per key"), ("paint hi", "the same"), ("write hi", "real letters"),
                                     ("write on", "keep typing letters"), ("paint on", "back to colors")]),
         (COLORS, *_COLOR_TOPIC),

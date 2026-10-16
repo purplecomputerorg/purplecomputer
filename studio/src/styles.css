@@ -42,8 +42,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 /* Shell: a top bar, then the editor beside the laptop, which gets the larger share */
 .topbar { position: sticky; top: 0; z-index: 20; height: 60px; display: flex; align-items: center; gap: 18px; padding: 0 20px; background: rgba(250, 248, 245, 0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 4px; text-decoration: none; color: inherit; flex-shrink: 0; }
-/* The bot sits high in a square with wide margins (assets/logo.svg): drawn bigger, its sides trimmed and nudged down to the text */
-.brand img { width: 38px; height: 38px; margin: 0 -8px 0 -10px; transform: translateY(2px); }
+/* The bot fills only the middle of a square with wide margins (assets/logo.svg): drawn bigger, its sides trimmed */
+.brand img { width: 38px; height: 38px; margin: 0 -8px 0 -10px; }
 .brand b { font-family: var(--display); font-weight: 600; font-size: 15px; }
 .brand span { color: var(--dim); }
 .tabs-nav { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }

@@ -359,17 +359,18 @@ class CodePanel:
         self.all_colors = _colors_markup(MORE_COLORS)
 
     def _layout(self, g) -> tuple:
-        """(margin, input px, box height, sub px, gap, cards height), sized to
-        the viewport like the rooms are."""
-        px = g.em(1.2)
-        return g.em(0.6), px, round(px * 1.9), g.em(0.85), g.em(0.35), g.em(4.2)
+        """(margin, input px, box height, sub px, sub row height, gap, cards height),
+        sized to the viewport like the rooms are. The sub row fits a keycap, not
+        just a text line, so a lit Tab never crowds the box or the cards."""
+        px, sub_px = g.em(1.2), g.em(0.85)
+        return g.em(0.6), px, round(px * 1.9), sub_px, keycap_size(g, "X", sub_px)[1], g.em(0.45), g.em(4.2)
 
     def side_width(self, g) -> int:
         return g.em(16)
 
     def height(self, g) -> int:
-        m, _, box_h, sub_px, gap, cards_h = self._layout(g)
-        return 2 * m + box_h + gap + g.line_height(sub_px, "mono") + gap + cards_h
+        m, _, box_h, _, sub_h, gap, cards_h = self._layout(g)
+        return 2 * m + box_h + gap + sub_h + gap + cards_h
 
     def set_correction(self, original: str, corrected: str):
         self.field.set_correction(original, corrected)
@@ -464,13 +465,14 @@ class CodePanel:
         return None
 
     def draw(self, g, rect):
-        m, px, box_h, sub_px, gap, cards_h = self._layout(g)
+        m, px, box_h, sub_px, sub_h, gap, cards_h = self._layout(g)
         x, w = rect.x + g.em(0.8), rect.w - g.em(1.6)
         box = self.field.draw_boxed(g, x, rect.y + m, w, px, "Code", PLACEHOLDER)
         y = box.bottom + gap
         sub = self._sub()
-        self.field.draw_sub(g, box.x + round(px * 0.55), y, sub_px, hint=sub and ("", sub))
-        y += g.line_height(sub_px, "mono") + gap
+        text_y = y + (sub_h - g.line_height(sub_px, "mono")) // 2
+        self.field.draw_sub(g, box.x + round(px * 0.55), text_y, sub_px, hint=sub and ("", sub))
+        y += sub_h + gap
         self._draw_cards(g, pygame.Rect(box.x, y, x + w - box.x, cards_h))
         self._draw_close_hint(g, pygame.Rect(x, y, box.x - x - g.em(0.4), cards_h))
 
@@ -483,7 +485,7 @@ class CodePanel:
         key_px = min(key_px, key_px * (rect.w - g.em(1.1)) // keycap_size(g, "hold Space", key_px)[0])
         ink = P.TEXT if picked else P.MUTED
         g.draw_text("Close", px, rect.centerx, rect.centery - g.em(0.5), "mono-bold", ink, anchor="center")
-        draw_key_hint(g, "{hold Space}", key_px, rect.centerx, rect.centery + g.em(0.55), anchor="center")
+        draw_key_hint(g, "{hold Space}", key_px, rect.centerx, rect.centery + g.em(0.55), color=P.MUTED, anchor="center")
 
     def _draw_cards(self, g, area):
         n = len(self.recipes)

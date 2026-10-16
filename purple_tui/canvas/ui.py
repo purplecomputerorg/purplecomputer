@@ -641,7 +641,7 @@ def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=
     name = text.removeprefix(HOLD)
     left = key.x + round(px * 0.7)
     if name != text:
-        left = g.draw_text(HOLD, px, left, key.centery, "mono", mix(ink, fill, 0.25), anchor="midleft").right
+        left = g.draw_text(HOLD, px, left, key.centery, "mono", ink, anchor="midleft").right
     g.draw_text(name, px, left, key.centery, "mono-bold", ink, anchor="midleft")
     return key
 

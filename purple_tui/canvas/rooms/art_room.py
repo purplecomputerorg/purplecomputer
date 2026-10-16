@@ -59,6 +59,14 @@ def brush_for_key(char: str):
     return None
 
 
+def onto_grid(x: int, y: int, w: int, h: int, wrap: bool):
+    """(x, y) if it's on a w by h grid, else around to the far side with `wrap`, else None.
+    Moves wrap on a fresh press but a held key stops at the edge, so a fast run sticks there."""
+    if 0 <= x < w and 0 <= y < h:
+        return x, y
+    return (x % w, y % h) if wrap else None
+
+
 def _brush_shape(at, u: float, press: float) -> tuple:
     """Bristles, sheen, ferrule and handle as polygons, tip first along the lean.
     Pressing splays the bristles and bends their tip off sideways, the way a
@@ -402,25 +410,20 @@ class ArtRoom:
             self._heading = "right"
         self.app.invalidate()
 
-    def _move_in_direction(self, direction: str) -> bool:
+    def _move_in_direction(self, direction: str, wrap: bool = False) -> bool:
         dx, dy = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}.get(direction, (0, 0))
-        nx, ny = self._cursor_x + dx, self._cursor_y + dy
-        if not (0 <= nx < COLS and 0 <= ny < ROWS):
-            return False
-        self._cursor_x, self._cursor_y = nx, ny
-        return True
-
-    def _carriage_return(self):
-        self._cursor_x = 0
-        self._cursor_y = (self._cursor_y + 1) % ROWS
+        spot = onto_grid(self._cursor_x + dx, self._cursor_y + dy, COLS, ROWS, wrap)
+        if spot:
+            self._cursor_x, self._cursor_y = spot
+        return bool(spot)
 
     def _advance_after_stamp(self, direction: str):
-        stamp_x = self._cursor_x
+        """On past a typed or stamped cell, wrapping like lines of text."""
+        self._post_stamp_x = self._cursor_x
         if direction == "right" and self._cursor_x >= COLS - 1:
-            self._carriage_return()
+            self._new_line()
         else:
-            self._move_in_direction(direction)
-        self._post_stamp_x = stamp_x
+            self._move_in_direction(direction, wrap=True)
 
     def execute_logo_command(self, action: str, direction: str, distance: int):
         for _ in range(distance):
@@ -453,7 +456,7 @@ class ArtRoom:
 
     def _new_line(self):
         self._cursor_x = 0
-        self._cursor_y = min(ROWS - 1, self._cursor_y + 1)
+        self._cursor_y = (self._cursor_y + 1) % ROWS
 
     def type_char(self, char: str, direction: str = "right"):
         pos = (self._cursor_x, self._cursor_y)
@@ -461,11 +464,7 @@ class ArtRoom:
         self._last_key_color = get_key_color(char)
         bg = self._get_cell_bg(pos)
         self._set_cell(pos, char, self._ink or (_contrast_text_color(bg) if pos in self._painted_positions else P.TEXT), bg)
-        self._post_stamp_x = self._cursor_x
-        if direction == "right" and self._cursor_x >= COLS - 1:
-            self._new_line()
-        else:
-            self._move_in_direction(direction)
+        self._advance_after_stamp(direction)
         self._restart_blink()
         self.app.invalidate()
 
@@ -679,7 +678,7 @@ class ArtRoom:
         steps = HOLD_ACCEL_MULTIPLIER if (not trail and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD) else 1
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(steps):
-                if not self._move_in_direction(direction):
+                if not self._move_in_direction(direction, wrap=not action.is_repeat):
                     break
                 if trail:
                     trail(direction)

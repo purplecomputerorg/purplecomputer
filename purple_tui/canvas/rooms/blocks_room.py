@@ -29,7 +29,7 @@ from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo, SpaceHold
 from ..ui import draw_key_hint, draw_mode_switch
-from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
+from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
@@ -289,11 +289,11 @@ class BlocksRoom:
         return True
 
     def _step_height(self, rise: int, wrap: bool = False):
-        """The next free level up or down; with `wrap`, past the top starts over from the floor."""
+        """The next free level up or down; with `wrap`, past the end starts over from the other one."""
         y, self._next = self._cursor_y(), None
         free = self._free(range(y + rise, HEIGHT if rise > 0 else -1, rise))
         if not free and wrap:
-            free = self._free(range(HEIGHT))
+            free = self._free(range(HEIGHT)[::rise])
         if free:
             self._hover = free[0]
 
@@ -329,13 +329,13 @@ class BlocksRoom:
             self.set_brush_color(brush[1], brush[0])
         return bool(brush)
 
-    def _move(self, direction: str) -> bool:
+    def _move(self, direction: str, wrap: bool = False) -> bool:
         dx, dz = STEPS[direction]
         vx, vz = self._view(self._x, self._z)
-        vx, vz = vx + dx, vz + dz
-        if not (0 <= vx < WIDTH and 0 <= vz < DEPTH):
+        spot = onto_grid(vx + dx, vz + dz, WIDTH, DEPTH, wrap)
+        if not spot:
             return False
-        self._x, self._z = self._view(vx, vz)
+        self._x, self._z = self._view(*spot)
         self._next = None
         return True
 
@@ -427,7 +427,7 @@ class BlocksRoom:
     def _navigate(self, action):
         if action.shift_held and action.direction in ("up", "down"):
             self.echo.flush()
-            self._step_height(STEPS[action.direction][1])
+            self._step_height(STEPS[action.direction][1], wrap=not action.is_repeat)
             self._face(RISE if action.direction == "up" else SINK)
             return
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
@@ -441,7 +441,7 @@ class BlocksRoom:
         fast = not laying and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(HOLD_ACCEL_MULTIPLIER if fast else 1):
-                if not self._move(direction):
+                if not self._move(direction, wrap=not action.is_repeat):
                     break
                 if laying:
                     self._lay(direction)

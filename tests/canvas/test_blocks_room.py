@@ -80,8 +80,8 @@ def test_typing_goes_right_by_default_and_wraps_like_lines_of_text():
 def test_walking_into_a_wall_turns_typing_along_it_instead_of_wrapping():
     async def go():
         app, room = _blocks()
-        for _ in range(DEPTH):
-            await press(app, "down")
+        for i in range(DEPTH):
+            await press(app, "down", is_repeat=i > 0)
         assert room._dir == "right"
         await type_text(app, "ab")
         assert {(5, 0, 0), (6, 0, 0)} == set(room._blocks)
@@ -92,7 +92,7 @@ def test_in_the_right_hand_corner_typing_turns_left():
     async def go():
         app, room = _blocks()
         room._x = WIDTH - 1
-        await press(app, "right")
+        await press(app, "right", is_repeat=True)
         await type_text(app, "ab")
         assert {(WIDTH - 1, 5, 0), (WIDTH - 2, 5, 0)} == set(room._blocks)
     run(go())
@@ -101,8 +101,8 @@ def test_in_the_right_hand_corner_typing_turns_left():
 def test_shift_up_to_the_ceiling_turns_typing_right():
     async def go():
         app, room = _blocks()
-        for _ in range(HEIGHT):
-            await app._dispatch_keyboard_action(NavigationAction(direction="up", shift_held=True))
+        for i in range(HEIGHT):
+            await app._dispatch_keyboard_action(NavigationAction(direction="up", shift_held=True, is_repeat=i > 0))
         await type_text(app, "ab")
         assert {(5, 5, HEIGHT - 1), (6, 5, HEIGHT - 1)} == set(room._blocks)
     run(go())
@@ -145,16 +145,35 @@ def test_enter_walks_up_and_starts_over_from_the_floor():
     run(go())
 
 
-def test_shift_up_and_down_move_the_height_and_stop_at_the_ends():
+def test_shift_up_and_down_held_stop_at_the_ends_and_a_fresh_press_wraps():
     async def go():
         app, room = _blocks()
         await press(app, "a")
-        for _ in range(HEIGHT + 2):
-            await press(app, "up", shift_held=True)
+        for i in range(HEIGHT + 2):
+            await press(app, "up", shift_held=True, is_repeat=i > 0)
         assert room._cursor_y() == HEIGHT - 1 and (room._x, room._z) == (5, 5)
-        for _ in range(HEIGHT + 2):
-            await press(app, "down", shift_held=True)
+        for i in range(HEIGHT + 2):
+            await press(app, "down", shift_held=True, is_repeat=i > 0)
         assert room._cursor_y() == 1                # rests on the block at 0
+        await press(app, "down", shift_held=True)
+        assert room._cursor_y() == HEIGHT - 1
+        await press(app, "up", shift_held=True)
+        assert room._cursor_y() == 1
+    run(go())
+
+
+def test_held_arrows_stop_at_the_wall_and_a_fresh_press_comes_out_the_far_side():
+    async def go():
+        app, room = _blocks()
+        for i in range(WIDTH + 5):
+            await press(app, "right", is_repeat=i > 0)
+        assert room._x == WIDTH - 1
+        await press(app, "right")
+        assert (room._x, room._z) == (0, 5)
+        await press(app, "up")
+        room._z = DEPTH - 1
+        await press(app, "up")
+        assert room._z == 0
     run(go())
 
 
@@ -262,8 +281,8 @@ def test_keyboard_reports_the_still_held_letter_and_shift():
 def test_holding_a_letter_or_space_while_arrowing_lays_a_line():
     async def go():
         app, room = _blocks()
-        for _ in range(WIDTH):
-            await press(app, "right", char_held="z")
+        for i in range(WIDTH):
+            await press(app, "right", char_held="z", is_repeat=i > 0)
         assert room._x == WIDTH - 1
         assert all((x, 5, 0) in room._blocks for x in range(6, WIDTH))
         await press(app, "up", space_held=True)

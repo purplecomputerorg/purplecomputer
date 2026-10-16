@@ -27,7 +27,7 @@ def test_thumb_never_shorter_than_min_or_past_the_top():
 
 def test_scrollbar_only_when_history_overflows():
     async def go():
-        app = make_app()
+        app = make_app(room="play")
         room = app.room
         g = app.g
         content = app.content_rect(app._viewport_rect())

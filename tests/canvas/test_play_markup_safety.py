@@ -177,7 +177,7 @@ def test_real_app_never_puts_markup_on_screen():
     checked = ["[red blue", "a[b", "\\red", "a[/", "[cat", "red [ blue"]
 
     async def scenario():
-        app = make_app()
+        app = make_app(room="play")
         play = app.rooms["play"]
         for text in checked:
             await type_text(app, text)

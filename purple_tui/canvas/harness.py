@@ -18,11 +18,13 @@ from .press import ARROWS, CONTROL_KEYS, press, type_text  # noqa: E402,F401
 DEFAULT_SIZE = (1366, 768)
 
 
-def make_app(size=None):
+def make_app(size=None, room=None):
     from .app import PurpleApp, _env_size
     app = PurpleApp(headless=True, size=size or _env_size() or DEFAULT_SIZE)
+    app.active_room = room or app.active_room
     app.timers.bind(asyncio.get_running_loop())
     app.room.on_enter()
+    app.timeline_restore(app.active_room)
     return app
 
 

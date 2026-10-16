@@ -16,7 +16,7 @@ def test_rods_run_from_the_biggest_place_down():
 
 def test_abacus_answer_draws_and_paper_prints_it():
     async def scenario():
-        app = make_app()
+        app = make_app(room="play")
         play = app.rooms["play"]
         await type_text(app, "321223 trex", enter=True)
         app._draw()

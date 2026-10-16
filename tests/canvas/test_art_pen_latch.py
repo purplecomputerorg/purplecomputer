@@ -71,14 +71,17 @@ def test_pen_lifts_on_clear():
 def test_only_the_write_caret_blinks():
     async def _test():
         app, canvas = _art()
-        canvas._blink()
-        assert canvas._blink_on  # brush tip: steady
+        assert canvas._blink_timer is None  # brush tip: steady, no idle wakeups
         await _tap(canvas)
-        canvas._blink()
-        assert canvas._blink_on
+        assert canvas._blink_timer is None
         canvas._set_paint_mode(False)
-        canvas._blink()
-        assert not canvas._blink_on  # write caret blinks
+        assert canvas._blink_timer is not None  # write caret blinks
+        canvas.open_code_panel()
+        assert canvas._blink_timer is None
+        canvas.close_code_panel()
+        assert canvas._blink_timer is not None
+        app.action_switch_room("play")
+        assert canvas._blink_timer is None
     _run(_test())
 
 

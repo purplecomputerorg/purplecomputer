@@ -223,7 +223,7 @@ def test_play_entries_replay_and_clear_records_steps(monkeypatch, tmp_path):
     monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
 
     async def scenario():
-        app = make_app()
+        app = make_app(room="play")
         play = app.rooms["play"]
         await type_text(app, "2 + 2", enter=True)
         await type_text(app, "3 + 3", enter=True)

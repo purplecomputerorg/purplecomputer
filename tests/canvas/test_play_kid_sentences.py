@@ -174,7 +174,7 @@ def test_the_ask_line_echoes_what_was_typed(text):
     from purple_tui.play_eval import parse_speech_trigger
 
     async def scenario():
-        app = make_app()
+        app = make_app(room="play")
         play = app.rooms["play"]
         await type_text(app, text)
         typed = play.field.value

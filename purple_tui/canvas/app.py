@@ -160,7 +160,7 @@ class PurpleApp:
         from . import theme
         theme.apply(theme.find())
         self.rooms = {c.name: c(self) for c in ROOM_CLASSES}
-        self.active_room = "play"
+        self.active_room = "art"
         self._panel = None          # bottom panel drawn inside the viewport: code / loop / time
         self._legend_key = None
         self._legend_visible = True

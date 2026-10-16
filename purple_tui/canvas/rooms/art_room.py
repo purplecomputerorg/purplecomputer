@@ -243,20 +243,23 @@ class ArtRoom(Room):
     # ---------------------------------------------------------------- lifecycle
     def on_enter(self):
         self._post_paint_mode_changed()
-        if self._blink_timer is None:
-            self._blink_timer = self.app.timers.every(0.4, self._blink)
 
     def on_leave(self):
         self.code_panel = None
         self._erasing = False
-        if self._blink_timer:
+        self._sync_blink(leaving=True)
+
+    def _sync_blink(self, leaving=False):
+        """Only the write caret blinks, so the timer runs only then: an idle brush must not wake the CPU."""
+        if not leaving and self.app.active_room == self.name and not self._paint_mode and self.code_panel is None:
+            if self._blink_timer is None:
+                self._blink_on = True
+                self._blink_timer = self.app.timers.every(0.4, self._blink)
+        elif self._blink_timer:
             self._blink_timer.stop()
             self._blink_timer = None
 
     def _blink(self):
-        """Only the write caret blinks; the brush tip holds still."""
-        if self._paint_mode or self.code_panel is not None:
-            return
         self._blink_on = not self._blink_on
         self.app.invalidate()
 
@@ -308,6 +311,7 @@ class ArtRoom(Room):
 
     def _post_paint_mode_changed(self):
         self.app.set_legend(self._last_key_color if self._paint_mode else None, visible=True)
+        self._sync_blink()
         self.app.invalidate()
 
     def arrow_hint(self) -> str:
@@ -573,10 +577,12 @@ class ArtRoom(Room):
             self.code_panel = CodePanel(self.app, "art", self.echo.take())
             self.set_code_mode(True)
             self.app.set_panel(self.code_panel)
+            self._sync_blink()
 
     def close_code_panel(self):
         if self.code_panel is not None:
             self.code_panel = None
+            self._sync_blink()
             self.set_code_mode(False)
             self.app.set_panel(None)
 

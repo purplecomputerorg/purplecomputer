@@ -158,6 +158,23 @@ def test_up_leaves_the_cards_and_typing_edits_the_recipe():
     run(go())
 
 
+def test_left_of_the_first_card_is_close_and_enter_closes():
+    async def go():
+        app, art = await _room("art")
+        art.open_code_panel()
+        panel = art.code_panel
+        await press(app, "down")
+        await press(app, "left")
+        await press(app, "left")
+        assert panel.card == CodePanel.CLOSE
+        await press(app, "right")
+        assert panel.card == 0
+        await press(app, "left")
+        await press(app, "enter")
+        assert art.code_panel is None and not app.code_lines("art")
+    run(go())
+
+
 def test_open_code_hides_the_color_legend_and_names_its_arrows(monkeypatch):
     async def go():
         app, art = await _room("art")

@@ -336,10 +336,11 @@ class SpaceHold:
 
 class CodePanel:
     """The 'Code →' line with autocomplete and recall, over a row of recipe
-    cards that ↓ steps into. It opens holding the code for the newest thing
-    done by hand, if any."""
+    cards that ↓ steps into, with a Close button left of them. It opens holding
+    the code for the newest thing done by hand, if any."""
 
     kind = "code"
+    CLOSE = -1   # self.card on the Close button
 
     def __init__(self, app, room: str, prefill: str = ""):
         self.app = app
@@ -390,7 +391,7 @@ class CodePanel:
             else:
                 self._recall(1 if action.direction == "up" else -1)
             return None
-        from_card, self.card = self.card is not None, None
+        closing, from_card, self.card = self.card == self.CLOSE, self.card is not None, None
         if isinstance(action, ControlAction):
             if not action.is_down:
                 return None
@@ -399,6 +400,8 @@ class CodePanel:
             if action.action == "enter":
                 if action.is_repeat:
                     return None
+                if closing:
+                    return "close"
                 text = f.value.strip()
                 if not text:
                     f.set(f.last_command)
@@ -433,11 +436,15 @@ class CodePanel:
         self.field.set(self.recipes[i][0])
 
     def _pick(self, direction: str):
-        """In the cards: ← → pick one, ↑ goes back to the line with it."""
+        """In the cards: ← → pick one or Close, ↑ goes back to the line with it."""
         if direction == "up":
             self.card = None
         elif direction in ("left", "right"):
-            self._choose(max(0, min(len(self.recipes) - 1, self.card + (1 if direction == "right" else -1))))
+            i = max(self.CLOSE, min(len(self.recipes) - 1, self.card + (1 if direction == "right" else -1)))
+            if i == self.CLOSE:
+                self.card = i
+            else:
+                self._choose(i)
 
     def _recall(self, step: int):
         """↑/↓ through the code typed in this room, which a save or Time Travel brings back with it."""
@@ -446,6 +453,8 @@ class CodePanel:
         self.field.set(lines[-self._back] if self._back else "")
 
     def _sub(self) -> str:
+        if self.card == self.CLOSE:
+            return f"[dim]Enter: put the code away    {RIGHT} examples    {UP} back to typing[/]"
         if self.card is not None:
             return f"[dim]{LEFT} {RIGHT} pick one    Enter: run it    {UP} back to typing[/]"
         if self.note[0] and self.field.value == self.note[0]:
@@ -464,15 +473,15 @@ class CodePanel:
         self._draw_close_hint(g, pygame.Rect(x, y, box.x - x - g.em(0.4), cards_h))
 
     def _draw_close_hint(self, g, rect):
-        """Under the label, beside the cards: how to put the code line away."""
-        px = g.em(0.75)
-        px = min(px, px * rect.w // keycap_size(g, "hold Space", px)[0])
-        lines = [ICON_ROBOT, "{hold Space}", "to close"]
-        lh = max(g.line_height(px, "mono"), keycap_size(g, "X", px)[1])
-        y = rect.centery - lh * (len(lines) - 1) // 2
-        for line in lines:
-            draw_key_hint(g, line, px, rect.centerx, y, anchor="center")
-            y += lh
+        """Under the label, beside the cards: a Close button the arrows reach, with Space's hold under it."""
+        picked = self.card == self.CLOSE
+        g.rect(P.FIELD, rect, radius=g.em(0.4))
+        g.rect(P.ACCENT if picked else P.LINE, rect, width=3 if picked else 1, radius=g.em(0.4))
+        px, key_px = g.em(0.95), g.em(0.75)
+        key_px = min(key_px, key_px * (rect.w - g.em(0.5)) // keycap_size(g, "hold Space", key_px)[0])
+        ink = P.TEXT if picked else P.MUTED
+        g.draw_text(f"{ICON_ROBOT} Close", px, rect.centerx, rect.centery - g.em(0.6), "mono-bold", ink, anchor="center")
+        draw_key_hint(g, "{hold Space}", key_px, rect.centerx, rect.centery + g.em(0.75), anchor="center")
 
     def _draw_cards(self, g, area):
         n = len(self.recipes)

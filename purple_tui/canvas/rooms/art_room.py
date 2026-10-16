@@ -172,6 +172,31 @@ def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
     return head.subsurface(head.get_bounding_rect()).copy()
 
 
+class _RoomBrushRunner(ArtCodeRunner):
+    """The brush lives on the room, so `brush up` holds across lines and shows on
+    the cursor; `_paint_on` is Paint (not ABC) with that brush down."""
+
+    @property
+    def _paint_on(self) -> bool:
+        return self._painting and self.canvas._code_brush_down
+
+    @_paint_on.setter
+    def _paint_on(self, on: bool):
+        self._painting = on
+
+    async def _do_lift(self, m) -> bool:
+        self.canvas.set_code_brush(not self.canvas._code_brush_down)
+        return True
+
+    async def _do_pen_up(self, m) -> bool:
+        self.canvas.set_code_brush(False)
+        return True
+
+    async def _do_pen_down(self, m) -> bool:
+        self.canvas.set_code_brush(True)
+        return True
+
+
 class ArtRoom(Room):
     """Cells are (char, fg, bg); a painted cell holds BRUSH_CHAR with both
     colors equal, a written letter holds the letter over whatever bg it had."""
@@ -202,6 +227,7 @@ class ArtRoom(Room):
         self._lift_timer = None
         self._pen_at_press = self._dragged = False   # holding Space while moving lowers the brush until release
         self._code_mode = False
+        self._code_brush_down = True  # code's brush, apart from Space's pen
         self._heading = "right"
         self._use_heading_cursor = False
         self._post_stamp_x = None
@@ -397,13 +423,20 @@ class ArtRoom(Room):
         self._pen_down = down
         if down:
             self._paint_at_cursor()
-        if self._lift_timer is None:
-            self._lift_timer = self.app.timers.every(LIFT_FRAME, self._step_lift)
+        self._ease_lift()
         self._restart_blink()
         self._post_paint_mode_changed()
 
+    def set_code_brush(self, down: bool):
+        self._code_brush_down = down
+        self._ease_lift()
+
+    def _ease_lift(self):
+        if self._lift_timer is None:
+            self._lift_timer = self.app.timers.every(LIFT_FRAME, self._step_lift)
+
     def _step_lift(self):
-        target = 0.0 if self._pen_down else 1.0
+        target = 0.0 if (self._code_brush_down if self._code_mode else self._pen_down) else 1.0
         self._lift = target if abs(target - self._lift) <= LIFT_STEP else self._lift + math.copysign(LIFT_STEP, target - self._lift)
         if self._lift == target:
             self._lift_timer.stop()
@@ -415,6 +448,8 @@ class ArtRoom(Room):
         self._use_heading_cursor = on
         if on:
             self._heading = "right"
+            self._code_brush_down = True
+        self._ease_lift()
         self.app.invalidate()
 
     def _move_in_direction(self, direction: str, wrap: bool = False) -> bool:
@@ -566,7 +601,7 @@ class ArtRoom(Room):
 
     async def run_code(self, lines: list):
         try:
-            runner = ArtCodeRunner(self)
+            runner = _RoomBrushRunner(self)
             await runner.run(lines, paint=self._paint_mode)
             self._post_paint_mode_changed()
             if runner.corrections and self.code_panel:

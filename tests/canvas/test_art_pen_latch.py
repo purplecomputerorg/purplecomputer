@@ -238,3 +238,45 @@ def test_brush_eases_down_and_up_then_rests():
         await asyncio.sleep(0.2)
         assert canvas._lift == 1.0 and canvas._lift_timer is None
     _run(_test())
+
+
+def _code_art():
+    app, canvas = _art()
+    canvas.open_code_panel()
+    canvas._cursor_x = canvas._cursor_y = 5
+    return app, canvas
+
+
+def test_code_brush_holds_across_lines():
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code(["brush up"])
+        await canvas.run_code(["right 3"])
+        assert not canvas._painted_positions
+        await canvas.run_code(["brush down"])
+        await canvas.run_code(["right 2"])
+        assert canvas._painted_positions == {(8, 5), (9, 5)}
+    _run(_test())
+
+
+def test_a_color_keeps_the_code_brush_up():
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code(["brush up red right 3"])
+        assert not canvas._painted_positions
+    _run(_test())
+
+
+def test_code_cursor_shows_the_code_brush():
+    async def _test():
+        app, canvas = _code_art()
+        await asyncio.sleep(0.2)
+        assert canvas._lift == 0.0
+        await canvas.run_code(["brush up"])
+        await asyncio.sleep(0.2)
+        assert canvas._lift == 1.0
+        canvas.close_code_panel()
+        canvas.open_code_panel()
+        await asyncio.sleep(0.2)
+        assert canvas._code_brush_down and canvas._lift == 0.0
+    _run(_test())

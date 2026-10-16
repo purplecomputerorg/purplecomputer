@@ -247,3 +247,22 @@ def test_code_input_caret_is_solid():
     must be a steady block."""
     from purple_tui.code_input import CodeInput
     assert CodeInput().cursor_blink is False
+
+
+def test_down_picks_close_and_enter_closes_code():
+    async def _test():
+        app = PurpleApp()
+        async with app.run_test(size=APP_SIZE) as pilot:
+            await _setup(pilot)
+            await _switch_room(app, pilot, "art")
+            await _open_code_panel(app, pilot)
+            viewport = app.query_one("#viewport")
+
+            await _type_text(app, pilot, ["down"])
+            assert "Enter: close code" in str(viewport.border_subtitle)
+            await _type_text(app, pilot, ["a"])
+            assert app._code_panel_active and "Hold Space" in str(viewport.border_subtitle)
+
+            await _type_text(app, pilot, ["down", "enter"])
+            assert not app._code_panel_active
+    _run(_test())

@@ -60,7 +60,7 @@ STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the 
 TIMELINE_DEBOUNCE_S = 3.0
 LEGEND_TEXT_VH = 1.15         # letter size on the sticker keyboard in the bottom-left corner
 LEGEND_POP = 1.45             # the last key pressed grows by this much
-LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 0.75), (ZXCV_ROW, 1.25))   # with real stagger
+LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 1), (ZXCV_ROW, 1.5))   # even half-key stagger
 _KEY_FOR_COLOR = {get_key_color(k): k for row, _ in LEGEND_ROWS for k in row}
 TIMELINE_MAX_WAIT_S = 15.0
 MAX_CODE_LINES = 200          # code lines kept with a room's state (Time Travel, saves)
@@ -1379,9 +1379,9 @@ class PurpleApp:
                 pygame.Rect(vp.x, vp.bottom - g.em(4.5), vp.w, g.em(4.5))
             draw_hold_bar(g, strip, (hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1])
         g.surface.set_clip(None)
+        esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
         if self._legend_visible:
-            self._draw_legend(frame)
-        self._draw_status(frame, left="" if self._legend_visible else None)
+            self._draw_legend(frame, esc_pill.bottom if esc_pill else g.h - g.vh(2))
         for o in self._overlays:
             o.draw(g)
         self._draw_toasts()
@@ -1402,22 +1402,22 @@ class PurpleApp:
         if right:
             g.draw_text(right, px, frame.right, y, "mono", P.MUTED, anchor="midright")
 
-    def _draw_legend(self, frame):
+    def _draw_legend(self, frame, bottom: int):
         """A tiny keyboard in the sticker colors, so a kid without stickers can
-        find a color before pressing; the last key pops out bigger."""
+        find a color before pressing; the last key pops out bigger. Its
+        outline's bottom edge sits at `bottom`."""
         g = self.g
         px = g.vh(LEGEND_TEXT_VH)
         size = round(px * 1.35)
         pitch = size + max(2, g.vh(0.25))
-        top = g.h - g.vh(STATUS_TEXT_VH) - (4 * pitch - (pitch - size)) // 2   # centered on the room tabs' line
-        popped = None
         pad = g.vh(0.6)
-        board = pygame.Rect(frame.x, top, round(12.5 * pitch) - (pitch - size), 4 * pitch - (pitch - size))
-        g.rect(P.HAIR, board.inflate(2 * pad, 2 * pad).move(pad, 0), width=1, radius=pad + size // 4)
-        board.x += pad
+        board = pygame.Rect(frame.x + pad, 0, round(12.5 * pitch) - (pitch - size), 4 * pitch - (pitch - size))
+        board.bottom = bottom - pad
+        g.rect(P.HAIR, board.inflate(2 * pad, 2 * pad), width=1, radius=pad + size // 4)
+        popped = None
         for r, (row, stagger) in enumerate(LEGEND_ROWS):
             for i, key in enumerate(row):
-                cap = pygame.Rect(board.x + round((stagger + i) * pitch), top + r * pitch, size, size)
+                cap = pygame.Rect(board.x + round((stagger + i) * pitch), board.y + r * pitch, size, size)
                 if key == self._legend_key:
                     popped = key, cap
                 else:
@@ -1445,7 +1445,8 @@ class PurpleApp:
         names = [(rid, f"{ROOM_ICONS[rid]} {label}") for rid, label in ROOMS] if tabs else []
         widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for _, t in names]
         x = frame.centerx - (esc_w + sum(gap + w for w in widths)) // 2
-        x = draw_keycap(g, esc, px, x, y).right + gap
+        esc_pill = draw_keycap(g, esc, px, x, y)
+        x = esc_pill.right + gap
         for (rid, label), w in zip(names, widths):
             draw_label(g, label, px, x + w // 2, y, P.MUTED, anchor="center", on=rid == self.active_room)
             x += w + gap
@@ -1455,6 +1456,7 @@ class PurpleApp:
             if self._effective_volume() == 0:
                 right = f"{ICON_VOLUME_OFF}  " + right
         g.draw_text(right, px, frame.right, y, "mono", P.DIM, anchor="midright")
+        return esc_pill
 
     def _draw_toasts(self):
         """A calm centered pill above the status strip, stacking upward, so a

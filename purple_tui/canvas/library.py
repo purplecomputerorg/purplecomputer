@@ -21,6 +21,7 @@ ICON_OPEN = "\U000F0770"  # nf-md-folder_open
 ICON_HOME = "\U000F02DC"  # nf-md-home
 COLS, ROWS_SHOWN = 4, 2
 DELETE_HOLD_S = 1.2
+FILL_BUDGET_S = 0.03  # drawing new pictures stops for the frame after this, so Open shows at once and fills in
 LABEL_CHARS = 14
 
 
@@ -56,7 +57,8 @@ class Library(Overlay):
         self.tiles = saves.list_saves(app.active_room) + [PictureTile(app, p) for p in pictures]
         self.selected = 0
         self.top_row = 0
-        self._thumbs: dict = {}
+        self._thumbs = app.save_pictures
+        self._deadline, self._filling = None, False
         self._deleting = None   # (save, started) while Backspace is held on it
         self._hold_timers: list = []
         self.can_print = printing.status() == printing.READY
@@ -133,11 +135,24 @@ class Library(Overlay):
     def _thumb(self, tile, w: int, h: int):
         key = (tile.id, w, h)
         if key not in self._thumbs:
-            source = self.app.save_artwork(tile, on_screen=True)
-            self._thumbs[key] = None if source is None else fit(source, w, h)
-        return self._thumbs[key]
+            now = time.monotonic()
+            self._deadline = self._deadline or now + FILL_BUDGET_S   # the frame's first new picture always draws
+            if now > self._deadline:
+                self._filling = True
+                return None
+        return self._thumbs.get_or(key, lambda: self._picture(tile, w, h)) or None
+
+    def _picture(self, tile, w: int, h: int):
+        source = self.app.save_artwork(tile, on_screen=True)
+        return False if source is None else fit(source, w, h)  # False is cached, None would be redrawn
 
     def draw(self, g):
+        self._deadline, self._filling = None, False
+        self._draw(g)
+        if self._filling:
+            self.app.timers.after(0, self.app.invalidate)   # a draw's own invalidate is cleared when the frame lands
+
+    def _draw(self, g):
         draw_scrim(g)
         em = g.em
         tw, ih, label_h, gap, pad = em(12.5), em(9.4), em(2.6), em(1.1), em(1.8)

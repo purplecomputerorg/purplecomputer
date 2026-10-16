@@ -27,7 +27,7 @@ from ..constants import (
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
     is_usb_cached, is_usb_needed, is_usb_present,
 )
-from .gfx import Gfx
+from .gfx import Gfx, _Cache
 from .rooms import ROOM_CLASSES, ROOM_NAMES
 from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
 from ..keyboard import (
@@ -148,6 +148,7 @@ class PurpleApp:
         self._timeline_timer = None
         self._timeline_restored: set = set()
         self._time_travel = None
+        self.save_pictures = _Cache(limit=48)  # Open's pictures; saves never change, and the theme only at startup
         self._last_evdev_time = time.monotonic()
         self._keyboard_state_machine = KeyboardStateMachine()
         self._keyboard_state_machine.on_sticky_shift_change(self._on_sticky_shift_change)

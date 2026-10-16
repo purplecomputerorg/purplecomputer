@@ -157,11 +157,15 @@ def is_emoji(text: str) -> bool:
 
 
 class _Cache(OrderedDict):
+    def __init__(self, limit=CACHE_LIMIT):
+        super().__init__()
+        self.limit = limit
+
     def get_or(self, key, make):
         hit = self.get(key)
         if hit is None:
             hit = self[key] = make()
-            if len(self) > CACHE_LIMIT:
+            if len(self) > self.limit:
                 self.popitem(last=False)
         else:
             self.move_to_end(key)

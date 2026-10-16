@@ -253,3 +253,24 @@ def test_time_travel_stars_the_saved_moment_until_the_save_is_removed():
         app._start_time_travel()
         assert app.time_travel_position()[2] == []
     run(go())
+
+
+def test_open_fills_in_its_pictures_a_frame_at_a_time_and_keeps_them(monkeypatch):
+    import purple_tui.canvas.library as library
+    monkeypatch.setattr(library, "FILL_BUDGET_S", 0)
+
+    async def go():
+        app = await _art_with_drawing()
+        for keys in ("asdf", "zxcv"):
+            await type_text(app, keys)
+            app.save_room()
+        lib = await _open_library(app)
+        assert len(app.save_pictures) == 1
+        await asyncio.sleep(0.05)
+        app._draw()
+        assert len(app.save_pictures) == 2
+        lib.close()
+        drawn = dict(app.save_pictures)
+        await _open_library(app)
+        assert all(app.save_pictures[k] is v for k, v in drawn.items())
+    run(go())

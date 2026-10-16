@@ -534,3 +534,23 @@ class TestMusicKey:
 
     def test_without_a_key_setter_the_words_play_as_notes(self):
         assert self._run("key g", set_key=False) == (['K', 'E', 'Y', 'G'], [])
+
+
+class TestArtCommandsMidLine:
+    def _cells(self, line):
+        from purple_tui.code_runner import ArtCodeRunner
+        canvas = _FakeCanvas()
+        runner = ArtCodeRunner(canvas)
+        asyncio.run(runner.run([line]))
+        return canvas
+
+    @pytest.mark.parametrize("words", ["brush up", "pen up", "lift"])
+    def test_lifting_the_brush_mid_line_leaves_a_gap(self, words):
+        down = "brush down" if words != "lift" else "lift"
+        canvas = self._cells(f"right 2 {words} right 2 {down} right 2")
+        assert canvas._painted_positions == self._cells("right 2, brush up, right 2, brush down, right 2")._painted_positions
+
+    def test_color_then_a_move(self):
+        canvas = self._cells("color mint right 2")
+        assert canvas._last_key_color.upper() == "#98FF98"
+        assert canvas._painted_positions == self._cells("right 2")._painted_positions

@@ -276,3 +276,14 @@ def test_music_recipe_pictures_put_higher_notes_higher():
     from purple_tui.canvas.panels import _melody
     assert _melody("asd") == ["..d", ".s.", "a.."]
     assert _melody("asas") == [".s.s", "a.a."]
+
+
+@pytest.mark.parametrize("room, text, heading", [
+    ("art", "", None), ("art", "red right 5 turn", "Turn and go"), ("art", "right 2 brush up", "Brush"),
+    ("art", "mint", "Colors"), ("art", "dark", "Colors"), ("art", "hello", None),
+    ("music", "key", "Key"), ("music", "choose uke", "Sound"), ("blocks", "up 3 repeat", "Again"),
+])
+def test_the_guide_shows_the_last_code_word_typed(room, text, heading):
+    from purple_tui.canvas.panels import guide_topic
+    topic = guide_topic(room, text)
+    assert (topic and topic[0]) == heading if heading else topic is None

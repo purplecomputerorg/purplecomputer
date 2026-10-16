@@ -28,7 +28,7 @@ ROOM_KEYWORDS = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
               'marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', 'piano', 'electric'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step', 'turn', 'color',
-            'paint', 'write', 'lift', 'pen', 'penup', 'pendown', 'repeat'],
+            'paint', 'write', 'lift', 'brush', 'pen', 'penup', 'pendown', 'repeat'],
     'blocks': ['left', 'right', 'up', 'down', 'back', 'front', 'forward', 'go', 'repeat'],
 }
 
@@ -66,13 +66,14 @@ RECIPES = {
     ],
 }
 # The side column: words to use, a section at a time, each an example and a
-# few words on what it does. COLORS lists the color words in their colors.
-COLORS = "colors"
+# few words on what it does. COLORS lists the color words in their colors,
+# ALL_COLORS every one of the extras too.
+COLORS, ALL_COLORS = "colors", "all colors"
 GUIDE = {
     'art': [
         ("Colors", [(COLORS, "")]),
         ("Move", [("right 5", f"{RIGHT} five steps"), ("up 3", f"{UP} three steps")]),
-        ("Turn", [("forward 6", "the way it points"), ("spin", "turn to the right"), ("turn left", "")]),
+        ("Turn", [("forward 6", "the way it points"), ("spin", "turn to the right")]),
         ("Again", [("repeat 4 ...", "do it four times")]),
         ("Letters", [("asdf", "a color per key"), ("write hi", "real letters")]),
     ],
@@ -80,7 +81,7 @@ GUIDE = {
         ("Notes", [("asdf", "play those keys"), ("1234", "drums")]),
         ("Speed", [("fast asdf", "quick"), ("slow asdf", "slow")]),
         ("Sound", [("choose ukulele", "or marimba, accordion, glockenspiel")]),
-        ("Key", [("key g", "same keys, new notes: c g d f b flat")]),
+        ("Key", [("key g", "same keys, new notes")]),
         ("Again", [("repeat 3 asdf", "three times")]),
         ("Say", [("letters on", "keys say letters")]),
     ],
@@ -91,6 +92,61 @@ GUIDE = {
         ("Again", [("repeat 4 right 1 up 1", "stairs")]),
     ],
 }
+GUIDE_HINT = "Type a word to see more about it"
+# What the side column shows instead while the code holds one of a topic's
+# words: (words, heading, rows). COLORS stands for any color word.
+_COLOR_TOPIC = ("Colors", [(ALL_COLORS, ""), ("color mint", "switch colors"), ("dark blue", "or light, bright, pale, neon")])
+_AGAIN_ROWS = [("repeat 3 right 2, up 1", "commas: both, each time"), ("repeat right 1", "with no number: twice")]
+TOPICS = {
+    'art': [
+        ("right left up down", "Move", [("right 5", f"{RIGHT} five steps"), ("left 5", f"{LEFT} five steps"), ("up 3", f"{UP} three steps"),
+                                        ("down 3", f"{DOWN} three steps"), ("right", "one step"), ("red right 5 blue down 3", "")]),
+        ("turn spin rotate face forward go move walk step back backward around", "Turn and go",
+         [("forward 6", "the way it points"), ("turn left", ""), ("turn right", ""), ("turn around", ""), ("spin", "turn to the right"),
+          ("face up", "point up"), ("back 3", "go backwards"), ("go 4", "same as forward")]),
+        ("brush pen lift penup pendown", "Brush", [("brush up", "move without painting"), ("brush down", "paint again"),
+                                                   ("lift", "brush up, or down again"), ("right 2 brush up right 3", "leaves a gap")]),
+        ("repeat", "Again", [("repeat 4 forward 6 spin", "a square")] + _AGAIN_ROWS),
+        ("paint write", "Letters", [("asdf", "a color per key"), ("paint hi", "the same"), ("write hi", "real letters"),
+                                    ("write on", "keep typing letters"), ("paint on", "back to colors")]),
+        (COLORS, *_COLOR_TOPIC),
+    ],
+    'music': [
+        ("choose select use instrument play marimba ukulele uke accordion glockenspiel", "Sound",
+         [("choose marimba", ""), ("choose ukulele", ""), ("choose accordion", ""), ("choose glockenspiel", ""),
+          ("play uke", "same as choose"), ("choose ukulele zxcv", "then play")]),
+        ("fast slow", "Speed", [("fast asdf", "quick"), ("slow asdf", "slow"), ("fast 1234", "quick drums")]),
+        ("key", "Key", [("key c", "where you start"), ("key g", "brighter"), ("key d", "brighter still"),
+                        ("key f", "warmer"), ("key b flat", "warmer still")]),
+        ("repeat", "Again", [("repeat 3 asdf", "three times"), ("repeat 2 asdf, jkl", "commas: both, each time"), ("repeat asdf", "with no number: twice")]),
+        ("letters", "Say", [("letters on", "keys say letters"), ("letters off", "keys play notes")]),
+    ],
+    'blocks': [
+        ("right left up down back front forward go", "Build",
+         [("right 5", f"a row {RIGHT}"), ("left 5", f"a row {LEFT}"), ("up 4", f"a tower {UP}"), ("down 2", f"{DOWN} again"),
+          ("back 3", "away from you"), ("front 3", "toward you"), ("forward 3", "keep going that way"), ("red up 3 blue right 2", "")]),
+        ("repeat", "Again", [("repeat 4 right 1 up 1", "stairs")] + _AGAIN_ROWS),
+        (COLORS, "Colors", [(ALL_COLORS, ""), ("red up 5", "a red tower"), ("dark blue", "or light, bright, pale, neon")]),
+    ],
+}
+_TAKES_A_WAY = {"turn", "face", "brush", "pen"}
+
+
+def guide_topic(room: str, text: str):
+    """(heading, rows) for the last word in `text` that has a topic, else None.
+    The way after turn, face or brush belongs to that word: "brush up" is Brush."""
+    from ..color_mixing import COLOR_ADJECTIVES
+    words = text.lower().split()
+    for i, word in reversed(list(enumerate(words))):
+        if i and words[i - 1] in _TAKES_A_WAY:
+            continue
+        is_color = word in COLOR_ADJECTIVES or get_content().exact_color(word)
+        for triggers, heading, rows in TOPICS[room]:
+            if word in triggers.split() or (is_color and triggers == COLORS):
+                return heading, rows
+    return None
+
+
 PLACEHOLDER = f"Type code, or press {DOWN} to try one"
 HUES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'brown']
 # A few of these show under the plain hues, different ones each time code opens.
@@ -302,6 +358,7 @@ class CodePanel:
         self.card = None   # index of the picked recipe card while ↓ is in the cards
         self._back = 0     # how far up the room's code lines ↑ has stepped
         self.colors = _colors_markup(random.sample(MORE_COLORS, 2))
+        self.all_colors = _colors_markup(MORE_COLORS)
 
     def _layout(self, g) -> tuple:
         """(margin, input px, box height, sub px, gap, cards height), sized to
@@ -434,27 +491,29 @@ class CodePanel:
             g.draw_markup(code, px, tx, card.centery - text_h // 2, "mono", P.TEXT if picked else P.MUTED, card.right - pad - tx)
 
     def draw_side(self, g, rect):
-        """The word guide, top down until it runs out of room. Each example is
-        boxed like the code line, so it reads as something to type; its note
-        sits beside it, or under it when it won't fit. An example whose word
-        is in the code being typed gets an outline."""
+        """The word guide, top down until it runs out of room: all about the
+        last code word typed, else a bit of everything. Each example is boxed
+        like the code line, so it reads as something to type; its note sits
+        beside it, or under it when it won't fit."""
         g.rect(P.LINE, (rect.x, rect.y + g.em(0.9), 1, rect.h - g.em(1.8)))
-        typed = set(self.field.value.lower().split())
+        topic = guide_topic(self.room, self.field.value)
         x, w = rect.x + g.em(0.95), rect.w - g.em(1.7)
         head_px, px = g.em(0.72), g.em(0.82)
         bottom = rect.bottom - g.em(0.45)
         y = rect.y + g.em(0.9)
-        for heading, rows in GUIDE[self.room]:
+        if not topic:
+            y += g.draw_markup(GUIDE_HINT, head_px, x, y, "sans", P.MUTED, w) + g.em(0.5)
+        for heading, rows in [topic] if topic else GUIDE[self.room]:
             if y + g.line_height(head_px, "sans") + g.line_height(px, "mono") > bottom:
                 break
             y += g.draw_text(heading, head_px, x, y, "sans-bold", P.ACCENT).h + g.em(0.1)
             for code, gloss in rows:
-                if code == COLORS:
-                    h = g.draw_markup(self.colors, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
+                if code in (COLORS, ALL_COLORS):
+                    h = g.draw_markup(self.colors if code == COLORS else self.all_colors, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
                 elif y + (h := _example_height(g, code, gloss, px, w)) > bottom:
                     break
                 else:
-                    _draw_example(g, code, gloss, px, x, y, w, code.split()[0] in typed)
+                    _draw_example(g, code, gloss, px, x, y, w)
                 y += h + g.em(0.12)
             y += g.em(0.4)
 
@@ -473,11 +532,11 @@ def _example_height(g, code, gloss, px, w) -> int:
     return chip[1] if beside else chip[1] + g.em(0.1) + g.markup_size(gloss, gpx, "sans", w)[1]
 
 
-def _draw_example(g, code, gloss, px, x, y, w, lit: bool):
+def _draw_example(g, code, gloss, px, x, y, w):
     chip, gpx, beside = _example_layout(g, code, gloss, px, w)
     box = pygame.Rect((x, y), chip)
     g.rect(P.FIELD, box, radius=g.em(0.25))
-    g.rect(P.ACCENT if lit else P.HAIR, box, width=2 if lit else 1, radius=g.em(0.25))
+    g.rect(P.HAIR, box, width=1, radius=g.em(0.25))
     g.draw_text(code, px, box.centerx, box.centery, "mono", P.TEXT, anchor="center")
     if gloss:
         gx, gy = (box.right + g.em(0.5), box.centery - g.line_height(gpx, "sans") // 2) if beside else (x + g.em(0.2), box.bottom + g.em(0.1))

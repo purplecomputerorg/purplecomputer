@@ -7,6 +7,7 @@ import pytest
 from purple_tui.code_runner import (
     _split_clauses, _split_commands, _merge_multiword,
 )
+from purple_tui.canvas.rooms.art_room import onto_grid
 from purple_tui.fuzzy import fuzzy_match_small
 
 
@@ -180,6 +181,7 @@ class _FakeCanvas:
         self._cursor_x = 0
         self._cursor_y = 0
         self._heading = 'right'
+        self._run_end = None
         self._use_heading_cursor = False
         self._grid = {}
         self._painted_positions = set()
@@ -202,35 +204,13 @@ class _FakeCanvas:
     def refresh(self): pass
     def _set_paint_mode(self, on): self._paint_mode = on
     def _post_paint_mode_changed(self): pass
-    def _move_in_direction(self, d):
-        if d == 'right': return self._move_cursor_right()
-        if d == 'left': return self._move_cursor_left()
-        if d == 'up': return self._move_cursor_up()
-        if d == 'down': return self._move_cursor_down()
-        return False
-    def _move_cursor_right(self):
-        if self._cursor_x < self.canvas_width - 1:
-            self._cursor_x += 1
-            return True
-        return False
+    def _move_in_direction(self, direction, wrap=False):
+        dx, dy = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}[direction]
+        spot = onto_grid(self._cursor_x + dx, self._cursor_y + dy, self.canvas_width, self.canvas_height, wrap)
+        if spot:
+            self._cursor_x, self._cursor_y = spot
+        return bool(spot)
 
-    def _move_cursor_left(self):
-        if self._cursor_x > 0:
-            self._cursor_x -= 1
-            return True
-        return False
-
-    def _move_cursor_up(self):
-        if self._cursor_y > 0:
-            self._cursor_y -= 1
-            return True
-        return False
-
-    def _move_cursor_down(self):
-        if self._cursor_y < self.canvas_height - 1:
-            self._cursor_y += 1
-            return True
-        return False
     def _paint_at_cursor(self): self._painted_positions.add((self._cursor_x, self._cursor_y))
     def post_message(self, msg): pass
 

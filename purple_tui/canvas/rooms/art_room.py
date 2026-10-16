@@ -435,16 +435,14 @@ class ArtRoom(Room):
     def execute_logo_command(self, action: str, direction: str, distance: int):
         back = self._TURN_RIGHT[self._TURN_RIGHT[direction]]
         if distance and self._run_end == (back, self._cursor_x, self._cursor_y):
-            self._move_in_direction(direction)      # turning straight back starts on the run's last cell
+            self._move_in_direction(direction, wrap=True)    # turning straight back starts on the run's last cell
         self._run_end = None
         for _ in range(distance):
             if action == "paint":
                 self._paint_at_cursor()
-            if not self._move_in_direction(direction):
-                break
-        else:
-            if action == "paint" and distance:
-                self._run_end = (direction, self._cursor_x, self._cursor_y)
+            self._move_in_direction(direction, wrap=True)    # as tapped arrows do, so echoed strokes replay whole
+        if action == "paint" and distance:
+            self._run_end = (direction, self._cursor_x, self._cursor_y)
         self._restart_blink()
         self.refresh()
 

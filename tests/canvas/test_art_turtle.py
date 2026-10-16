@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from purple_tui.canvas.rooms.art_room import ArtRoom as ArtCanvas, HEADING_TURNS
+from purple_tui.canvas.rooms.art_room import ArtRoom as ArtCanvas, HEADING_TURNS, onto_grid
 
 
 # ---------------------------------------------------------------------------
@@ -51,41 +51,12 @@ class FakeCanvas:
     def refresh(self):
         pass
 
-    # Real movement logic (simplified from ArtCanvas)
-    def _move_cursor_right(self):
-        if self._cursor_x < self.canvas_width - 1:
-            self._cursor_x += 1
-            return True
-        return False
-
-    def _move_cursor_left(self):
-        if self._cursor_x > 0:
-            self._cursor_x -= 1
-            return True
-        return False
-
-    def _move_cursor_down(self):
-        if self._cursor_y < self.canvas_height - 1:
-            self._cursor_y += 1
-            return True
-        return False
-
-    def _move_cursor_up(self):
-        if self._cursor_y > 0:
-            self._cursor_y -= 1
-            return True
-        return False
-
-    def _move_in_direction(self, direction):
-        if direction == 'up':
-            return self._move_cursor_up()
-        elif direction == 'down':
-            return self._move_cursor_down()
-        elif direction == 'left':
-            return self._move_cursor_left()
-        elif direction == 'right':
-            return self._move_cursor_right()
-        return False
+    def _move_in_direction(self, direction, wrap=False):
+        dx, dy = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}[direction]
+        spot = onto_grid(self._cursor_x + dx, self._cursor_y + dy, self.canvas_width, self.canvas_height, wrap)
+        if spot:
+            self._cursor_x, self._cursor_y = spot
+        return bool(spot)
 
     def _paint_at_cursor(self):
         pos = (self._cursor_x, self._cursor_y)
@@ -247,17 +218,6 @@ class TestForward:
         c.execute_logo_command("move", "down", 3)
         assert c._cursor_y == 3
         assert c._cursor_x == 0
-
-    def test_forward_stops_at_edge(self):
-        c = FakeCanvas(width=10, height=5)
-        c.execute_logo_command("move", "right", 100)
-        assert c._cursor_x == 9  # width - 1
-
-    def test_forward_stops_at_top_edge(self):
-        c = FakeCanvas(width=10, height=5)
-        c._cursor_y = 2
-        c.execute_logo_command("move", "up", 100)
-        assert c._cursor_y == 0
 
     def test_forward_paints_when_paint_action(self):
         c = FakeCanvas()
@@ -454,7 +414,7 @@ class TestArtCodeRunnerTurtle:
         from purple_tui.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "forward 999"]))
-        assert canvas._cursor_x == 19
+        assert canvas._cursor_x == 200 % 20
 
     def test_turn_case_insensitive(self, canvas):
         from purple_tui.code_runner import ArtCodeRunner
@@ -784,9 +744,9 @@ class TestNearestAnchor:
     def test_turn_left_with_distance(self):
         """turn left 5: face left, then move 5."""
         c, _ = self._run(["paint off", "turn left 5"])
-        # Start at (0,0); turn left and try to move 5 → clamped at left edge.
+        # Start at (0,0); turn left and move 5, around to the right side.
         assert c._heading == 'left'
-        assert c._cursor_x == 0
+        assert c._cursor_x == 25
 
     def test_multiword_color_before_distance_direction(self):
         """dark blue 10 down: the adjective+color span counts as one token
@@ -813,30 +773,31 @@ class TestNearestAnchor:
 
 
 # ---------------------------------------------------------------------------
-# Edge stop (no wrapping) tests
+# Edge wrap tests: runs come out the far side, like tapped arrows
 # ---------------------------------------------------------------------------
 
-class TestEdgeStop:
-    def test_forward_stops_at_right_edge(self):
+class TestEdgeWrap:
+    def test_forward_wraps_at_right_edge(self):
         c = FakeCanvas(width=10)
         c._cursor_x = 8
-        c.execute_logo_command("move", "right", 5)
-        assert c._cursor_x == 9
+        c.execute_logo_command("paint", "right", 5)
+        assert c._cursor_x == 3
+        assert {(8, 0), (9, 0), (0, 0), (1, 0), (2, 0)} == c._painted_positions
 
-    def test_forward_stops_at_left_edge(self):
+    def test_forward_wraps_at_left_edge(self):
         c = FakeCanvas(width=10)
         c._cursor_x = 2
         c.execute_logo_command("move", "left", 5)
-        assert c._cursor_x == 0
+        assert c._cursor_x == 7
 
-    def test_forward_stops_at_top_edge(self):
+    def test_forward_wraps_at_top_edge(self):
         c = FakeCanvas(height=10)
         c._cursor_y = 2
         c.execute_logo_command("move", "up", 5)
-        assert c._cursor_y == 0
+        assert c._cursor_y == 7
 
-    def test_forward_stops_at_bottom_edge(self):
+    def test_forward_wraps_at_bottom_edge(self):
         c = FakeCanvas(height=10)
         c._cursor_y = 7
         c.execute_logo_command("move", "down", 5)
-        assert c._cursor_y == 9
+        assert c._cursor_y == 2

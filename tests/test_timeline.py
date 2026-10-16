@@ -107,6 +107,7 @@ class TestRoomTimeline:
         assert len(lines) == 2
         assert "s" in json.loads(lines[0])
         parsed = json.loads(lines[1])
+        assert parsed.pop("t") > 0
         assert parsed == {"d": {"b": 2}, "r": ["a"]}
 
 

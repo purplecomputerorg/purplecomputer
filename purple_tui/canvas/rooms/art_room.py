@@ -1,23 +1,25 @@
 """Art room: a grid of square cells. Every letter paints its sticker color,
-Backslash opens the color wheel, Space puts the pen down so arrows draw,
+Backslash opens the color wheel (for the brush, or in ABC for the letters),
+Space puts the brush down so arrows draw,
 holding Backspace makes arrows erase, Tab switches to writing letters, and
 hold Space opens the Logo-style code line."""
 
+import math
 import time
 
 import pygame
 
 from ... import palette as P
 from ...code_runner import ArtCodeRunner
-from ...constants import ART_COLS, ART_ROWS, ICON_PALETTE, ICON_ROBOT
+from ...constants import ART_COLS, ART_ROWS, ICON_PALETTE
 from ...color_mixing import mix_colors_paint
 from ..gfx import _Cache, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
-from .. import paper
+from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
-from ..color_wheel import open_on as open_color_wheel
-from ..panels import CodePanel, SpaceHold
-from ..ui import draw_label, draw_mode_switch
+from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
+from ..panels import CodePanel, Echo, SpaceHold
+from ..ui import MOVE_HINT, draw_key_hint, draw_label, draw_mode_switch
 from .base import Room
 
 COLS, ROWS = ART_COLS, ART_ROWS
@@ -27,13 +29,18 @@ HOLD_ACCEL_MULTIPLIER = 6
 CANVAS_BG = "#221440"
 CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
 TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
+BRUSH_LEAN = (0.5, -0.866)          # handle up and to the right, the way a right hand holds it
+BRUSH_FLOAT = 0.35                  # cells the lifted brush hovers above its ring
+BRUSH_HEAD = 0.55                   # of the brush's height from the tip: bristles and ferrule, no handle
+SPRITE_HALF = 3.5                   # cells from the cursor cell's center to the sprite's edge
+LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three quick frames
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
 HINTS = {
     "littles": "Type to paint!",
-    "pen": "Pen is down! Arrows paint a trail. Space lifts the pen.",
+    "pen": "Brush down! Arrows paint. {Space} lifts it.",
     "erase": "Erasing! Arrows clear a trail.",
-    "paint": "Type to paint! Every letter is a color. Space puts the pen down.",
-    "write": "Type to write! Arrow keys move. Enter for a new line.",
+    "paint": "Type to paint! {Space} puts the brush down.",
+    "write": "Type to write! Arrow keys move. {Enter} for a new line.",
 }
 
 
@@ -54,34 +61,115 @@ def brush_for_key(char: str):
     return None
 
 
-def _brush_tip(c: int, color: str, tip, arrow: bool) -> pygame.Surface:
-    """A 2c square centered on the cursor cell, drawn 4x and smoothed down:
-    tip is "ring" (pen up), "dot" (pen down), "erase" (a hollow square over
-    the cell) or None; arrow adds a chevron pointing right."""
+def onto_grid(x: int, y: int, w: int, h: int, wrap: bool):
+    """(x, y) if it's on a w by h grid, else around to the far side with `wrap`, else None.
+    Moves wrap on a fresh press but a held key stops at the edge, so a fast run sticks there."""
+    if 0 <= x < w and 0 <= y < h:
+        return x, y
+    return (x % w, y % h) if wrap else None
+
+
+def _brush_shape(at, u: float, press: float) -> tuple:
+    """Bristles, sheen, ferrule and handle as polygons, tip first along the lean.
+    Pressing splays the bristles and bends their tip off sideways, the way a
+    brush flattens against paper."""
+    n, belly = 20, 0.42
+    length, half, bend = u * (1.15 - 0.2 * press), u * (0.4 + 0.12 * press), u * 0.6 * press
+    tip_r, neck = u * (0.01 + 0.08 * press), u * 0.21
+    width = lambda t: (tip_r + (half - tip_r) * math.sin(math.pi / 2 * t / belly) if t < belly
+                       else half - (half - neck) * ((t - belly) / (1 - belly)) ** 2)
+    dx, dy = BRUSH_LEAN
+    paper = at(0, 0)[1] + u * (0.5 - 0.45 * press)
+
+    def side(t, k):
+        x, y = at(length * t, 0)
+        tx_, ty_ = dx * length + 2 * bend * (1 - t), dy * length
+        m = math.hypot(tx_, ty_)
+        w = width(t) * k
+        return x - bend * (1 - t) ** 2 - ty_ / m * w, min(paper, y + tx_ / m * w)
+
+    ts = [i / n for i in range(n + 1)]
+    bristles = [side(t, 1) for t in ts] + [side(t, -1) for t in reversed(ts)]
+    sheen = [side(t, -0.45) for t in ts[4:15]]
+    f0, f1, h1 = length, length + 0.32 * u, length + 1.6 * u
+    ferrule = [at(f0, neck * 1.15), at(f1, neck * 0.95), at(f1, -neck * 0.95), at(f0, -neck * 1.15)]
+    stations = ((f1, 0.12), (f1 + 0.35 * u, 0.16), (h1, 0.07))
+    handle = [at(a, w * u) for a, w in stations] + [at(a, -w * u) for a, w in reversed(stations)]
+    return bristles, sheen, ferrule, handle, at(h1, 0)
+
+
+def _dash_outline(surf, mid: int, u: float, edge: int, color: str, alpha: int):
+    """Thin dashes around the cursor cell, the square the brush will paint."""
+    lo, hi, n = mid - u / 2, mid + u / 2, 3
+    seg, w = u / (2 * n - 1), max(2, round(u * 0.035))
+    for (x0, y0), (x1, y1) in (((lo, lo), (hi, lo)), ((hi, lo), (hi, hi)), ((hi, hi), (lo, hi)), ((lo, hi), (lo, lo))):
+        dx, dy = (x1 - x0) / u, (y1 - y0) / u
+        for i in range(n):
+            a, b = 2 * i * seg, (2 * i + 1) * seg
+            line = ((x0 + dx * a, y0 + dy * a), (x0 + dx * b, y0 + dy * b))
+            pygame.draw.line(surf, (*rgb(TIP_EDGE), alpha), *line, w + edge)
+            pygame.draw.line(surf, (*rgb(color), alpha), *line, w)
+
+
+def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground="cell") -> pygame.Surface:
+    """A 7c square centered on the cursor cell, drawn 4x and smoothed down.
+    tip "brush" is a paintbrush in the brush color: lift 1 floats it above a
+    ring on the cell (pen up), lift 0 presses its splayed bristles into the
+    cell (pen down); ground "ring" leaves off the dashed cell, None the ring too. "erase"
+    is a hollow square over the cell. arrow_turn, when not None, adds a chevron turned that many degrees from pointing right."""
     s = 4
-    size, mid = 2 * c * s, c * s
-    surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    r = round(c * s * (0.42 if tip == "dot" else 0.38))
-    edge = max(s, round(c * s * 0.05))
-    band = max(2 * s, round(c * s * 0.13))
-    if tip == "ring":
-        pygame.draw.circle(surf, rgb(TIP_EDGE), (mid, mid), r + edge, band + 2 * edge)
-        pygame.draw.circle(surf, rgb(color), (mid, mid), r, band)
-    elif tip == "dot":
-        pygame.draw.circle(surf, rgb(TIP_EDGE), (mid, mid), r + edge)
-        pygame.draw.circle(surf, rgb(P.TEXT), (mid, mid), r)
-        pygame.draw.circle(surf, rgb(color), (mid, mid), r - max(s, round(c * s * 0.08)))
+    u = c * s
+    mid = round(SPRITE_HALF * u)
+    surf = pygame.Surface((2 * mid, 2 * mid), pygame.SRCALPHA)
+    edge = max(s, round(u * 0.06))
+    if tip == "brush":
+        press = 1 - lift
+        if lift and ground:
+            ring, band, alpha = pygame.Rect(0, 0, round(u * 0.9), round(u * 0.42)), max(2 * s, round(u * 0.09)), round(255 * lift)
+            ring.center = (mid, mid + round(u * 0.3))
+            if ground == "cell":
+                _dash_outline(surf, mid, u, edge, color, alpha)
+            pygame.draw.ellipse(surf, (*rgb(TIP_EDGE), alpha), ring.inflate(2 * edge, 2 * edge), band + 2 * edge)
+            pygame.draw.ellipse(surf, (*rgb(color), alpha), ring, band)
+        tx, ty = mid + u * 0.3 * press, mid + u * (0.3 - BRUSH_FLOAT * lift)
+        (dx, dy), (px, py) = BRUSH_LEAN, (-BRUSH_LEAN[1], BRUSH_LEAN[0])
+        at = lambda a, b: (tx + dx * a + px * b, ty + dy * a + py * b)
+        bristles, sheen, ferrule, handle, end = _brush_shape(at, u, press)
+        r_end = round(u * 0.08)
+        pygame.draw.circle(surf, rgb(TIP_EDGE), end, r_end + edge)
+        parts = ((handle, P.ACCENT), (ferrule, P.TEXT), (bristles, color))
+        for poly, _ in parts:
+            pygame.draw.polygon(surf, rgb(TIP_EDGE), poly, 2 * edge)
+        for poly, fill in parts:
+            pygame.draw.polygon(surf, rgb(fill), poly)
+        pygame.draw.circle(surf, rgb(P.ACCENT), end, r_end)
+        pygame.draw.lines(surf, rgb(mix_colors_paint([color, "#FFFFFF"])), False, sheen, 2 * edge)
     elif tip == "erase":
-        box = pygame.Rect(0, 0, c * s, c * s)
+        box = pygame.Rect(0, 0, u, u)
         box.center = (mid, mid)
+        band = max(2 * s, round(u * 0.13))
         pygame.draw.rect(surf, rgb(TIP_EDGE), box.inflate(2 * edge, 2 * edge), band + 2 * edge)
         pygame.draw.rect(surf, rgb(P.TEXT), box, band)
-    if arrow:
-        x0, h = mid + max(r, round(c * s * 0.42)) + edge, round(c * s * 0.24)
-        tri = [(x0, mid - h), (x0 + round(h * 1.3), mid), (x0, mid + h)]
-        pygame.draw.polygon(surf, rgb(color), tri)
+    if arrow_turn is not None:
+        x0, h = round(u * 0.65), round(u * 0.32)
+        a = math.radians(arrow_turn)
+        turn = lambda x, y: (mid + x * math.cos(a) + y * math.sin(a), mid - x * math.sin(a) + y * math.cos(a))
+        tri = [turn(x0, -h), turn(x0 + h * 1.3, 0), turn(x0, h)]
+        fill = color if tip else P.TEXT
+        pygame.draw.polygon(surf, rgb(fill), tri)
         pygame.draw.polygon(surf, rgb(TIP_EDGE), tri, edge)
-    return pygame.transform.smoothscale(surf, (2 * c, 2 * c))
+    return pygame.transform.smoothscale(surf, (2 * mid // s, 2 * mid // s))
+
+
+def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
+    """The cursor brush's bristles and ferrule over its ring, no handle, cropped to their ink."""
+    c = max(3, round(h / 1.4))
+    ink = _brush_tip(c, color, "brush", None, lift, ground=None).get_bounding_rect()
+    surf = _brush_tip(c, color, "brush", None, lift, ground="ring")
+    full = surf.get_bounding_rect()
+    top = ink.bottom - round(ink.h * BRUSH_HEAD)
+    head = surf.subsurface(pygame.Rect(full.x, top, full.w, full.bottom - top))
+    return head.subsurface(head.get_bounding_rect()).copy()
 
 
 class ArtRoom(Room):
@@ -89,9 +177,9 @@ class ArtRoom(Room):
     colors equal, a written letter holds the letter over whatever bg it had."""
 
     name, label, icon = "art", "Art", ICON_PALETTE
-    arrow_hint = "Arrows move  ← ↑ ↓ →"
     LANDSCAPE = True
     has_code_panel = True
+    wheel_ready = True
     canvas_width = COLS
     canvas_height = ROWS
     _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
@@ -106,7 +194,12 @@ class ArtRoom(Room):
         self._paint_mode = True
         self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""
+        self._ink = None              # ABC letters' color from the wheel; None: light, or black/white over paint
+        self._wheel_spots = {}        # per mode
         self._pen_down = False
+        self._lift = 1.0              # the brush's height: 1 up, 0 pressed down; eases on Space
+        self._lift_timer = None
+        self._pen_at_press = self._dragged = False   # holding Space while moving lowers the brush until release
         self._code_mode = False
         self._heading = "right"
         self._use_heading_cursor = False
@@ -120,6 +213,7 @@ class ArtRoom(Room):
         self._blink_timer = None
         self._tips = _Cache()
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
+        self.echo = Echo()
         self.code_panel = None
         self._cell = 10
         self._origin = (0, 0)
@@ -170,19 +264,33 @@ class ArtRoom(Room):
 
     @property
     def brush_color(self) -> str:
-        return self._last_key_color
+        """In ABC the wheel's 'brush' is the letters' ink."""
+        return self._last_key_color if self._paint_mode else self._ink or P.TEXT
 
     def set_brush_color(self, color: str, key: str = ""):
-        self._last_key_char, self._last_key_color = key, color
+        if self._paint_mode:
+            self._last_key_char, self._last_key_color = key, color
+        else:
+            self._ink = None if color == P.TEXT else color
         self._post_paint_mode_changed()
+
+    @property
+    def wheel_spot(self):
+        return self._wheel_spots.get(self._paint_mode)
+
+    @wheel_spot.setter
+    def wheel_spot(self, spot):
+        self._wheel_spots[self._paint_mode] = spot
 
     def _post_paint_mode_changed(self):
         self.app.set_legend(self._last_key_color if self._paint_mode else None, visible=True)
         self.app.invalidate()
 
+    def arrow_hint(self) -> str:
+        return MOVE_HINT
+
     def hold_progress(self):
-        p = self.space.progress()
-        return (p, "Code") if p is not None else None
+        return self.space.status(self.code_panel is not None)
 
     def cursor_fraction(self, vp):
         return ((self._origin[0] + self._cursor_x * self._cell - vp.x) / vp.w,
@@ -192,7 +300,8 @@ class ArtRoom(Room):
     def timeline_state(self) -> dict:
         state = {f"c:{x},{y}": [ch, fg, bg, 1 if (x, y) in self._painted_positions else 0]
                  for (x, y), (ch, fg, bg) in self._grid.items()}
-        state.update(cursor=[self._cursor_x, self._cursor_y], paint=self._paint_mode, color=self._last_key_color)
+        state.update(cursor=[self._cursor_x, self._cursor_y], paint=self._paint_mode, color=self._last_key_color,
+                     ink=self._ink)
         return state
 
     def restore_timeline_state(self, state: dict):
@@ -210,6 +319,8 @@ class ArtRoom(Room):
         self._paint_mode = bool(state.get("paint", True))
         self._set_pen(False)
         self._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
+        self._ink = state.get("ink")
+        self.echo.reset()
         self._post_paint_mode_changed()
 
     def clear(self):
@@ -224,6 +335,8 @@ class ArtRoom(Room):
         self._heading = "right"
         self._use_heading_cursor = False
         self._last_key_color = DEFAULT_BRUSH_COLOR
+        self._ink = None
+        self.echo.reset()
         self._post_paint_mode_changed()
 
     def has_content(self) -> bool:
@@ -250,7 +363,9 @@ class ArtRoom(Room):
         self._dirty = None
 
     def _paint_at_cursor(self):
-        pos = (self._cursor_x, self._cursor_y)
+        self._paint_at((self._cursor_x, self._cursor_y))
+
+    def _paint_at(self, pos):
         cell = self._grid.get(pos)
         color = mix_colors_paint([self._get_cell_bg(pos), self._last_key_color]) if pos in self._painted_positions else self._last_key_color
         self._painted_positions.add(pos)
@@ -277,8 +392,18 @@ class ArtRoom(Room):
         self._pen_down = down
         if down:
             self._paint_at_cursor()
+        if self._lift_timer is None:
+            self._lift_timer = self.app.timers.every(LIFT_FRAME, self._step_lift)
         self._restart_blink()
         self._post_paint_mode_changed()
+
+    def _step_lift(self):
+        target = 0.0 if self._pen_down else 1.0
+        self._lift = target if abs(target - self._lift) <= LIFT_STEP else self._lift + math.copysign(LIFT_STEP, target - self._lift)
+        if self._lift == target:
+            self._lift_timer.stop()
+            self._lift_timer = None
+        self.app.invalidate()
 
     def set_code_mode(self, on: bool):
         self._code_mode = on
@@ -287,25 +412,20 @@ class ArtRoom(Room):
             self._heading = "right"
         self.app.invalidate()
 
-    def _move_in_direction(self, direction: str) -> bool:
+    def _move_in_direction(self, direction: str, wrap: bool = False) -> bool:
         dx, dy = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}.get(direction, (0, 0))
-        nx, ny = self._cursor_x + dx, self._cursor_y + dy
-        if not (0 <= nx < COLS and 0 <= ny < ROWS):
-            return False
-        self._cursor_x, self._cursor_y = nx, ny
-        return True
-
-    def _carriage_return(self):
-        self._cursor_x = 0
-        self._cursor_y = (self._cursor_y + 1) % ROWS
+        spot = onto_grid(self._cursor_x + dx, self._cursor_y + dy, COLS, ROWS, wrap)
+        if spot:
+            self._cursor_x, self._cursor_y = spot
+        return bool(spot)
 
     def _advance_after_stamp(self, direction: str):
-        stamp_x = self._cursor_x
+        """On past a typed or stamped cell, wrapping like lines of text."""
+        self._post_stamp_x = self._cursor_x
         if direction == "right" and self._cursor_x >= COLS - 1:
-            self._carriage_return()
+            self._new_line()
         else:
-            self._move_in_direction(direction)
-        self._post_stamp_x = stamp_x
+            self._move_in_direction(direction, wrap=True)
 
     def execute_logo_command(self, action: str, direction: str, distance: int):
         for _ in range(distance):
@@ -334,23 +454,19 @@ class ArtRoom(Room):
         self._advance_after_stamp(direction)
 
     def _letter_px(self, c: int) -> int:
-        return max(6, round(c * 0.8))
+        return max(6, round(c * 0.85))
 
     def _new_line(self):
         self._cursor_x = 0
-        self._cursor_y = min(ROWS - 1, self._cursor_y + 1)
+        self._cursor_y = (self._cursor_y + 1) % ROWS
 
     def type_char(self, char: str, direction: str = "right"):
         pos = (self._cursor_x, self._cursor_y)
         self._last_key_char = char
         self._last_key_color = get_key_color(char)
         bg = self._get_cell_bg(pos)
-        self._set_cell(pos, char, _contrast_text_color(bg) if pos in self._painted_positions else P.TEXT, bg)
-        self._post_stamp_x = self._cursor_x
-        if direction == "right" and self._cursor_x >= COLS - 1:
-            self._new_line()
-        else:
-            self._move_in_direction(direction)
+        self._set_cell(pos, char, self._ink or (_contrast_text_color(bg) if pos in self._painted_positions else P.TEXT), bg)
+        self._advance_after_stamp(direction)
         self._restart_blink()
         self.app.invalidate()
 
@@ -362,7 +478,13 @@ class ArtRoom(Room):
             self._cursor_x = COLS - 1
         self._erase_at_cursor()
 
-    def _erase_at_cursor(self):
+    def _paint_stroke(self, direction: str):
+        """One cell of an arrow trail, written down as code too."""
+        self._paint_at_cursor()
+        self.echo.color(self._last_key_color)
+        self.echo.step(direction)
+
+    def _erase_at_cursor(self, _direction=None):
         pos = (self._cursor_x, self._cursor_y)
         if pos in self._grid:
             self._del_cell(pos)
@@ -387,6 +509,17 @@ class ArtRoom(Room):
             self._last_key_char, self._last_key_color = brush
         self._paint_at_cursor()
 
+    def _mix_into_last(self, held_key: str, char: str) -> bool:
+        """A chord: the cell the held key just painted takes this key's color
+        mixed in, and the brush becomes the mix. Holding on, each next key
+        mixes in too."""
+        pos = self._last_paint_pos
+        if pos is None or self._last_key_char != held_key or not self._select_brush(char):
+            return False
+        self._paint_at(pos)
+        self.set_brush_color(self._grid[pos][2], char)
+        return True
+
     def _select_brush(self, char: str) -> bool:
         """Set the brush from a key; False when the key has no color."""
         brush = brush_for_key(char)
@@ -398,7 +531,7 @@ class ArtRoom(Room):
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
             self._set_pen(False)
-            self.code_panel = CodePanel(self.app, "art")
+            self.code_panel = CodePanel(self.app, "art", self.echo.take())
             self.set_code_mode(True)
             self.app.set_panel(self.code_panel)
 
@@ -438,13 +571,26 @@ class ArtRoom(Room):
             self._set_pen(not self._pen_down)
             if self._pen_down and arrow_held:
                 self._advance_after_stamp(arrow_held)
+            elif not self._pen_down:
+                self.echo.flush()
         else:
             self.type_char(" ")
+            self.echo.letter("write", " ")
         self.app.invalidate()
 
+    def _space_press(self, down: bool):
+        if down:
+            self._pen_at_press, self._dragged = self._pen_down, False
+        elif self._dragged and not self._pen_at_press:
+            self._set_pen(False)
+            self.echo.flush()
+
     async def handle(self, action):
-        if isinstance(action, ControlAction) and action.action == "space" and self.space.route(action):
-            return
+        if isinstance(action, ControlAction) and action.action == "space":
+            if not action.is_repeat:
+                self._space_press(action.is_down)
+            if self.space.route(action):
+                return
         if self.code_panel is not None:
             self.space.other_key()
             result = await self.code_panel.handle(action)
@@ -453,7 +599,8 @@ class ArtRoom(Room):
             elif result == "close":
                 self.close_code_panel()
             return
-        self.space.other_key()
+        dragging = self._paint_mode and isinstance(action, NavigationAction) and action.space_held
+        self.space.other_key(flush=not dragging)
         prior_post_stamp_x = self._post_stamp_x
         self._post_stamp_x = None
         if isinstance(action, ControlAction):
@@ -464,6 +611,8 @@ class ArtRoom(Room):
                     self.app.invalidate()
                 return
             a = action.action
+            if a in ("tab", "backspace") or (a == "enter" and not self._paint_mode):
+                self.echo.flush()
             if a == "space":
                 if not (self._paint_mode and action.is_repeat):
                     self._space(action.arrow_held)
@@ -489,16 +638,23 @@ class ArtRoom(Room):
             self._backspace_repeat_count = 0
             char = action.char
             direction = action.arrow_held or "right"
-            if not self._paint_mode:
-                self.type_char(char)
-                return
-            if action.shift_held and char in UNSHIFT_MAP:
+            if self._paint_mode and action.shift_held and char in UNSHIFT_MAP:
                 char = UNSHIFT_MAP[char]
             if open_color_wheel(self, char):
                 return
-            if self._select_brush(char) and not action.shift_held:
+            if not self._paint_mode:
+                self.type_char(char)
+                self.echo.letter("write", char)
+                return
+            held = brush_for_key(action.char_held) if action.char_held else None
+            mixed = bool(held) and not action.shift_held and self._mix_into_last(held[0], char)
+            if not mixed and self._select_brush(char) and not action.shift_held:
                 self._paint_at_cursor()
                 self._advance_after_stamp(direction)
+                if char.isalpha():
+                    self.echo.letter(direction, char)
+                else:
+                    self.echo.flush()   # a digit would read as a distance
             self._restart_blink()
             self.app.invalidate()
 
@@ -514,15 +670,20 @@ class ArtRoom(Room):
                 self._paint_at_cursor()
         if action.direction in ("up", "down") and prior_post_stamp_x is not None and not action.char_held:
             self._cursor_x = prior_post_stamp_x
+        if self._paint_mode and action.space_held and not self._erasing:
+            self._dragged = True
+            self._set_pen(True)
         paint_each_step = self._paint_mode and not self._erasing and (self._pen_down or bool(action.char_held))
-        trail = self._erase_at_cursor if self._erasing else self._paint_at_cursor if paint_each_step else None
+        trail = self._erase_at_cursor if self._erasing else self._paint_stroke if paint_each_step else None
+        if trail != self._paint_stroke:
+            self.echo.flush()
         steps = HOLD_ACCEL_MULTIPLIER if (not trail and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD) else 1
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(steps):
-                if not self._move_in_direction(direction):
+                if not self._move_in_direction(direction, wrap=not action.is_repeat):
                     break
                 if trail:
-                    trail()
+                    trail(direction)
         self._restart_blink()
         self.app.invalidate()
 
@@ -544,12 +705,18 @@ class ArtRoom(Room):
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
         self._draw_letters(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
+        held = chrome_h and self._paint_mode and self._last_paint_pos and color_recipe.held_key(self.app, self._last_key_char)
+        if held:
+            x, y = self._last_paint_pos
+            cell = pygame.Rect(ox + x * c, oy + y * c, c, c)
+            color_recipe.draw_hold_badge(g, held, g.vh(1.9), cell, pygame.Rect(ox, oy, c * COLS, c * ROWS))
         if chrome_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             key = "littles" if self.app._littles_mode else self._hint_key()
-            g.draw_text(HINTS[key], g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
-            if self.app._code_panel_enabled and not self.app._littles_mode:
-                g.draw_text(f"{ICON_ROBOT} Hold Space: write code", g.vh(1.9), foot.right, foot.centery, "mono", P.DIM, anchor="midright")
+            draw_key_hint(g, HINTS[key], g.vh(1.9), foot.x, foot.centery)
+            if not self.app._littles_mode:
+                color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled,
+                                           self._paint_mode and color_recipe.hint_row(self._last_key_char))
 
     def _hint_key(self) -> str:
         if self._erasing:
@@ -610,19 +777,18 @@ class ArtRoom(Room):
         if not self._paint_mode and self._blink_on:  # underline caret: the next letter lands in this cell
             bar = max(2, c // 4)
             g.rect(P.ACCENT, (x, y + c - bar, c, bar))
-        tip = "erase" if self._erasing else ("dot" if self._pen_down else "ring") if self._paint_mode else None
-        heading = self._heading if self._use_heading_cursor else None
-        if tip or heading:
-            color = self._last_key_color if self._paint_mode else P.TEXT
-            key = (c, color, tip, heading)
-            sprite = self._tips.get_or(key, lambda: pygame.transform.rotate(_brush_tip(c, color, tip, bool(heading)), HEADING_TURNS.get(heading, 0)))
+        tip = "erase" if self._erasing else "brush" if self._paint_mode else None
+        turn = HEADING_TURNS[self._heading] if self._use_heading_cursor else None
+        if tip or turn is not None:
+            key = (c, self._last_key_color, tip, turn, round(self._lift, 2))
+            sprite = self._tips.get_or(key, lambda: _brush_tip(*key))
             g.surface.blit(sprite, sprite.get_rect(center=(x + c // 2, y + c // 2)))
 
     def _draw_header(self, g, r):
-        """PAINT / ABC mode switch (active one in inverse video) with the brush
-        color as a swatch beside it, and the Tab keycap on the right."""
+        """The Tab switch between Paint and ABC, with the brush beside it."""
         if self.app._littles_mode:
             draw_label(g, "Paint" if self._paint_mode else "Write", g.vh(1.9), r.centerx, r.centery, P.TEXT, anchor="center")
             return
-        draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self._last_key_color,
-                         "to write" if self._paint_mode else "to paint")
+        icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
+        draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self.brush_color,
+                         icon, wheel_chip(self))

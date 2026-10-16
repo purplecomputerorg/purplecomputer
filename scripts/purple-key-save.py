@@ -77,13 +77,17 @@ def pack(folder):
 
 
 def unpack(payload, folder, owner):
+    # Runs as root in a folder purple owns: a link planted there must not steer the chown elsewhere
+    for path in (os.path.dirname(folder), folder):
+        if os.path.islink(path):
+            raise OSError(f"{path} is a link")
     os.makedirs(folder, exist_ok=True)
-    os.chown(os.path.dirname(folder), owner, owner)  # ~/.config, if this just made it
+    os.lchown(os.path.dirname(folder), owner, owner)  # ~/.config, if this just made it
     with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tar:
         tar.extractall(folder, filter="data")
     for root, dirs, files in os.walk(folder):
         for name in [root] + [os.path.join(root, n) for n in dirs + files]:
-            os.chown(name, owner, owner)
+            os.lchown(name, owner, owner)
 
 
 class SaveFile:

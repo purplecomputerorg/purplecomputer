@@ -27,25 +27,25 @@ def _split_clauses(text: str) -> list[str]:
 # Command keywords that start a new command when found mid-line.
 # Includes direction words and new commands (spin/face/back/backward/rotate).
 _COMMAND_STARTS = re.compile(
-    r'\b(?=(?:turn|spin|rotate|face|forward|go|move|walk|step|back|backward|paint|write|color|lift|pen|choose|select|use|play|instrument|letters|fast|slow|repeat|left|right|up|down)\b)',
+    r'\b(?=(?:turn|spin|rotate|face|forward|go|move|walk|step|back|backward|paint|write|color|lift|brush|pen|choose|select|use|play|instrument|letters|fast|slow|repeat|left|right|up|down)\b)',
     re.IGNORECASE,
 )
 
 # Patterns for merging multi-word commands after keyword splitting.
-# "turn"/"face" + direction and "pen" + up/down must stay together.
+# "turn"/"face" + direction and "brush"/"pen" + up/down must stay together.
 _MULTIWORD_MERGE = [
     # (bare_keyword_re, following_arg_re)
     (re.compile(r'^turn$', re.IGNORECASE),
      re.compile(r'^(?:left|right|up|down|back|backward|around|\d)', re.IGNORECASE)),
     (re.compile(r'^face$', re.IGNORECASE),
      re.compile(r'^(?:left|right|up|down)\b', re.IGNORECASE)),
-    (re.compile(r'^pen$', re.IGNORECASE),
+    (re.compile(r'^(?:brush|pen)$', re.IGNORECASE),
      re.compile(r'^(?:up|down)\b', re.IGNORECASE)),
 ]
 
 
 def _merge_multiword(parts: list[str]) -> list[str]:
-    """Rejoin bare 'turn'/'face'/'pen' with the following argument chunk."""
+    """Rejoin bare 'turn'/'face'/'brush'/'pen' with the following argument chunk."""
     merged = []
     i = 0
     while i < len(parts):
@@ -231,18 +231,20 @@ class MusicCodeRunner:
         (re.compile(r'^letters\s+(\S+)\s*$', re.I), '_do_letters'),
         (re.compile(r'^(?:choose|instrument|select|use)\s+(.+)$', re.I), '_do_instrument'),
         (re.compile(r'^play\s+(.+)$', re.I), '_do_play'),
+        (re.compile(r'^key\s+(?:of\s+)?(.+?)\s*$', re.I), '_do_key'),
     ]
 
     # Command keywords for fuzzy matching
     _KEYWORD_VOCAB = ['letters', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
 
     def __init__(self, play_key_fn, set_instrument_fn=None,
-                 color_fn=None, flash_fn=None, set_letters_fn=None):
+                 color_fn=None, flash_fn=None, set_letters_fn=None, set_key_fn=None):
         self.play_key = play_key_fn
         self.set_instrument = set_instrument_fn
         self.color_fn = color_fn
         self.flash_fn = flash_fn
         self.set_letters = set_letters_fn
+        self.set_key = set_key_fn
         self.corrections: list[tuple[str, str]] = []
         self._original_text: str = ""
         self._correction_final: str = ""
@@ -411,6 +413,19 @@ class MusicCodeRunner:
         await self._play_notes(arg)
         return True
 
+    async def _do_key(self, m) -> bool | None:
+        """key g: the same keys play in another friendly key. Without a
+        set_key_fn the words play as notes, as they always did."""
+        if not self.set_key:
+            await self._play_notes(m.group(0))
+            return True
+        from .music_constants import FRIENDLY_KEY_NAMES
+        name = re.sub(r'^bb$|\s*flat$', lambda f: 'b♭' if f.group(0) == 'bb' else '♭', m.group(1).lower())
+        names = [n.lower() for n in FRIENDLY_KEY_NAMES]
+        if name in names:
+            self.set_key(names.index(name))
+        return True
+
     async def _play_notes(self, text: str) -> None:
         """Parse speed prefix and play characters as notes."""
         delay = self.SPEED_NORMAL
@@ -443,7 +458,7 @@ class MusicCodeRunner:
 # Vocabulary lists for fuzzy matching
 _COMMAND_VOCAB = [
     'turn', 'forward', 'go', 'move', 'walk', 'step', 'paint', 'write',
-    'color', 'lift', 'pen', 'left', 'right', 'up', 'down', 'spin', 'face',
+    'color', 'lift', 'brush', 'pen', 'left', 'right', 'up', 'down', 'spin', 'face',
     'rotate', 'repeat', 'back', 'backward',
 ]
 _TURN_VOCAB = ['left', 'right', 'up', 'down', 'back', 'backward', 'around']
@@ -485,9 +500,11 @@ class ArtCodeRunner:
         (re.compile(r'^write\s+(.+?)\s*$', re.I), '_do_write_inline'),
         (re.compile(r'^color\s+(.+?)\s*$', re.I), '_do_color'),
         (re.compile(r'^lift\s*$', re.I), '_do_lift'),
-        (re.compile(r'^(?:pen\s*up|penup)\s*$', re.I), '_do_pen_up'),
-        (re.compile(r'^(?:pen\s*down|pendown)\s*$', re.I), '_do_pen_down'),
+        (re.compile(r'^(?:brush|pen)\s*up\s*$', re.I), '_do_pen_up'),
+        (re.compile(r'^(?:brush|pen)\s*down\s*$', re.I), '_do_pen_down'),
     ]
+    # Brush moves that stand on their own anywhere in a line: "right 2 brush up right 2".
+    _BRUSH_WORDS = re.compile(r'\b((?:brush|pen)\s*(?:up|down)|lift)\b', re.I)
 
     def __init__(self, canvas):
         self.canvas = canvas
@@ -511,12 +528,21 @@ class ArtCodeRunner:
         for cmd in flatten_commands(cmds):
             if cmd['type'] != 'line':
                 continue
-            try:
-                await self._dispatch(cmd['text'], _resolving)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                log.debug("Art command failed: %s", cmd['text'], exc_info=True)
+            for text in self._split_brush_words(cmd['text']):
+                await self._dispatch_safely(text, _resolving)
+
+    def _split_brush_words(self, text: str) -> list[str]:
+        if not self._COMMANDS or re.match(r'(?:paint|write)\s', text, re.I):
+            return [text]
+        return [t.strip() for t in self._BRUSH_WORDS.split(text) if t and t.strip()]
+
+    async def _dispatch_safely(self, text: str, _resolving: bool) -> None:
+        try:
+            await self._dispatch(text, _resolving)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.debug("Art command failed: %s", text, exc_info=True)
 
     def _peel_color_before_repeat(self, line: str) -> list[str]:
         """Split a leading color off when it precedes `repeat` so the loop body
@@ -532,7 +558,7 @@ class ArtCodeRunner:
 
     async def _dispatch(self, text: str, _resolving: bool = False) -> None:
         """Try explicit commands, then motion classifier, then resolution."""
-        # Stage 1: explicit-command table (paint/write/color/lift/pen).
+        # Stage 1: explicit-command table (paint/write/color/lift/brush).
         for pattern, handler_name in self._COMMANDS:
             m = pattern.match(text)
             if m:
@@ -602,7 +628,13 @@ class ArtCodeRunner:
         return True
 
     async def _do_color(self, m) -> bool | None:
-        """color <name/adj+name/key>: switch brush color."""
+        """color <name/adj+name/key>: switch brush color, then run whatever follows it."""
+        words = m.group(1).split()
+        hex_color, used = self._resolve_leading_color(words)
+        if hex_color and used < len(words):
+            self._apply_color(hex_color)
+            await self._dispatch(" ".join(words[used:]))
+            return True
         color_arg = m.group(1).strip().lower()
         content = get_content()
         hex_color = content.get_color(color_arg)

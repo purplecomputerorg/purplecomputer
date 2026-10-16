@@ -912,7 +912,7 @@ class SimpleEvaluator:
     def _chunk_words(self, words: list[str]) -> list[str]:
         """Single source of truth for grouping space-separated words into
         semantic units. A unit is [count] [adjective... color]* [noun]: the
-        count binds to the noun if present, else multiplies the trailing color.
+        count binds to the noun if present, else multiplies the color after it.
         Color modifiers are emitted before their noun so the color-as-adjective
         renderer can attach them ("2 bright red dogs" -> ["bright red", "2 dogs"]).
         """
@@ -969,13 +969,13 @@ class SimpleEvaluator:
                 i += 1
                 continue
 
-            groups.extend(color_chunks)
             if noun:
+                groups.extend(color_chunks)
                 groups.append(f"{count} {noun}" if count else noun)
             elif count and color_chunks:
-                groups[-1] = f"{count} {color_chunks[-1]}"
-            elif count:
-                groups.append(count)
+                groups.extend([f"{count} {color_chunks[0]}"] + color_chunks[1:])
+            else:
+                groups.extend(color_chunks or [count])
             i = j
 
         return groups
@@ -1161,16 +1161,15 @@ class SimpleEvaluator:
         """
         words = text.strip().split()
         count_str, j = self._take_count(words, 0)
-        if count_str is None or len(words) - j != 1:
-            return None
-        count, word = int(count_str), words[j].lower()
-        if e := self._get_emoji(word):  # a word that is both ("3 oranges") is the thing
+        # A word that is both ("3 oranges") is the thing
+        if count_str is not None and len(words) - j == 1 and (e := self._get_emoji(words[j].lower())):
+            count = int(count_str)
             consumed = self._normalize_math(" ".join(words[:j]))
             if not any(op in consumed for op in ('/', '-')):
                 return None
             return self._format_emoji_label(e, count) if count > 1 else _repeat_emoji(e, count)
-        if h := self._get_color(word):
-            return self._format_color_label(h, count)
+        if not any(self._get_emoji(w.lower()) for w in words) and (counted := self._counted_color(text)):
+            return self._format_color_label(counted[1], counted[0])
         return None
 
     def _eval_mult(self, text: str) -> str | None:
@@ -1239,21 +1238,26 @@ class SimpleEvaluator:
             return self.content.get_color(term[:-1])
         return None
 
+    def _counted_color(self, term: str) -> tuple[int, str] | None:
+        """(count, hex) for one color phrase with a count on either side:
+        "2 red", "6 / 2 dark red", "dark red 2", "red x 2"."""
+        words = self._normalize_mult(term).lower().split()
+        count, j = self._take_count(words, 0)
+        if count is None and len(words) > 1:
+            count, _ = self._take_count(words[-1:], 0)
+            words = words[:-1][:-1] if words[-2] == '*' else words[:-1]
+        phrase = " ".join(words[j:]).removeprefix("* ")
+        if count is None or not phrase:
+            return None
+        h = self._get_color(phrase) or (self.content.get_modified_color(phrase) or [None])[0]
+        return (int(count), h) if h else None
+
     def _parse_color(self, term: str) -> list[str] | None:
         """Parse color term -> list of hex colors (repeated for multiplication)."""
         term = self._normalize_mult(term.strip()).lower()
 
-        # "N color", "N * M color", "6 / 2 color"
-        words = term.split()
-        count, j = self._take_count(words, 0)
-        if count is not None and len(words) - j == 1 and 1 <= int(count) <= 20:
-            if h := self._get_color(words[j]):
-                return [h] * int(count)
-
-        # "color * N"
-        if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', term):
-            if (h := self._get_color(m.group(1))) and 1 <= int(m.group(2)) <= 20:
-                return [h] * int(m.group(2))
+        if (counted := self._counted_color(term)) and 1 <= counted[0] <= 20:
+            return [counted[1]] * counted[0]
 
         # Bare plural, typos included (e.g., "yellows" -> 2 yellow, "redds" -> 2 red)
         if h := self._plural_color(term):

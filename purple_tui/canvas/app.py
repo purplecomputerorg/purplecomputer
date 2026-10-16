@@ -27,31 +27,44 @@ from ..constants import (
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
     is_usb_cached, is_usb_needed, is_usb_present,
 )
-from .gfx import Gfx, rgb
+from .gfx import Gfx
 from .rooms import ROOM_CLASSES, ROOM_NAMES
 from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
 from ..keyboard import (
     CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction, RoomAction,
     detect_keyboard_mode,
 )
-from ..palette import ROW_LEGEND_COLORS
+from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from ..timeline import RoomTimeline
 from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
-from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
+from .color_recipe import draw_color_cap
+from .ui import DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
 PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
                 printing.READY: "The printer is ready. Press Esc, then P"}
+ARROW_GLYPHS = {"left": LEFT, "up": UP, "down": DOWN, "right": RIGHT}
+ARROW_LIT_S = 0.35            # outlasts the 250ms key-repeat delay, so a held arrow stays lit
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
+LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
+CARET_BLINK_S = 0.53          # the classic terminal half-second
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
-SIDE_MARGIN_VW = 6            # air beside the frame; the sticker legend sits in the right one
+SIDE_MARGIN_VW = 6            # air beside the frame
 TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
 STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
 STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the TUI's room bar
 TIMELINE_DEBOUNCE_S = 3.0
+LEGEND_TEXT_VH = 1.15         # letter size on the sticker keyboard in the bottom-left corner
+LEGEND_POP = 1.45             # the last key pressed grows by this much
+LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 1), (ZXCV_ROW, 1.5))   # even half-key stagger
 TIMELINE_MAX_WAIT_S = 15.0
 MAX_CODE_LINES = 200          # code lines kept with a room's state (Time Travel, saves)
+
+
+def _key_for_color(color: str | None) -> str | None:
+    """Looked up live: a family theme recolors the keys after import."""
+    return next((k for row, _ in LEGEND_ROWS for k in row if color and get_key_color(k).lower() == color.lower()), None)
 
 
 def _battery_icon(pct: int, charging: bool) -> str:
@@ -100,6 +113,8 @@ class PurpleApp:
         self._volume_lock = None
         self._brightness_hint_showing = False
         self._toasts: list[Toast] = []
+        self._hold_nudge = None
+        self._hold_nudge_timer = None
         self._overlays: list[Overlay] = []
         self._littles_mode = None
         self._code_panel_enabled = True
@@ -111,6 +126,8 @@ class PurpleApp:
         self._escape_hold_timer = None
         self._escape_down_at = None
         self._backslash_hold_timer = None
+        self._lit_arrow = self._lit_arrow_timer = None
+        self._held_char = self.held_letter = self._letter_hold_timer = None
         self._sticky_shift_timer = None
         self._evdev_reader = self._power_button_reader = self._lid_switch_reader = None
         self._frame_stats = FrameStats(self.g)
@@ -144,7 +161,7 @@ class PurpleApp:
         self.rooms = {c.name: c(self) for c in ROOM_CLASSES}
         self.active_room = "play"
         self._panel = None          # bottom panel drawn inside the viewport: code / loop / time
-        self._legend_row = -1
+        self._legend_key = None
         self._legend_visible = True
         self._computer_name = None
         self._frame_note = None
@@ -218,6 +235,7 @@ class PurpleApp:
         self._usb_text = None
         self._usb_timer = self.timers.every(1.0, self._tick_usb) if is_live_boot() else None
         self._battery_timer = self.timers.every(30.0, self.invalidate)
+        self.timers.every(CARET_BLINK_S / 4, lambda: self.g.blink(CARET_BLINK_S))
         boot_log.heartbeat("main loop ready")
         try:
             await self._render_loop()
@@ -375,7 +393,7 @@ class PurpleApp:
                 self.room.open_code_panel()
             else:
                 self._code_panel_active = False
-        self._legend_row = -1
+        self._legend_key = None
         self._legend_visible = self.room.shows_legend
         self._update_shift_indicator()
         self.invalidate()
@@ -387,9 +405,8 @@ class PurpleApp:
         self.invalidate()
 
     def set_legend(self, color: str | None, visible: bool = True):
-        from .theme import legend_row
         self._legend_visible = visible
-        self._legend_row = legend_row(color) if color else -1
+        self._legend_key = _key_for_color(color)
         self.invalidate()
 
     def _silence_music(self):
@@ -406,8 +423,16 @@ class PurpleApp:
     def run_code(self, room: str, lines: list):
         """Run code-panel lines against a room; the last correction lands in the panel's recall hint."""
         self._stop_code_execution()
-        self._code_lines[room] = (self._code_lines[room] + lines)[-MAX_CODE_LINES:]
+        self.add_code_lines(room, lines)
         self._code_task = asyncio.create_task(self.rooms[room].run_code(lines))
+
+    def add_code_lines(self, room: str, lines: list):
+        """A line just like the newest one isn't kept twice, so ↑ never repeats itself."""
+        kept = self._code_lines[room]
+        for line in lines:
+            if not kept or kept[-1] != line:
+                kept = kept + [line]
+        self._code_lines[room] = kept[-MAX_CODE_LINES:]
 
     def code_lines(self, room: str) -> list:
         return self._code_lines[room]
@@ -454,11 +479,45 @@ class PurpleApp:
         elif not sm.backslash_held and self._backslash_hold_timer is not None:
             self._backslash_hold_timer.stop()
             self._backslash_hold_timer = None
+        if sm.held_char != self._held_char:
+            self._track_letter_hold(sm.held_char)
+
+    def _track_letter_hold(self, char):
+        """`held_letter` is the character key down for LETTER_HOLD or longer, else None."""
+        if self._letter_hold_timer:
+            self._letter_hold_timer.stop()
+        self._held_char, self.held_letter = char, None
+        self._letter_hold_timer = self.timers.after(LETTER_HOLD, self._letter_held) if char else None
+        self.invalidate()
+
+    def _letter_held(self):
+        self.held_letter, self._letter_hold_timer = self._held_char, None
+        self.invalidate()
 
     async def _dispatch_keyboard_action(self, action):
+        before = self.hold_progress()
+        await self._dispatch_action(action)
+        if before and before[0] > HOLD_QUIET and self.hold_progress() is None and \
+                isinstance(action, ControlAction) and action.action in ("space", "enter") and not action.is_down:
+            self._show_hold_nudge(before[2])
+
+    def _show_hold_nudge(self, text):
+        """A hold let go after its bar showed: say what holding on would have done."""
+        if self._hold_nudge_timer:
+            self._hold_nudge_timer.stop()
+        self._hold_nudge = text
+        self._hold_nudge_timer = self.timers.after(HOLD_NUDGE_SECONDS, self._clear_hold_nudge)
+
+    def _clear_hold_nudge(self):
+        self._hold_nudge = self._hold_nudge_timer = None
+        self.invalidate()
+
+    async def _dispatch_action(self, action):
         self._frame_stats.key()
         self._record_user_activity()
         self.invalidate()
+        if isinstance(action, NavigationAction):
+            self._light_arrow(action.direction)
         if isinstance(action, RoomAction):
             if action.room == "parent":
                 self.action_parent_menu()
@@ -509,6 +568,16 @@ class PurpleApp:
             return
         await self.room.handle(action)
         self._timeline_touch()
+
+    def _light_arrow(self, direction):
+        if self._lit_arrow_timer:
+            self._lit_arrow_timer.stop()
+        self._lit_arrow = direction
+        self._lit_arrow_timer = self.timers.after(ARROW_LIT_S, self._unlight_arrow)
+
+    def _unlight_arrow(self):
+        self._lit_arrow = self._lit_arrow_timer = None
+        self.invalidate()
 
     def _start_escape_hold_timer(self):
         self._cancel_escape_hold_timer()
@@ -569,6 +638,9 @@ class PurpleApp:
             self.push(Library(self))
         elif result.get("print"):
             self.action_print()
+        elif result.get("colors"):
+            from .color_wheel import open_on
+            open_on(self.room)
 
     def open_family_room(self, name: str):
         from ..content import get_content
@@ -805,12 +877,13 @@ class PurpleApp:
         self.timeline_capture_now(room)
 
     def _step_time_travel(self, delta: int):
+        from .panels import stops
         tt = self._time_travel
         tl = self._timelines[tt["room"]]
-        index = max(0, min(len(tl) - 1, tt["index"] + delta))
-        if index == tt["index"]:
+        ahead = [s for s in stops(tl.times(), time.time()) if (s - tt["index"]) * delta > 0]
+        if not ahead:
             return
-        tt["index"] = index
+        index = tt["index"] = min(ahead, key=lambda s: abs(s - tt["index"]))
         try:
             self.apply_room_state(tt["room"], tl.state_at(index))
         except Exception:
@@ -818,8 +891,9 @@ class PurpleApp:
         self.invalidate()
 
     def time_travel_position(self):
+        """The step on show and when each step was taken."""
         tt = self._time_travel
-        return (tt["index"], len(self._timelines[tt["room"]])) if tt else (0, 0)
+        return (tt["index"], self._timelines[tt["room"]].times()) if tt else (0, [])
 
     async def _handle_time_travel_action(self, action):
         if isinstance(action, NavigationAction):
@@ -833,6 +907,8 @@ class PurpleApp:
             elif action.action == "escape":
                 self._escape_consumed_by_mode = True
                 self._cancel_time_travel()
+            elif action.action == "tab" and (turn := getattr(self.rooms[self._time_travel["room"]], "turn_around", None)):
+                turn()                          # a view, not history: look at any moment from either side
 
     # ------------------------------------------------------------------ volume
     def _effective_volume(self) -> int:
@@ -1330,14 +1406,16 @@ class PurpleApp:
         return vp.inflate(2 * self.g.vh(FRAME_GAP_VH), 2 * self.g.vh(FRAME_GAP_VH))
 
     def content_rect(self, vp: pygame.Rect) -> pygame.Rect:
-        """Room drawing area: the viewport minus any bottom panel."""
+        """Room drawing area: the viewport minus any bottom panel and its side column."""
         inner = vp.copy()
         if self._panel is not None:
             inner.height -= self._panel.height(self.g)
+            inner.width -= getattr(self._panel, "side_width", lambda g: 0)(self.g)
         return inner
 
     def _draw(self):
         g = self.g
+        g.caret = None
         g.fill(P.BG)
         vp = self._viewport_rect()
         frame = self._frame_rect(vp)
@@ -1348,14 +1426,21 @@ class PurpleApp:
         g.surface.set_clip(frame.inflate(-4, -4))
         self.room.draw(g, content)
         if self._panel is not None:
-            self._panel.draw(g, pygame.Rect(content.x, content.bottom, content.w, self._panel.height(g)))
+            self._panel.draw(g, pygame.Rect(vp.x, content.bottom, vp.w, self._panel.height(g)))
+            if content.w < vp.w:
+                self._panel.draw_side(g, pygame.Rect(content.right, content.y, vp.right - content.right, content.h))
         hold = self.hold_progress()
-        if hold and hold[0] > 0.12:
-            strip_h = g.vh(4.5)
-            draw_hold_bar(g, pygame.Rect(content.x, content.bottom - strip_h, content.w, strip_h), hold[0], hold[1])
+        bar = ((hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1]) if hold and hold[0] > HOLD_QUIET else \
+            (0, self._hold_nudge) if self._hold_nudge and not hold else None
+        if bar:
+            # over the open panel, or the room's whole footer, so nothing peeks out around it
+            strip = pygame.Rect(vp.x, content.bottom, vp.w, vp.bottom - content.bottom) if self._panel else \
+                pygame.Rect(vp.x, vp.bottom - g.em(4.5), vp.w, g.em(4.5))
+            draw_hold_bar(g, strip, *bar)
         g.surface.set_clip(None)
-        self._draw_legend(frame)
-        self._draw_status(frame)
+        esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
+        if self._legend_visible and not self._code_panel_active:   # keys type code there, not colors
+            self._draw_legend(frame, esc_pill.bottom if esc_pill else g.h - g.vh(2))
         for o in self._overlays:
             o.draw(g)
         self._draw_toasts()
@@ -1376,21 +1461,31 @@ class PurpleApp:
         if right:
             g.draw_text(right, px, frame.right, y, "mono", P.MUTED, anchor="midright")
 
-    def _draw_legend(self, frame):
-        """Sticker colors per keyboard row beside the viewport; a triangle
-        points at the row of the last key."""
-        if not self._legend_visible:
-            return
+    def _draw_legend(self, frame, bottom: int):
+        """A tiny keyboard in the sticker colors, so a kid without stickers can
+        find a color before pressing; the last key pops out bigger. Its
+        outline's bottom edge sits at `bottom`."""
         g = self.g
-        sw, sh = g.vw(0.7), g.vh(2.2)
-        x = frame.right + g.vw(0.5)
-        y = frame.bottom - 4 * sh
-        for r, shades in enumerate(ROW_LEGEND_COLORS):
-            for i, color in enumerate(shades):
-                g.rect(color, (x + i * sw, y + r * sh, sw, sh))
-        if self._legend_row >= 0:
-            tx, ty, t = x + 3 * sw + g.vw(0.25), y + self._legend_row * sh + sh // 2, g.vh(0.7)
-            pygame.draw.polygon(g.surface, rgb(P.TEXT), [(tx, ty), (tx + t, ty - t), (tx + t, ty + t)])
+        px = g.vh(LEGEND_TEXT_VH)
+        size = round(px * 1.35)
+        pitch = size + max(2, g.vh(0.25))
+        pad = g.vh(0.6)
+        board = pygame.Rect(frame.x + pad, 0, round(12.5 * pitch) - (pitch - size), 4 * pitch - (pitch - size))
+        board.bottom = bottom - pad
+        g.rect(P.HAIR, board.inflate(2 * pad, 2 * pad), width=1, radius=pad + size // 4)
+        popped = None
+        for r, (row, stagger) in enumerate(LEGEND_ROWS):
+            for i, key in enumerate(row):
+                cap = pygame.Rect(board.x + round((stagger + i) * pitch), board.y + r * pitch, size, size)
+                if key == self._legend_key:
+                    popped = key, cap
+                else:
+                    draw_color_cap(g, _KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), cap, px, radius=size // 5)
+        if popped:
+            key, cap = popped
+            big = cap.inflate(round(size * (LEGEND_POP - 1)), round(size * (LEGEND_POP - 1)))
+            g.rect(P.BG, big.inflate(4, 4), radius=big.w // 4)
+            draw_color_cap(g, _KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), big, round(px * LEGEND_POP), radius=big.w // 5)
 
     def _draw_status(self, frame, left=None, right=None, tabs=True):
         """The strip under the viewport: keyboard note, the Esc pill and room
@@ -1409,15 +1504,20 @@ class PurpleApp:
         names = [(rid, f"{r.icon} {r.label}") for rid, r in self.rooms.items()] if tabs else []
         widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for _, t in names]
         x = frame.centerx - (esc_w + sum(gap + w for w in widths)) // 2
-        x = draw_keycap(g, esc, px, x, y).right + gap
+        esc_pill = draw_keycap(g, esc, px, x, y)
+        x = esc_pill.right + gap
         for (rid, label), w in zip(names, widths):
             draw_label(g, label, px, x + w // 2, y, P.MUTED, anchor="center", on=rid == self.active_room)
             x += w + gap
         if right is None:
-            right = self.room.arrow_hint
+            right = (getattr(self._panel, "arrow_hint", None) or self.room.arrow_hint)()
             if self._effective_volume() == 0:
                 right = f"{ICON_VOLUME_OFF}  " + right
-        g.draw_text(right, px, frame.right, y, "mono", P.DIM, anchor="midright")
+        if glyph := ARROW_GLYPHS.get(self._lit_arrow):
+            right = right.replace(glyph, f"[{P.ACCENT}]{glyph}[/]")
+        w, h = g.markup_size(right, px, "mono")
+        g.draw_markup(right, px, frame.right - w, y - h // 2, "mono", P.DIM)
+        return esc_pill
 
     def _draw_toasts(self):
         """A calm centered pill above the status strip, stacking upward, so a

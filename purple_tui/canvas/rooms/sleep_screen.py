@@ -31,6 +31,7 @@ class FullScreen(Overlay):
     """Solid background, a face or message, and a hint underneath."""
 
     bg = P.BG
+    image = ""
     face: list = []
     message = ""
     hint = ""
@@ -39,6 +40,10 @@ class FullScreen(Overlay):
     def draw(self, g):
         g.fill(self.bg)
         y = g.h // 2 - g.vh(14)
+        if self.image:
+            pic = g.image(self.image, g.vh(26))
+            g.surface.blit(pic, pic.get_rect(midbottom=(g.w // 2, y + g.vh(14))))
+            y += g.vh(16)
         for line in self.face:
             g.draw_text(line or " ", g.vh(4), g.w // 2, y, "mono-bold", P.PRIMARY, anchor="midtop")
             y += g.vh(5)
@@ -54,7 +59,8 @@ class FullScreen(Overlay):
 
 class SleepScreen(FullScreen):
     bg = "#140a22"
-    face = _FACE
+    image = "bot-asleep.png"
+    face = ["z z z"]
     hint = "Press any key to wake"
 
     def on_open(self):

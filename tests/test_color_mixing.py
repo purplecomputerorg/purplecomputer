@@ -259,6 +259,11 @@ class TestMixColorsPaint:
         name = get_color_name_approximation(result)
         assert name == "green"
 
+    def test_color_over_black_is_a_dark_shade_not_black(self):
+        once = hex_to_rgb(mix_colors_paint(["#000000", self.RED]))
+        thrice = hex_to_rgb(mix_colors_paint(["#000000", self.RED, self.RED, self.RED]))
+        assert 40 < once[0] < thrice[0]
+
     def test_single_color_unchanged(self):
         assert mix_colors_paint(["#FF0000"]) == "#FF0000"
 

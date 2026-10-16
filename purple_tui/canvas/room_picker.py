@@ -1,4 +1,5 @@
-"""The Esc menu: pick a room, or Volume, Clear, Time Travel, Save, Open, Print, and the code toggle."""
+"""The Esc menu: pick a room, or Volume, Clear, Time Travel, Save, Open, Print, and the room's tools: the
+code toggle and the color wheel."""
 
 import pygame
 
@@ -6,16 +7,16 @@ from .. import palette as P
 from .. import printing
 from ..constants import ICON_BROOM, ICON_ROBOT, ICON_TIME_TRAVEL, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from . import key_save
+from . import color_wheel, key_save
 from .paper import can_print
 from .rooms.family_room import ICON_FAMILY
 from .library import ICON_OPEN, ICON_SAVE
-from .ui import Dialog, Overlay, Picker, draw_keycap, draw_scrim
+from .ui import DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_scrim
 
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
 EXTRA_KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "save": "s", "open": "o", "print": "p"}
 PRINTER_LABELS = {printing.NONE: "No Printer", printing.SETTING_UP: "Starting Up", printing.BROKEN: "Can't Print"}
-ROWS, FAMILY, EXTRAS, CODE = "rooms", "family", "extras", "code"
+ROWS, FAMILY, EXTRAS, TOOLS = "rooms", "family", "extras", "tools"
 MAX_FAMILY_ROOMS = 6
 FAMILY_LABEL_CHARS = 12
 
@@ -38,11 +39,12 @@ class RoomPicker(Overlay):
         self.options = list(app.rooms.values())
         self.row = ROWS
         self.col = list(app.rooms).index(app.active_room)
-        self.code_row = app.room.has_code_panel and (app._code_panel_active or app._code_panel_enabled)
+        code = app.room.has_code_panel and (app._code_panel_active or app._code_panel_enabled)
+        self.tools = (["code"] if code else []) + (["colors"] if color_wheel.can_open(app.room) else [])
         self.family = family_rooms()
         self.extras = ["volume", "clear", "time_travel", "save", "open", "print"]
         self.card_rows = [ROWS] + ([FAMILY] if self.family else []) + [EXTRAS]
-        self.rows = self.card_rows + ([CODE] if self.code_row else [])
+        self.rows = self.card_rows + ([TOOLS] if self.tools else [])
         self.printer = printing.status()
 
     def _disabled_volume(self):
@@ -59,19 +61,20 @@ class RoomPicker(Overlay):
             if action.is_repeat:
                 return
             d = action.direction
-            if d in ("left", "right") and self.row != CODE:
+            if d in ("left", "right"):
                 self.col = max(0, min(self._row_len() - 1, self.col + (1 if d == "right" else -1)))
-            elif d in ("up", "down"):
+            else:
                 i = self.rows.index(self.row) + (1 if d == "down" else -1)
                 self.row = self.rows[max(0, min(len(self.rows) - 1, i))]
-                if self.row != CODE:
-                    self.col = min(self.col, self._row_len() - 1)
+                self.col = min(self.col, self._row_len() - 1)
             self.app.invalidate()
             return
         if isinstance(action, CharacterAction):
             if action.is_repeat:
                 return
             ch = action.char.lower()
+            if ch == color_wheel.OPEN_KEY and "colors" in self.tools:
+                return self.close({"colors": True})
             if ch.isdigit() and 0 < int(ch) <= len(self.options):
                 return self.close({"room": self.options[int(ch) - 1].name})
             extra = next((e for e in self.extras if EXTRA_KEYS[e] == ch), None)
@@ -85,13 +88,13 @@ class RoomPicker(Overlay):
                 getattr(self.app, f"action_{a}")()
             elif a == "escape" and not action.is_down:
                 self.close(None)  # on release, so a hold falls through to the app's timer
-            elif a == "space" and action.is_down and not action.is_repeat and self.code_row:
+            elif a == "space" and action.is_down and not action.is_repeat and "code" in self.tools:
                 self._toggle_code()
             elif a == "enter" and action.is_down and not action.is_repeat:
                 self._activate()
 
     def _row_len(self) -> int:
-        return {ROWS: len(self.options), FAMILY: len(self.family), EXTRAS: len(self.extras)}[self.row]
+        return len({ROWS: self.options, FAMILY: self.family, EXTRAS: self.extras, TOOLS: self.tools}[self.row])
 
     def _activate(self):
         if self.row == ROWS:
@@ -104,8 +107,10 @@ class RoomPicker(Overlay):
              "save": self._save,
              "open": lambda: self.close({"open": True}),
              "print": self._print}[self.extras[self.col]]()
-        else:
+        elif self.tools[self.col] == "code":
             self._toggle_code()
+        else:
+            self.close({"colors": True})
 
     def _toggle_code(self):
         self.close({"close_code": True} if self.app._code_panel_active else {"open_code": True})
@@ -135,12 +140,12 @@ class RoomPicker(Overlay):
         draw_scrim(g)
         em = g.em
         tw, th, gap, pad = em(10.6), em(7.8), em(1.1), em(2.0)
-        code_h = em(4.6) if self.code_row else 0
+        tool_h = em(4.6) if self.tools else 0
         head_h = g.line_height(em(1.15), "mono-bold")
         foot_h = g.line_height(em(0.92), "mono")
         arrows_h = em(3.6)
         n = len(self.card_rows)
-        grid_h = n * th + (n - 1) * gap + (gap + code_h if self.code_row else 0)
+        grid_h = n * th + (n - 1) * gap + (gap + tool_h if self.tools else 0)
         lengths = {ROWS: len(self.options), FAMILY: len(self.family), EXTRAS: len(self.extras)}
         cols = max(lengths.values())
         box = pygame.Rect(0, 0, cols * tw + (cols - 1) * gap + 2 * pad,
@@ -177,21 +182,33 @@ class RoomPicker(Overlay):
                 g.draw_text("or Enter", em(0.9), r.centerx, r.y + em(6.7), "mono", fg, anchor="center")
             elif on and not disabled and not key:
                 g.draw_text("Press Enter", em(0.9), r.centerx, r.y + em(5.6), "mono", fg, anchor="center")
-        y += grid_h - (code_h + gap if self.code_row else 0)
-        if self.code_row:
+        y += grid_h - (tool_h + gap if self.tools else 0)
+        if self.tools:
             y += gap
-            r = pygame.Rect(x0, y, cols * tw + (cols - 1) * gap, code_h)
-            on = self.row == CODE
-            self._card(g, r, on)
-            label = "Close Code" if self.app._code_panel_active else "Open Code"
-            fg = P.ON_PRIMARY if on else P.TEXT
-            g.draw_text(f"{ICON_ROBOT}  {label}", em(1.0), r.centerx, r.centery - em(0.65), "mono-bold", fg, anchor="center")
-            g.draw_text("Press Space or Enter" if on else "Press Space", em(0.9), r.centerx, r.centery + em(0.95),
-                        "mono", fg if on else P.DIM, anchor="center")
-            y += code_h
+            n = len(self.tools)
+            w = (cols * tw + (cols - 1) * gap - (n - 1) * gap) // n
+            for i, tool in enumerate(self.tools):
+                self._tool_card(g, pygame.Rect(x0 + i * (w + gap), y, w, tool_h), tool, (self.row, self.col) == (TOOLS, i))
+            y += tool_h
         y += em(1.5)
         g.draw_text("Enter to pick   ·   Hold Esc for grown-ups", em(0.92), box.centerx, y, "mono", P.DIM, anchor="midtop")
         self._draw_arrow_cluster(g, box.centerx, y + foot_h + em(0.9) + arrows_h - em(0.9))
+
+    def _tool_card(self, g, r, tool, on):
+        """A wide card: the tool's name over the key that does it."""
+        em = g.em
+        self._card(g, r, on)
+        fg = P.ON_PRIMARY if on else P.TEXT
+        if tool == "code":
+            label, key = f"{ICON_ROBOT}  " + ("Close Code" if self.app._code_panel_active else "Open Code"), "Space"
+        else:
+            label, key = "Colors", color_wheel.OPEN_KEY
+        top = g.draw_text(label, em(1.0), r.centerx, r.centery - em(0.65), "mono-bold", fg, anchor="center")
+        if tool == "colors":
+            dot = color_wheel.disc(round(em(1.3)))
+            g.surface.blit(dot, dot.get_rect(midright=(top.x - em(0.6), top.centery)))
+        g.draw_text(f"Press {key} or Enter" if on else f"Press {key}", em(0.9), r.centerx, r.centery + em(0.95),
+                    "mono", fg if on else P.DIM, anchor="center")
 
     def _save_card(self):
         why = key_save.unavailable()
@@ -205,17 +222,11 @@ class RoomPicker(Overlay):
         return ICON_PRINTER, PRINTER_LABELS[self.printer], "", True
 
     def _draw_arrow_cluster(self, g, cx, y):
-        """Inverted-T keycaps beside their label, [↑] floating over [↓]."""
-        px, space = g.em(0.9), g.em(0.35)
-        key_w = g.measure("↓", px, "mono")[0] + round(px * 1.4)
+        px = g.em(0.9)
         label_w = g.measure("Arrows move", px, "mono")[0]
-        x = cx - (label_w + g.em(0.9) + 3 * key_w + 2 * space) // 2
+        x = cx - (label_w + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
         x = g.draw_text("Arrows move", px, x, y, "mono", P.MUTED, anchor="midleft").right + g.em(0.9)
-        boxes = []
-        for glyph in "←↓→":
-            boxes.append(draw_keycap(g, glyph, px, x, y, color=P.ACCENT))
-            x = boxes[-1].right + space
-        draw_keycap(g, "↑", px, boxes[1].centerx, y - boxes[1].h - space, anchor="center", color=P.ACCENT)
+        draw_arrow_keys(g, px, x, y, color=P.ACCENT)
 
     def _card(self, g, r, on):
         if on:
@@ -226,7 +237,7 @@ class RoomPicker(Overlay):
 
 class VolumeModal(Dialog):
     title = "Volume"
-    hint = "◀ ▶ ▲ ▼ adjust   Enter close"
+    hint = f"{LEFT} {RIGHT} {UP} {DOWN} adjust   Enter close"
     width_pct = 40
 
     def body_height(self, g):

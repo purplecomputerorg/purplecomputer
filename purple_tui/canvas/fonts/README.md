@@ -7,8 +7,9 @@ Vendored from IBM's Plex release and Google Fonts, all under the SIL Open Font L
   every piece of chrome (titles, room tabs, keycaps, hints), and the menus (Parent Menu
   and Picker option lists). Plex is IBM's own face, so the DOS-era callback is literal, and
   it stays calm at small sizes. The italic sets the Parent Menu's section headers.
-- Press Start 2P (Regular): letters written on the Art grid. Every glyph is
-  drawn on an em square, so one letter fills one cell and words stay even.
+- Martian Mono Art (Bold): letters written on the Art grid. Martian Mono at
+  wdth 112.5 / wght 700, instanced and widened 1.15x with fontTools so a normal
+  lowercase fills a square cell without gaps. Press Start 2P is the old Art face.
 
 Color emoji come from Noto Color Emoji, installed on the ISO by the
 `fonts-noto-color-emoji` package. On a dev machine put `NotoColorEmoji.ttf`

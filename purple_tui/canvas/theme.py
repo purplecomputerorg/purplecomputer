@@ -3,7 +3,7 @@ palette (ground, panels, text), the Art canvas, and the letter-row colors every 
 The number row stays gray. Without a theme, Purple's own colors stand.
 
 Applied at startup over Purple's defaults. Palette roles are module attributes read at draw
-time; KEY_COLORS and ROW_LEGEND_COLORS are changed in place because rooms hold references."""
+time; KEY_COLORS is changed in place because rooms hold references."""
 
 import re
 
@@ -15,7 +15,7 @@ HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 ROLES = ["bg", "surface", "tile", "field", "hair", "line", "primary", "on_primary", "accent", "text", "muted", "dim"]
 LETTER_ROWS = [P.QWERTY_ROW, P.ASDF_ROW, P.ZXCV_ROW]
 _DEFAULTS = {"roles": {r: getattr(P, r.upper()) for r in ROLES}, "keys": dict(P.KEY_COLORS),
-             "legend": [list(r) for r in P.ROW_LEGEND_COLORS], "canvas": (art_room.CANVAS_BG, art_room.CANVAS_ALT)}
+             "canvas": (art_room.CANVAS_BG, art_room.CANVAS_ALT)}
 
 
 def _colors(data, allowed) -> dict:
@@ -47,15 +47,3 @@ def apply(theme: dict) -> None:
     P.KEY_COLORS.update(_DEFAULTS["keys"])
     P.KEY_COLORS.update(theme.get("keys", {}))
     P.KEY_COLORS["÷"] = P.KEY_COLORS["×"] = P.KEY_COLORS["/"]
-    for r, row in enumerate(LETTER_ROWS, start=1):
-        shades = [P.KEY_COLORS[row[i]] for i in (1, len(row) // 2, -2)]
-        P.ROW_LEGEND_COLORS[r][:] = shades if theme.get("keys") else _DEFAULTS["legend"][r]
-
-
-def legend_row(color: str) -> int:
-    """Which legend row a painted color belongs to: by the key it came from, so family hues
-    land on the right row too."""
-    for r, row in enumerate(LETTER_ROWS, start=1):
-        if any(P.KEY_COLORS.get(k, "").lower() == color.lower() for k in row):
-            return r
-    return P.get_legend_row_from_color(color)

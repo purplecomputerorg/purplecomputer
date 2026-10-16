@@ -45,7 +45,7 @@ def test_a_theme_recolors_the_rows_ground_and_canvas(themed):
         app.action_switch_room("art")
         await press(app, "q")
         assert app.rooms["art"]._last_key_color == "#11aa22"
-        assert theme.legend_row("#11aa22") == 1 and theme.legend_row("#2233cc") == 2
+        assert app._legend_key == "q"
     run(go())
 
 

@@ -1,6 +1,7 @@
 """The renderer's text pipeline: markup parsing, emoji splitting, wrapping."""
 
 import pytest
+import pygame
 
 from purple_tui.canvas.gfx import Gfx, is_emoji, parse_markup, split_runs, strip_markup
 from purple_tui.palette import contrast_text
@@ -81,3 +82,35 @@ def test_wrapped_letter_tiles_stay_whole_and_aligned(g):
     lines = g.layout(letters, 20, max_width=side * 3 + 1)
     assert [len(p) for _, _, p in lines] == [3, 3, 2]
     assert all(x == i * side for _, _, pieces in lines for i, (_, x, _) in enumerate(pieces))
+
+
+def test_caret_blinks_by_swapping_its_own_pixels():
+    g = Gfx(size=(100, 100), headless=True)
+    g.fill("#000000")
+    g.draw_caret((10, 10, 5, 5), lambda: g.rect("#ffffff", (10, 10, 5, 5)))
+    g.dirty = False
+    g.blink(0)
+    assert g.surface.get_at((12, 12))[:3] == (0, 0, 0)
+    g.blink(0)
+    assert g.surface.get_at((12, 12))[:3] == (255, 255, 255)
+    g.dirty = True
+    g.blink(0)
+    assert g.surface.get_at((12, 12))[:3] == (255, 255, 255)
+
+
+def test_caret_painted_over_stops_blinking():
+    g = Gfx(size=(100, 100), headless=True)
+    g.draw_caret((10, 10, 5, 5), lambda: g.rect("#ffffff", (10, 10, 5, 5)))
+    g.rect("#ff0000", (0, 0, 100, 100))
+    g.dirty = False
+    g.blink(0)
+    assert g.caret is None and g.surface.get_at((12, 12))[:3] == (255, 0, 0)
+
+
+def test_caret_outside_a_shrunk_window_stops_blinking():
+    g = Gfx(size=(100, 100), headless=True)
+    g.draw_caret((80, 80, 5, 5), lambda: g.rect("#ffffff", (80, 80, 5, 5)))
+    g.surface = pygame.Surface((50, 50))
+    g.dirty = False
+    g.blink(0)
+    assert g.caret is None

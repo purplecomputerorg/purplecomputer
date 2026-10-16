@@ -1,5 +1,7 @@
 """Play room: type a word, a sum, a color, and it comes to life. History
-scrolls up; the line you're typing sits above the rotating 'Try:' hint."""
+scrolls up; the line you're typing shows a rotating set of ideas to try."""
+
+import re
 
 import pygame
 
@@ -7,34 +9,131 @@ from ... import palette as P
 from ...constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ...content import get_content
 from .. import paper
-from ..gfx import is_emoji, strip_markup
+from ..gfx import is_emoji, mix, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
 from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
-from ..ui import MATH_OPERATORS, HintRotator, TextField
+from ..ui import DOWN, MATH_OPERATORS, UP, HintRotator, TextField, draw_key_hint
 from .base import Room
 
 PAPER_ZOOM = 1.6
-PLAY_HINTS = [
-    "Try: cat  •  2 + 2  •  trex!",
-    "Try: say hi  (or hello!, both speak aloud)  •  red sun",
-    "Try: red + blue!  •  5 dinos",
-    "Try: asdfghjkl  •  say yellow",
-    "Try: three cats!  •  pink fish",
-    "Try: say 4 + 3 cats  •  red + yellow!",
-    "Try: I love trex  •  blue frog!",
-    "Try: 4 birds + 2 owls  •  say purple  (speaks out loud)",
-    "Try: cat times 5  •  light pink unicorn!",
-    "Try: I have 5 dinos!  •  say 5 x 5 ducks",
-    "Try: pink + purple  •  dark green trex!",
-    "Try: say wow!  •  2 red, 3 blue",
-    "Try: orange + white  •  rainbow mermaid!  (end with ! to speak it)",
-    "Try: 20 19 18 17...  •  bright blue dinosaur!",
-    "Try: dinos ... 5  •  2 4 6 8...",
+PLAY_IDEAS = [
+    ("cat", "2 + 2", "trex!"),
+    ("say hi", "red sun"),
+    ("red + blue!", "5 dinos"),
+    ("asdfghjkl", "say yellow"),
+    ("three cats!", "pink fish"),
+    ("say 4 + 3 cats", "red + yellow!"),
+    ("I love trex", "blue frog!"),
+    ("4 birds + 2 owls", "say purple"),
+    ("cat times 5", "light pink unicorn!"),
+    ("I have 5 dinos!", "say 5 x 5 ducks"),
+    ("pink + purple", "dark green trex!"),
+    ("say wow!", "2 red, 3 blue"),
+    ("orange + white", "rainbow mermaid!"),
+    ("20 19 18 17...", "bright blue dinosaur!"),
+    ("dinos ... 5", "2 4 6 8..."),
 ]
 TIMELINE_MAX_ENTRIES = 100
 MAX_HISTORY = 60
 SPEECH_ICONS = {"generating": "··", "playing": ICON_VOLUME_HIGH, "filtered": ICON_VOLUME_OFF}
+ABACUS_MARK = "\x1e"
+ABACUS_RE = re.compile(r"\x1e(\d+) (.*?)\x1e")
+ABACUS_SLOTS = 12  # 9 beads plus the gap they slide across
+
+
+class PlayEvaluator(SimpleEvaluator):
+    """Hands big counts to the room as a marked abacus to draw; the text rows
+    only line up in a terminal's fixed cells."""
+
+    def _format_number_with_dots(self, num, show_label=True, expression="", bead="●"):
+        n = int(num) if float(num).is_integer() else 0
+        if self.INLINE_MAX < n < 10 ** len(self.ABACUS_COLORS):
+            rods = f"{ABACUS_MARK}{n} {bead}{ABACUS_MARK}"
+            return f"{self._format_number(num)}\n{rods}" if show_label else rods
+        out = super()._format_number_with_dots(num, show_label, expression, bead)
+        # A thin space, not a mono cell, so a row of dots reads as one group.
+        return re.sub("● ", "●\u2009", out) if bead == "●" else out
+
+
+def answer_parts(markup: str) -> list:
+    """An answer's markup runs, with each abacus as an (n, bead) tuple."""
+    parts = ABACUS_RE.split(markup)
+    out = []
+    for i in range(0, len(parts), 3):
+        if text := parts[i].strip("\n"):
+            out.append(text)
+        if i + 1 < len(parts):
+            out.append((int(parts[i + 1]), parts[i + 2]))
+    return out
+
+
+def abacus_rows(n: int) -> list:
+    """(place name, digit, color) per rod, the biggest place on top."""
+    digits = str(n)
+    places = range(len(digits) - 1, -1, -1)
+    return [(SimpleEvaluator.PLACE_NAMES[10 ** p], int(d), SimpleEvaluator.ABACUS_COLORS[p])
+            for p, d in zip(places, digits)]
+
+
+def abacus_size(g, n: int) -> tuple:
+    slot, bar = g.em(1.45), g.em(0.1)
+    return slot, bar, len(str(n)) * slot + 2 * bar
+
+
+def draw_abacus(g, n: int, bead: str, x: int, y: int, frame, ground):
+    """Bare rods: counted beads slid left, the rest waiting right,
+    the place names before each rod and its digit after it."""
+    rows = abacus_rows(n)
+    slot, bar, h = abacus_size(g, n)
+    px, step = g.em(1.3), g.em(1.35)
+    label_w = max(g.measure(name, px, "mono-bold")[0] for name, _, _ in rows)
+    box = pygame.Rect(x + label_w + g.em(0.9), y, ABACUS_SLOTS * step, h)
+    rod_h, bead_h = max(2, g.em(0.12)), g.em(0.85)
+    for i, (name, digit, color) in enumerate(rows):
+        cy = y + bar + i * slot + slot // 2
+        g.draw_text(name, px, box.x - g.em(0.9), cy, "mono-bold", color, anchor="midright")
+        g.rect(mix(frame, ground, 0.35), (box.x, cy - rod_h // 2, box.w, rod_h))
+        for k in range(9):
+            at = k if k < digit else k + ABACUS_SLOTS - 9
+            cell = pygame.Rect(box.x + at * step, cy - slot // 2, step, slot)
+            draw_bead(g, bead if k < digit else None, color, cell, bead_h, mix(frame, ground, 0.78))
+        g.draw_text(str(digit), px, box.right + g.em(0.9), cy, "mono-bold", color, anchor="midleft")
+
+
+def draw_bead(g, bead, color, cell, h, idle):
+    """bead None is one not yet counted; a color block becomes a bead of its color."""
+    hexes = re.findall(r"\[on (#[0-9a-fA-F]{6})\]", bead or "")
+    if bead and bead != "●" and strip_markup(bead).strip():
+        w, bh = g.markup_size(bead, g.em(0.95), "mono-bold")
+        g.draw_markup(bead, g.em(0.95), cell.centerx - w // 2, cell.centery - bh // 2, "mono-bold")
+        return
+    pill = pygame.Rect(0, 0, cell.w - g.em(0.4), h)
+    pill.center = cell.center
+    fill = idle if bead is None else hexes[0] if hexes else color
+    g.rect(fill, pill, radius=h // 2)
+
+
+def speech_marks(text: str) -> list:
+    """Spans of what makes a line talk: each `!` and a say/talk/speak first word."""
+    marks = [m.span() for m in re.finditer("!+", text)]
+    m = re.match(r"\s*([A-Za-z]+)", text)
+    if m and parse_speech_trigger(m.group(1))[0]:
+        marks.append(m.span(1))
+    return sorted(marks)
+
+
+def toggled_say(value: str, cursor: int) -> tuple:
+    """(value, cursor) with `say ` added to a quiet line, or every speech mark taken off a talking one."""
+    marks = speech_marks(value)
+    if not marks:
+        return "say " + value, cursor + 4
+    for a, b in reversed(marks):
+        if value[a] != "!":
+            b += len(value[b:]) - len(value[b:].lstrip())
+        value = value[:a] + value[b:]
+        cursor -= max(0, min(cursor, b) - a)
+    return value, cursor
 
 
 def _play_validator(word: str) -> bool:
@@ -70,13 +169,12 @@ class Entry:
 
 class PlayRoom(Room):
     name, label, icon = "play", "Play", ICON_CHAT
-    arrow_hint = "Arrows scroll  ↑ ↓"
 
     def __init__(self, app):
         super().__init__(app)
-        self.evaluator = SimpleEvaluator()
-        self.field = TextField(_play_autocomplete, validator=_play_validator)
-        self.hints = HintRotator(PLAY_HINTS)
+        self.evaluator = PlayEvaluator()
+        self.field = TextField(_play_autocomplete, validator=_play_validator, marks=speech_marks)
+        self.hints = HintRotator(PLAY_IDEAS)
         self.history: list = []
         self.scroll = 0                  # px of history hidden below the bottom (scrolled up)
         self._timeline_entries: list = []
@@ -87,6 +185,9 @@ class PlayRoom(Room):
     def on_enter(self):
         self.hints.advance()
         self.app.set_legend(None, visible=True)
+
+    def arrow_hint(self) -> str:
+        return f"Arrows scroll  {UP} {DOWN}"
 
     def cursor_fraction(self, vp):
         return (0.07, 0.9)
@@ -130,15 +231,12 @@ class PlayRoom(Room):
         data = self.evaluator._parse_color_result(parts[i])
         if not data:
             return self._add("answer", result)
-        hex_color, color_name, components = data
-        other = " ".join(filter(None, [before, after]))
+        hex_color, _, components = data
         is_modified = len(components) == 1 and components[0].upper() != hex_color.upper()
         box = f"[on {hex_color}]   [/]"
         if len(components) <= 1 and not is_modified:
             return self._add("answer", " ".join(filter(None, [before, box, after])))
         comps = " ".join(f"[on {c}]   [/]" for c in components)
-        if is_modified and not other:
-            return self._add("answer", f"{comps} → {box}  {color_name}")
         input_line = " ".join(filter(None, [before, comps, after]))
         result_line = " ".join(filter(None, [before, box, after]))
         combined = f"{input_line} → {result_line}"
@@ -214,9 +312,9 @@ class PlayRoom(Room):
             return
 
         def on_playing(i):
-            self.app.call_from_thread(self._set_speech, items[i][1], "playing")
             if i:
                 self.app.call_from_thread(self._set_speech, items[i - 1][1], "")
+            self.app.call_from_thread(self._set_speech, items[i][1], "playing")
 
         def on_done():
             for _, e in items:
@@ -243,8 +341,8 @@ class PlayRoom(Room):
             if not action.is_down:
                 return
             a = action.action
-            if a == "tab":
-                f.accept_autocomplete()
+            if a == "tab" and not action.is_repeat:
+                f.accept_autocomplete() or f.set(*toggled_say(f.value, f.cursor))
             elif a == "space":
                 if not action.is_repeat:
                     f.insert(" ")
@@ -274,23 +372,14 @@ class PlayRoom(Room):
         pad = em(1.6)
         x = rect.x + pad
         width = rect.w - 2 * pad
-        line_px = em(1.05)
-        bottom = rect.bottom - em(1.4)
-        g.draw_text(self.hints.current, em(0.95), x, bottom, "mono", P.DIM, anchor="bottomleft")
-        bottom -= g.line_height(em(0.95), "mono") + em(1.1)
-        sub = self.field.autocomplete_markup or \
-            f"[dim]{self.field.recall_text() or 'Type a word, then press Enter'}[/]"
-        sub_h = g.line_height(em(0.92), "mono")
-        gap = em(1.15)  # 0.55em from the arrow to the field, 0.6em of field padding
-        sub_x = self.field.text_x(g, x, line_px, label_px=em(1.2), gap=gap)
-        g.draw_markup(sub, em(0.92), sub_x, bottom - sub_h, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
-        bottom -= sub_h + em(0.4)
-        box = pygame.Rect(sub_x - em(0.6), bottom - em(2.0), 0, em(2.0))
-        box.w = min(rect.right - pad - box.x, em(21))
-        g.rect(P.FIELD, box, radius=em(0.42))
-        g.rect(P.LINE, box, width=1, radius=em(0.42))
-        line_h = g.line_height(line_px, "mono")
-        self.field.draw(g, x, box.centery - line_h // 2, box.right - x, line_px, label_px=em(1.2), gap=gap)
+        line_px, sub_px = em(1.35), em(0.95)
+        sub_h = g.line_height(sub_px, "mono")
+        bottom = rect.bottom - em(1.0) - sub_h
+        talks = bool(speech_marks(self.field.value))
+        ideas = self.hints.current(hold=bool(self.field.value))
+        box = self.field.draw_boxed(g, x, bottom - em(0.9) - round(line_px * 1.9), width, line_px, "Type",
+                                    ideas=ideas, arrow=ICON_VOLUME_HIGH if talks else "→")
+        self._draw_sub(g, box.x + round(line_px * 0.55), bottom, sub_px, talks)
         top_limit = rect.y + em(1)
         base = box.y - em(1)
         viewport = base - top_limit
@@ -314,6 +403,18 @@ class PlayRoom(Room):
             g.rect(P.BG, track, radius=w // 2)
             g.rect(P.FIELD, scroll_thumb(track, viewport, total, self.scroll, em(1.5)), radius=w // 2)
 
+    def _draw_sub(self, g, x, y, px, talks: bool):
+        """The line under the box: what the typed word makes, then what Tab and Enter do."""
+        f = self.field
+        if f.matches:
+            lead, keys = f.match_words, "{Tab}"
+        else:
+            lead, keys = f.exact_display, "   ".join(filter(None, [f.recall_text(keycap=True), "{Tab} quiet" if talks else "{Tab} say it"]))
+        if lead:
+            g.draw_markup(lead, px, x, y, "mono", P.MUTED, dim_to=P.SURFACE)
+            x += g.markup_size(lead, px, "mono")[0] + 2 * px
+        draw_key_hint(g, keys, px, x, y + g.line_height(px, "mono") // 2)
+
     def _answer_px(self, g, e) -> int:
         """Only a small all-emoji answer earns the big size; text stays a
         step above the ask line so it reads as the computer's voice."""
@@ -330,14 +431,25 @@ class PlayRoom(Room):
         """An answer hugs its ask; each new ask stands clear of the pair above."""
         return g.em(0.35) if e.kind == "answer" else g.em(1.0)
 
-    def _answer_indent(self, g, e) -> int:
-        icon = SPEECH_ICONS.get(e.speech, "")
-        return g.em(0.1) + (g.measure(icon, g.em(1.05), "mono-bold")[0] + g.em(0.5) if icon else 0)
+    def _part_height(self, g, e, part, width) -> int:
+        if isinstance(part, tuple):
+            return abacus_size(g, part[0])[2]
+        return g.markup_size(part, self._answer_px(g, e), "mono-bold", width, self._row_gap(g))[1]
 
     def _entry_height(self, g, e, width) -> int:
         if e.kind == "ask":
             return g.line_height(g.em(1.05), "mono")
-        return g.markup_size(e.markup, self._answer_px(g, e), "mono-bold", width - self._answer_indent(g, e), self._row_gap(g))[1]
+        parts = answer_parts(e.markup)
+        return sum(self._part_height(g, e, p, width) for p in parts) + self._row_gap(g) * (len(parts) - 1)
+
+    def _first_row_height(self, g, e, width) -> int:
+        """The answer's first row, so its speaker sits level with it."""
+        part = next(iter(answer_parts(e.markup)), "")
+        if isinstance(part, tuple):
+            slot, bar, _ = abacus_size(g, part[0])
+            return slot + 2 * bar
+        lines = g.layout(part, self._answer_px(g, e), "mono-bold", P.TEXT, width)
+        return lines[0][1] if lines else 0
 
     def _draw_entry(self, g, e, x, y, width, ink=None):
         """ink is (text, muted, ground); the screen's tokens unless printing."""
@@ -349,10 +461,16 @@ class PlayRoom(Room):
             return
         icon = SPEECH_ICONS.get(e.speech, "")
         if icon:
-            g.draw_text(icon, g.em(1.05), x + g.em(0.1), y, "mono-bold", text)
-        indent = self._answer_indent(g, e)
-        g.draw_markup(e.markup, self._answer_px(g, e), x + indent, y, "mono-bold", text, width - indent,
-                      dim_to=ground, line_gap=self._row_gap(g))
+            # Hangs in the side margin so a talking answer never shifts.
+            mid = y + self._first_row_height(g, e, width) // 2
+            g.draw_text(icon, g.em(1.05), x - g.em(0.4), mid, "mono-bold", text, anchor="midright")
+        for part in answer_parts(e.markup):
+            if isinstance(part, tuple):
+                draw_abacus(g, *part, x, y, muted, ground)
+            else:
+                g.draw_markup(part, self._answer_px(g, e), x, y, "mono-bold", text, width,
+                              dim_to=ground, line_gap=self._row_gap(g))
+            y += self._part_height(g, e, part, width) + self._row_gap(g)
 
     def paper(self, g, size):
         """The newest asks and answers that fit the page, oldest at the top,

@@ -19,7 +19,9 @@ the response is.
 
 Design rules, in priority order:
 
-1. Motion only in response to a key. Nothing moves on an idle screen.
+1. Motion only in response to a key. Nothing moves on an idle screen, except
+   the text caret, which blinks by swapping its own pixels (`Gfx.blink`), never
+   by repainting the frame.
 2. Text and emoji render smoothly at native resolution, any size per element.
 3. A grid exists only where the grid is the content: Music tiles, Art cells,
    the Blocks floor.
@@ -114,8 +116,14 @@ is no evdev (`PURPLE_NO_EVDEV=1`, macOS), `sdl_input.pump` turns the window's
 key events into the same `RawKeyEvent`s.
 
 Hold gestures for Space (code panel) and Enter (loop station) show a bar
-(`ui.draw_hold_bar`); the Esc hold for the Parent Menu shows nothing.
-`panels.SpaceHold` holds the tap versus hold policy Music and Art share.
+(`ui.draw_hold_bar`), and one let go early leaves a
+"Hold Space longer to ..." hint up for a moment; the Esc hold for the Parent Menu shows nothing.
+`panels.SpaceHold` holds the tap versus hold policy Music, Art and Blocks
+share (rooms with `has_code_panel`). Their code panel opens holding `panels.Echo`'s
+code for the newest stroke drawn or played by hand, and ↓ steps into
+`panels.RECIPES`, finished programs drawn as small pictures. A panel with
+`side_width` also gets a column beside the room: the code panel puts
+`panels.GUIDE` there, the words of each room with one example apiece.
 
 ## Overlays
 

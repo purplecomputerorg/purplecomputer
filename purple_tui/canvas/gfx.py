@@ -15,6 +15,7 @@ Markup is the small subset of Rich's syntax the rooms already speak:
 
 import os
 import re
+import time
 from collections import OrderedDict
 from contextlib import contextmanager
 from pathlib import Path
@@ -28,6 +29,7 @@ import pygame  # noqa: E402
 from ..palette import NAMED_COLORS, rgb
 
 FONT_DIR = Path(__file__).parent / "fonts"
+IMAGE_DIR = Path(__file__).parent / "images"
 FACES = {
     "sans": "IBMPlexSans-Regular.ttf",
     "sans-bold": "IBMPlexSans-SemiBold.ttf",
@@ -36,7 +38,7 @@ FACES = {
     "mono-bold": "IBMPlexMono-SemiBold.ttf",
     "mono-heavy": "IBMPlexMono-Bold.ttf",
     "mono-italic": "IBMPlexMono-Italic.ttf",  # parent-menu section headers
-    "block": "PressStart2P-Regular.ttf",  # one letter per square Art cell
+    "block": "MartianMonoArt-Bold.ttf",  # one letter per square Art cell
     "nerd": "SymbolsNerdFontMono-Regular.ttf",  # mono-tinted UI icon glyphs
     "symbols": "DejaVuSans.ttf",  # fallback for glyphs the faces above lack
 }
@@ -189,9 +191,11 @@ class Gfx:
         self.w, self.h = self.surface.get_size()
         self.all_caps = False
         self.dirty = True
+        self.caret = None             # [rect, pixels without, pixels with, shown, since] for the frame on screen
         self._fonts = {}
         self._text = _Cache()
         self._emoji = _Cache()
+        self._images = _Cache()
         self._coverage: dict = {}
         self._probes: dict = {}
         self._emoji_font = self._load_emoji_font()
@@ -248,6 +252,14 @@ class Gfx:
             size = (max(1, round(native.get_width() * scale)), target_h)
             return pygame.transform.smoothscale(native, size)
         return self._emoji.get_or((text, px), make)
+
+    def image(self, name: str, height: int) -> pygame.Surface:
+        """A picture from images/, scaled to height (cached)."""
+        def make():
+            native = pygame.image.load(str(IMAGE_DIR / name))
+            w = max(1, round(native.get_width() * height / native.get_height()))
+            return pygame.transform.smoothscale(native, (w, height))
+        return self._images.get_or((name, height), make)
 
     def text(self, text: str, px: int, face: str = "sans", color="#ffffff", _raw=False, track: float = 0) -> pygame.Surface:
         """One line of text as a surface (cached). Emoji inside go through the
@@ -450,12 +462,36 @@ class Gfx:
         return (max((w for w, _, _ in lines), default=0), sum(h for _, h, _ in lines) + line_gap * (len(lines) - 1))
 
     # ----- frame -----
-    def present(self):
+    def present(self, rect=None):
         if self._kms:
             self._kms.present()
         elif not self.headless:
-            pygame.display.flip()
-        self.dirty = False
+            pygame.display.update(rect) if rect else pygame.display.flip()
+        if rect is None:
+            self.dirty = False
+
+    def draw_caret(self, rect, draw):
+        """Run draw() and keep the pixels under rect both ways, so blink() can
+        swap them without repainting the frame."""
+        rect = pygame.Rect(rect).clip(self.surface.get_rect())
+        off = self.surface.subsurface(rect).copy()
+        draw()
+        self.caret = [rect, off, self.surface.subsurface(rect).copy(), True, time.monotonic()]
+
+    def blink(self, period: float):
+        """Toggle the caret once it has held still for `period`. Skipped when a
+        redraw is due or something was painted over it after it was drawn."""
+        c = self.caret
+        if not c or self.dirty or time.monotonic() - c[4] < period:
+            return
+        rect, off, on, shown, _ = c
+        # A VM window can shrink under us before its resize event is handled
+        if not self.surface.get_rect().contains(rect) or pygame.image.tobytes(self.surface.subsurface(rect), "RGB") != pygame.image.tobytes(on if shown else off, "RGB"):
+            self.caret = None
+            return
+        self.surface.blit(off if shown else on, rect)
+        c[3], c[4] = not shown, time.monotonic()
+        self.present(rect)
 
     def save(self, path: str):
         pygame.image.save(self.surface, path)

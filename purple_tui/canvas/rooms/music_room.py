@@ -10,7 +10,7 @@ import pygame
 from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
-from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_MUSIC, ICON_ROBOT
+from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import warm_mixer
@@ -20,9 +20,9 @@ from ...music_constants import (
 )
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
-from ..panels import CodePanel, LoopPanel, SpaceHold
+from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, SpaceHold
 from ..sounds import SoundBank
-from ..ui import draw_label
+from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hold_status
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -34,13 +34,12 @@ WAVEFRONT_COLOR = "#7a5aa6"
 PITCH_TRANSITION_DURATION = 0.25
 LETTERS_SAME_KEY_DEBOUNCE_S = 0.40
 LETTERS_CROSS_KEY_DEBOUNCE_S = 0.20
+ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
 NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit"
-
 
 
 class MusicRoom(Room):
     name, label, icon = "music", "Music", ICON_MUSIC
-    arrow_hint = "Arrows change key  ← →"
     LANDSCAPE = True
     has_code_panel = True
     shows_legend = False
@@ -64,6 +63,7 @@ class MusicRoom(Room):
         self._last_letter_key = None
         self._last_letter_press_t = float("-inf")
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
+        self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
         self._enter_down_at = None
         self._enter_ring = None
@@ -114,6 +114,7 @@ class MusicRoom(Room):
             if key.startswith("k:") and key[2:] in self.color_state:
                 self.color_state[key[2:]] = int(val)
         self._transition = None
+        self.echo.reset()
         self.app.invalidate()
 
     def clear(self):
@@ -209,6 +210,10 @@ class MusicRoom(Room):
         if self._transition_timer is None:
             self._transition_timer = self.app.timers.every(0.03, self._transition_tick)
         self.app.invalidate()
+
+    def set_key(self, root_index: int):
+        if self.app._music_key_switching_enabled and root_index != self.root_index:
+            self.shift_root(root_index, 1 if root_index > self.root_index else -1)
 
     def _transition_tick(self):
         if self._transition and time.monotonic() - self._transition["start"] >= PITCH_TRANSITION_DURATION:
@@ -338,7 +343,7 @@ class MusicRoom(Room):
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled and self.loop.state == IDLE:
             self.cleanup_sounds()
-            self.code_panel = CodePanel(self.app, "music")
+            self.code_panel = CodePanel(self.app, "music", self.echo.take())
             self.app.set_panel(self.code_panel)
 
     def close_code_panel(self):
@@ -383,6 +388,7 @@ class MusicRoom(Room):
                 color_fn=self.next_color,
                 flash_fn=self.flash_note,
                 set_letters_fn=lambda on: setattr(self, "letters_mode", on),
+                set_key_fn=self.set_key,
             )
             await runner.run(lines, self._current_mode())
             if runner.corrections and self.code_panel:
@@ -433,6 +439,7 @@ class MusicRoom(Room):
                     self._stop_loop()
                     self.app._escape_consumed_by_mode = True
                 elif action.action == "tab":
+                    self.echo.flush()
                     if self.loop.state != IDLE:
                         self._stop_loop()
                     else:
@@ -460,6 +467,7 @@ class MusicRoom(Room):
             mode = self._current_mode()
             self.loop.record_event(lookup, mode, instrument=self.instrument_index)
             self._hit(lookup, mode)
+            self.echo.letter("", lookup.lower())
 
     def _handle_enter(self, action):
         if self.enter_hold.fired:
@@ -476,6 +484,8 @@ class MusicRoom(Room):
             self._stop_enter_ring()
             if self.enter_hold.on_up():
                 self.instrument_index = (self.instrument_index + 1) % len(instruments())
+                self.echo.flush()
+                self.echo.word(f"choose {self._instrument(self.instrument_index)[0]}")
                 self.app.invalidate()
 
     def _flush_enter(self):
@@ -500,12 +510,12 @@ class MusicRoom(Room):
             self._stop_loop()
 
     def hold_progress(self):
-        p = self.space.progress()
-        if p is not None:
-            return p, "Code"
-        if self._enter_down_at is not None and self.enter_hold.is_pending:
-            return min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD), "Loop"
-        return None
+        if self._enter_down_at is not None and self.enter_hold.is_pending and \
+                (self.loop.state != IDLE or self.app._music_looping_enabled):
+            doing = "record a loop" if self.loop.state == IDLE else "stop the loop"
+            return hold_status(min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD),
+                               "Enter", ICON_LOOP, doing)
+        return self.space.status(self.code_panel is not None)
 
     def cursor_fraction(self, vp):
         return None
@@ -515,41 +525,42 @@ class MusicRoom(Room):
         if self._is_noscreen:
             return self._draw_noscreen(g, rect)
         em = g.em
-        head_h, hint_h = em(4.3), em(3.9)
+        head_h = em(4.3)
+        panel = self.app._panel
+        hint_h = em(FOOTER_EM) if panel is None else 0 if isinstance(panel, LoopPanel) else em(1.0)
         pad = em(1.6)
-        self._draw_header(g, pygame.Rect(rect.x + pad, rect.y, rect.w - 2 * pad, head_h))
+        self._draw_header(g, rect)
         grid = pygame.Rect(rect.x + pad, rect.y + head_h, rect.w - 2 * pad, rect.h - head_h - hint_h)
         self._draw_grid(g, grid)
         if self.app._panel is None:
             cy = rect.bottom - em(1.4) - g.line_height(em(0.92), "mono") // 2
             right_edge = rect.right - pad
             if self.app._code_panel_enabled:
-                note = g.draw_text(f"{ICON_ROBOT} Hold Space: write code", em(0.86), right_edge, cy, "mono", P.DIM, anchor="midright")
-                right_edge = note.left - em(2)
-            g.draw_text(self._hint_text(), em(0.92), (rect.x + right_edge) // 2, cy, "mono", P.DIM, anchor="center")
+                right_edge = draw_key_hint(g, CODE_HINT, em(0.86), right_edge, cy, anchor="midright").left - em(2)
+            draw_key_hint(g, self._hint_text(), em(0.92), (rect.x + right_edge) // 2, cy, anchor="center")
 
     def _hint_text(self) -> str:
         if self.app._littles_mode:
-            return "Enter: instrument"
-        parts = ["Space: hide notes" if self.show_labels else "Space: notes",
-                 "Tab: stop letters" if self.letters_mode else "Tab: say letters",
-                 "Enter: instrument"]
-        if self.app._music_looping_enabled:
-            parts.append("Hold Enter: loop")
-        return "   ".join(parts)
+            return "{Enter} sound"
+        return "{hold Enter} loop" if self.app._music_looping_enabled else ""
 
-    def _draw_header(self, g, r):
-        """One quiet plate naming the current layer, and the key on the right.
-        Arrows for the key live in the status strip, not here."""
-        px = g.em(1.0)
-        cy = r.y + g.em(1.9)
-        plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {self._instrument(self.instrument_index)[1]}"
+    def _draw_header(self, g, rect):
+        """The same header as Art and Blocks: Enter and Space chips beside the
+        Sounds / ABC switch."""
+        instrument = self._instrument(self.instrument_index)[1]
         if self.app._littles_mode:
-            draw_label(g, plate, px, r.centerx, cy, P.TEXT, anchor="center", on=True)
+            plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {instrument}"
+            draw_label(g, plate, g.em(1.0), rect.centerx, rect.y + g.em(1.9), P.TEXT, anchor="center", on=True)
             return
-        draw_label(g, plate, px, r.x, cy, on=True)
-        root = self.root_index if self.app._music_key_switching_enabled else DEFAULT_ROOT_INDEX
-        g.draw_text(f"Key of {FRIENDLY_KEY_NAMES[root]}", px, r.right, cy, "mono", P.DIM, anchor="midright")
+        bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
+        bar.h = g.line_height(g.vh(1.9), "mono") + g.em(0.4)
+        draw_mode_switch(g, bar, ("Sounds", "ABC"), 1 if self.letters_mode else 0,
+                         chips=(("Enter", ICON_MUSIC, instrument, False, "sound"), ("Space", None, "notes", self.show_labels)))
+
+    def arrow_hint(self) -> str:
+        if not self.app._music_key_switching_enabled:
+            return f"Key of {FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]}"
+        return f"Arrows change key: {FRIENDLY_KEY_NAMES[self.root_index]}  {LEFT} {RIGHT}"
 
     def paper(self, g, size):
         """The kid's colors on the keyboard grid; quiet keys print as outlined letters."""

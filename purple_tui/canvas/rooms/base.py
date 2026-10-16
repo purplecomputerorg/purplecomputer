@@ -7,7 +7,6 @@ class Room:
     name = ""
     label = ""
     icon = ""
-    arrow_hint = ""
     LANDSCAPE = False
     has_code_panel = False
     shows_legend = True
@@ -30,6 +29,9 @@ class Room:
 
     def close_code_panel(self):
         pass
+
+    def arrow_hint(self) -> str:
+        return ""
 
     def hold_progress(self):
         return None

@@ -514,3 +514,43 @@ class TestArtFuzzyVerbResolution:
         canvas, runner = self._run_art(["blue 4"])
         assert canvas._painted_positions == control._painted_positions
         assert canvas._last_key_color == control._last_key_color
+
+
+class TestMusicKey:
+    def _run(self, line, set_key=True):
+        from purple_tui.code_runner import MusicCodeRunner
+        played, keys = [], []
+        runner = MusicCodeRunner(play_key_fn=lambda k, m: played.append(k),
+                                 set_key_fn=keys.append if set_key else None)
+        asyncio.run(runner.run([line]))
+        return played, keys
+
+    @pytest.mark.parametrize("line, index", [("key g", 3), ("key of d", 4), ("KEY C", 2), ("key b flat", 0), ("key bb", 0)])
+    def test_key_names_pick_a_friendly_key(self, line, index):
+        assert self._run(line) == ([], [index])
+
+    def test_a_key_outside_the_five_does_nothing(self):
+        assert self._run("key a") == ([], [])
+
+    def test_without_a_key_setter_the_words_play_as_notes(self):
+        assert self._run("key g", set_key=False) == (['K', 'E', 'Y', 'G'], [])
+
+
+class TestArtCommandsMidLine:
+    def _cells(self, line):
+        from purple_tui.code_runner import ArtCodeRunner
+        canvas = _FakeCanvas()
+        runner = ArtCodeRunner(canvas)
+        asyncio.run(runner.run([line]))
+        return canvas
+
+    @pytest.mark.parametrize("words", ["brush up", "pen up", "lift"])
+    def test_lifting_the_brush_mid_line_leaves_a_gap(self, words):
+        down = "brush down" if words != "lift" else "lift"
+        canvas = self._cells(f"right 2 {words} right 2 {down} right 2")
+        assert canvas._painted_positions == self._cells("right 2, brush up, right 2, brush down, right 2")._painted_positions
+
+    def test_color_then_a_move(self):
+        canvas = self._cells("color mint right 2")
+        assert canvas._last_key_color.upper() == "#98FF98"
+        assert canvas._painted_positions == self._cells("right 2")._painted_positions

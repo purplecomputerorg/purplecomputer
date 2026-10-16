@@ -50,6 +50,22 @@ def test_save_pack_round_trip(tmp_path, monkeypatch):
     (src / "saves/art/1-a.json").write_text("{}")
     (src / "settings.json").write_text('{"v": 1}')
     out = tmp_path / "home/.config/purple"
-    monkeypatch.setattr(k.os, "chown", lambda *a: None)
+    monkeypatch.setattr(k.os, "lchown", lambda *a: None)
     k.unpack(k.pack(str(src)), str(out), os.getuid())
     assert (out / "saves/art/1-a.json").read_text() == "{}" and (out / "settings.json").exists()
+
+
+def test_restore_refuses_a_linked_config_folder(tmp_path):
+    k = _load()
+    src, elsewhere = tmp_path / "src", tmp_path / "etc"
+    src.mkdir()
+    elsewhere.mkdir()
+    (src / "settings.json").write_text("{}")
+    (tmp_path / "home").mkdir()
+    (tmp_path / "home/.config").symlink_to(elsewhere)
+    try:
+        k.unpack(k.pack(str(src)), str(tmp_path / "home/.config/purple"), os.getuid())
+        raise AssertionError("unpacked through a link")
+    except OSError:
+        pass
+    assert list(elsewhere.iterdir()) == []

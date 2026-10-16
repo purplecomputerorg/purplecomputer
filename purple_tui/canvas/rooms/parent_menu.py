@@ -22,7 +22,7 @@ from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
+from ..ui import CANCELLED, DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
 from .sleep_screen import FullScreen
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
@@ -130,7 +130,7 @@ def apply_saved_display_settings():
 
 class DisplaySettingsScreen(Dialog):
     title = "Display"
-    hint = "← → adjust   ▲ ▼ switch   Esc done"
+    hint = f"{LEFT} {RIGHT} adjust   {UP} {DOWN} switch   Esc done"
     width_pct = 50
 
     def __init__(self, app):
@@ -225,7 +225,7 @@ class _YesNo(Picker):
 
 class CodePanelScreen(_YesNo):
     title = "Allow Code Space"
-    DESCRIPTION = "Allow older kids to write code in Music and Art by holding the space button"
+    DESCRIPTION = "Allow older kids to write code in Music, Art and Blocks by holding the space button"
 
     @staticmethod
     def getter():
@@ -407,7 +407,7 @@ class ParentVolumeModal(Dialog):
 
     @property
     def hint(self):
-        row = "← → change    ▲ ▼ switch" if self._focus == "volume" else "Enter on/off    ▲ ▼ switch"
+        row = f"{LEFT} {RIGHT} change    {UP} {DOWN} switch" if self._focus == "volume" else f"Enter on/off    {UP} {DOWN} switch"
         return f"{row}\nSpace plays sound    Esc done"
 
     def body_height(self, g):
@@ -1141,7 +1141,7 @@ def _find_usb_device():
 def _try_remount_usb(dev: str) -> bool:
     try:
         subprocess.run(["sudo", "umount", "-l", "/cdrom"], capture_output=True, timeout=5)
-        subprocess.run(["sudo", "mount", "-o", "ro", dev, "/cdrom"], capture_output=True, timeout=5)
+        subprocess.run(["sudo", "mount", "-o", "ro,nosuid,nodev", dev, "/cdrom"], capture_output=True, timeout=5)
         return _PAYLOAD_PATH.exists()
     except (subprocess.TimeoutExpired, OSError):
         return False
@@ -1495,7 +1495,7 @@ class ParentMenu(Overlay):
                             P.ON_PRIMARY if on else (P.DIM if disabled else P.ACCENT), anchor="midleft")
             y += row_h
         foot = box.bottom - pad - foot_h
-        g.draw_text("▲ ▼   Enter   Esc", em(0.92), box.centerx, foot + em(1.3), "mono", P.MUTED, anchor="center", track=0.08)
+        g.draw_text(f"{UP} {DOWN}   Enter   Esc", em(0.92), box.centerx, foot + em(1.3), "mono", P.MUTED, anchor="center", track=0.08)
         g.draw_markup("Purple is keyboard only, on purpose.\nKids explore by typing.", em(0.85), box.x, foot + em(2.3),
                       "mono", P.DIM, box.w, "center", P.SURFACE)
         g.draw_text(diagnostics.get_version_label() or "", em(0.8), box.centerx, foot + em(5.3), "mono", P.DIM, anchor="center")

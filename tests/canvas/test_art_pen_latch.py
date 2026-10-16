@@ -107,7 +107,7 @@ def test_hold_opens_code_panel_and_lifts_pen():
 
 def test_code_panel_disabled_space_is_immediate():
     """With Code Space off there is no tap-or-hold ambiguity: Space reaches the
-    canvas at once, so hold-space-then-arrows still paints."""
+    canvas at once, so a tap latches and hold-space-then-arrows paints until release."""
     async def _test():
         app, canvas = _art()
         app._code_panel_enabled = False
@@ -116,14 +116,41 @@ def test_code_panel_disabled_space_is_immediate():
         assert canvas._pen_down
         await canvas.handle(_space(is_repeat=True))
         assert canvas._pen_down
-        await canvas.handle(NavigationAction(direction='right'))
+        await canvas.handle(NavigationAction(direction='right', space_held=True))
         assert (6, 5) in canvas._painted_positions
         await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
         assert canvas.code_panel is None
         await canvas.handle(_space(is_down=False))
-        assert canvas._pen_down
-        await canvas.handle(_space())
         assert not canvas._pen_down
+        await _tap(canvas)
+        assert canvas._pen_down
+    _run(_test())
+
+
+def test_holding_space_while_moving_paints_until_release():
+    async def _test():
+        app, canvas = _art()
+        canvas._cursor_x = canvas._cursor_y = 5
+        await canvas.handle(_space())
+        await canvas.handle(NavigationAction(direction='right', space_held=True))
+        assert canvas._pen_down and {(5, 5), (6, 5)} <= canvas._painted_positions
+        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
+        assert canvas.code_panel is None
+        await canvas.handle(_space(is_down=False))
+        assert not canvas._pen_down
+        await canvas.handle(NavigationAction(direction='right'))
+        assert (7, 5) not in canvas._painted_positions
+    _run(_test())
+
+
+def test_holding_space_while_moving_keeps_a_latched_brush_down():
+    async def _test():
+        app, canvas = _art()
+        await _tap(canvas)
+        await canvas.handle(_space())
+        await canvas.handle(NavigationAction(direction='right', space_held=True))
+        await canvas.handle(_space(is_down=False))
+        assert canvas._pen_down
     _run(_test())
 
 
@@ -163,4 +190,34 @@ def test_draw_path_without_pen_callback_is_safe():
             pass
         player = PlaybackPlayer(dispatch_action=dispatch, is_art_paint_mode=lambda: True)
         await player._draw_path(DrawPath(directions=['right'], delay_per_step=0.0, pause_after=0.0))
+    _run(_test())
+
+
+def test_a_chord_mixes_into_the_cell_the_held_letter_painted():
+    from purple_tui.canvas.harness import press
+    from purple_tui.color_mixing import mix_colors_paint
+    from purple_tui.palette import get_key_color
+
+    async def _test():
+        app, canvas = _art()
+        canvas._cursor_x = canvas._cursor_y = 5
+        await press(app, "b")
+        await press(app, "g", char_held="b")
+        await press(app, "r", char_held="g")
+        two = mix_colors_paint([get_key_color("b"), get_key_color("g")])
+        mixed = mix_colors_paint([two, get_key_color("r")])
+        assert canvas._grid[(5, 5)][2] == mixed and (6, 5) not in canvas._grid
+        assert canvas.brush_color == mixed and (canvas._cursor_x, canvas._cursor_y) == (6, 5)
+    _run(_test())
+
+
+def test_brush_eases_down_and_up_then_rests():
+    async def _test():
+        app, canvas = _art()
+        await _tap(canvas)
+        await asyncio.sleep(0.2)
+        assert canvas._lift == 0.0 and canvas._lift_timer is None
+        await _tap(canvas)
+        await asyncio.sleep(0.2)
+        assert canvas._lift == 1.0 and canvas._lift_timer is None
     _run(_test())

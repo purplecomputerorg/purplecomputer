@@ -148,7 +148,8 @@ def _linear_rgb_to_spectrum(lrgb: Tuple[float, float, float]) -> list[float]:
                r * BASE_SPECTRA["R"][i] +
                g * BASE_SPECTRA["G"][i] +
                b * BASE_SPECTRA["B"][i])
-        spectrum.append(max(1e-10, val))
+        # Real black paint reflects a little light; a near-zero floor made black absorb every mix.
+        spectrum.append(max(0.003, val))
     return spectrum
 
 

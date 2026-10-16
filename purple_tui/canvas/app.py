@@ -1467,15 +1467,23 @@ class PurpleApp:
         if right:
             g.draw_text(right, px, frame.right, y, "mono", P.MUTED, anchor="midright")
 
+    def _legend_metrics(self) -> tuple:
+        """(letter px, key size, key pitch, outline pad) of the sticker keyboard."""
+        g = self.g
+        px = g.vh(LEGEND_TEXT_VH)
+        size = round(px * 1.35)
+        return px, size, size + max(2, g.vh(0.25)), g.vh(0.6)
+
+    def _legend_width(self) -> int:
+        _, size, pitch, pad = self._legend_metrics()
+        return round(12.5 * pitch) - (pitch - size) + 2 * pad
+
     def _draw_legend(self, frame, bottom: int):
         """A tiny keyboard in the sticker colors, so a kid without stickers can
         find a color before pressing; the last key pops out bigger. Its
         outline's bottom edge sits at `bottom`."""
         g = self.g
-        px = g.vh(LEGEND_TEXT_VH)
-        size = round(px * 1.35)
-        pitch = size + max(2, g.vh(0.25))
-        pad = g.vh(0.6)
+        px, size, pitch, pad = self._legend_metrics()
         board = pygame.Rect(frame.x + pad, 0, round(12.5 * pitch) - (pitch - size), 4 * pitch - (pitch - size))
         board.bottom = bottom - pad
         g.rect(P.HAIR, board.inflate(2 * pad, 2 * pad), width=1, radius=pad + size // 4)
@@ -1499,31 +1507,57 @@ class PurpleApp:
         reuses it with its own corners and no room tabs."""
         g = self.g
         y = g.h - g.vh(STATUS_TEXT_VH)
-        px = g.em(0.92)
         if self._littles_mode:
-            g.draw_text("Littles Mode · Hold Esc to exit", px, frame.centerx, y, "mono", P.MUTED, anchor="center")
+            g.draw_text("Littles Mode · Hold Esc to exit", g.em(0.92), frame.centerx, y, "mono", P.MUTED, anchor="center")
             return
-        g.draw_text(left if left is not None else "Keyboard only, on purpose", px, frame.x, y, "mono", P.DIM, anchor="midleft")
-        gap = g.em(0.5)
-        esc = f"Esc {ICON_MENU}"
-        esc_w = g.measure(esc, px, "mono")[0] + round(px * 1.4)
-        names = [(rid, f"{r.icon} {r.label}") for rid, r in self.rooms.items()] if tabs else []
-        widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for _, t in names]
-        x = frame.centerx - (esc_w + sum(gap + w for w in widths)) // 2
-        esc_pill = draw_keycap(g, esc, px, x, y)
-        x = esc_pill.right + gap
-        for (rid, label), w in zip(names, widths):
-            draw_label(g, label, px, x + w // 2, y, P.MUTED, anchor="center", on=rid == self.active_room)
-            x += w + gap
+        left = left if left is not None else "Keyboard only, on purpose"
         if right is None:
             right = (getattr(self._panel, "arrow_hint", None) or self.room.arrow_hint)()
             if self._effective_volume() == 0:
                 right = f"{ICON_VOLUME_OFF}  " + right
         if glyph := ARROW_GLYPHS.get(self._lit_arrow):
             right = right.replace(glyph, f"[{P.ACCENT}]{glyph}[/]")
-        w, h = g.markup_size(right, px, "mono")
-        g.draw_markup(right, px, frame.right - w, y - h // 2, "mono", P.DIM)
+        px, parts = self._status_layout(frame, left, right, tabs)
+        g.draw_text(left, px, frame.x, y, "mono", P.DIM, anchor="midleft")
+        esc_pill = draw_keycap(g, f"Esc {ICON_MENU}", px, parts["esc"].x, y)
+        for rid, label, r in parts["tabs"]:
+            draw_label(g, label, px, r.centerx, y, P.MUTED, anchor="center", on=rid == self.active_room)
+        h = g.markup_size(right, px, "mono")[1]
+        g.draw_markup(right, px, parts["right"].x, y - h // 2, "mono", P.DIM)
         return esc_pill
+
+    def _status_layout(self, frame, left: str, right: str, tabs: bool = True):
+        """(px, {left, esc, tabs, right} rects) for the status strip: the
+        largest text up to em(0.92) at which the corners and the centered Esc
+        pill and room tabs fit the frame side by side."""
+        g = self.g
+        names = [(rid, f"{r.icon} {r.label}") for rid, r in self.rooms.items()] if tabs else []
+        reserve = self._legend_width() if self._legend_visible and not self._code_panel_active else 0
+
+        def widths(px):
+            pad, gap = round(px * 1.4), round(px * 0.55)
+            mid = [g.measure(f"Esc {ICON_MENU}", px, "mono")[0] + pad] + \
+                  [g.measure(t, px, "mono-bold")[0] + pad for _, t in names]
+            return gap, mid, max(reserve, g.measure(left, px, "mono")[0]), g.markup_size(right, px, "mono")[0]
+
+        def need(px):
+            gap, mid, lw, rw = widths(px)
+            return sum(mid) + gap * (len(mid) + 3) + 2 * max(lw, rw)
+
+        px = g.em(0.92)
+        if need(px) > frame.w:
+            px = max(6, px * frame.w // need(px))
+            while px > 6 and need(px) > frame.w:
+                px -= 1
+        gap, mid, lw, rw = widths(px)
+        x = frame.centerx - (sum(mid) + gap * (len(mid) - 1)) // 2
+        rects = []
+        for w in mid:
+            rects.append(pygame.Rect(x, 0, w, 1))
+            x += w + gap
+        return px, {"left": pygame.Rect(frame.x, 0, lw, 1), "esc": rects[0],
+                    "tabs": [(rid, t, r) for (rid, t), r in zip(names, rects[1:])],
+                    "right": pygame.Rect(frame.right - rw, 0, rw, 1)}
 
     def _draw_toasts(self):
         """A calm centered pill above the status strip, stacking upward, so a

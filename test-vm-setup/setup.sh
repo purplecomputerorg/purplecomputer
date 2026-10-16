@@ -179,6 +179,13 @@ exec /usr/bin/startx "$HOME/.xinitrc"
 SPX
 sudo chmod +x /usr/local/bin/startx-purple
 
+# `run`: pull the latest code and start dev mode (see dev.sh)
+sudo tee /usr/local/bin/run > /dev/null << 'RUN'
+#!/bin/bash
+exec "$HOME/purplecomputer/test-vm-setup/dev.sh" "$@"
+RUN
+sudo chmod +x /usr/local/bin/run
+
 # Clean up old scripts
 rm -f ~/bin/startx-tiling ~/bin/startx-purple
 sudo rm -f /usr/local/bin/startx-tiling
@@ -192,7 +199,7 @@ echo "  2. Log into VM console (not SSH)"
 echo "  3. Run:     startx-purple"
 echo "  4. Clone:   git clone https://github.com/purplecomputerorg/purplecomputer.git"
 echo "  5. Setup:   cd purplecomputer && make setup"
-echo "  6. Run:     make run"
+echo "  6. Run:     make run  (later: just type 'run' to pull and start dev mode)"
 echo ""
 echo "Remember: SSH is for editing. Use VM console for testing keyboard."
 echo ""

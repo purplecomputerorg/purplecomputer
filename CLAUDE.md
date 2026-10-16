@@ -99,6 +99,8 @@ just test    just run    just lint    just setup    just python foo.py
 
 Always `just python` instead of `.venv/bin/python`.
 
+**Don't run the full suite (`just test`) unless the user asks.** Lots of lanes run in parallel; the user runs it manually. After a change, run `just lint` plus only the relevant tests (`just python -m pytest tests/canvas/test_foo.py -v`, or `-k` a name), and write or update tests as usual. This applies before `/wrap` and `/checkpoint` too.
+
 ---
 
 ## Headless UI Preview

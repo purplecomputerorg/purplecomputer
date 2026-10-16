@@ -327,3 +327,15 @@ def test_a_big_count_keeps_its_color(evaluator):
     """The abacus beads are the colored thing the kid asked to count."""
     assert f"[on {evaluator._get_color('blue')}] 🐱 [/]" in \
         evaluator.evaluate("1000 blue cats")
+
+
+@pytest.mark.parametrize("text", ["2 red blue", "2 red, blue", "2 red + blue"])
+def test_a_count_multiplies_the_color_right_after_it(evaluator, text):
+    red, blue = evaluator._get_color("red"), evaluator._get_color("blue")
+    assert evaluator.evaluate(text).endswith(f":{red},{red},{blue}"), text
+
+
+@pytest.mark.parametrize("text", ["2 dark red blue", "blue 2 dark red"])
+def test_a_count_multiplies_a_two_word_color(evaluator, text):
+    dark_red = evaluator.content.get_modified_color("dark red")[0]
+    assert evaluator.evaluate(text).count(dark_red) == 2, text

@@ -379,7 +379,8 @@ class PlayRoom(Room):
         ideas = self.hints.current(hold=bool(self.field.value))
         box = self.field.draw_boxed(g, x, bottom - em(0.9) - round(line_px * 1.9), width, line_px, "Type",
                                     ideas=ideas, arrow=ICON_VOLUME_HIGH if talks else "→")
-        self.field.draw_sub(g, box.x + round(line_px * 0.55), bottom, sub_px, "{Tab} quiet" if talks else "{Tab} say it")
+        self.field.draw_sub(g, box.x + round(line_px * 0.55), bottom, sub_px, "{Enter} go" if self.field.value.strip() else "",
+                            "{Tab} quiet" if talks else "{Tab} say it")
         top_limit = rect.y + em(1)
         base = box.y - em(1)
         viewport = base - top_limit

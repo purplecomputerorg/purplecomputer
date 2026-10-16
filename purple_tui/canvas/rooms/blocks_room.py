@@ -411,7 +411,7 @@ class BlocksRoom(Room):
                 self._control(action.action, action.is_repeat)
         elif isinstance(action, NavigationAction):
             self._navigate(action)
-        elif isinstance(action, CharacterAction) and not action.is_repeat:
+        elif isinstance(action, CharacterAction):
             self._character(action)
         self._restart_blink()
         self.app.invalidate()

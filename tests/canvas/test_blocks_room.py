@@ -38,12 +38,13 @@ def test_letters_and_space_stack_on_the_cursor_column():
     run(go())
 
 
-def test_held_letter_repeats_do_not_stack():
+def test_held_letter_repeats_like_in_art():
     async def go():
         app, room = _blocks()
         await press(app, "a")
         await press(app, "a", is_repeat=True)
-        assert len(room._blocks) == 1
+        await press(app, "a", is_repeat=True)
+        assert len(room._blocks) == 3
     run(go())
 
 

@@ -279,6 +279,18 @@ def test_a_chord_keeps_mixing_while_letters_stay_held():
     run(go())
 
 
+
+def test_holding_a_chord_keeps_building_the_mix():
+    async def go():
+        app, room = _blocks()
+        await press(app, "b")
+        await press(app, "g", char_held="b")
+        await press(app, "g", is_repeat=True)
+        await press(app, "right", char_held="g")
+        mixed = mix_colors_paint([get_key_color("b"), get_key_color("g")])
+        assert set(room._blocks.values()) == {mixed} and len(room._blocks) == 3
+    run(go())
+
 def test_keyboard_reports_the_still_held_letter_and_shift():
     sm = KeyboardStateMachine()
     down = lambda code: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=time.monotonic()))

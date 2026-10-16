@@ -530,10 +530,11 @@ class ArtRoom(Room):
         self.set_brush_color(self._grid[pos][2], char)
         return True
 
-    def _select_brush(self, char: str) -> bool:
-        """Set the brush from a key; False when the key has no color."""
+    def _select_brush(self, char: str, hold: bool = False) -> bool:
+        """Set the brush from a key; False when the key has no color. With
+        `hold`, a key still down keeps its brush, so a chord's mix keeps going."""
         brush = brush_for_key(char)
-        if brush:
+        if brush and not (hold and brush[0] == self._last_key_char):
             self.set_brush_color(brush[1], brush[0])
         return bool(brush)
 
@@ -658,7 +659,7 @@ class ArtRoom(Room):
                 return
             held = brush_for_key(action.char_held) if action.char_held else None
             mixed = bool(held) and not action.shift_held and self._mix_into_last(held[0], char)
-            if not mixed and self._select_brush(char) and not action.shift_held:
+            if not mixed and self._select_brush(char, hold=action.is_repeat) and not action.shift_held:
                 self._paint_at_cursor()
                 self._advance_after_stamp(direction)
                 if char.isalpha():
@@ -675,7 +676,7 @@ class ArtRoom(Room):
             self._arrow_repeat_dir = action.direction
             self._arrow_repeat_count = 1 if action.is_repeat else 0
         if self._paint_mode and action.char_held and not self._erasing:
-            self._select_brush(action.char_held)
+            self._select_brush(action.char_held, hold=True)
             if self._arrow_repeat_count == 0 or (self._cursor_x, self._cursor_y) != self._last_paint_pos:
                 self._paint_at_cursor()
         if action.direction in ("up", "down") and prior_post_stamp_x is not None and not action.char_held:

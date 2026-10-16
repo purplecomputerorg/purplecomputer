@@ -211,6 +211,23 @@ def test_a_chord_mixes_into_the_cell_the_held_letter_painted():
     _run(_test())
 
 
+
+def test_holding_a_chord_keeps_painting_the_mix():
+    from purple_tui.canvas.harness import press
+    from purple_tui.color_mixing import mix_colors_paint
+    from purple_tui.palette import get_key_color
+
+    async def _test():
+        app, canvas = _art()
+        canvas._cursor_x = canvas._cursor_y = 5
+        await press(app, "b")
+        await press(app, "g", char_held="b")
+        await press(app, "g", is_repeat=True)
+        await press(app, "right", char_held="g")
+        mixed = mix_colors_paint([get_key_color("b"), get_key_color("g")])
+        assert all(canvas._grid[(x, 5)][2] == mixed for x in (5, 6, 7))
+    _run(_test())
+
 def test_brush_eases_down_and_up_then_rests():
     async def _test():
         app, canvas = _art()

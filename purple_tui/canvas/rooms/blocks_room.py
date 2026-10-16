@@ -348,9 +348,10 @@ class BlocksRoom(Room):
         self._key, self._color = key, color
         self.app.set_legend(color, visible=True)
 
-    def _set_color(self, char: str):
+    def _set_color(self, char: str, hold: bool = False):
+        """With `hold`, a key still down keeps its brush, so a chord's mix keeps going."""
         brush = brush_for_key(char)
-        if brush:
+        if brush and not (hold and brush[0] == self._key):
             self.set_brush_color(brush[1], brush[0])
         return bool(brush)
 
@@ -418,7 +419,7 @@ class BlocksRoom(Room):
 
     def _character(self, action):
         char = UNSHIFT_MAP.get(action.char, action.char) if action.shift_held else action.char
-        if open_color_wheel(self, char) or not self._set_color(char) or action.shift_held:
+        if open_color_wheel(self, char) or not self._set_color(char, hold=action.is_repeat) or action.shift_held:
             return
         held = brush_for_key(action.char_held) if action.char_held else None
         if held and self._mix_into_last(held[0]):
@@ -460,7 +461,7 @@ class BlocksRoom(Room):
         else:
             self._arrow_repeat_dir = action.direction
             self._arrow_repeat_count = 1 if action.is_repeat else 0
-        laying = (bool(action.char_held) and self._set_color(action.char_held)) or action.space_held
+        laying = (bool(action.char_held) and self._set_color(action.char_held, hold=True)) or action.space_held
         if not laying:
             self.echo.flush()
         fast = not laying and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD

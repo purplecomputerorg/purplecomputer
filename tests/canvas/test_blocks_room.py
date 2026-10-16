@@ -399,3 +399,16 @@ def test_picker_number_four_opens_blocks():
         await press(app, "4")
         assert app.active_room == "blocks"
     run(go())
+
+
+def test_restoring_blocks_past_the_walls_drops_them():
+    """Steps from an older, bigger floor must not crash the back view."""
+    async def go():
+        app, room = _blocks()
+        room.restore_timeline_state({f"b:3,{DEPTH + 2},0": "#FF0000", "b:3,4,0": "#00FF00",
+                                     "cursor": [WIDTH + 3, DEPTH + 3]})
+        assert room._blocks == {(3, 4, 0): "#00FF00"}
+        assert (room._x, room._z) == (WIDTH - 1, DEPTH - 1)
+        await press(app, "tab")
+        room.draw(app.g, app.g.surface.get_rect())
+    run(go())

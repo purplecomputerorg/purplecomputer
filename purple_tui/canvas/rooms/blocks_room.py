@@ -179,8 +179,11 @@ class BlocksRoom:
         return state
 
     def restore_timeline_state(self, state: dict):
-        self._blocks = {tuple(int(n) for n in k[2:].split(",")): v for k, v in state.items() if k.startswith("b:")}
-        self._x, self._z = state.get("cursor", [WIDTH // 2, DEPTH // 2])
+        # Older builds had a bigger floor; their steps may hold blocks past today's walls.
+        blocks = {tuple(int(n) for n in k[2:].split(",")): v for k, v in state.items() if k.startswith("b:")}
+        self._blocks = {p: c for p, c in blocks.items() if all(0 <= n < SIZE[a] for n, a in zip(p, "xzy"))}
+        x, z = state.get("cursor", [WIDTH // 2, DEPTH // 2])
+        self._x, self._z = min(max(x, 0), WIDTH - 1), min(max(z, 0), DEPTH - 1)
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
         self._last = self._next = self._last_mix = None

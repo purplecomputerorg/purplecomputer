@@ -220,11 +220,16 @@ class BlocksRoom(Room):
     def _cursor_y(self) -> int:
         """The first free level at or above the chosen height, or on from where
         a run left off, the way it goes. Never above the top level: a full
-        column puts it on the top block."""
+        column puts it on the top block. A run already going through blocks
+        mixes into them, as Art paints over its own lines, rather than climbing."""
         run = []
         if self._next and self._next[:2] == (self._x, self._z):
-            y = self._next[2]
-            run = self._free(range(y, -1, -1) if self._dir == SINK else range(y, HEIGHT))
+            _, _, y, inside = self._next
+            if inside:
+                return y
+            if self._dir == SINK:
+                return next(iter(self._free(range(y, -1, -1))), y)
+            run = self._free(range(y, HEIGHT))
         return next(iter(run or self._free(range(self._hover, HEIGHT))), HEIGHT - 1)
 
     def _place(self, y=None):
@@ -235,14 +240,14 @@ class BlocksRoom(Room):
         self._blocks[pos] = mix_colors_paint([old, self._color]) if old else self._color
         self._last = (pos, self._key)
         self._changed()
+        return bool(old)
 
     def _build(self, keep_height: bool = False):
         """A typed block, then on to the next cell the way the cursor last went."""
         y = self._cursor_y()
-        self._place(y)
-        self._advance(y, keep_height)
+        self._advance(y, keep_height, inside=self._place(y))
 
-    def _advance(self, y: int, keep_height: bool = False):
+    def _advance(self, y: int, keep_height: bool = False, inside: bool = False):
         """On from the cursor's column at height y the way it last went,
         wrapping at the walls like lines of text. Typing into a new column
         starts again from the chosen height; code keeps the height it reached."""
@@ -255,7 +260,7 @@ class BlocksRoom(Room):
         column = (self._x, self._z)
         self._x, self._z = self._view(pos["x"], pos["z"])
         keep = keep_height or column == (self._x, self._z)
-        self._next = (self._x, self._z, pos["y"]) if keep else None
+        self._next = (self._x, self._z, pos["y"], inside) if keep else None
 
     def _spot(self, y=None) -> dict:
         """The cursor in view coordinates, at height y or its own."""
@@ -273,6 +278,15 @@ class BlocksRoom(Room):
 
     # What code drives: the same moves as the keys, minus the echo.
     def set_way(self, way: str):
+        """Turning straight back after a run starts on its last block, like Art's."""
+        if self._next and self._last:
+            pos = self._spot(self._next[2])
+            axis, step = WRAP[way][0]
+            pos[axis] += step
+            back = (*self._view(pos["x"], pos["z"]), pos["y"])
+            if back == self._last[0]:
+                self._x, self._z = back[:2]
+                self._next = (*back, True)
         self._dir = way
 
     def build(self):

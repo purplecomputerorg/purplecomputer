@@ -25,6 +25,7 @@ class FakeCanvas:
         self._last_key_color = "#FF0000"
         self._paint_mode = False
         self._typed: list[str] = []
+        self._run_end = None
         self._width = width
         self._height = height
 
@@ -280,6 +281,19 @@ class TestForward:
         c._cursor_x = 5
         c.execute_logo_command("move", "left", 3)
         assert c._cursor_x == 2
+
+    def test_turning_straight_back_retraces_without_extending(self):
+        c = FakeCanvas()
+        c.execute_logo_command("paint", "right", 10)
+        c.execute_logo_command("paint", "left", 2)
+        assert c._painted_positions == {(x, 0) for x in range(10)}
+        assert c._cursor_x == 7
+
+    def test_a_corner_starts_past_the_run(self):
+        c = FakeCanvas()
+        c.execute_logo_command("paint", "right", 3)
+        c.execute_logo_command("paint", "down", 2)
+        assert c._painted_positions == {(0, 0), (1, 0), (2, 0), (3, 0), (3, 1)}
 
 
 # ---------------------------------------------------------------------------

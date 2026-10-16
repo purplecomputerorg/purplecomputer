@@ -187,6 +187,7 @@ class ArtRoom(Room):
 
     def __init__(self, app):
         super().__init__(app)
+        self._run_end = None            # (way, cursor) after a code run, to turn straight back from
         self._grid: dict = {}
         self._painted_positions: set = set()
         self._last_paint_pos = None
@@ -432,11 +433,18 @@ class ArtRoom(Room):
             self._move_in_direction(direction, wrap=True)
 
     def execute_logo_command(self, action: str, direction: str, distance: int):
+        back = self._TURN_RIGHT[self._TURN_RIGHT[direction]]
+        if distance and self._run_end == (back, self._cursor_x, self._cursor_y):
+            self._move_in_direction(direction)      # turning straight back starts on the run's last cell
+        self._run_end = None
         for _ in range(distance):
             if action == "paint":
                 self._paint_at_cursor()
             if not self._move_in_direction(direction):
                 break
+        else:
+            if action == "paint" and distance:
+                self._run_end = (direction, self._cursor_x, self._cursor_y)
         self._restart_blink()
         self.refresh()
 

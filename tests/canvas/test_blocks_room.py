@@ -12,7 +12,7 @@ cursor's row fade when they hide it, and the Esc picker reaches the room with
 import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
+from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, SINK, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import KeyboardStateMachine, NavigationAction
@@ -439,4 +439,42 @@ def test_restoring_blocks_past_the_walls_drops_them():
         assert (room._x, room._z) == (WIDTH - 1, DEPTH - 1)
         await press(app, "tab")
         room.draw(app.g, app.g.surface.get_rect())
+    run(go())
+
+
+def _code(room, *moves):
+    """Code moves as the code runner drives them: (way, count) pairs."""
+    for way, count in moves:
+        room.set_way(way)
+        for _ in range(count):
+            room.build()
+
+
+def test_code_turning_straight_back_retraces_without_extending():
+    async def go():
+        app, room = _blocks()
+        _code(room, (RISE, 10), (SINK, 2))
+        tower = {(5, 5, y) for y in range(10)}
+        assert set(room._blocks) == tower
+        _code(room, ("right", 3))
+        assert set(room._blocks) - tower == {(6, 5, 7), (7, 5, 7)}
+    run(go())
+
+
+def test_code_turning_straight_back_along_a_row_mixes_into_it():
+    async def go():
+        app, room = _blocks()
+        _code(room, ("right", 4), ("left", 2))
+        assert set(room._blocks) == {(x, 5, 0) for x in range(5, 9)}
+        assert room._x == 6
+    run(go())
+
+
+def test_a_code_row_still_climbs_over_a_tower_in_its_way():
+    async def go():
+        app, room = _blocks()
+        _code(room, (RISE, 2))
+        room._x, room._next = 4, None
+        _code(room, ("right", 3))
+        assert {(4, 5, 0), (5, 5, 2), (6, 5, 2)} <= set(room._blocks)
     run(go())

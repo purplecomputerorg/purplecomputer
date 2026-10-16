@@ -613,17 +613,31 @@ def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Re
 AUTO = "auto"   # a swatch that picks light or dark for what's under it
 
 
-@functools.lru_cache(maxsize=8)
+def auto_inks() -> tuple:
+    """The theme's (light, dark) ink, the pair AUTO letters choose from."""
+    return tuple(sorted((P.TEXT, P.ON_PRIMARY), key=P.luminance, reverse=True))
+
+
+def auto_ink(bg: str) -> str:
+    """Whichever of the theme's two inks reads better on bg (WCAG contrast)."""
+    lum = P.luminance(bg)
+    return max(auto_inks(), key=lambda ink: (max(P.luminance(ink), lum) + 0.05) / (min(P.luminance(ink), lum) + 0.05))
+
+
 def swatch_dot(color: str, d: int) -> pygame.Surface:
-    """A color dot drawn 4x and smoothed down so the edge stays clean; AUTO is half white, half black."""
+    """A color dot; AUTO is split down the middle into the theme's light and dark ink."""
+    return _dot(auto_inks() if color == AUTO else (color,), d)
+
+
+@functools.lru_cache(maxsize=8)
+def _dot(colors: tuple, d: int) -> pygame.Surface:
+    """Drawn 4x and smoothed down so the edge stays clean; two colors split it left and right."""
     s = 4
     big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)
     c = (d * s / 2, d * s / 2)
-    if color == AUTO:
-        pygame.draw.circle(big, rgb("#FFFFFF"), c, c[0], draw_top_left=True, draw_bottom_left=True)
-        pygame.draw.circle(big, rgb("#000000"), c, c[0], draw_top_right=True, draw_bottom_right=True)
-    else:
-        pygame.draw.circle(big, rgb(color), c, c[0])
+    left, right = colors[0], colors[-1]
+    pygame.draw.circle(big, rgb(left), c, c[0], draw_top_left=True, draw_bottom_left=True)
+    pygame.draw.circle(big, rgb(right), c, c[0], draw_top_right=True, draw_bottom_right=True)
     return pygame.transform.smoothscale(big, (d, d))
 
 

@@ -3,8 +3,8 @@ the center to dark at the rim. Arrows move a dot over it and the brush takes
 the color under the dot; Space or Enter keeps it, Esc puts the old one back,
 and any other key keeps it and goes on to the room. Each room's wheel reopens
 on the last color kept from it, so a stray key never loses a hard-won pick.
-A room with wheel_auto set swaps the white center for AUTO, half white and
-half black: back to letters that turn light or dark to show up."""
+A room with wheel_auto set swaps the white center for AUTO, half the theme's light ink and
+half its dark: back to letters that turn light or dark to show up."""
 
 import colorsys
 import functools
@@ -16,7 +16,7 @@ from .. import palette as P
 from ..color_mixing import rgb_to_hex
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from .gfx import rgb
-from .ui import AUTO, Overlay, swatch_dot, arrow_key_metrics, arrow_keys_size, draw_arrow_keys, draw_keycap
+from .ui import AUTO, Overlay, auto_inks, swatch_dot, arrow_key_metrics, arrow_keys_size, draw_arrow_keys, draw_keycap
 
 OPEN_KEY = "\\"
 HUES, RINGS = 36, 7          # ring 0 is the white center
@@ -51,8 +51,12 @@ def _spot(color: str) -> tuple:
     return d * math.sin(a), -d * math.cos(a)
 
 
-@functools.lru_cache(maxsize=4)
 def disc(d: int, auto: bool = False) -> pygame.Surface:
+    return _disc(d, auto_inks() if auto else None)
+
+
+@functools.lru_cache(maxsize=4)
+def _disc(d: int, auto) -> pygame.Surface:
     """Pies from the rim inward, each ring painted over the last, drawn 2x and smoothed down."""
     s = 2
     big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)

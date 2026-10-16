@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from purple_tui.canvas.harness import make_app
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.keyboard import CharacterAction
+from purple_tui import palette as P
 from purple_tui.palette import get_key_color
 from purple_tui.canvas.rooms.art_room import BRUSH_CHAR
 
@@ -89,14 +90,14 @@ async def test_paint_over_letter_on_blank_canvas_stays_pure(canvas):
 
 @_canvas_test
 async def test_letter_stays_readable_after_the_paint_under_it_mixes(canvas):
-    """Yellow needs black letters, the yellow+blue mix needs white ones."""
-    _paint(canvas, 0, YELLOW)
-    _type(canvas, 0, "H")
-    assert canvas._grid[(0, 0)][1] == "#000000"
-
+    """Blue needs the theme's light ink, the blue+yellow mix needs its dark one."""
     _paint(canvas, 0, BLUE)
-    assert canvas._grid[(0, 0)][2] == YELLOW_ON_BLUE
-    assert canvas._grid[(0, 0)][1] == "#FFFFFF", (
+    _type(canvas, 0, "H")
+    assert canvas._grid[(0, 0)][1] == P.TEXT
+
+    _paint(canvas, 0, YELLOW)
+    assert canvas._grid[(0, 0)][2] == mix_colors_paint([BLUE, YELLOW])
+    assert canvas._grid[(0, 0)][1] == P.ON_PRIMARY, (
         "Letter color must follow the mixed background"
     )
 

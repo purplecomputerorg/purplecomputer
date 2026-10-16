@@ -19,7 +19,7 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo, SpaceHold
-from ..ui import AUTO, MOVE_HINT, draw_key_hint, hint_row_h, draw_label, draw_mode_switch
+from ..ui import AUTO, MOVE_HINT, auto_ink, draw_key_hint, hint_row_h, draw_label, draw_mode_switch
 from .base import Room
 
 COLS, ROWS = ART_COLS, ART_ROWS
@@ -42,13 +42,6 @@ HINTS = {
     "paint": "Type to paint! {Space} puts the brush down.",
     "write": "Type to write! Arrow keys move. {Enter} for a new line.",
 }
-
-
-def _contrast_text_color(bg_hex: str) -> str:
-    """Black on light paint, white on dark: the simple perceptual split the
-    canvas has always used for letters over paint."""
-    r, g, b = int(bg_hex[1:3], 16), int(bg_hex[3:5], 16), int(bg_hex[5:7], 16)
-    return "#000000" if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 else "#FFFFFF"
 
 
 def brush_for_key(char: str):
@@ -402,7 +395,7 @@ class ArtRoom(Room):
         self._painted_positions.add(pos)
         self._last_paint_pos = pos
         if cell and cell[0] not in ("", " ", BRUSH_CHAR):
-            self._set_cell(pos, cell[0], _contrast_text_color(color), color)
+            self._set_cell(pos, cell[0], auto_ink(color), color)
         else:
             self._set_cell(pos, BRUSH_CHAR, color, color)
         self.app.invalidate()
@@ -510,7 +503,7 @@ class ArtRoom(Room):
         self._last_key_char = char
         self._last_key_color = get_key_color(char)
         bg = self._get_cell_bg(pos)
-        self._set_cell(pos, char, self._ink or (_contrast_text_color(bg) if pos in self._painted_positions else P.TEXT), bg)
+        self._set_cell(pos, char, self._ink or (auto_ink(bg) if pos in self._painted_positions else P.TEXT), bg)
         self._advance_after_stamp(direction)
         self._restart_blink()
         self.app.invalidate()

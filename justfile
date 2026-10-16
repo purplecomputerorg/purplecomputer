@@ -299,6 +299,11 @@ read-log path *args:
 link-iso *args:
     ./build-scripts/link-iso.sh {{args}}
 
+# Publish a main build (Purple 2.0) to purple2.purplecomputer.org; never touches the 1.x download.
+# just ship-2 [commit], default HEAD. Build it first with just build.
+ship-2 *args:
+    ./build-scripts/upload-purple2.sh {{args}}
+
 # Host a built commit's ISO for one customer at files.purplecomputer.org/oneoff/<name>.iso, outside the release paths.
 # just ship-oneoff <commit> [name] [--debug|--standard|--backup]; asks for the name when omitted, debug ISO by default
 ship-oneoff commit *args:

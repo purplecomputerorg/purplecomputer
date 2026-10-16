@@ -119,6 +119,12 @@ just flash-debug    # debug ISO
 
 ---
 
+## Purple 2.0 Preview (main)
+
+`purple2.purplecomputer.org` offers a main build to people granted 2.0 access on the landing admin's downloads access page (or holding the `?key=PURPLE2_ACCESS_KEY` link). An order email alone doesn't unlock it. Build on main (`just build`), then `just ship-2 [commit]` uploads standard + debug to `purple2/<version>/` on the files host, writes `purple2/latest.json` (same shape as `latest.json`), and prunes `purple2/` to that version plus the one it replaced. It never touches `releases/`, `latest.json`, the redirects, or tags, so `release-status` and `release-check` keep reading 1.x. The page links the versioned paths straight from `purple2/latest.json`, so there are no redirects to maintain.
+
+---
+
 ## Updating the Download Page
 
 The page is part of the landing site: edit `~/landing/src/pages/downloads.tsx` and deploy the landing repo. Nothing to upload from this repo.
@@ -176,6 +182,7 @@ All scripts live in `build-scripts/`.
 |--------|-------------|---------|
 | `build-all.sh` (via `build-in-docker.sh`) | `./build-scripts/build-in-docker.sh` | Build standard + debug ISOs |
 | `release-iso.sh` | `just release` | Upload ISOs to R2, update redirects |
+| `upload-purple2.sh` | `just ship-2` | Publish a main build to the 2.0 preview page |
 | `release-check.sh` | `just release-check` | Show the live download's commit, verify it against a hash |
 | `upload-pdfs.sh` | `just upload-pdfs` | Upload the card PDFs, purge cache |
 | `clean-old-releases.sh` | `just clean-releases` | Delete old release versions from R2 |

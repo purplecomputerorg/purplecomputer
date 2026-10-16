@@ -241,6 +241,11 @@ class Gfx:
             f = self._fonts[key] = pygame.font.Font(str(FONT_DIR / FACES[face]), px)
         return f
 
+    def cap_drop(self, px: int, face: str = "sans") -> float:
+        """How far below its box middle a line's capitals are centered, so mixed sizes can share a visual center."""
+        f = self.font(face, px)
+        return f.get_ascent() - f.metrics("H")[0][3] / 2 - f.get_height() / 2
+
     def _load_emoji_font(self):
         for path in EMOJI_FONT_PATHS:
             if path and os.path.exists(path):

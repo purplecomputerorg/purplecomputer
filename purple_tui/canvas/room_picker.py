@@ -262,8 +262,10 @@ class RoomPicker(Overlay):
                              (hint, em(0.85), "mono", fg if on else P.DIM)] if p[0]]
         space = em(0.7)
         x = r.centerx - (sum(g.measure(t, px, face)[0] for t, px, face, _ in parts) + space * (len(parts) - 1)) // 2
+        label_drop = g.cap_drop(em(0.95), "mono-bold")
         for text, px, face, color in parts:
-            x = g.draw_text(text, px, x, cy, face, color, anchor="midleft").right + space
+            y = cy if face == "nerd" else round(cy + label_drop - g.cap_drop(px, face))
+            x = g.draw_text(text, px, x, y, face, color, anchor="midleft").right + space
 
     def _draw_footer(self, g, cx, y):
         px = g.em(0.9)

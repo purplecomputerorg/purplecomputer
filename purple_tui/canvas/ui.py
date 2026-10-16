@@ -229,7 +229,9 @@ class TextField:
     def text_x(self, g: Gfx, x: int, px: int, label: str = "Type", label_px: int | None = None,
                gap: int | None = None) -> int:
         """Where typed text starts, so hints under the field can line up with it."""
-        return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + (gap if gap is not None else px // 2)
+        lpx = label_px or px
+        head = g.measure(f"{label} ", lpx, "mono-bold")[0] + g.measure("→", lpx, "mono-bold")[0]
+        return x + head + (gap if gap is not None else px // 2)
 
     def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Type", label_px: int | None = None,
              gap: int | None = None, arrow: str = "→") -> pygame.Rect:

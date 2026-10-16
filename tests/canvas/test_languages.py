@@ -9,6 +9,7 @@ from purple_tui import content, i18n, settings, tts
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.rooms.parent_menu import LanguageScreen, SecondLanguageScreen
 from purple_tui.canvas.rooms.play_room import echo_markup, pinyin_candidates
+from purple_tui.canvas.ui import TextField
 from purple_tui.pack_manager import check_pack
 
 
@@ -31,7 +32,8 @@ def langs(tmp_path, monkeypatch):
     monkeypatch.setattr(content, "_content", None)
     es = make_pack(tmp_path, "es", strings={"Volume": "Volumen", "{0} blocks left": "quedan {0} bloques",
                                             "Hold {0} longer to {1}": "Mantén {0} para {1}", "Off": "No", "Save": "Guardar",
-                                            "Clear a Room": "Borrar un cuarto"},
+                                            "Clear a Room": "Borrar un cuarto",
+                                            "Type": "Escribe"},
                    words={"dog": "perro", "red": "rojo", "mouse": "ratón"})
     zh = make_pack(tmp_path, "zh", words={"dog": ["狗", "gǒu"], "panda": ["熊猫", "xióng māo"]},
                    typing={"gou": ["够", "狗", "沟"], "ni": ["你", "呢"]})
@@ -71,6 +73,15 @@ def test_drawn_text_translates_but_typed_text_does_not(langs):
         assert g.measure("Volume", 20) == g.measure("Volumen", 20, tr=False)
         assert g.measure("Volume", 20, tr=False) != g.measure("Volumen", 20, tr=False)
         assert g.markup_size("Volume", 20) == g.markup_size("Volumen", 20, tr=False)
+    run(go())
+
+
+def test_typed_text_starts_after_a_translated_label(langs):
+    i18n.set_languages("es", None)
+
+    async def go():
+        g = make_app().g
+        assert TextField().text_x(g, 0, 30, gap=0) >= g.measure("Escribe →", 30, "mono-bold", tr=False)[0]
     run(go())
 
 

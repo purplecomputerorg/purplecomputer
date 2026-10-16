@@ -5,5 +5,5 @@ from .blocks_room import BlocksRoom
 from .music_room import MusicRoom
 from .play_room import PlayRoom
 
-ROOM_CLASSES = (PlayRoom, MusicRoom, ArtRoom, BlocksRoom)
+ROOM_CLASSES = (ArtRoom, MusicRoom, PlayRoom, BlocksRoom)
 ROOM_NAMES = tuple(c.name for c in ROOM_CLASSES)

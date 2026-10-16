@@ -12,7 +12,7 @@ def test_arrows_cross_between_rooms_tools_and_volume():
         picker = app.top
         assert isinstance(picker, RoomPicker) and picker.tools[:2] == ["code", "colors"]
         await press(app, "down")
-        assert picker.row == HERE and picker.tools[picker.col] in ("save", "open")
+        assert picker.row == HERE and picker.tools[picker.col] in ("code", "colors")
         await press(app, "up")
         await press(app, "up")
         assert picker.row == VOLUME

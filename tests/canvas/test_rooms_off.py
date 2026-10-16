@@ -13,6 +13,14 @@ def settings_file(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
 
 
+def test_purple_opens_in_art_or_the_first_room_thats_on():
+    async def go():
+        return make_app().active_room
+    assert run(go()) == "art"
+    settings.set_room_off("art", True)
+    assert run(go()) == "music"
+
+
 def test_turning_rooms_off_hides_them_and_leaves_the_room_youre_in():
     async def go():
         app = make_app()
@@ -20,9 +28,9 @@ def test_turning_rooms_off_hides_them_and_leaves_the_room_youre_in():
         app.push(screen)
         assert [o[1:] for o in screen.options[:-1]] == [(app.rooms[r].label, "On") for r in app.rooms]
         await press(app, "enter")
-        assert app.active_room == "music" and settings.get_rooms_off() == ["play"]
+        assert app.active_room == "music" and settings.get_rooms_off() == ["art"]
         assert screen.options[0][2] == "Off"
-        assert [r.name for r in RoomPicker(app).options] == ["music", "art", "blocks"]
+        assert [r.name for r in RoomPicker(app).options] == ["music", "play", "blocks"]
         await press(app, "enter")
         assert screen.options[0][2] == "On" and settings.get_rooms_off() == []
     run(go())
@@ -51,7 +59,7 @@ def test_switching_to_a_room_thats_off_lands_on_one_thats_on():
     async def go():
         app = make_app()
         app.action_switch_room("art")
-        assert app.active_room == "play"
+        assert app.active_room == "music"
     run(go())
 
 
@@ -63,5 +71,5 @@ def test_littles_mode_keeps_its_room_even_if_it_is_off():
         app = make_app()
         assert app.active_room == "music"
         app._apply_littles_mode(None)
-        assert app.active_room == "play"
+        assert app.active_room == "art"
     run(go())

@@ -18,7 +18,7 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo, SpaceHold
-from ..ui import draw_label, draw_mode_switch
+from ..ui import draw_key_hint, draw_label, draw_mode_switch
 
 COLS, ROWS = 56, 24
 BRUSH_CHAR = "█"
@@ -35,10 +35,10 @@ LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three 
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
 HINTS = {
     "littles": "Type to paint!",
-    "pen": "Brush is down! Arrows paint a trail. Space lifts the brush.",
+    "pen": "Brush is down! Arrows paint a trail. {Space} lifts the brush.",
     "erase": "Erasing! Arrows clear a trail.",
-    "paint": "Type to paint! Hold Space and move to paint a trail.",
-    "write": "Type to write! Arrow keys move. Enter for a new line.",
+    "paint": "Type to paint! Hold {Space} and move to paint a trail.",
+    "write": "Type to write! Arrow keys move. {Enter} for a new line.",
 }
 
 
@@ -715,7 +715,7 @@ class ArtRoom:
         if chrome_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             key = "littles" if self.app._littles_mode else self._hint_key()
-            g.draw_text(HINTS[key], g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
+            draw_key_hint(g, HINTS[key], g.vh(1.9), foot.x, foot.centery)
             if not self.app._littles_mode:
                 color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled,
                                            self._paint_mode and color_recipe.hint_row(self._last_key_char, self._last_mix))
@@ -787,11 +787,10 @@ class ArtRoom:
             g.surface.blit(sprite, sprite.get_rect(center=(x + c // 2, y + c // 2)))
 
     def _draw_header(self, g, r):
-        """PAINT / ABC mode switch (active one in inverse video) with the brush
-        color as a swatch beside it, and the Tab keycap on the right."""
+        """The Tab switch between Paint and ABC, with the brush beside it."""
         if self.app._littles_mode:
             draw_label(g, "Paint" if self._paint_mode else "Write", g.vh(1.9), r.centerx, r.centery, P.TEXT, anchor="center")
             return
         icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
         draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self.brush_color,
-                         "to write" if self._paint_mode else "to paint", icon, wheel_chip(self))
+                         icon, wheel_chip(self))

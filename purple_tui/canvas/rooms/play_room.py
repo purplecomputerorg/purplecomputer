@@ -13,7 +13,7 @@ from ..gfx import is_emoji, mix, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
 from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
-from ..ui import MATH_OPERATORS, HintRotator, TextField
+from ..ui import MATH_OPERATORS, HintRotator, TextField, draw_key_hint
 
 PAPER_ZOOM = 1.6
 PLAY_IDEAS = [
@@ -387,12 +387,10 @@ class PlayRoom:
         sub_h = g.line_height(sub_px, "mono")
         bottom = rect.bottom - em(1.2) - sub_h
         talks = bool(speech_marks(self.field.value))
-        sub = self.field.autocomplete_markup if self.field.matches else self._say_hint(talks)
         ideas = self.hints.current(hold=bool(self.field.value))
         box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type",
                                     ideas=ideas, arrow=ICON_VOLUME_HIGH if talks else "→")
-        sub_x = box.x + round(line_px * 0.55)
-        g.draw_markup(sub, sub_px, sub_x, bottom, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
+        self._draw_sub(g, box.x + round(line_px * 0.55), bottom, sub_px, talks)
         top_limit = rect.y + em(1)
         base = box.y - em(1)
         viewport = base - top_limit
@@ -416,10 +414,17 @@ class PlayRoom:
             g.rect(P.BG, track, radius=w // 2)
             g.rect(P.FIELD, scroll_thumb(track, viewport, total, self.scroll, em(1.5)), radius=w // 2)
 
-    def _say_hint(self, talks: bool) -> str:
+    def _draw_sub(self, g, x, y, px, talks: bool):
+        """The line under the box: what the typed word makes, then what Tab and Enter do."""
         f = self.field
-        dim = [f"[dim]{t}[/]" for t in (f.recall_text(), "⇥ Tab: quiet" if talks else "⇥ Tab: say it") if t]
-        return "   ".join(filter(None, [f.autocomplete_markup, *dim]))
+        if f.matches:
+            lead, keys = f.match_words, "{Tab}"
+        else:
+            lead, keys = f.exact_display, "   ".join(filter(None, [f.recall_text(keycap=True), "{Tab} quiet" if talks else "{Tab} say it"]))
+        if lead:
+            g.draw_markup(lead, px, x, y, "mono", P.MUTED, dim_to=P.SURFACE)
+            x += g.markup_size(lead, px, "mono")[0] + 2 * px
+        draw_key_hint(g, keys, px, x, y + g.line_height(px, "mono") // 2)
 
     def _answer_px(self, g, e) -> int:
         """Only a small all-emoji answer earns the big size; text stays a

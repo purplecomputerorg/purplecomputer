@@ -7,8 +7,8 @@ import pygame
 
 from .. import palette as P
 from ..color_mixing import mix_colors_paint
-from ..constants import ICON_ROBOT
 from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
+from .ui import CODE_HINT, draw_key_hint
 
 HUE_ROWS = [[k for k in row if k.isalpha()] for row in (QWERTY_ROW, ASDF_ROW, ZXCV_ROW)]   # red, yellow, blue
 EXAMPLE_KEY = "f"
@@ -95,7 +95,7 @@ def draw_foot_right(g, foot: pygame.Rect, code_hint: bool, recipe: dict | None):
     """The hint row's right end: the code line's hold hint, with the recipe before it."""
     px, right = g.vh(1.9), foot.right
     if code_hint:
-        right = g.draw_text(f"{ICON_ROBOT} Hold Space: write code", px, right, foot.centery, "mono", P.DIM, anchor="midright").x - 2 * px
+        right = draw_key_hint(g, CODE_HINT, px, right, foot.centery, anchor="midright").x - 2 * px
     if recipe:
         draw_recipe(g, px=px, x=right, y=foot.centery, **recipe)
 

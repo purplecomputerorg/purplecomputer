@@ -12,6 +12,7 @@ import time
 import pygame
 
 from .. import palette as P
+from ..constants import ICON_ROBOT
 from .gfx import Gfx, mix, rgb
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 
@@ -144,15 +145,16 @@ class TextField:
         self._correction = (original, corrected)
         self.last_command = corrected
 
-    def recall_text(self) -> str:
-        """Dim hint under an empty field; a correction shows once."""
+    def recall_text(self, keycap: bool = False) -> str:
+        """Dim hint under an empty field; a correction shows once. keycap
+        writes Enter as {Enter} for draw_key_hint."""
         if self.value or not self.last_command:
             return ""
         if self._correction:
             orig, corr = self._correction
             self._correction = None
             return _truncate(f"{orig} → {corr}")
-        return f"Enter to try again: {_truncate(self.last_command)}"
+        return f"{'{Enter}' if keycap else 'Enter to'} try again: {_truncate(self.last_command)}"
 
     # --- autocomplete (logic unchanged from CodeInput) ---
     def _check_autocomplete(self):
@@ -192,10 +194,12 @@ class TextField:
 
     @property
     def autocomplete_markup(self) -> str:
-        if self.exact_display:
+        if self.exact_display or not self.matches:
             return self.exact_display
-        if not self.matches:
-            return ""
+        return self.match_words + "   [dim]⇥ Tab[/]"
+
+    @property
+    def match_words(self) -> str:
         parts = []
         for word, color_hex, emoji in self.matches:
             s = f"[dim]{word}[/]"
@@ -204,7 +208,7 @@ class TextField:
             if color_hex:
                 s += f" [{color_hex}]██[/]"
             parts.append(s)
-        return "   ".join(parts) + "   [dim]⇥ Tab[/]"
+        return "   ".join(parts)
 
     # --- drawing ---
     def text_x(self, g: Gfx, x: int, px: int, label: str = "Type", label_px: int | None = None,
@@ -590,57 +594,110 @@ def _swatch_dot(color: str, d: int) -> pygame.Surface:
     return pygame.transform.smoothscale(big, (d, d))
 
 
-def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, label: str, on: bool):
-    """'[key] mark label' in one pill, the key a solid keycap so it reads as
-    press-me; mark is a surface or an icon glyph; on = wears the selection plate."""
+def keycap_size(g: Gfx, text: str, px: int) -> tuple:
+    w, h = g.measure(text, px, "mono-bold")
+    return w + round(px * 1.4), h + round(px * 0.56)
+
+
+def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=P.TEXT, ink=P.SURFACE) -> pygame.Rect:
+    """A solid keycap: the one look for a key the kid can press inside a room."""
+    key = pygame.Rect((0, 0), keycap_size(g, text, px))
+    setattr(key, anchor, (x, y))
+    g.rect(fill, key, radius=round(px * 0.5))
+    g.draw_text(text, px, key.centerx, key.centery, "mono-bold", ink, anchor="center")
+    return key
+
+
+_KEY_RE = re.compile(r"\{([^}]+)\}")
+
+
+def key_hint_width(g: Gfx, text: str, px: int) -> int:
+    parts = _KEY_RE.split(text)
+    return sum(keycap_size(g, t, px)[0] if i % 2 else g.measure(t, px, "mono")[0] for i, t in enumerate(parts) if t)
+
+
+def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=P.DIM, anchor="midleft") -> pygame.Rect:
+    """A dim hint line where {Key} draws as a solid keycap: 'Hold {Space} write code'."""
+    box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
+    setattr(box, anchor, (x, y))
+    x = box.x
+    for i, t in enumerate(_KEY_RE.split(text)):
+        if t:
+            x = (draw_key(g, t, px, x, box.centery, fill=color) if i % 2 else
+                 g.draw_text(t, px, x, box.centery, "mono", color, anchor="midleft")).right
+    return box
+
+
+CODE_HINT = f"{ICON_ROBOT} Hold {{Space}} write code"
+
+
+def _pill(g: Gfx, px: int, content_w: int, right: int, cy: int, on: bool) -> tuple:
+    """The rounded plate a header control sits in; returns (pill, pad)."""
     pad = round(px * 0.35)
-    kw, kh = g.measure(key_name, px, "mono-bold")
-    key = pygame.Rect(0, 0, kw + round(px * 1.4), kh + round(px * 0.56))
-    mark_w = mark.get_width() if isinstance(mark, pygame.Surface) else g.measure(mark, px, "mono")[0]
-    label_w = g.measure(label, px, "mono-bold" if on else "mono")[0]
-    pill = pygame.Rect(0, 0, pad + key.w + px // 2 + mark_w + px // 2 + label_w + px, key.h + 2 * pad)
+    pill = pygame.Rect(0, 0, content_w + 2 * pad, keycap_size(g, "X", px)[1] + 2 * pad)
     pill.midright = (right, cy)
-    radius = round(px * 0.5)
-    ink, cap = (P.ON_PRIMARY, P.PRIMARY) if on else (P.TEXT, P.SURFACE)
-    g.rect(P.PRIMARY if on else P.FIELD, pill, radius=radius + pad)
+    g.rect(P.PRIMARY if on else P.FIELD, pill, radius=round(px * 0.5) + pad)
     if not on:
-        g.rect(P.LINE, pill, width=1, radius=radius + pad)
-    key.midleft = (pill.x + pad, cy)
-    g.rect(ink, key, radius=radius)
-    g.draw_text(key_name, px, key.centerx, key.centery, "mono-bold", cap, anchor="center")
+        g.rect(P.LINE, pill, width=1, radius=round(px * 0.5) + pad)
+    return pill, pad
+
+
+def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, label: str, on: bool,
+                   noun: str = "") -> pygame.Rect:
+    """'[key] noun mark label' in one pill: noun says what the key changes, label
+    is what it's on now; mark is a surface, an icon glyph or None; on = lit."""
+    gap = px // 2
+    key_w = keycap_size(g, key_name, px)[0]
+    noun_w = g.measure(noun, px, "mono")[0] + gap if noun else 0
+    mark_w = (mark.get_width() if isinstance(mark, pygame.Surface) else g.measure(mark, px, "mono")[0]) + gap if mark else 0
+    label_w = g.measure(label, px, "mono-bold" if on else "mono")[0]
+    pill, pad = _pill(g, px, key_w + gap + noun_w + mark_w + label_w + px - round(px * 0.35), right, cy, on)
+    ink, cap = (P.ON_PRIMARY, P.PRIMARY) if on else (P.TEXT, P.SURFACE)
+    x = draw_key(g, key_name, px, pill.x + pad, cy, fill=ink, ink=cap).right + gap
+    if noun:
+        x = g.draw_text(noun, px, x, cy, "mono", ink if on else P.MUTED, anchor="midleft").right + gap
     if isinstance(mark, pygame.Surface):
-        x = g.surface.blit(mark, mark.get_rect(midleft=(key.right + px // 2, cy))).right + px // 2
-    else:
-        x = g.draw_text(mark, px, key.right + px // 2, cy, "mono", ink, anchor="midleft").right + px // 2
+        x = g.surface.blit(mark, mark.get_rect(midleft=(x, cy))).right + gap
+    elif mark:
+        x = g.draw_text(mark, px, x, cy, "mono", ink, anchor="midleft").right + gap
     g.draw_text(label, px, x, cy, "mono-bold" if on else "mono", ink, anchor="midleft")
+    return pill
 
 
-def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str | None, tab_hint: str,
-                     icon=None, wheel: str | None = None, chip: tuple | None = None):
-    """Two mode labels (active one in inverse video) with the brush swatch, or
-    an icon standing in for it, beside them; a key chip further left, '[\\] Colors'
-    while the color wheel opens (wheel from color_wheel.chip) or chip = (key, mark,
-    label, on); the Tab keycap with what it switches to on the right."""
-    px = g.vh(1.9)
-    cy = r.centery
-    widths = [g.measure(t, px, "mono-bold")[0] + px for t in labels]
-    x = r.centerx - (sum(widths) + px) // 2
-    left = x - px
-    if icon:
-        left = g.surface.blit(icon, icon.get_rect(midright=(left, cy))).x
-    elif swatch:
-        dot = _swatch_dot(swatch, round(px * 2.1))
-        left = g.surface.blit(dot, dot.get_rect(midright=(left, cy))).x
-    if wheel:
-        from .color_wheel import OPEN_KEY, disc
-        chip = (OPEN_KEY, disc(round(px * 1.3)), "Colors", wheel == "open")
-    if chip:
-        _draw_key_chip(g, px, left - round(px * 1.6), cy, *chip)
+def _draw_tab_switch(g: Gfx, px: int, left: int, cy: int, labels: tuple, active: int) -> pygame.Rect:
+    """'[Tab] One Two' in one pill, the active label on the selection plate."""
+    gap = px // 2
+    key_w = keycap_size(g, "Tab", px)[0]
+    widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for t in labels]
+    content = key_w + gap + sum(widths) + gap * (len(labels) - 1)
+    pill, pad = _pill(g, px, content, left + content + 2 * round(px * 0.35), cy, False)
+    x = draw_key(g, "Tab", px, pill.x + pad, cy).right + gap
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
-        x += w + px
-    g.draw_text(tab_hint, px, r.right, cy, "mono", P.MUTED, anchor="midright")
-    draw_keycap(g, "Tab", px, r.right - g.measure(tab_hint + " ", px, "mono")[0] - int(px * 0.5), cy, anchor="midright")
+        x += w + gap
+    return pill
+
+
+def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str | None = None,
+                     icon=None, wheel: str | None = None, chips: tuple = ()):
+    """The room's header: the Tab switch starting at the middle, the brush
+    swatch (or an icon standing in for it) left of it, then key chips further
+    left: '[\\] Colors' when wheel (from color_wheel.chip) is set, and each of
+    chips = (key, mark, label, on, noun)."""
+    px = g.vh(1.9)
+    cy = r.centery
+    sw = _draw_tab_switch(g, px, r.centerx - keycap_size(g, "Tab", px)[0], cy, labels, active)
+    left = sw.x - round(px * 1.2)
+    if icon:
+        left = g.surface.blit(icon, icon.get_rect(midright=(left, cy))).x - round(px * 1.2)
+    elif swatch:
+        dot = _swatch_dot(swatch, round(px * 2.1))
+        left = g.surface.blit(dot, dot.get_rect(midright=(left, cy))).x - round(px * 1.2)
+    if wheel:
+        from .color_wheel import OPEN_KEY, disc
+        chips = ((OPEN_KEY, disc(round(px * 1.3)), "Colors", wheel == "open"), *chips)
+    for chip in reversed(chips):
+        left = _draw_key_chip(g, px, left, cy, *chip).x - round(px * 1.2)
 
 
 def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=P.PRIMARY, track=P.LINE):

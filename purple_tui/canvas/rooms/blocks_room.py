@@ -28,7 +28,7 @@ from .. import color_recipe, paper
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo, SpaceHold
-from ..ui import draw_mode_switch
+from ..ui import draw_key_hint, draw_mode_switch
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, CANVAS_ALT, CANVAS_BG, HOLD_ACCEL_MULTIPLIER, brush_for_key
 from .blocks_code import WORDS, BlocksCodeRunner
 
@@ -53,7 +53,7 @@ SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), ("y", 1)),
         "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
         RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
-HINT = "Type to build the way you last moved! Enter goes up."
+HINT = "Type to build the way you last moved! {Enter} goes up."
 
 
 @cache
@@ -613,10 +613,10 @@ class BlocksRoom:
         else:
             self._draw_turning(g, ox, oy, p)
         draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
-                         1 if self._back else 0, self._color, "to turn around", wheel=wheel_chip(self))
+                         1 if self._back else 0, self._color, wheel=wheel_chip(self))
         if foot_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
-            g.draw_text(HINT, g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
+            draw_key_hint(g, HINT, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._last_mix))
 
     def _draw_hold_badge(self, g, ox, oy, area):

@@ -11,7 +11,7 @@ import pygame
 from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
-from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_MUSIC, ICON_ROBOT
+from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_MUSIC
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import mixer_generation, mixer_ready_for_play, warm_mixer
@@ -22,7 +22,7 @@ from ...music_constants import (
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..panels import CodePanel, Echo, LoopPanel, SpaceHold
-from ..ui import draw_label, draw_mode_switch
+from ..ui import CODE_HINT, draw_key_hint, draw_label, draw_mode_switch
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
@@ -600,21 +600,17 @@ class MusicRoom:
             cy = rect.bottom - em(1.4) - g.line_height(em(0.92), "mono") // 2
             right_edge = rect.right - pad
             if self.app._code_panel_enabled:
-                note = g.draw_text(f"{ICON_ROBOT} Hold Space: write code", em(0.86), right_edge, cy, "mono", P.DIM, anchor="midright")
-                right_edge = note.left - em(2)
-            g.draw_text(self._hint_text(), em(0.92), (rect.x + right_edge) // 2, cy, "mono", P.DIM, anchor="center")
+                right_edge = draw_key_hint(g, CODE_HINT, em(0.86), right_edge, cy, anchor="midright").left - em(2)
+            draw_key_hint(g, self._hint_text(), em(0.92), (rect.x + right_edge) // 2, cy, anchor="center")
 
     def _hint_text(self) -> str:
         if self.app._littles_mode:
-            return "Enter: instrument"
-        parts = ["Space: hide notes" if self.show_labels else "Space: notes"]
-        if self.app._music_looping_enabled:
-            parts.append("Hold Enter: loop")
-        return "   ".join(parts)
+            return "{Enter} sound"
+        return "Hold {Enter} loop" if self.app._music_looping_enabled else ""
 
     def _draw_header(self, g, rect):
-        """The same header as Art and Blocks: the instrument as an Enter chip,
-        the Sounds / ABC switch, the Tab keycap on the right."""
+        """The same header as Art and Blocks: Enter and Space chips beside the
+        Sounds / ABC switch."""
         instrument = INSTRUMENTS[self.instrument_index][1]
         if self.app._littles_mode:
             plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {instrument}"
@@ -622,9 +618,8 @@ class MusicRoom:
             return
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
         bar.h = g.line_height(g.vh(1.9), "mono") + g.em(0.4)
-        draw_mode_switch(g, bar, ("Sounds", "ABC"), 1 if self.letters_mode else 0, None,
-                         "to play sounds" if self.letters_mode else "to say letters",
-                         chip=("Enter", ICON_MUSIC, instrument, False))
+        draw_mode_switch(g, bar, ("Sounds", "ABC"), 1 if self.letters_mode else 0,
+                         chips=(("Enter", ICON_MUSIC, instrument, False, "sound"), ("Space", None, "notes", self.show_labels)))
 
     def arrow_hint(self) -> str:
         if not self.app._music_key_switching_enabled:

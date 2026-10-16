@@ -6,7 +6,7 @@ import time
 
 from ... import backlight
 from ... import palette as P
-from ...constants import (ICON_BATTERY_MED, ICON_HOURGLASS, ICON_LAPTOP, ICON_PLUG, ICON_USB,
+from ...constants import (ICON_BATTERY_MED, ICON_HARDDISK, ICON_HOURGLASS, ICON_KEYBOARD, ICON_LAPTOP, ICON_PLUG, ICON_USB,
                          ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, is_live_boot)
 from ...keyboard import ControlAction
 from ...power_manager import LID_SHUTDOWN_DELAY, get_power_manager, manual_off_hint
@@ -174,13 +174,32 @@ class ByeScreen(FullScreen):
 
 
 class LiveBootSplash(FullScreen):
-    message = ("Welcome to Purple Computer!\n\n"
-               "Purple is keyboard only, on purpose!\nKids explore by typing.\n\n"
-               "You're running from USB. If the computer\nturns off, you'll need the USB to start again.\n\n"
-               "To install Purple and keep it, hold the Esc\nkey to open the Parent Menu.")
-    _AUDIO_WARNING = (f"{ICON_VOLUME_OFF} Sound is not working on this computer.\nPlug in a USB audio adapter, or open the\n"
-                      "Parent Menu to see Support info.")
+    _NOTES = [(ICON_KEYBOARD, "Purple is keyboard only, on purpose. Kids explore by typing."),
+              (ICON_USB, "You're running from the Purple Key. If the computer turns off, you'll need it to start again."),
+              (ICON_HARDDISK, "To install Purple and keep it, hold Esc to open the Parent Menu.")]
+    _AUDIO_WARNING = (ICON_VOLUME_OFF, "Sound is not working on this computer. Plug in a USB audio adapter, "
+                                       "or open the Parent Menu to see Support info.")
     hint = "Press any key to start"
+
+    def draw(self, g):
+        g.fill(self.bg)
+        px, icon_w, gap = g.em(0.95), g.em(2.2), g.em(1.1)
+        w = min(g.vw(84), g.em(44))
+        notes = self._NOTES + ([self._AUDIO_WARNING] if self.status else [])
+        heights = [g.markup_size(text, px, "sans", w - icon_w)[1] for _, text in notes]
+        bot_h, title_px = g.vh(16), g.em(1.7)
+        total = bot_h + g.em(1.5) + g.line_height(title_px, "sans-bold") + g.em(2.2) + sum(heights) + gap * (len(notes) - 1)
+        y = max(g.em(1), (g.h - total) // 2 - g.em(1))
+        bot = g.image("bot.png", bot_h)
+        g.surface.blit(bot, bot.get_rect(midtop=(g.w // 2, y)))
+        y += bot_h + g.em(1.5)
+        y += g.draw_text("Welcome to Purple Computer!", title_px, g.w // 2, y, "sans-bold", P.ACCENT, anchor="midtop").h + g.em(2.2)
+        x = (g.w - w) // 2
+        for (icon, text), h in zip(notes, heights):
+            g.draw_text(icon, px, x + icon_w // 2, y + g.line_height(px, "sans") // 2, "nerd", P.MUTED, anchor="center")
+            g.draw_markup(text, px, x + icon_w, y, "sans", P.TEXT, w - icon_w)
+            y += h + gap
+        g.draw_text(self.hint, g.em(0.85), g.w // 2, g.h - g.em(2.5), "mono", P.MUTED, anchor="midbottom")
 
     def on_open(self):
         self._timer = self.app.timers.every(0.25, self._refresh)

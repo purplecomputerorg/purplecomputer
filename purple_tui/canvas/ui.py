@@ -16,8 +16,8 @@ from ..constants import ICON_ROBOT
 from .gfx import Gfx, mix, rgb
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 
-# Heavy arrows: Plex's ← → ↑ ↓ are too thin to read at hint size.
-LEFT, UP, DOWN, RIGHT = "⬅⬆⬇➡"
+# nf-md-arrow_*_bold: big heads stay readable at hint size, unlike Plex's or DejaVu's arrows.
+LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"
 
 # ----------------------------------------------------------------------------
 # Timers (asyncio-backed; HoldOrTap needs an object with .stop())

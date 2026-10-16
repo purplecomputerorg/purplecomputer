@@ -58,7 +58,7 @@ COLORS = "colors"
 GUIDE = {
     'art': [
         ("Colors", [(COLORS, "or dark blue")]),
-        ("Move", [("right 5", "→ five steps"), ("up 3", "↑ three steps")]),
+        ("Move", [("right 5", f"{RIGHT} five steps"), ("up 3", f"{UP} three steps")]),
         ("Turn", [("forward 6", "the way it points"), ("spin", "turn to the right"), ("turn left", "")]),
         ("Again", [("repeat 4 ...", "do it four times")]),
         ("Letters", [("paint hi", "a color per letter"), ("write hi", "real letters")]),
@@ -72,7 +72,7 @@ GUIDE = {
     ],
     'blocks': [
         ("Colors", [(COLORS, "or dark blue")]),
-        ("Build", [("right 5", "a row →"), ("up 4", "a tower ↑"), ("back 3", "away from you"), ("front 3", "toward you")]),
+        ("Build", [("right 5", f"a row {RIGHT}"), ("up 4", f"a tower {UP}"), ("back 3", "away from you"), ("front 3", "toward you")]),
         ("Letters", [("right hi", "a block per letter")]),
         ("Again", [("repeat 4 right 1 up 1", "stairs")]),
     ],

@@ -1458,12 +1458,12 @@ class PurpleApp:
                 if key == self._legend_key:
                     popped = key, cap
                 else:
-                    draw_color_cap(g, key.upper(), get_key_color(key), cap, px, radius=size // 5)
+                    draw_color_cap(g, _KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), cap, px, radius=size // 5)
         if popped:
             key, cap = popped
             big = cap.inflate(round(size * (LEGEND_POP - 1)), round(size * (LEGEND_POP - 1)))
             g.rect(P.BG, big.inflate(4, 4), radius=big.w // 4)
-            draw_color_cap(g, key.upper(), get_key_color(key), big, round(px * LEGEND_POP), radius=big.w // 5)
+            draw_color_cap(g, _KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), big, round(px * LEGEND_POP), radius=big.w // 5)
 
     def _draw_status(self, frame, left=None, right=None, tabs=True):
         """The strip under the viewport: keyboard note, the Esc pill and room

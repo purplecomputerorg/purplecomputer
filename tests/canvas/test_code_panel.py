@@ -306,3 +306,24 @@ def test_the_guide_shows_the_last_code_word_typed(room, text, heading):
     from purple_tui.canvas.panels import guide_topic
     topic = guide_topic(room, text)
     assert (topic and topic[0]) == heading if heading else topic is None
+
+
+@pytest.mark.parametrize("name", ["art", "music", "blocks"])
+def test_the_guide_never_shows_a_heading_with_nothing_under_it(name, monkeypatch):
+    import pygame
+    from purple_tui.canvas import panels
+
+    async def go():
+        app, room = await _room(name)
+        room.open_code_panel()
+        drawn = []
+        for fn in ("draw_text", "draw_markup"):
+            real = getattr(app.g, fn)
+            monkeypatch.setattr(app.g, fn, lambda s, *a, real=real, **k: drawn.append(s) or real(s, *a, **k))
+        monkeypatch.setattr(panels, "_draw_example", lambda g, code, *a, **k: drawn.append(code))
+        headings = {h for h, _ in panels.GUIDE[name]}
+        for h in range(app.g.em(4), app.g.em(30), 3):
+            drawn.clear()
+            room.code_panel.draw_side(app.g, pygame.Rect(0, 0, app.g.em(14), h))
+            assert not drawn or drawn[-1] not in headings, f"empty {drawn[-1]} at height {h}"
+    run(go())

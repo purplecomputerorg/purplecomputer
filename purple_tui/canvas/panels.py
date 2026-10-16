@@ -507,7 +507,9 @@ class CodePanel:
             y += g.draw_markup(GUIDE_HINT, head_px, x, y, "sans", P.MUTED, w) + g.em(0.5)
         word = topic[2] if topic else None
         for heading, rows in [topic[:2]] if topic else GUIDE[self.room]:
-            if y + g.line_height(head_px, "sans") + g.line_height(px, "mono") > bottom:
+            code, gloss = rows[0]
+            first_h = g.line_height(px, "mono") if code in (COLORS, ALL_COLORS) else _example_height(g, code, gloss, px, w)
+            if y + g.line_height(head_px, "sans") + g.em(0.3) + first_h > bottom:
                 break
             y += g.draw_text(heading, head_px, x, y, "sans-bold", P.ACCENT).h + g.em(0.3)
             for code, gloss in rows:

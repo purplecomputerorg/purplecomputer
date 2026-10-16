@@ -385,10 +385,10 @@ class PlayRoom:
         width = rect.w - 2 * pad
         line_px, sub_px = em(1.35), em(0.95)
         sub_h = g.line_height(sub_px, "mono")
-        bottom = rect.bottom - em(1.2) - sub_h
+        bottom = rect.bottom - em(1.0) - sub_h
         talks = bool(speech_marks(self.field.value))
         ideas = self.hints.current(hold=bool(self.field.value))
-        box = self.field.draw_boxed(g, x, bottom - em(0.4) - round(line_px * 1.9), width, line_px, "Type",
+        box = self.field.draw_boxed(g, x, bottom - em(0.9) - round(line_px * 1.9), width, line_px, "Type",
                                     ideas=ideas, arrow=ICON_VOLUME_HIGH if talks else "→")
         self._draw_sub(g, box.x + round(line_px * 0.55), bottom, sub_px, talks)
         top_limit = rect.y + em(1)

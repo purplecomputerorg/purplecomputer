@@ -606,7 +606,7 @@ class MusicRoom:
     def _hint_text(self) -> str:
         if self.app._littles_mode:
             return "{Enter} sound"
-        return "Hold {Enter} loop" if self.app._music_looping_enabled else ""
+        return "{hold Enter} loop" if self.app._music_looping_enabled else ""
 
     def _draw_header(self, g, rect):
         """The same header as Art and Blocks: Enter and Space chips beside the

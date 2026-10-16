@@ -597,17 +597,27 @@ def _swatch_dot(color: str, d: int) -> pygame.Surface:
     return pygame.transform.smoothscale(big, (d, d))
 
 
+HOLD = "hold "
+
+
 def keycap_size(g: Gfx, text: str, px: int) -> tuple:
-    w, h = g.measure(text, px, "mono-bold")
+    w, h = g.measure(text.removeprefix(HOLD), px, "mono-bold")
+    if text.startswith(HOLD):
+        w += g.measure(HOLD, px, "mono")[0]
     return w + round(px * 1.4), h + round(px * 0.56)
 
 
 def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=P.TEXT, ink=P.SURFACE) -> pygame.Rect:
-    """A solid keycap: the one look for a key the kid can press inside a room."""
+    """A solid keycap: the one look for a key the kid can press inside a room.
+    'hold Space' puts the verb on the cap, so the hold reads as part of the key."""
     key = pygame.Rect((0, 0), keycap_size(g, text, px))
     setattr(key, anchor, (x, y))
     g.rect(fill, key, radius=round(px * 0.5))
-    g.draw_text(text, px, key.centerx, key.centery, "mono-bold", ink, anchor="center")
+    name = text.removeprefix(HOLD)
+    left = key.x + round(px * 0.7)
+    if name != text:
+        left = g.draw_text(HOLD, px, left, key.centery, "mono", mix(ink, fill, 0.25), anchor="midleft").right
+    g.draw_text(name, px, left, key.centery, "mono-bold", ink, anchor="midleft")
     return key
 
 
@@ -620,7 +630,7 @@ def key_hint_width(g: Gfx, text: str, px: int) -> int:
 
 
 def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=P.DIM, anchor="midleft") -> pygame.Rect:
-    """A dim hint line where {Key} draws as a solid keycap: 'Hold {Space} write code'."""
+    """A dim hint line where {Key} draws as a solid keycap: '{hold Space} write code'."""
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
     setattr(box, anchor, (x, y))
     x = box.x
@@ -631,7 +641,7 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=P.DIM, ancho
     return box
 
 
-CODE_HINT = f"{ICON_ROBOT} Hold {{Space}} write code"
+CODE_HINT = f"{ICON_ROBOT} {{hold Space}} write code"
 
 
 def _pill(g: Gfx, px: int, content_w: int, right: int, cy: int, on: bool) -> tuple:

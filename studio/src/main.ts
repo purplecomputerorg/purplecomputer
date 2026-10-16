@@ -95,7 +95,9 @@ function renderPhoneBar() {
 live.onMove = renderPhoneBar;
 const stageTitle = h("h3");
 const stageCaption = h("p", { class: "caption" });
-const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption));
+// Purple's voice runs espeak-ng, which is GPL: its source goes wherever the voice does.
+const voiceCredit = h("p", { class: "dim small" }, "Purple's voice is Piper, which reads words with espeak-ng (GPL-3.0, ", h("a", { href: "voice/espeak-ng/README.md", target: "_blank" }, "source"), ").");
+const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, voiceCredit));
 const body = h("div", { class: "body" }, main, stage);
 app.append(top, body);
 
@@ -130,6 +132,7 @@ function renderStage() {
   previewSlot.hidden = !v?.preview;
   stageTitle.textContent = v?.previewTitle ?? "What your kid sees";
   stageCaption.textContent = v?.caption ?? "";
+  voiceCredit.hidden = !v?.live;
   if (v?.live) live.show(v.live);
   renderPhoneBar();
   tapTarget = v?.live ? (key) => live.key(key) : v?.preview?.press ? (key) => v.preview!.press!(key) : null;

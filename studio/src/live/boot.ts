@@ -3,6 +3,7 @@
 import type { PaintOp } from "@sdk/purple/art";
 import browserShim from "./browser.py?raw";
 import controller from "./live.py?raw";
+import { piperSay, startIfCached } from "./piper";
 
 const ROOT = "/home/pyodide/purple";
 
@@ -71,7 +72,8 @@ export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) 
   py.canvas.setCanvas2D(canvas);
   const emoji = new FontFace("PurpleEmoji", py.FS.readFile(`${ROOT}/fonts/NotoColorEmoji.ttf`).slice());
   document.fonts.add(await emoji.load());
-  Object.assign(globalThis, { purpleDrawEmoji: drawEmoji, purpleSay: say, purpleHush: () => speechSynthesis.cancel() });
+  Object.assign(globalThis, { purpleDrawEmoji: drawEmoji, purpleSay: say, purplePiper: piperSay, purpleHush: () => speechSynthesis.cancel() });
+  void startIfCached();
   log("Starting Purple…");
   await py.runPythonAsync(`
 import os, sys

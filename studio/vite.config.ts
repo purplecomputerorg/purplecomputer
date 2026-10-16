@@ -1,16 +1,32 @@
 /// <reference types="vitest/config" />
-import { copyFileSync, mkdirSync, readdirSync, createReadStream, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { copyFileSync, cpSync, mkdirSync, readdirSync, createReadStream, existsSync, statSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import basicSsl from "@vitejs/plugin-basic-ssl";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Connect, type Plugin } from "vite";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pyodideDir = resolve(here, "node_modules/pyodide");
-// Files fetched or built for the in-browser Purple: Pyodide's pygame-ce wheel, and purple.zip
-// from scripts/studio_bundle.py.
+// The ONNX runtime for Purple's voice (src/live/piper.worker.ts), loaded by URL rather than bundled: its
+// threads start from the file the runtime is in.
+const ortDir = resolve(here, "node_modules/onnxruntime-web/dist");
+const ORT_FILES = ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm"];
+// espeak-ng's source offer, served beside the voice (see vendor/espeak-ng/README.md).
+const espeakDir = resolve(here, "vendor/espeak-ng");
+const ESPEAK_SOURCE = ["README.md", "espeak_bridge.c", "build.sh"];
+// Files fetched or built for the in-browser Purple by scripts/studio_bundle.py: Pyodide's pygame-ce
+// wheel, purple.zip, and Purple's voice (voice/).
 const cacheDir = resolve(here, ".cache");
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
+
+// pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval.
+const liveCsp: Connect.NextHandleFunction = (req, res, next) => {
+  if (req.url?.startsWith("/purple.html")) {
+    const set = res.setHeader.bind(res);
+    res.setHeader = (k: string, v: number | string | readonly string[]) => set(k, k.toLowerCase() === "content-security-policy" ? LIVE_CSP : v);
+  }
+  next();
+};
 
 // Pyodide loads its runtime files by URL next to itself, so serve node_modules/pyodide
 // at /pyodide/ in dev and copy the same files into dist/pyodide/ on build.
@@ -18,25 +34,23 @@ function pyodideAssets(): Plugin {
   return {
     name: "pyodide-assets",
     configureServer(server) {
-      const serve = (prefix: string, dirs: string[]) => server.middlewares.use(prefix, (req, res, next) => {
-        const name = (req.url ?? "/").slice(1).split("?")[0];
-        const dir = dirs.find((d) => existsSync(d) && readdirSync(d).includes(name));
-        if (!name || !dir) return next();
-        const file = join(dir, name);
-        res.setHeader("Content-Type", name.endsWith(".wasm") ? "application/wasm" : name.endsWith(".json") ? "application/json" : /\.(zip|whl)$/.test(name) ? "application/zip" : "text/javascript");
+      const serve = (prefix: string, dirs: string[], keep: (f: string) => boolean = () => true) => server.middlewares.use(prefix, (req, res, next) => {
+        const name = decodeURIComponent((req.url ?? "/").slice(1).split("?")[0]);
+        const file = name && keep(name) ? dirs.map((d) => resolve(d, name)).find((f) => dirs.some((d) => f.startsWith(d + sep)) && existsSync(f) && statSync(f).isFile()) : null;
+        if (!file) return next();
+        res.setHeader("Content-Type", TYPES[name.split(".").pop()!] ?? "application/octet-stream");
         for (const [k, v] of Object.entries(HEADERS)) res.setHeader(k, v);
         createReadStream(file).pipe(res);
       });
-      // pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval.
-      server.middlewares.use((req, res, next) => {
-        if (req.url?.startsWith("/purple.html")) {
-          const set = res.setHeader.bind(res);
-          res.setHeader = (k: string, v: number | string | readonly string[]) => set(k, k.toLowerCase() === "content-security-policy" ? LIVE_CSP : v);
-        }
-        next();
-      });
+      server.middlewares.use(liveCsp);
       serve("/pyodide", [pyodideDir, join(cacheDir, "pyodide")]);
       serve("/purple", [cacheDir]);
+      serve("/ort", [ortDir], (f) => ORT_FILES.includes(f));
+      serve("/voice/espeak-ng", [espeakDir], (f) => ESPEAK_SOURCE.includes(f));
+      serve("/voice", [join(cacheDir, "voice")]);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(liveCsp);
     },
     closeBundle() {
       const copyAll = (from: string, to: string, keep: (f: string) => boolean) => {
@@ -46,6 +60,9 @@ function pyodideAssets(): Plugin {
       copyAll(pyodideDir, resolve(here, "dist/pyodide"), (f) => PYODIDE_FILES.includes(f));
       copyAll(join(cacheDir, "pyodide"), resolve(here, "dist/pyodide"), (f) => f.endsWith(".whl"));
       copyAll(cacheDir, resolve(here, "dist/purple"), (f) => /^(purple\.zip|poster-.*\.png)$/.test(f));
+      copyAll(ortDir, resolve(here, "dist/ort"), (f) => ORT_FILES.includes(f));
+      if (existsSync(join(cacheDir, "voice"))) cpSync(join(cacheDir, "voice"), resolve(here, "dist/voice"), { recursive: true });
+      copyAll(espeakDir, resolve(here, "dist/voice/espeak-ng"), (f) => ESPEAK_SOURCE.includes(f));
     },
   };
 }
@@ -67,6 +84,7 @@ export const CSP = [
   "form-action 'none'",
 ].join("; ");
 const LIVE_CSP = CSP.replace("'wasm-unsafe-eval'", "'wasm-unsafe-eval' 'unsafe-eval'");
+const TYPES: Record<string, string> = { wasm: "application/wasm", json: "application/json", zip: "application/zip", whl: "application/zip", js: "text/javascript", mjs: "text/javascript", md: "text/plain; charset=utf-8", c: "text/plain; charset=utf-8", sh: "text/plain; charset=utf-8" };
 const HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",

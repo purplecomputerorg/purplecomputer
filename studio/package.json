@@ -18,6 +18,7 @@
   "dependencies": {
     "blockly": "^13.2.1",
     "emojibase-data": "17.0.0",
+    "onnxruntime-web": "1.30.0",
     "pyodide": "^314.0.6"
   }
 }

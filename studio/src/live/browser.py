@@ -89,18 +89,36 @@ def _patch_mixer():
 _patch_mixer()
 
 
-# Speech: Purple's own recorded clips when it has one for the words, the browser's voice otherwise
-# (Piper can't run here). Run on the event loop instead of a thread, otherwise as tts.speak_many.
+# Speech: Purple's own recorded clips when it has one for the words, else Piper as Purple runs it (the
+# page's purplePiper, see piper.ts), cached and leveled by tts itself; the browser's voice while Piper
+# loads. Run on the event loop instead of a thread, otherwise as tts.speak_many.
 def _patch_speech():
+    import array
     import asyncio
+    import os
+    import tempfile
     import pygame
-    from js import purpleSay, purpleHush
+    from js import purplePiper, purpleSay, purpleHush
     from purple_tui import tts
     from purple_tui.audio import play_safe
     from purple_tui.speech_filter import filter_speech
 
-    async def say(text):
-        clip = tts._get_voice_clip(text)
+    async def piper(text):
+        prepared = tts._prepare_text(text)
+        if cached := tts._get_cached(prepared, tts.VOICE_NATURAL):
+            return cached
+        voice = await purplePiper(prepared)
+        if voice is None:
+            return None
+        fd, wav = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        tts._write_wav(wav, tts.postprocess_samples(array.array("h", voice.pcm.to_bytes()), voice.rate), voice.rate)
+        return tts._store_cache(prepared, wav, tts.VOICE_NATURAL) or wav
+
+    async def say(text, speech_id):
+        clip = tts._get_voice_clip(text) or await piper(text)
+        if speech_id != tts._speech_id:
+            return
         if not clip:
             return await purpleSay(text)
         channel = play_safe(pygame.mixer.Sound(str(clip)))
@@ -116,7 +134,7 @@ def _patch_speech():
                     return
                 if on_playing:
                     on_playing(index)
-                await say(text)
+                await say(text, speech_id)
         finally:
             if on_done:
                 on_done()

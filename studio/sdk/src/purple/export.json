@@ -595,6 +595,24 @@
    "It's Purple Computer": "it's_purple_computer.wav",
    "hi": "hi.wav",
    "5 times 5 ducks equals 25 ducks": "5_times_5_ducks_equals_25_ducks.wav"
+  },
+  "piper": {
+   "model": "en_US-libritts_r-medium",
+   "speaker": 166,
+   "scales": [
+    0.3,
+    1.15,
+    0.3
+   ],
+   "espeak_data": [
+    "en_dict",
+    "intonations",
+    "phondata",
+    "phonindex",
+    "phontab",
+    "lang/gmw/en",
+    "lang/gmw/en-US"
+   ]
   }
  },
  "synth": {

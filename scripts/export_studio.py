@@ -27,7 +27,7 @@ from purple_tui.canvas.rooms.art_room import CANVAS_ALT, CANVAS_BG  # noqa: E402
 from purple_tui.palette import KEY_COLORS  # noqa: E402
 from purple_tui.canvas.sounds import CLIP_NAMES  # noqa: E402
 from purple_tui.roomkit.purple import H as ROOM_H, W as ROOM_W  # noqa: E402
-from purple_tui.tts import voice_clip_filename  # noqa: E402
+from purple_tui.tts import VOICE_MODEL, VOICE_SPEAKER, _SYNTH_PARAMS, voice_clip_filename  # noqa: E402
 from tools.photo_to_art import fit_to_canvas  # noqa: E402
 
 EXPORT_PATH = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
@@ -36,6 +36,8 @@ GOLDEN_PATH = ROOT / "studio" / "tests" / "golden.json"
 PALETTE_NAMES = ("BG", "SURFACE", "TILE", "FIELD", "HAIR", "LINE", "PRIMARY", "ON_PRIMARY", "ACCENT", "TEXT", "MUTED", "DIM", "CARET", "DANGER", "GOOD")
 FIT_SIZES = [(4032, 3024), (3024, 4032), (1000, 1000), (1920, 1080), (100, 2000), (2000, 100), (1, 1), (132, 50), (264, 50), (50, 25)]
 CLIP_EXAMPLES = ["  Hello There ", "It's Purple Computer", "hi", "5 times 5 ducks equals 25 ducks"]
+# The espeak-ng files Piper reads for English (en-us is lang/gmw/en-US on top of lang/gmw/en).
+ESPEAK_DATA = ["en_dict", "intonations", "phondata", "phonindex", "phontab", "lang/gmw/en", "lang/gmw/en-US"]
 # Golden renders: two pitches at the defaults, then one short varied render per instrument.
 GOLDEN_FREQS = [261.63, 880.0]
 GOLDEN_VARIED = {
@@ -86,6 +88,10 @@ def build_export() -> dict:
             "sample_rate": clip_rate,
             "channels": clip_channels,
             "clip_filenames": {text: voice_clip_filename(text) for text in CLIP_EXAMPLES},
+            # Studio's Piper: the model input "scales" is noise, length, noise_w.
+            "piper": {"model": VOICE_MODEL, "speaker": VOICE_SPEAKER,
+                      "scales": [_SYNTH_PARAMS[k] for k in ("noise_scale", "length_scale", "noise_w")],
+                      "espeak_data": ESPEAK_DATA},
         },
         "synth": {"sample_rate": synth.SAMPLE_RATE, "defaults": synth.DEFAULTS},
         "room": {

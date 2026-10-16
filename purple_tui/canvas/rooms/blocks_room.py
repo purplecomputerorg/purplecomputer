@@ -200,6 +200,16 @@ class BlocksRoom:
     def _column(self) -> list:
         return [y for (x, z, y) in self._blocks if (x, z) == (self._x, self._z)]
 
+    def _stacks(self) -> list:
+        """(bottom, top) of each run of touching blocks in the cursor's column."""
+        runs = []
+        for y in sorted(self._column()):
+            if runs and runs[-1][1] == y - 1:
+                runs[-1][1] = y
+            else:
+                runs.append([y, y])
+        return runs
+
     def _free(self, ys) -> list:
         return [y for y in ys if (self._x, self._z, y) not in self._blocks]
 
@@ -747,8 +757,8 @@ class BlocksRoom:
         self._outline(layer, column, edge // 3)
         if y:                                   # the column carries on down through whatever is below, to the floor
             self._outline(layer, self._faces(*self._corner(vx, vz, y), levels=y)[1:], edge * 3 // 4, fill)
-        for h in self._column():                # its blocks, ringed so they read as part of it among many columns
-            for poly in self._faces(*self._corner(vx, vz, h + 1)):
+        for lo, hi in self._stacks():           # its blocks, ringed so they read as part of it among many columns
+            for poly in self._faces(*self._corner(vx, vz, hi + 1), levels=hi + 1 - lo):
                 pygame.draw.polygon(layer, (*rgb(P.TEXT), 220 if self._blink_on else 120), poly, 2)
         self._cage(layer, vx, vz, y)
         self._pointer(layer, vx, vz, y)

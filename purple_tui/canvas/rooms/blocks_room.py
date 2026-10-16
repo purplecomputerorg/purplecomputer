@@ -6,10 +6,12 @@ cursor up a level at a time, starting over at the floor after a pause at the
 top, and Shift with Up or Down moves it either way; that height stays put as
 the arrows move, for building sideways. At the top, letters mix into the top
 block.
+Every block goes in the first free spot at or above the cursor's height, so
+a line climbs over whatever is in its way and a stack passes floating
+blocks; only the code line keeps the height it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
-on into the column to its left. A letter landing on a block, as a stack
-reaches a floating one or a line crosses one, paint-mixes into it, and
-holding one letter while pressing another mixes the two colors. Backslash
+on into the column to its left. Holding one letter while pressing another
+mixes the two colors. Backslash
 opens the color wheel, Tab flips to the back side, and holding Space opens
 the code line."""
 
@@ -89,7 +91,7 @@ class BlocksRoom:
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
         self._last = None             # (pos, key) of the block just dropped
-        self._next = None             # where the next letter goes after it, even onto a floating block
+        self._next = None             # where a run up or down the column (or a code run) goes on from
         self._dir = "right"           # the way typing builds: a key of WRAP
         self._fade_start = self._fade_timer = None
         self._arrow_repeat_dir = None
@@ -214,12 +216,14 @@ class BlocksRoom:
         return [y for y in ys if (self._x, self._z, y) not in self._blocks]
 
     def _cursor_y(self) -> int:
-        """Where the block just dropped sent it, so a stack never skips past a
-        floating block; otherwise the first free level at or above the chosen
-        height. Never above the top level: a full column puts it on the top block."""
+        """The first free level at or above the chosen height, or on from where
+        a run left off, the way it goes. Never above the top level: a full
+        column puts it on the top block."""
+        run = []
         if self._next and self._next[:2] == (self._x, self._z):
-            return self._next[2]
-        return next(iter(self._free(range(self._hover, HEIGHT))), HEIGHT - 1)
+            y = self._next[2]
+            run = self._free(range(y, -1, -1) if self._dir == SINK else range(y, HEIGHT))
+        return next(iter(run or self._free(range(self._hover, HEIGHT))), HEIGHT - 1)
 
     def _place(self, y=None):
         """A block at height y (the cursor's by default), paint-mixed into one already there."""
@@ -230,22 +234,26 @@ class BlocksRoom:
         self._last = (pos, self._key)
         self._changed()
 
-    def _build(self):
+    def _build(self, keep_height: bool = False):
         """A typed block, then on to the next cell the way the cursor last went."""
         y = self._cursor_y()
         self._place(y)
-        self._advance(y)
+        self._advance(y, keep_height)
 
-    def _advance(self, y: int):
-        """On from the cursor's column at height y the way it last went, wrapping at the walls like lines of text."""
+    def _advance(self, y: int, keep_height: bool = False):
+        """On from the cursor's column at height y the way it last went,
+        wrapping at the walls like lines of text. Typing into a new column
+        starts again from the chosen height; code keeps the height it reached."""
         pos = self._spot(y)
         for axis, step in WRAP[self._dir]:
             pos[axis] += step
             if 0 <= pos[axis] < SIZE[axis]:
                 break
             pos[axis] = 0 if step > 0 else SIZE[axis] - 1
+        column = (self._x, self._z)
         self._x, self._z = self._view(pos["x"], pos["z"])
-        self._next = (self._x, self._z, pos["y"])
+        keep = keep_height or column == (self._x, self._z)
+        self._next = (self._x, self._z, pos["y"]) if keep else None
 
     def _spot(self, y=None) -> dict:
         """The cursor in view coordinates, at height y or its own."""
@@ -265,16 +273,17 @@ class BlocksRoom:
     def set_way(self, way: str):
         self._dir = way
 
-    build = _build
+    def build(self):
+        self._build(keep_height=True)
 
     def build_letter(self, ch: str) -> bool:
         if not self._set_color(ch):
             return False
-        self._build()
+        self.build()
         return True
 
     def skip(self):
-        self._advance(self._cursor_y())
+        self._advance(self._cursor_y(), keep_height=True)
 
     def _mix_into_last(self, held_key: str) -> bool:
         """A chord: the block the held key just dropped takes the new color
@@ -445,8 +454,7 @@ class BlocksRoom:
                     break
                 if laying:
                     self._lay(direction)
-                    self._place(self._hover)        # a line keeps its height, mixing into blocks in its way
-                    self._next = (self._x, self._z, self._hover)
+                    self._place()
         self._face(action.direction)
 
     # ---------------------------------------------------------------- geometry

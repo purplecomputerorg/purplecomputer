@@ -1440,8 +1440,8 @@ class PurpleApp:
             (0, self._hold_nudge) if self._hold_nudge and not hold else None
         if bar:
             # over the open panel, or the room's whole footer, so nothing peeks out around it
-            strip = pygame.Rect(vp.x, content.bottom, vp.w, vp.bottom - content.bottom) if self._panel else \
-                pygame.Rect(vp.x, vp.bottom - g.em(4.5), vp.w, g.em(4.5))
+            top = content.bottom if self._panel else vp.bottom - self.room.footer_h(g)
+            strip = pygame.Rect(vp.x, top, vp.w, vp.bottom - top)
             draw_hold_bar(g, strip, *bar)
         g.surface.set_clip(None)
         esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)

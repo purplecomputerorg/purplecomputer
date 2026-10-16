@@ -19,7 +19,7 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo, SpaceHold
-from ..ui import AUTO, MOVE_HINT, draw_key_hint, draw_label, draw_mode_switch
+from ..ui import AUTO, MOVE_HINT, draw_key_hint, hint_row_h, draw_label, draw_mode_switch
 from .base import Room
 
 COLS, ROWS = ART_COLS, ART_ROWS
@@ -704,7 +704,7 @@ class ArtRoom(Room):
         hint row instead."""
         pad, gap = g.em(0.7), g.em(0.5)
         inner = rect.inflate(-2 * pad, -2 * pad)
-        chrome_h = 0 if self.app._panel is not None else g.line_height(g.vh(1.9), "mono") + g.em(0.4)
+        chrome_h = 0 if self.app._panel is not None else hint_row_h(g)
         area = inner.inflate(0, -2 * (chrome_h + gap))
         c = self._cell = max(3, min(area.w // COLS, area.h // ROWS))
         ox = area.x + (area.w - c * COLS) // 2

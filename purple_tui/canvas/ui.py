@@ -762,14 +762,20 @@ def hold_status(fraction: float, key: str, icon: str, verb: str) -> tuple:
     return fraction, f"{icon} {verb[0].upper()}{verb[1:]}", f"Hold {key} longer to {verb}"
 
 
+def hint_row_h(g: Gfx) -> int:
+    """A room's header or footer hint row."""
+    return g.line_height(g.vh(1.9), "mono") + g.em(0.4)
+
+
 def draw_hold_bar(g: Gfx, rect: pygame.Rect, progress: float, label: str):
     """A hold gesture under way, over the bottom of the viewport: a pill that
     fills as the hold goes on, saying what a full one does. The words turn
     dark where the fill has reached them."""
     g.rect(P.SURFACE, rect)
     g.rect(P.LINE, (rect.x + g.em(1), rect.y, rect.w - g.em(2), 1))
-    px = g.em(0.95)
-    pill = pygame.Rect(0, 0, g.measure(label, px, "mono-bold")[0] + g.em(3), round(px * 2.4))
+    h = min(round(g.em(0.95) * 2.4), rect.h - 2 * g.em(0.3))
+    px = round(h / 2.4)
+    pill = pygame.Rect(0, 0, g.measure(label, px, "mono-bold")[0] + g.em(3), h)
     pill.center = rect.center
     r = pill.h // 2
     g.rect(P.FIELD, pill, radius=r)

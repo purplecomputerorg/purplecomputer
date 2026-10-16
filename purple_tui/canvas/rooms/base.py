@@ -3,6 +3,9 @@ Open library read a room's identity from these attributes; adding a room is one
 subclass plus a line in rooms/__init__.py. guides/canvas-architecture.md."""
 
 
+from ..ui import hint_row_h
+
+
 class Room:
     name = ""
     label = ""
@@ -35,6 +38,10 @@ class Room:
 
     def hold_progress(self):
         return None
+
+    def footer_h(self, g) -> int:
+        """Height under the room's canvas: the hold bar covers exactly this."""
+        return hint_row_h(g) + g.em(1.1)   # Art and Blocks: pad, hint row, gap
 
     def timeline_state(self) -> dict:
         return {}

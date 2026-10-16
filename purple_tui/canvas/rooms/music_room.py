@@ -22,7 +22,7 @@ from ...palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, SpaceHold
 from ..sounds import SoundBank
-from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hold_status
+from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hint_row_h, hold_status
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -517,6 +517,9 @@ class MusicRoom(Room):
                                "Enter", ICON_LOOP, doing)
         return self.space.status(self.code_panel is not None)
 
+    def footer_h(self, g) -> int:
+        return g.em(FOOTER_EM)
+
     def cursor_fraction(self, vp):
         return None
 
@@ -553,7 +556,7 @@ class MusicRoom(Room):
             draw_label(g, plate, g.em(1.0), rect.centerx, rect.y + g.em(1.9), P.TEXT, anchor="center", on=True)
             return
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
-        bar.h = g.line_height(g.vh(1.9), "mono") + g.em(0.4)
+        bar.h = hint_row_h(g)
         draw_mode_switch(g, bar, ("Sounds", "ABC"), 1 if self.letters_mode else 0,
                          chips=(("Enter", ICON_MUSIC, instrument, False, "sound"), ("Space", None, "notes", self.show_labels)))
 

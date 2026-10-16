@@ -30,7 +30,7 @@ from .. import color_recipe, paper
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo, SpaceHold
-from ..ui import MOVE_HINT, draw_key_hint, draw_mode_switch
+from ..ui import MOVE_HINT, draw_key_hint, draw_mode_switch, hint_row_h
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
@@ -631,7 +631,7 @@ class BlocksRoom(Room):
     def draw(self, g, rect):
         pad, gap = g.em(0.7), g.em(0.5)
         inner = rect.inflate(-2 * pad, -2 * pad)
-        chrome_h = g.line_height(g.vh(1.9), "mono") + g.em(0.4)
+        chrome_h = hint_row_h(g)
         foot_h = 0 if self.app._panel is not None else chrome_h + gap
         area = pygame.Rect(inner.x, inner.y + chrome_h + gap, inner.w, inner.h - chrome_h - gap - foot_h)
         c = self._fit(area.w, area.h)

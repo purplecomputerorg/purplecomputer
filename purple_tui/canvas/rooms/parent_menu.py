@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pygame
 
-from ... import boot_log, diagnostics
+from ... import boot_log, diagnostics, i18n
 from ...backlight import set_level as set_backlight_level
 from ... import palette as P
 from ..gfx import FONT_DIR
@@ -354,6 +354,40 @@ class VoiceScreen(Picker):
         super().__init__(app)
         from ...settings import get_voice
         self.selected = next((i for i, opt in enumerate(self.OPTIONS) if opt[0] == get_voice()), 0)
+
+
+class LanguageScreen(Picker):
+    title = "Language"
+    DESCRIPTION = "The language Purple's menus and messages are in"
+    escape_value = CANCELLED
+
+    def __init__(self, app):
+        langs = i18n.languages().values()
+        super().__init__(app, [(i18n.ENGLISH, "English")] + [(lang.code, lang.name, lang.english_name) for lang in langs])
+        current = i18n.interface_language()
+        self.selected = next((i for i, o in enumerate(self.options) if current and o[0] == current.code), 0)
+
+
+class SecondLanguageScreen(Picker):
+    title = "Second Language"
+    DESCRIPTION = "Play shows and says words in this language next to English"
+    escape_value = CANCELLED
+
+    def __init__(self, app):
+        langs = i18n.languages().values()
+        super().__init__(app, [(None, "Off")] + [(lang.code, lang.name, lang.english_name) for lang in langs])
+        current = i18n.second_language()
+        self.selected = next((i for i, o in enumerate(self.options) if current and o[0] == current.code), 0)
+
+
+def _language_menu_label() -> str:
+    lang = i18n.interface_language()
+    return f"Language: {lang.name if lang else 'English'}"
+
+
+def _second_language_menu_label() -> str:
+    lang = i18n.second_language()
+    return f"Second Language: {lang.name if lang else 'Off'}"
 
 
 def _voice_menu_label(pref: str) -> str:
@@ -1226,6 +1260,9 @@ def _get_menu_items(app) -> list:
         if get_content().rooms:
             items.append(("menu-family-rooms", _family_rooms_label()))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
+    if i18n.languages():
+        items.append(("menu-second-language", _second_language_menu_label()))
+        items.append(("menu-language", _language_menu_label()))
     items.append(("menu-export", "Copy Saved Work to USB"))
     items.append(("sec-av", "Sound & Display"))
     items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
@@ -1341,6 +1378,7 @@ class ParentMenu(Overlay):
             "menu-all-caps": self._open_all_caps, "menu-secret": self._open_secret_menu,
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),
             "menu-volume": self._open_volume, "menu-voice": self._open_voice,
+            "menu-language": self._open_language, "menu-second-language": self._open_second_language,
             "menu-install": self._install_to_disk, "menu-rename": self._rename_computer,
             "menu-export": lambda: self.app.push(__import__("purple_tui.canvas.rooms.save_export", fromlist=["SaveExportScreen"]).SaveExportScreen(self.app)),
             "menu-shell": lambda: (self.close(), self.app.push(TerminalScreen(self.app))),
@@ -1447,6 +1485,26 @@ class ParentMenu(Overlay):
     def _open_volume(self):
         self.app.push(ParentVolumeModal(self.app), on_close=lambda _: self._relabel("menu-volume", _volume_menu_label(self.app._volume_lock)))
 
+    def _open_language(self):
+        def apply(code):
+            if code is not CANCELLED:
+                second = i18n.second_language()
+                self._set_languages(code, second.code if second else None)
+        self.app.push(LanguageScreen(self.app), on_close=apply)
+
+    def _open_second_language(self):
+        def apply(code):
+            if code is not CANCELLED:
+                interface = i18n.interface_language()
+                self._set_languages(interface.code if interface else i18n.ENGLISH, code)
+        self.app.push(SecondLanguageScreen(self.app), on_close=apply)
+
+    def _set_languages(self, interface, second):
+        i18n.set_languages(interface, second)
+        self._relabel("menu-language", _language_menu_label())
+        self._relabel("menu-second-language", _second_language_menu_label())
+        self.app.invalidate()
+
     def _open_voice(self):
         def apply(v):
             if v is CANCELLED:
@@ -1528,11 +1586,11 @@ class ParentMenu(Overlay):
             if on:
                 g.rect(P.PRIMARY, r, radius=em(0.35))
             fg = P.ON_PRIMARY if on else (P.DIM if disabled else P.TEXT)
-            name, sep, value = label.partition(": ")
-            drawn = g.draw_text(name + sep, px, x0, r.centery, "mono", fg, anchor="midleft")
+            name, sep, value = (re.split("(: |：)", i18n.translate(label), maxsplit=1) + ["", ""])[:3]
+            drawn = g.draw_text(name + sep, px, x0, r.centery, "mono", fg, anchor="midleft", tr=False)
             if value:
                 g.draw_text(value, px, drawn.right, r.centery, "mono",
-                            P.ON_PRIMARY if on else (P.DIM if disabled else P.ACCENT), anchor="midleft")
+                            P.ON_PRIMARY if on else (P.DIM if disabled else P.ACCENT), anchor="midleft", tr=False)
             y += row_h
         foot = box.bottom - pad - foot_h
         g.draw_text(f"{UP} {DOWN}   Enter   Esc", em(0.92), box.centerx, foot + em(1.3), "mono", P.MUTED, anchor="center", track=0.08)

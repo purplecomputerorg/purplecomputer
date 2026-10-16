@@ -11,6 +11,7 @@ import time
 
 import pygame
 
+from .. import i18n
 from .. import palette as P
 from ..constants import ICON_ROBOT
 from .gfx import Gfx, mix, rgb
@@ -244,12 +245,12 @@ class TextField:
         tx = self.text_x(g, x, px, label, label_px, gap)
         shown, start = self._visible_slice(g, px, width - (tx - x) - px)
         before = shown[:self.cursor - start]
-        g.draw_text(shown, px, tx, y, "mono", P.TEXT)
+        g.draw_text(shown, px, tx, y, "mono", P.TEXT, tr=False)
         if self._validator:
             self._underline(g, shown, px, tx, y)
         if self._marks:
             self._draw_marks(g, shown, start, px, tx, y)
-        draw_text_caret(g, tx + g.measure(before, px, "mono")[0] if before else tx, y, px)
+        draw_text_caret(g, tx + g.measure(before, px, "mono", tr=False)[0] if before else tx, y, px)
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
     def traced(self, ideas) -> str:
@@ -276,7 +277,7 @@ class TextField:
             g.draw_text(_fit(g, placeholder, px, right - hx), px, hx, ty, "mono", P.DIM)
         self.draw(g, x, ty, right - x, px, label, label_px, gap, arrow)
         if ideas:
-            self._draw_ideas(g, ideas, tx + g.measure(self.value, px, "mono")[0] + px, box, right, px)
+            self._draw_ideas(g, ideas, tx + g.measure(self.value, px, "mono", tr=False)[0] + px, box, right, px)
         return box
 
     def _draw_ideas(self, g: Gfx, ideas, left: int, box: pygame.Rect, right: int, px: int):
@@ -305,7 +306,7 @@ class TextField:
 
     def _visible_slice(self, g, px, avail):
         """Keep the cursor on screen for long lines by scrolling the start."""
-        if g.measure(self.value, px, "mono")[0] <= avail or not self.value:
+        if g.measure(self.value, px, "mono", tr=False)[0] <= avail or not self.value:
             return self.value, 0
         cw = g.measure("M", px, "mono")[0] or 1
         fit = max(8, avail // cw)
@@ -317,17 +318,17 @@ class TextField:
         for a, b in self._marks(self.value):
             a, b = max(a - start, 0), min(b - start, len(shown))
             if a < b:
-                x0 = tx + g.measure(shown[:a], px, "mono")[0]
-                w = g.measure(shown[a:b], px, "mono")[0]
+                x0 = tx + g.measure(shown[:a], px, "mono", tr=False)[0]
+                w = g.measure(shown[a:b], px, "mono", tr=False)[0]
                 g.rect(mix(P.FIELD, P.PRIMARY, 0.35), (x0 - px // 12, y + lh // 10, w + px // 6, lh - lh // 5), radius=px // 6)
-                g.draw_text(shown[a:b], px, x0, y, "mono", P.ACCENT)
+                g.draw_text(shown[a:b], px, x0, y, "mono", P.ACCENT, tr=False)
 
     def _underline(self, g, shown, px, tx, y):
         lh = g.line_height(px, "mono")
         for m in re.finditer(r'[a-z]+', shown.lower()):
             if self._validator(m.group()):
-                x0 = tx + g.measure(shown[:m.start()], px, "mono")[0]
-                x1 = tx + g.measure(shown[:m.end()], px, "mono")[0]
+                x0 = tx + g.measure(shown[:m.start()], px, "mono", tr=False)[0]
+                x1 = tx + g.measure(shown[:m.end()], px, "mono", tr=False)[0]
                 g.rect(P.MUTED, (x0, y + lh - 2, x1 - x0, 2))
 
 
@@ -675,8 +676,8 @@ _KEY_RE = re.compile(r"\{([^}]+)\}")
 
 
 def key_hint_width(g: Gfx, text: str, px: int) -> int:
-    parts = _KEY_RE.split(text)
-    return sum(keycap_size(g, t, px)[0] if i % 2 else g.measure(t, px, "mono")[0] for i, t in enumerate(parts) if t)
+    parts = _KEY_RE.split(i18n.translate(text))
+    return sum(keycap_size(g, t, px)[0] if i % 2 else g.measure(t, px, "mono", tr=False)[0] for i, t in enumerate(parts) if t)
 
 
 def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=P.DIM, anchor="midleft") -> pygame.Rect:
@@ -684,10 +685,10 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=P.DIM, ancho
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
     setattr(box, anchor, (x, y))
     x = box.x
-    for i, t in enumerate(_KEY_RE.split(text)):
+    for i, t in enumerate(_KEY_RE.split(i18n.translate(text))):
         if t:
             x = (draw_key(g, t, px, x, box.centery, fill=color) if i % 2 else
-                 g.draw_text(t, px, x, box.centery, "mono", color, anchor="midleft")).right
+                 g.draw_text(t, px, x, box.centery, "mono", color, anchor="midleft", tr=False)).right
     return box
 
 

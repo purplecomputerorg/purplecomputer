@@ -18,7 +18,7 @@ Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple
 ```
 
 - `id`, `name`, `version`, `type` are required. `id` is the directory name the pack installs under, so it must be a single plain path segment. `version` must be `x.y.z`. `description` and `author` are optional.
-- `type` must be one of `emoji`, `sounds`, `stories`; only `emoji` dispatches to anything in the loader. Studio always declares `emoji`. The directories below are read from every user pack regardless of type.
+- `type` must be one of `emoji`, `sounds`, `stories`, `language`; only `emoji` and `language` dispatch to anything in the loader. Studio always declares `emoji`. The directories below are read from every user pack regardless of type.
 - `format` is the layout version, `1` today and the default when absent. `content.PACK_FORMAT` is the newest a build reads; a pack declaring a higher one is skipped whole rather than half-loaded, and the installer refuses it with a message that says so.
 - An `entrypoint` key, or any `.py` file anywhere in the pack outside the rooms below, makes the installer refuse the pack. Packs are data.
 
@@ -99,6 +99,23 @@ The library the pack's rooms import as `purple`: the copy of `purple_tui/roomkit
 A family's colors, read by the canvas UI when Purple starts (`purple_tui/canvas/theme.py`; the Textual UI ignores it). `colors` sets any of the screen's palette roles from `purple_tui/palette.py` by their lowercase names: `bg`, `surface`, `tile`, `field`, `hair`, `line`, `primary`, `on_primary`, `accent`, `text`, `muted`, `dim`. `canvas` is the Art canvas (its checkerboard partner is a small step away). `keys` maps letter-row keys to the colors they paint with in Art, light up in Music, and mark in Play; the row legend beside the screen follows them. Every field is optional, anything that isn't a `#rrggbb` color or a known role or letter-row key is ignored, and the number row always stays gray. The key stickers keep Purple's own colors, so themed paint colors no longer match them. With several themed packs, the last installed wins.
 
 Studio writes the whole palette, derived from one color the parent picks (`sdk/src/purple/theme.ts`): Purple's own palette turned to that color with the same relationships between its colors, a light color flipping it to dark text on a light screen, and each kind of text nudged until it reads on the panels it sits on.
+
+### language.json, strings.json, words.json, input.json (type "language")
+
+A language pack (`packs/lang-es`, `packs/lang-zh`) declares `"type": "language"` and needs `language.json`:
+
+```json
+{ "code": "es", "name": "Español", "english_name": "Spanish", "voice": "es_MX-ald-medium", "font": "MyFont.ttf" }
+```
+
+`code` is any code but `en`. `voice` names a Piper model, found in the usual voice folders or as `content/<voice>.onnx` (plus `.onnx.json`) in the pack itself. `font` is a file in `content/` that draws the language's script when the built-in faces can't; it joins the font fallback chain at startup. The other files are optional:
+
+- `strings.json`: the interface, English text as drawn mapped to its translation. `{0}`, `{1}` stand for values filled in at run time (a translation may reorder them); `{Enter}`-style keycaps and `[bold]` markup are kept as they are. Anything missing stays English. `just python scripts/i18n_strings.py <code> --json` lists what's missing.
+- `words.json`: English Play words (emoji names, colors) to the language's word, `"dog": "perro"`, or `[word, reading]`, `"dog": ["狗", "gǒu"]`. Play shows and says them next to English when this is the second language, and understands them typed (unaccented and plural too, and the reading without tones).
+- `input.json`: toneless pinyin to characters, most common first, `{"gou": ["狗", "够"]}`. With it, the number keys pick a character for the pinyin just typed in Play.
+- `blocked.txt`: words Purple never says aloud, base64 of one word per line (so no plaintext profanity sits in the repo). Every installed language's list applies whatever the settings, since a kid can type Spanish with Spanish off. Chinese entries match anywhere in the text; others match a whole word, with or without accents. A family pack can add words but never remove them.
+
+A second pack with the same `code` adds to the first, its entries winning, so a family can fix a few words without replacing the language. The setting is in the parent menu: Language (the interface) and Second Language (Play). Design: `guides/languages.md`.
 
 ## Where packs live and how they get there
 

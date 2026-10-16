@@ -84,6 +84,8 @@ _ALLOWED_WORDS = frozenset({
     "fluctuate", "fluctuates", "fluctuated", "fluctuating",
     "fluctuation", "fluctuations",
     "fluke", "flukes", "fluky",
+    # Spanish colors and words in Play (language packs)
+    "fucsia",
 })
 
 
@@ -123,6 +125,29 @@ def _scrub(normalized: str, blocked_matches: list[str]) -> str:
 
 
 def filter_speech(text: str) -> str:
+    """Filter text before TTS synthesis: English, then every installed language."""
+    return _filter_english(_filter_languages(text))
+
+
+def _filter_languages(text: str) -> str:
+    """Drop words on a language pack's list, whatever the language settings: a kid can type
+    Spanish with Spanish off. Chinese entries match anywhere (no spaces between words);
+    others match a whole word, with or without accents."""
+    from .i18n import fold, has_cjk, languages
+    blocked = frozenset().union(*(lang.blocked for lang in languages().values()))
+    if not text or not blocked:
+        return text
+    out = text
+    for word in (w for w in blocked if has_cjk(w)):
+        out = out.replace(word, "")
+    out = "".join(t for t in re.split(r"(\W+)", out) if t.lower() not in blocked and fold(t) not in blocked)
+    if out == text:
+        return text
+    out = re.sub(r"\s+", " ", out).strip()
+    return out if len(re.sub(r"[\W\d_]", "", out)) >= _MIN_SCRUBBED_LEN else ""
+
+
+def _filter_english(text: str) -> str:
     """Filter text before TTS synthesis.
 
     Returns the original text if clean. If blocked content is found:

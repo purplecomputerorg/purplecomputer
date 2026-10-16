@@ -23,23 +23,20 @@ echo_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
-echo_step "Setting up Piper TTS voice..."
+echo_step "Setting up Piper TTS voices (English, and the Spanish and Mandarin language packs)..."
 PIPER_VOICES_DIR="$HOME/.local/share/piper-voices"
-VOICE_MODEL="en_US-libritts_r-medium"
-if [ -f "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx" ]; then
-    echo_info "✓ Piper voice model already downloaded"
-else
+for VOICE_PATH in en/en_US/libritts_r/medium/en_US-libritts_r-medium es/es_MX/ald/medium/es_MX-ald-medium zh/zh_CN/huayan/medium/zh_CN-huayan-medium; do
+    VOICE_MODEL="$(basename "$VOICE_PATH")"
+    if [ -f "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx" ]; then
+        echo_info "✓ $VOICE_MODEL already downloaded"
+        continue
+    fi
     mkdir -p "$PIPER_VOICES_DIR"
     echo_info "Downloading Piper voice model ($VOICE_MODEL)..."
-    # Download from Hugging Face
-    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/$VOICE_MODEL.onnx" -o "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx"
-    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/$VOICE_MODEL.onnx.json" -o "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx.json"
-    if [ -f "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx" ]; then
-        echo_info "✓ Piper voice model downloaded"
-    else
-        echo_warn "Could not download Piper voice model (TTS may not work)"
-    fi
-fi
+    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/$VOICE_PATH.onnx" -o "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx"
+    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/$VOICE_PATH.onnx.json" -o "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx.json"
+    [ -f "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx" ] || echo_warn "Could not download $VOICE_MODEL (speech may not work)"
+done
 
 echo_step "Setting up the flite voice (the Quick voice)..."
 FLITE_VOICES_DIR="$HOME/.local/share/flite-voices"

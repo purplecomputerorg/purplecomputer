@@ -904,13 +904,16 @@ TMPFILES
     # Download Piper TTS voice model (LibriTTS-R medium - American English, speaker 6006)
     # Medium is ~4.5x faster than high on CPUs without AVX (Celeron N3060/N4000).
     # The i386 image has no onnxruntime, so it gets only the flite voice below.
+    # The Spanish and Mandarin voices belong to packs/lang-es and packs/lang-zh.
     if [ "$PIPER" = 1 ]; then
-        log_info "Downloading Piper TTS voice model..."
-        VOICE_MODEL="en_US-libritts_r-medium"
+        log_info "Downloading Piper TTS voice models..."
         VOICE_DIR="$MOUNT_DIR/opt/purple/piper-voices"
         mkdir -p "$VOICE_DIR"
-        curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
-        curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
+        for VOICE_PATH in en/en_US/libritts_r/medium/en_US-libritts_r-medium es/es_MX/ald/medium/es_MX-ald-medium zh/zh_CN/huayan/medium/zh_CN-huayan-medium; do
+            for EXT in onnx onnx.json; do
+                curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/${VOICE_PATH}.${EXT}" -o "$VOICE_DIR/$(basename "$VOICE_PATH").${EXT}"
+            done
+        done
     fi
 
     # The Quick voice (flite cmu_us_lnh). Festvox serves it over plain http only, so pin the hash.

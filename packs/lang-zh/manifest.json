@@ -1,0 +1,8 @@
+{
+  "id": "lang-zh",
+  "name": "中文",
+  "version": "1.0.0",
+  "type": "language",
+  "description": "Mandarin Chinese (Simplified) for Purple Computer: the interface in Chinese, Chinese words in Play, and pinyin typing.",
+  "author": "Purple Computer Team"
+}

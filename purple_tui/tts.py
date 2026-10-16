@@ -246,11 +246,18 @@ _SYNTH_SIGNATURES = {
     VOICE_NATURAL: repr((VOICE_MODEL, VOICE_SPEAKER, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB)),
     VOICE_QUICK: repr((FLITE_VOICE, _FLITE_STRETCH, SPEECH_RMS_DB, SPEECH_CEILING_DB)),
 }
+_LANG_ENGINE = "natural:"  # + a language pack's Piper model
+
+
+def _signature(engine: str) -> str:
+    if engine.startswith(_LANG_ENGINE):
+        return repr((engine, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB))
+    return _SYNTH_SIGNATURES[engine]
 
 
 def _cache_path(prepared_text: str, engine: str) -> Path:
     """Keyed on text plus synthesis settings, so a voice or leveling change never replays stale WAVs."""
-    key = f"{_SYNTH_SIGNATURES[engine]}\n{prepared_text}".encode('utf-8')
+    key = f"{_signature(engine)}\n{prepared_text}".encode('utf-8')
     return _CACHE_DIR / f"{hashlib.sha256(key).hexdigest()[:16]}.wav"
 
 
@@ -360,8 +367,12 @@ def _find_voice(kind: str, filename: str) -> Path | None:
     return next((c for c in (p / filename for p in _get_voice_search_paths(kind)) if c.exists()), None)
 
 
-def find_voice_model() -> Path | None:
-    return _find_voice("piper", f"{VOICE_MODEL}.onnx")
+def find_voice_model(model: str = VOICE_MODEL) -> Path | None:
+    """A language pack may carry its own voice next to its strings."""
+    from . import i18n
+    found = _find_voice("piper", f"{model}.onnx")
+    packs = (lang.content / f"{model}.onnx" for lang in i18n.languages().values() if model != VOICE_MODEL)
+    return found or next((p for p in packs if p.exists()), None)
 
 
 def find_flite_voice() -> Path | None:
@@ -400,12 +411,12 @@ def _engine() -> str:
     return VOICE_NATURAL
 
 
-def load_voice():
+def load_voice(model: str = VOICE_MODEL):
     """PiperVoice for the clip scripts. Raises ImportError or FileNotFoundError with the reason."""
     from piper import PiperVoice
-    model_path = find_voice_model()
+    model_path = find_voice_model(model)
     if model_path is None:
-        searched = "\n".join(f"  {p / f'{VOICE_MODEL}.onnx'}" for p in _get_voice_search_paths())
+        searched = "\n".join(f"  {p / f'{model}.onnx'}" for p in _get_voice_search_paths())
         raise FileNotFoundError(f"Piper voice model not found. Searched in:\n{searched}")
     return PiperVoice.load(str(model_path))
 
@@ -495,7 +506,7 @@ def preload() -> threading.Thread | None:
     return thread
 
 
-def _worker_synthesize(prepared_text: str, wav_path: str) -> bool | None:
+def _worker_synthesize(prepared_text: str, wav_path: str, model: str = VOICE_MODEL) -> bool | None:
     """ok/fail from the worker, or None when there is no usable worker."""
     if _worker is None:
         return None
@@ -506,9 +517,10 @@ def _worker_synthesize(prepared_text: str, wav_path: str) -> bool | None:
     proc = _worker
     if proc is None:
         return None
+    fields = [wav_path, prepared_text] + ([] if model == VOICE_MODEL else [model])
     with _synthesis_lock:
         try:
-            proc.stdin.write(f"{wav_path}\t{prepared_text}\n")
+            proc.stdin.write("\t".join(fields) + "\n")
             proc.stdin.flush()
             readable, _, _ = select.select([proc.stdout], [], [], _WORKER_REPLY_TIMEOUT)
             reply = proc.stdout.readline().strip() if readable else ""
@@ -543,13 +555,14 @@ def _ensure_mixer() -> bool:
     return True
 
 
-def _make_synth_config():
-    """Build a SynthesisConfig using only parameters the installed version accepts."""
+def _make_synth_config(model: str = VOICE_MODEL):
+    """Build a SynthesisConfig using only parameters the installed version accepts.
+    Language voices have one speaker; only the English model picks one."""
     from piper.config import SynthesisConfig
     import dataclasses
     valid = {f.name for f in dataclasses.fields(SynthesisConfig)}
     kwargs = {k: v for k, v in _SYNTH_PARAMS.items() if k in valid}
-    kwargs["speaker_id"] = VOICE_SPEAKER
+    kwargs["speaker_id"] = VOICE_SPEAKER if model == VOICE_MODEL else None
     return SynthesisConfig(**kwargs)
 
 
@@ -561,9 +574,9 @@ def _write_wav(wav_path: str, samples: array.array, sample_rate: int, channels: 
         wav_file.writeframes(samples.tobytes())
 
 
-def synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
+def synthesize_to_file(voice, prepared_text: str, wav_path: str, model: str = VOICE_MODEL) -> bool:
     """Shared by runtime speech and the clip scripts so the two can't drift. Serialized: espeak's phonemizer is not thread-safe."""
-    config = _make_synth_config()
+    config = _make_synth_config(model)
     with _synthesis_lock:
         audio_chunks = list(voice.synthesize(prepared_text, config))
     if not audio_chunks:
@@ -592,13 +605,26 @@ def synthesize_with_flite(prepared_text: str, wav_path: str) -> bool:
     return True
 
 
-def _synthesize_piper(prepared_text: str, wav_path: str) -> bool:
+_lang_voices: dict = {}  # in-process language voices, when there is no worker
+
+
+def _lang_voice(model: str):
+    if model not in _lang_voices:
+        try:
+            _lang_voices[model] = load_voice(model)
+        except Exception as e:
+            _dbg(f"piper {model} unavailable: {type(e).__name__}: {e}")
+            _lang_voices[model] = None
+    return _lang_voices[model]
+
+
+def _synthesize_piper(prepared_text: str, wav_path: str, model: str = VOICE_MODEL) -> bool:
     """Worker first, in-process if there is none."""
-    ok = _worker_synthesize(prepared_text, wav_path)
+    ok = _worker_synthesize(prepared_text, wav_path, model)
     if ok is not None:
         return ok
-    voice = _get_piper_voice()
-    return voice is not None and synthesize_to_file(voice, prepared_text, wav_path)
+    voice = _get_piper_voice() if model == VOICE_MODEL else _lang_voice(model)
+    return voice is not None and synthesize_to_file(voice, prepared_text, wav_path, model)
 
 
 def _synthesize_to_cache(prepared_text: str, engine: str) -> Path | None:
@@ -611,8 +637,9 @@ def _synthesize_to_cache(prepared_text: str, engine: str) -> Path | None:
             wav_path = f.name
 
         t0 = time.monotonic()
-        ok = engine == VOICE_NATURAL and _synthesize_piper(prepared_text, wav_path)
-        if not ok and _flite_ready():
+        model = engine[len(_LANG_ENGINE):] if engine.startswith(_LANG_ENGINE) else VOICE_MODEL
+        ok = engine != VOICE_QUICK and _synthesize_piper(prepared_text, wav_path, model)
+        if not ok and model == VOICE_MODEL and _flite_ready():
             engine = VOICE_QUICK
             ok = synthesize_with_flite(prepared_text, wav_path)
         _dbg(f"synth via {engine}: {time.monotonic() - t0:.2f}s ok={ok}")
@@ -664,9 +691,10 @@ def stop() -> None:
     _current_channel = None
 
 
-def speak(text: str, on_playing: callable = None, on_done: callable = None) -> bool:
+def speak(text: str, on_playing: callable = None, on_done: callable = None, lang=None) -> bool:
     """
-    Speak the given text using Piper TTS.
+    Speak the given text using Piper TTS, in English unless lang (an i18n.Language)
+    says otherwise or the text is Chinese.
     Runs in a background thread to not block the UI.
     Cancels any currently playing or generating speech first.
 
@@ -679,7 +707,7 @@ def speak(text: str, on_playing: callable = None, on_done: callable = None) -> b
         True if speech was started, False otherwise
     """
     wrapped = (lambda i: on_playing()) if on_playing else None
-    return speak_many([text], on_playing=wrapped, on_done=on_done)
+    return speak_many([(text, lang)], on_playing=wrapped, on_done=on_done)
 
 
 def speak_many(texts: list[str], gap: float = 0.5,
@@ -690,7 +718,8 @@ def speak_many(texts: list[str], gap: float = 0.5,
     speak()/stop() cancels the rest of the sequence.
 
     Args:
-        texts: The texts to speak, in order
+        texts: The texts to speak, in order; an item may be (text, i18n.Language)
+            to speak it in that language
         gap: Pause between items, in seconds
         on_playing: Called from background thread with the index into texts
             when that item starts playing
@@ -707,12 +736,13 @@ def speak_many(texts: list[str], gap: float = 0.5,
 
     from .speech_filter import filter_speech
     items = []
-    for i, text in enumerate(texts):
+    for i, item in enumerate(texts):
+        text, lang = item if isinstance(item, tuple) else (item, None)
         if not text or not text.strip():
             continue
         filtered = filter_speech(text)
         if filtered and filtered.strip():
-            items.append((i, filtered))
+            items.append((i, filtered, lang))
     if not items:
         _dbg("speak_many: all filtered, not starting")
         return False
@@ -728,11 +758,11 @@ def speak_many(texts: list[str], gap: float = 0.5,
     return True
 
 
-def _speak_seq(items: list[tuple[int, str]], speech_id: int, gap: float,
+def _speak_seq(items: list[tuple], speech_id: int, gap: float,
                on_playing: callable = None, on_done: callable = None) -> None:
     """Speak a sequence of (index, text) items from a background thread."""
     try:
-        for n, (index, text) in enumerate(items):
+        for n, (index, text, lang) in enumerate(items):
             if n:
                 time.sleep(gap)
             if speech_id != _speech_id:
@@ -740,7 +770,7 @@ def _speak_seq(items: list[tuple[int, str]], speech_id: int, gap: float,
                 return
             cb = (lambda idx=index: on_playing(idx)) if on_playing else None
             try:
-                _speak_sync(text, speech_id, cb)
+                _speak_sync(text, speech_id, cb, lang)
             except Exception as e:
                 # A failed item must not silently kill the whole thread
                 _dbg(f"speak_seq: item raised {type(e).__name__}: {e}")
@@ -752,7 +782,7 @@ def _speak_seq(items: list[tuple[int, str]], speech_id: int, gap: float,
                 pass
 
 
-def _speak_sync(text: str, speech_id: int, on_playing: callable = None) -> bool:
+def _speak_sync(text: str, speech_id: int, on_playing: callable = None, lang=None) -> bool:
     """Synchronous speech, called from background thread"""
     global _current_channel, _speech_id
 
@@ -765,15 +795,21 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None) -> bool:
         _dbg("speak_sync: mixer unavailable")
         return False
 
-    # Check for pre-generated voice clip first (hand-curated clips take priority)
-    clip_path = _get_voice_clip(text)
-    if clip_path:
-        _dbg(f"speak_sync: voice clip {clip_path}")
-        return _play_clip(clip_path, speech_id, on_playing)
-
-    # Prepare text (letter expansion, pronunciation, padding)
-    prepared = _prepare_text(text)
-    engine = _engine()
+    from .i18n import speech_language
+    lang = lang or speech_language(text)
+    if lang is not None:
+        if not lang.voice or find_voice_model(lang.voice) is None:
+            _dbg(f"speak_sync: no voice for {lang.code}")
+            return False
+        prepared, engine = _normalize_for_cache(text) + ".", _LANG_ENGINE + lang.voice
+    else:
+        # Check for pre-generated voice clip first (hand-curated clips take priority)
+        clip_path = _get_voice_clip(text)
+        if clip_path:
+            _dbg(f"speak_sync: voice clip {clip_path}")
+            return _play_clip(clip_path, speech_id, on_playing)
+        # Prepare text (letter expansion, pronunciation, padding)
+        prepared, engine = _prepare_text(text), _engine()
 
     # Check cache
     cached_path = _get_cached(prepared, engine)

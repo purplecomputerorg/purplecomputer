@@ -26,7 +26,7 @@ from typing import Optional
 from .content import PACK_FORMAT, ROOM_LIB, ROOM_NAME, read_manifest
 
 # Valid content-only pack types (no executable code)
-VALID_PACK_TYPES = ['emoji', 'sounds', 'stories']
+VALID_PACK_TYPES = ['emoji', 'sounds', 'stories', 'language']
 
 CODE_SUFFIXES = {'.py', '.pyc', '.pyo', '.pyw'}
 ROOM_MAX_BYTES = 64 * 1024
@@ -140,7 +140,17 @@ def check_pack(pack_dir: Path) -> list[str]:
     problems += _check_instruments(content)
     problems += _check_pictures(content)
     problems += _check_rooms(content)
+    if manifest['type'] == 'language':
+        problems += _check_language(pack_dir)
     return problems
+
+
+def _check_language(pack_dir: Path) -> list[str]:
+    from .i18n import ENGLISH, load_language
+    meta = _json_object(pack_dir / 'content' / 'language.json')
+    if meta is None or not isinstance(meta.get('code'), str) or meta['code'] == ENGLISH:
+        return ["content/language.json: must be an object with a language \"code\" other than en"]
+    return [] if load_language(pack_dir) else ["content/language.json: unreadable"]
 
 
 def _is_room_file(pack_dir: Path, path: Path) -> bool:
@@ -289,6 +299,8 @@ class PackInstaller:
                     return False, f"Pack already installed: {manifest['id']}"
                 shutil.rmtree(final_dir)
             shutil.move(str(temp_dir), str(final_dir))
+            from . import i18n
+            i18n.reload()
             return True, f"Pack installed: {manifest['name']} v{manifest['version']}"
 
         except tarfile.TarError as e:

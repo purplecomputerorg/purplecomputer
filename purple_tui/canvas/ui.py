@@ -249,9 +249,7 @@ class TextField:
             self._underline(g, shown, px, tx, y)
         if self._marks:
             self._draw_marks(g, shown, start, px, tx, y)
-        cx = tx + g.measure(before, px, "mono")[0] if before else tx
-        caret = (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05))
-        g.draw_caret(caret, lambda: g.rect(P.CARET, caret))
+        draw_text_caret(g, tx + g.measure(before, px, "mono")[0] if before else tx, y, px)
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
     def traced(self, ideas) -> str:
@@ -269,9 +267,8 @@ class TextField:
         up as it is. Returns the box."""
         label_px, gap, pad = round(px * 1.15), round(px * 1.1), round(px * 0.55)
         tx = self.text_x(g, x, px, label, label_px, gap)
-        box = pygame.Rect(tx - pad, y, x + width - tx + pad, round(px * 1.9))
-        g.rect(P.FIELD, box, radius=round(px * 0.4))
-        g.rect(P.LINE, box, width=1, radius=round(px * 0.4))
+        box = pygame.Rect(tx - pad, y, x + width - tx + pad, field_height(px))
+        draw_field(g, box, px)
         ty = box.centery - g.line_height(px, "mono") // 2
         right = box.right - pad
         if placeholder and not self.value:
@@ -533,10 +530,24 @@ class Toast:
 # ----------------------------------------------------------------------------
 
 
-def draw_scrim(g: Gfx, alpha: int = 225):
-    s = pygame.Surface((g.w, g.h), pygame.SRCALPHA)
-    s.fill((*rgb(P.BG), alpha))
-    g.surface.blit(s, (0, 0))
+def draw_scrim(g: Gfx):
+    g.surface.fill(rgb(P.BG))
+
+
+def field_height(px: int) -> int:
+    return round(px * 1.9)
+
+
+def draw_field(g: Gfx, box: pygame.Rect, px: int):
+    """The one text-entry look: a filled, outlined, rounded box."""
+    g.rect(P.FIELD, box, radius=round(px * 0.4))
+    g.rect(P.LINE, box, width=1, radius=round(px * 0.4))
+
+
+def draw_text_caret(g: Gfx, x: int, y: int, px: int):
+    """The block caret at (x, line top); Gfx.blink flashes it in place."""
+    caret = (x, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05))
+    g.draw_caret(caret, lambda: g.rect(P.CARET, caret))
 
 
 def window_title_height(g: Gfx, title: str) -> int:

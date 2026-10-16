@@ -22,7 +22,8 @@ from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import CANCELLED, DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
+from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, draw_bar, draw_field, draw_scrim,
+                  draw_text_caret, draw_window, field_height, window_title_height)
 from .sleep_screen import FullScreen
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
@@ -504,9 +505,10 @@ class ParentVolumeModal(Dialog):
 
 
 class _Entry(Dialog):
-    """A dialog with a description, a one-line field, and an error slot."""
+    """A dialog with a description and a boxed field below it; an error
+    takes the description's place."""
 
-    hint = "Enter  Esc"
+    hint = "Enter confirm   Esc cancel"
     width_pct = 46
 
     def __init__(self, app, title, description):
@@ -514,28 +516,21 @@ class _Entry(Dialog):
         self.title = title
         self._description = description
         self._error = ""
-        self._blink_on = True
 
-    def on_open(self):
-        self._timer = self.app.timers.every(0.5, self._blink)
-
-    def on_close(self):
-        self._timer.stop()
-
-    def _blink(self):
-        self._blink_on = not self._blink_on
-        self.app.invalidate()
+    def _field_y(self, g):
+        return g.markup_size(self._description, g.em(0.92), "mono", self.box_width(g) - 2 * g.vw(3), g.vh(0.4))[1] + g.em(1.4)
 
     def body_height(self, g):
-        return g.vh(14)
+        return self._field_y(g) + field_height(g.em(1.05)) + g.em(0.8)
 
-    def field_text(self) -> str:
-        return ""
+    def fill_field(self, g, box, px):
+        pass
 
     def draw_body(self, g, rect):
         desc = self._error or self._description
         g.draw_markup(desc, g.em(0.92), rect.x, rect.y, "mono", P.DANGER if self._error else P.MUTED, rect.w, "center", P.SURFACE, g.vh(0.4))
-        g.draw_markup(self.field_text(), g.em(1.3), rect.x, rect.y + g.vh(8), "mono-bold", P.TEXT, rect.w, "center", P.SURFACE)
+        px = g.em(1.05)
+        self.fill_field(g, pygame.Rect(rect.x, rect.y + self._field_y(g), rect.w, field_height(px)), px)
 
 
 class PinEntry(_Entry):
@@ -549,12 +544,18 @@ class PinEntry(_Entry):
         self._pin = ""
         self._ignore_keys = {"escape"}   # the parent may still be holding Esc from opening this
 
-    def field_text(self):
-        filled = "● " * len(self._pin)
-        empty = "_ " * (self._LEN - len(self._pin))
-        if self._blink_on and len(self._pin) < self._LEN:
-            empty = "█ " + "_ " * max(0, self._LEN - len(self._pin) - 1)
-        return (filled + empty).rstrip()
+    def fill_field(self, g, box, px):
+        """One small box per digit; the caret waits in the next empty one."""
+        side, gap = box.h, round(px * 0.6)
+        x = box.centerx - (self._LEN * side + (self._LEN - 1) * gap) // 2
+        lh = g.line_height(px, "mono")
+        for i in range(self._LEN):
+            slot = pygame.Rect(x + i * (side + gap), box.y, side, side)
+            draw_field(g, slot, px)
+            if i < len(self._pin):
+                g.draw_text("●", px, slot.centerx, slot.centery, "mono", P.TEXT, anchor="center")
+            elif i == len(self._pin):
+                draw_text_caret(g, slot.centerx - max(2, int(px * 0.55)) // 2, slot.centery - lh // 2, px)
 
     def _submit(self):
         if len(self._pin) != self._LEN:
@@ -602,9 +603,15 @@ class ComputerNameScreen(_Entry):
         super().__init__(app, title, description)
         self._name = initial
 
-    def field_text(self):
-        cursor = "█" if self._blink_on else " "
-        return self._name + cursor if self._name else f"{cursor} [dim]{DEFAULT_COMPUTER_NAME}[/]"
+    def fill_field(self, g, box, px):
+        draw_field(g, box, px)
+        x = box.x + round(px * 0.7)
+        y = box.centery - g.line_height(px, "mono") // 2
+        if self._name:
+            x = g.draw_text(self._name, px, x, y, "mono", P.TEXT).right
+        else:
+            g.draw_text(DEFAULT_COMPUTER_NAME, px, x + px, y, "mono", P.DIM)
+        draw_text_caret(g, x, y, px)
 
     async def handle(self, action):
         if isinstance(action, ControlAction) and action.is_down:

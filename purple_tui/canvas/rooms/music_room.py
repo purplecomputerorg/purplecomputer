@@ -21,7 +21,7 @@ from ...music_constants import (
 )
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
-from ..panels import CodePanel, Echo, LoopPanel, SpaceHold
+from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, SpaceHold
 from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hold_status
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -598,7 +598,8 @@ class MusicRoom:
             return self._draw_noscreen(g, rect)
         em = g.em
         head_h = em(4.3)
-        hint_h = em(1.0) if self.app._panel is not None else em(3.9)
+        panel = self.app._panel
+        hint_h = em(FOOTER_EM) if panel is None else 0 if isinstance(panel, LoopPanel) else em(1.0)
         pad = em(1.6)
         self._draw_header(g, rect)
         grid = pygame.Rect(rect.x + pad, rect.y + head_h, rect.w - 2 * pad, rect.h - head_h - hint_h)

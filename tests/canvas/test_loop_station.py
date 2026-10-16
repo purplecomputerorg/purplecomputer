@@ -392,3 +392,25 @@ class TestTimeFn:
         events, duration = loop.finish_recording()  # now=3.0, duration=2.0
         assert events[0][2] == pytest.approx(1.0)
         assert duration == pytest.approx(2.0)
+
+
+# =============================================================================
+# Panel layout
+# =============================================================================
+
+def test_loop_panel_keeps_grid_size():
+    from purple_tui.canvas.harness import make_app, run
+
+    async def _test():
+        app = make_app()
+        app.action_switch_room("music")
+        music = app.rooms["music"]
+        grids = []
+        music._draw_grid = lambda g, r, on_paper=False: grids.append(r)
+        app._draw()
+        music._advance_loop_state()
+        assert music.loop.state == RECORDING
+        app._draw()
+        assert grids[0] == grids[1]
+        music._stop_loop()
+    run(_test())

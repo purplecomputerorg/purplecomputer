@@ -38,6 +38,8 @@ def _keys(notes: str) -> list:
     return ["".join(k.lower() if k.lower() in notes else "-" for k in row) for row in GRID_KEYS]
 
 
+FOOTER_EM = 3.9   # the strip under Music's grid: its key hints, or the loop panel in their place
+
 # Finished programs to pick with ↓, each with a picture of what it makes:
 # rows of cells, '#' in the recipe's color, a letter in that key's color, '-' an unlit key.
 RECIPES = {
@@ -574,6 +576,8 @@ def draw_picture(g, rows: list, color: str, rect: pygame.Rect):
 
 
 class LoopPanel:
+    """One row in the footer Music already keeps under its grid, so the keys
+    never shrink: a status pill, the time bar, then the keys that matter."""
     kind = "loop"
 
     def __init__(self, app, loop):
@@ -581,30 +585,30 @@ class LoopPanel:
         self.loop = loop
 
     def height(self, g) -> int:
-        return g.vh(12)
+        return g.em(FOOTER_EM)
 
     def draw(self, g, rect):
         st = self.loop.state
-        cx, y = rect.centerx, rect.y + g.vh(1.5)
-        if st == RECORDING:
-            head = f"● Recording, {int(self.loop.recording_remaining())}s left"
-            frac = self.loop.recording_progress()
-            action = "Play any keys    Space: play it back    Esc: exit"
-        elif st == LOOPING:
-            head = f"{ICON_LOOP} Looping and recording"
-            frac = self.loop.loop_progress()
-            action = "Play on top    Esc: exit"
-        else:
+        if st not in (RECORDING, LOOPING):
             return
-        g.draw_text(head, g.vh(2.6), cx, y, "mono-heavy", P.DANGER, anchor="midtop")
-        bw = rect.w // 2
-        by = y + g.vh(4)
-        if st == RECORDING:
-            draw_bar(g, cx - bw // 2, by, bw, g.vh(1.4), frac, P.DANGER)
-        else:
-            draw_bar(g, cx - bw // 2, by, bw, g.vh(1.4), 0)
-            g.rect(P.TEXT, (cx - bw // 2 + int(bw * frac) - g.vw(0.3), by - 2, g.vw(0.6), g.vh(1.4) + 4))
-        g.draw_text(action, g.vh(1.9), cx, by + g.vh(3.2), "mono", P.MUTED, anchor="midtop")
+        recording = st == RECORDING
+        px, pad, gap = g.em(0.92), g.em(1.6), g.em(1.4)
+        cy = rect.bottom - g.em(1.4) - g.line_height(px, "mono") // 2
+        color = P.DANGER if recording else P.PRIMARY
+        label = "● Recording" if recording else f"{ICON_LOOP} Looping"
+        w, h = g.measure(label, px, "mono-bold")
+        pill = pygame.Rect(0, 0, w + round(px * 1.6), h + round(px * 0.7))
+        pill.midleft = (rect.x + pad, cy)
+        g.rect(color, pill, radius=pill.h // 2)
+        g.draw_text(label, px, pill.centerx, pill.centery, "mono-bold", P.ON_PRIMARY, anchor="center")
+        keys = "{Space} play it back   {Esc} stop" if recording else "keys play on top   {Esc} stop"
+        right = draw_key_hint(g, keys, px, rect.right - pad, cy, color=P.MUTED, anchor="midright").x - gap
+        if recording:
+            right = g.draw_text(f"{int(self.loop.recording_remaining())}s", px, right, cy,
+                                "mono-bold", P.DANGER, anchor="midright").x - g.em(0.8)
+        bar_h = g.em(0.55)
+        frac = self.loop.recording_progress() if recording else self.loop.loop_progress()
+        draw_bar(g, pill.right + gap, cy - bar_h // 2, max(0, right - pill.right - gap), bar_h, frac, color, P.FIELD, bar_h // 2)
 
 
 class TimeTravelBar:

@@ -722,10 +722,10 @@ def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, s
     return left + gap
 
 
-def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=P.PRIMARY, track=P.LINE):
-    g.rect(track, (x, y, w, h))
+def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=P.PRIMARY, track=P.LINE, radius=0):
+    g.rect(track, (x, y, w, h), radius=radius)
     if fraction > 0:
-        g.rect(color, (x, y, max(h, int(w * min(1.0, fraction))), h))
+        g.rect(color, (x, y, max(h, int(w * min(1.0, fraction))), h), radius=radius)
 
 
 HOLD_QUIET = 0.35   # of a hold: before this, nothing shows, so a tap never flashes the bar

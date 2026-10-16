@@ -242,15 +242,12 @@ class PlayRoom:
         data = self.evaluator._parse_color_result(parts[i])
         if not data:
             return self._add("answer", result)
-        hex_color, color_name, components = data
-        other = " ".join(filter(None, [before, after]))
+        hex_color, _, components = data
         is_modified = len(components) == 1 and components[0].upper() != hex_color.upper()
         box = f"[on {hex_color}]   [/]"
         if len(components) <= 1 and not is_modified:
             return self._add("answer", " ".join(filter(None, [before, box, after])))
         comps = " ".join(f"[on {c}]   [/]" for c in components)
-        if is_modified and not other:
-            return self._add("answer", f"{comps} → {box}  {color_name}")
         input_line = " ".join(filter(None, [before, comps, after]))
         result_line = " ".join(filter(None, [before, box, after]))
         combined = f"{input_line} → {result_line}"

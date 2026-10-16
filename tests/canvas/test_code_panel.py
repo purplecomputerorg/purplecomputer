@@ -292,10 +292,9 @@ def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
     run(go())
 
 
-def test_music_recipe_pictures_put_higher_notes_higher():
-    from purple_tui.canvas.panels import _melody
-    assert _melody("asd") == ["..d", ".s.", "a.."]
-    assert _melody("asas") == [".s.s", "a.a."]
+def test_music_recipe_pictures_light_the_grid_keys():
+    from purple_tui.canvas.panels import _keys
+    assert _keys("asd") == ["-" * 10, "asd-------", "-" * 10]
 
 
 @pytest.mark.parametrize("room, text, heading", [

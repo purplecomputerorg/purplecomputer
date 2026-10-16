@@ -19,7 +19,7 @@ from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_LOOP, ICON_ROBOT, ICON_TIME_
 from ..content import get_content
 from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ..loop_station import LOOPING, RECORDING
-from ..music_constants import CHROMATIC_NOTE_NAMES, GRID_KEYS, pitch_for
+from ..music_constants import GRID_KEYS
 from ..palette import get_key_color
 from .gfx import rgb
 from .ui import DOWN, LEFT, RIGHT, UP, TextField, draw_bar
@@ -33,18 +33,13 @@ ROOM_KEYWORDS = {
 }
 
 
-def _melody(notes: str) -> list:
-    """Music's picture: a cell per note left to right, higher up the higher it sounds."""
-    def pitch(ch):
-        r, c = next((r, row.index(ch.upper())) for r, row in enumerate(GRID_KEYS) if ch.upper() in row)
-        name, octave = pitch_for(r - 1, c, 0, 0)
-        return 12 * octave + CHROMATIC_NOTE_NAMES.index(name)
-    heights = [pitch(ch) for ch in notes]
-    return ["".join(ch if h == level else "." for ch, h in zip(notes, heights)) for level in sorted(set(heights), reverse=True)]
+def _keys(notes: str) -> list:
+    """Music's picture: the letter rows of the grid, the tune's keys lit."""
+    return ["".join(k.lower() if k.lower() in notes else "-" for k in row) for row in GRID_KEYS[1:]]
 
 
 # Finished programs to pick with ↓, each with a picture of what it makes:
-# rows of cells, '#' in the recipe's color, a letter in that key's color.
+# rows of cells, '#' in the recipe's color, a letter in that key's color, '-' an unlit key.
 RECIPES = {
     'art': [
         ("asdfghjkl", "", ["asdfghjkl"]),
@@ -53,10 +48,10 @@ RECIPES = {
         ("green repeat 3 up 3 right 2 down 3 right 2", "#48D370", ["###.###.###.", "#.#.#.#.#.#.", "#.#.#.#.#.#.", "#.###.###.##"]),
     ],
     'music': [
-        ("asdfghjkl", "", _melody("asdfghjkl")),
-        ("fast qwertyuiop", "", _melody("qwertyuiop")),
-        ("repeat 3 asdf", "", _melody("asdf" * 3)),
-        ("choose ukulele zxcvbnm", "", _melody("zxcvbnm")),
+        ("asdfghjkl", "", _keys("asdfghjkl")),
+        ("fast qwertyuiop", "", _keys("qwertyuiop")),
+        ("repeat 3 asdf", "", _keys("asdf")),
+        ("choose ukulele zxcvbnm", "", _keys("zxcvbnm")),
     ],
     'blocks': [
         ("red up 5", "#ED1C24", ["#", "#", "#", "#", "#"]),
@@ -489,7 +484,9 @@ class CodePanel:
             g.rect(P.FIELD, card, radius=g.em(0.4))
             g.rect(P.ACCENT if picked else P.LINE, card, width=3 if picked else 1, radius=g.em(0.4))
             pad, px = g.em(0.55), g.em(0.78)
-            pic = pygame.Rect(card.x + pad, card.y + pad, card.h - 2 * pad, card.h - 2 * pad)
+            side = card.h - 2 * pad
+            wide = min(cw * 2 // 5, side * max(map(len, rows)) // len(rows))
+            pic = pygame.Rect(card.x + pad, card.y + pad, max(side, wide), side)
             draw_picture(g, rows, color, pic)
             tx = pic.right + pad
             text_h = g.markup_size(code, px, "mono", card.right - pad - tx)[1]
@@ -563,14 +560,14 @@ def _colors_markup(more: list) -> str:
 
 
 def draw_picture(g, rows: list, color: str, rect: pygame.Rect):
-    """A recipe's picture, centered in `rect`: '#' cells in `color`, letters in their key colors."""
+    """A recipe's picture, centered in `rect`: '#' cells in `color`, '-' faint, letters in their key colors."""
     cell = max(1, min(rect.w // max(len(r) for r in rows), rect.h // len(rows)))
     ox = rect.x + (rect.w - cell * max(len(r) for r in rows)) // 2
     oy = rect.y + (rect.h - cell * len(rows)) // 2
     for j, row in enumerate(rows):
         for i, ch in enumerate(row):
             if ch != ".":
-                g.rect(color if ch == "#" else get_key_color(ch), (ox + i * cell, oy + j * cell, cell, cell))
+                g.rect({"#": color, "-": P.LINE}.get(ch) or get_key_color(ch), (ox + i * cell, oy + j * cell, cell, cell))
 
 
 class LoopPanel:

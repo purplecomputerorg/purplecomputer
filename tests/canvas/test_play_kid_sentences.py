@@ -339,3 +339,11 @@ def test_a_count_multiplies_the_color_right_after_it(evaluator, text):
 def test_a_count_multiplies_a_two_word_color(evaluator, text):
     dark_red = evaluator.content.get_modified_color("dark red")[0]
     assert evaluator.evaluate(text).count(dark_red) == 2, text
+
+
+@pytest.mark.parametrize("phrase", ["red", "dark red", "light blue"])
+@pytest.mark.parametrize("order", ["2 {c}", "{c} 2", "{c} x 2", "2 x {c}", "2 * {c}"])
+def test_a_count_on_either_side_of_a_color_draws_that_many(evaluator, phrase, order):
+    text = order.format(c=phrase)
+    assert evaluator.evaluate(text) == evaluator.evaluate(f"2 {phrase}") == "[on {0}]  [/][on {0}]  [/]".format(
+        evaluator._counted_color(f"1 {phrase}")[1]), text

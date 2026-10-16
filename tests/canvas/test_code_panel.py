@@ -362,3 +362,41 @@ def test_the_guide_never_shows_a_heading_with_nothing_under_it(name, monkeypatch
             room.code_panel.draw_side(app.g, pygame.Rect(0, 0, app.g.em(14), h))
             assert not drawn or drawn[-1] not in headings, f"empty {drawn[-1]} at height {h}"
     run(go())
+
+
+@pytest.mark.parametrize("name", ["art", "blocks"])
+def test_colors_in_code_opens_the_wheel_and_writes_the_color_picked(name):
+    from purple_tui.canvas.color_wheel import ColorWheel
+    from purple_tui.content import get_content
+
+    async def go():
+        app, room = await _room(name)
+        room.open_code_panel()
+        field = room.code_panel.field
+        field.set("up 3 colors")
+        await press(app, "enter")
+        assert isinstance(app.top, ColorWheel)
+        for way in ("down", "down", "left"):
+            await press(app, way)
+        await press(app, "space")
+        assert app.top is None and field.value.startswith("up 3 ") and field.value.endswith(" ")
+        word = field.value[len("up 3 "):].strip()
+        picked = room.brush_color
+        content = get_content()
+        assert picked == (content.exact_color(word) or content.get_modified_color(word)[0])
+        await press(app, "d")
+        assert field.value == f"up 3 {word} d"
+    run(go())
+
+
+def test_escape_from_the_code_wheel_puts_the_line_back():
+    async def go():
+        app, room = await _room("blocks")
+        before = room.brush_color
+        room.open_code_panel()
+        room.code_panel.field.set("right 2 wheel")
+        await press(app, "enter")
+        await press(app, "up")
+        await press(app, "escape")
+        assert app.top is None and room.code_panel.field.value == "right 2 wheel" and room.brush_color == before
+    run(go())

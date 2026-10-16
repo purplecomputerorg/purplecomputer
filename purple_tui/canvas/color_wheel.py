@@ -87,11 +87,12 @@ def chip(room) -> str | None:
     return "ready" if can_open(room) else None
 
 
-def open_on(room, char: str = OPEN_KEY) -> bool:
-    """Backslash opens the wheel over the room; True when it did."""
+def open_on(room, char: str = OPEN_KEY, on_close=None) -> bool:
+    """Backslash opens the wheel over the room; True when it did. on_close gets
+    the color kept, or None on Esc."""
     if char != OPEN_KEY or not can_open(room):
         return False
-    room.app.push(ColorWheel(room.app, room))
+    room.app.push(ColorWheel(room.app, room), on_close=on_close)
     return True
 
 
@@ -116,11 +117,14 @@ class ColorWheel(Overlay):
             return
         if not getattr(action, "is_down", True) or not isinstance(action, (CharacterAction, ControlAction)):
             return
+        kept = None
         if isinstance(action, ControlAction) and action.action == "escape":
             self.room.set_brush_color(self._was)
-        elif self.room.brush_color != self._was:
-            self.room.wheel_spot = (self._x, self._y)
-        self.close()
+        else:
+            kept = self.room.brush_color
+            if kept != self._was:
+                self.room.wheel_spot = (self._x, self._y)
+        self.close(kept)
         passes_on = isinstance(action, CharacterAction) and action.char != OPEN_KEY or \
             isinstance(action, ControlAction) and action.action in ("backspace", "tab")
         if passes_on:

@@ -21,16 +21,19 @@ from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationActi
 from ..loop_station import LOOPING, RECORDING
 from ..music_constants import GRID_KEYS
 from ..palette import get_key_color
+from . import color_wheel
 from .gfx import rgb
-from .ui import DOWN, LEFT, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, hold_status, keycap_size
+from .ui import AUTO, DOWN, LEFT, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, hold_status, keycap_size
 
 ROOM_KEYWORDS = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
               'marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', 'piano', 'electric'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step', 'turn', 'color',
-            'paint', 'write', 'lift', 'brush', 'pen', 'penup', 'pendown', 'repeat'],
-    'blocks': ['left', 'right', 'up', 'down', 'back', 'front', 'forward', 'go', 'repeat'],
+            'paint', 'write', 'lift', 'brush', 'pen', 'penup', 'pendown', 'repeat', 'colors', 'wheel'],
+    'blocks': ['left', 'right', 'up', 'down', 'back', 'front', 'forward', 'go', 'repeat', 'color', 'colors', 'wheel'],
 }
+# Enter on a line ending in one of these opens the color wheel, which writes the color picked in its place.
+WHEEL_WORDS = ('color', 'colors', 'wheel')
 
 
 def _keys(notes: str) -> list:
@@ -186,28 +189,32 @@ def keyword_autocomplete(room: str):
 
 
 @cache
-def _echo_colors() -> dict:
+def _named_colors(every: bool = False) -> dict:
+    """name -> (hex, hls): the plain words echo writes, or with `every`, each named color too."""
     content = get_content()
     names = {n: content.get_color(n) for n in HUES + ['black', 'white', 'gray']}
     for adj in ("light", "dark"):
         names.update({f"{adj} {n}": m[0] for n in HUES if (m := content.get_modified_color(f"{adj} {n}"))})
-    return {n: _hls(h) for n, h in names.items() if h}
+    if every:
+        names.update({n: h for n, h in content.colors.items() if n not in names})
+    return {n: (h, _hls(h)) for n, h in names.items() if h}
 
 
 def _hls(hex_color: str) -> tuple:
     return colorsys.rgb_to_hls(*(v / 255 for v in rgb(hex_color)[:3]))
 
 
-def color_name(hex_color: str) -> str:
-    """The plain color word nearest a brush color, so code can say it. Hue
-    counts most, but only as far as both colors have any."""
+def color_name(hex_color: str, every: bool = False) -> str:
+    """The color word nearest a brush color, so code can say it. Hue counts
+    most, but only as far as both colors have any. Ties go to plain words."""
     h, l, s = _hls(hex_color)
+    names = _named_colors(every)
 
     def far(n):
-        h2, l2, s2 = _echo_colors()[n]
+        h2, l2, s2 = names[n][1]
         dh = min(abs(h - h2), 1 - abs(h - h2)) * min(s, s2)
         return (3 * dh) ** 2 + (l - l2) ** 2 + (0.5 * (s - s2)) ** 2
-    return min(_echo_colors(), key=far)
+    return min(names, key=far)
 
 
 class Echo:
@@ -408,6 +415,8 @@ class CodePanel:
                 if not text:
                     f.set(f.last_command)
                     return None
+                if self._open_wheel(text):
+                    return None
                 f.clear()
                 f.remember(text)
                 self._back = 0
@@ -427,6 +436,24 @@ class CodePanel:
         if isinstance(action, CharacterAction) and not action.is_repeat:
             f.insert(action.char)
         return None
+
+    def _open_wheel(self, text: str) -> bool:
+        *head, last = text.split()
+        if last.lower() not in WHEEL_WORDS:
+            return False
+        return color_wheel.open_on(self.app.room, on_close=lambda kept: self._took_color(text, head, kept))
+
+    def _took_color(self, text: str, head: list, kept):
+        """The wheel's color goes in as the nearest color word, and the brush takes
+        that word's color so running the line paints what the wheel showed."""
+        if kept is None:
+            self.field.set(text)
+            return
+        if kept != AUTO:
+            name = color_name(kept, every=True)
+            self.app.room.set_brush_color(_named_colors(True)[name][0])
+            head = [*head, name]
+        self.field.set(" ".join(head) + " " if head else "")
 
     def arrow_hint(self) -> str:
         if self.card is not None:

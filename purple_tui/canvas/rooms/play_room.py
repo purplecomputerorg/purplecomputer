@@ -443,10 +443,6 @@ class PlayRoom:
         """An answer hugs its ask; each new ask stands clear of the pair above."""
         return g.em(0.35) if e.kind == "answer" else g.em(1.0)
 
-    def _answer_indent(self, g, e) -> int:
-        icon = SPEECH_ICONS.get(e.speech, "")
-        return g.em(0.1) + (g.measure(icon, g.em(1.05), "mono-bold")[0] + g.em(0.5) if icon else 0)
-
     def _part_height(self, g, e, part, width) -> int:
         if isinstance(part, tuple):
             return abacus_size(g, part[0])[2]
@@ -455,7 +451,6 @@ class PlayRoom:
     def _entry_height(self, g, e, width) -> int:
         if e.kind == "ask":
             return g.line_height(g.em(1.05), "mono")
-        width -= self._answer_indent(g, e)
         parts = answer_parts(e.markup)
         return sum(self._part_height(g, e, p, width) for p in parts) + self._row_gap(g) * (len(parts) - 1)
 
@@ -477,11 +472,10 @@ class PlayRoom:
             g.draw_text(e.markup, px, r.right, y, "mono", muted)
             return
         icon = SPEECH_ICONS.get(e.speech, "")
-        indent = self._answer_indent(g, e)
         if icon:
-            mid = y + self._first_row_height(g, e, width - indent) // 2
-            g.draw_text(icon, g.em(1.05), x + g.em(0.1), mid, "mono-bold", text, anchor="midleft")
-        x, width = x + indent, width - indent
+            # Hangs in the side margin so a talking answer never shifts.
+            mid = y + self._first_row_height(g, e, width) // 2
+            g.draw_text(icon, g.em(1.05), x - g.em(0.4), mid, "mono-bold", text, anchor="midright")
         for part in answer_parts(e.markup):
             if isinstance(part, tuple):
                 draw_abacus(g, *part, x, y, muted, ground)

@@ -6,6 +6,7 @@ kid does by hand.
 
 import colorsys
 import math
+import random
 import re
 import time
 from datetime import date
@@ -57,7 +58,7 @@ RECIPES = {
 COLORS = "colors"
 GUIDE = {
     'art': [
-        ("Colors", [(COLORS, "or dark blue")]),
+        ("Colors", [(COLORS, "")]),
         ("Move", [("right 5", f"{RIGHT} five steps"), ("up 3", f"{UP} three steps")]),
         ("Turn", [("forward 6", "the way it points"), ("spin", "turn to the right"), ("turn left", "")]),
         ("Again", [("repeat 4 ...", "do it four times")]),
@@ -71,7 +72,7 @@ GUIDE = {
         ("Say", [("letters on", "keys say letters")]),
     ],
     'blocks': [
-        ("Colors", [(COLORS, "or dark blue")]),
+        ("Colors", [(COLORS, "")]),
         ("Build", [("right 5", f"a row {RIGHT}"), ("up 4", f"a tower {UP}"), ("back 3", "away from you"), ("front 3", "toward you")]),
         ("Letters", [("right hi", "a block per letter")]),
         ("Again", [("repeat 4 right 1 up 1", "stairs")]),
@@ -79,6 +80,9 @@ GUIDE = {
 }
 PLACEHOLDER = f"Type code, or press {DOWN} to try one"
 HUES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'brown']
+# A few of these show under the plain hues, different ones each time code opens.
+MORE_COLORS = ['periwinkle', 'mint', 'gold', 'coral', 'sky', 'lime', 'turquoise', 'lavender', 'peach',
+               'bubblegum', 'lemon', 'tangerine', 'silver', 'orchid', 'lilac', 'ruby', 'emerald', 'aqua']
 SEPARATORS = ",.;|"           # they split a code line, so an echo leaves them out
 ECHO_MAX = 40
 _INSTRUMENT_NAMES = ['marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', 'piano']
@@ -284,6 +288,7 @@ class CodePanel:
         self.recipes = RECIPES[room]
         self.card = None   # index of the picked recipe card while ↓ is in the cards
         self._back = 0     # how far up the room's code lines ↑ has stepped
+        self.colors = _colors_markup(random.sample(MORE_COLORS, 2))
 
     def _layout(self, g) -> tuple:
         """(margin, input px, box height, sub px, gap, cards height), sized to
@@ -416,47 +421,62 @@ class CodePanel:
             g.draw_markup(code, px, tx, card.centery - text_h // 2, "mono", P.TEXT if picked else P.MUTED, card.right - pad - tx)
 
     def draw_side(self, g, rect):
-        """The word guide, top down until it runs out of room. A note that
-        won't fit beside its example goes on the line under it. A line whose
-        word is in the code being typed lights up."""
+        """The word guide, top down until it runs out of room. Each example is
+        boxed like the code line, so it reads as something to type; its note
+        sits beside it, or under it when it won't fit. An example whose word
+        is in the code being typed gets an outline."""
         g.rect(P.LINE, (rect.x, rect.y + g.em(0.9), 1, rect.h - g.em(1.8)))
         typed = set(self.field.value.lower().split())
         x, w = rect.x + g.em(0.95), rect.w - g.em(1.7)
         head_px, px = g.em(0.72), g.em(0.82)
-        lh = g.line_height(px, "mono")
         bottom = rect.bottom - g.em(0.45)
         y = rect.y + g.em(0.9)
         for heading, rows in GUIDE[self.room]:
-            if y + g.line_height(head_px, "mono") + lh > bottom:
+            if y + g.line_height(head_px, "sans") + g.line_height(px, "mono") > bottom:
                 break
-            y += g.draw_text(heading, head_px, x, y, "mono-bold", P.ACCENT).h + g.em(0.13)
+            y += g.draw_text(heading, head_px, x, y, "sans-bold", P.ACCENT).h + g.em(0.1)
             for code, gloss in rows:
-                lines = _guide_lines(g, code, gloss, px, w)
-                h = sum(g.markup_size(line, px, "mono", w)[1] for line in lines)
-                if y + h > bottom:
+                if code == COLORS:
+                    h = g.draw_markup(self.colors, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
+                elif y + (h := _example_height(g, code, gloss, px, w)) > bottom:
                     break
-                if code.split()[0] in typed:
-                    g.rect(P.FIELD, (x - g.em(0.3), y - 2, w + g.em(0.6), h + 4), radius=g.em(0.27))
-                for line in lines:
-                    y += g.draw_markup(line, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
-            y += g.em(0.6)
+                else:
+                    _draw_example(g, code, gloss, px, x, y, w, code.split()[0] in typed)
+                y += h + g.em(0.12)
+            y += g.em(0.4)
 
 
-def _guide_lines(g, code: str, gloss: str, px: int, w: int) -> list:
-    """An example and its note as one line, or two when they don't fit side by side."""
-    text = _colors_markup() if code == COLORS else code
-    if not gloss:
-        return [text]
-    one = f"{text}  [dim]{gloss}[/]"
-    if g.markup_size(one, px, "mono")[0] <= w:
-        return [one]
-    return [text, f"  [dim]{gloss}[/]"]
+def _example_layout(g, code: str, gloss: str, px: int, w: int) -> tuple:
+    """(chip size, gloss px, gloss beside the chip?) for one guide example."""
+    tw, th = g.measure(code, px, "mono")
+    chip = (tw + round(px * 0.8), th + round(px * 0.1))
+    gpx = px
+    beside = not gloss or chip[0] + g.em(0.5) + g.markup_size(gloss, gpx, "sans")[0] <= w
+    return chip, gpx, beside
 
 
-@cache
-def _colors_markup() -> str:
+def _example_height(g, code, gloss, px, w) -> int:
+    chip, gpx, beside = _example_layout(g, code, gloss, px, w)
+    return chip[1] if beside else chip[1] + g.em(0.1) + g.markup_size(gloss, gpx, "sans", w)[1]
+
+
+def _draw_example(g, code, gloss, px, x, y, w, lit: bool):
+    chip, gpx, beside = _example_layout(g, code, gloss, px, w)
+    box = pygame.Rect((x, y), chip)
+    g.rect(P.FIELD, box, radius=g.em(0.25))
+    g.rect(P.ACCENT if lit else P.HAIR, box, width=2 if lit else 1, radius=g.em(0.25))
+    g.draw_text(code, px, box.centerx, box.centery, "mono", P.TEXT, anchor="center")
+    if gloss:
+        gx, gy = (box.right + g.em(0.5), box.centery - g.line_height(gpx, "sans") // 2) if beside else (x + g.em(0.2), box.bottom + g.em(0.1))
+        g.draw_markup(gloss, gpx, gx, gy, "sans", P.MUTED, x + w - gx)
+
+
+def _colors_markup(more: list) -> str:
+    """The plain hues, then `more` and a light one, each in its own color."""
     content = get_content()
-    return " ".join(f"[{content.get_color(n)}]{n}[/]" for n in HUES + ['white'] if n != 'brown')
+    hues = [f"[{content.get_color(n)}]{n}[/]" for n in HUES + ['white'] + more if n != 'brown']
+    light = f"[{content.get_modified_color('light blue')[0]}]light blue[/]"
+    return " ".join(hues + [light, "[dim]...[/]"])
 
 
 def draw_picture(g, rows: list, color: str, rect: pygame.Rect):

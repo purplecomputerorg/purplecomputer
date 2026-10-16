@@ -589,12 +589,20 @@ def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Re
     return pygame.Rect(x, y + key_h // 2 - h, w, h)
 
 
+AUTO = "auto"   # a swatch that picks light or dark for what's under it
+
+
 @functools.lru_cache(maxsize=8)
-def _swatch_dot(color: str, d: int) -> pygame.Surface:
-    """A color dot drawn 4x and smoothed down so the edge stays clean."""
+def swatch_dot(color: str, d: int) -> pygame.Surface:
+    """A color dot drawn 4x and smoothed down so the edge stays clean; AUTO is half white, half black."""
     s = 4
     big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)
-    pygame.draw.circle(big, rgb(color), (d * s / 2, d * s / 2), d * s / 2)
+    c = (d * s / 2, d * s / 2)
+    if color == AUTO:
+        pygame.draw.circle(big, rgb("#FFFFFF"), c, c[0], draw_top_left=True, draw_bottom_left=True)
+        pygame.draw.circle(big, rgb("#000000"), c, c[0], draw_top_right=True, draw_bottom_right=True)
+    else:
+        pygame.draw.circle(big, rgb(color), c, c[0])
     return pygame.transform.smoothscale(big, (d, d))
 
 
@@ -719,7 +727,7 @@ def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, s
     """Draws the header with the Tab switch at start; returns its left edge."""
     gap = round(px * 1.2)
     left = _draw_tab_switch(g, px, start, cy, labels, active).x - gap
-    mark = icon or (_swatch_dot(swatch, round(px * 2.1)) if swatch else None)
+    mark = icon or (swatch_dot(swatch, round(px * 2.1)) if swatch else None)
     if mark:
         spot = mark.get_rect(midright=(left, cy))
         g.surface.blit(mark, spot)

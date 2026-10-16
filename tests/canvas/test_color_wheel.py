@@ -6,6 +6,7 @@ opens it too, and in ABC it colors the letters typed next. Also Art's eraser: ho
 
 from purple_tui.canvas.color_wheel import ColorWheel, _cell, _spot, wheel_color
 from purple_tui.canvas.harness import make_app, press, run
+from purple_tui.canvas.ui import AUTO
 from purple_tui.keyboard import ControlAction
 from purple_tui import palette as P
 from purple_tui.palette import get_key_color
@@ -159,4 +160,34 @@ def test_in_abc_the_wheel_colors_the_letters():
         await press(app, "|")
         cells = sorted((x, ch, fg) for (x, _), (ch, fg, _) in room._grid.items())
         assert [(ch, fg) for _, ch, fg in cells] == [("h", ink), ("|", ink)]
+    run(go())
+
+
+def test_in_abc_the_center_goes_back_to_auto_letters():
+    async def go():
+        app, room = _room("art")
+        await press(app, "tab")
+        assert room.brush_color == AUTO
+        await press(app, "\\")
+        await press(app, "down")
+        await press(app, "down")
+        await press(app, "space")
+        assert room.brush_color != AUTO
+        await press(app, "\\")
+        await press(app, "up")
+        await press(app, "up")
+        await press(app, "space")
+        assert room.brush_color == AUTO and room._ink is None
+        await press(app, "h")
+        assert [fg for ch, fg, _ in room._grid.values()] == [P.TEXT]
+    run(go())
+
+
+def test_in_paint_the_center_stays_white():
+    async def go():
+        app, room = _room("art")
+        await press(app, "\\")
+        app.top._x = app.top._y = 0.0
+        app.top._move([])
+        assert room.brush_color == "#FFFFFF"
     run(go())

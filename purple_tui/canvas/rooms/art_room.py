@@ -19,7 +19,7 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo, SpaceHold
-from ..ui import MOVE_HINT, draw_key_hint, draw_label, draw_mode_switch
+from ..ui import AUTO, MOVE_HINT, draw_key_hint, draw_label, draw_mode_switch
 from .base import Room
 
 COLS, ROWS = ART_COLS, ART_ROWS
@@ -265,14 +265,18 @@ class ArtRoom(Room):
     @property
     def brush_color(self) -> str:
         """In ABC the wheel's 'brush' is the letters' ink."""
-        return self._last_key_color if self._paint_mode else self._ink or P.TEXT
+        return self._last_key_color if self._paint_mode else self._ink or AUTO
 
     def set_brush_color(self, color: str, key: str = ""):
         if self._paint_mode:
             self._last_key_char, self._last_key_color = key, color
         else:
-            self._ink = None if color == P.TEXT else color
+            self._ink = None if color == AUTO else color
         self._post_paint_mode_changed()
+
+    @property
+    def wheel_auto(self) -> bool:
+        return not self._paint_mode
 
     @property
     def wheel_spot(self):

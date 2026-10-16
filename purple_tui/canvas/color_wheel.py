@@ -2,7 +2,9 @@
 the center to dark at the rim. Arrows move a dot over it and the brush takes
 the color under the dot; Space or Enter keeps it, Esc puts the old one back,
 and any other key keeps it and goes on to the room. Each room's wheel reopens
-on the last color kept from it, so a stray key never loses a hard-won pick."""
+on the last color kept from it, so a stray key never loses a hard-won pick.
+A room with wheel_auto set swaps the white center for AUTO, half white and
+half black: back to letters that turn light or dark to show up."""
 
 import colorsys
 import functools
@@ -14,7 +16,7 @@ from .. import palette as P
 from ..color_mixing import rgb_to_hex
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from .gfx import rgb
-from .ui import Overlay, arrow_key_metrics, arrow_keys_size, draw_arrow_keys, draw_keycap
+from .ui import AUTO, Overlay, swatch_dot, arrow_key_metrics, arrow_keys_size, draw_arrow_keys, draw_keycap
 
 OPEN_KEY = "\\"
 HUES, RINGS = 36, 7          # ring 0 is the white center
@@ -39,6 +41,8 @@ def _cell(x: float, y: float) -> tuple:
 
 def _spot(color: str) -> tuple:
     """Where a color sits on the disc, so the dot starts on the brush's own color."""
+    if color == AUTO:
+        return 0.0, 0.0
     h, l, s = colorsys.rgb_to_hls(*(c / 255 for c in rgb(color)))
     if s < 0.15 or l > LIGHT:
         return 0.0, 0.0
@@ -48,7 +52,7 @@ def _spot(color: str) -> tuple:
 
 
 @functools.lru_cache(maxsize=4)
-def disc(d: int) -> pygame.Surface:
+def disc(d: int, auto: bool = False) -> pygame.Surface:
     """Pies from the rim inward, each ring painted over the last, drawn 2x and smoothed down."""
     s = 2
     big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)
@@ -61,7 +65,11 @@ def disc(d: int) -> pygame.Surface:
         for hue in range(HUES):
             arc = [(hue - 0.5 + i / 4) / HUES * 2 * math.pi for i in range(5)]
             pygame.draw.polygon(big, rgb(wheel_color(hue, ring)), [(c, c)] + [(c + r * math.sin(a), c - r * math.cos(a)) for a in arc])
-    return pygame.transform.smoothscale(big, (d, d))
+    small = pygame.transform.smoothscale(big, (d, d))
+    if auto:
+        center = swatch_dot(AUTO, round(d / RINGS))
+        small.blit(center, center.get_rect(center=(d / 2, d / 2)))
+    return small
 
 
 def can_open(room) -> bool:
@@ -121,7 +129,9 @@ class ColorWheel(Overlay):
         far = math.hypot(self._x, self._y)
         if far > REACH:
             self._x, self._y = self._x * REACH / far, self._y * REACH / far
-        self.room.set_brush_color(wheel_color(*_cell(self._x, self._y)))
+        hue, ring = _cell(self._x, self._y)
+        auto = ring == 0 and getattr(self.room, "wheel_auto", False)
+        self.room.set_brush_color(AUTO if auto else wheel_color(hue, ring))
 
     def draw(self, g):
         vp = self.app._viewport_rect()
@@ -136,12 +146,13 @@ class ColorWheel(Overlay):
         radius = g.em(0.6)
         g.rect(P.SURFACE, box, radius=radius)
         g.rect(P.LINE, box, width=1, radius=radius)
-        g.surface.blit(disc(d), (box.x + pad, box.y + pad))
+        g.surface.blit(disc(d, getattr(self.room, "wheel_auto", False)), (box.x + pad, box.y + pad))
         cx, cy = box.x + pad + d / 2 + self._x * d / 2, box.y + pad + d / 2 + self._y * d / 2
         dot = max(4, d // 28)
         pygame.draw.circle(g.surface, rgb(P.ON_PRIMARY), (cx, cy), dot + max(2, dot // 2))
         pygame.draw.circle(g.surface, rgb(P.TEXT), (cx, cy), dot + max(1, dot // 4))
-        pygame.draw.circle(g.surface, rgb(self.room.brush_color), (cx, cy), dot)
+        fill = swatch_dot(self.room.brush_color, 2 * dot)
+        g.surface.blit(fill, fill.get_rect(center=(cx, cy)))
         space_w = g.measure("Space", px, "mono")[0] + round(px * 1.4)
         x = box.centerx - (keys_w + px + space_w) // 2
         y = box.bottom - pad // 2 - arrow_key_metrics(g, px)[1] // 2

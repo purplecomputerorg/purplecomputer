@@ -58,7 +58,8 @@ TITLE_STRIP_VH = 8            # air above the frame: computer name, title, batte
 STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
 STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the TUI's room bar
 TIMELINE_DEBOUNCE_S = 3.0
-LEGEND_KEY_VH = 2.35          # pitch of the sticker keyboard in the bottom-left corner
+LEGEND_TEXT_VH = 1.15         # letter size on the sticker keyboard in the bottom-left corner
+LEGEND_POP = 1.45             # the last key pressed grows by this much
 LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 0.75), (ZXCV_ROW, 1.25))   # with real stagger
 _KEY_FOR_COLOR = {get_key_color(k): k for row, _ in LEGEND_ROWS for k in row}
 TIMELINE_MAX_WAIT_S = 15.0
@@ -1403,17 +1404,25 @@ class PurpleApp:
 
     def _draw_legend(self, frame):
         """A tiny keyboard in the sticker colors, so a kid without stickers can
-        find a color before pressing; the last key wears a ring."""
+        find a color before pressing; the last key pops out bigger."""
         g = self.g
-        pitch = g.vh(LEGEND_KEY_VH)
-        size, px = pitch - g.vh(0.4), round(pitch * 0.5)
-        top = g.h - g.vh(0.8) - 4 * pitch
+        px = g.vh(LEGEND_TEXT_VH)
+        size = round(px * 1.35)
+        pitch = size + 1
+        top = g.h - g.vh(1.5) - 4 * pitch
+        popped = None
         for r, (row, stagger) in enumerate(LEGEND_ROWS):
             for i, key in enumerate(row):
                 cap = pygame.Rect(frame.x + round((stagger + i) * pitch), top + r * pitch, size, size)
-                draw_color_cap(g, key.upper(), get_key_color(key), cap, px, radius=size // 5)
                 if key == self._legend_key:
-                    g.rect(P.TEXT, cap.inflate(4, 4), width=2, radius=size // 4)
+                    popped = key, cap
+                else:
+                    draw_color_cap(g, key.upper(), get_key_color(key), cap, px, radius=size // 5)
+        if popped:
+            key, cap = popped
+            big = cap.inflate(round(size * (LEGEND_POP - 1)), round(size * (LEGEND_POP - 1)))
+            g.rect(P.BG, big.inflate(4, 4), radius=big.w // 4)
+            draw_color_cap(g, key.upper(), get_key_color(key), big, round(px * LEGEND_POP), radius=big.w // 5)
 
     def _draw_status(self, frame, left=None, right=None, tabs=True):
         """The strip under the viewport: keyboard note, the Esc pill and room

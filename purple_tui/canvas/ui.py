@@ -598,21 +598,27 @@ def _swatch_dot(color: str, d: int) -> pygame.Surface:
 
 
 HOLD = "hold "
+SHIFTED = dict(zip("\\[];',./-=`", "|{}:\"<>?_+~"))
 
 
 def keycap_size(g: Gfx, text: str, px: int) -> tuple:
     w, h = g.measure(text.removeprefix(HOLD), px, "mono-bold")
     if text.startswith(HOLD):
         w += g.measure(HOLD, px, "mono")[0]
-    return w + round(px * 1.4), h + round(px * 0.56)
+    return w + round(px * 1.4), h + round(px * (0.98 if text in SHIFTED else 0.56))
 
 
 def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=P.TEXT, ink=P.SURFACE) -> pygame.Rect:
     """A solid keycap: the one look for a key the kid can press inside a room.
-    'hold Space' puts the verb on the cap, so the hold reads as part of the key."""
+    'hold Space' puts the verb on the cap, so the hold reads as part of the key;
+    a symbol key shows its shifted mark above it, as printed on the real key."""
     key = pygame.Rect((0, 0), keycap_size(g, text, px))
     setattr(key, anchor, (x, y))
     g.rect(fill, key, radius=round(px * 0.5))
+    if text in SHIFTED:
+        for t, dy in ((SHIFTED[text], -1), (text, 1)):
+            g.draw_text(t, round(px * 0.8), key.centerx, key.centery + dy * key.h // 4, "mono-bold", ink, anchor="center")
+        return key
     name = text.removeprefix(HOLD)
     left = key.x + round(px * 0.7)
     if name != text:

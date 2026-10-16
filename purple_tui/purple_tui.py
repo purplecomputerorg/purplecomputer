@@ -191,7 +191,6 @@ from .hints import TITLE_MUTED, TITLE_PRIMARY, room_arrow_hint
 
 CODE_PANEL_CLOSE_HINT_TEXT = "Hold Space: close code"
 CODE_PANEL_CLOSE_HINT = f"{ICON_ROBOT} {CODE_PANEL_CLOSE_HINT_TEXT} {ICON_ROBOT}"
-CODE_PANEL_CLOSE_PICKED_TEXT = "Enter: close code"
 # Pulse the close-code hint when a kid presses arrows in code mode (a "how do I
 # get out?" signal). Gentle highlight, then settle: not a strobe. Left/right
 # arrows already navigate, so they blink once; up/down blink twice.
@@ -905,7 +904,6 @@ class PurpleApp(App):
         self._code_panel_active: bool = False  # True when code panel mode is on (persists across rooms)
         self._close_hint_pulse_timer = None  # Pulses the "close code" hint when a stuck kid presses arrows
         self._close_hint_pulse_remaining: int = 0
-        self._close_code_picked = False  # ↓ in code mode picked the close hint; Enter closes
         self._music_looping_enabled: bool = True
         self._music_key_switching_enabled: bool = True
 
@@ -1646,8 +1644,9 @@ class PurpleApp(App):
             await self._handle_time_travel_action(action)
             return
 
-        if self._code_panel_active and self._close_code_key(action):
-            return
+        # Arrows in code mode: a kid reaching for a way out. Pulse the close hint.
+        if self._code_panel_active and isinstance(action, NavigationAction):
+            self._pulse_close_code_hint(action.direction)
 
         # Block tab in Littles Mode (prevents sub-mode switching in music/art)
         if self._littles_mode and isinstance(action, ControlAction) and action.action == 'tab':
@@ -1909,7 +1908,6 @@ class PurpleApp(App):
         border subtitle. Resize/indicator behavior is identical for both so
         the LoopPanel reuses this exact path.
         """
-        self._close_code_picked = False
         try:
             viewport = self.query_one("#viewport")
             indicator = self.query_one("#room-indicator", RoomIndicator)
@@ -1938,33 +1936,6 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-    def _close_code_key(self, action) -> bool:
-        """↓ in code mode picks the close hint and Enter then closes; any other
-        key lets go of it. Other arrows pulse the hint. True when consumed."""
-        picked, self._close_code_picked = self._close_code_picked, False
-        if isinstance(action, NavigationAction) and action.direction == 'down':
-            self._close_code_picked = True
-        elif isinstance(action, NavigationAction):
-            self._pulse_close_code_hint(action.direction)
-        elif picked and isinstance(action, ControlAction) and action.action == 'enter' and action.is_down:
-            self._close_repl_panel()
-            return True
-        if picked != self._close_code_picked:
-            self._show_close_code_hint()
-        return self._close_code_picked
-
-    def _show_close_code_hint(self, lit: bool = False) -> None:
-        try:
-            viewport = self.query_one("#viewport")
-        except NoMatches:
-            return
-        text = CODE_PANEL_CLOSE_PICKED_TEXT if self._close_code_picked else CODE_PANEL_CLOSE_HINT_TEXT
-        # Highlight only the words, leaving the double-width robot glyphs and the
-        # spaces around them outside the background so they can't smear it or shift
-        # right-alignment.
-        words = f"[{CLOSE_HINT_PULSE_MARKUP}]{text}[/]" if lit or self._close_code_picked else text
-        _set_viewport_hints(viewport, left=None, right=f"{ICON_ROBOT} {words} {ICON_ROBOT}", active_theme=self.active_theme)
-
     def _pulse_close_code_hint(self, direction: str) -> None:
         """Briefly highlight the 'Hold Space: close code' hint a few times.
 
@@ -1982,15 +1953,27 @@ class PurpleApp(App):
             )
 
     def _step_close_code_pulse(self) -> None:
+        try:
+            viewport = self.query_one("#viewport")
+        except NoMatches:
+            return
         done = self._close_hint_pulse_remaining <= 0 or not self._code_panel_active
         if done:
             if self._close_hint_pulse_timer is not None:
                 self._close_hint_pulse_timer.stop()
                 self._close_hint_pulse_timer = None
             if self._code_panel_active:
-                self._show_close_code_hint()
+                _set_viewport_hints(viewport, left=None, right=CODE_PANEL_CLOSE_HINT, active_theme=self.active_theme)
             return
-        self._show_close_code_hint(lit=self._close_hint_pulse_remaining % 2 == 0)
+        lit = self._close_hint_pulse_remaining % 2 == 0
+        # Highlight only the words, leaving the double-width robot glyphs and the
+        # spaces around them outside the background so they can't smear it or shift
+        # right-alignment.
+        hint = (
+            f"{ICON_ROBOT} [{CLOSE_HINT_PULSE_MARKUP}]{CODE_PANEL_CLOSE_HINT_TEXT}[/] {ICON_ROBOT}"
+            if lit else CODE_PANEL_CLOSE_HINT
+        )
+        _set_viewport_hints(viewport, left=None, right=hint, active_theme=self.active_theme)
         self._close_hint_pulse_remaining -= 1
 
     def _restore_room_code_state(self) -> None:

@@ -38,7 +38,7 @@ FACES = {
     "mono-bold": "IBMPlexMono-SemiBold.ttf",
     "mono-heavy": "IBMPlexMono-Bold.ttf",
     "mono-italic": "IBMPlexMono-Italic.ttf",  # parent-menu section headers
-    "block": "SpaceMono-Bold.ttf",  # one letter per square Art cell
+    "block": "PressStart2P-Regular.ttf",  # one letter per square Art cell
     "nerd": "SymbolsNerdFontMono-Regular.ttf",  # mono-tinted UI icon glyphs
     "symbols": "DejaVuSans.ttf",  # fallback for glyphs the faces above lack
 }

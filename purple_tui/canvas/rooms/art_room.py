@@ -450,7 +450,7 @@ class ArtRoom:
         self._advance_after_stamp(direction)
 
     def _letter_px(self, c: int) -> int:
-        return max(6, round(c * 0.95))
+        return max(6, round(c * 0.8))
 
     def _new_line(self):
         self._cursor_x = 0

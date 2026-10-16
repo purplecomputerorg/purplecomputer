@@ -34,8 +34,8 @@ ROOM_KEYWORDS = {
 
 
 def _keys(notes: str) -> list:
-    """Music's picture: the letter rows of the grid, the tune's keys lit."""
-    return ["".join(k.lower() if k.lower() in notes else "-" for k in row) for row in GRID_KEYS[1:]]
+    """Music's picture: the four rows of the grid, the tune's keys lit."""
+    return ["".join(k.lower() if k.lower() in notes else "-" for k in row) for row in GRID_KEYS]
 
 
 # Finished programs to pick with ↓, each with a picture of what it makes:
@@ -560,14 +560,14 @@ def _colors_markup(more: list) -> str:
 
 
 def draw_picture(g, rows: list, color: str, rect: pygame.Rect):
-    """A recipe's picture, centered in `rect`: '#' cells in `color`, '-' faint, letters in their key colors."""
+    """A recipe's picture, centered in `rect`: '#' cells in `color`, '-' a quiet key, letters in their key colors."""
     cell = max(1, min(rect.w // max(len(r) for r in rows), rect.h // len(rows)))
     ox = rect.x + (rect.w - cell * max(len(r) for r in rows)) // 2
     oy = rect.y + (rect.h - cell * len(rows)) // 2
     for j, row in enumerate(rows):
         for i, ch in enumerate(row):
             if ch != ".":
-                g.rect({"#": color, "-": P.LINE}.get(ch) or get_key_color(ch), (ox + i * cell, oy + j * cell, cell, cell))
+                g.rect({"#": color, "-": P.SURFACE}.get(ch) or get_key_color(ch), (ox + i * cell, oy + j * cell, cell, cell))
 
 
 class LoopPanel:

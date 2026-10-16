@@ -294,7 +294,7 @@ def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
 
 def test_music_recipe_pictures_light_the_grid_keys():
     from purple_tui.canvas.panels import _keys
-    assert _keys("asd") == ["-" * 10, "asd-------", "-" * 10]
+    assert _keys("asd") == ["-" * 10, "-" * 10, "asd-------", "-" * 10]
 
 
 @pytest.mark.parametrize("room, text, heading", [

@@ -57,7 +57,7 @@ SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), ("y", 1)),
         "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
         RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
-HINT = "Type to build the way you last moved! {Enter} goes up."
+HINT = "Type to build! {Enter} goes up."
 
 
 @cache

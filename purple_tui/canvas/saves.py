@@ -1,10 +1,10 @@
 """Saved work: what a kid chose to keep, one folder per room, newest first.
 
-A save is <ms>-<digest>.json (the room's state, code lines included) beside
-<ms>-<digest>.thumb.png, a small picture of it for the wall. Opening a save
-loads the state; printing and copying to a USB stick redraw it at full size
-(PurpleApp.save_artwork), which keeps a save small enough for the Key's
-PURPLE-SAVE. The digest makes saving the same work twice a no-op.
+A save is <ms>-<digest>.json (the room's state, code lines included). Opening a
+save loads the state; Open's pictures, printing and copying to a USB drive redraw
+it (PurpleApp.save_artwork), so Open shows it in today's colors and a save stays
+small enough for the Key's PURPLE-SAVE. The digest makes saving the same work
+twice a no-op, and lets Time Travel find the step a save was made from.
 """
 
 import hashlib
@@ -18,7 +18,6 @@ import pygame
 
 from ..timeline import state_dir
 
-THUMB_PX = 320  # longest side; wall tiles are about this wide on a 1920px screen
 _ram_dir = None
 
 
@@ -41,7 +40,7 @@ def saves_dir() -> Path:
     return base
 
 
-def _digest(state: dict) -> str:
+def digest(state: dict) -> str:
     return hashlib.sha1(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12]
 
 
@@ -76,12 +75,13 @@ class Save:
     def room(self) -> str:
         return self.path.parent.name
 
-    def thumbnail(self):
-        return _load(_thumb_path(self.path))
-
     @property
     def made(self) -> datetime:
         return datetime.fromtimestamp(int(self.id.split("-")[0]) / 1000)
+
+    @property
+    def digest(self) -> str:
+        return self.id.split("-")[1]
 
     def when(self, today: date | None = None) -> str:
         today = today or date.today()
@@ -93,42 +93,30 @@ class Save:
         return self.made.strftime("%A" if 0 < days < 7 else "%b %-d")
 
 
-def _thumb_path(path: Path) -> Path:
-    return path.with_suffix(".thumb.png")
-
-
-def _load(path: Path):
-    try:
-        return pygame.image.load(str(path))
-    except (pygame.error, OSError):
-        return None
-
-
 def list_saves(room: str) -> list[Save]:
     folder = saves_dir() / room
     return [Save(p) for p in sorted(folder.glob("*.json"), reverse=True)] if folder.is_dir() else []
 
 
-def add(room: str, state: dict, image: pygame.Surface, landscape: bool) -> Save | None:
-    """Write a new save with a thumbnail of image, or None when this exact work is already saved (or the disk refused)."""
-    digest = _digest(state)
+def add(room: str, state: dict, landscape: bool) -> Save | None:
+    """Write a new save, or None when this exact work is already saved (or the disk refused)."""
+    key = digest(state)
     folder = saves_dir() / room
-    if any(folder.glob(f"*-{digest}.json")):
+    if any(folder.glob(f"*-{key}.json")):
         return None
-    path = folder / f"{int(time.time() * 1000)}-{digest}.json"
+    path = folder / f"{int(time.time() * 1000)}-{key}.json"
     try:
         folder.mkdir(parents=True, exist_ok=True)
-        pygame.image.save(fit(image, THUMB_PX, THUMB_PX), str(_thumb_path(path)))
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"state": state, "landscape": landscape}, separators=(",", ":")))
         tmp.replace(path)  # the .json landing is what makes the save exist
-    except (OSError, pygame.error):
+    except OSError:
         return None
     return Save(path)
 
 
 def delete(save: Save):
-    for p in (save.path, _thumb_path(save.path)):
+    for p in (save.path, save.path.with_suffix(".thumb.png")):  # older saves kept a picture beside them
         try:
             p.unlink()
         except OSError:

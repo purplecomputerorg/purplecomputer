@@ -1,11 +1,15 @@
 """The printed page: what the kid made, on white, without cursor or hints.
 
 Every page carries a small maker's mark built from the computer's name.
-A room that can print has paper(g, size), which returns its work drawn to fit
-size on a white ground (or None when there is nothing yet), and LANDSCAPE.
+A room that can print has paper(g, size, on_screen=False), which returns its work
+drawn to fit size on a white ground (or None when there is nothing yet), and
+LANDSCAPE. on_screen draws it in the screen's colors instead, as Open shows it.
 """
 
 import pygame
+
+from .. import palette as P
+from ..palette import rgb
 
 PAGE = (1650, 1275)  # US Letter landscape at 150 dpi; the driver fits it to A4 too
 MARGIN = 75          # half an inch
@@ -33,12 +37,12 @@ def page_size(landscape: bool) -> tuple:
     return PAGE if landscape else PAGE[::-1]
 
 
-def artwork(room, g):
-    """The room's work drawn to fill a page inside its margins, or None when there is nothing yet."""
+def artwork(room, g, size=None, on_screen=False):
+    """The room's work drawn to fill size (a page inside its margins), or None when there is nothing yet."""
     if not can_print(room):
         return None
     w, h = page_size(room.LANDSCAPE)
-    return room.paper(g, (w - 2 * MARGIN, h - 2 * MARGIN))
+    return room.paper(g, size or (w - 2 * MARGIN, h - 2 * MARGIN), on_screen)
 
 
 def page(room, g, computer_name: str = ""):
@@ -58,7 +62,7 @@ def compose(work, landscape: bool, g, computer_name: str = ""):
     return out, landscape
 
 
-def blank(size) -> pygame.Surface:
+def blank(size, on_screen=False) -> pygame.Surface:
     s = pygame.Surface(size)
-    s.fill(WHITE)
+    s.fill(rgb(P.SURFACE) if on_screen else WHITE)
     return s

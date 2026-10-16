@@ -562,13 +562,13 @@ class MusicRoom(Room):
             return f"Key of {FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]}"
         return f"Arrows change key: {FRIENDLY_KEY_NAMES[self.root_index]}  {LEFT} {RIGHT}"
 
-    def paper(self, g, size):
+    def paper(self, g, size, on_screen=False):
         """The kid's colors on the keyboard grid; quiet keys print as outlined letters."""
         if all(self.get_color(k) == P.TILE for row in GRID_KEYS for k in row):
             return None
-        s = paper.blank(size)
+        s = paper.blank(size, on_screen)
         with g.drawing_on(s):
-            self._draw_grid(g, s.get_rect(), on_paper=True)
+            self._draw_grid(g, s.get_rect(), on_paper=not on_screen)
         return s
 
     def _draw_grid(self, g, r, on_paper=False):

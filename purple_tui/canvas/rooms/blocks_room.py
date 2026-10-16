@@ -546,11 +546,15 @@ class BlocksRoom(Room):
     def _floor_surface(self) -> pygame.Surface:
         """Checkerboard floor on a slab, built once per cell size."""
         if self._floor is None or self._floor.get_size() != self._scene_size():
-            bg = art_room.CANVAS_BG  # a family theme can change it (canvas/theme.py)
-            self._floor = self._build_floor(P.SURFACE, bg, art_room.CANVAS_ALT, mix(bg, "#000000", 0.4), mix(bg, "#000000", 0.55))
+            self._floor = self._build_floor(on_screen=True)
         return self._floor
 
-    def _build_floor(self, ground, tile, alt, slab_front, slab_side) -> pygame.Surface:
+    def _build_floor(self, on_screen) -> pygame.Surface:
+        if on_screen:
+            bg = art_room.CANVAS_BG  # a family theme can change it (canvas/theme.py)
+            ground, tile, alt, slab_front, slab_side = P.SURFACE, bg, art_room.CANVAS_ALT, mix(bg, "#000000", 0.4), mix(bg, "#000000", 0.55)
+        else:
+            ground, tile, alt, slab_front, slab_side = paper.WHITE, "#f1f1f1", "#e4e4e4", "#c8c8c8", "#b4b4b4"
         dz, hy, sx, slab = self._metrics()
         s = pygame.Surface(self._scene_size())
         s.fill(rgb(ground))
@@ -612,14 +616,14 @@ class BlocksRoom(Room):
     def _fit(self, w, h) -> int:
         return max(6, int(min(w / (WIDTH + DEPTH * ROW_SKEW), h / (DEPTH * ROW_DEPTH + HEIGHT * BLOCK_RISE + SLAB))))
 
-    def paper(self, g, size):
-        """The build for printing, on a pale floor, nothing see-through and no cursor."""
+    def paper(self, g, size, on_screen=False):
+        """The build for printing, on a pale floor (the screen's floor on screen), nothing see-through and no cursor."""
         if not self._blocks:
             return None
         screen = self._c, self._sprites
         self._c, self._sprites = self._fit(*size), {}
         try:
-            floor = self._build_floor(paper.WHITE, "#f1f1f1", "#e4e4e4", "#c8c8c8", "#b4b4b4")
+            floor = self._build_floor(on_screen)
             return self._stack(floor, self._placed(), haze=False)
         finally:
             self._c, self._sprites = screen

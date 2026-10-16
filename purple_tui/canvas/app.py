@@ -674,13 +674,13 @@ class PurpleApp:
         """A copy of the room that draws nowhere, for redrawing work without touching the screen."""
         return type(self.rooms[room])(_Offscreen(self))
 
-    def save_artwork(self, save):
+    def save_artwork(self, save, on_screen=False):
         """A save's work at page size, drawn by an off-screen copy of its room."""
         from .paper import artwork
         try:
             scratch = self.offscreen(save.room)
             scratch.restore_timeline_state(save.state)
-            return artwork(scratch, self.g)
+            return artwork(scratch, self.g, on_screen=on_screen)
         except Exception:
             return None
 
@@ -802,10 +802,12 @@ class PurpleApp:
         """Save what's on screen: the new Save, None when it was already saved, False when there is nothing yet."""
         from . import saves
         from .paper import artwork
-        work = artwork(self.room, self.g)
-        if work is None:
+        if artwork(self.room, self.g) is None:
             return False
-        made = saves.add(self.active_room, self.room_state(self.active_room), work, self.room.LANDSCAPE)
+        room, state = self.active_room, self.room_state(self.active_room)
+        made = saves.add(room, state, self.room.LANDSCAPE)
+        self.timeline_capture_now(room)
+        self._timelines[room].mark(saves.digest(state))
         if made:
             self.key_save.changed()
         return made
@@ -852,8 +854,11 @@ class PurpleApp:
         tl = self._timelines[room]
         if len(tl) == 0:
             return
+        from . import saves
         from .panels import TimeTravelBar
-        self._time_travel = {"room": room, "index": len(tl) - 1}
+        kept = {s.digest for s in saves.list_saves(room)}
+        saved = [i for i, tags in enumerate(tl.tags()) if kept.intersection(tags)]
+        self._time_travel = {"room": room, "index": len(tl) - 1, "saved": saved}
         self.set_panel(TimeTravelBar(self))
         self.invalidate()
 
@@ -880,7 +885,7 @@ class PurpleApp:
         from .panels import stops
         tt = self._time_travel
         tl = self._timelines[tt["room"]]
-        ahead = [s for s in stops(tl.times(), time.time()) if (s - tt["index"]) * delta > 0]
+        ahead = [s for s in stops(tl.times(), time.time(), tt["saved"]) if (s - tt["index"]) * delta > 0]
         if not ahead:
             return
         index = tt["index"] = min(ahead, key=lambda s: abs(s - tt["index"]))
@@ -891,9 +896,9 @@ class PurpleApp:
         self.invalidate()
 
     def time_travel_position(self):
-        """The step on show and when each step was taken."""
+        """The step on show, when each step was taken, and which steps were saved."""
         tt = self._time_travel
-        return (tt["index"], self._timelines[tt["room"]].times()) if tt else (0, [])
+        return (tt["index"], self._timelines[tt["room"]].times(), tt["saved"]) if tt else (0, [], [])
 
     async def _handle_time_travel_action(self, action):
         if isinstance(action, NavigationAction):

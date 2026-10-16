@@ -42,8 +42,8 @@ def test_save_from_the_esc_menu_then_open_it_back():
         await _save(app)
         assert app.top is None
         [save] = saves.list_saves("art")
-        assert save.state == drawn and save.thumbnail() is not None
-        assert not any(p.suffix == ".png" and not p.name.endswith(".thumb.png") for p in save.path.parent.iterdir())
+        assert save.state == drawn and app.save_artwork(save, on_screen=True) is not None
+        assert [p.suffix for p in save.path.parent.iterdir()] == [".json"]
         app._start_fresh("art")
         assert app.room_state("art") != drawn
         library = await _open_library(app)
@@ -234,4 +234,22 @@ def test_key_writes_wait_for_a_quiet_moment_and_flush_before_power_off(monkeypat
         await type_text(app, "z")
         await _save(app)
         assert len(saves.list_saves("art")) == 1, "a full USB takes no new saves"
+    run(go())
+
+
+def test_time_travel_stars_the_saved_moment_until_the_save_is_removed():
+    async def go():
+        app = await _art_with_drawing()
+        drawn = app.room_state("art")
+        await _save(app)
+        await type_text(app, "asdf")
+        app._start_time_travel()
+        [star] = app.time_travel_position()[2]
+        app._step_time_travel(-1)
+        assert app.time_travel_position()[0] == star and app.room_state("art") == drawn
+        app._draw()
+        app._cancel_time_travel()
+        app.delete_save(saves.list_saves("art")[0])
+        app._start_time_travel()
+        assert app.time_travel_position()[2] == []
     run(go())

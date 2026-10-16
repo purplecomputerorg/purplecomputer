@@ -81,6 +81,22 @@ class TestRoomTimeline:
         fresh = RoomTimeline("art")
         assert fresh.tip() == tl.tip()
 
+    def test_tags_survive_reload_and_compaction(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+        tl = RoomTimeline("art")
+        tl.record({"n": 0})
+        tl.mark("first")
+        tl.mark("first")
+        assert RoomTimeline("art").tags() == [["first"]]
+        monkeypatch.setattr(timeline_mod, "MAX_FILE_BYTES", 500)
+        for i in range(1, 50):
+            tl.record({"n": i, "pad": "x" * 20})
+            if i == 48:
+                tl.mark("late")
+        fresh = RoomTimeline("art")
+        [tagged] = [i for i, tags in enumerate(fresh.tags()) if tags]
+        assert fresh.tags()[tagged] == ["late"] and fresh.state_at(tagged)["n"] == 48
+
     def test_dev_mode_without_override_writes_no_files(self, monkeypatch, tmp_path):
         monkeypatch.delenv("PURPLE_TIMELINE_DIR", raising=False)
         monkeypatch.setenv("PURPLE_DEV_MODE", "1")
@@ -150,11 +166,15 @@ class TestTimeTravelTrack:
         assert len([m for m in marks if m < 40]) <= panels.OLD_STRETCH_STOPS + 1
         assert marks[-6:] == list(range(40, 46))
 
+    def test_saved_steps_are_always_stops(self):
+        times = [NOW - 86400] * 40 + [NOW - 30] * 6
+        assert 17 in panels.stops(times, NOW, [17]) and 17 not in panels.stops(times, NOW)
+
     def test_draws_any_history(self):
         async def scenario():
             app = make_app()
             for index, times in ((0, [NOW]), (3, [None] * 5 + [NOW - 86400 * 2, NOW - 100, NOW])):
-                bar = panels.TimeTravelBar(SimpleNamespace(time_travel_position=lambda: (index, times)))
+                bar = panels.TimeTravelBar(SimpleNamespace(time_travel_position=lambda: (index, times, [1, index])))
                 bar.draw(app.g, app._viewport_rect())
         run(scenario())
 

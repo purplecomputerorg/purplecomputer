@@ -2,7 +2,9 @@
 
 Each room's state is a flat JSON dict (str keys). Steps are stored as NDJSON:
 a full snapshot line {"s": {...}} or a delta line {"d": {changed}, "r": [removed]}
-against the previous step, each stamped with the wall-clock second it was taken ("t"). Replaying the file yields the room's latest state,
+against the previous step, each stamped with the wall-clock second it was taken ("t").
+A {"k": tag} line tags the step before it (a save's digest, so Time Travel can
+show which moments were saved). Replaying the file yields the room's latest state,
 which is how rooms are restored after a restart; scrubbing to any step replays
 from the nearest snapshot line.
 
@@ -66,6 +68,9 @@ class RoomTimeline:
                 break  # torn tail: keep everything before it
             if not self._steps and "s" not in step:
                 continue  # history must start from a snapshot
+            if isinstance(step.get("k"), str):
+                self._steps[-1].setdefault("k", []).append(step["k"])
+                continue
             self._steps.append(step)
         self._tip = self.state_at(len(self._steps) - 1) if self._steps else None
 
@@ -81,6 +86,17 @@ class RoomTimeline:
         """When each step was taken (epoch seconds), None for steps from before stamping."""
         self.load()
         return [step.get("t") for step in self._steps]
+
+    def tags(self) -> list:
+        self.load()
+        return [step.get("k", []) for step in self._steps]
+
+    def mark(self, tag: str) -> None:
+        """Tag the newest step."""
+        self.load()
+        if self._steps and tag not in self._steps[-1].get("k", []):
+            self._steps[-1].setdefault("k", []).append(tag)
+            self._append_to_disk({"k": tag})
 
     def state_at(self, index: int) -> dict:
         """Replay to the state after step `index` (from the nearest snapshot)."""
@@ -129,7 +145,8 @@ class RoomTimeline:
     def _compact(self) -> None:
         """Drop the oldest half of history and rewrite the file atomically."""
         cut = len(self._steps) // 2
-        kept = [{"s": self.state_at(cut), "t": self._steps[cut].get("t")}] + self._steps[cut + 1:]
+        first = {k: v for k, v in self._steps[cut].items() if k in ("t", "k")}
+        kept = [{"s": self.state_at(cut), **first}] + self._steps[cut + 1:]
         self._steps = kept
         path = self._path()
         if path is None:

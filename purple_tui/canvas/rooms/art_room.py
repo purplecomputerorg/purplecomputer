@@ -754,17 +754,19 @@ class ArtRoom(Room):
     def _painted(cell) -> bool:
         return bool(cell) and (cell[2] != CANVAS_BG or cell[0] == BRUSH_CHAR)
 
-    def paper(self, g, size):
-        """The picture for printing: paint and letters, unpainted cells left white."""
+    def paper(self, g, size, on_screen=False):
+        """The picture for printing: paint and letters, unpainted cells left white (or the checkerboard on screen)."""
         if not self.has_content():
             return None
         c = min(size[0] // COLS, size[1] // ROWS)
         s = paper.blank((c * COLS, c * ROWS))
-        for (x, y), cell in self._grid.items():
-            if 0 <= x < COLS and 0 <= y < ROWS and self._painted(cell):
-                s.fill(rgb(cell[2]), (x * c, y * c, c, c))
+        for x in range(COLS):
+            for y in range(ROWS):
+                cell = self._grid.get((x, y))
+                if self._painted(cell) or on_screen:
+                    s.fill(rgb(cell[2] if self._painted(cell) else self._ground(x, y)), (x * c, y * c, c, c))
         with g.drawing_on(s):
-            self._draw_letters(g, 0, 0, c, on_paper=True)
+            self._draw_letters(g, 0, 0, c, on_paper=not on_screen)
         return s
 
     @staticmethod

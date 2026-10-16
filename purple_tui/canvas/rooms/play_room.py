@@ -460,7 +460,7 @@ class PlayRoom(Room):
                               dim_to=ground, line_gap=self._row_gap(g))
             y += self._part_height(g, e, part, width) + self._row_gap(g)
 
-    def paper(self, g, size):
+    def paper(self, g, size, on_screen=False):
         """The newest asks and answers that fit the page, oldest at the top,
         drawn at screen size and enlarged so they read from across a room."""
         w, h = (round(n / PAPER_ZOOM) for n in size)
@@ -473,10 +473,10 @@ class PlayRoom(Room):
             used += eh + gap
         if not rows:
             return None
-        s = paper.blank((w, h))
+        s = paper.blank((w, h), on_screen)
         y = 0
         with g.drawing_on(s):
             for e, eh in reversed(rows):
-                self._draw_entry(g, e, 0, y, w, (paper.INK, paper.INK_MUTED, paper.WHITE))
+                self._draw_entry(g, e, 0, y, w, None if on_screen else (paper.INK, paper.INK_MUTED, paper.WHITE))
                 y += eh + self._gap_above(g, e)
         return pygame.transform.smoothscale(s, size)

@@ -44,9 +44,6 @@ class PictureTile:
             self._state = art.timeline_state()
         return self._state
 
-    def thumbnail(self):
-        return self.app.save_artwork(self)
-
     def when(self) -> str:
         name = self.picture.title
         return f"{ICON_HOME} {name if len(name) <= LABEL_CHARS else name[:LABEL_CHARS - 1] + '…'}"
@@ -136,7 +133,7 @@ class Library(Overlay):
     def _thumb(self, tile, w: int, h: int):
         key = (tile.id, w, h)
         if key not in self._thumbs:
-            source = tile.thumbnail()
+            source = self.app.save_artwork(tile, on_screen=True)
             self._thumbs[key] = None if source is None else fit(source, w, h)
         return self._thumbs[key]
 

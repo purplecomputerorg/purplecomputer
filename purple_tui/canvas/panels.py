@@ -154,6 +154,7 @@ _INSTRUMENT_NAMES = ['marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', '
 _INSTRUMENT_PREFIX = re.compile(r'.*\b(?:choose|select|use|play|instrument)\s+\S*$', re.IGNORECASE)
 _DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
 _MAX_CONTEXT_RESULTS = 7
+ICON_STAR = "\U000F04CE"  # nf-md-star
 SESSION_GAP_S = 20 * 60   # a pause this long starts a new stretch on the Time Travel track
 MAX_STRETCHES = 7
 OLD_STRETCH_STOPS = 5
@@ -622,7 +623,7 @@ class TimeTravelBar:
     """Every step on one track, split into stretches where the kid took a
     break. A stretch is as wide as the log of its steps (today's twice that),
     so months of old history never crowd out today; the words say how long
-    ago it really was."""
+    ago it really was. A star marks each moment the kid saved."""
     kind = "time"
 
     def __init__(self, app):
@@ -632,17 +633,19 @@ class TimeTravelBar:
         return g.vh(11)
 
     def draw(self, g, rect):
-        index, times = self.app.time_travel_position()
+        index, times, saved = self.app.time_travel_position()
         if not times:
             return
         now = time.time()
         pad, cy = g.em(2), rect.y + g.vh(3)
         when = "Now" if index == len(times) - 1 else time_ago(times[index], now)
+        if index in saved:
+            when = f"{ICON_STAR}  Saved" + ("" if when == "Now" else f" {when.lower()}")
         g.draw_text(f"{ICON_TIME_TRAVEL}  Time Travel", g.vh(2.1), rect.x + pad, cy, "mono-heavy", P.ACCENT, anchor="midleft")
         g.draw_text(when, g.vh(2.6), rect.centerx, cy, "mono-heavy", P.TEXT, anchor="center")
         g.draw_text("Enter: keep this    Esc: never mind", g.vh(1.8), rect.right - pad, cy, "mono", P.MUTED, anchor="midright")
         track = pygame.Rect(rect.x + pad, rect.y + g.vh(5.2), rect.w - 2 * pad, g.vh(3))
-        labels = self._draw_track(g, track, index, times, stretches(times, now))
+        labels = self._draw_track(g, track, index, times, saved, stretches(times, now))
         last_left = track.right
         for label, left, right, here in reversed(labels):   # newest first, so Today always fits
             r = g.text(label, g.vh(1.7), "mono").get_rect(midtop=((left + right) // 2, track.bottom + g.vh(0.4)))
@@ -650,8 +653,8 @@ class TimeTravelBar:
                 g.draw_text(label, g.vh(1.7), r.x, r.y, "mono-bold" if here else "mono", P.MUTED if here else P.DIM)
                 last_left = r.x
 
-    def _draw_track(self, g, track, index, times, runs) -> list:
-        """The arrows, stretches and knob, drawn big and scaled down smooth.
+    def _draw_track(self, g, track, index, times, saved, runs) -> list:
+        """The arrows, stretches, stars and knob, drawn big and scaled down smooth.
         Returns each day's (label, left, right, holds the knob) span."""
         k = 3
         surf = pygame.Surface((track.w * k, track.h * k), pygame.SRCALPHA)
@@ -663,12 +666,14 @@ class TimeTravelBar:
         gap = g.em(1.2) * k
         weights = [(1 + math.log2(end - begin)) * (2 if label == "Today" else 1) for begin, end, label in runs]
         unit = (x1 - x0 - gap * (len(runs) - 1)) / sum(weights)
-        x, knob_x, days = x0, x0, []
+        x, knob_x, days, stars = x0, x0, [], []
         for (begin, end, label), w in zip(runs, weights):
             span = pygame.Rect(round(x), cy - bar // 2, round(w * unit), bar)
             steps = end - begin
+            at = lambda i: span.centerx if steps == 1 else span.x + bar // 2 + (span.w - bar) * (i - begin) // (steps - 1)
             if begin <= index < end:
-                knob_x = span.centerx if steps == 1 else span.x + bar // 2 + (span.w - bar) * (index - begin) // (steps - 1)
+                knob_x = at(index)
+            stars += [at(i) for i in saved if begin <= i < end]
             pygame.draw.rect(surf, rgb(P.FIELD), span, border_radius=bar // 2)
             past = span.w if index >= end - 1 else knob_x - span.x if index >= begin else 0
             if past:
@@ -679,10 +684,20 @@ class TimeTravelBar:
             else:
                 days.append((label, span.x // k, span.right // k, here))
             x += w * unit + gap
+        for sx in stars:
+            _star(surf, sx, cy, knob * 1.15, P.ACCENT, P.ON_PRIMARY, k * 2)
         pygame.draw.circle(surf, rgb(P.ON_PRIMARY), (knob_x, cy), knob + k * 2)
         pygame.draw.circle(surf, rgb(P.TEXT), (knob_x, cy), knob)
         g.surface.blit(pygame.transform.smoothscale(surf, track.size), track)
         return [(label, track.x + left, track.x + right, here) for label, left, right, here in days]
+
+
+def _star(surf, x, y, r, fill, edge, edge_w):
+    """Five points, drawn over a slightly larger copy in edge so it stands off the bar."""
+    for color, radius in ((edge, r + edge_w), (fill, r)):
+        points = [(x + radius * (1 if j % 2 == 0 else 0.45) * math.sin(j * math.pi / 5),
+                   y - radius * (1 if j % 2 == 0 else 0.45) * math.cos(j * math.pi / 5)) for j in range(10)]
+        pygame.draw.polygon(surf, rgb(color), points)
 
 
 def _ago(n: int, unit: str) -> str:
@@ -729,12 +744,12 @@ def stretches(times, now) -> list:
     return runs
 
 
-def stops(times, now) -> list:
-    """The steps ← and → land on: every step of the newest stretch, but only a
-    few evenly spaced ones (always its last) in each older one, so the knob
-    crosses old history in a handful of presses."""
+def stops(times, now, saved=()) -> list:
+    """The steps ← and → land on: every step of the newest stretch and every
+    saved one, but only a few evenly spaced ones (always its last) in each
+    older one, so the knob crosses old history in a handful of presses."""
     runs = stretches(times, now)
-    marks = {0, *range(runs[-1][0], runs[-1][1])}
+    marks = {0, *saved, *range(runs[-1][0], runs[-1][1])}
     for begin, end, _ in runs[:-1]:
         n = end - begin
         k = min(n, OLD_STRETCH_STOPS)

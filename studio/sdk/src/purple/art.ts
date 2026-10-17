@@ -65,6 +65,10 @@ export function canvasOrigin(cols: number, rows: number): [x0: number, y0: numbe
 }
 
 export type PaintOp = [x: number, y: number, hex: string];
+// A letter written over the paint, in its ink.
+export type LetterOp = [x: number, y: number, char: string, ink: string];
+// What a pack picture puts on the Art canvas.
+export interface ArtPicture { ops: PaintOp[]; letters: LetterOp[] }
 
 export function cellsToOps(cells: string[][]): PaintOp[] {
   const [x0, y0] = canvasOrigin(cells[0].length, cells.length);

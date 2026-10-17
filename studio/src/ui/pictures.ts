@@ -1,5 +1,5 @@
 import type { RoomSetup } from "../live/boot";
-import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
+import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, onScreen, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
 import { changed, draft, freeName, titleOf, withSample } from "../state";
 import { field, h } from "./dom";
 import { liveScreen } from "./live";
@@ -75,8 +75,51 @@ function more(current: Picture | null): HTMLElement[] {
 const card = (src: string, alt: string, ...body: (Node | null)[]) =>
   h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px;align-items:flex-start" }, h("img", { class: "photo", src, alt }), h("div", { class: "stack", style: "flex:1;min-width:200px" }, ...body)));
 
+const showPicture = (pic: Picture, writing = false) => liveScreen().show({ room: "art", picture: onScreen(pic), letters: writing });
+
+// Paint or Write words on Purple's screen, and keeping what's there as the picture.
+function paintedField(pic: Picture): { element: HTMLElement; render: () => void } {
+  const live = liveScreen();
+  const mode = (label: string, writing: boolean) => h("button", { type: "button", onclick: () => {
+    if (live.place.writing !== writing) live.key("tab");
+    live.engage();
+  } }, label);
+  const paint = mode("Paint", false);
+  const write = mode("Write words", true);
+  const how = h("p", { class: "dim small" });
+  const kept = h("div", { class: "row", style: "gap:12px" });
+  const keep = async () => {
+    pic.painted = await live.picture();
+    pic.sample = false;
+    changed();
+    showPicture(pic, live.place.writing);
+    render();
+  };
+  const photoOnly = () => {
+    pic.painted = undefined;
+    changed();
+    showPicture(pic);
+    render();
+  };
+  const render = () => {
+    const writing = live.place.writing;
+    paint.setAttribute("aria-pressed", String(!writing));
+    write.setAttribute("aria-pressed", String(writing));
+    how.textContent = writing
+      ? "Type on Purple's screen to write on the picture. The arrows move where the words go. Tab goes back to painting."
+      : "Type on Purple's screen to paint on the picture. It's just for trying until you keep it.";
+    kept.replaceChildren(...(pic.painted
+      ? [h("span", { class: "added" }, "✓ Your painting is part of this picture"), h("button", { class: "btn small", onclick: keep }, "Keep it again"),
+        h("button", { class: "linkbtn dim small", onclick: photoOnly }, "Back to just the photo")]
+      : [h("button", { class: "btn small", onclick: keep }, "Keep what I painted")]));
+  };
+  live.onWriting = render;
+  render();
+  return { element: h("div", { class: "stack" }, h("div", { class: "room-buttons crop-modes" }, paint, write), how, kept), render };
+}
+
 // The whole photo on the screen, or a canvas-shaped box of it to drag and resize by its corner.
-function cropper(pic: Picture): HTMLElement {
+function cropper(pic: Picture, onCrop: () => void): HTMLElement {
   const { width: W, height: H } = pic.bitmap;
   const handle = h("i", { class: "crop-handle", title: "Drag to resize" }, "⤡");
   const box = h("div", { class: "crop-box" }, h("i", { class: "crop-handle crop-move", title: "Drag to move" }, "✥"), handle);
@@ -93,11 +136,13 @@ function cropper(pic: Picture): HTMLElement {
     if (c) Object.assign(box.style, { left: pct(c.x, W), top: pct(c.y, H), width: pct(c.w, W), height: pct(c.h, H) });
   };
   const apply = (c?: Crop) => {
+    if (pic.painted && !confirm("Changing this takes off what you painted and wrote on the picture. Change it anyway?")) return show();
     cropTo(pic, c);
     pic.sample = false;
     show();
     changed();
-    liveScreen().show({ room: "art", picture: pic.ops });
+    onCrop();
+    showPicture(pic);
   };
   const drag = (e: PointerEvent) => {
     e.preventDefault();
@@ -136,34 +181,37 @@ function pictureView(pic: Picture): HTMLElement {
     changed();
     location.hash = "#pictures";
   };
+  const painted = paintedField(pic);
   return h("section", {},
     card(pic.sourceUrl, ex?.alt ?? "",
       tryBar(pic, remove),
       ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
       field("Picture name", name),
-      h("div", { class: "field" }, h("span", {}, "On the screen"), cropper(pic)),
+      h("div", { class: "field" }, h("span", {}, "On the screen"), cropper(pic, painted.render)),
+      h("div", { class: "field" }, h("span", {}, "Painting and words"), painted.element),
       h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
     ...more(pic));
 }
 
-const caption = "Type on the keyboard to paint right on top of the picture, the way your kid will.";
+const caption = "Type on the keyboard to paint on the picture, the way your kid will. It's just for trying and won't go in your Purple Pack.";
 
 export function picturesView(item: string | null): View {
   // Purple's screen shows the picture painted on, added or not; Open lists only the added ones.
   const setup: RoomSetup = { room: "art" };
-  const view = (title: string, editor: HTMLElement): View => ({ title, editor, live: setup, caption });
+  const cleanup = () => (liveScreen().onWriting = () => {});
+  const view = (title: string, editor: HTMLElement, text = caption): View => ({ title, editor, live: setup, caption: text, cleanup });
   const pic = item ? draft.pictures.find((p) => p.name === item) : null;
   if (pic) {
-    setup.picture = pic.ops;
-    return view(titleOf(pic), pictureView(pic));
+    setup.picture = onScreen(pic);
+    return view(titleOf(pic), pictureView(pic), "Paint or write on the picture, the way your kid will. Only what you keep goes in your Purple Pack.");
   }
   const first = draft.pictures.find((p) => p.kept) ?? draft.pictures[0];
-  setup.picture = first?.ops;
+  setup.picture = first && onScreen(first);
   // With nothing of their own yet, the screen shows one of ours without trying it.
   const here = location.hash;
   if (!first) void examplePicture(EXAMPLES[0]).then((p) => {
     if (location.hash !== here) return;
-    setup.picture = p.ops;
+    setup.picture = onScreen(p);
     liveScreen().show(setup);
   });
   return view("Pictures", h("section", {},

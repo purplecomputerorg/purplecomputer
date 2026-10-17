@@ -4,16 +4,18 @@ from ..secret_doodle import build_ops
 from ..secret_photo import OPS
 
 
-def paint_picture(art, cells: list) -> None:
-    """Paint (x, y, color) cells of the Art grid onto a fresh canvas."""
+def paint_picture(art, cells: list, letters: list = ()) -> None:
+    """Paint (x, y, color) cells of the Art grid onto a fresh canvas, then write (x, y, char, ink) letters over them."""
     art.clear()
     for x, y, k in cells:
         art.paint_at(x, y, k)
+    for x, y, ch, ink in letters:
+        art.write_at(x, y, ch, ink)
 
 
-def paint_cells(app, cells: list) -> None:
+def paint_cells(app, cells: list, letters: list = ()) -> None:
     app.action_switch_room("art")
-    paint_picture(app.rooms["art"], cells)
+    paint_picture(app.rooms["art"], cells, letters)
     app.invalidate()
 
 

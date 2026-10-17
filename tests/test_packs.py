@@ -46,7 +46,7 @@ def make_pack(root: Path, pack_id: str = "the-tests-pack", fmt: int | None = 1, 
     write_wav(c / "voice" / "hi_there.wav")
     (c / "pictures").mkdir()
     (c / "pictures" / "palm.json").write_text(json.dumps({"name": "palm", "ops": [[43, 0, "#ffffff"], [44, 1, "#fefefe"]]}))
-    (c / "pictures" / "grandmas-dog.json").write_text(json.dumps({"name": "Grandma's dog", "ops": [[0, 0, "#000000"]]}))
+    (c / "pictures" / "grandmas-dog.json").write_text(json.dumps({"name": "Grandma's dog", "ops": [[0, 0, "#000000"]], "letters": [[1, 0, "D", "#ffffff"]]}))
     (c / "rooms").mkdir()
     (c / "rooms" / "farm.py").write_text('from purple import *\n\ndef on_key(key):\n    show("🐄")\n    say("cow")\n')
     (c / "rooms" / "farm.blocks.json").write_text("{}")
@@ -78,9 +78,17 @@ class TestLoader:
         assert [(i.id, i.name, i.path) for i in packs.instruments] == [("kitchen", "Kitchen", c / "kitchen")]
         assert packs.instrument_dir("kitchen") == c / "kitchen"
         assert packs.instrument_dir("marimba") is None
-        assert [(p.name, p.title, p.ops) for p in packs.pictures] == [
-            ("grandmas-dog", "Grandma's dog", [(0, 0, "#000000")]), ("palm", "Palm", [(43, 0, "#ffffff"), (44, 1, "#fefefe")])]
+        assert [(p.name, p.title, p.ops, p.letters) for p in packs.pictures] == [
+            ("grandmas-dog", "Grandma's dog", [(0, 0, "#000000")], [(1, 0, "D", "#ffffff")]),
+            ("palm", "Palm", [(43, 0, "#ffffff"), (44, 1, "#fefefe")], [])]
         assert [(r.name, r.title, r.path) for r in packs.rooms] == [("farm", "Farm", c / "rooms" / "farm.py")]
+
+    def test_picture_with_a_bad_letter_is_not_listed(self, tmp_path):
+        d = make_pack(tmp_path)
+        (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [], "letters": [[0, 0, "AB", "#ffffff"]]}))
+        cm = ContentManager(packs_dir=tmp_path)
+        cm.load_all()
+        assert [p.name for p in cm.pictures] == ["grandmas-dog"]
 
     def test_room_with_a_syntax_error_is_refused_by_the_installer(self, tmp_path):
         d = make_pack(tmp_path)
@@ -159,6 +167,7 @@ class TestCheckPack:
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "marimba", "params": {"reverb": 1}})), "no parameter 'reverb'"),
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "piano"})), "base must be one of"),
         (lambda d: (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [[999, 0, "#ffffff"]]})), "off the 56 by 24 Art grid"),
+        (lambda d: (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [], "letters": [[0, 0, " ", "#ffffff"]]})), "letters must be a list"),
         (lambda d: (d / "manifest.json").write_text(json.dumps({"id": "x", "name": "x", "version": "1.0", "type": "emoji"})), "Invalid version"),
         (lambda d: (d / "manifest.json").write_text(json.dumps({"id": "../x", "name": "x", "version": "1.0.0", "type": "emoji"})), "Invalid pack id"),
         (lambda d: (d / "manifest.json").write_text(json.dumps({"id": "x", "name": "x", "version": "1.0.0", "type": "emoji", "format": 9})), "newer format"),

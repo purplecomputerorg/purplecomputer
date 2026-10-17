@@ -86,6 +86,16 @@ describe("pack assembly", () => {
     expect((await buildEntries(spec)).map((e) => e.path)).toEqual(["manifest.json", "content/emoji.json", "content/rankings.txt"]);
   });
 
+  it("writes a picture's letters beside its paint, and leaves them out when there are none", async () => {
+    const spec: PackSpec = { ...base, pictures: [
+      { name: "t-rex", title: "T. rex", ops: [[0, 0, "#00ff00"]], letters: [[1, 0, "T", "#ffffff"]] },
+      { name: "palm", ops: [[0, 0, "#00ff00"]], letters: [] },
+    ] };
+    const read = async (path: string) => JSON.parse(new TextDecoder().decode((await buildEntries(spec)).find((e) => e.path === path)!.data));
+    expect(await read("content/pictures/t-rex.json")).toEqual({ name: "T. rex", ops: [[0, 0, "#00ff00"]], letters: [[1, 0, "T", "#ffffff"]] });
+    expect(await read("content/pictures/palm.json")).toEqual({ name: "palm", ops: [[0, 0, "#00ff00"]] });
+  });
+
   it("writes a room's Python next to the blocks it came from, and the library it runs on", async () => {
     const source = "from purple import *\nshow('🐄')";
     const spec: PackSpec = { ...base, rooms: [{ name: "farm", source, blocks: { blocks: { languageVersion: 0, blocks: [] } } }] };

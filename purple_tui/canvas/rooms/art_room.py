@@ -551,6 +551,17 @@ class ArtRoom(Room):
             self._last_key_char, self._last_key_color = brush
         self._paint_at_cursor()
 
+    def write_at(self, x: int, y: int, char: str, ink: str):
+        """Write one letter in that ink over whatever is painted there (pack pictures)."""
+        pos = (x, y)
+        self._set_cell(pos, char, ink, self._get_cell_bg(pos))
+
+    def picture(self) -> tuple[list, list]:
+        """The canvas as a pack picture: its painted cells' colors, and its letters in their inks."""
+        cells = sorted(self._grid.items())
+        return ([[x, y, bg] for (x, y), (_, _, bg) in cells if (x, y) in self._painted_positions],
+                [[x, y, ch, fg] for (x, y), (ch, fg, _) in cells if ch not in ("", " ", BRUSH_CHAR)])
+
     def _mix_into_last(self, held_key: str, char: str) -> bool:
         """A chord: the cell the held key just painted takes this key's color
         mixed in, and the brush becomes the mix. Holding on, each next key

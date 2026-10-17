@@ -12,7 +12,7 @@ Purplepacks are content-only (JSON + assets) - NO executable Python code.
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import Optional
@@ -68,10 +68,11 @@ class Room:
 
 @dataclass
 class Picture:
-    """A pack picture: content/pictures/<name>.json, paint ops for the Art canvas."""
+    """A pack picture: content/pictures/<name>.json, paint ops for the Art canvas and letters written over them."""
     name: str
     ops: list[tuple[int, int, str]]
     label: str = ""  # the name as the family typed it, apostrophes and all
+    letters: list[tuple[int, int, str, str]] = field(default_factory=list)
 
     @property
     def title(self) -> str:
@@ -382,8 +383,11 @@ class ContentManager:
         for spec in sorted((content_dir / "pictures").glob("*.json")):
             data = _read_json(spec)
             ops = data.get("ops") if isinstance(data, dict) else None
-            if isinstance(ops, list) and all(_is_paint_op(op) for op in ops):
-                self.pictures.append(Picture(spec.stem, [(x, y, c) for x, y, c in ops], typed_name(data, spec.stem)))
+            letters = data.get("letters", []) if isinstance(data, dict) else None
+            if (isinstance(ops, list) and all(is_paint_op(op) for op in ops)
+                    and isinstance(letters, list) and all(is_letter_op(op) for op in letters)):
+                self.pictures.append(Picture(spec.stem, [tuple(op) for op in ops], typed_name(data, spec.stem),
+                                             [tuple(op) for op in letters]))
 
     def pack_dirs(self, sub: str) -> list[Path]:
         """content/<sub>/ in every user pack that has one, last installed first,
@@ -791,10 +795,25 @@ def _read_json(path: Path):
         return None
 
 
-def _is_paint_op(op) -> bool:
-    return (isinstance(op, list) and len(op) == 3
-            and isinstance(op[0], int) and isinstance(op[1], int)
-            and isinstance(op[2], str) and op[2].startswith("#") and len(op[2]) == 7)
+def _on_grid(op, size: int) -> bool:
+    from .constants import ART_COLS, ART_ROWS
+    return (isinstance(op, list) and len(op) == size
+            and isinstance(op[0], int) and 0 <= op[0] < ART_COLS
+            and isinstance(op[1], int) and 0 <= op[1] < ART_ROWS)
+
+
+def _is_hex(v) -> bool:
+    return isinstance(v, str) and len(v) == 7 and v[0] == "#"
+
+
+def is_paint_op(op) -> bool:
+    """[x, y, "#rrggbb"] on the Art grid."""
+    return _on_grid(op, 3) and _is_hex(op[2])
+
+
+def is_letter_op(op) -> bool:
+    """[x, y, "A", "#rrggbb"]: a letter written on the Art grid, in that ink."""
+    return _on_grid(op, 4) and isinstance(op[2], str) and len(op[2]) == 1 and not op[2].isspace() and _is_hex(op[3])
 
 
 # Global content manager instance

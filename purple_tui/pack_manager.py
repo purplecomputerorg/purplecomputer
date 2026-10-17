@@ -23,7 +23,7 @@ import wave
 from pathlib import Path
 from typing import Optional
 
-from .content import PACK_FORMAT, ROOM_LIB, ROOM_NAME, read_manifest
+from .content import PACK_FORMAT, ROOM_LIB, ROOM_NAME, is_letter_op, is_paint_op, read_manifest
 
 # Valid content-only pack types (no executable code)
 VALID_PACK_TYPES = ['emoji', 'sounds', 'stories', 'language']
@@ -245,12 +245,11 @@ def _check_pictures(content: Path) -> list[str]:
         if not isinstance(ops, list):
             problems.append(f"{rel}: needs an ops list of [x, y, \"#rrggbb\"]")
             continue
-        bad = [op for op in ops if not (isinstance(op, list) and len(op) == 3
-                                        and isinstance(op[0], int) and 0 <= op[0] < ART_COLS
-                                        and isinstance(op[1], int) and 0 <= op[1] < ART_ROWS
-                                        and isinstance(op[2], str) and len(op[2]) == 7 and op[2][0] == '#')]
-        if bad:
+        if bad := [op for op in ops if not is_paint_op(op)]:
             problems.append(f"{rel}: {len(bad)} ops are off the {ART_COLS} by {ART_ROWS} Art grid or not [x, y, \"#rrggbb\"]")
+        letters = data.get('letters', [])
+        if not isinstance(letters, list) or any(not is_letter_op(op) for op in letters):
+            problems.append(f"{rel}: letters must be a list of [x, y, \"A\", \"#rrggbb\"] on the {ART_COLS} by {ART_ROWS} Art grid")
     return problems
 
 

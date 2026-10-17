@@ -1,7 +1,7 @@
 // Builds a .purplepack from a plain description. Everything Purple reads is described
 // in studio/PACK_FORMAT.md; this is the one place that knows the file layout.
 import exported from "./purple/export.json";
-import { type PaintOp } from "./purple/art";
+import { type LetterOp, type PaintOp } from "./purple/art";
 import { LETTER_FILES, SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
 import { SYNTH_RATE, renderNote, type BaseName, type Params } from "./purple/synth";
 import { themeJson, type Theme } from "./purple/theme";
@@ -11,7 +11,7 @@ import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 
 // title: the name as the family typed it, which Purple shows as is; name is the file name.
 // source: the photo Studio crops from, kept for reopening; Purple never reads it.
-export interface PackPicture { name: string; title?: string; ops: PaintOp[]; png?: Uint8Array; source?: Uint8Array }
+export interface PackPicture { name: string; title?: string; ops: PaintOp[]; letters?: LetterOp[]; png?: Uint8Array; source?: Uint8Array }
 export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params }
 // content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Blockly workspace it came from rides beside it.
 export interface PackRoom { name: string; source: string; blocks?: unknown }
@@ -82,7 +82,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   for (const p of spec.phrases) entries.push({ path: phrasePath(p.text), data: encodeWav(p.clip) });
 
   for (const pic of spec.pictures) {
-    entries.push(json(`content/pictures/${pic.name}.json`, { name: pic.title ?? pic.name, ops: pic.ops }));
+    entries.push(json(`content/pictures/${pic.name}.json`, { name: pic.title ?? pic.name, ops: pic.ops, ...(pic.letters?.length ? { letters: pic.letters } : {}) }));
     if (pic.png) entries.push({ path: picturePngPath(pic.name), data: pic.png });
     if (pic.source) entries.push({ path: pictureSourcePath(pic.name), data: pic.source });
   }

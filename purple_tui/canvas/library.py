@@ -41,7 +41,7 @@ class PictureTile:
     def state(self) -> dict:
         if self._state is None:
             art = self.app.offscreen("art")
-            paint_picture(art, self.picture.ops)
+            paint_picture(art, self.picture.ops, self.picture.letters)
             self._state = art.timeline_state()
         return self._state
 

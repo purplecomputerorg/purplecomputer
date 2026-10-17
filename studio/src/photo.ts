@@ -5,11 +5,12 @@ import greatWave from "./assets/great-wave.jpg";
 import house from "./assets/sample-drawing.svg";
 import { slug } from "@sdk/pack";
 import type { Keepable } from "./state";
-import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "@sdk/purple/art";
+import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, cellsToOps, fitToCanvas, type ArtPicture, type PaintOp } from "@sdk/purple/art";
 
 // crop: the part of the photo on the screen, in its own pixels and the Art canvas's shape; none is the whole photo.
+// painted: Purple's screen as kept after painting or writing on the photo, which goes in the pack in its place.
 export interface Crop { x: number; y: number; w: number; h: number }
-export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string; bitmap: ImageBitmap; crop?: Crop }
+export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string; bitmap: ImageBitmap; crop?: Crop; painted?: ArtPicture }
 
 const hex = (r: number, g: number, b: number) =>
   "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
@@ -86,8 +87,10 @@ function pictureFromBitmap(bitmap: ImageBitmap, name: string, sourceUrl: string)
   return pic;
 }
 
+// A new crop is a new painting of the photo, so whatever was kept from the screen goes.
 export function cropTo(pic: Picture, crop?: Crop) {
   pic.crop = crop;
+  pic.painted = undefined;
   const { x, y, w, h } = crop ?? { x: 0, y: 0, w: pic.bitmap.width, h: pic.bitmap.height };
   const [sw, sh] = [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))];
   const ctx = new OffscreenCanvas(sw, sh).getContext("2d")!;
@@ -114,20 +117,17 @@ export function clampCrop(c: Crop, w: number, h: number): Crop {
   return { x: clamp(c.x, 0, w - cw), y: clamp(c.y, 0, h - ch), w: cw, h: ch };
 }
 
-// The picture on the Art grid, centered the way Purple paints it; a cell is cellPx wide.
-export function paintCells(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, cells: string[][], cellPx: number, bg: string | null = CANVAS_BG) {
+// What Purple paints for a picture: the photo, or what was kept from its screen.
+export const onScreen = (pic: Picture): ArtPicture => pic.painted ?? { ops: pic.ops, letters: [] };
+
+type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+function fillOps(ctx: Ctx2D, ops: PaintOp[], cellPx: number) {
   const ch = cellPx * CELL_ASPECT;
-  if (bg) {
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * ch);
+  for (const [x, y, color] of ops) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x * cellPx, y * ch, cellPx, ch);
   }
-  const [x0, y0] = canvasOrigin(cells[0].length, cells.length);
-  cells.forEach((row, cy) =>
-    row.forEach((color, cx) => {
-      ctx.fillStyle = color;
-      ctx.fillRect((x0 + cx) * cellPx, (y0 + cy) * ch, cellPx, ch);
-    }),
-  );
 }
 
 // The photo a pack keeps so Studio can crop again after reopening, at most SOURCE_MAX pixels a side. Drawing it
@@ -148,8 +148,33 @@ export async function sourceJpeg(pic: Picture): Promise<{ jpg: Uint8Array; crop?
   return { jpg: new Uint8Array(await blob.arrayBuffer()), crop: scaleCrop(pic.crop, s) };
 }
 
-export async function previewPng(cells: string[][], cellPx = 10): Promise<Uint8Array> {
+export const photoFromBlob = async (blob: Blob): Promise<Pick<Picture, "bitmap" | "sourceUrl">> =>
+  ({ bitmap: await createImageBitmap(blob), sourceUrl: await dataUrl(blob) });
+
+// A reopened picture's photo painted back from its cells, for packs made before the photo rode along.
+export async function photoFromCells(cells: string[][], cellPx = 10): Promise<Pick<Picture, "bitmap" | "sourceUrl">> {
+  const canvas = new OffscreenCanvas(cells[0].length * cellPx, cells.length * cellPx * CELL_ASPECT);
+  fillOps(canvas.getContext("2d")!, cells.flatMap((row, y) => row.map((hex, x): PaintOp => [x, y, hex])), cellPx);
+  return photoFromBlob(await canvas.convertToBlob({ type: "image/png" }));
+}
+
+// A picture on the Art grid the way Purple paints it; a cell is cellPx wide.
+export function paintPicture(ctx: Ctx2D, { ops, letters }: ArtPicture, cellPx: number) {
+  const ch = cellPx * CELL_ASPECT;
+  ctx.fillStyle = CANVAS_BG;
+  ctx.fillRect(0, 0, CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * ch);
+  fillOps(ctx, ops, cellPx);
+  ctx.font = `bold ${Math.round(ch * 0.85)}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const [x, y, char, ink] of letters) {
+    ctx.fillStyle = ink;
+    ctx.fillText(char, (x + 0.5) * cellPx, (y + 0.5) * ch);
+  }
+}
+
+export async function previewPng(art: ArtPicture, cellPx = 10): Promise<Uint8Array> {
   const canvas = new OffscreenCanvas(CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * cellPx * CELL_ASPECT);
-  paintCells(canvas.getContext("2d")!, cells, cellPx);
+  paintPicture(canvas.getContext("2d")!, art, cellPx);
   return new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
 }

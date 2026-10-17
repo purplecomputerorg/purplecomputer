@@ -54,7 +54,7 @@ def test_save_from_the_esc_menu_then_open_it_back():
 
 def test_pack_pictures_open_in_art_only_and_cannot_be_removed(monkeypatch):
     from purple_tui.content import Picture, get_content
-    monkeypatch.setattr(get_content(), "pictures", [Picture("palm-tree", [(2, 3, "#ff0000")])])
+    monkeypatch.setattr(get_content(), "pictures", [Picture("palm-tree", [(2, 3, "#ff0000")], letters=[(2, 3, "P", "#ffffff"), (5, 5, "Q", "#000000")])])
 
     async def go():
         app = await _art_with_drawing()
@@ -65,7 +65,8 @@ def test_pack_pictures_open_in_art_only_and_cannot_be_removed(monkeypatch):
         await press(app, "backspace", hold=DELETE_HOLD_S + 0.2)
         assert library.tiles == [tile]
         await press(app, "enter")
-        assert app.room_state("art")["c:2,3"][2] == "#ff0000"
+        assert app.room_state("art")["c:2,3"][:3] == ["P", "#ffffff", "#ff0000"]
+        assert app.rooms["art"].picture() == ([[2, 3, "#ff0000"]], [[2, 3, "P", "#ffffff"], [5, 5, "Q", "#000000"]])
         assert app._timelines["art"].tip() != drawn, "the picture is a new Time Travel step"
         library.close()
         app.action_switch_room("music")

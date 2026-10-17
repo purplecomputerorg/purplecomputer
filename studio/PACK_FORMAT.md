@@ -20,7 +20,7 @@ Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple
 - `id`, `name`, `version`, `type` are required. `id` is the directory name the pack installs under, so it must be a single plain path segment, and a pack with the same id replaces it. Studio makes one per Purple Pack (`pack-` and eight hex digits) and keeps it however the file is renamed, so a new download of the same pack replaces the old one and a different pack sits beside it. `version` must be `x.y.z`. `description` and `author` are optional.
 - `type` must be one of `emoji`, `sounds`, `stories`, `language`; only `emoji` and `language` dispatch to anything in the loader. Studio always declares `emoji`. The directories below are read from every user pack regardless of type.
 - `format` is the layout version, `1` today and the default when absent. `content.PACK_FORMAT` is the newest a build reads; a pack declaring a higher one is skipped whole rather than half-loaded, and the installer refuses it with a message that says so.
-- `studio.json`, beside the manifest in packs Studio builds, is how Studio reopens the pack: what was added, as Studio holds it, with clips read back from `content/`. Each picture's photo rides beside it in `studio/pictures/<name>.jpg`, at most 2048 pixels a side and without its EXIF, so a reopened picture can be cropped again; packs made before that fall back to `content/pictures/<name>.png`. Purple never reads either.
+- `studio.json`, beside the manifest in packs Studio builds, is how Studio reopens the pack: what was added, as Studio holds it (a picture as its photo's cells, its crop and whatever was painted on it), with clips read back from `content/`. Each picture's photo rides beside it in `studio/pictures/<name>.jpg`, at most 2048 pixels a side and without its EXIF, so a reopened picture can be cropped again; packs made before that fall back to the photo's cells. Purple never reads either.
 - An `entrypoint` key, or any `.py` file anywhere in the pack outside the rooms below, makes the installer refuse the pack. Packs are data.
 
 ## What each file is
@@ -49,10 +49,10 @@ Filename is `text.strip().lower().replace(" ", "_") + ".wav"`, the rule in `tts.
 ### pictures/<name>.json and <name>.png
 
 ```json
-{ "name": "palm", "ops": [[43, 0, "#ffffff"], [44, 0, "#fefefe"]] }
+{ "name": "palm", "ops": [[43, 0, "#ffffff"], [44, 0, "#fefefe"]], "letters": [[2, 1, "P", "#1a1033"]] }
 ```
 
-`name` is what the kid sees in Open, exactly as the family typed it ("Grandma's dog"), cut to 24 characters; when it is missing or the same as the file name, Purple tidies the file name instead (`palm` shows as Palm). `ops` is a `[x, y, "#rrggbb"]` paint-op list on the canvas UI's 56 by 24 Art grid of square cells, the photo fitted and centered; Purple paints each op on its cell. Every op must be on the grid. The Art room's Open (Esc, O) lists them after the kid's saves; choosing one paints it onto a fresh canvas as a new Time Travel step. `<name>.png` is a preview for people; Purple does not open it.
+`name` is what the kid sees in Open, exactly as the family typed it ("Grandma's dog"), cut to 24 characters; when it is missing or the same as the file name, Purple tidies the file name instead (`palm` shows as Palm). `ops` is a `[x, y, "#rrggbb"]` paint-op list on the canvas UI's 56 by 24 Art grid of square cells, the photo fitted and centered; Purple paints each op on its cell. Every op must be on the grid. `letters`, optional, is a `[x, y, "A", "#rrggbb"]` list of single characters written over the paint in that ink, the way Art's ABC mode writes them (Studio's Write words). The Art room's Open (Esc, O) lists them after the kid's saves; choosing one paints it onto a fresh canvas as a new Time Travel step. `<name>.png` is a preview for people; Purple does not open it.
 
 ### instruments/<name>.json and <name>/<pitch>.wav
 

@@ -1,19 +1,19 @@
 // The app's draft, turned into the plain spec the SDK builds a pack from, and a pack turned back into a draft.
-import { buildPack as build, letterPath, packFilename as filename, phrasePath, picturePngPath, pictureSourcePath, type PackSpec } from "@sdk/pack";
-import { cellsToOps } from "@sdk/purple/art";
+import { buildPack as build, letterPath, packFilename as filename, phrasePath, pictureSourcePath, type PackSpec } from "@sdk/pack";
+import { cellsToOps, type ArtPicture } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar } from "@sdk/tar";
 import { decodeWav } from "@sdk/wav";
-import { dataUrl, previewPng, sourceJpeg, type Crop } from "./photo";
+import { onScreen, photoFromBlob, photoFromCells, previewPng, sourceJpeg, type Crop } from "./photo";
 import { draft, emptyDraft, type Draft, type Keepable } from "./state";
 
 export { manifest } from "@sdk/pack";
 
-// studio.json: what reopening needs beyond the files Purple reads. Clips and previews are read back from the pack.
+// studio.json: what reopening needs beyond the files Purple reads. Clips are read back from the pack.
 interface Saved extends Pick<PackSpec, "name" | "words" | "synonyms" | "ranked" | "instruments" | "rooms" | "theme"> {
   letters: string[];
   phrases: string[];
-  pictures: { name: string; title?: string; cells: string[][]; crop?: Crop }[];
+  pictures: { name: string; title?: string; cells: string[][]; crop?: Crop; painted?: ArtPicture }[];
 }
 
 // The download holds what the family added; Studio's own Purple also plays what they're trying.
@@ -23,7 +23,7 @@ export async function packSpec(d: Draft = draft, trying = false): Promise<PackSp
   const added = d.pictures.filter(ok);
   // Only the download keeps the photos; Studio's own Purple never reopens a pack.
   const sources = trying ? [] : await Promise.all(added.map(sourceJpeg));
-  const pictures = await Promise.all(added.map(async (p, i) => ({ name: p.name, title: p.title, ops: p.ops, png: await previewPng(p.cells), source: sources[i]?.jpg })));
+  const pictures = await Promise.all(added.map(async (p, i) => ({ name: p.name, title: p.title, ...onScreen(p), png: await previewPng(onScreen(p)), source: sources[i]?.jpg })));
   // A family's own words come first in autocomplete, after the words Purple already ranks.
   const ranked = [...new Set([...d.ranked, ...words.map((w) => w.word).filter((w) => !isCoreRanked(w))])];
   const letters = Object.fromEntries(Object.entries(d.letters).filter(([, l]) => ok(l)).map(([k, l]) => [k, l.clip]));
@@ -35,7 +35,7 @@ export async function packSpec(d: Draft = draft, trying = false): Promise<PackSp
   const studio: Saved = {
     name: d.name, words, synonyms, ranked: d.ranked, instruments, rooms, theme,
     letters: Object.keys(letters), phrases: phrases.map((p) => p.text),
-    pictures: added.map(({ name, title, cells }, i) => ({ name, title, cells, crop: sources[i]?.crop })),
+    pictures: added.map(({ name, title, cells, painted }, i) => ({ name, title, cells, painted, crop: sources[i]?.crop })),
   };
   return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments, rooms, theme, studio };
 }
@@ -72,9 +72,9 @@ export async function openPack(file: Blob): Promise<Draft> {
     letters: Object.fromEntries(s.letters.map((k) => [k, kept({ clip: decodeWav(read(letterPath(k))) })])),
     phrases: s.phrases.map((text) => kept({ text, clip: decodeWav(read(phrasePath(text))) })),
     pictures: await Promise.all(s.pictures.map(async (p) => {
-      // Packs from before Studio kept the photo crop from the grid's own picture.
-      const photo = files.has(pictureSourcePath(p.name)) ? image(pictureSourcePath(p.name), "image/jpeg") : image(picturePngPath(p.name), "image/png");
-      return kept({ ...p, ops: cellsToOps(p.cells), sourceUrl: await dataUrl(photo), bitmap: await createImageBitmap(photo) });
+      // Packs from before Studio kept the photo crop from the picture's own cells.
+      const photo = files.has(pictureSourcePath(p.name)) ? photoFromBlob(image(pictureSourcePath(p.name), "image/jpeg")) : photoFromCells(p.cells);
+      return kept({ ...p, ops: cellsToOps(p.cells), ...(await photo) });
     })),
   };
 }

@@ -1,5 +1,6 @@
 import { features } from "../state";
 import { h } from "./dom";
+import { startOverButton } from "./packfile";
 import type { View } from "./view";
 
 // One line, on every page that takes something of the family's, linking to the full answer.
@@ -19,7 +20,7 @@ export function privacyView(): View {
         item("Purple runs fully in your browser.", "Purple Studio is JavaScript, and Purple's Python runs with ", h("a", { href: "https://pyodide.org", target: "_blank", rel: "noopener" }, "Pyodide"), "."),
         item("Nothing is tracked.", "No account, cookies, analytics, or ads."),
         item("No AI service.", "Nothing you add or make is sent to an AI company."),
-        item("Closing the tab clears it.", "Nothing you made is saved after you close Purple Studio."),
+        item("Saved in this browser.", "What you're working on stays on this computer, never online. ", startOverButton(), " erases it."),
       ),
       h("h3", {}, "See all the code for yourself"),
       h("p", {}, "All of Purple Studio's code, and all of Purple's, is open on GitHub, where ", h("a", { href: "https://github.com/purplecomputerorg/purplecomputer/tree/main/studio#privacy", target: "_blank", rel: "noopener" }, "Purple Studio's notes"), " explain how this works in detail."),

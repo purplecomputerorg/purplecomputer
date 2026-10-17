@@ -62,7 +62,7 @@ function more(current: Picture | null): HTMLElement[] {
   const kept = draft.pictures.filter((p) => p.kept);
   const trying = draft.pictures.filter((p) => !p.kept);
   return [
-    h("div", {}, h("h3", {}, "On your Purple"), kept.length ? theirs(kept, current?.name ?? null) : h("p", { class: "dim small" }, "Nothing yet. Add your own, or try one of ours.")),
+    h("div", {}, h("h3", {}, "In your Purple Pack"), kept.length ? theirs(kept, current?.name ?? null) : h("p", { class: "dim small" }, "Nothing yet. Add your own, or try one of ours.")),
     ...(trying.length ? [h("h3", {}, "Trying"), theirs(trying, current?.name ?? null)] : []),
     h("h3", {}, "Add your own"), dropZone(),
     staysHere("Your pictures are turned into paintings right here in your browser. They are never uploaded."),

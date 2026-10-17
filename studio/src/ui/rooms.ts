@@ -40,7 +40,7 @@ function list(): View {
         choice("🐍", EXAMPLES[0].label, `${EXAMPLES[0].about} Written in Python, ready to change.`, () => open(EXAMPLES[0].name, EXAMPLES[0].source, { blocks: null, template: null }))),
       ...([true, false] as const).map((kept) => {
         const rooms = draft.rooms.filter((r) => !!r.kept === kept);
-        return rooms.length ? h("div", {}, h("h3", {}, kept ? "On your Purple" : "Trying"), h("div", { class: "row" }, ...rooms.map((r) =>
+        return rooms.length ? h("div", {}, h("h3", {}, kept ? "In your Purple Pack" : "Trying"), h("div", { class: "row" }, ...rooms.map((r) =>
           h("a", { class: "btn secondary small", href: `#rooms/${encodeURIComponent(r.name)}` }, roomTitle(r.name))))) : null;
       }),
     ),

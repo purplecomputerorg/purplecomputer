@@ -2,6 +2,14 @@
 
 export interface Clip { samples: Float32Array; rate: number }
 
+// The inverse of encodeWav, for the clips Studio wrote into a pack.
+export function decodeWav(bytes: Uint8Array): Clip {
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const samples = new Float32Array((bytes.length - 44) >> 1);
+  for (let i = 0; i < samples.length; i++) samples[i] = v.getInt16(44 + i * 2, true) / 0x7fff;
+  return { samples, rate: v.getUint32(24, true) };
+}
+
 export function encodeWav({ samples, rate }: Clip): Uint8Array {
   const buf = new ArrayBuffer(44 + samples.length * 2);
   const v = new DataView(buf);

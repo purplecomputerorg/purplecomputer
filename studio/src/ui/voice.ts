@@ -81,7 +81,7 @@ function lettersView(): View {
   };
 }
 
-const voiceStays = () => staysHere("Your recordings stay in your browser. Nobody else hears them unless you share the file.");
+const voiceStays = () => staysHere("Your recordings stay in your browser. Nobody else hears them unless you share your Purple Pack.");
 
 function phrasesView(): View {
   const list = h("div", { class: "stack" });

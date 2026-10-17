@@ -1,7 +1,9 @@
 import "./fonts";
 import "./styles.css";
 import logo from "../../assets/logo.svg";
-import { allPieces, features, onChange, pieces } from "./state";
+import { features, onChange, pieces, replaceDraft } from "./state";
+import { recall, remember } from "./saved";
+import { openPackButton } from "./ui/packfile";
 import { clear, h } from "./ui/dom";
 import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
@@ -43,7 +45,7 @@ const MORE = ([
   ["install", "Putting it on Purple", installView],
   ["guide", "Room guide", guideView],
   ["python", "Python console", pythonView],
-  ["format", "What is in the file", formatView],
+  ["format", "What is in a Purple Pack", formatView],
   ["privacy", "Your privacy", privacyView],
 ] satisfies Page[]).filter(([id]) => features.rooms || id !== "guide");
 const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
@@ -58,7 +60,8 @@ function welcomeView(): View {
       h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
       h("div", { class: "cards" }, ...SECTIONS.map((s) =>
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
-      h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB drive."),
+      h("p", { class: "dim" }, "Pick any one. When you're done, download your Purple Pack and put it on Purple with a USB drive."),
+      h("p", { class: "dim" }, "Made one before? ", openPackButton("Open your Purple Pack"), " to keep going."),
       staysHere("Everything happens in your web browser. Nothing you add is uploaded, and nothing is tracked."),
     ),
     live: { room: "art" },
@@ -159,7 +162,9 @@ function route() {
 // ?sample seeds a room so a screenshot or a demo lands on a filled editor.
 if (features.rooms && new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name, EXAMPLES[0].source);
 
-onChange(() => { renderTop(); renderPhoneBar(); live.changed(); });
+onChange(() => { renderTop(); renderPhoneBar(); live.changed(); remember(); });
 window.addEventListener("hashchange", route);
-window.addEventListener("beforeunload", (e) => allPieces().some((p) => p.items.length) && e.preventDefault());
-route();
+recall().then((saved) => {
+  if (saved) replaceDraft(saved);
+  route();
+});

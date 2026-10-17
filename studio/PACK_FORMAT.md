@@ -17,9 +17,10 @@ Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple
 }
 ```
 
-- `id`, `name`, `version`, `type` are required. `id` is the directory name the pack installs under, so it must be a single plain path segment. `version` must be `x.y.z`. `description` and `author` are optional.
+- `id`, `name`, `version`, `type` are required. `id` is the directory name the pack installs under, so it must be a single plain path segment, and a pack with the same id replaces it. Studio makes one per Purple Pack (`pack-` and eight hex digits) and keeps it however the file is renamed, so a new download of the same pack replaces the old one and a different pack sits beside it. `version` must be `x.y.z`. `description` and `author` are optional.
 - `type` must be one of `emoji`, `sounds`, `stories`, `language`; only `emoji` and `language` dispatch to anything in the loader. Studio always declares `emoji`. The directories below are read from every user pack regardless of type.
 - `format` is the layout version, `1` today and the default when absent. `content.PACK_FORMAT` is the newest a build reads; a pack declaring a higher one is skipped whole rather than half-loaded, and the installer refuses it with a message that says so.
+- `studio.json`, beside the manifest in packs Studio builds, is how Studio reopens the pack: what was added, as Studio holds it, with clips and picture previews read back from `content/`. Purple never reads it.
 - An `entrypoint` key, or any `.py` file anywhere in the pack outside the rooms below, makes the installer refuse the pack. Packs are data.
 
 ## What each file is
@@ -120,7 +121,7 @@ A second pack with the same `code` adds to the first, its entries winning, so a 
 ## Where packs live and how they get there
 
 - Built-in: `packs/`, copied to `/opt/purple/packs/` at image build.
-- User: `~/.purple/packs/<id>/` of the `purple` user. Loaded after the built-ins, in name order, so a later pack wins any per-file lookup.
+- User: `~/.purple/packs/<id>/` of the `purple` user. Loaded after the built-ins, oldest first by when each was built (its `manifest.json` mtime, which extraction keeps), so the newest pack wins any per-file lookup. The Parent Menu's Purple Packs list removes one; it stays in use until Purple restarts.
 
 **Any USB drive.** `config/udev/99-purple-update.rules` starts `config/systemd/purple-usb-update@.service` for every FAT, exFAT or NTFS partition on a USB drive, the Purple Key's own PURPLEUSB partition included; there is no label to set. The unit mounts it read-only with `nosuid,nodev,noexec` under `/run/purple-update/<device>`, and if `*.purplepack` files sit in its top directory runs `purple_tui.usb_updater`, then unmounts. A drive without packs never starts Python. The updater installs each pack into the purple user's packs, replacing a pack with the same id, and appends a line per pack to `/var/log/purple/usb-update.log`. The unit orders itself before `purple-x11.service`, so a drive present at boot is installed before the first screen; one plugged in later is installed on the spot, but the running app only reads packs at startup, so it takes effect at the next start. On a live-booted Key `$HOME` is tmpfs, so the packs vanish at shutdown and come back at the next boot from the Key itself.
 

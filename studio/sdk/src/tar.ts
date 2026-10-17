@@ -53,7 +53,26 @@ export function tar(entries: TarEntry[], mtime = Math.floor(Date.now() / 1000)):
   return out;
 }
 
-export async function gzip(data: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new CompressionStream("gzip"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+const dec = new TextDecoder();
+const field = (h: Uint8Array, offset: number, width: number) => dec.decode(h.subarray(offset, offset + width)).replace(/\0[^]*$/, "");
+
+// The files in a tar, skipping directories and links: the inverse of tar().
+export function untar(data: Uint8Array): TarEntry[] {
+  const out: TarEntry[] = [];
+  for (let offset = 0; offset + BLOCK <= data.length;) {
+    const h = data.subarray(offset, offset + BLOCK);
+    const path = field(h, 0, 100);
+    if (!path) break;
+    const size = parseInt(field(h, 124, 12), 8) || 0;
+    const prefix = field(h, 345, 155);
+    offset += BLOCK;
+    if (h[156] === 0x30 || h[156] === 0) out.push({ path: prefix ? `${prefix}/${path}` : path, data: data.slice(offset, offset + size) });
+    offset += Math.ceil(size / BLOCK) * BLOCK;
+  }
+  return out;
 }
+
+const pipe = async (data: Uint8Array, through: CompressionStream | DecompressionStream) =>
+  new Uint8Array(await new Response(new Blob([data as BlobPart]).stream().pipeThrough(through)).arrayBuffer());
+export const gzip = (data: Uint8Array) => pipe(data, new CompressionStream("gzip"));
+export const gunzip = (data: Uint8Array) => pipe(data, new DecompressionStream("gzip"));

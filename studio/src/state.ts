@@ -1,7 +1,7 @@
 import type { Clip } from "./audio";
 import type { Picture } from "./photo";
 import type { TemplateDraft } from "./examples";
-import { packId as sdkPackId, roomTitle, slug } from "@sdk/pack";
+import { roomTitle, slug } from "@sdk/pack";
 import type { Theme } from "@sdk/purple/theme";
 import type { BaseName, Params } from "@sdk/purple/synth";
 
@@ -22,6 +22,8 @@ export interface Instrument extends Keepable { name: string; title?: string; bas
 export interface RoomDraft extends Keepable { name: string; source: string; blocks: unknown | null; template: TemplateDraft | null }
 
 export interface Draft {
+  // The pack's id on Purple, made once per Purple Pack, so downloading it again under any name replaces it.
+  id: string;
   name: string;
   pictures: Picture[];
   letters: Record<string, Letter>;
@@ -36,8 +38,8 @@ export interface Draft {
   colors: Keepable;
 }
 
-
-export const draft: Draft = {
+export const emptyDraft = (): Draft => ({
+  id: `pack-${crypto.randomUUID().slice(0, 8)}`,
   name: `purple-${new Date().toISOString().slice(0, 10)}`,
   pictures: [],
   letters: {},
@@ -49,7 +51,15 @@ export const draft: Draft = {
   rooms: [],
   theme: null,
   colors: {},
-};
+});
+
+export const draft: Draft = emptyDraft();
+
+// Pages hold this one object, so another Purple Pack (reopened, recalled, or a fresh start) goes into it in place.
+export function replaceDraft(d: Draft = emptyDraft()) {
+  Object.assign(draft, d);
+  changed();
+}
 
 export { slug } from "@sdk/pack";
 
@@ -61,7 +71,6 @@ export function freeName(text: string, taken: (name: string) => boolean, fallbac
   return name;
 }
 export const titleOf = (p: { name: string; title?: string }) => p.title || roomTitle(p.name);
-export const packId = (d: Draft = draft) => sdkPackId(d);
 
 // Trying one of Studio's examples replaces the last one tried, unless the family changed or added it.
 export const withSample = <T extends Keepable>(list: T[], item: T): T[] => [...list.filter((x) => !x.sample || x.kept), { ...item, sample: true }];

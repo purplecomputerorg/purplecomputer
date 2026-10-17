@@ -16,8 +16,12 @@ export interface PackInstrument { name: string; title?: string; base: BaseName; 
 export interface PackRoom { name: string; source: string; blocks?: unknown }
 
 export interface PackSpec {
-  // The file name without .purplepack; a pack with the same name replaces it on Purple.
+  // The file name without .purplepack.
   name: string;
+  // What Purple installs it under, so a pack with the same id replaces it; the file name when missing.
+  id?: string;
+  // studio.json: how Purple Studio reopens the pack. Purple never reads it.
+  studio?: unknown;
   words: { word: string; emoji: string }[];
   synonyms: { alias: string; word: string }[];
   ranked: string[];
@@ -44,9 +48,9 @@ export const roomTitle = (name: string) =>
 export const packId = (spec: Pick<PackSpec, "name">) => slug(spec.name) || "purple";
 export const packFilename = (spec: Pick<PackSpec, "name">) => `${packId(spec)}.purplepack`;
 
-export function manifest(spec: Pick<PackSpec, "name">) {
+export function manifest(spec: Pick<PackSpec, "name" | "id">) {
   return {
-    id: packId(spec),
+    id: spec.id || packId(spec),
     name: spec.name.trim() || packId(spec),
     version: "1.0.0",
     type: "emoji",
@@ -63,17 +67,21 @@ export function emojiEntries(spec: PackSpec): TarEntry[] {
   return out;
 }
 
-const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
+export const letterPath = (key: string) => `content/letters/${LETTER_FILES[key] ?? key}.wav`;
+export const phrasePath = (text: string) => `content/voice/${voiceClipFilename(text)}`;
+export const picturePngPath = (name: string) => `content/pictures/${name}.png`;
+
+const yieldToUi =() => new Promise((r) => setTimeout(r, 0));
 
 export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) => void): Promise<TarEntry[]> {
   const entries: TarEntry[] = [json("manifest.json", manifest(spec)), ...emojiEntries(spec)];
 
-  for (const [key, clip] of Object.entries(spec.letters)) entries.push({ path: `content/letters/${LETTER_FILES[key] ?? key}.wav`, data: encodeWav(clip) });
-  for (const p of spec.phrases) entries.push({ path: `content/voice/${voiceClipFilename(p.text)}`, data: encodeWav(p.clip) });
+  for (const [key, clip] of Object.entries(spec.letters)) entries.push({ path: letterPath(key), data: encodeWav(clip) });
+  for (const p of spec.phrases) entries.push({ path: phrasePath(p.text), data: encodeWav(p.clip) });
 
   for (const pic of spec.pictures) {
     entries.push(json(`content/pictures/${pic.name}.json`, { name: pic.title ?? pic.name, ops: pic.ops }));
-    if (pic.png) entries.push({ path: `content/pictures/${pic.name}.png`, data: pic.png });
+    if (pic.png) entries.push({ path: picturePngPath(pic.name), data: pic.png });
   }
 
   for (const inst of spec.instruments) {
@@ -95,6 +103,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   }
 
   if (spec.theme) entries.push(json("content/theme.json", themeJson(spec.theme)));
+  if (spec.studio) entries.push(json("studio.json", spec.studio));
   return entries;
 }
 

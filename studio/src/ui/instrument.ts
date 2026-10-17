@@ -40,8 +40,8 @@ function chooser(): View {
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, change how it sounds, and add it to your Purple when you like it."),
-      section("On your Purple", theirs(true)),
+      h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, change how it sounds, and add it to your Purple Pack when you like it."),
+      section("In your Purple Pack", theirs(true)),
       section("Trying", theirs(false)),
       h("h3", {}, "Try a sound"),
       h("div", { class: "cards" }, ...SOUNDS.map((snd) =>

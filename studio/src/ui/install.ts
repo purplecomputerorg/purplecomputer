@@ -3,8 +3,8 @@ import { h } from "./dom";
 import type { View } from "./view";
 
 export const putItOnPurple = () => h("ol", { class: "steps" },
-  h("li", {}, "Download your file."),
-  h("li", {}, "Copy it onto any USB drive. Your Purple Key works too."),
+  h("li", {}, "Download your Purple Pack."),
+  h("li", {}, "Copy it onto your Purple Key, or any USB drive."),
   h("li", {}, "Plug the drive into Purple and turn Purple on. That's it."),
 );
 
@@ -14,11 +14,12 @@ export function installView(): View {
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "Purple has no internet, so your file goes in on a USB drive."),
+      h("p", { class: "lead" }, "Purple has no internet, so your Purple Pack goes in on a USB drive."),
       putItOnPurple(),
       h("p", {}, "Everything you made is there from the first screen. If the drive goes in while Purple is already on, restart Purple once."),
+      h("p", {}, "If Purple starts from your Purple Key, keep your Purple Pack on the Key so it's there every time."),
       h("h3", {}, "Sharing"),
-      h("p", {}, "The file is yours to share. Email it to Grandma, or put it on a USB drive for a cousin. There is no place to upload it and nothing to sign up for."),
+      h("p", {}, "Your Purple Pack is yours to share. Email it to Grandma, or put it on a USB drive for a cousin. There is no place to upload it and nothing to sign up for."),
     ),
   };
 }
@@ -39,7 +40,7 @@ export function formatView(): View {
     "  theme.json                   background and key rows  not read yet",
   ].join("\n");
   return {
-    title: "What is in the file",
+    title: "What is in a Purple Pack",
     editor: h(
       "section",
       {},

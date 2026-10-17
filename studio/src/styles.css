@@ -243,7 +243,7 @@ input[type="range"] { accent-color: var(--purple); width: 100%; margin: 0; }
 .photo-list a { display: flex; flex-direction: column; gap: 4px; width: 84px; text-decoration: none; color: var(--text); font-size: 12px; text-align: center; line-height: 1.2; }
 .photo-list img { width: 84px; height: 84px; object-fit: cover; border-radius: 12px; border: 3px solid #fff; box-shadow: var(--shadow); }
 .photo-list a[aria-current="page"] img { border-color: var(--purple); }
-/* Trying versus on your Purple (ui/trybar.ts), the same on every page */
+/* Trying versus in the Purple Pack (ui/trybar.ts), the same on every page */
 .trybar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 12px 0; padding: 10px 14px; border-radius: 12px; background: var(--fill); font-size: 14px; }
 .trybar .trying { color: var(--purple-dark); font-weight: 600; }
 .trybar .added { color: #3d7a4e; font-weight: 600; }

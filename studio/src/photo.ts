@@ -47,8 +47,16 @@ export function downsample(img: ImageData, cols: number, rows: number): string[]
 
 // A picture's name is its file name in the pack; Purple shows its title as typed, or else the name tidied.
 
+// A data URL rather than an object URL, so the photo is still there when the draft is recalled.
+export const dataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(r.result as string);
+  r.onerror = () => reject(r.error);
+  r.readAsDataURL(blob);
+});
+
 export async function pictureFromFile(file: File): Promise<Picture> {
-  return pictureFromBitmap(await createImageBitmap(file), slug(file.name.replace(/\.[^.]+$/, "")) || "picture", URL.createObjectURL(file));
+  return pictureFromBitmap(await createImageBitmap(file), slug(file.name.replace(/\.[^.]+$/, "")) || "picture", await dataUrl(file));
 }
 
 // Studio's examples, painted the same way as a family's pictures. One goes in the pack only if

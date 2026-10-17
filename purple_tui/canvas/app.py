@@ -60,6 +60,8 @@ LEGEND_POP_VH = 1.67          # letter size on the last key pressed, which pops 
 LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 1), (ZXCV_ROW, 1.5))   # even half-key stagger
 TIMELINE_MAX_WAIT_S = 15.0
 MAX_CODE_LINES = 200          # code lines kept with a room's state (Time Travel, saves)
+SAVE_FLASH_S = 0.45           # the camera-flash fade over the frame when a save lands
+SAVE_THUMB_VH = 7             # height of the saved picture in its toast
 
 
 def _key_for_color(color: str | None) -> str | None:
@@ -148,6 +150,8 @@ class PurpleApp:
         self._timeline_timer = None
         self._timeline_restored: set = set()
         self._time_travel = None
+        self._saved_digest: dict = {}  # room -> digest of what's on screen while it is still the saved work
+        self._save_flash_at = None
         self.save_pictures = _Cache(limit=48)  # Open's pictures; saves never change, and the theme only at startup
         self._last_evdev_time = time.monotonic()
         self._keyboard_state_machine = KeyboardStateMachine()
@@ -279,6 +283,8 @@ class PurpleApp:
             if len(live) != len(self._toasts):
                 self._toasts = live
                 self.g.dirty = True
+            if self._save_flash_at is not None:
+                self.g.dirty = True
             if self.g.dirty:
                 start = time.monotonic()
                 self._draw()
@@ -362,8 +368,8 @@ class PurpleApp:
     def has_overlay(self, cls) -> bool:
         return any(isinstance(o, cls) for o in self._overlays)
 
-    def notify(self, text: str, timeout: float = 1.5, title: str = ""):
-        self._toasts.append(Toast(text, timeout))
+    def notify(self, text: str, timeout: float = 1.5, title: str = "", picture=None):
+        self._toasts.append(Toast(text, timeout, picture))
         self.invalidate()
 
     def clear_notifications(self):
@@ -787,6 +793,7 @@ class PurpleApp:
 
     def timeline_capture_now(self, room: str):
         self._timeline_pending.pop(room, None)
+        self._check_still_saved(room)
         if self._time_travel is not None:
             return
         try:
@@ -798,6 +805,7 @@ class PurpleApp:
     def _timeline_touch(self):
         if self._time_travel is not None:
             return
+        self._check_still_saved(self.active_room)
         now = time.monotonic()
         first, _ = self._timeline_pending.get(self.active_room, (now, now))
         self._timeline_pending[self.active_room] = (first, now)
@@ -827,6 +835,7 @@ class PurpleApp:
         made = saves.add(room, state, self.room.LANDSCAPE)
         self.timeline_capture_now(room)
         self._timelines[room].mark(saves.digest(state))
+        self._saved_digest[room] = saves.digest(state)
         if made:
             self.key_save.changed()
         return made
@@ -839,7 +848,24 @@ class PurpleApp:
         result = self.save_room()
         if result is False:
             return self.notify("Make something first, then save it", timeout=3)
-        self.notify(f"{ICON_SAVE}  Saved" if result else f"{ICON_SAVE}  Already saved", timeout=2)
+        if result:
+            self._save_flash_at = time.monotonic()
+        self.notify(f"{ICON_SAVE}  Saved" if result else f"{ICON_SAVE}  Already saved", timeout=2.5,
+                    picture=self._save_thumb())
+
+    def _save_thumb(self):
+        from .paper import artwork
+        from .saves import fit
+        g = self.g
+        work = artwork(self.room, g, (g.vw(40), g.vh(40)), on_screen=True)
+        return None if work is None else fit(work, g.vh(SAVE_THUMB_VH) * 2, g.vh(SAVE_THUMB_VH))
+
+    def _check_still_saved(self, room: str):
+        """The Saved star stays only while what's on screen is the saved work."""
+        from .saves import digest
+        if room in self._saved_digest and digest(self.room_state(room)) != self._saved_digest[room]:
+            del self._saved_digest[room]
+            self.invalidate()
 
     def delete_save(self, save):
         from . import saves
@@ -1461,6 +1487,7 @@ class PurpleApp:
             top = content.bottom if self._panel else vp.bottom - self.room.footer_h(g)
             strip = pygame.Rect(vp.x, top, vp.w, vp.bottom - top)
             draw_hold_bar(g, strip, *bar)
+        self._draw_save_flash(frame)
         g.surface.set_clip(None)
         esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
         if self._legend_visible and not self._code_panel_active:   # keys type code there, not colors
@@ -1476,9 +1503,13 @@ class PurpleApp:
         y = frame.y - g.vh(TITLE_STRIP_VH) // 2
         px = g.em(1.0)
         g.draw_text(self._boot_mode_text(), px, frame.x, y, "mono", P.MUTED, anchor="midleft")
+        saved = title is None and self._time_travel is None and self.active_room in self._saved_digest
         if title is None:
             title = f"{self.room.icon} {self.room.label}"
-        g.draw_text(title, px, frame.centerx, y, "mono-bold", P.ACCENT, anchor="center", track=0.04)
+        r = g.draw_text(title, px, frame.centerx, y, "mono-bold", P.ACCENT, anchor="center", track=0.04)
+        if saved:
+            from .panels import ICON_STAR
+            g.draw_text(f"{ICON_STAR} Saved", round(px * 0.85), r.right + px, y, "mono", P.MUTED, anchor="midleft")
         right = self._battery_text()
         if self._keyboard_state_machine._sticky_shift_active:
             right = "⇧  " + right
@@ -1579,18 +1610,38 @@ class PurpleApp:
                     "tabs": [(rid, t, r) for (rid, t), r in zip(names, rects[1:])],
                     "right": pygame.Rect(frame.right - rw, 0, rw, 1)}
 
+    def _draw_save_flash(self, frame):
+        """A camera flash over the frame that fades out, so a save is seen on the work itself."""
+        t = (time.monotonic() - self._save_flash_at) / SAVE_FLASH_S if self._save_flash_at is not None else 1
+        if t >= 1:
+            self._save_flash_at = None
+            return
+        veil = pygame.Surface(frame.size)
+        veil.fill((255, 255, 255))
+        veil.set_alpha(round(200 * (1 - t) ** 2))
+        self.g.surface.blit(veil, frame)
+
     def _draw_toasts(self):
         """A calm centered pill above the status strip, stacking upward, so a
-        transient message never lands on top of the room's content."""
+        transient message never lands on top of the room's content. A toast's
+        picture sits left of its text."""
         g = self.g
         pad = g.vh(1.1)
         y = g.h - g.vh(11)
         for t in reversed(self._toasts[-3:]):
-            r = g.text(t.text, g.vh(2.4), "mono-bold", P.TEXT).get_rect(midbottom=(g.w // 2, y))
-            pill = r.inflate(pad * 2, pad * 2)
+            text = g.text(t.text, g.vh(2.4), "mono-bold", P.TEXT)
+            pic = t.picture
+            gap = pad if pic else 0
+            w = text.get_width() + gap + (pic.get_width() if pic else 0)
+            h = max(text.get_height(), pic.get_height() if pic else 0)
+            pill = pygame.Rect(0, 0, w, h).inflate(pad * 2, pad * 2)
+            pill.midbottom = (g.w // 2, y + pad)
             g.rect(P.SURFACE, pill, radius=g.em(0.5))
             g.rect(P.HAIR, pill, width=1, radius=g.em(0.5))
-            g.surface.blit(g.text(t.text, g.vh(2.4), "mono-bold", P.TEXT), r)
+            if pic:
+                at = g.surface.blit(pic, pic.get_rect(midleft=(pill.x + pad, pill.centery)))
+                g.rect(P.LINE, at.inflate(2, 2), width=1)
+            g.surface.blit(text, text.get_rect(midright=(pill.right - pad, pill.centery)))
             y = pill.top - g.vh(1.4)
 
 

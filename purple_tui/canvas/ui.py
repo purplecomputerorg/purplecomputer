@@ -527,8 +527,9 @@ class Confirm(Picker):
 
 
 class Toast:
-    def __init__(self, text: str, timeout: float):
+    def __init__(self, text: str, timeout: float, picture=None):
         self.text = text
+        self.picture = picture
         self.expires = time.monotonic() + timeout
 
 

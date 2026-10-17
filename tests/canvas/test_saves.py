@@ -274,3 +274,18 @@ def test_open_fills_in_its_pictures_a_frame_at_a_time_and_keeps_them(monkeypatch
         await _open_library(app)
         assert all(app.save_pictures[k] is v for k, v in drawn.items())
     run(go())
+
+
+def test_a_save_flashes_shows_its_picture_and_stars_the_title_until_the_work_changes():
+    async def go():
+        app = await _art_with_drawing()
+        await _save(app)
+        [toast] = app._toasts
+        assert app._save_flash_at is not None and toast.picture is not None
+        assert "art" in app._saved_digest
+        app._draw()
+        await _save(app)
+        assert "Already" in app._toasts[-1].text
+        await type_text(app, "z")
+        assert "art" not in app._saved_digest
+    run(go())

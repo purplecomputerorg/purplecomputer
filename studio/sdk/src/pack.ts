@@ -10,7 +10,8 @@ import { encodeWav, type Clip } from "./wav";
 import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 
 // title: the name as the family typed it, which Purple shows as is; name is the file name.
-export interface PackPicture { name: string; title?: string; ops: PaintOp[]; png?: Uint8Array }
+// source: the photo Studio crops from, kept for reopening; Purple never reads it.
+export interface PackPicture { name: string; title?: string; ops: PaintOp[]; png?: Uint8Array; source?: Uint8Array }
 export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params }
 // content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Blockly workspace it came from rides beside it.
 export interface PackRoom { name: string; source: string; blocks?: unknown }
@@ -70,6 +71,7 @@ export function emojiEntries(spec: PackSpec): TarEntry[] {
 export const letterPath = (key: string) => `content/letters/${LETTER_FILES[key] ?? key}.wav`;
 export const phrasePath = (text: string) => `content/voice/${voiceClipFilename(text)}`;
 export const picturePngPath = (name: string) => `content/pictures/${name}.png`;
+export const pictureSourcePath = (name: string) => `studio/pictures/${name}.jpg`;
 
 const yieldToUi =() => new Promise((r) => setTimeout(r, 0));
 
@@ -82,6 +84,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   for (const pic of spec.pictures) {
     entries.push(json(`content/pictures/${pic.name}.json`, { name: pic.title ?? pic.name, ops: pic.ops }));
     if (pic.png) entries.push({ path: picturePngPath(pic.name), data: pic.png });
+    if (pic.source) entries.push({ path: pictureSourcePath(pic.name), data: pic.source });
   }
 
   for (const inst of spec.instruments) {

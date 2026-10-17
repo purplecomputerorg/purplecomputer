@@ -4,6 +4,7 @@ import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
 import { gunzip, gzip, tar, untar } from "../sdk/src/tar";
 import { buildPack, openPack, packSpec } from "../src/pack";
+import { scaleCrop } from "../src/photo";
 import type { Draft } from "../src/state";
 import roomLibrary from "../../purple_tui/roomkit/purple.py?raw";
 
@@ -50,6 +51,17 @@ describe("pack assembly", () => {
     expect(back.phrases.map((p) => p.text)).toEqual(["hi there"]);
     expect(back.letters.a.clip.rate).toBe(22050);
     [...back.phrases[0].clip.samples].forEach((s, i) => expect(s).toBeCloseTo(clip.samples[i], 4));
+  });
+
+  it("keeps a picture's photo outside content/, where Purple never reads", async () => {
+    const pic = { name: "dog", ops: [], png: new Uint8Array([1]), source: new Uint8Array([2]) };
+    const paths = (await buildEntries({ ...base, pictures: [pic] })).map((e) => e.path);
+    expect(paths).toEqual(["manifest.json", "content/pictures/dog.json", "content/pictures/dog.png", "studio/pictures/dog.jpg"]);
+  });
+
+  it("scales a crop with the photo it was made on", () => {
+    expect(scaleCrop({ x: 100, y: 40, w: 1000, h: 400 }, 0.5)).toEqual({ x: 50, y: 20, w: 500, h: 200 });
+    expect(scaleCrop(undefined, 0.5)).toBeUndefined();
   });
 
   it("says why a file that isn't a Studio Purple Pack can't be opened", async () => {

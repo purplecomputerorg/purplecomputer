@@ -130,6 +130,24 @@ export function paintCells(ctx: CanvasRenderingContext2D | OffscreenCanvasRender
   );
 }
 
+// The photo a pack keeps so Studio can crop again after reopening, at most SOURCE_MAX pixels a side. Drawing it
+// through a canvas also drops its EXIF, a phone photo's location included.
+const SOURCE_MAX = 2048;
+export const scaleCrop = (c: Crop | undefined, s: number): Crop | undefined => c && { x: c.x * s, y: c.y * s, w: c.w * s, h: c.h * s };
+
+export async function sourceJpeg(pic: Picture): Promise<{ jpg: Uint8Array; crop?: Crop }> {
+  const { width, height } = pic.bitmap;
+  const s = Math.min(1, SOURCE_MAX / Math.max(width, height));
+  const canvas = new OffscreenCanvas(Math.round(width * s), Math.round(height * s));
+  const ctx = canvas.getContext("2d")!;
+  // JPEG has no transparency; black is what downsample already makes of it.
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(pic.bitmap, 0, 0, canvas.width, canvas.height);
+  const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+  return { jpg: new Uint8Array(await blob.arrayBuffer()), crop: scaleCrop(pic.crop, s) };
+}
+
 export async function previewPng(cells: string[][], cellPx = 10): Promise<Uint8Array> {
   const canvas = new OffscreenCanvas(CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * cellPx * CELL_ASPECT);
   paintCells(canvas.getContext("2d")!, cells, cellPx);

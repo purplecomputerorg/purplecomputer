@@ -3,7 +3,6 @@ import { changed, draft, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, openEmojiPicker } from "./emojipicker";
-import { addAllBar, keepButton } from "./trybar";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -14,7 +13,6 @@ const WORD = /^[a-z][a-z'-]*$/;
 function wordTable(): HTMLElement {
   const rows = h("div", { class: "word-rows" });
   const status = h("div", { class: "status" });
-  const pending = h("div");
 
   const checkWord = (word: string, self: WordEntry | null): string | null => {
     if (!WORD.test(word)) return "A word is letters only, no spaces. Kids type one word at a time.";
@@ -38,7 +36,7 @@ function wordTable(): HTMLElement {
       status.textContent = err ?? "";
       if (err) return false;
       if (entry) entry.word = w;
-      else draft.words.push({ word: w, emoji: pending.emoji });
+      else draft.words.push({ word: w, emoji: pending.emoji, kept: true });
       changed();
       render();
       return true;
@@ -65,12 +63,12 @@ function wordTable(): HTMLElement {
     if (entry) word.addEventListener("change", () => commit() || (word.value = entry.word));
     showWas();
 
-    const remove = entry && h("button", { type: "button", class: "remove", title: "Remove", "aria-label": `Remove ${entry.word}`, onclick: () => {
+    const remove = entry ? h("button", { type: "button", class: "remove", title: "Remove", "aria-label": `Remove ${entry.word}`, onclick: () => {
       draft.words.splice(draft.words.indexOf(entry), 1);
       changed();
       render();
-    } }, "✕");
-    return h("div", { class: `word-row${entry ? "" : " blank"}` }, word, h("div", { class: "emoji-wrap" }, emoji), was, entry ? keepButton(entry, render) : h("span"), remove);
+    } }, "✕") : h("span");
+    return h("div", { class: `word-row${entry ? "" : " blank"}` }, word, h("div", { class: "emoji-wrap" }, emoji), was, remove);
   }
 
   function render() {
@@ -80,11 +78,10 @@ function wordTable(): HTMLElement {
       ...draft.words.map(row),
       row(null),
     );
-    pending.replaceChildren(addAllBar(draft.words, (n) => `${n} word${n === 1 ? " is" : "s are"}`, render) ?? "");
     rows.querySelector<HTMLInputElement>(".blank input")?.focus({ preventScroll: true });
   }
   render();
-  return h("div", {}, h("div", { class: "card" }, rows, status), pending);
+  return h("div", { class: "card" }, rows, status);
 }
 
 export function wordsView(): View {

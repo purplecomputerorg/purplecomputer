@@ -35,7 +35,7 @@ function dropZone(): HTMLElement {
       ondrop: (e: DragEvent) => { e.preventDefault(); drop.classList.remove("over"); add(e.dataTransfer?.files[0]); },
     },
     h("div", {}, "Drop a picture here, or click to choose one."),
-    h("div", { class: "small" }, "A photo, a scan of a drawing, anything. It stays on this computer."),
+    h("div", { class: "small" }, "A photo, a scan of a drawing, anything. It stays on your device."),
     input,
   );
   return h("div", {}, drop, status);

@@ -21,7 +21,17 @@ The dev server and `vite preview` use https with a self-signed certificate (`@vi
 
 **Room code is untrusted.** A parent may paste it from anywhere. In the preview it runs in a Web Worker with a fresh Pyodide, which cannot import `js` or `pyodide` and has its network functions removed; Purple's own `FamilyRoom` checks every reply, and ends a room that is busy for 3 seconds, sends too much, or answers out of turn. The hard limits are the CSP and those checks; the import wall only raises the bar.
 
-Stack: Vite, TypeScript, vanilla DOM, no backend. Three runtime dependencies: Blockly for the room editor, Pyodide, which runs Purple, rooms in the preview, and the Python page, and onnxruntime-web, which runs Purple's voice. Fonts come from `@fontsource` packages and Blockly's icons from its own `media/`, both served by Studio, so a visit contacts no other site; the browser's speech fallback uses only `localService` voices. The More menu's "Your privacy" page says all this to parents (`src/ui/privacy.ts`); keep it true. Everything pure (tar and gzip, WAV encoding, the synth port, the pack builder) is in `sdk/src/`; the app in `src/` is the UI over it.
+Stack: Vite, TypeScript, vanilla DOM, no backend. Three runtime dependencies: Blockly for the room editor, Pyodide, which runs Purple, rooms in the preview, and the Python page, and onnxruntime-web, which runs Purple's voice. Everything pure (tar and gzip, WAV encoding, the synth port, the pack builder) is in `sdk/src/`; the app in `src/` is the UI over it.
+
+## Privacy
+
+The "Your privacy" page (`src/ui/privacy.ts`, the 🔒 in the top bar) promises parents that nothing they add leaves their device and nothing is tracked, and links here for the details. Keep both true:
+
+- **No backend.** The site serves static files and takes nothing back. A pack is built in the page and saved through the browser's download.
+- **The browser enforces it.** Every page and every room worker carries a `Content-Security-Policy` with `connect-src 'self'` (`vite.config.ts`, `HEADERS`), so nothing can be sent to another site even by mistake. Room workers also have Pyodide's network functions removed.
+- **Nothing third party.** Fonts come from `@fontsource` packages and Blockly's icons from its own `media/`, both served by Studio, so a visit contacts no other site. No cookies, analytics, or accounts.
+- **Speech stays local.** Purple's voice is Piper running in a worker; the browser's speech fallback uses only `localService` voices, so no text goes to a cloud voice.
+- **Nothing persists but the voice.** The only storage is the Cache API holding the 79 MB voice model. Drafts, recordings, and photos live in the tab and are gone when it closes. The microphone is on only while recording.
 
 ## The shape
 

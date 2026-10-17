@@ -58,7 +58,7 @@ function welcomeView(): View {
       h("div", { class: "cards" }, ...SECTIONS.map((s) =>
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
       h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB drive."),
-      staysHere("Everything happens in this browser, on this computer. Nothing you add is uploaded, and nothing is tracked."),
+      staysHere("Everything happens in your web browser. Nothing you add is uploaded, and nothing is tracked."),
     ),
     live: { room: "play" },
     previewTitle: "This is Purple",
@@ -99,7 +99,7 @@ const stageTitle = h("h3");
 const stageCaption = h("p", { class: "caption" });
 // Purple's voice runs espeak-ng, which is GPL: its source goes wherever the voice does.
 const voiceCredit = h("p", { class: "dim small" }, "Purple's voice is Piper, which reads words with espeak-ng (GPL-3.0, ", h("a", { href: "voice/espeak-ng/README.md", target: "_blank" }, "source"), ").");
-const stageStays = staysHere("This Purple runs in your browser. What you try on it stays on this computer.");
+const stageStays = staysHere("This Purple runs in your browser. What you type into it stays on your device.");
 const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays, voiceCredit));
 const body = h("div", { class: "body" }, main, stage);
 app.append(top, body);

@@ -49,7 +49,7 @@ export function downloadView(): View {
       "section",
       {},
       h("p", { class: "lead" }, "Everything you added to your Purple goes into one file."),
-      staysHere("The file is made right here in your browser and saved to this computer. No copy goes anywhere else."),
+      staysHere("The file is made in your browser and saved to your downloads. No copy goes anywhere else."),
       h("div", { class: "card" }, field("Your family's name", nameIn), summary),
       trying,
       h("div", { class: "row", style: "margin-top:22px" }, button),

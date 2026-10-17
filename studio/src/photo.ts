@@ -148,16 +148,6 @@ export async function sourceJpeg(pic: Picture): Promise<{ jpg: Uint8Array; crop?
   return { jpg: new Uint8Array(await blob.arrayBuffer()), crop: scaleCrop(pic.crop, s) };
 }
 
-export const photoFromBlob = async (blob: Blob): Promise<Pick<Picture, "bitmap" | "sourceUrl">> =>
-  ({ bitmap: await createImageBitmap(blob), sourceUrl: await dataUrl(blob) });
-
-// A reopened picture's photo painted back from its cells, for packs made before the photo rode along.
-export async function photoFromCells(cells: string[][], cellPx = 10): Promise<Pick<Picture, "bitmap" | "sourceUrl">> {
-  const canvas = new OffscreenCanvas(cells[0].length * cellPx, cells.length * cellPx * CELL_ASPECT);
-  fillOps(canvas.getContext("2d")!, cells.flatMap((row, y) => row.map((hex, x): PaintOp => [x, y, hex])), cellPx);
-  return photoFromBlob(await canvas.convertToBlob({ type: "image/png" }));
-}
-
 // A picture on the Art grid the way Purple paints it; a cell is cellPx wide.
 export function paintPicture(ctx: Ctx2D, { ops, letters }: ArtPicture, cellPx: number) {
   const ch = cellPx * CELL_ASPECT;

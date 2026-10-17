@@ -4,7 +4,7 @@ import { cellsToOps, type ArtPicture } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar } from "@sdk/tar";
 import { decodeWav } from "@sdk/wav";
-import { onScreen, photoFromBlob, photoFromCells, previewPng, sourceJpeg, type Crop } from "./photo";
+import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop } from "./photo";
 import { draft, emptyDraft, type Draft, type Keepable } from "./state";
 
 export { manifest } from "@sdk/pack";
@@ -72,9 +72,8 @@ export async function openPack(file: Blob): Promise<Draft> {
     letters: Object.fromEntries(s.letters.map((k) => [k, kept({ clip: decodeWav(read(letterPath(k))) })])),
     phrases: s.phrases.map((text) => kept({ text, clip: decodeWav(read(phrasePath(text))) })),
     pictures: await Promise.all(s.pictures.map(async (p) => {
-      // Packs from before Studio kept the photo crop from the picture's own cells.
-      const photo = files.has(pictureSourcePath(p.name)) ? photoFromBlob(image(pictureSourcePath(p.name), "image/jpeg")) : photoFromCells(p.cells);
-      return kept({ ...p, ops: cellsToOps(p.cells), ...(await photo) });
+      const photo = image(pictureSourcePath(p.name), "image/jpeg");
+      return kept({ ...p, ops: cellsToOps(p.cells), sourceUrl: await dataUrl(photo), bitmap: await createImageBitmap(photo) });
     })),
   };
 }

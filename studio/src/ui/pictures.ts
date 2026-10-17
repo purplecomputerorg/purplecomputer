@@ -79,12 +79,12 @@ const card = (src: string, alt: string, ...body: (Node | null)[]) =>
 function cropper(pic: Picture): HTMLElement {
   const { width: W, height: H } = pic.bitmap;
   const handle = h("i", { class: "crop-handle", title: "Drag to resize" }, "⤡");
-  const box = h("div", { class: "crop-box" }, handle);
+  const box = h("div", { class: "crop-box" }, h("i", { class: "crop-handle crop-move", title: "Drag to move" }, "✥"), handle);
   const frame = h("div", { class: "cropper" }, h("img", { src: pic.sourceUrl, alt: "" }), box);
   const mode = (label: string, crop: () => Crop | undefined) => h("button", { type: "button", onclick: () => apply(crop()) }, label);
   const whole = mode("Whole picture", () => undefined);
   const fill = mode("Fill the screen", () => pic.crop ?? fillCrop(W, H));
-  const hint = h("p", { class: "dim small" }, "Drag the box to move it. Drag the purple corner to make it bigger or smaller.");
+  const hint = h("p", { class: "dim small" }, "Drag the middle circle to move the box. Drag the corner circle to make it bigger or smaller.");
   const pct = (v: number, of: number) => `${(100 * v) / of}%`;
   const show = (c = pic.crop) => {
     box.hidden = hint.hidden = !c;
@@ -140,7 +140,7 @@ function pictureView(pic: Picture): HTMLElement {
     card(pic.sourceUrl, ex?.alt ?? "",
       tryBar(pic, remove),
       ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
-      field("Its name", name),
+      field("Picture name", name),
       h("div", { class: "field" }, h("span", {}, "On the screen"), cropper(pic)),
       h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
     ...more(pic));

@@ -139,6 +139,11 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .room-buttons button { font: 600 13px var(--sans); padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; }
 .room-buttons button:hover { background: var(--fill); }
 .room-buttons button[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
+.room-buttons.crop-modes { justify-content: flex-start; margin-bottom: 10px; }
+.cropper { position: relative; display: inline-block; max-width: 100%; line-height: 0; border-radius: 10px; overflow: hidden; user-select: none; }
+.cropper img { display: block; max-width: 100%; max-height: 260px; }
+.crop-box { position: absolute; box-shadow: 0 0 0 9999px rgba(53, 42, 74, 0.55); outline: 2px solid #fff; outline-offset: -2px; cursor: move; touch-action: none; }
+.crop-handle { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; border-radius: 50% 0 0 0; background: #fff; cursor: nwse-resize; }
 .phone-bar .tray-keys, .phone-hint { display: none; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .room-buttons { margin-bottom: 10px; }
@@ -208,8 +213,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .stack { display: flex; flex-direction: column; gap: 10px; }
 .stack > * { margin-block: 0; }
 
-label.field { display: block; margin: 10px 0; }
-label.field > span { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 5px; }
+.field { display: block; margin: 10px 0; }
+.field > span { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 5px; }
 input[type="text"], input[type="password"], select, textarea {
   font: inherit; color: var(--text); background: #fff; border: 1.5px solid var(--line); border-radius: 12px;
   padding: 9px 14px; width: 100%; outline: none;

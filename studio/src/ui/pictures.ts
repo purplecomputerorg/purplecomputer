@@ -1,5 +1,5 @@
 import type { RoomSetup } from "../live/boot";
-import { EXAMPLES, examplePicture, pictureFromFile, type Example, type Picture } from "../photo";
+import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
 import { changed, draft, freeName, titleOf, withSample } from "../state";
 import { field, h } from "./dom";
 import { liveScreen } from "./live";
@@ -75,6 +75,51 @@ function more(current: Picture | null): HTMLElement[] {
 const card = (src: string, alt: string, ...body: (Node | null)[]) =>
   h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px;align-items:flex-start" }, h("img", { class: "photo", src, alt }), h("div", { class: "stack", style: "flex:1;min-width:200px" }, ...body)));
 
+// The whole photo on the screen, or a canvas-shaped box of it to drag and resize by its corner.
+function cropper(pic: Picture): HTMLElement {
+  const { width: W, height: H } = pic.bitmap;
+  const handle = h("i", { class: "crop-handle" });
+  const box = h("div", { class: "crop-box" }, handle);
+  const frame = h("div", { class: "cropper" }, h("img", { src: pic.sourceUrl, alt: "" }), box);
+  const mode = (label: string, crop: () => Crop | undefined) => h("button", { type: "button", onclick: () => apply(crop()) }, label);
+  const whole = mode("Whole picture", () => undefined);
+  const fill = mode("Fill the screen", () => pic.crop ?? fillCrop(W, H));
+  const pct = (v: number, of: number) => `${(100 * v) / of}%`;
+  const show = (c = pic.crop) => {
+    box.hidden = !c;
+    whole.setAttribute("aria-pressed", String(!c));
+    fill.setAttribute("aria-pressed", String(!!c));
+    if (c) Object.assign(box.style, { left: pct(c.x, W), top: pct(c.y, H), width: pct(c.w, W), height: pct(c.h, H) });
+  };
+  const apply = (c?: Crop) => {
+    cropTo(pic, c);
+    pic.sample = false;
+    show();
+    changed();
+    liveScreen().show({ room: "art", picture: pic.ops });
+  };
+  const drag = (e: PointerEvent) => {
+    e.preventDefault();
+    const start = pic.crop!;
+    const resize = e.target === handle;
+    const k = W / frame.clientWidth;
+    let crop = start;
+    const move = (m: PointerEvent) => {
+      const [dx, dy] = [(m.clientX - e.clientX) * k, (m.clientY - e.clientY) * k];
+      crop = clampCrop(resize
+        ? { ...start, w: Math.min(start.w + Math.max(dx, dy * CANVAS_SHAPE), W - start.x, (H - start.y) * CANVAS_SHAPE) }
+        : { ...start, x: start.x + dx, y: start.y + dy }, W, H);
+      show(crop);
+    };
+    box.setPointerCapture(e.pointerId);
+    box.onpointermove = move;
+    box.onpointerup = () => { box.onpointermove = box.onpointerup = null; apply(crop); };
+  };
+  box.onpointerdown = drag;
+  show();
+  return h("div", {}, h("div", { class: "room-buttons crop-modes" }, whole, fill), frame);
+}
+
 function pictureView(pic: Picture): HTMLElement {
   const ex = EXAMPLES.find((e) => e.src === pic.sourceUrl);
   const name = h("input", { type: "text", class: "name-field", value: titleOf(pic), maxLength: 24 });
@@ -95,6 +140,7 @@ function pictureView(pic: Picture): HTMLElement {
       tryBar(pic, remove),
       ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
       field("Its name", name),
+      h("div", { class: "field" }, h("span", {}, "On the screen"), cropper(pic)),
       h("p", { class: "dim small" }, "Your kid sees this name in the Art room, under Open (Esc, then O). Click the screen and type to paint on top of it.")),
     ...more(pic));
 }

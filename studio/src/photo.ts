@@ -7,7 +7,9 @@ import { slug } from "@sdk/pack";
 import type { Keepable } from "./state";
 import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type PaintOp } from "@sdk/purple/art";
 
-export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string }
+// crop: the part of the photo on the screen, in its own pixels and the Art canvas's shape; none is the whole photo.
+export interface Crop { x: number; y: number; w: number; h: number }
+export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string; bitmap: ImageBitmap; crop?: Crop }
 
 const hex = (r: number, g: number, b: number) =>
   "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
@@ -71,12 +73,37 @@ export function examplePicture({ name, src }: Example): Promise<Picture> {
 }
 
 function pictureFromBitmap(bitmap: ImageBitmap, name: string, sourceUrl: string): Picture {
-  const [cols, rows] = fitToCanvas(bitmap.width, bitmap.height);
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(bitmap, 0, 0);
-  const cells = downsample(ctx.getImageData(0, 0, bitmap.width, bitmap.height), cols, rows);
-  return { name, cells, ops: cellsToOps(cells), sourceUrl };
+  const pic: Picture = { name, cells: [], ops: [], sourceUrl, bitmap };
+  cropTo(pic);
+  return pic;
+}
+
+export function cropTo(pic: Picture, crop?: Crop) {
+  pic.crop = crop;
+  const { x, y, w, h } = crop ?? { x: 0, y: 0, w: pic.bitmap.width, h: pic.bitmap.height };
+  const [sw, sh] = [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))];
+  const ctx = new OffscreenCanvas(sw, sh).getContext("2d")!;
+  ctx.drawImage(pic.bitmap, x, y, w, h, 0, 0, sw, sh);
+  pic.cells = downsample(ctx.getImageData(0, 0, sw, sh), ...fitToCanvas(sw, sh));
+  pic.ops = cellsToOps(pic.cells);
+}
+
+export const CANVAS_SHAPE = CANVAS_WIDTH / (CANVAS_HEIGHT * CELL_ASPECT);
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+
+// The biggest canvas-shaped crop of a w by h photo, centered.
+export function fillCrop(w: number, h: number): Crop {
+  const cw = Math.min(w, h * CANVAS_SHAPE);
+  const ch = cw / CANVAS_SHAPE;
+  return { x: (w - cw) / 2, y: (h - ch) / 2, w: cw, h: ch };
+}
+
+// A crop pulled back inside the photo at the canvas's shape, no narrower than the canvas has cells.
+export function clampCrop(c: Crop, w: number, h: number): Crop {
+  const max = fillCrop(w, h).w;
+  const cw = clamp(c.w, Math.min(CANVAS_WIDTH, max), max);
+  const ch = cw / CANVAS_SHAPE;
+  return { x: clamp(c.x, 0, w - cw), y: clamp(c.y, 0, h - ch), w: cw, h: ch };
 }
 
 // The picture on the Art grid, centered the way Purple paints it; a cell is cellPx wide.

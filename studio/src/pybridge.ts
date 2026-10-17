@@ -3,7 +3,7 @@
 // pack for something is adding it, so these go straight onto the family's Purple.
 import { ROOM_NAME } from "@sdk/pack";
 import { BASES, defaults, type BaseName } from "@sdk/purple/synth";
-import { changed, draft, pieces, slug, type RoomDraft } from "./state";
+import { changed, draft, features, pieces, slug, type RoomDraft } from "./state";
 
 export function addRoom(name: string, source: string, made: Pick<RoomDraft, "blocks" | "template" | "kept"> = { blocks: null, template: null }): RoomDraft {
   const room: RoomDraft = { name, source, ...made };
@@ -39,6 +39,7 @@ export const bridge = {
     return "";
   },
   add_room(name: string, source: string): string {
+    if (!features.rooms) return "rooms are turned off in Purple Studio for now";
     if (!ROOM_NAME.test(name)) return "a room name is lowercase letters, digits, and dashes";
     addRoom(name, source, { blocks: null, template: null, kept: true });
     return "";

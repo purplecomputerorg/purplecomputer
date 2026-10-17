@@ -4,6 +4,8 @@ A parent-facing web app for putting a family's own things into their Purple Comp
 
 This is a draft, not a shipping product, and nothing in it is a public commitment. It is the first web code in the repo.
 
+**Rooms are off for now:** `features.rooms = false` in `src/state.ts` hides the Rooms page, the Room guide, and `pack.room`, and drops rooms from the copy that mentions them. Flip it to `true` to turn everything back on.
+
 ## Run it
 
 ```bash

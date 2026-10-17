@@ -2,13 +2,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { loadPyodide, type PyodideInterface } from "pyodide";
 import prelude from "../src/purple_prelude.py?raw";
 import { bridge } from "../src/pybridge";
-import { draft } from "../src/state";
+import { draft, features } from "../src/state";
 
 // Pyodide runs in Node too, so the prelude and the bridge get a real Python interpreter here.
 // Loading it takes a few seconds; every test shares one instance.
 let py: PyodideInterface;
 
 beforeAll(async () => {
+  features.rooms = true;
   // Under Vite the module's own URL is rewritten, so point Pyodide at its files explicitly.
   py = await loadPyodide({ indexURL: decodeURIComponent(new URL("../node_modules/pyodide/", import.meta.url).pathname) });
   py.registerJsModule("purple_bridge", bridge);
@@ -38,5 +39,14 @@ pack.room("farm", """
   it("raises the same refusals Purple would", async () => {
     await expect(py.runPythonAsync(`pack.room("Bad Name", "x")`)).rejects.toThrow(/lowercase/);
     await expect(py.runPythonAsync(`pack.instrument("x", "marimba", reverb=1)`)).rejects.toThrow(/no parameter reverb/);
+  });
+
+  it("refuses rooms while they are turned off", async () => {
+    features.rooms = false;
+    try {
+      await expect(py.runPythonAsync(`pack.room("farm", "x")`)).rejects.toThrow(/turned off/);
+    } finally {
+      features.rooms = true;
+    }
   });
 });

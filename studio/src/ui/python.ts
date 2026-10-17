@@ -3,6 +3,7 @@
 // through the same check Purple applies.
 import prelude from "../purple_prelude.py?raw";
 import { bridge } from "../pybridge";
+import { features } from "../state";
 import { clear, h } from "./dom";
 import type { View } from "./view";
 
@@ -17,7 +18,7 @@ declare global { interface Window { loadPyodide?: (options: { indexURL: string }
 const EXAMPLE = `pack.word("tractor", "🚜")
 pack.synonym("tracter", "tractor")
 pack.rank("tractor")
-
+${features.rooms ? `
 pack.room("hello", """
 from purple import *
 
@@ -26,7 +27,7 @@ show("👋")
 def on_key(key):
     show(key)
     play("C4")
-""")
+""")` : ""}
 print(pack)`;
 
 let pyodide: Promise<Pyodide> | null = null;
@@ -75,12 +76,12 @@ export function pythonView(): View {
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "The same pack, from Python. A ", h("span", { class: "mono" }, "pack"), " object adds words, synonyms, instruments, and rooms. It runs right here in the browser and changes the pack on the left as it goes."),
+      h("p", { class: "lead" }, "The same pack, from Python. A ", h("span", { class: "mono" }, "pack"), ` object adds words, synonyms, instruments${features.rooms ? ", and rooms" : ""}. It runs right here in the browser and changes the pack on the left as it goes.`),
       h("div", { class: "card" }, code, h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "btn small", onclick: run }, "Run"), h("span", { class: "dim small" }, "or Ctrl+Enter"), status), out),
       h("h3", {}, "What you can call"),
       h("pre", { class: "small" }, prelude.split('"""')[1].trim()),
-      h("p", { class: "dim small" }, "A room is its own Python file; see the ", h("a", { href: "#guide" }, "Room guide"), " for what it can call, and the Rooms page to try one."),
-      h("div", { class: "note" }, h("strong", {}, "What this is not: "), "a way to change Purple itself. This page fills in the pack; only the rooms in it run on Purple, each in a box of its own. The Python runtime is Pyodide, loaded from this site the first time you press Run."),
+      features.rooms ? h("p", { class: "dim small" }, "A room is its own Python file; see the ", h("a", { href: "#guide" }, "Room guide"), " for what it can call, and the Rooms page to try one.") : null,
+      h("div", { class: "note" }, h("strong", {}, "What this is not: "), `a way to change Purple itself. This page fills in the pack${features.rooms ? "; only the rooms in it run on Purple, each in a box of its own" : ""}. The Python runtime is Pyodide, loaded from this site the first time you press Run.`),
     ),
   };
 }

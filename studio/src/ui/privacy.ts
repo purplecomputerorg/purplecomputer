@@ -1,3 +1,4 @@
+import { features } from "../state";
 import { h } from "./dom";
 import type { View } from "./view";
 
@@ -14,7 +15,7 @@ export function privacyView(): View {
       {},
       h("p", { class: "lead" }, "Purple Studio runs entirely in your web browser. Nothing you add or make leaves your phone or computer."),
       h("ul", { class: "plain privacy" },
-        item("Nothing is uploaded.", "Photos, drawings, recordings, words, and rooms stay in your browser."),
+        item("Nothing is uploaded.", `Photos, drawings, recordings, ${features.rooms ? "words, and rooms" : "and words"} stay in your browser.`),
         item("Purple runs fully in your browser.", "Purple Studio is JavaScript, and Purple's Python runs with ", h("a", { href: "https://pyodide.org", target: "_blank", rel: "noopener" }, "Pyodide"), "."),
         item("Nothing is tracked.", "No account, cookies, analytics, or ads."),
         item("No AI service.", "Nothing you add or make is sent to an AI company."),

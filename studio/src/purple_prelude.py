@@ -7,12 +7,6 @@ being edited in Studio; nothing is saved anywhere else.
     pack.synonym("tracter", "tractor")
     pack.rank("tractor", "cow")
     pack.instrument("kitchen", "marimba", wood=0.9, tube=0.4)
-    pack.room("hello", '''
-    from purple import *
-    show("👋")
-    def on_key(key):
-        show(key)
-    ''')
     print(pack.summary())
 """
 

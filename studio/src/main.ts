@@ -1,7 +1,7 @@
 import "./fonts";
 import "./styles.css";
 import logo from "../../assets/logo.svg";
-import { allPieces, onChange, pieces } from "./state";
+import { allPieces, features, onChange, pieces } from "./state";
 import { clear, h } from "./ui/dom";
 import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
@@ -37,14 +37,15 @@ const SECTIONS: Section[] = [
   { id: "instruments", label: "Instruments", icon: "🎹", blurb: "A sound of your own for the Music room", view: instrumentsView },
   { id: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
   { id: "colors", label: "Colors", icon: "🎨", blurb: "The colors the letters paint with", view: colorsView },
-];
-const MORE: [id: string, label: string, view: (item: string | null) => View][] = [
+].filter((s) => features.rooms || s.id !== "rooms");
+type Page = [id: string, label: string, view: (item: string | null) => View];
+const MORE = ([
   ["install", "Putting it on Purple", installView],
   ["guide", "Room guide", guideView],
   ["python", "Python console", pythonView],
   ["format", "What is in the file", formatView],
   ["privacy", "Your privacy", privacyView],
-];
+] satisfies Page[]).filter(([id]) => features.rooms || id !== "guide");
 const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
 
 function welcomeView(): View {
@@ -156,7 +157,7 @@ function route() {
 }
 
 // ?sample seeds a room so a screenshot or a demo lands on a filled editor.
-if (new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name, EXAMPLES[0].source);
+if (features.rooms && new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name, EXAMPLES[0].source);
 
 onChange(() => { renderTop(); renderPhoneBar(); live.changed(); });
 window.addEventListener("hashchange", route);

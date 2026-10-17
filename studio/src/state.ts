@@ -5,6 +5,9 @@ import { packId as sdkPackId, roomTitle, slug } from "@sdk/pack";
 import type { Theme } from "@sdk/purple/theme";
 import type { BaseName, Params } from "@sdk/purple/synth";
 
+// Off until room customization ships: no Rooms page, Room guide, or pack.room. Mutable so tests can turn it on.
+export const features = { rooms: false };
+
 // Everything starts as a try: Studio's Purple plays it, and it goes in the download once the family
 // adds it (kept). A sample is one of Studio's examples, tried and not yet changed or added.
 export interface Keepable { kept?: boolean; sample?: boolean }

@@ -90,7 +90,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .more-menu summary { font-size: 0; padding: 7px 6px; }
   .more-menu summary::after { content: "⋯"; font-size: 18px; }
   .topbar .btn.download { padding: 8px 14px; }
-  .word-row { grid-template-columns: minmax(0, 1fr) 56px 72px 28px; }
+  .word-rows { grid-template-columns: minmax(0, 1fr) 56px auto auto; }
   .word-row .was { display: none; }
 }
 
@@ -340,8 +340,9 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .swatch-pick input[type="color"] { width: 44px; height: 44px; border-radius: 12px; overflow: hidden; }
 
 /* Words */
-.word-rows { display: grid; gap: 6px; max-width: 560px; }
-.word-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px minmax(90px, auto) 72px 28px; gap: 10px; align-items: center; }
+.word-rows { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto auto auto; gap: 6px 10px; max-width: 560px; }
+.word-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
+.word-rows + .status:empty { min-height: 0; }
 .word-row.head span { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .emoji-wrap { position: relative; }
 .emoji-cell { width: 64px; height: 42px; font-size: 24px; border-radius: 12px; border: 1.5px solid var(--line); background: #fff; cursor: pointer; padding: 0; }

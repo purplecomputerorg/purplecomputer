@@ -15,6 +15,8 @@ from pathlib import Path
 
 ENGLISH = "en"
 PACK_TYPE = "language"
+# Off until a speaker reviews the packs: none load, so Purple is English and the parent menu has no Language rows.
+ENABLED = False
 _SLOT_RE = re.compile(r"\{(\d+)\}")
 _CJK_RE = re.compile(r"[㐀-鿿豈-﫿]")
 _MEMO_LIMIT = 4096
@@ -158,6 +160,8 @@ _memo: dict = {}
 def languages() -> dict:
     """Installed languages by code: the image's packs, then user packs, which win."""
     global _languages
+    if not ENABLED:
+        return {}
     if _languages is None:
         from .content import _pack_dirs
         found = {}
@@ -171,6 +175,8 @@ def languages() -> dict:
 
 def _choice():
     global _interface, _second, _loaded_choice
+    if not ENABLED:
+        return ENGLISH, None
     if not _loaded_choice:
         from .settings import get_language, get_second_language
         _interface, _second, _loaded_choice = get_language(), get_second_language(), True

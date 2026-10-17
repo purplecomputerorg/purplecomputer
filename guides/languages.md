@@ -9,6 +9,8 @@ Both languages' words type the same emoji and colors as their English. When a wo
 
 Canvas UI only. The Textual UI stays English.
 
+**Off for now:** `i18n.ENABLED = False` until a speaker reviews the packs. No language pack loads (fonts and `blocked.txt` lists included), so Purple stays English and the parent menu hides both rows. Flip it to `True` to turn everything back on.
+
 Pack file format: `studio/PACK_FORMAT.md`. Code: `purple_tui/i18n.py`.
 
 ## Why strings are translated where they are drawn

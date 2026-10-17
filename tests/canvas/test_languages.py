@@ -31,7 +31,7 @@ def make_pack(root, code, strings=None, words=None, typing=None, voice=None, spe
 @pytest.fixture
 def langs(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
-    for name, value in (("_memo", {}), ("_interface", None), ("_second", None), ("_loaded_choice", False)):
+    for name, value in (("ENABLED", True), ("_memo", {}), ("_interface", None), ("_second", None), ("_loaded_choice", False)):
         monkeypatch.setattr(i18n, name, value)
     monkeypatch.setattr(content, "_content", None)
     es = make_pack(tmp_path, "es", strings={"Volume": "Volumen", "{0} blocks left": "quedan {0} bloques",
@@ -261,6 +261,7 @@ def test_shipped_packs_load(code):
 
 @pytest.fixture
 def shipped(monkeypatch):
+    monkeypatch.setattr(i18n, "ENABLED", True)
     monkeypatch.setattr(i18n, "_languages", None)
     monkeypatch.setattr(i18n.Path, "home", lambda: i18n.Path("/nonexistent"))
     return i18n.languages()

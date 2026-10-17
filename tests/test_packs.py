@@ -132,13 +132,16 @@ class TestLoader:
         assert cm.exact_emoji("zorb") is None
         assert cm.user_content == [] and cm.instruments == [] and cm.pictures == []
 
-    def test_later_pack_wins_lookups(self, tmp_path):
-        make_pack(tmp_path, "a-pack")
-        make_pack(tmp_path, "b-pack")
+    def test_newest_pack_wins_lookups_whatever_its_name(self, tmp_path):
+        for pack_id, built in (("a-pack", 2000), ("b-pack", 1000)):
+            d = make_pack(tmp_path, pack_id)
+            (d / "content" / "emoji.json").write_text(json.dumps({"zorb": pack_id}))
+            os.utime(d / "manifest.json", (built, built))
         cm = ContentManager(packs_dir=tmp_path)
         cm.load_all()
-        assert cm.pack_dirs("letters")[0] == tmp_path / "b-pack" / "content" / "letters"
-        assert cm.instrument_dir("kitchen") == tmp_path / "b-pack" / "content" / "kitchen"
+        assert cm.exact_emoji("zorb") == "a-pack"
+        assert cm.pack_dirs("letters")[0] == tmp_path / "a-pack" / "content" / "letters"
+        assert cm.instrument_dir("kitchen") == tmp_path / "a-pack" / "content" / "kitchen"
 
     def test_voice_clip_from_pack_beats_core(self, packs, tmp_path):
         assert tts._get_voice_clip("Hi there") == tmp_path / "the-tests-pack" / "content" / "voice" / "hi_there.wav"

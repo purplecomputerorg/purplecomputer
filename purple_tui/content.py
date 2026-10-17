@@ -215,8 +215,8 @@ class ContentManager:
         for pack_dir in _pack_dirs(source_packs):
             self._load_pack(pack_dir)
 
-        # Then load from user-installed packs (can override/extend)
-        for pack_dir in _pack_dirs(self.packs_dir):
+        # Then user-installed packs, newest last so it wins a word two packs both define
+        for pack_dir in _pack_dirs(self.packs_dir, newest_last=True):
             self._load_pack(pack_dir, user=True)
 
         self._load_language_words()
@@ -767,10 +767,20 @@ def room_files(content_dir: Path) -> list[Path]:
     return sorted(p for p in (content_dir / "rooms").glob("*.py") if ROOM_NAME.match(p.stem))
 
 
-def _pack_dirs(packs_dir: Path) -> list[Path]:
+def _pack_dirs(packs_dir: Path, newest_last: bool = False) -> list[Path]:
     if not packs_dir.exists():
         return []
-    return sorted(p for p in packs_dir.iterdir() if p.is_dir() and not p.name.startswith("."))
+    dirs = sorted(p for p in packs_dir.iterdir() if p.is_dir() and not p.name.startswith("."))
+    return sorted(dirs, key=_made_at) if newest_last else dirs
+
+
+def _made_at(pack_dir: Path) -> float:
+    """When the pack was built: extraction keeps the archive's mtimes, so a live Key's
+    reinstall at every boot doesn't reorder them."""
+    try:
+        return (pack_dir / "manifest.json").stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def _read_json(path: Path):

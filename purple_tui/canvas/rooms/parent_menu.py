@@ -22,7 +22,7 @@ from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, draw_bar, draw_field, draw_scrim,
+from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_bar, draw_field, draw_scrim,
                   draw_text_caret, draw_window, field_height, window_title_height)
 from .sleep_screen import FullScreen
 
@@ -292,6 +292,45 @@ class FamilyRoomsScreen(Picker):
         set_room_on(room.key, None if _room_state(room, get_rooms_on()) == "on" else room.digest)
         self.options = self._options()
         self.app.invalidate()
+
+
+class PurplePacksScreen(Picker):
+    """Each Purple Pack installed from a USB drive. Packs are read at startup, so a removed one
+    stays listed, and in use, until Purple restarts."""
+    title = "Purple Packs"
+    DESCRIPTION = "Pictures, words, and sounds from Purple Studio."
+
+    def __init__(self, app):
+        self.removed: dict[str, str] = {}
+        super().__init__(app, self._options())
+
+    def _options(self) -> list:
+        from ...pack_manager import get_installer
+        packs = [(p["id"], p["name"], "Enter to remove") for p in get_installer().list_installed()]
+        gone = [(False, name, "Removed: gone when Purple restarts") for name in self.removed.values()]
+        return packs + gone + [(None, "Done")]
+
+    def _on_confirm(self, pack_id):
+        if pack_id is None:
+            return self.close(True)
+        if pack_id is False:
+            return
+        name = self.options[self.selected][1]
+        self.app.push(Confirm(self.app, f"Remove {name}?", "It comes back if its Purple Pack is on a USB drive when Purple starts.",
+                              yes="Remove", no="Keep"), on_close=lambda yes: yes is True and self._remove(pack_id, name))
+
+    def _remove(self, pack_id: str, name: str):
+        from ...pack_manager import get_installer
+        if get_installer().uninstall_pack(pack_id)[0]:
+            self.removed[pack_id] = name
+        self.options = self._options()
+        self.selected = min(self.selected, len(self.options) - 1)
+        self.app.invalidate()
+
+
+def _purple_packs_label() -> str:
+    from ...pack_manager import get_installer
+    return f"Purple Packs: {len(get_installer().list_installed())}"
 
 
 class MusicLoopingScreen(_YesNo):
@@ -1242,6 +1281,7 @@ def _family_rooms_label() -> str:
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
     from ...content import get_content
+    from ...pack_manager import get_installer
     from ...settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
                             get_music_looping, get_parent_pin, get_secret_unlocked, get_voice, get_volume_lock)
     items = [("menu-help", "Help & Videos")]
@@ -1260,6 +1300,8 @@ def _get_menu_items(app) -> list:
         items.append(("menu-music-key-switching", "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"))
         if get_content().rooms:
             items.append(("menu-family-rooms", _family_rooms_label()))
+    if get_installer().list_installed():
+        items.append(("menu-purple-packs", _purple_packs_label()))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
     if i18n.languages():
         items.append(("menu-second-language", _second_language_menu_label()))
@@ -1375,6 +1417,7 @@ class ParentMenu(Overlay):
         handler = {
             "menu-littles": self._open_littles_mode, "menu-code-panel": self._open_code_panel,
             "menu-rooms": self._open_rooms, "menu-family-rooms": self._open_family_rooms,
+            "menu-purple-packs": lambda: self.app.push(PurplePacksScreen(self.app), on_close=lambda _: self._relabel("menu-purple-packs", _purple_packs_label())),
             "menu-music-looping": self._open_music_looping, "menu-music-key-switching": self._open_music_key_switching,
             "menu-all-caps": self._open_all_caps, "menu-secret": self._open_secret_menu,
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),

@@ -87,7 +87,7 @@ function wordTable(): HTMLElement {
 export function wordsView(): View {
   const table = wordTable();
   return {
-    title: "Words",
+    title: "Emoji",
     editor: h(
       "section",
       {},

@@ -33,7 +33,7 @@ interface Section {
 const SECTIONS: Section[] = [
   { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or your kid's drawing, for them to paint on top of", view: picturesView },
   { id: "voice", label: "Voice", icon: "🎙️", blurb: "Your voice on the keys, saying anything you like", view: voiceView },
-  { id: "words", label: "Words", icon: "🐶", blurb: "Your words, each with its own emoji", view: wordsView },
+  { id: "words", label: "Emoji", icon: "🐶", blurb: "An emoji for each word your family uses", view: wordsView },
   { id: "instruments", label: "Instruments", icon: "🎹", blurb: "A sound of your own for the Music room", view: instrumentsView },
   { id: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
   { id: "colors", label: "Colors", icon: "🎨", blurb: "The colors the letters paint with", view: colorsView },

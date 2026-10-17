@@ -340,7 +340,7 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .swatch-pick { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .swatch-pick input[type="color"] { width: 44px; height: 44px; border-radius: 12px; overflow: hidden; }
 
-/* Words */
+/* Emoji */
 .word-rows { display: grid; grid-template-columns: minmax(0, 1fr) 64px 96px 28px; gap: 6px 10px; max-width: 560px; }
 .word-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
 .word-rows + .status:empty { min-height: 0; }

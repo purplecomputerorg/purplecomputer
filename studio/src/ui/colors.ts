@@ -83,7 +83,7 @@ export function colorsView(): View {
 
       h("details", { class: "more-options" }, h("summary", {}, "Change one color at a time"),
         h("p", { class: "dim small" }, "Purple works these out from your screen color, so they stay easy to read. Change any one here."),
-        h("h4", {}, "Words"), h("div", { class: "wells" }, ...TEXT_ROLES.map(well)),
+        h("h4", {}, "Text"), h("div", { class: "wells" }, ...TEXT_ROLES.map(well)),
         h("h4", {}, "Screen"), h("div", { class: "wells" }, ...SCREEN_ROLES.map(well))),
       draft.theme ? h("p", {}, h("button", { class: "linkbtn dim", onclick: () => { draft.colors = {}; set(structuredClone(DEFAULT_THEME)); } }, "Undo all my color changes")) : null,
     ));

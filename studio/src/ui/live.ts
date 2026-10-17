@@ -49,9 +49,9 @@ class LiveScreen {
   // Set by the Rooms page: a family room's print() output, and why one stopped.
   onPrint = (_text: string) => {};
   onProblem = (_p: RoomProblem) => {};
-  place: Place = { room: "play", menu: false, at: null };
+  place: Place = { room: "art", menu: false, at: null };
   private ready = false;
-  private setup: RoomSetup = { room: "play" };
+  private setup: RoomSetup = { room: "art" };
   private timer = 0;
   private sent = "";
   // Messages wait for the frame's page to be listening; until then the iframe holds about:blank.

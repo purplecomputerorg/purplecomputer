@@ -53,16 +53,16 @@ function welcomeView(): View {
     editor: h(
       "section",
       {},
-      h("h1", {}, "Make it your family's."),
-      h("p", { class: "serif" }, "The dog on the canvas. Grandma saying the letters. A room where C is for cow."),
+      h("h1", {}, "Make Purple your own"),
+      h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
       h("div", { class: "cards" }, ...SECTIONS.map((s) =>
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
       h("p", { class: "dim" }, "Pick any one. When you're done, download one file and put it on Purple with a USB drive."),
       staysHere("Everything happens in your web browser. Nothing you add is uploaded, and nothing is tracked."),
     ),
-    live: { room: "play" },
+    live: { room: "art" },
     previewTitle: "This is Purple",
-    caption: "The real Purple, running in your browser. Try cat, red sun, or 3 dogs.",
+    caption: "The real Purple, running in your browser. Type any letter to paint, and the arrows move.",
   };
 }
 
@@ -77,7 +77,7 @@ const laptop = new Laptop((key) => { tapTarget?.(key); engage(); });
 laptop.screen.append(live.element);
 
 // On a phone, under the laptop: Purple's rooms to switch between, and a few keys for the room it's in.
-const ROOMS: [Room, string][] = [["play", "💬 Play"], ["music", "🎵 Music"], ["art", "🎨 Art"], ["blocks", "🧊 Blocks"]];
+const ROOMS: [Room, string][] = [["art", "🎨 Art"], ["music", "🎵 Music"], ["play", "💬 Play"], ["blocks", "🧊 Blocks"]];
 const TRAY: Record<Room, string[]> = { play: typingKeys("cat"), music: [..."asdfg"], art: ["q", "a", "z", "space"], blocks: ["q", "a", "z", "enter"] };
 const ARROWS = ["left", "up", "down", "right"];
 const roomButtons = h("div", { class: "room-buttons" });

@@ -30,7 +30,7 @@ def install(path):
 
 async def restart():
     global _app, _task
-    room = _app.active_room if _app else "play"
+    room = _app.active_room if _app else "art"
     if _app:
         _app.exit()
         await _task

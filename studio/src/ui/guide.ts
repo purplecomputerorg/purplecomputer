@@ -52,7 +52,7 @@ const SECTIONS: Section[] = [
   },
   {
     heading: "If something breaks",
-    text: "The Purple on the right shows a calm \"this room needs fixing\" card, just as the real one would, and Studio shows which line of the file the problem is on, with the error Python gave. Fix that line, or press Play from the start. On Purple, the rest of the computer keeps working.",
+    text: "The Purple on the right shows a calm \"this room needs fixing\" card, just as the real one would, and Purple Studio shows which line of the file the problem is on, with the error Python gave. Fix that line, or press Play from the start. On Purple, the rest of the computer keeps working.",
   },
 ];
 

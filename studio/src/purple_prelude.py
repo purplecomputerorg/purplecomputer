@@ -23,7 +23,7 @@ import purple_bridge as _bridge
 
 
 class Pack:
-    """The pack open in Studio. Each method changes it at once."""
+    """The pack open in Purple Studio. Each method changes it at once."""
 
     def word(self, word, emoji):
         _bridge.add_word(str(word), str(emoji))

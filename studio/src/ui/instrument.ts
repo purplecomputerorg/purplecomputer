@@ -116,7 +116,7 @@ function editor(inst: Instrument): View {
     ),
     live: { room: "music", instrument: inst.name },
     previewTitle: "What your kid hears",
-    caption: `Purple's Music room playing ${titleOf(inst)}. Moving a slider plays it in Studio; Purple has the new sound a moment later.`,
+    caption: `Purple's Music room playing ${titleOf(inst)}. Moving a slider plays it in Purple Studio; Purple has the new sound a moment later.`,
     cleanup: () => { unlisten(); clearTimeout(replayTimer); },
   };
 }

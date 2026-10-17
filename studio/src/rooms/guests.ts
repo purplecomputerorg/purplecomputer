@@ -6,7 +6,7 @@ import type { FromWorker } from "./worker";
 
 // Rooms block on shared memory, which browsers only allow on a cross-origin isolated page, and
 // that needs a secure context: https, or http on localhost.
-export const NOT_ISOLATED = "The preview needs a secure page. Open Studio at its https:// address, or at http://localhost on the computer running it.";
+export const NOT_ISOLATED = "The preview needs a secure page. Open Purple Studio at its https:// address, or at http://localhost on the computer running it.";
 
 interface Guest { worker: Worker; channel: SharedArrayBuffer; queue: string[]; pump: number }
 

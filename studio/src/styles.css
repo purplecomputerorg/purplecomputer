@@ -206,6 +206,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .row.between { justify-content: space-between; }
 .stack { display: flex; flex-direction: column; gap: 10px; }
+.stack > * { margin-block: 0; }
 
 label.field { display: block; margin: 10px 0; }
 label.field > span { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 5px; }

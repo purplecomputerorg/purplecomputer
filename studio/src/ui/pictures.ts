@@ -73,7 +73,7 @@ function more(current: Picture | null): HTMLElement[] {
 }
 
 const card = (src: string, alt: string, ...body: (Node | null)[]) =>
-  h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px" }, h("img", { class: "photo", src, alt }), h("div", { class: "stack", style: "flex:1;min-width:200px" }, ...body)));
+  h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px;align-items:flex-start" }, h("img", { class: "photo", src, alt }), h("div", { class: "stack", style: "flex:1;min-width:200px" }, ...body)));
 
 function pictureView(pic: Picture): HTMLElement {
   const ex = EXAMPLES.find((e) => e.src === pic.sourceUrl);

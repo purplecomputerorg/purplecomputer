@@ -26,7 +26,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 os.environ.setdefault("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
 import pygame  # noqa: E402
 
-from .. import i18n
+from .. import i18n, palette as P
 from ..palette import NAMED_COLORS, rgb
 
 FONT_DIR = Path(__file__).parent / "fonts"
@@ -394,7 +394,7 @@ class Gfx:
         for chunk, style in parse_markup(markup):
             fg = style.get("fg", color)
             if style.get("dim"):
-                fg = mix(fg, dim_to or "#1d1234", 0.5)
+                fg = mix(fg, dim_to or P.BG, 0.5)
             f = face
             if style.get("bold") and not face.endswith("bold") and not face.endswith("heavy"):
                 f = face + "-bold"

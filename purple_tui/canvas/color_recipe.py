@@ -51,9 +51,10 @@ def recipe_size(g, terms, result, px: int, lead: str = "") -> tuple:
     return sum(ws) + gap * (len(ws) - 1), h
 
 
-def draw_recipe(g, terms, result, px: int, x: int, y: int, anchor="midright", ink=P.MUTED, lead: str = "") -> pygame.Rect:
+def draw_recipe(g, terms, result, px: int, x: int, y: int, anchor="midright", ink=None, lead: str = "") -> pygame.Rect:
     """`terms` are (key, color) keycaps, a None color an empty keycap for the
     key still to come; '= result' follows as a blank keycap of the mixed color when given."""
+    ink = ink or P.MUTED
     pieces = _pieces(terms, result, lead)
     ws, h, gap = _widths(g, pieces, px)
     box = pygame.Rect((0, 0), recipe_size(g, terms, result, px, lead))

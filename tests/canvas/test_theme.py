@@ -9,7 +9,7 @@ import pytest
 from purple_tui import content as content_mod
 from purple_tui import palette as P
 from purple_tui import settings
-from purple_tui.canvas import theme
+from purple_tui.canvas import theme, ui
 from purple_tui.canvas.harness import make_app, press, run
 from purple_tui.canvas.rooms import art_room
 from purple_tui.content import ContentManager
@@ -64,6 +64,18 @@ def test_starting_again_without_the_theme_puts_purples_colors_back(themed):
     assert P.KEY_COLORS["q"] == "#11aa22"
     theme.apply({})
     assert P.KEY_COLORS["q"] == DEFAULT_Q and P.BG == DEFAULT_BG and P.ROW_LEGEND_COLORS[1] == ["#DF7070", "#BF4040", "#802020"]
+
+
+def test_keycaps_and_hints_drawn_with_default_colors_follow_the_theme(themed):
+    themed({"colors": {"text": "#eeeeff", "dim": "#552233"}})
+
+    async def go():
+        g = make_app().g
+        cap = ui.draw_key(g, "Tab", 20, 10, 40)
+        hint = ui.draw_key_hint(g, "{hold Enter} loop", 20, 10, 100)
+        assert tuple(g.surface.get_at((cap.x + 3, cap.centery)))[:3] == P.rgb("#eeeeff")
+        assert tuple(g.surface.get_at((hint.x + 3, hint.centery)))[:3] == P.rgb("#552233")
+    run(go())
 
 
 async def _start():

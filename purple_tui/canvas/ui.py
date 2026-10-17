@@ -574,9 +574,10 @@ def draw_window(g: Gfx, box: pygame.Rect, title: str = "") -> int:
     return box.y + head
 
 
-def draw_label(g: Gfx, text: str, px: int, x: int, y: int, color=P.MUTED, anchor="midleft", on=False) -> pygame.Rect:
+def draw_label(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft", on=False) -> pygame.Rect:
     """Mono label; on = the selection plate (filled rounded pill, dark ink):
     the one selection idiom everywhere."""
+    color = color or P.MUTED
     if not on:
         return g.draw_text(text, px, x, y, "mono", color, anchor=anchor)
     w, h = g.measure(text, px, "mono-bold")
@@ -587,9 +588,9 @@ def draw_label(g: Gfx, text: str, px: int, x: int, y: int, color=P.MUTED, anchor
     return plate
 
 
-def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", color=P.MUTED) -> pygame.Rect:
+def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", color=None) -> pygame.Rect:
     """A key name in a quiet rounded outline pill: Esc, Tab."""
-    r = g.draw_text(text, px, x, y, "mono", color, anchor=anchor)
+    r = g.draw_text(text, px, x, y, "mono", color or P.MUTED, anchor=anchor)
     box = r.inflate(round(px * 1.4), round(px * 0.56))
     g.rect(P.HAIR, box, width=1, radius=round(px * 0.5))
     return box
@@ -605,7 +606,7 @@ def arrow_keys_size(g: Gfx, px: int) -> tuple:
     return 3 * key_w + 2 * space, 2 * key_h + space
 
 
-def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=P.MUTED) -> pygame.Rect:
+def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=None) -> pygame.Rect:
     """Inverted-T keycaps, up floating over down; (x, y) is the bottom row's
     midleft. Returns the cluster's rect."""
     key_w, key_h, space = arrow_key_metrics(g, px)
@@ -659,10 +660,11 @@ def keycap_size(g: Gfx, text: str, px: int) -> tuple:
     return w + round(px * 1.4), h + round(px * 0.56)
 
 
-def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=P.TEXT, ink=P.SURFACE) -> pygame.Rect:
+def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=None, ink=None) -> pygame.Rect:
     """A solid keycap: the one look for a key the kid can press inside a room.
     'hold Space' puts the verb on the cap, so the hold reads as part of the key;
     a symbol key shows its shifted mark up and to the left, as printed on the real key."""
+    fill, ink = fill or P.TEXT, ink or P.SURFACE
     key = pygame.Rect((0, 0), keycap_size(g, text, px))
     setattr(key, anchor, (x, y))
     g.rect(fill, key, radius=round(px * 0.5))
@@ -686,8 +688,9 @@ def key_hint_width(g: Gfx, text: str, px: int) -> int:
     return sum(keycap_size(g, t, px)[0] if i % 2 else g.measure(t, px, "mono", tr=False)[0] for i, t in enumerate(parts) if t)
 
 
-def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=P.DIM, anchor="midleft") -> pygame.Rect:
+def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft") -> pygame.Rect:
     """A dim hint line where {Key} draws as a solid keycap: '{hold Space} write code'."""
+    color = color or P.DIM
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
     setattr(box, anchor, (x, y))
     x = box.x
@@ -779,7 +782,8 @@ def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, s
     return left + gap
 
 
-def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=P.PRIMARY, track=P.LINE, radius=0):
+def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=None, track=None, radius=0):
+    color, track = color or P.PRIMARY, track or P.LINE
     g.rect(track, (x, y, w, h), radius=radius)
     if fraction > 0:
         g.rect(color, (x, y, max(h, int(w * min(1.0, fraction))), h), radius=radius)

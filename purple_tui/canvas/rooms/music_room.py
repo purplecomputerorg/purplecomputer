@@ -30,7 +30,6 @@ PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
 _KID_MATH_UNREMAP = {"÷": "/", "×": "*"}
 _KID_MATH_DISPLAY = {"/": "÷", "*": "×"}
-WAVEFRONT_COLOR = "#7a5aa6"
 PITCH_TRANSITION_DURATION = 0.25
 LETTERS_SAME_KEY_DEBOUNCE_S = 0.40
 LETTERS_CROSS_KEY_DEBOUNCE_S = 0.20
@@ -593,7 +592,7 @@ class MusicRoom(Room):
                     root_idx, at_front = self._transition_state_for_col(col_idx)
                     note, _ = pitch_for(row_idx - 1, col_idx, FRIENDLY_KEYS[root_idx], 0)
                     if at_front and not on_paper:
-                        bg = WAVEFRONT_COLOR
+                        bg = P.LINE
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
                 quiet = bg == P.TILE
                 if not quiet:

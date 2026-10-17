@@ -142,7 +142,7 @@ function pictureView(pic: Picture): HTMLElement {
       ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
       field("Its name", name),
       h("div", { class: "field" }, h("span", {}, "On the screen"), cropper(pic)),
-      h("p", { class: "dim small" }, "Your kid sees this name in the Art room, under Open (Esc, then O). Click the screen and type to paint on top of it.")),
+      h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
     ...more(pic));
 }
 

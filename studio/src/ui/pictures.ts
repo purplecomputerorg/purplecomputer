@@ -78,15 +78,16 @@ const card = (src: string, alt: string, ...body: (Node | null)[]) =>
 // The whole photo on the screen, or a canvas-shaped box of it to drag and resize by its corner.
 function cropper(pic: Picture): HTMLElement {
   const { width: W, height: H } = pic.bitmap;
-  const handle = h("i", { class: "crop-handle" });
+  const handle = h("i", { class: "crop-handle", title: "Drag to resize" }, "⤡");
   const box = h("div", { class: "crop-box" }, handle);
   const frame = h("div", { class: "cropper" }, h("img", { src: pic.sourceUrl, alt: "" }), box);
   const mode = (label: string, crop: () => Crop | undefined) => h("button", { type: "button", onclick: () => apply(crop()) }, label);
   const whole = mode("Whole picture", () => undefined);
   const fill = mode("Fill the screen", () => pic.crop ?? fillCrop(W, H));
+  const hint = h("p", { class: "dim small" }, "Drag the box to move it. Drag the purple corner to make it bigger or smaller.");
   const pct = (v: number, of: number) => `${(100 * v) / of}%`;
   const show = (c = pic.crop) => {
-    box.hidden = !c;
+    box.hidden = hint.hidden = !c;
     whole.setAttribute("aria-pressed", String(!c));
     fill.setAttribute("aria-pressed", String(!!c));
     if (c) Object.assign(box.style, { left: pct(c.x, W), top: pct(c.y, H), width: pct(c.w, W), height: pct(c.h, H) });
@@ -117,7 +118,7 @@ function cropper(pic: Picture): HTMLElement {
   };
   box.onpointerdown = drag;
   show();
-  return h("div", {}, h("div", { class: "room-buttons crop-modes" }, whole, fill), frame);
+  return h("div", {}, h("div", { class: "room-buttons crop-modes" }, whole, fill), frame, hint);
 }
 
 function pictureView(pic: Picture): HTMLElement {

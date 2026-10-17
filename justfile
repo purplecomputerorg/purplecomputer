@@ -413,6 +413,12 @@ studio-bundle:
     cd studio && npm install --no-audit --no-fund
     {{venv}}/bin/python scripts/studio_bundle.py
 
+# Purple Studio: build here and upload to its Vercel project (link once with `cd studio && vercel link`); --prod for studio.purplecomputer.org
+studio-deploy *args: studio-bundle
+    cd studio && npm run build
+    cd studio && rm -rf .vercel/output/static && cp -r dist .vercel/output/static
+    cd studio && vercel deploy --prebuilt {{args}}
+
 # Purple Studio: type-check and unit tests
 studio-test:
     cd studio && npm install --no-audit --no-fund

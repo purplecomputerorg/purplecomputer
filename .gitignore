@@ -112,3 +112,4 @@ pytest-of-*/
 studio/node_modules/
 studio/dist/
 studio/.cache/
+studio/.vercel/

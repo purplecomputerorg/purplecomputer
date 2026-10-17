@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { copyFileSync, cpSync, mkdirSync, readdirSync, createReadStream, existsSync, statSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, readdirSync, createReadStream, existsSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import basicSsl from "@vitejs/plugin-basic-ssl";
@@ -67,6 +67,13 @@ function pyodideAssets(): Plugin {
       copyAll(blocklyMedia, resolve(here, "dist/blockly"), () => true);
       if (existsSync(join(cacheDir, "voice"))) cpSync(join(cacheDir, "voice"), resolve(here, "dist/voice"), { recursive: true });
       copyAll(espeakDir, resolve(here, "dist/voice/espeak-ng"), (f) => ESPEAK_SOURCE.includes(f));
+      // Vercel's Build Output API config, so `just studio-deploy` sends the same headers as vite.
+      const routes = [
+        { src: "/(.*)", headers: HEADERS, continue: true },
+        { src: "/purple\\.html", headers: { "Content-Security-Policy": LIVE_CSP }, continue: true },
+      ];
+      mkdirSync(resolve(here, ".vercel/output"), { recursive: true });
+      writeFileSync(resolve(here, ".vercel/output/config.json"), JSON.stringify({ version: 3, routes }, null, 2));
     },
   };
 }

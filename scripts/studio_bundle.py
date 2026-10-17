@@ -6,13 +6,11 @@ Also fetches the Pyodide wheels Purple needs (pygame-ce and friends) and Purple'
 since the page may only load files from its own site.
 
 Writes studio/.cache/purple.zip, studio/.cache/pyodide/*.whl, studio/.cache/voice/ (the voice model
-and the espeak-ng English data it phonemizes with), and studio/.cache/poster-<room>.png: a screenshot
-of each room from Purple's headless preview, shown while the live one starts.
+and the espeak-ng English data it phonemizes with).
 Usage: just studio-bundle
 """
 
 import json
-import os
 import shutil
 import subprocess
 import urllib.request
@@ -65,19 +63,9 @@ def fetch_voice() -> None:
         shutil.copyfile(data / name, out / "espeak-ng-data" / name)
 
 
-def take_posters() -> None:
-    shots = OUT.parent / "shots"
-    for room in ("play", "music", "art", "blocks"):
-        env = {**os.environ, "PURPLE_SCREENSHOT_DIR": str(shots)}
-        subprocess.run([sys.executable, str(ROOT / "scripts" / "preview.py"), room], cwd=ROOT, env=env, check=True, capture_output=True)
-        (shots / f"{room}.png").replace(OUT.parent / f"poster-{room}.png")
-    shots.rmdir()
-
-
 def main() -> None:
     fetch_wheels()
     fetch_voice()
-    take_posters()
     files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:

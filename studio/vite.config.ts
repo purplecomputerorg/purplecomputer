@@ -62,7 +62,7 @@ function pyodideAssets(): Plugin {
       };
       copyAll(pyodideDir, resolve(here, "dist/pyodide"), (f) => PYODIDE_FILES.includes(f));
       copyAll(join(cacheDir, "pyodide"), resolve(here, "dist/pyodide"), (f) => f.endsWith(".whl"));
-      copyAll(cacheDir, resolve(here, "dist/purple"), (f) => /^(purple\.zip|poster-.*\.png)$/.test(f));
+      copyAll(cacheDir, resolve(here, "dist/purple"), (f) => f === "purple.zip");
       copyAll(ortDir, resolve(here, "dist/ort"), (f) => ORT_FILES.includes(f));
       copyAll(blocklyMedia, resolve(here, "dist/blockly"), () => true);
       if (existsSync(join(cacheDir, "voice"))) cpSync(join(cacheDir, "voice"), resolve(here, "dist/voice"), { recursive: true });

@@ -1,6 +1,6 @@
 // The real Purple on the right: one iframe (purple.html), started when Studio opens and kept for
-// the whole visit, so it's usually ready before anyone looks. Until it is, a screenshot of the
-// same room, taken from Purple itself, stands in.
+// the whole visit, so it's usually ready before anyone looks. Until it is, and while it restarts
+// with an edit, a quiet message covers it, since it can't take keys then.
 import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { announceKey } from "../keys";
@@ -18,7 +18,6 @@ function tryHint(hint: string): HTMLElement {
 // Why a family room stopped, as Purple's FamilyRoom put it.
 export interface RoomProblem { text: string; line: number | null }
 
-const poster = (room: string) => new URL(`purple/poster-${room}.png`, document.baseURI).href;
 // Quiet time after the last edit before the pack is rebuilt and Purple restarts with it.
 const SETTLE_MS = 700;
 // A close-up of Purple's screen: this much bigger, around the spot given here, or else the room's
@@ -38,8 +37,7 @@ const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
 class LiveScreen {
   readonly element: HTMLElement;
   private frame = h("iframe", { class: "live-frame", src: "purple.html", title: "Purple", tabindex: -1 });
-  private poster = h("img", { class: "live-poster", alt: "" });
-  private status = h("span", {}, "Loading Purple");
+  private status = h("span", {}, "Loading Purple Computer in your browser");
   private hint = tryHint("then use the keyboard, like on Purple");
   private voiceNote = h("div", { class: "voice-loading", hidden: true });
   private zoomed = PHONE.matches;
@@ -60,7 +58,7 @@ class LiveScreen {
 
   constructor() {
     this.hint.onclick = () => this.focus();
-    this.element = h("div", { class: "screen-wrap live" }, this.frame, this.poster, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote);
+    this.element = h("div", { class: "screen-wrap live" }, this.frame, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote);
     PHONE.addEventListener("change", () => { this.zoomed = PHONE.matches; this.reframe(); });
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
@@ -70,7 +68,6 @@ class LiveScreen {
   show(setup: RoomSetup): void {
     this.setup = setup;
     this.moved({ room: setup.room, menu: false, at: null });
-    this.poster.src = poster(setup.room);
     if (this.ready) this.post({ type: "setup", setup });
   }
 
@@ -111,7 +108,7 @@ class LiveScreen {
 
   private onMessage(m: FromFrame): void {
     if (m.type === "hello") this.hello();
-    if (m.type === "failed") { this.status.textContent = "Purple couldn't start here"; console.warn("Purple failed:", m.text); }
+    if (m.type === "failed") { this.status.textContent = "Purple Computer couldn't start in this browser"; this.element.classList.add("failed"); console.warn("Purple failed:", m.text); }
     if (m.type === "loaded") this.busy(false);
     if (m.type === "loaded" && !this.ready) {
       this.ready = true;
@@ -127,9 +124,8 @@ class LiveScreen {
     if (m.type === "problem") this.onProblem({ text: m.text, line: m.line });
   }
 
-  // Between an edit and Purple restarting with it, the spinner says so.
   private busy(on: boolean): void {
-    if (this.ready) this.status.textContent = "Updating Purple";
+    if (this.ready) this.status.textContent = "Updating Purple Computer";
     this.element.classList.toggle("busy", on);
   }
 

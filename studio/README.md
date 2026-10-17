@@ -12,7 +12,7 @@ This is a draft, not a shipping product, and nothing in it is a public commitmen
 just studio            # npm install and a dev server on https://localhost:5173 (also https://<this machine>:5173 on the LAN)
 just studio-test       # tsc, vitest
 just studio-fixtures   # regenerate export.json and golden.json from Purple's Python (see below)
-just studio-bundle     # Purple itself for the live preview: .cache/purple.zip, Pyodide wheels, room posters (just studio runs it)
+just studio-bundle     # Purple itself for the live preview: .cache/purple.zip, Pyodide wheels (just studio runs it)
 ```
 
 Or from `studio/`: `npm install`, `npm run dev`, `npm test`, `npm run build` (static output in `studio/dist/`, deployable anywhere that serves files).
@@ -49,9 +49,9 @@ Everything starts as a try: a picture, a sound, a word, a recording, a room, new
 
 ## The live Purple
 
-`purple.html` boots Purple in an iframe that Studio starts at first paint and keeps for the whole visit; until it is running (about 3 seconds on a fast machine, 33 MB on first load) a screenshot of the same room from `just preview` stands in. After each edit settles, Studio builds the pack exactly as Download would, and Purple installs it with its own `PackInstaller` and starts again, the way it reads packs after a reboot. Keys typed on the Voice and Instruments pages are sent to Purple too.
+`purple.html` boots Purple in an iframe that Studio starts at first paint and keeps for the whole visit; until it is running (about 3 seconds on a fast machine, 33 MB on first load) a message on Purple's background covers it, and says "Updating" while Purple restarts after an edit. After each edit settles, Studio builds the pack exactly as Download would, and Purple installs it with its own `PackInstaller` and starts again, the way it reads packs after a reboot. Keys typed on the Voice and Instruments pages are sent to Purple too.
 
-- `scripts/studio_bundle.py` zips `purple_tui`, its fonts, the core packs, and the emoji font, fetches the Pyodide wheels Purple needs (pygame-ce, fonttools, rich, wcwidth), and takes the posters.
+- `scripts/studio_bundle.py` zips `purple_tui`, its fonts, the core packs, and the emoji font, fetches the Pyodide wheels Purple needs (pygame-ce, fonttools, rich, wcwidth).
 - `src/live/browser.py` turns what a browser can't do into no-ops before Purple loads: threads don't start, glyph coverage comes from the fonts' character maps (pygame.freetype doesn't initialize in Pyodide), the page draws emoji with the same Noto Color Emoji, the mixer opens without the subprocess probe, and speech plays Purple's recorded clips, or Piper (below).
 - `src/live/live.py` installs a pack (turning on its rooms: the parent made them), restarts the app, and sets up the room a page asks for, a family room being tried included.
 - Family rooms run in Purple's own `FamilyRoom`, with the room in a Web Worker in place of a process (`src/rooms/guests.ts`, swapped in by `src/live/browser.py`), so the preview is the laptop's room host, limits included.

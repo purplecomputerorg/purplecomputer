@@ -21,8 +21,9 @@ export interface RoomProblem { text: string; line: number | null }
 const poster = (room: string) => new URL(`purple/poster-${room}.png`, document.baseURI).href;
 // Quiet time after the last edit before the pack is rebuilt and Purple restarts with it.
 const SETTLE_MS = 700;
-// On a phone Purple's screen is too small to read whole, so it shows a close-up: this much bigger,
-// around the spot given here, or else the room's cursor (Art and Blocks follow theirs).
+// A close-up of Purple's screen: this much bigger, around the spot given here, or else the room's
+// cursor (Art and Blocks follow theirs). A phone starts in it, since the whole screen is too small
+// to read there; a computer starts on the whole screen and can zoom in.
 const ZOOM: Record<Room, { scale: number; at?: [number, number] }> = {
   play: { scale: 2, at: [0.33, 0.6] },
   music: { scale: 1.3, at: [0.5, 0.47] },
@@ -41,7 +42,7 @@ class LiveScreen {
   private status = h("span", {}, "Loading Purple");
   private hint = tryHint("then use the keyboard, like on Purple");
   private voiceNote = h("div", { class: "voice-loading", hidden: true });
-  private zoomed = true;
+  private zoomed = PHONE.matches;
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
   // Set by Studio: Purple moved to another room, or opened or closed a menu.
   onMove = () => {};
@@ -60,7 +61,7 @@ class LiveScreen {
   constructor() {
     this.hint.onclick = () => this.focus();
     this.element = h("div", { class: "screen-wrap live" }, this.frame, this.poster, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote);
-    PHONE.addEventListener("change", () => this.reframe());
+    PHONE.addEventListener("change", () => { this.zoomed = PHONE.matches; this.reframe(); });
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
     void this.sync();
@@ -139,10 +140,10 @@ class LiveScreen {
     if (!same) this.onMove();
   }
 
-  // The whole screen, or on a phone the close-up; menus and pictures show whole.
+  // The whole screen or the close-up; menus and pictures show whole.
   private reframe(): void {
     const { room, menu, at } = this.place;
-    const zoom = PHONE.matches && !menu && !(room === "art" && this.setup.picture) ? ZOOM[room] : null;
+    const zoom = !menu && !(room === "art" && this.setup.picture) ? ZOOM[room] : null;
     this.zoomButton.hidden = !zoom;
     this.zoomButton.textContent = this.zoomed ? "Whole screen" : "Zoom in";
     const size = zoom && this.zoomed ? 1 / zoom.scale : 1;

@@ -24,5 +24,5 @@ export function openPackButton(label: string): HTMLElement {
 }
 
 export const startOverButton = () => h("button", { class: "linkbtn dim", onclick: () => {
-  if (confirm("Erase everything here and start a new Purple Pack? One you already downloaded stays as it is.")) swapIn();
+  if (confirm("Erase everything currently loaded in Purple Studio and start a new Purple Pack?")) swapIn();
 } }, "Start over");

@@ -33,12 +33,12 @@ interface Section {
 }
 
 const SECTIONS: Section[] = [
-  { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or your kid's drawing, for them to paint on top of", view: picturesView },
-  { id: "voice", label: "Voice", icon: "🎙️", blurb: "Your voice on the keys, saying anything you like", view: voiceView },
-  { id: "words", label: "Emoji", icon: "🐶", blurb: "An emoji for each word your family uses", view: wordsView },
-  { id: "instruments", label: "Instruments", icon: "🎹", blurb: "A sound of your own for the Music room", view: instrumentsView },
+  { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or picture for for them to open and paint on top of", view: picturesView },
+  { id: "voice", label: "Voice", icon: "🎙️", blurb: "Make any key say any sound or recorded voice", view: voiceView },
+  { id: "words", label: "Emoji", icon: "🐶", blurb: "Pick an emoji for any word", view: wordsView },
+  { id: "instruments", label: "Instruments", icon: "🎹", blurb: "Custom instruments for them to play", view: instrumentsView },
   { id: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
-  { id: "colors", label: "Colors", icon: "🎨", blurb: "The colors the letters paint with", view: colorsView },
+  { id: "colors", label: "Colors", icon: "🎨", blurb: "Make Purple green, or change the colors the letters type", view: colorsView },
 ].filter((s) => features.rooms || s.id !== "rooms");
 type Page = [id: string, label: string, view: (item: string | null) => View];
 const MORE = ([
@@ -60,7 +60,7 @@ function welcomeView(): View {
       h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
       h("div", { class: "cards" }, ...SECTIONS.map((s) =>
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
-      h("p", { class: "dim" }, "Pick any one. When you're done, download your Purple Pack and put it on Purple with a USB drive."),
+      h("p", { class: "dim" }, "When you're done, download your Purple Pack and put it on Purple with a USB drive."),
       h("p", { class: "dim" }, "Made one before? ", openPackButton("Open your Purple Pack"), " to keep going."),
       staysHere("Everything happens in your web browser. Nothing you add is uploaded, and nothing is tracked."),
     ),

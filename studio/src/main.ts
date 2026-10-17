@@ -121,6 +121,7 @@ function renderTop() {
     h("a", { class: "brand", href: "#" }, h("img", { src: logo, alt: "" }), h("b", {}, "Purple ", h("span", {}, "Studio"))),
     h("nav", { class: "tabs-nav" }, ...SECTIONS.map((s) => h("a", { href: `#${s.id}`, "aria-current": sec === s.id ? "page" : null },
       h("span", { class: "icon" }, s.icon), h("span", { class: "label" }, s.label), added(s.id) ? h("span", { class: "n" }, String(added(s.id))) : null))),
+    h("a", { class: "privacy-link", href: "#privacy", "aria-current": sec === "privacy" ? "page" : null }, "🔒", h("span", {}, " Privacy")),
     h("details", { class: "more-menu" }, h("summary", {}, "More"),
       h("div", {}, ...MORE.map(([id, label]) => h("a", { href: `#${id}`, "aria-current": sec === id ? "page" : null, onclick: (e: Event) => (e.target as HTMLElement).closest("details")?.removeAttribute("open") }, label)))),
     h("a", { class: `btn download${sec === "pack" ? " here" : ""}`, href: "#pack" }, "Download", n ? h("span", { class: "n" }, String(n)) : null),

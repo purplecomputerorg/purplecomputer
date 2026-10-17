@@ -3,7 +3,7 @@ import type { View } from "./view";
 
 // One line, on every page that takes something of the family's, linking to the full answer.
 export const staysHere = (text: string) =>
-  h("p", { class: "stays-here" }, "🔒 ", text, " ", h("a", { href: "#privacy" }, "How we know"));
+  h("p", { class: "stays-here" }, "🔒 ", text, " ", h("a", { href: "#privacy" }, "How it stays private"));
 
 export function privacyView(): View {
   const item = (title: string, body: string) => h("li", {}, h("b", {}, title), " ", body);
@@ -23,8 +23,8 @@ export function privacyView(): View {
       ),
       h("h3", {}, "What does travel"),
       h("p", {}, "Your browser downloads Studio itself from this site: the page, a copy of Purple to run in it, and Purple's voice. Like any website, the site sees that those files were asked for. Downloads only come to you; nothing goes back."),
-      h("h3", {}, "How we know"),
-      h("p", {}, "It isn't only a promise. Every Studio page tells your browser it may only talk to the site it came from, and your browser enforces that, so the page couldn't send your things elsewhere even by mistake. Rooms you paste in run walled off with their internet access removed. Studio's fonts, icons, and voice are all served from this site, and when the browser's own voice fills in for Purple's, Studio uses only voices installed on this computer."),
+      h("h3", {}, "Not just a promise"),
+      h("p", {}, "Every Studio page tells your browser it may only talk to the site it came from, and your browser enforces that, so the page couldn't send your things elsewhere even by mistake. Rooms you paste in run walled off with their internet access removed. Studio's fonts, icons, and voice are all served from this site, and when the browser's own voice fills in for Purple's, Studio uses only voices installed on this computer."),
       h("p", { class: "dim small" }, "(Technical: a Content-Security-Policy with ", h("span", { class: "mono" }, "connect-src 'self'"), " on every page and room worker, no backend, no cookies or storage beyond the Cache API for the voice model, and only ", h("span", { class: "mono" }, "localService"), " speech voices. The source is in Purple's repository under ", h("span", { class: "mono" }, "studio/"), ".)"),
     ),
   };

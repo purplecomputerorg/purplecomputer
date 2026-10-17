@@ -52,6 +52,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .tabs-nav a[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .tabs-nav .icon { font-size: 15px; }
 .tabs-nav .n { font-size: 11px; font-weight: 700; color: var(--purple); background: #fff; border-radius: 999px; padding: 0 6px; }
+.privacy-link { flex-shrink: 0; font-size: 14px; color: var(--dim); text-decoration: none; padding: 7px 10px; border-radius: 999px; }
+.privacy-link:hover, .privacy-link[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .more-menu { position: relative; flex-shrink: 0; }
 .more-menu summary { list-style: none; cursor: pointer; font-size: 14px; color: var(--dim); padding: 7px 10px; border-radius: 999px; }
 .more-menu summary::-webkit-details-marker { display: none; }
@@ -83,6 +85,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .tabs-nav { order: 3; flex: 0 0 calc(100% + 24px); margin: 0 -12px; padding: 0 12px; mask-image: linear-gradient(to right, #000 85%, transparent); }
   .tabs-nav .icon, .tabs-nav .n { display: none; }
   .tabs-nav a { padding: 6px 12px; font-size: 14px; }
+  .privacy-link { padding: 7px 6px; }
+  .privacy-link span { display: none; }
   .more-menu summary { font-size: 0; padding: 7px 6px; }
   .more-menu summary::after { content: "⋯"; font-size: 18px; }
   .topbar .btn.download { padding: 8px 14px; }
@@ -260,7 +264,7 @@ ol.plain { padding-left: 22px; } ol.plain li { margin-bottom: 8px; }
 ul.privacy { list-style: none; padding: 0; } ul.privacy li { margin-bottom: 12px; }
 .voice-loading { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 3; padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); color: #fff; font: 600 12px var(--sans); white-space: nowrap; pointer-events: none; }
 .voice-loading[hidden] { display: none; }
-.stays-here { font-size: 13px; color: var(--purple-dark); background: var(--fill); border-radius: 10px; padding: 8px 12px; }
+.stays-here { font-size: 13px; color: var(--purple-dark); background: var(--fill); border-radius: 10px; padding: 8px 12px; margin: 20px 0; }
 .stays-here a { color: var(--purple); white-space: nowrap; }
 pre { background: #2a1845; color: #e8daf0; padding: 14px 18px; border-radius: 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
 pre code { background: none; color: inherit; padding: 0; }

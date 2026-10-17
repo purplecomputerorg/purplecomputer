@@ -6,7 +6,7 @@ import { packSpec } from "../src/pack";
 import type { Draft } from "../src/state";
 import roomLibrary from "../../purple_tui/roomkit/purple.py?raw";
 
-const base: PackSpec = { familyName: "", pictures: [], letters: {}, phrases: [], words: [], synonyms: [], ranked: [], instruments: [], rooms: [], theme: null };
+const base: PackSpec = { name: "", pictures: [], letters: {}, phrases: [], words: [], synonyms: [], ranked: [], instruments: [], rooms: [], theme: null };
 const draftBase: Draft = { ...base, letters: {}, pictures: [], rooms: [], colors: {} };
 
 describe("pack assembly", () => {
@@ -21,11 +21,11 @@ describe("pack assembly", () => {
     expect((await packSpec(d, true)).words.map((w) => w.word)).toEqual(["biscuit", "zorbo"]);
   });
 
-  it("names the pack after the family and keeps the manifest loader-shaped", () => {
-    expect(manifest({ familyName: "The Nathansons" })).toEqual({
-      id: "the-nathansons-pack", name: "The Nathansons' Purple", version: "1.0.0", type: "emoji", format: 1, description: "Made with Purple Studio.",
+  it("names the pack after its file name and keeps the manifest loader-shaped", () => {
+    expect(manifest({ name: "Purple 2026-10-17" })).toEqual({
+      id: "purple-2026-10-17", name: "Purple 2026-10-17", version: "1.0.0", type: "emoji", format: 1, description: "Made with Purple Studio.",
     });
-    expect(manifest(base).id).toBe("our-family-pack");
+    expect(manifest(base).id).toBe("purple");
   });
 
   it("renders an instrument into one file per reachable pitch plus its numbers", async () => {

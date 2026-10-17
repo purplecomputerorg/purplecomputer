@@ -14,7 +14,7 @@ export async function packSpec(d: Draft = draft, trying = false): Promise<PackSp
   // A family's own words come first in autocomplete, after the words Purple already ranks.
   const ranked = [...new Set([...d.ranked, ...words.map((w) => w.word).filter((w) => !isCoreRanked(w))])];
   return {
-    familyName: d.familyName,
+    name: d.name,
     pictures,
     words,
     ranked,

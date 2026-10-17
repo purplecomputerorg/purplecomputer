@@ -22,7 +22,7 @@ export interface Instrument extends Keepable { name: string; title?: string; bas
 export interface RoomDraft extends Keepable { name: string; source: string; blocks: unknown | null; template: TemplateDraft | null }
 
 export interface Draft {
-  familyName: string;
+  name: string;
   pictures: Picture[];
   letters: Record<string, Letter>;
   phrases: Phrase[];
@@ -38,7 +38,7 @@ export interface Draft {
 
 
 export const draft: Draft = {
-  familyName: "",
+  name: `purple-${new Date().toISOString().slice(0, 10)}`,
   pictures: [],
   letters: {},
   phrases: [],
@@ -87,6 +87,7 @@ export interface Count { id: string; section: string; label: string; one: string
 const counted = (kept: boolean): Count[] => allPieces()
   .map(({ items, ...p }) => ({ ...p, count: items.filter((i) => !!i.kept === kept).length }))
   .filter((p) => p.count > 0);
+export const countOf = (p: Count) => `${p.count} ${p.count === 1 ? p.one : p.label}`;
 // What the family has added (the download), and what they're still trying.
 export const pieces = () => counted(true);
 export const tryingPieces = () => counted(false);

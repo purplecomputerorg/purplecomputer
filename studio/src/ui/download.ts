@@ -1,11 +1,12 @@
 import { buildPack, packFilename } from "../pack";
-import { addAll, changed, draft, pieces, tryingPieces } from "../state";
+import { addAll, changed, countOf, draft, pieces, tryingPieces } from "../state";
 import { clear, field, h } from "./dom";
+import { putItOnPurple } from "./install";
 import { staysHere } from "./privacy";
 import type { View } from "./view";
 
 export function downloadView(): View {
-  const nameIn = h("input", { type: "text", placeholder: "The Nathansons", value: draft.familyName });
+  const nameIn = h("input", { type: "text", value: draft.name, oninput: () => { draft.name = nameIn.value; changed(); } });
   const summary = h("ul", { class: "summary" });
   const trying = h("div");
   const status = h("div", { class: "status" });
@@ -14,19 +15,14 @@ export function downloadView(): View {
   function render() {
     clear(summary);
     const list = pieces();
-    for (const p of list) summary.append(h("li", {}, h("span", {}, p.label), h("span", { class: "n" }, String(p.count))));
+    for (const p of list) summary.append(h("li", {}, countOf(p)));
     if (!list.length) summary.append(h("li", { class: "dim" }, "Nothing added yet. Try something, then press Add to my Purple."));
     button.disabled = !list.length;
     const left = tryingPieces();
     trying.replaceChildren(...(left.length ? [h("div", { class: "trybar" },
-      h("span", { class: "trying" }, `Still trying, not in the file: ${left.map((p) => `${p.count} ${p.count === 1 ? p.one : p.label}`).join(", ")}.`),
+      h("span", { class: "trying" }, `Still trying, not in the file: ${left.map(countOf).join(", ")}.`),
       h("button", { class: "btn small", onclick: () => { addAll(); changed(); render(); } }, left.reduce((n, p) => n + p.count, 0) > 1 ? "Add them too" : "Add it too"))] : []));
   }
-  nameIn.oninput = () => {
-    draft.familyName = nameIn.value;
-    changed();
-    render();
-  };
   render();
 
   button.onclick = async () => {
@@ -50,16 +46,14 @@ export function downloadView(): View {
       {},
       h("p", { class: "lead" }, "Everything you added to your Purple goes into one file."),
       staysHere("The file is made in your browser and saved to your downloads. No copy goes anywhere else."),
-      h("div", { class: "card" }, field("Your family's name", nameIn), summary),
+      h("div", { class: "card" }, summary),
       trying,
+      field("File name", h("div", { class: "row", style: "flex-wrap:nowrap" }, nameIn, h("span", { class: "mono dim" }, ".purplepack"))),
+      h("p", { class: "dim small" }, "Reuse a name to replace that file on Purple. A new name adds alongside it."),
       h("div", { class: "row", style: "margin-top:22px" }, button),
       status,
       h("h3", {}, "Then put it on Purple"),
-      h("ol", { class: "steps" },
-        h("li", {}, "Copy the file onto any USB drive, or onto your Purple Key."),
-        h("li", {}, "Plug it into Purple, then turn Purple on."),
-      ),
-      h("p", { class: "dim small" }, "Step by step, and other ways: ", h("a", { href: "#install" }, "Putting it on Purple"), "."),
+      putItOnPurple(),
     ),
   };
 }

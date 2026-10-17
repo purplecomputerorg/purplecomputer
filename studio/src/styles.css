@@ -252,10 +252,8 @@ tr.warn td { color: var(--dim); }
 
 .summary { list-style: none; padding: 0; margin: 0; }
 .summary li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
-.summary li .n { font-weight: 600; color: var(--purple); }
 .status { min-height: 22px; color: var(--dim); font-size: 13px; }
 hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
-ol.plain { padding-left: 22px; } ol.plain li { margin-bottom: 8px; }
 ul.privacy { list-style: none; padding: 0; } ul.privacy li { margin-bottom: 12px; }
 .voice-loading { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 3; padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); color: #fff; font: 600 12px var(--sans); white-space: nowrap; pointer-events: none; }
 .voice-loading[hidden] { display: none; }

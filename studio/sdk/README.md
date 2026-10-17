@@ -23,7 +23,7 @@ It is a directory, not a published package. Import it as `@sdk` inside Studio (a
 import { buildPack, defaults, type PackSpec } from "@sdk";
 
 const spec: PackSpec = {
-  familyName: "The Nathansons",
+  name: "nathanson-purple",
   words: [{ word: "octopus", emoji: "🐙" }],
   synonyms: [{ alias: "octo", word: "octopus" }],
   ranked: ["octopus"],

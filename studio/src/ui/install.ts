@@ -1,33 +1,24 @@
-import { packFilename } from "../pack";
 import { features } from "../state";
 import { h } from "./dom";
 import type { View } from "./view";
 
+export const putItOnPurple = () => h("ol", { class: "steps" },
+  h("li", {}, "Download your file."),
+  h("li", {}, "Copy it onto any USB drive. Your Purple Key works too."),
+  h("li", {}, "Plug the drive into Purple and turn Purple on. That's it."),
+);
+
 export function installView(): View {
-  const file = packFilename();
   return {
     title: "Putting it on Purple",
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "Purple has no internet, so a pack goes in on a USB drive."),
-      h("ol", { class: "plain" },
-        h("li", {}, "Copy ", h("span", { class: "mono" }, file), " onto any USB drive. Your Purple Key works too. More than one pack is fine."),
-        h("li", {}, "Plug it into the Purple computer, then turn Purple on."),
-      ),
-      h("p", {}, "The new words, voices, pictures, and instruments are there from the first screen. If the drive goes in while Purple is already on, restart Purple once."),
-      h("p", { class: "dim small" }, "If your kid runs Purple from the Purple Key, put the pack on the Key itself: Purple reads it again every time it starts. Purple only ever reads from a USB drive, and leaves everything else on it alone."),
-      h("h3", {}, "From the parent menu's terminal"),
-      h("p", {}, "On an installed Purple, a pack can also be put in by hand. Open the parent menu, then the terminal, plug in the drive, and run:"),
-      h("pre", {}, h("code", {}, [
-        "sudo mkdir -p /mnt/drive",
-        "sudo mount /dev/sdb1 /mnt/drive",
-        `python3 -m purple_tui.usb_updater /mnt/drive`,
-        "sudo umount /mnt/drive",
-      ].join("\n"))),
-      h("p", { class: "dim small" }, "The drive is usually ", h("span", { class: "mono" }, "/dev/sdb1"), "; ", h("span", { class: "mono" }, "lsblk"), " lists what is plugged in. Packs land in ", h("span", { class: "mono" }, "~/.purple/packs/"), "; to take one out again, delete its folder there."),
+      h("p", { class: "lead" }, "Purple has no internet, so your file goes in on a USB drive."),
+      putItOnPurple(),
+      h("p", {}, "Everything you made is there from the first screen. If the drive goes in while Purple is already on, restart Purple once."),
       h("h3", {}, "Sharing"),
-      h("p", {}, "The pack is a plain file. Email it to Grandma, or put it on a USB drive for a cousin. There is no place to upload it and nothing to sign up for."),
+      h("p", {}, "The file is yours to share. Email it to Grandma, or put it on a USB drive for a cousin. There is no place to upload it and nothing to sign up for."),
     ),
   };
 }

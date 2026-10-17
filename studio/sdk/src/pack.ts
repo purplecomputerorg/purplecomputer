@@ -16,7 +16,8 @@ export interface PackInstrument { name: string; title?: string; base: BaseName; 
 export interface PackRoom { name: string; source: string; blocks?: unknown }
 
 export interface PackSpec {
-  familyName: string;
+  // The file name without .purplepack; a pack with the same name replaces it on Purple.
+  name: string;
   words: { word: string; emoji: string }[];
   synonyms: { alias: string; word: string }[];
   ranked: string[];
@@ -40,14 +41,13 @@ export const ROOM_NAME = /^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$/;
 // content.display_name: what Purple shows for a room called `name`.
 export const roomTitle = (name: string) =>
   name.replace(/[-_]/g, " ").trim().replace(/[a-zA-Z]+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).slice(0, 24);
-export const packId = (spec: Pick<PackSpec, "familyName">) => `${slug(spec.familyName) || "our-family"}-pack`;
-export const packFilename = (spec: Pick<PackSpec, "familyName">) => `${packId(spec)}.purplepack`;
+export const packId = (spec: Pick<PackSpec, "name">) => slug(spec.name) || "purple";
+export const packFilename = (spec: Pick<PackSpec, "name">) => `${packId(spec)}.purplepack`;
 
-export function manifest(spec: Pick<PackSpec, "familyName">) {
-  const name = spec.familyName;
+export function manifest(spec: Pick<PackSpec, "name">) {
   return {
     id: packId(spec),
-    name: name ? `${name}${/s$/i.test(name) ? "'" : "'s"} Purple` : "Our Purple",
+    name: spec.name.trim() || packId(spec),
     version: "1.0.0",
     type: "emoji",
     format: PACK_FORMAT,

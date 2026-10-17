@@ -68,8 +68,9 @@ export async function openPack(file: Blob): Promise<Draft> {
     colors: s.theme ? { kept: true } : {},
     letters: Object.fromEntries(s.letters.map((k) => [k, kept({ clip: decodeWav(read(letterPath(k))) })])),
     phrases: s.phrases.map((text) => kept({ text, clip: decodeWav(read(phrasePath(text))) })),
-    pictures: await Promise.all(s.pictures.map(async (p) => kept({
-      ...p, ops: cellsToOps(p.cells), sourceUrl: await dataUrl(new Blob([read(picturePngPath(p.name)) as BlobPart], { type: "image/png" })),
-    }))),
+    pictures: await Promise.all(s.pictures.map(async (p) => {
+      const png = new Blob([read(picturePngPath(p.name)) as BlobPart], { type: "image/png" });
+      return kept({ ...p, ops: cellsToOps(p.cells), sourceUrl: await dataUrl(png), bitmap: await createImageBitmap(png) });
+    })),
   };
 }

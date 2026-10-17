@@ -85,7 +85,7 @@ function editor(inst: Instrument): View {
         clearTimeout(replayTimer);
         replayTimer = window.setTimeout(() => playGridKey(inst.name, lastKey), 140);
       };
-      sliders.append(h("div", { class: "slider" }, h("span", { class: "lbl" }, spec.label), range, val));
+      sliders.append(h("div", { class: "slider" }, h("span", { class: "lbl" }, spec.label, h("small", {}, spec.hint)), range, val));
     }
   }
 

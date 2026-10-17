@@ -7,11 +7,12 @@ export const SYNTH_RATE: number = exported.synth.sample_rate;
 export type BaseName = "marimba" | "ukulele" | "accordion" | "glockenspiel";
 export type Params = Record<string, number>;
 
-export interface ParamSpec { key: string; label: string; group: string; min: number; max: number; step: number; unit?: string }
+export interface ParamSpec { key: string; label: string; hint: string; group: string; min: number; max: number; step: number; unit?: string }
 export interface Base { label: string; blurb: string; params: ParamSpec[] }
 
-const p = (key: string, label: string, group: string, min: number, max: number, step: number, unit?: string): ParamSpec =>
-  ({ key, label, group, min, max, step, unit });
+const p = (key: string, label: string, hint: string, group: string, min: number, max: number, step: number, unit?: string): ParamSpec =>
+  ({ key, label, hint, group, min, max, step, unit });
+const LENGTH = "How long each note lasts";
 
 // Slider ranges and labels are Studio's; the keys must match synth.DEFAULTS in Python (tested).
 export const BASES: Record<BaseName, Base> = {
@@ -19,53 +20,53 @@ export const BASES: Record<BaseName, Base> = {
     label: "Marimba",
     blurb: "A wooden bar over a tube. The 4x partial is the woody knock.",
     params: [
-      p("duration", "Length", "Shape", 0.2, 1.5, 0.05, "s"),
-      p("attack_ms", "Attack", "Shape", 1, 40, 1, "ms"),
-      p("bar_decay", "Bar decay", "Shape", 1, 15, 0.5),
-      p("wood", "Woodiness", "Tone", 0, 1.2, 0.05),
-      p("sparkle", "Sparkle", "Tone", 0, 0.3, 0.01),
-      p("tube", "Tube body", "Tone", 0, 0.6, 0.05),
-      p("tube_decay", "Tube decay", "Tone", 2, 12, 0.5),
-      p("mallet", "Mallet knock", "Tone", 0, 0.6, 0.05),
+      p("duration", "Length", LENGTH, "Shape", 0.2, 1.5, 0.05, "s"),
+      p("attack_ms", "Attack", "How gently a note starts. Higher is softer", "Shape", 1, 40, 1, "ms"),
+      p("bar_decay", "Bar decay", "How fast the note fades. Higher is shorter", "Shape", 1, 15, 0.5),
+      p("wood", "Woodiness", "The hollow, woody knock", "Tone", 0, 1.2, 0.05),
+      p("sparkle", "Sparkle", "A bright metal edge on top", "Tone", 0, 0.3, 0.01),
+      p("tube", "Tube body", "The low hum from the tube under the bar", "Tone", 0, 0.6, 0.05),
+      p("tube_decay", "Tube decay", "How fast the hum fades. Higher is shorter", "Tone", 2, 12, 0.5),
+      p("mallet", "Mallet knock", "The click of the mallet hitting", "Tone", 0, 0.6, 0.05),
     ],
   },
   ukulele: {
     label: "Ukulele",
     blurb: "A plucked nylon string, modeled as a loop of sound that slowly loses its highs.",
     params: [
-      p("duration", "Length", "Shape", 0.3, 2, 0.05, "s"),
-      p("damping", "Sustain", "Shape", 0.98, 0.999, 0.0005),
-      p("warmth", "Warmth", "Tone", 0.1, 1, 0.05),
-      p("softness", "Soft pluck", "Tone", 0, 6, 1),
-      p("pluck_pos", "Pluck spot", "Tone", 0.1, 0.5, 0.05),
-      p("body_freq", "Body size", "Body", 150, 800, 10, "Hz"),
-      p("body_q", "Body ring", "Body", 1, 10, 0.5),
-      p("body_mix", "Body amount", "Body", 0, 1, 0.05),
+      p("duration", "Length", LENGTH, "Shape", 0.3, 2, 0.05, "s"),
+      p("damping", "Sustain", "How long the string keeps ringing", "Shape", 0.98, 0.999, 0.0005),
+      p("warmth", "Brightness", "Higher keeps the string bright, lower makes it mellow", "Tone", 0.1, 1, 0.05),
+      p("softness", "Soft pluck", "A gentler pluck, like a fingertip instead of a pick", "Tone", 0, 6, 1),
+      p("pluck_pos", "Pluck spot", "Lower plucks near the end of the string for more twang", "Tone", 0.1, 0.5, 0.05),
+      p("body_freq", "Body size", "The pitch of the wooden body. Lower sounds bigger", "Body", 150, 800, 10, "Hz"),
+      p("body_q", "Body ring", "How sharply the body rings at that pitch", "Body", 1, 10, 0.5),
+      p("body_mix", "Body amount", "How much of the wooden body you hear", "Body", 0, 1, 0.05),
     ],
   },
   accordion: {
     label: "Accordion",
     blurb: "Two reeds a few cents apart, breathing with a slow tremolo.",
     params: [
-      p("duration", "Length", "Shape", 0.3, 2, 0.05, "s"),
-      p("attack_ms", "Attack", "Shape", 10, 300, 5, "ms"),
-      p("detune", "Reed detune", "Tone", 0, 20, 0.5, "cents"),
-      p("harmonics", "Reediness", "Tone", 1, 20, 1),
-      p("rolloff", "Brightness", "Tone", 300, 4000, 50, "Hz"),
-      p("trem_rate", "Breath speed", "Breath", 2, 10, 0.5, "Hz"),
-      p("trem_depth", "Breath depth", "Breath", 0, 0.2, 0.005),
+      p("duration", "Length", LENGTH, "Shape", 0.3, 2, 0.05, "s"),
+      p("attack_ms", "Attack", "How slowly a note swells in", "Shape", 10, 300, 5, "ms"),
+      p("detune", "Reed detune", "Two reeds a little out of tune. More is wobblier", "Tone", 0, 20, 0.5, "cents"),
+      p("harmonics", "Reediness", "More buzz from extra overtones", "Tone", 1, 20, 1),
+      p("rolloff", "Brightness", "How bright the reeds sound", "Tone", 300, 4000, 50, "Hz"),
+      p("trem_rate", "Breath speed", "How fast the volume pulses", "Breath", 2, 10, 0.5, "Hz"),
+      p("trem_depth", "Breath depth", "How strong the pulse is", "Breath", 0, 0.2, 0.005),
     ],
   },
   glockenspiel: {
     label: "Glockenspiel",
     blurb: "A small metal bar. The bell lives in the 2.8x partial, louder than the fundamental.",
     params: [
-      p("duration", "Length", "Shape", 0.3, 3, 0.05, "s"),
-      p("ring", "Ring", "Shape", 0.3, 3, 0.05),
-      p("fundamental", "Fundamental", "Tone", 0, 1, 0.05),
-      p("bell", "Bell", "Tone", 0, 1.2, 0.05),
-      p("shimmer", "Shimmer", "Tone", 0, 2, 0.05),
-      p("ping", "Mallet ping", "Tone", 0, 0.6, 0.05),
+      p("duration", "Length", LENGTH, "Shape", 0.3, 3, 0.05, "s"),
+      p("ring", "Ring", "How long the metal keeps ringing", "Shape", 0.3, 3, 0.05),
+      p("fundamental", "Fundamental", "The plain, pure note underneath", "Tone", 0, 1, 0.05),
+      p("bell", "Bell", "The bell tone that makes it sound like metal", "Tone", 0, 1.2, 0.05),
+      p("shimmer", "Shimmer", "High, sparkly overtones", "Tone", 0, 2, 0.05),
+      p("ping", "Mallet ping", "The tiny tick when the mallet hits", "Tone", 0, 0.6, 0.05),
     ],
   },
 };

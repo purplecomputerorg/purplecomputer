@@ -109,9 +109,9 @@ function paintedField(pic: Picture): { element: HTMLElement; render: () => void 
       ? "Type on Purple's screen to write on the picture. The arrows move where the words go. Tab goes back to painting."
       : "Type on Purple's screen to paint on the picture. It's just for trying until you save it.";
     kept.replaceChildren(...(pic.painted
-      ? [h("span", { class: "added" }, "✓ Your painting and words are saved on this picture"), h("button", { class: "btn small", onclick: keep }, "Save again"),
+      ? [h("span", { class: "added" }, "✓ Your edits are saved on this picture"), h("button", { class: "btn small", onclick: keep }, "Save again"),
         h("button", { class: "linkbtn dim small", onclick: photoOnly }, "Back to just the photo")]
-      : [h("button", { class: "btn small", onclick: keep }, "Save Purple's screen on this picture")]));
+      : [h("button", { class: "btn small", onclick: keep }, "Save your edits in Studio")]));
   };
   live.onWriting = render;
   render();
@@ -188,7 +188,7 @@ function pictureView(pic: Picture): HTMLElement {
       tryBar(pic, remove),
       ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
       field("Picture name", name),
-      h("div", { class: "field" }, h("span", {}, "Paint on it"), painted.element),
+      h("div", { class: "field" }, h("span", {}, "Paint on it right now in Studio"), painted.element),
       h("details", { class: "more-options" }, h("summary", {}, "Change what part shows"), cropper(pic, painted.render)),
       h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
     ...more(pic));

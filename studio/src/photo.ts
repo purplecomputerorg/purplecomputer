@@ -5,7 +5,7 @@ import greatWave from "./assets/great-wave.jpg";
 import house from "./assets/sample-drawing.svg";
 import { slug } from "@sdk/pack";
 import type { Keepable } from "./state";
-import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, cellsToOps, fitToCanvas, type ArtPicture, type PaintOp } from "@sdk/purple/art";
+import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, KEY_COLORS, canvasOrigin, cellsToOps, fitToCanvas, type ArtPicture, type LetterOp, type PaintOp } from "@sdk/purple/art";
 
 // crop: the part of the photo on the screen, in its own pixels and the Art canvas's shape; none is the whole photo.
 // painted: Purple's screen as kept after painting or writing on the photo, which goes in the pack in its place.
@@ -61,14 +61,25 @@ export async function pictureFromFile(file: File): Promise<Picture> {
 }
 
 // Studio's examples, painted the same way as a family's pictures. One goes in the pack only if
-// the family adds it.
-export interface Example { name: string; src: string; alt: string; credit?: string }
+// the family adds it. doodle: what a kid might paint on it, shown before anyone tries it.
+// paint: rows of the keys pressed, from a cell of the Art canvas, a space painting nothing.
+export interface Doodle { paint: [x: number, y: number, rows: string[]][]; words?: [x: number, y: number, text: string, ink: string][] }
+export interface Example { name: string; src: string; alt: string; credit?: string; doodle: Doodle }
 export const EXAMPLES: Example[] = [
-  { name: "our-house", src: house, alt: "A drawing of a house, a sun, and a tree" },
-  { name: "dinosaur", src: dinosaur, alt: "A dinosaur to color in" },
-  { name: "dog", src: dog, alt: "A black dog looking up" },
-  { name: "saturn", src: saturn, alt: "Saturn and its rings", credit: "NASA, from the Cassini spacecraft" },
-  { name: "great-wave", src: greatWave, alt: "A giant wave curling over boats", credit: "Katsushika Hokusai, around 1831" },
+  { name: "dog", src: dog, alt: "A black dog looking up", doodle: {
+    paint: [[25, 0, ["   g   ", "   t   ", "  ttt  ", "  fff  ", " ttttt ", "ttttttt"]]],
+    words: [[13, 21, "WOOF", "#FFFFFF"]] } },
+  { name: "dinosaur", src: dinosaur, alt: "A dinosaur to color in", doodle: {
+    paint: [[2, 1, ["g  g  g", " ggggg ", "ggggggg", " ggggg ", "g  g  g"]],
+      [25, 10, ["     vv     ", "vv   vv  vv ", "vv       vv ", "   vv       ", "   vv   vv  ", "        vv  "]]],
+    words: [[4, 10, "ROAR", "#000000"]] } },
+  { name: "our-house", src: house, alt: "A drawing of a house, a sun, and a tree", doodle: {
+    paint: [[13, 0, ["   tttttt   ", " ttggggggtt ", "tggvvvvvvggt", "tgv      vgt", "tgv      vgt"]]] } },
+  { name: "saturn", src: saturn, alt: "Saturn and its rings", credit: "NASA, from the Cassini spacecraft", doodle: {
+    paint: [[24, 13, [" ==    == ", " ==    == ", "          ", "=        =", " ======== "]],
+      ...[[6, 3], [46, 4], [10, 18], [44, 19]].map(([x, y]): [number, number, string[]] => [x, y, [" g ", "ggg", " g "]])] } },
+  { name: "great-wave", src: greatWave, alt: "A giant wave curling over boats", credit: "Katsushika Hokusai, around 1831", doodle: {
+    paint: [[33, 1, [" rrr ", "rrrrr", "rrrrr", " rrr "]]] } },
 ];
 const examples = new Map<string, Promise<Picture>>();
 export function examplePicture({ name, src }: Example): Promise<Picture> {
@@ -117,6 +128,34 @@ export function clampCrop(c: Crop, w: number, h: number): Crop {
   return { x: clamp(c.x, 0, w - cw), y: clamp(c.y, 0, h - ch), w: cw, h: ch };
 }
 
+const doodlePaint = ({ paint }: Doodle): PaintOp[] => paint.flatMap(([x, y, rows]) =>
+  rows.flatMap((row, dy) => [...row].flatMap((key, dx): PaintOp[] => (key === " " ? [] : [[x + dx, y + dy, KEY_COLORS[key]]]))));
+const doodleWords = ({ words = [] }: Doodle): LetterOp[] => words.flatMap(([x, y, text, ink]) => [...text].map((c, i): LetterOp => [x + i, y, c, ink]));
+
+// An example as Purple paints it with its doodle on top.
+export async function doodled(ex: Example): Promise<ArtPicture> {
+  return { ops: [...(await examplePicture(ex)).ops, ...doodlePaint(ex.doodle)], letters: doodleWords(ex.doodle) };
+}
+
+// An example's photo with its doodle painted over in Purple's square cells, as an image URL.
+const doodledImages = new Map<string, Promise<string>>();
+export function doodledImage(ex: Example): Promise<string> {
+  if (!doodledImages.has(ex.name)) doodledImages.set(ex.name, (async () => {
+    const pic = await examplePicture(ex);
+    const [cols, rows] = [pic.cells[0].length, pic.cells.length];
+    const [x0, y0] = canvasOrigin(cols, rows);
+    const cell = Math.ceil(240 / rows);
+    const canvas = new OffscreenCanvas(cols * cell, rows * cell);
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(pic.bitmap, 0, 0, canvas.width, canvas.height);
+    ctx.translate(-x0 * cell, -y0 * cell);
+    fillOps(ctx, doodlePaint(ex.doodle), cell);
+    drawLetters(ctx, doodleWords(ex.doodle), cell);
+    return URL.createObjectURL(await canvas.convertToBlob({ type: "image/png" }));
+  })());
+  return doodledImages.get(ex.name)!;
+}
+
 // What Purple paints for a picture: the photo, or what was kept from its screen.
 export const onScreen = (pic: Picture): ArtPicture => pic.painted ?? { ops: pic.ops, letters: [] };
 
@@ -154,6 +193,11 @@ export function paintPicture(ctx: Ctx2D, { ops, letters }: ArtPicture, cellPx: n
   ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * ch);
   fillOps(ctx, ops, cellPx);
+  drawLetters(ctx, letters, cellPx);
+}
+
+function drawLetters(ctx: Ctx2D, letters: LetterOp[], cellPx: number) {
+  const ch = cellPx * CELL_ASPECT;
   ctx.font = `bold ${Math.round(ch * 0.85)}px sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";

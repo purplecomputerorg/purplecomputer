@@ -1,5 +1,5 @@
 import type { RoomSetup } from "../live/boot";
-import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, onScreen, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
+import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, doodled, doodledImage, examplePicture, fillCrop, onScreen, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
 import { changed, draft, freeName, titleOf, withSample } from "../state";
 import { field, h } from "./dom";
 import { liveScreen } from "./live";
@@ -53,8 +53,11 @@ async function tryExample(ex: Example) {
 }
 
 // Pictures to pick from, each with its name; the one being looked at is marked.
-const thumb = (title: string, src: string, current: boolean, attrs: Record<string, unknown>) =>
-  h("a", { ...attrs, "aria-current": current ? "page" : null }, h("img", { src, alt: "" }), h("span", {}, title));
+function thumb(title: string, src: string | Promise<string>, current: boolean, attrs: Record<string, unknown>) {
+  const img = h("img", { alt: "" });
+  void Promise.resolve(src).then((url) => (img.src = url));
+  return h("a", { ...attrs, "aria-current": current ? "page" : null }, img, h("span", {}, title));
+}
 const theirs = (list: Picture[], current: string | null) => h("div", { class: "photo-list" },
   ...list.map((p) => thumb(titleOf(p), p.sourceUrl, p.name === current, { href: `#pictures/${encodeURIComponent(p.name)}` })));
 
@@ -67,7 +70,7 @@ function more(current: Picture | null): HTMLElement[] {
     h("h3", {}, "Add your own"), dropZone(),
     staysHere("Your pictures are turned into paintings right here in your browser. They are never uploaded."),
     h("h3", {}, "Try one of ours"),
-    h("div", { class: "photo-list" }, ...EXAMPLES.map((e) => thumb(titleOf(e), e.src, current?.sourceUrl === e.src,
+    h("div", { class: "photo-list" }, ...EXAMPLES.map((e) => thumb(titleOf(e), doodledImage(e), current?.sourceUrl === e.src,
       { href: "#pictures", onclick: (ev: Event) => { ev.preventDefault(); void tryExample(e); } }))),
   ];
 }
@@ -187,8 +190,8 @@ function pictureView(pic: Picture): HTMLElement {
       tryBar(pic, remove),
       ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
       field("Picture name", name),
-      h("div", { class: "field" }, h("span", {}, "On the screen"), cropper(pic, painted.render)),
-      h("div", { class: "field" }, h("span", {}, "Painting and words"), painted.element),
+      h("div", { class: "field" }, h("span", {}, "Paint on it"), painted.element),
+      h("details", { class: "more-options" }, h("summary", {}, "Change what part shows"), cropper(pic, painted.render)),
       h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
     ...more(pic));
 }
@@ -203,15 +206,18 @@ export function picturesView(item: string | null): View {
   const pic = item ? draft.pictures.find((p) => p.name === item) : null;
   if (pic) {
     setup.picture = onScreen(pic);
-    return view(titleOf(pic), pictureView(pic), "Paint or write on the picture, the way your kid will. Only what you keep goes in your Purple Pack.");
+    const live = liveScreen();
+    return { ...view(titleOf(pic), pictureView(pic), "Paint or write on the picture, the way your kid will. Only what you keep goes in your Purple Pack."),
+      mounted: () => { live.prompt("Type to paint on it!"); live.engage(); },
+      cleanup: () => { cleanup(); live.prompt(null); } };
   }
   const first = draft.pictures.find((p) => p.kept) ?? draft.pictures[0];
   setup.picture = first && onScreen(first);
-  // With nothing of their own yet, the screen shows one of ours without trying it.
+  // With nothing of their own yet, the screen shows one of ours, painted on, without trying it.
   const here = location.hash;
-  if (!first) void examplePicture(EXAMPLES[0]).then((p) => {
+  if (!first) void doodled(EXAMPLES[0]).then((art) => {
     if (location.hash !== here) return;
-    setup.picture = onScreen(p);
+    setup.picture = art;
     liveScreen().show(setup);
   });
   return view("Pictures", h("section", {},

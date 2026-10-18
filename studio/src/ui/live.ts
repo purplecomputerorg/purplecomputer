@@ -4,7 +4,7 @@
 import type { ArtPicture } from "@sdk/purple/art";
 import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
-import { announceKey } from "../keys";
+import { KEY_EVENT, announceKey } from "../keys";
 import { buildPack } from "../pack";
 import { draft } from "../state";
 import { h } from "./dom";
@@ -41,6 +41,7 @@ class LiveScreen {
   private status = h("span", {}, "Loading Purple Computer in your browser");
   private hint = tryHint("then use the keyboard, like on Purple");
   private voiceNote = h("div", { class: "voice-loading", hidden: true });
+  private note = h("div", { class: "screen-note", hidden: true });
   private zoomed = PHONE.matches;
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
   // Set by Studio: Purple moved to another room, or opened or closed a menu.
@@ -62,11 +63,18 @@ class LiveScreen {
 
   constructor() {
     this.hint.onclick = () => this.focus();
-    this.element = h("div", { class: "screen-wrap live" }, this.frame, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote);
+    this.element = h("div", { class: "screen-wrap live" }, this.frame, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote, this.note);
     PHONE.addEventListener("change", () => { this.zoomed = PHONE.matches; this.reframe(); });
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
+    addEventListener(KEY_EVENT, () => (this.note.hidden = true));
     void this.sync();
+  }
+
+  // A handwritten note on the screen saying what to do, until the next key.
+  prompt(text: string | null): void {
+    this.note.textContent = text;
+    this.note.hidden = !text;
   }
 
   show(setup: RoomSetup): void {

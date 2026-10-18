@@ -107,15 +107,16 @@ function paintedField(pic: Picture): { element: HTMLElement; render: () => void 
     write.setAttribute("aria-pressed", String(writing));
     how.textContent = writing
       ? "Type on Purple's screen to write on the picture. The arrows move where the words go. Tab goes back to painting."
-      : "Type on Purple's screen to paint on the picture. It's just for trying until you keep it.";
+      : "Type on Purple's screen to paint on the picture. It's just for trying until you save it.";
     kept.replaceChildren(...(pic.painted
-      ? [h("span", { class: "added" }, "✓ Your painting is part of this picture"), h("button", { class: "btn small", onclick: keep }, "Keep it again"),
+      ? [h("span", { class: "added" }, "✓ Your painting and words are saved on this picture"), h("button", { class: "btn small", onclick: keep }, "Save again"),
         h("button", { class: "linkbtn dim small", onclick: photoOnly }, "Back to just the photo")]
-      : [h("button", { class: "btn small", onclick: keep }, "Keep what I painted")]));
+      : [h("button", { class: "btn small", onclick: keep }, "Save Purple's screen on this picture")]));
   };
   live.onWriting = render;
   render();
-  return { element: h("div", { class: "stack" }, h("div", { class: "room-buttons crop-modes" }, paint, write), how, kept), render };
+  return { element: h("div", { class: "stack" }, h("div", { class: "room-buttons crop-modes" }, paint, write), how, kept,
+    h("p", { class: "dim small" }, "When this picture is in your Purple Pack, your kid gets it with what you saved on it.")), render };
 }
 
 // The whole photo on the screen, or a canvas-shaped box of it to drag and resize by its corner.
@@ -204,7 +205,7 @@ export function picturesView(item: string | null): View {
   if (pic) {
     setup.picture = onScreen(pic);
     const live = liveScreen();
-    return { ...view(titleOf(pic), pictureView(pic), "Paint or write on the picture, the way your kid will. Only what you keep goes in your Purple Pack."),
+    return { ...view(titleOf(pic), pictureView(pic), "Paint or write on the picture, the way your kid will. Only what you save goes in your Purple Pack."),
       mounted: () => { live.prompt("Type to paint on it!"); live.engage(); },
       cleanup: () => { cleanup(); live.prompt(null); } };
   }

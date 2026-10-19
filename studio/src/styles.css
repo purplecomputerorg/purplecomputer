@@ -154,7 +154,13 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .crop-stage { display: flex; justify-content: center; padding: 20px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
 .cropper { position: relative; display: inline-block; max-width: 100%; line-height: 0; border-radius: 10px; overflow: hidden; user-select: none; box-shadow: var(--shadow); }
 .cropper img { display: block; max-width: 100%; max-height: 340px; }
-.crop-box { position: absolute; box-shadow: inset 0 0 0 5px #fff, 0 0 0 9999px rgba(53, 42, 74, 0.55); outline: 3px solid var(--purple); outline-offset: -3px; cursor: move; touch-action: none; }
+.crop-box {
+  --dash-x: repeating-linear-gradient(90deg, var(--purple) 0 14px, #fff 14px 28px);
+  --dash-y: repeating-linear-gradient(180deg, var(--purple) 0 14px, #fff 14px 28px);
+  position: absolute; box-shadow: 0 0 0 9999px rgba(53, 42, 74, 0.55); cursor: move; touch-action: none;
+  background: var(--dash-x) top / 100% 4px no-repeat, var(--dash-x) bottom / 100% 4px no-repeat,
+    var(--dash-y) left / 4px 100% no-repeat, var(--dash-y) right / 4px 100% no-repeat;
+}
 .crop-handle { position: absolute; right: 4px; bottom: 4px; width: 30px; height: 30px; border-radius: 50%; background: var(--purple); border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); cursor: nwse-resize; display: grid; place-items: center; color: #fff; font: 700 16px/1 var(--sans); font-style: normal; }
 .crop-move { right: auto; bottom: auto; left: calc(50% - 18px); top: calc(50% - 18px); width: 36px; height: 36px; font-size: 20px; cursor: move; }
 .crop-handle:hover { transform: scale(1.12); }

@@ -287,20 +287,7 @@ class PackInstaller:
 
             if refused := extract_pack(pack_path, temp_dir):
                 return False, refused
-
-            if problems := check_pack(temp_dir):
-                return False, "Pack not installed: " + "; ".join(problems[:5])
-
-            manifest = read_manifest(temp_dir) or {}
-            final_dir = self.packs_dir / manifest['id']
-            if final_dir.exists():
-                if not replace:
-                    return False, f"Pack already installed: {manifest['id']}"
-                shutil.rmtree(final_dir)
-            shutil.move(str(temp_dir), str(final_dir))
-            from . import i18n
-            i18n.reload()
-            return True, f"Pack installed: {manifest['name']} v{manifest['version']}"
+            return self.install_dir(temp_dir, replace)
 
         except tarfile.TarError as e:
             return False, f"Invalid pack file: {e}"
@@ -312,6 +299,24 @@ class PackInstaller:
                 temp_dir.parent.rmdir()
             except OSError:
                 pass
+
+    def install_dir(self, pack_dir: Path, replace: bool = False) -> tuple[bool, str]:
+        """Move an unpacked pack into place, after the same checks a .purplepack gets."""
+        if problems := check_pack(pack_dir):
+            return False, "Pack not installed: " + "; ".join(problems[:5])
+        manifest = read_manifest(pack_dir) or {}
+        final_dir = self.packs_dir / manifest['id']
+        try:
+            if final_dir.exists():
+                if not replace:
+                    return False, f"Pack already installed: {manifest['id']}"
+                shutil.rmtree(final_dir)
+            shutil.move(str(pack_dir), str(final_dir))
+        except OSError as e:
+            return False, f"Error installing pack: {e}"
+        from . import i18n
+        i18n.reload()
+        return True, f"Pack installed: {manifest['name']} v{manifest['version']}"
 
     def uninstall_pack(self, pack_id: str) -> tuple[bool, str]:
         """Uninstall a pack"""

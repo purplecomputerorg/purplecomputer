@@ -295,34 +295,30 @@ class FamilyRoomsScreen(Picker):
 
 
 class PurplePacksScreen(Picker):
-    """Each Purple Pack installed from a USB drive. Packs are read at startup, so a removed one
-    stays listed, and in use, until Purple restarts."""
+    """Each Purple Pack added from a USB drive."""
     title = "Purple Packs"
     DESCRIPTION = "Pictures, words, and sounds from Purple Studio."
 
     def __init__(self, app):
-        self.removed: dict[str, str] = {}
         super().__init__(app, self._options())
 
     def _options(self) -> list:
         from ...pack_manager import get_installer
-        packs = [(p["id"], p["name"], "Enter to remove") for p in get_installer().list_installed()]
-        gone = [(False, name, "Removed: gone when Purple restarts") for name in self.removed.values()]
-        return packs + gone + [(None, "Done")]
+        return [(p["id"], p["name"], "Enter to remove") for p in get_installer().list_installed()] + [(None, "Done")]
 
     def _on_confirm(self, pack_id):
         if pack_id is None:
             return self.close(True)
-        if pack_id is False:
-            return
         name = self.options[self.selected][1]
-        self.app.push(Confirm(self.app, f"Remove {name}?", "It comes back if its Purple Pack is on a USB drive when Purple starts.",
-                              yes="Remove", no="Keep"), on_close=lambda yes: yes is True and self._remove(pack_id, name))
+        self.app.push(Confirm(self.app, f"Remove {name}?", "Plug in a USB drive with it to add it again.",
+                              yes="Remove", no="Keep"), on_close=lambda yes: yes is True and self._remove(pack_id))
 
-    def _remove(self, pack_id: str, name: str):
+    def _remove(self, pack_id: str):
         from ...pack_manager import get_installer
+        from ...settings import set_pack_added
         if get_installer().uninstall_pack(pack_id)[0]:
-            self.removed[pack_id] = name
+            set_pack_added(pack_id, None)
+            self.app.refresh_packs()
         self.options = self._options()
         self.selected = min(self.selected, len(self.options) - 1)
         self.app.invalidate()

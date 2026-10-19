@@ -1,49 +1,88 @@
-"""Install every .purplepack at the top level of a USB drive.
+"""Set aside every .purplepack at the top level of a USB drive, for Purple to offer.
 
 Run by config/systemd/purple-usb-update@.service, as root, with the drive
-already mounted read-only at the path given on the command line. Packs go to
-the purple user's ~/.purple/packs, replacing any pack with the same id, and
-are chowned to that user so the app can read them. Purple picks them up the
-next time it starts. Only stdlib and the pure-data parts of purple_tui are
-imported: this runs under the system python3, outside the app's venv.
+already mounted read-only at the path given on the command line. Each pack
+that passes check_pack is unpacked into the purple user's waiting folder,
+named by the file's sha256, and chowned to that user. Nothing is installed
+here: the app (purple_tui/pack_arrivals.py) asks before it adds one. Only
+stdlib and the pure-data parts of purple_tui are imported: this runs under
+the system python3, outside the app's venv.
 
     python3 -m purple_tui.usb_updater /run/purple-update/sdb1
 """
 
+import hashlib
 import os
 import pwd
+import shutil
 import sys
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 
-from .pack_manager import PackInstaller
+from .pack_manager import check_pack, extract_pack
 
 APP_USER = "purple"
 LOG_PATH = Path("/var/log/purple/usb-update.log")
+WAITING = Path(".purple") / "packs-waiting"
+READING = ".reading"  # there while a drive's packs are being unpacked, so the app can say so
 
 
-def app_user_packs_dir() -> Path:
+def app_user_waiting_dir() -> Path:
     try:
         home = Path(pwd.getpwnam(APP_USER).pw_dir)
     except KeyError:
         home = Path.home()
-    return home / ".purple" / "packs"
+    return home / WAITING
 
 
 def _chown_tree(root: Path, uid: int, gid: int) -> None:
     for path in [root, *root.rglob("*")]:
-        os.chown(path, uid, gid)
+        os.chown(path, uid, gid, follow_symlinks=False)
 
 
-def update_from(mount: Path, packs_dir: Path | None = None) -> list[tuple[str, bool, str]]:
-    """Install each pack on the drive. Returns (filename, ok, message) per pack."""
-    packs_dir = packs_dir or app_user_packs_dir()
-    installer = PackInstaller(packs_dir)
-    results = [(p.name, *installer.install_pack(p, replace=True)) for p in sorted(mount.glob("*.purplepack"))]
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def stage(pack: Path, waiting: Path) -> tuple[bool, str]:
+    """Unpack and check one pack into waiting/<sha256>. Dot-named while it is being written,
+    so the app never sees half a pack."""
+    dest = waiting / sha256(pack)
+    if dest.exists():
+        return True, "already waiting"
+    tmp = Path(tempfile.mkdtemp(prefix=".", dir=waiting))
+    try:
+        refused = extract_pack(pack, tmp) or "; ".join(check_pack(tmp)[:5])
+        if refused:
+            return False, refused
+        tmp.rename(dest)
+        return True, "waiting to be added"
+    except (tarfile.TarError, OSError) as e:
+        return False, f"unreadable: {e}"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def update_from(mount: Path, waiting: Path | None = None) -> list[tuple[str, bool, str]]:
+    """Stage each pack on the drive. Returns (filename, ok, message) per pack."""
+    waiting = waiting or app_user_waiting_dir()
+    waiting.mkdir(parents=True, exist_ok=True)
+    reading = waiting / READING
+    reading.touch()
+    try:
+        results = [(p.name, *stage(p, waiting)) for p in sorted(mount.glob("*.purplepack"))]
+    finally:
+        reading.unlink(missing_ok=True)
     try:
         user = pwd.getpwnam(APP_USER)
         if os.geteuid() == 0:
-            _chown_tree(packs_dir.parent, user.pw_uid, user.pw_gid)
+            _chown_tree(waiting.parent, user.pw_uid, user.pw_gid)
     except (KeyError, OSError):
         pass
     return results

@@ -17,7 +17,7 @@ from purple_tui import tts  # noqa: E402
 from purple_tui.content import ContentManager  # noqa: E402
 from purple_tui.music_constants import INSTRUMENTS, instruments, pitch_filename, reachable_pitches  # noqa: E402
 from purple_tui.pack_manager import PackInstaller, check_pack  # noqa: E402
-from purple_tui.usb_updater import update_from  # noqa: E402
+from purple_tui.usb_updater import sha256, update_from  # noqa: E402
 from scripts.purplepack import build_pack, render_instruments  # noqa: E402
 
 
@@ -208,18 +208,21 @@ class TestInstaller:
 
 
 class TestUsbUpdater:
-    def test_installs_every_pack_on_the_stick_and_replaces_on_rerun(self, tmp_path):
+    def test_sets_aside_each_good_pack_by_its_hash_and_installs_nothing(self, tmp_path):
         stick = tmp_path / "stick"
         stick.mkdir()
         build_pack(make_pack(tmp_path / "a", "a-pack"), stick / "a-pack.purplepack")
         build_pack(make_pack(tmp_path / "b", "b-pack"), stick / "b-pack.purplepack")
+        bad = make_pack(tmp_path / "bad", "bad-pack")
+        (bad / "content" / "run.py").write_text("")
+        build_pack(bad, stick / "bad.purplepack")
         (stick / "notes.txt").write_text("ignored")
-        packs_dir = tmp_path / "home" / ".purple" / "packs"
-        first = update_from(stick, packs_dir)
-        assert [(name, ok) for name, ok, _ in first] == [("a-pack.purplepack", True), ("b-pack.purplepack", True)]
-        second = update_from(stick, packs_dir)
-        assert all(ok for _, ok, _ in second)
-        assert sorted(p.name for p in packs_dir.iterdir()) == ["a-pack", "b-pack"]
+        waiting = tmp_path / "home" / ".purple" / "packs-waiting"
+        first = update_from(stick, waiting)
+        assert [(name, ok) for name, ok, _ in first] == [("a-pack.purplepack", True), ("b-pack.purplepack", True), ("bad.purplepack", False)]
+        assert sorted(d.name for d in waiting.iterdir()) == sorted(sha256(stick / f"{p}.purplepack") for p in ("a-pack", "b-pack"))
+        assert [msg for _, _, msg in update_from(stick, waiting)][:2] == ["already waiting"] * 2
+        assert not (tmp_path / "home" / ".purple" / "packs").exists()
 
 
 class TestRender:

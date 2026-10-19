@@ -1,8 +1,8 @@
 [Unit]
 Description=Purple Computer: packs from a USB drive (%i)
 After=local-fs.target
-# A drive present at boot is read before Purple starts, so the packs are
-# there on the first screen. A drive plugged in later waits for a restart.
+# A drive present at boot is read before Purple starts, so its packs are
+# offered on the first screen; one plugged in later is offered within seconds.
 Before=purple-x11.service
 
 [Service]
@@ -10,9 +10,9 @@ Type=oneshot
 # A drive that won't mount or read must not hold Purple's start for long.
 TimeoutStartSec=60
 
-# Mount the drive read-only with nothing on it runnable, install any packs
-# into the purple user's ~/.purple/packs, unmount. A drive with no packs on
-# it never starts Python.
+# Mount the drive read-only with nothing on it runnable, set any packs aside
+# in the purple user's ~/.purple/packs-waiting for the app to offer,
+# unmount. A drive with no packs on it never starts Python.
 ExecStartPre=/bin/mkdir -p /run/purple-update/%i
 ExecStartPre=/bin/mount -o ro,nosuid,nodev,noexec /dev/%i /run/purple-update/%i
 ExecStart=/bin/sh -c 'ls /run/purple-update/%i/*.purplepack >/dev/null 2>&1 || exit 0; exec /usr/bin/python3 -m purple_tui.usb_updater /run/purple-update/%i'

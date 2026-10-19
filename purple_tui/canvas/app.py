@@ -152,7 +152,7 @@ class PurpleApp:
         self._time_travel = None
         self._saved_digest: dict = {}  # room -> digest of what's on screen while it is still the saved work
         self._save_flash_at = None
-        self.save_pictures = _Cache(limit=48)  # Open's pictures; saves never change, and the theme only at startup
+        self.save_pictures = _Cache(limit=48)  # Open's pictures; saves never change, the theme only when packs do
         self._last_evdev_time = time.monotonic()
         self._keyboard_state_machine = KeyboardStateMachine()
         self._keyboard_state_machine.on_sticky_shift_change(self._on_sticky_shift_change)
@@ -161,6 +161,10 @@ class PurpleApp:
             detect_keyboard_mode()
         from ..secret import SecretKnock
         self._secret_knock = SecretKnock()
+        from .. import pack_arrivals
+        pack_arrivals.settle()
+        self._arrivals_seen = None
+        self._offering_packs = self._reading_packs = False
         from . import theme
         theme.apply(theme.find())
         self.rooms = {c.name: c(self) for c in ROOM_CLASSES}
@@ -238,6 +242,7 @@ class PurpleApp:
         if not is_live_boot() and os.path.exists(LIVE_AUDIO_MARKER):
             self.timers.after(30.0, self._check_first_boot_audio)
         self.timers.every(PRINTER_CHECK_S, self._check_printer)
+        self.timers.every(1.0, self._check_pack_arrivals)
         self._usb_text = None
         self._usb_timer = self.timers.every(1.0, self._tick_usb) if is_live_boot() else None
         self._battery_timer = self.timers.every(30.0, self.invalidate)
@@ -674,6 +679,71 @@ class PurpleApp:
             self._silence_music()
             self.push(FamilyRoom(self, room))
 
+    def _check_pack_arrivals(self):
+        from .. import pack_arrivals
+        stamp = pack_arrivals.stamp()
+        if stamp == self._arrivals_seen or self._offering_packs:
+            return
+        self._arrivals_seen = stamp
+        if pack_arrivals.reading():
+            if not self._reading_packs:
+                self._reading_packs = True
+                self.notify("Reading the Purple Pack...", timeout=60)
+            return
+        was_reading, self._reading_packs = self._reading_packs, False
+        installed, known, offer = pack_arrivals.settle()
+        if installed:
+            self.refresh_packs()
+        if was_reading:
+            self.clear_notifications()
+        if offer:
+            self._offer_packs(offer)
+        elif was_reading:
+            self.notify("Already added" if known else "Couldn't read that Purple Pack. Try downloading it from Purple Studio again.", timeout=4)
+
+    def _offer_packs(self, waiting):
+        from .. import pack_arrivals
+        from .ui import Confirm
+        body = "\n".join(m["name"] for _, m in waiting) + "\nPictures, words, and sounds from Purple Studio."
+        if pack_arrivals.has_rooms(waiting):
+            body += "\nIts rooms stay off until a grown-up turns them on in the Parent Menu."
+        self._offering_packs = True
+        self.push(Confirm(self, "New Purple Pack", body, yes="Add", no="Not now", default_no=False),
+                  on_close=lambda yes: self._answer_packs(waiting, yes))
+
+    def _answer_packs(self, waiting, yes):
+        if yes:
+            self.with_parent_pin(lambda: self._settle_offer(waiting, True), cancelled=lambda: self._settle_offer(waiting, False))
+        else:
+            self._settle_offer(waiting, False)
+
+    def _settle_offer(self, waiting, add):
+        from .. import pack_arrivals
+        self._offering_packs = False
+        if not add:
+            return pack_arrivals.decline(waiting)
+        failed = pack_arrivals.add(waiting)
+        self.refresh_packs()
+        names = ", ".join(m["name"] for _, m in waiting if m["name"] not in failed)
+        self.notify(f"Couldn't add {', '.join(failed)}" if failed else f"Added {names}", timeout=3)
+
+    def refresh_packs(self, reread=True):
+        """The packs changed under a running Purple: read them again, and redo what was drawn or
+        loaded from the old ones."""
+        from .. import i18n
+        from ..content import reload_content
+        from . import theme
+        if reread:
+            i18n.reload()
+            reload_content()
+        theme.apply(theme.find())
+        self.rooms["art"]._repaint_all()  # its cached canvas only repaints cells that changed
+        self.save_pictures.clear()
+        for room in self.rooms.values():
+            if sounds := getattr(room, "sounds", None):
+                sounds.clear()
+        self.invalidate()
+
     def _check_printer(self):
         """A toast when a printer is plugged in, gets ready, turns out not to work, or goes."""
         stamp, was = self._printer_seen
@@ -721,14 +791,17 @@ class PurpleApp:
         self._cancel_escape_hold_timer()
         self._keyboard_state_machine.reset()
         self.clear_notifications()
+        self.with_parent_pin(self._open_parent_menu_after_pin)
+
+    def with_parent_pin(self, then, cancelled=None):
+        """then() now, or once the parent PIN is typed when one is set."""
         from ..settings import get_parent_pin
         pin = get_parent_pin()
-        if pin:
-            from .rooms.parent_menu import PinEntry
-            self.push(PinEntry(self, "Enter Parent PIN", verify=lambda p: p == pin),
-                      on_close=lambda ok: ok is not None and self._open_parent_menu_after_pin())
-            return
-        self._open_parent_menu_after_pin()
+        if not pin:
+            return then()
+        from .rooms.parent_menu import PinEntry
+        self.push(PinEntry(self, "Enter Parent PIN", verify=lambda p: p == pin),
+                  on_close=lambda ok: then() if ok is not None else cancelled and cancelled())
 
     def _open_parent_menu_after_pin(self):
         from .rooms.parent_menu import LittlesExitScreen, ParentMenu

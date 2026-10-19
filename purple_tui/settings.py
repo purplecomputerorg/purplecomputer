@@ -19,6 +19,7 @@ _defaults = {
     "music_key_switching": True, # Whether music room key switching (arrows) is enabled
     "rooms_off": [],             # Built-in rooms a parent turned off, hidden from the Esc menu
     "rooms_on": {},              # Family rooms a parent turned on: "pack/room" -> Room.digest of what they turned on
+    "packs_added": {},           # Purple Packs someone pressed Add for: pack id -> sha256 of its .purplepack
     "all_caps": False,           # Whether all rendered text is uppercased at render time
     "volume_level": None,        # Last volume anyone set (0-100), restored on restart; None until then
     "volume_lock": None,         # Parent ceiling: None = no limit, 0-100 = loudest the kid can pick (0 = Silent Mode, keys disabled)
@@ -100,16 +101,33 @@ def set_room_off(name: str, off: bool) -> None:
     save_settings(settings)
 
 
+def _get_map(name: str) -> dict:
+    value = load_settings()[name]
+    return value if isinstance(value, dict) else {}
+
+
+def _set_in_map(name: str, key: str, value: str | None) -> None:
+    settings = load_settings()
+    settings[name] = {k: v for k, v in _get_map(name).items() if k != key} | ({key: value} if value else {})
+    save_settings(settings)
+
+
 def get_rooms_on() -> dict:
-    on = load_settings()["rooms_on"]
-    return on if isinstance(on, dict) else {}
+    return _get_map("rooms_on")
 
 
 def set_room_on(key: str, digest: str | None) -> None:
     """digest None turns the room off."""
-    settings = load_settings()
-    settings["rooms_on"] = {k: v for k, v in get_rooms_on().items() if k != key} | ({key: digest} if digest else {})
-    save_settings(settings)
+    _set_in_map("rooms_on", key, digest)
+
+
+def get_packs_added() -> dict:
+    return _get_map("packs_added")
+
+
+def set_pack_added(pack_id: str, sha: str | None) -> None:
+    """sha None forgets it, so the next drive with it asks again."""
+    _set_in_map("packs_added", pack_id, sha)
 
 
 def get_music_looping() -> bool:

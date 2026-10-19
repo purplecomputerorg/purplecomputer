@@ -827,3 +827,10 @@ def get_content() -> ContentManager:
         _content = ContentManager()
         _content.load_all()
     return _content
+
+
+def reload_content() -> None:
+    """Read the packs again, in place: rooms hold on to the manager."""
+    if _content is not None:
+        _content.__init__()
+        _content.load_all()

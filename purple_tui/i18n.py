@@ -208,10 +208,7 @@ def set_languages(interface: str, second: str | None) -> None:
     set_language(interface)
     set_second_language(second)
     _interface, _second, _loaded_choice = interface, second, True
-    _memo.clear()
-    if content._content is not None:  # rebuilt in place: rooms hold on to it
-        content._content.__init__(content._content.packs_dir)
-        content._content.load_all()
+    content.reload_content()
 
 
 def reload() -> None:

@@ -40,24 +40,15 @@ def install(pack_id=None, files=(), removed=(), fresh=True):
         if problems := check_pack(pack):
             print(f"[studio] pack problems: {'; '.join(problems[:5])}")
     i18n.reload()
-    content._content = None
+    content.reload_content()
     for key, digest in _rooms():
         set_room_on(key, digest)
     return _app is None or _rooms() != before
 
 
 def refresh():
-    """The new pack in the running Purple, which reads its content as it goes: only the theme and
-    what was loaded from the old pack (sounds, Open's thumbnails, Play's words) are redone."""
-    from purple_tui.canvas import theme
-    theme.apply(theme.find())
-    _app.rooms["art"]._repaint_all()  # its cached canvas only repaints cells that changed
-    _app.save_pictures.clear()
-    _app.rooms["play"].evaluator.content = content.get_content()
-    for room in _app.rooms.values():
-        if sounds := getattr(room, "sounds", None):
-            sounds.clear()
-    _app.invalidate()
+    """The new pack in the running Purple; install() already read it."""
+    _app.refresh_packs(reread=False)
 
 
 async def restart():

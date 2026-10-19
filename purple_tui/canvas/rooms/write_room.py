@@ -11,7 +11,7 @@ from ... import palette as P
 from ...constants import ICON_PENCIL
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from .. import paper
-from ..ui import MOVE_HINT, TextField, draw_field, draw_key_hint, draw_text_caret, hint_row_h
+from ..ui import MOVE_HINT, TextField, draw_key_hint, draw_text_caret, hint_row_h
 from .base import Room
 from .play_room import scroll_thumb
 
@@ -130,20 +130,19 @@ class WriteRoom(Room):
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g, rect):
-        """The text on a sheet centered in the room, the hint under the sheet's edge."""
+        """The text in a centered column on faint ruled lines, the hint under it as in Art."""
         em, pad = g.em, g.em(0.7)
         inner = rect.inflate(-2 * pad, -2 * pad)
         foot_h = hint_row_h(g)
-        sheet = pygame.Rect(inner.x, inner.y, inner.w, inner.h - foot_h - em(0.5))
-        margin = em(1.6)
-        px = text_px(g, sheet.w - 2 * margin - em(2), em(1.45))
+        page = pygame.Rect(inner.x, inner.y + em(0.5), inner.w, inner.h - foot_h - em(1.0))
+        px = text_px(g, page.w - 2 * em(2), em(1.45))
         lh = line_pitch(g, px)
-        sheet.w = min(sheet.w, (COLS + 1) * g.measure("M", px, "mono", tr=False)[0] + 2 * margin)
-        sheet.centerx = inner.centerx
-        draw_field(g, sheet, px)
-        page = sheet.inflate(-2 * margin, -2 * em(1.0))
-        x = page.x
+        col_w = (COLS + 1) * g.measure("M", px, "mono", tr=False)[0]
+        x = page.centerx - col_w // 2
         rows = max(1, page.h // lh)
+        for i in range(rows):
+            y = page.y + i * lh + round(px * 1.25)
+            g.rect(P.FIELD, pygame.Rect(x, y, col_w, max(1, px // 14)))
         text, cursor = self.field.value, self.field.cursor
         lines = wrap(text)
         k = line_of(lines, cursor)
@@ -155,11 +154,11 @@ class WriteRoom(Room):
                         page.y + (k - self.top) * lh, px, text[cursor:cursor + 1])
         if len(lines) > rows:
             w = em(0.7)
-            track = pygame.Rect(sheet.right + em(0.6), page.y, w, rows * lh)
+            track = pygame.Rect(rect.right - em(0.5) - w, page.y, w, rows * lh)
             g.rect(P.BG, track, radius=w // 2)
             hidden = (len(lines) - self.top - rows) * lh
             g.rect(P.FIELD, scroll_thumb(track, rows * lh, len(lines) * lh, hidden, em(1.5)), radius=w // 2)
-        foot = pygame.Rect(sheet.x, inner.bottom - foot_h, inner.w, foot_h)
+        foot = pygame.Rect(x, inner.bottom - foot_h, inner.w, foot_h)
         draw_key_hint(g, HINT, g.vh(1.9), foot.x, foot.centery)
 
     def paper_pages(self, g, size, on_screen=False, limit=None) -> list:

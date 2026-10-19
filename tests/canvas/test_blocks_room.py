@@ -15,7 +15,7 @@ from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, SINK, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
-from purple_tui.keyboard import KeyboardStateMachine, NavigationAction
+from purple_tui.keyboard import ControlAction, KeyboardStateMachine, NavigationAction
 from purple_tui.palette import get_key_color
 
 
@@ -298,6 +298,8 @@ def test_keyboard_reports_the_still_held_letter_and_shift():
     assert down(KeyCode.KEY_Y)[0].char_held == "b"
     down(KeyCode.KEY_LEFTSHIFT)
     assert down(KeyCode.KEY_UP)[0].shift_held
+    down(KeyCode.KEY_SPACE)
+    assert down(KeyCode.KEY_ENTER)[0].space_held
 
 
 def test_holding_a_letter_or_space_while_arrowing_lays_a_line():
@@ -309,6 +311,19 @@ def test_holding_a_letter_or_space_while_arrowing_lays_a_line():
         assert all((x, 5, 0) in room._blocks for x in range(6, WIDTH))
         await press(app, "up", space_held=True)
         assert (WIDTH - 1, 6, 0) in room._blocks
+    run(go())
+
+
+def test_holding_space_while_pressing_enter_lays_a_column():
+    async def go():
+        app, room = _blocks()
+        app._code_panel_enabled = True
+        room._dir = "right"
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
+        for i in range(3):
+            await app._dispatch_keyboard_action(ControlAction(action="enter", is_repeat=i > 0, space_held=True))
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
+        assert set(room._blocks) == {(5, 5, y) for y in range(4)} and room.code_panel is None
     run(go())
 
 

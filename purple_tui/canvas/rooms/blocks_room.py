@@ -399,6 +399,9 @@ class BlocksRoom(Room):
     async def handle(self, action):
         if isinstance(action, ControlAction) and action.action == "space" and self.space.route(action):
             return
+        stacking = isinstance(action, ControlAction) and action.action == "enter" and action.space_held
+        if stacking and self.code_panel is None:
+            self._dir = RISE    # Space + Enter lays a column, as Space + arrows lay a line
         self.space.other_key()
         if self.code_panel is not None:
             result = await self.code_panel.handle(action)
@@ -409,7 +412,7 @@ class BlocksRoom(Room):
             return
         if isinstance(action, ControlAction):
             if action.is_down and (not action.is_repeat or action.action in ("backspace", "enter")):
-                self._control(action.action, action.is_repeat)
+                self._control("space" if stacking else action.action, action.is_repeat)
         elif isinstance(action, NavigationAction):
             self._navigate(action)
         elif isinstance(action, CharacterAction):

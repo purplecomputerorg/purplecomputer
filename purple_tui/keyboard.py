@@ -660,6 +660,7 @@ class ControlAction(KeyAction):
     arrow_held: str | None = None  # Arrow direction held when this action fired
     is_repeat: bool = False  # Is this a key repeat?
     synthetic: bool = False  # Injected by demo playback, not a physical key
+    space_held: bool = False  # Space down when this fired (Enter only)
 
 
 @dataclass
@@ -836,7 +837,7 @@ class KeyboardStateMachine:
             actions.append(ControlAction(action='backspace', is_down=True, is_repeat=is_repeat))
             return actions
         if keycode == KeyCode.KEY_ENTER:
-            actions.append(ControlAction(action='enter', is_down=True, is_repeat=is_repeat))
+            actions.append(ControlAction(action='enter', is_down=True, is_repeat=is_repeat, space_held=self._space_held))
             return actions
         # Tab toggles modes, so a held Tab must flip once, not on every repeat.
         if keycode == KeyCode.KEY_TAB:

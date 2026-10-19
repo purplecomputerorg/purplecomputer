@@ -22,9 +22,6 @@ fi
 source "$PROJECT_ROOT/.venv/bin/activate"
 
 mkdir -p "$TEST_HOME/.purple/packs"
-for pack in core-emoji core-definitions core-sounds; do
-    [ -d "$PROJECT_ROOT/packs/$pack" ] && cp -r "$PROJECT_ROOT/packs/$pack" "$TEST_HOME/.purple/packs/"
-done
 
 export HOME="$TEST_HOME"
 export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"

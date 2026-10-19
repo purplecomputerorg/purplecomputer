@@ -61,18 +61,6 @@ fi
 echo_info "Creating test environment at $TEST_HOME"
 mkdir -p "$TEST_HOME/.purple/packs"
 
-# Copy packs to test environment
-echo_info "Copying content packs..."
-if [ -d "$PROJECT_ROOT/packs/core-emoji" ]; then
-    cp -r "$PROJECT_ROOT/packs/core-emoji" "$TEST_HOME/.purple/packs/"
-fi
-if [ -d "$PROJECT_ROOT/packs/core-definitions" ]; then
-    cp -r "$PROJECT_ROOT/packs/core-definitions" "$TEST_HOME/.purple/packs/"
-fi
-if [ -d "$PROJECT_ROOT/packs/core-sounds" ]; then
-    cp -r "$PROJECT_ROOT/packs/core-sounds" "$TEST_HOME/.purple/packs/"
-fi
-
 # Check dependencies
 echo_info "Checking Python dependencies..."
 MISSING_DEPS=()

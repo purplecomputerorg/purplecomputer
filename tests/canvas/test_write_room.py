@@ -296,3 +296,24 @@ def test_mashing_keys_never_raises_or_overflows():
         assert len(app.room.plain_text()) == MAX_CHARS
         app._draw()
     run(go())
+
+
+@pytest.mark.parametrize("room", ["art", "music", "play", "blocks"])
+def test_other_rooms_ignore_editing_shortcuts_and_take_ctrl_arrows_as_arrows(room):
+    async def go():
+        app, plain = make_app(), make_app()
+        for a in (app, plain):
+            a.action_switch_room(room)
+            await type_text(a, "ab")
+        before = app.room_state(room)
+        for key in ("a", "c", "x", "v"):
+            await press(app, key, ctrl_held=True)
+            await press(app, key, cmd_held=True)
+        for key in ("home", "end", "page_up", "page_down"):
+            await press(app, key)
+        assert app.room_state(room) == before
+        for a, kw in ((app, {"ctrl_held": True}), (plain, {})):
+            await press(a, "right", **kw)
+            await press(a, "down", **kw)
+        assert app.room_state(room) == plain.room_state(room)
+    run(go())

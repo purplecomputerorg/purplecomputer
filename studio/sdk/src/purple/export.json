@@ -543,7 +543,8 @@
    "2,7": "C3",
    "2,8": "D3",
    "2,9": "E3"
-  }
+  },
+  "sample_volume": 0.4
  },
  "voice": {
   "letter_files": {

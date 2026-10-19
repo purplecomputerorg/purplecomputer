@@ -25,7 +25,7 @@ from purple_tui.music_constants import (  # noqa: E402
 )
 from purple_tui.canvas.rooms.art_room import CANVAS_ALT, CANVAS_BG  # noqa: E402
 from purple_tui.palette import KEY_COLORS  # noqa: E402
-from purple_tui.canvas.sounds import CLIP_NAMES  # noqa: E402
+from purple_tui.canvas.sounds import CLIP_NAMES, SAMPLE_VOLUME  # noqa: E402
 from purple_tui.roomkit.purple import H as ROOM_H, W as ROOM_W  # noqa: E402
 from purple_tui.tts import VOICE_MODEL, VOICE_SPEAKER, _SYNTH_PARAMS, voice_clip_filename  # noqa: E402
 from tools.photo_to_art import fit_to_canvas  # noqa: E402
@@ -82,6 +82,7 @@ def build_export() -> dict:
             "instruments": [d for d, _ in INSTRUMENTS],
             "pitches": pitches,
             "grid_pitches": grid_pitches,
+            "sample_volume": SAMPLE_VOLUME,
         },
         "voice": {
             "letter_files": {k.lower(): name for k, name in CLIP_NAMES.items()},

@@ -17,6 +17,7 @@ export function voiceClipFilename(text: string): string {
 export const INSTRUMENTS: readonly string[] = music.instruments;
 export const GRID_ROWS: string[][] = music.grid_rows;
 export const PERCUSSION_ROW: string[] = music.percussion_row;
+export const SAMPLE_VOLUME: number = music.sample_volume;
 
 // music_constants.pitch_filename: "C#4" -> "cs4"
 export function pitchFilename(note: string, octave: number): string {

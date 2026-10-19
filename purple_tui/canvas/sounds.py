@@ -13,6 +13,7 @@ from ..music_constants import ALL_KEYS, PERCUSSION
 # Every grid key can have a recording; the ones that can't be a file name are spelled out.
 CLIP_NAMES = {k: {";": "semicolon", ",": "comma", ".": "period", "/": "slash"}.get(k, k.lower()) for k in ALL_KEYS}
 DRUM_KEYS = {name: digit for digit, name in PERCUSSION.items()}
+SAMPLE_VOLUME = 0.4
 
 
 def core_sounds() -> Path:
@@ -28,7 +29,7 @@ def find_sound(base: Path, name: str):
 def _load(path) -> pygame.mixer.Sound | None:
     try:
         s = pygame.mixer.Sound(str(path))
-        s.set_volume(0.4)
+        s.set_volume(SAMPLE_VOLUME)
         return s
     except pygame.error:
         return None

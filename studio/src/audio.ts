@@ -40,10 +40,10 @@ export function play(clip: Clip): void {
   playBuffer(clipToBuffer(clip));
 }
 
-export function playBuffer(buffer: AudioBuffer): void {
+export function playBuffer(buffer: AudioBuffer, volume = 1): void {
   const ctx = audioContext();
   const node = new AudioBufferSourceNode(ctx, { buffer });
-  node.connect(ctx.destination);
+  node.connect(new GainNode(ctx, { gain: volume })).connect(ctx.destination);
   node.start();
 }
 

@@ -93,7 +93,7 @@ export function wordsView(): View {
       {},
       h("p", { class: "lead" }, "In Play, kids type a word and see its emoji. Add the words your family uses: a pet's name, a favorite food, a word only you say."),
       table,
-      h("p", { class: "dim small" }, `Purple already knows ${Object.keys(CORE_EMOJI).length} words, like cat and dog. Your words come first when Purple suggests what to type.`),
+      h("p", { class: "dim small" }, "Purple already knows hundreds of words, like cat and dog. Your words come first when Purple suggests what to type."),
     ),
     live: { room: "play" },
     keys: () => typingKeys(draft.words[0]?.word || "cat"),

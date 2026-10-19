@@ -155,7 +155,7 @@ class RoomPicker(Overlay):
     def draw(self, g):
         """A modal over the dimmed room: room cards under the title with Volume
         in the corner, a labelled section of this room's tools, then the
-        grown-ups hint and the arrow keys."""
+        Parent Menu hint and the arrow keys."""
         draw_scrim(g)
         em = g.em
         pad, card_h = em(2.0), em(CARD_H)
@@ -280,7 +280,7 @@ class RoomPicker(Overlay):
 
     def _draw_footer(self, g, cx, y):
         px = g.em(0.9)
-        label = "Hold Esc for grown-ups   ·   Arrows move"
+        label = "Hold Esc for Parent Menu   ·   Arrows move"
         label_w = g.measure(label, px, "mono")[0]
         x = cx - (label_w + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
         x = g.draw_text(label, px, x, y, "mono", P.MUTED, anchor="midleft").right + g.em(0.9)

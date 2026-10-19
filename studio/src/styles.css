@@ -159,7 +159,11 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .crop-move { right: auto; bottom: auto; left: calc(50% - 18px); top: calc(50% - 18px); width: 36px; height: 36px; font-size: 20px; cursor: move; }
 .crop-handle:hover { transform: scale(1.12); }
 .crop-words { position: absolute; inset: 0; pointer-events: none; font-family: PurpleArt; }
-.crop-words span { position: absolute; display: grid; place-items: center; pointer-events: auto; cursor: move; touch-action: none; }
+.crop-words span { position: absolute; display: grid; place-items: center; }
+.words-box { position: absolute; outline: 2px dashed #fff; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(53, 42, 74, 0.35); border-radius: 2px; pointer-events: auto; cursor: move; touch-action: none; }
+.words-box:hover { outline-style: solid; }
+.words-grab { right: auto; bottom: auto; left: calc(50% - 13px); top: -34px; width: 26px; height: 26px; font-size: 15px; cursor: move; }
+.words-box.below .words-grab { top: auto; bottom: -34px; }
 .words-field { width: 100%; min-height: 3.2em; font: 18px/1.4 PurpleArt; resize: vertical; }
 .phone-bar .tray-keys, .phone-hint { display: none; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {

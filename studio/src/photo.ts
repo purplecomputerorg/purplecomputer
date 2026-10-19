@@ -115,10 +115,26 @@ export function clampCrop(c: Crop, w: number, h: number): Crop {
   return { x: clamp(c.x, 0, w - cw), y: clamp(c.y, 0, h - ch), w: cw, h: ch };
 }
 
-// The words' lines and top left, kept inside the photo.
+// A line broken at spaces to fit cols; a word longer than that is cut where it must be.
+export function wrap(line: string, cols: number): string[] {
+  const out: string[] = [];
+  let cur = "";
+  for (const word of line.split(" ")) {
+    const next = cur ? `${cur} ${word}` : word;
+    if (next.length <= cols) {
+      cur = next;
+      continue;
+    }
+    if (cur) out.push(cur);
+    for (cur = word; cur.length > cols; cur = cur.slice(cols)) out.push(cur.slice(0, cols));
+  }
+  return [...out, cur];
+}
+
+// The words' lines, wrapped to the photo's width, and their top left, kept inside the photo.
 export function wordsAt(pic: Picture): { lines: string[]; x: number; y: number } | null {
   const [rows, cols] = [pic.cells.length, pic.cells[0].length];
-  const lines = (pic.words?.text ?? "").trimEnd().split("\n").slice(0, rows).map((l) => l.slice(0, cols));
+  const lines = (pic.words?.text ?? "").trimEnd().split("\n").flatMap((l) => wrap(l, cols)).slice(0, rows);
   const wide = Math.max(...lines.map((l) => l.length));
   if (!wide) return null;
   const { x = (cols - wide) >> 1, y = rows - lines.length - 1 } = pic.words!;

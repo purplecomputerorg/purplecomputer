@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, canvasOrigin, fitToCanvas } from "../sdk/src/purple/art";
 import { DEFAULT_PALETTE, contrast } from "../sdk/src/purple/theme";
-import { CANVAS_SHAPE, clampCrop, fillCrop, wordLetters, wordsAt, type Picture, type Words } from "../src/photo";
+import { CANVAS_SHAPE, clampCrop, fillCrop, wordLetters, wordsAt, wrap, type Picture, type Words } from "../src/photo";
 
 describe("cropping to the Art canvas", () => {
   it("fills the canvas from a tall photo and a wide one", () => {
@@ -34,9 +34,16 @@ describe("words on a picture", () => {
   });
 
   it("keeps moved words and their lines inside the photo", () => {
-    expect(wordsAt(pic({ text: "ab\nlong line here", x: 7, y: -3 }))).toEqual({ lines: ["ab", "long line "], x: 0, y: 0 });
+    expect(wordsAt(pic({ text: "ab\nlong line here", x: 7, y: -3 }))).toEqual({ lines: ["ab", "long line", "here"], x: 1, y: 0 });
+    expect(wordsAt(pic({ text: "a b c d e f g h i j k l m n o p q r s t u v w x y z" }))!.lines).toHaveLength(4);
     expect(wordsAt(pic({ text: "ab", x: 99, y: 99 }))).toMatchObject({ x: 8, y: 3 });
     expect(wordsAt(pic({ text: " \n" }))).toBeNull();
     expect(wordLetters(pic())).toEqual([]);
+  });
+
+  it("wraps at spaces, cutting only a word too long for a line", () => {
+    expect(wrap("happy birthday to you", 10)).toEqual(["happy", "birthday", "to you"]);
+    expect(wrap("supercalifragilistic is long", 10)).toEqual(["supercalif", "ragilistic", "is long"]);
+    expect(wrap("", 10)).toEqual([""]);
   });
 });

@@ -97,25 +97,36 @@ function edited(pic: Picture) {
 }
 
 // The words drawn over the photo as Purple writes them, one letter per cell, and dragged a cell at a time.
-function wordsOverlay(pic: Picture, frame: HTMLElement): { element: HTMLElement; render: () => void } {
+function wordsOverlay(pic: Picture, frame: HTMLElement): { element: HTMLElement; render: (crop?: Crop) => void } {
   const { width: W, height: H } = pic.bitmap;
   const element = h("div", { class: "crop-words" });
   const pct = (v: number, of: number) => `${(100 * v) / of}%`;
   // The photo's cells in its own pixels: the crop, or all of it.
-  const grid = () => {
-    const r = pic.crop ?? { x: 0, y: 0, w: W, h: H };
+  const grid = (crop = pic.crop) => {
+    const r = crop ?? { x: 0, y: 0, w: W, h: H };
     const [rows, cols] = [pic.cells.length, pic.cells[0].length];
     return { ...r, cw: r.w / cols, ch: r.h / rows, origin: canvasOrigin(cols, rows) };
   };
   const cellPx = () => grid().cw * (frame.clientWidth / W);
-  const render = () => {
-    const { x: rx, y: ry, cw, ch, origin: [x0, y0] } = grid();
+  // Room above the words for the move handle, in screen pixels.
+  const HANDLE_ROOM = 34;
+  // crop: the crop box while it's being dragged, before it's applied.
+  const render = (crop?: Crop) => {
+    const { x: rx, y: ry, cw, ch, origin: [x0, y0] } = grid(crop);
+    // An element over cells of the photo, from cell (x, y), w by h cells.
+    const over = <T extends HTMLElement>(el: T, x: number, y: number, w = 1, hh = 1) =>
+      (Object.assign(el.style, { left: pct(rx + x * cw, W), top: pct(ry + y * ch, H), width: pct(w * cw, W), height: pct(hh * ch, H) }), el);
     element.style.fontSize = `${letterPx(cellPx())}px`;
-    element.replaceChildren(...wordLetters(pic).map(([x, y, char, ink]) => {
-      const span = h("span", {}, char);
-      Object.assign(span.style, { left: pct(rx + (x - x0) * cw, W), top: pct(ry + (y - y0) * ch, H), width: pct(cw, W), height: pct(ch, H), color: ink });
+    const letters = wordLetters(pic).map(([x, y, char, ink]) => {
+      const span = over(h("span", {}, char), x - x0, y - y0);
+      span.style.color = ink;
       return span;
-    }));
+    });
+    const at = wordsAt(pic);
+    const below = !!at && (ry + at.y * ch) * (frame.clientHeight / H) < HANDLE_ROOM;
+    const box = at && over(h("div", { class: `words-box${below ? " below" : ""}`, title: "Drag to move the words" },
+      h("i", { class: "crop-handle words-grab" }, "✥")), at.x, at.y, Math.max(...at.lines.map((l) => l.length)), at.lines.length);
+    element.replaceChildren(...letters, ...(box ? [box] : []));
   };
   element.onpointerdown = (e: PointerEvent) => {
     const start = wordsAt(pic);
@@ -137,7 +148,7 @@ function wordsOverlay(pic: Picture, frame: HTMLElement): { element: HTMLElement;
     addEventListener("pointermove", move);
     addEventListener("pointerup", up);
   };
-  new ResizeObserver(render).observe(frame);
+  new ResizeObserver(() => render()).observe(frame);
   return { element, render };
 }
 
@@ -188,6 +199,7 @@ function cropper(pic: Picture, ex: Example | undefined): HTMLElement {
         ? { ...start, w: Math.min(start.w + Math.max(dx, dy * CANVAS_SHAPE), W - start.x, (H - start.y) * CANVAS_SHAPE) }
         : { ...start, x: start.x + dx, y: start.y + dy }, W, H);
       show(crop);
+      words.render(crop);
     };
     box.setPointerCapture(e.pointerId);
     box.onpointermove = move;
@@ -198,7 +210,7 @@ function cropper(pic: Picture, ex: Example | undefined): HTMLElement {
   return card("What shows on Purple", toggle(whole, fill), h("div", { class: "crop-stage" }, frame), hint,
     ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
     h("h3", {}, "Words on the picture (if you like)"), text,
-    h("p", { class: "dim small" }, "They show in Purple's own letters, the size they'll be on the screen. Drag them on the picture to move them."));
+    h("p", { class: "dim small" }, "They show in Purple's own letters, the size they'll be on the screen. Drag the words or their circle on the picture to move them."));
 }
 
 function pictureView(pic: Picture): HTMLElement {

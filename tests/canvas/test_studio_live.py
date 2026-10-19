@@ -1,5 +1,6 @@
-"""Studio's live Purple (studio/src/live/live.py) takes a new pack without starting again unless
-its family rooms changed: words, sounds, pictures and colors show up in the running app."""
+"""Studio's live Purple (studio/src/live/live.py) takes the files that changed in a pack without
+starting again unless its family rooms changed: words, sounds, pictures and colors show up in the
+running app, and a file Studio dropped goes away."""
 
 import importlib.util
 import json
@@ -11,10 +12,10 @@ from purple_tui import palette as P
 from purple_tui import settings
 from purple_tui.canvas import theme
 from purple_tui.canvas.harness import make_app, run
-from scripts.purplepack import build_pack
 from tests.test_packs import make_pack
 
 LIVE = Path(__file__).parents[2] / "studio" / "src" / "live" / "live.py"
+ID = "the-tests-pack"
 
 
 @pytest.fixture
@@ -28,23 +29,29 @@ def live(tmp_path, monkeypatch):
     theme.apply({})
 
 
-def pack(root: Path, emoji: str, bg: str, cow: str = "cow") -> str:
-    d = make_pack(root)
-    (d / "content" / "emoji.json").write_text(json.dumps({"zorb": emoji}))
-    (d / "content" / "theme.json").write_text(json.dumps({"colors": {"bg": bg}}))
-    (d / "content" / "rooms" / "farm.py").write_text(f'from purple import *\n\ndef on_key(key):\n    say("{cow}")\n')
-    return str(build_pack(d))
+def files(root: Path) -> list:
+    """A Studio-shaped pack as the (path, bytes) pairs Studio sends."""
+    d = make_pack(root, ID)
+    (d / "content" / "theme.json").write_text(json.dumps({"colors": {"bg": "#0d2233"}}))
+    return [(str(p.relative_to(d)), p.read_bytes()) for p in sorted(d.rglob("*")) if p.is_file()]
 
 
-def test_a_pack_without_room_changes_refreshes_the_running_purple(live, tmp_path):
+def text(path: str, value) -> tuple:
+    return path, (value if isinstance(value, str) else json.dumps(value)).encode()
+
+
+def test_changed_files_reach_the_running_purple_and_rooms_start_it_again(live, tmp_path):
     async def go():
-        assert live.install(pack(tmp_path / "a", "🐙", "#0d2233"))  # no Purple yet: it starts
+        assert live.install(ID, files(tmp_path / "pack"))  # no Purple yet: it starts
         live._app = app = make_app()
+        assert P.BG == "#0d2233"
         app.rooms["music"].sounds._cache[("instrument", "kitchen")] = {"c4": "the old note"}
-        assert not live.install(pack(tmp_path / "b", "🦑", "#10241a"))
+
+        assert not live.install(ID, [text("content/emoji.json", {"zorb": "🦑"})], ["content/theme.json"], fresh=False)
         live.refresh()
         assert app.rooms["play"].evaluator.content.exact_emoji("zorb") == "🦑"
-        assert P.BG == "#10241a"
+        assert P.BG == theme._DEFAULTS["roles"]["bg"]
         assert not app.rooms["music"].sounds._cache
-        assert live.install(pack(tmp_path / "c", "🦑", "#10241a", cow="moo"))
+
+        assert live.install(ID, [text("content/rooms/farm.py", 'from purple import *\n\ndef on_key(key):\n    say("moo")\n')], fresh=False)
     run(go())

@@ -15,6 +15,8 @@ interface Pyodide {
   setStderr(o: { batched: (s: string) => void }): void;
   canvas: { setCanvas2D(canvas: HTMLCanvasElement): void };
   FS: { readFile(path: string): Uint8Array; writeFile(path: string, data: Uint8Array): void };
+  globals: { get(name: string): unknown };
+  toPy(value: unknown): { destroy(): void };
 }
 
 // An emoji run as RGBA pixels, height px, drawn in the Noto Color Emoji Purple itself uses.
@@ -58,10 +60,13 @@ export interface Place { room: Room; menu: boolean; at: [number, number] | null;
 // family: a family room opened over the room, as the Esc menu opens one.
 export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: ArtPicture; family?: { name: string; source: string } }
 
+// A pack's files since the last one Purple got (all of them when fresh), as install() in live.py takes them.
+export interface PackFiles { id: string; fresh: boolean; files: [path: string, data: Uint8Array][]; removed: string[] }
+
 export interface LivePurple {
-  // Installs a .purplepack (null: none) into the running Purple, first calling restarting when
-  // Purple has to start again to read it (see install() in live.py).
-  load(pack: Uint8Array | null, restarting?: () => void): Promise<void>;
+  // Installs the pack (null: none) into the running Purple, first calling restarting when Purple
+  // has to start again to read it.
+  load(pack: PackFiles | null, restarting?: () => void): Promise<void>;
   // Both resolve to where Purple is afterwards: Esc opens the room picker, picking one changes the
   // room, and keys move the cursor.
   setup(room: RoomSetup): Promise<Place>;
@@ -98,6 +103,7 @@ sys.path.insert(0, "${ROOT}")
   await py.runPythonAsync(browserShim);
   await py.runPythonAsync(controller);
   const call = (code: string) => py.runPythonAsync(code);
+  const install = py.globals.get("install") as (id: string | undefined, files: unknown, removed: string[], fresh: boolean) => boolean;
   const arg = (v: unknown) => `__import__("json").loads(${JSON.stringify(JSON.stringify(v))})`;
   const place = async (code: string): Promise<Place> => {
     const proxy = (await call(code)) as { toJs(): [Room, boolean, [number, number] | null, boolean]; destroy(): void };
@@ -107,8 +113,11 @@ sys.path.insert(0, "${ROOT}")
   };
   const live: LivePurple = {
     async load(pack, restarting) {
-      if (pack) py.FS.writeFile("/tmp/studio.purplepack", pack);
-      if (await call(`install(${pack ? `"/tmp/studio.purplepack"` : "None"})`)) {
+      // As Python objects first: Python reading a JS array copies it a byte at a time.
+      const files = py.toPy(pack?.files ?? []);
+      const restart = install(pack?.id, files, pack?.removed ?? [], pack?.fresh ?? true);
+      files.destroy();
+      if (restart) {
         restarting?.();
         await call("await restart()");
       } else await call("refresh()");

@@ -4,11 +4,11 @@
 import { browserKey } from "../keys";
 import { roomGuests } from "../rooms/guests";
 import type { ArtPicture } from "@sdk/purple/art";
-import { bootPurple, type LivePurple, type Place, type RoomSetup } from "./boot";
+import { bootPurple, type LivePurple, type PackFiles, type Place, type RoomSetup } from "./boot";
 import { onVoiceNote } from "./piper";
 
 export type ToFrame =
-  | { type: "load"; pack: Uint8Array | null; setup: RoomSetup }
+  | { type: "load"; pack: PackFiles | null; setup: RoomSetup }
   | { type: "setup"; setup: RoomSetup }
   | { type: "key"; char: string }
   | { type: "focus" }

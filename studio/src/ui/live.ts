@@ -2,10 +2,11 @@
 // the whole visit, so it's usually ready before anyone looks. Until it is, and while it restarts
 // with an edit, a quiet message covers it, since it can't take keys then.
 import type { ArtPicture } from "@sdk/purple/art";
-import type { Place, Room, RoomSetup } from "../live/boot";
+import { buildEntries } from "@sdk/pack";
+import type { PackFiles, Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { KEY_EVENT, announceKey } from "../keys";
-import { buildPack } from "../pack";
+import { manifest, packSpec } from "../pack";
 import { draft } from "../state";
 import { h } from "./dom";
 
@@ -33,6 +34,7 @@ const ZOOM: Record<Room, { scale: number; at?: [number, number] }> = {
 // The same test as the phone rules in styles.css.
 export const PHONE = matchMedia("(max-width: 700px), (max-height: 500px) and (pointer: coarse)");
 const MOUSE = matchMedia("(pointer: fine)");
+const same = (a: Uint8Array | undefined, b: Uint8Array) => a === b || (!!a && a.length === b.length && a.every((v, i) => v === b[i]));
 const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
 
 class LiveScreen {
@@ -59,6 +61,10 @@ class LiveScreen {
   private setup: RoomSetup = { room: "art" };
   private timer = 0;
   private sent = "";
+  // What Purple has now, so the next pack sends only what changed.
+  private files = new Map<string, Uint8Array>();
+  private packId = "";
+  private syncing = Promise.resolve();
   // Messages wait for the frame's page to be listening; until then the iframe holds about:blank.
   private hello!: () => void;
   private listening = new Promise<void>((resolve) => (this.hello = resolve));
@@ -70,7 +76,7 @@ class LiveScreen {
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
     addEventListener(KEY_EVENT, () => (this.note.hidden = true));
-    void this.sync();
+    this.queueSync();
   }
 
   // A handwritten note on the screen saying what to do, until the next key.
@@ -98,7 +104,7 @@ class LiveScreen {
   changed(): void {
     clearTimeout(this.timer);
     this.updating.hidden = false;
-    this.timer = window.setTimeout(() => void this.sync(), SETTLE_MS);
+    this.timer = window.setTimeout(() => this.queueSync(), SETTLE_MS);
   }
 
   key(key: string): void {
@@ -118,6 +124,11 @@ class LiveScreen {
     if (MOUSE.matches) this.focus();
   }
 
+  // One at a time, so each one's changes are against what Purple last got.
+  private queueSync(): void {
+    this.syncing = this.syncing.then(() => this.sync()).catch((err) => console.warn("[studio] Purple's pack:", err));
+  }
+
   private async sync(): Promise<void> {
     // The room being tried opens straight on the screen (RoomSetup.family), so the Esc menu lists
     // only the added ones, as Open does pictures.
@@ -125,12 +136,24 @@ class LiveScreen {
     const key = JSON.stringify(live, (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
     if (key === this.sent) return void (this.updating.hidden = true);
     this.sent = key;
-    const pack = new Uint8Array(await (await buildPack(undefined, live, true)).arrayBuffer());
+    const spec = await packSpec(live, true);
+    const entries = await buildEntries(spec);
+    const id = manifest(spec).id;
+    const fresh = id !== this.packId;
+    const pack: PackFiles = {
+      id, fresh,
+      files: entries.filter((e) => fresh || !same(this.files.get(e.path), e.data)).map((e) => [e.path, e.data]),
+      removed: fresh ? [] : [...this.files.keys()].filter((path) => !entries.some((e) => e.path === path)),
+    };
+    this.files = new Map(entries.map((e) => [e.path, e.data]));
+    this.packId = id;
+    if (!pack.files.length && !pack.removed.length) return void (this.updating.hidden = true);
     this.post({ type: "load", pack, setup: this.setup });
   }
 
   private onMessage(m: FromFrame): void {
     if (m.type === "hello") this.hello();
+    if (m.type === "failed") this.packId = "";  // the next pack goes whole, since this one may not have landed
     if (m.type === "failed") { this.status.textContent = "Purple Computer couldn't start in this browser"; this.element.classList.add("failed"); console.warn("Purple failed:", m.text); }
     if (m.type === "restarting") this.busy(true);
     if (m.type === "loaded") { this.busy(false); this.updating.hidden = true; }

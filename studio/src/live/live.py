@@ -1,14 +1,15 @@
-# Studio's handle on the running Purple: install the family's pack the way the USB updater does,
-# then start Purple again so it reads it, as it would after a reboot. Each Studio page then sets up
-# the room it shows, with the same calls Purple's own menus and code panel make.
+# Studio's handle on the running Purple: lay out the family's pack as an installed pack, then have
+# the running Purple read it, or start it again when its rooms changed, as it would after a reboot.
+# Each Studio page then sets up the room it shows, with the same calls Purple's own menus and code
+# panel make.
 import asyncio
 import shutil
 from pathlib import Path
 
-from purple_tui import content
+from purple_tui import content, i18n
 from purple_tui.canvas.app import PurpleApp
 from purple_tui.canvas.press import press
-from purple_tui.pack_manager import PackInstaller
+from purple_tui.pack_manager import check_pack
 from purple_tui.settings import set_room_on
 
 PACKS = Path.home() / ".purple" / "packs"
@@ -21,14 +22,24 @@ def _rooms():
     return [(room.key, room.digest) for room in content.get_content().rooms]
 
 
-def install(path):
-    """Also turns on every room in it: the parent made them, here in Studio. True when Purple has
-    to start again to see it (its family rooms changed); refresh() covers everything else."""
+def install(pack_id=None, files=(), removed=(), fresh=True):
+    """Studio's pack, installed: the files that changed since the last one, as (path, bytes), and the
+    paths it dropped, or all of it when fresh (unpacking a whole pack stalls the page long enough to
+    crackle Purple's sound). Also turns on every room in it: the parent made them, here in Studio.
+    True when Purple has to start again to see it (its rooms changed); refresh() covers the rest."""
     before = _rooms()
-    shutil.rmtree(PACKS, ignore_errors=True)
-    if path:
-        ok, message = PackInstaller(PACKS).install_pack(Path(path), replace=True)
-        print(f"[studio] {message}")
+    if fresh:
+        shutil.rmtree(PACKS, ignore_errors=True)
+    if pack_id:
+        pack = PACKS / pack_id
+        for path in removed:
+            (pack / path).unlink(missing_ok=True)
+        for path, data in files:
+            (pack / path).parent.mkdir(parents=True, exist_ok=True)
+            (pack / path).write_bytes(bytes(data))
+        if problems := check_pack(pack):
+            print(f"[studio] pack problems: {'; '.join(problems[:5])}")
+    i18n.reload()
     content._content = None
     for key, digest in _rooms():
         set_room_on(key, digest)

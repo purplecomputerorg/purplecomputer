@@ -4,7 +4,8 @@ Every page carries a small maker's mark built from the computer's name.
 A room that can print has paper(g, size, on_screen=False), which returns its work
 drawn to fit size on a white ground (or None when there is nothing yet), and
 LANDSCAPE. on_screen draws it in the screen's colors instead; screen_artwork is that
-in the screen's shape, as the Saved toast and Open show it.
+in the screen's shape, as the Saved toast and Open show it. Work that runs past one
+page also has paper_pages(g, size), every page of it; paper() is then its first.
 """
 
 import pygame
@@ -50,10 +51,16 @@ def screen_artwork(room, g):
     return artwork(room, g, (g.vw(40), g.vh(40)), on_screen=True)
 
 
-def page(room, g, computer_name: str = ""):
-    """(surface, landscape) for the room's work, or None when there is nothing to print."""
-    work = artwork(room, g)
-    return None if work is None else compose(work, room.LANDSCAPE, g, computer_name)
+def pages(room, g, computer_name: str = ""):
+    """([page surfaces], landscape) for the room's work, or None when there is nothing to print."""
+    if not can_print(room):
+        return None
+    if hasattr(room, "paper_pages"):
+        w, h = page_size(room.LANDSCAPE)
+        works = room.paper_pages(g, (w - 2 * MARGIN, h - 2 * MARGIN))
+    else:
+        works = [w for w in [artwork(room, g)] if w is not None]
+    return ([compose(w, room.LANDSCAPE, g, computer_name)[0] for w in works], room.LANDSCAPE) if works else None
 
 
 def compose(work, landscape: bool, g, computer_name: str = ""):

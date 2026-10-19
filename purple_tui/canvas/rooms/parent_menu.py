@@ -250,7 +250,8 @@ class RoomsScreen(Picker):
         on = self.app.kid_rooms
         def note(name):
             return "Off" if name not in on else "On: the last room stays on" if len(on) == 1 else "On"
-        return [(name, r.label, note(name)) for name, r in self.app.rooms.items()] + [(None, "Done")]
+        return [(name, r.label, ": ".join(filter(None, (note(name), r.about))))
+                for name, r in self.app.rooms.items()] + [(None, "Done")]
 
     def _on_confirm(self, name):
         if name is None:

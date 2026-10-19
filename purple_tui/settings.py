@@ -18,6 +18,7 @@ _defaults = {
     "music_looping": True,       # Whether music room loop recording can be triggered (enter hold)
     "music_key_switching": True, # Whether music room key switching (arrows) is enabled
     "rooms_off": [],             # Built-in rooms a parent turned off, hidden from the Esc menu
+    "rooms_turned_on": [],       # Built-in rooms a parent turned on, which matters for ones that start off (Write)
     "rooms_on": {},              # Family rooms a parent turned on: "pack/room" -> Room.digest of what they turned on
     "packs_added": {},           # Purple Packs someone pressed Add for: pack id -> sha256 of its .purplepack
     "all_caps": False,           # Whether all rendered text is uppercased at render time
@@ -90,14 +91,21 @@ def set_code_panel(enabled: bool) -> None:
     save_settings(settings)
 
 
-def get_rooms_off() -> list:
-    off = load_settings()["rooms_off"]
-    return off if isinstance(off, list) else []
+def _get_list(name: str) -> list:
+    value = load_settings()[name]
+    return value if isinstance(value, list) else []
+
+
+def get_rooms_off(start_off=()) -> list:
+    """Rooms a parent turned off, plus the start_off ones they never turned on."""
+    off, on = _get_list("rooms_off"), _get_list("rooms_turned_on")
+    return off + [r for r in start_off if r not in on and r not in off]
 
 
 def set_room_off(name: str, off: bool) -> None:
     settings = load_settings()
-    settings["rooms_off"] = [r for r in get_rooms_off() if r != name] + ([name] if off else [])
+    settings["rooms_off"] = [r for r in _get_list("rooms_off") if r != name] + ([name] if off else [])
+    settings["rooms_turned_on"] = [r for r in _get_list("rooms_turned_on") if r != name] + ([] if off else [name])
     save_settings(settings)
 
 

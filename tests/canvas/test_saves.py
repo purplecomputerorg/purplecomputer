@@ -144,7 +144,8 @@ def test_export_writes_each_save_once(tmp_path):
         app = await _art_with_drawing()
         app.save_room()
         dest = tmp_path / "stick"
-        page = app.save_artwork
+        def page(save):
+            return app.save_artwork(save), ""
         assert export_saves(dest, page) == 1
         assert len(list((dest / FOLDER / "Art").glob("*.png"))) == 1
         assert export_saves(dest, page) == 0

@@ -137,31 +137,37 @@ async def _run(*argv) -> str:
     return out.decode(errors="replace")
 
 
-async def print_page(surface, landscape: bool, notify) -> bool:
-    """Send one page; notify(text) tells the screen what happened. Returns
-    whether the page was sent."""
+async def print_pages(surfaces, landscape: bool, notify) -> bool:
+    """Send the pages as one job; notify(text) tells the screen what happened.
+    Returns whether they were sent."""
     global _last_at, _count
     if printer() is None or ready_in():
         return False
     _last_at, _count = time.monotonic(), _count + 1
     import pygame
-    if _FAKE:  # previews and tests: the page lands next to the screenshots
-        pygame.image.save(surface, os.path.join(os.environ.get("PURPLE_SCREENSHOT_DIR", tempfile.gettempdir()), "print.png"))
+    if _FAKE:  # previews and tests: the pages land next to the screenshots
+        folder = os.environ.get("PURPLE_SCREENSHOT_DIR", tempfile.gettempdir())
+        for i, surface in enumerate(surfaces):
+            pygame.image.save(surface, os.path.join(folder, f"print{i + 1 if i else ''}.png"))
         notify("Printing!")
         return True
-    fd, path = tempfile.mkstemp(prefix="purple-print-", suffix=".png")
-    os.close(fd)
+    paths = []
     try:
-        pygame.image.save(surface, path)
+        for surface in surfaces:
+            fd, path = tempfile.mkstemp(prefix="purple-print-", suffix=".png")
+            os.close(fd)
+            paths.append(path)
+            pygame.image.save(surface, path)
         opts = ["-o", "fit-to-page"] + (["-o", "landscape"] if landscape else [])
-        job = _job_id(await _run("lp", "-d", QUEUE, "-t", "Purple Computer", *opts, path))
+        job = _job_id(await _run("lp", "-d", QUEUE, "-t", "Purple Computer", *opts, *paths))
     except Exception as e:
         boot_log.heartbeat(f"print: failed to send ({e})")
         notify("The printer didn't answer. Try again soon")
         return False
     finally:
-        os.unlink(path)  # lp has copied it into the spool
-    boot_log.heartbeat(f"print: page sent as job {job}")
+        for path in paths:
+            os.unlink(path)  # lp has copied them into the spool
+    boot_log.heartbeat(f"print: {len(surfaces)} page(s) sent as job {job}")
     notify("Printing!")
     asyncio.ensure_future(_watch(job, notify))
     return True

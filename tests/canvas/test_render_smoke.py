@@ -38,6 +38,11 @@ def test_rooms_draw_after_typing(size):
         await press(app, "b")
         await press(app, "enter")
         app._draw()
+        app._rooms_off.discard("write")
+        app.action_switch_room("write")
+        await type_text(app, "Once upon a time " * 40)
+        await press(app, "up")
+        app._draw()
         assert app.g.surface.get_size() == size
     run(go())
 

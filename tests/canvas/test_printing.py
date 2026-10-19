@@ -130,9 +130,9 @@ def test_art_page_is_the_paint_on_white(plugged_in):
     async def go():
         app = make_app()
         app.action_switch_room("art")
-        assert paper.page(app.room, app.g) is None
+        assert paper.pages(app.room, app.g) is None
         await type_text(app, "q")
-        surface, landscape = paper.page(app.room, app.g)
+        [surface], landscape = paper.pages(app.room, app.g)
         assert landscape and surface.get_size() == paper.PAGE
         colors = {surface.get_at((x, y))[:3] for x in range(0, paper.PAGE[0], 25) for y in range(0, paper.PAGE[1], 25)}
         assert paper.WHITE in colors and len(colors) == 2
@@ -144,14 +144,14 @@ def test_every_room_with_work_makes_a_page():
         app = make_app()
         app.action_switch_room("play")
         await type_text(app, "cat", enter=True)
-        assert paper.page(app.room, app.g)[1] is False
+        assert paper.pages(app.room, app.g)[1] is False
         app.action_switch_room("blocks")
         await type_text(app, "qa")
-        assert paper.page(app.room, app.g)[0].get_size() == paper.PAGE
+        assert paper.pages(app.room, app.g)[0][0].get_size() == paper.PAGE
         app.action_switch_room("music")
-        assert paper.page(app.room, app.g) is None
+        assert paper.pages(app.room, app.g) is None
         await type_text(app, "q")
-        assert paper.page(app.room, app.g)[1] is True
+        assert paper.pages(app.room, app.g)[1] is True
     run(go())
 
 

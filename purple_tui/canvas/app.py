@@ -185,7 +185,7 @@ class PurpleApp:
         from ..settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
                                get_music_looping, get_rooms_off, get_volume_level, get_volume_lock)
         self.g.all_caps = get_all_caps()
-        self._rooms_off = set(get_rooms_off())
+        self._rooms_off = set(get_rooms_off(tuple(c.name for c in ROOM_CLASSES if c.STARTS_OFF)))
         saved_volume = get_volume_level()
         self._volume_chosen = saved_volume is not None
         self.volume_level = VOLUME_DEFAULT if saved_volume is None else snap_volume(saved_volume)
@@ -761,36 +761,42 @@ class PurpleApp:
             self.notify(PRINTER_NEWS.get(now) or printing.why_not(), timeout=4)
 
     def action_print(self):
-        from .paper import page
-        self._print_page(page(self.room, self.g, self.computer_name()))
+        from .paper import pages
+        self._print_pages(pages(self.room, self.g, self.computer_name()))
 
     def print_save(self, save):
-        from .paper import compose
-        work = self.save_artwork(save)
-        self._print_page(None if work is None else compose(work, save.landscape, self.g, self.computer_name()))
+        from .paper import pages
+        self._print_pages(self._from_save(save, lambda room: pages(room, self.g, self.computer_name())))
 
     def offscreen(self, room: str):
         """A copy of the room that draws nowhere, for redrawing work without touching the screen."""
         return type(self.rooms[room])(_Offscreen(self))
 
-    def save_artwork(self, save, on_screen=False):
-        """A save's work at page size (screen shape on_screen), drawn by an off-screen copy of its room."""
-        from .paper import artwork, screen_artwork
+    def _from_save(self, save, make):
+        """make(room) on an off-screen copy of the save's room holding it, or None if that fails."""
         try:
             scratch = self.offscreen(save.room)
             scratch.restore_timeline_state(save.state)
-            return (screen_artwork if on_screen else artwork)(scratch, self.g)
+            return make(scratch)
         except Exception:
             return None
 
-    def _print_page(self, made):
+    def save_artwork(self, save, on_screen=False):
+        """A save's work at page size (screen shape on_screen)."""
+        from .paper import artwork, screen_artwork
+        return self._from_save(save, lambda room: (screen_artwork if on_screen else artwork)(room, self.g))
+
+    def save_text(self, save) -> str:
+        return self._from_save(save, lambda room: room.plain_text()) or ""
+
+    def _print_pages(self, made):
         if made is None:
             return
         wait = printing.ready_in()
         if wait:
             self.notify("That's lots of printing for today" if wait == float("inf") else "The printer is still busy", timeout=3)
             return
-        asyncio.ensure_future(printing.print_page(*made, lambda text: self.notify(text, timeout=4)))
+        asyncio.ensure_future(printing.print_pages(*made, lambda text: self.notify(text, timeout=4)))
 
     def action_parent_menu(self):
         self._cancel_escape_hold_timer()

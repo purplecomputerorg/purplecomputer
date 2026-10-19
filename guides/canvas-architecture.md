@@ -53,7 +53,7 @@ purple_tui/canvas/gfx.py       Gfx: the surface, fonts, text and emoji caches, m
 purple_tui/canvas/ui.py        Timers, TextField, Overlay/Dialog/Picker, Toast, draw_ring
 purple_tui/canvas/app.py       PurpleApp: asyncio loop, readers, dispatch, overlays, frame
 purple_tui/canvas/panels.py    CodePanel, LoopPanel, TimeTravelBar, SpaceHold
-purple_tui/canvas/rooms/     Room (base.py) and ROOM_CLASSES, the four rooms, FamilyRoom, parent flows, system screens
+purple_tui/canvas/rooms/     Room (base.py) and ROOM_CLASSES, the five rooms, FamilyRoom, parent flows, system screens
 purple_tui/canvas/sounds.py    SoundBank: instrument, percussion, and letter sounds, pack ones first
 purple_tui/play_eval.py The Play evaluator (engine; emits markup strings)
 purple_tui/mixer.py     Audio mixer lifecycle (engine)
@@ -136,7 +136,9 @@ without choosing" where `None` is itself a valid choice.
 
 A room is a `rooms/base.py` `Room` subclass listed in `ROOM_CLASSES`; its
 class attributes (label, icon, arrow hint, code panel, legend, audio) are
-what the app, the Esc menu and the status strip read. A family room from a
+what the app, the Esc menu and the status strip read. `STARTS_OFF` keeps a
+room out of the Esc menu until a parent turns it on in Parent Menu, Rooms
+(Write, the older kids' page of text, is the one that does). A family room from a
 pack is a `FamilyRoom` overlay over the current room: guides/family-rooms.md.
 
 ## Boot

@@ -14,6 +14,8 @@ class Room:
     has_code_panel = False
     shows_legend = True
     keeps_audio_awake = False
+    STARTS_OFF = False   # hidden from the Esc menu until a parent turns it on
+    about = ""           # the Parent Menu's line about it
 
     def __init__(self, app):
         self.app = app
@@ -55,6 +57,10 @@ class Room:
 
     def on_open_save(self):
         pass
+
+    def plain_text(self) -> str:
+        """The work as text, copied to a USB drive beside its picture; empty for rooms without words."""
+        return ""
 
     def clear(self):
         self.restore_timeline_state({})

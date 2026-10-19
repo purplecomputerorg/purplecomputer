@@ -44,9 +44,9 @@ if os.environ.get("PURPLE_UX") == "tui":  # the Textual UI has its own preview d
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from purple_tui.canvas.harness import make_app, press  # noqa: E402
+from purple_tui.canvas.rooms import ROOM_NAMES as ROOMS  # noqa: E402
 
 SCREENSHOT_DIR = os.environ.get("PURPLE_SCREENSHOT_DIR", "/tmp/screenshots")
-ROOMS = ("play", "music", "art", "blocks")
 
 
 async def run_action(app, action: str):
@@ -91,6 +91,7 @@ def build_filename(room: str, actions: list) -> str:
 async def preview(room: str, actions: list) -> str:
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     app = make_app()
+    app._rooms_off.discard(room)  # a room that starts off previews as if a parent turned it on
     if room != app.active_room:
         app.action_switch_room(room)
     for action in actions:

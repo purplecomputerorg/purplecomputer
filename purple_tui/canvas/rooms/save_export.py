@@ -1,7 +1,8 @@
 """Parent Menu: copy every save to a USB drive as printable pictures.
 
 Pictures land in a "Purple Computer" folder, one subfolder per room, named
-by when they were saved. A picture already on the drive is not copied again.
+by when they were saved, with a .txt of the same name for work that has words
+(Room.plain_text). A picture already on the drive is not copied again.
 """
 
 import json
@@ -40,17 +41,20 @@ def find_stick() -> tuple:
     return None, None
 
 
-def export_saves(dest: Path, page_for) -> int:
-    """Write every save's printed page under dest; returns how many pictures are new."""
+def export_saves(dest: Path, export_for) -> int:
+    """Write every save's printed page, and its text when export_for gives one, under dest;
+    returns how many pictures are new. export_for(save) is (page or None, text)."""
     copied = 0
     root = saves.saves_dir()
     for room in sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else []:
         for save in saves.list_saves(room):
             out = dest / FOLDER / room.title() / f"{save.made:%Y-%m-%d %H.%M.%S}.png"
-            page = None if out.exists() else page_for(save)
+            page, text = (None, "") if out.exists() else export_for(save)
             if page is None:
                 continue
             out.parent.mkdir(parents=True, exist_ok=True)
+            if text:
+                out.with_suffix(".txt").write_text(text, encoding="utf-8")
             pygame.image.save(page, str(out))
             copied += 1
     return copied
@@ -75,20 +79,21 @@ class SaveExportScreen(Dialog):
             self.app.invalidate()
         self.app.call_from_thread(apply)
 
-    def _page(self, save):
-        """The save's printed page, drawn on the UI thread (pygame text and rooms are not thread-safe)."""
+    def _export(self, save):
+        """(the save's printed page, its text), made on the UI thread (pygame text and rooms are not thread-safe)."""
         done, out = threading.Event(), []
 
         def draw():
             try:
                 work = self.app.save_artwork(save)
                 if work is not None:
-                    out.append(compose(work, save.landscape, self.app.g, self.app.computer_name())[0])
+                    out.append((compose(work, save.landscape, self.app.g, self.app.computer_name())[0],
+                                self.app.save_text(save)))
             finally:
                 done.set()
         self.app.call_from_thread(draw)
         done.wait(30)
-        return out[0] if out else None
+        return out[0] if out else (None, "")
 
     def _work(self):
         dev, mounted = find_stick()
@@ -102,7 +107,7 @@ class SaveExportScreen(Dialog):
                 subprocess.run(["sudo", "mkdir", "-p", MOUNT], check=True, timeout=10)
                 subprocess.run(["sudo", "mount", "-o", f"uid={os.getuid()},gid={os.getgid()},nosuid,nodev", dev, MOUNT],
                                check=True, capture_output=True, timeout=30)
-            copied = export_saves(Path(mnt), self._page)
+            copied = export_saves(Path(mnt), self._export)
             os.sync()
         except (OSError, subprocess.SubprocessError, pygame.error) as e:
             return self._say("Couldn't copy to that USB drive.", "", f"(Technical: {e})", done=True)

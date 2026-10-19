@@ -26,7 +26,8 @@ def test_turning_rooms_off_hides_them_and_leaves_the_room_youre_in():
         app = make_app()
         screen = RoomsScreen(app)
         app.push(screen)
-        assert [o[1:] for o in screen.options[:-1]] == [(app.rooms[r].label, "On") for r in app.rooms]
+        assert [o[1:] for o in screen.options[:-1]] == [(app.rooms[r].label, "On") for r in app.kid_rooms] + \
+            [("Write", "Off: a quiet page for stories and letters")]
         await press(app, "enter")
         assert app.active_room == "music" and settings.get_rooms_off() == ["art"]
         assert screen.options[0][2] == "Off"

@@ -59,7 +59,8 @@ driver, which Ubuntu doesn't ship.
 fits it to A4 as well. A room that prints has `paper(g, size)` and `LANDSCAPE`:
 Art prints its paint and letters with unpainted cells left white, Blocks prints
 the build on a pale floor, Play prints the newest asks and answers that fit,
-Music prints the key grid in the colors the kid gave it. A room with nothing
+Music prints the key grid in the colors the kid gave it, and Write prints
+every page of its text (`paper_pages`), all sent as one job. A room with nothing
 made yet prints nothing. The bottom corner
 says "Made on" plus the computer's name (Parent Menu, Name this Computer),
 adding "with Purple Computer" when the name doesn't already say Purple. The app sends a PNG
@@ -77,7 +78,8 @@ boot the print stack is read from the stick, so Print hides once it's pulled.
 ## Testing
 
 - `PURPLE_FAKE_PRINTER=1 just preview art type:qwerty key:escape type:p` shows
-  the card and writes the page to `print.png` next to the screenshots.
+  the card and writes the page to `print.png` next to the screenshots (later
+  pages of a Write print as `print2.png`, `print3.png`, ...).
 - `tests/canvas/test_printing.py` covers the card, the pages and the pacing.
 - On a Linux machine with CUPS, `ippeveprinter -p 8631 -d jobs ...` stands in
   for a printer: `lpadmin -p purple -E -v ipp://localhost:8631/ipp/print -m everywhere`,

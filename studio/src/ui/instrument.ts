@@ -8,16 +8,19 @@ import { liveScreen } from "./live";
 import type { View } from "./view";
 
 // Sounds to try first: Purple's four instruments with their sliders moved toward something familiar.
-const SOUNDS: { title: string; icon: string; blurb: string; base: BaseName; params: Params }[] = [
-  { title: "Bells", icon: "🔔", blurb: "Long and ringing", base: "glockenspiel", params: { duration: 2.6, ring: 2.4, shimmer: 1.6 } },
-  { title: "Music box", icon: "🎠", blurb: "Small and tinkly", base: "glockenspiel", params: { duration: 0.6, ring: 0.5, fundamental: 0.3, ping: 0.15 } },
-  { title: "Harp", icon: "🧚", blurb: "Soft, slow plucks", base: "ukulele", params: { duration: 1.8, damping: 0.998, warmth: 0.3, softness: 5, pluck_pos: 0.4, body_mix: 0.15 } },
-  { title: "Twangy guitar", icon: "🎸", blurb: "Bright and twangy", base: "ukulele", params: { warmth: 0.9, softness: 0, pluck_pos: 0.12, body_freq: 250, body_mix: 0.6 } },
-  { title: "Xylophone", icon: "🦴", blurb: "Short, knocky wood", base: "marimba", params: { duration: 0.35, bar_decay: 9, wood: 1, sparkle: 0.2, tube: 0, mallet: 0.5 } },
-  { title: "Deep marimba", icon: "🐋", blurb: "Low, with a long hum", base: "marimba", params: { duration: 1.2, bar_decay: 3, tube: 0.55, tube_decay: 10, mallet: 0.1 } },
-  { title: "Organ", icon: "👻", blurb: "Big and steady", base: "accordion", params: { attack_ms: 40, detune: 0.5, harmonics: 14, rolloff: 1800, trem_rate: 6, trem_depth: 0.06 } },
-  { title: "Harmonica", icon: "🤠", blurb: "Bright and breathy", base: "accordion", params: { attack_ms: 30, detune: 4, harmonics: 6, rolloff: 2600, trem_depth: 0.03 } },
+const SOUNDS: { title: string; blurb: string; base: BaseName; params: Params }[] = [
+  { title: "Bells", blurb: "Long and ringing", base: "glockenspiel", params: { duration: 2.6, ring: 2.4, shimmer: 1.6 } },
+  { title: "Music box", blurb: "Small and tinkly", base: "glockenspiel", params: { duration: 0.6, ring: 0.5, fundamental: 0.3, ping: 0.15 } },
+  { title: "Harp", blurb: "Soft, slow plucks", base: "ukulele", params: { duration: 1.8, damping: 0.998, warmth: 0.3, softness: 5, pluck_pos: 0.4, body_mix: 0.15 } },
+  { title: "Twangy guitar", blurb: "Bright and twangy", base: "ukulele", params: { warmth: 0.9, softness: 0, pluck_pos: 0.12, body_freq: 250, body_mix: 0.6 } },
+  { title: "Xylophone", blurb: "Short, knocky wood", base: "marimba", params: { duration: 0.35, bar_decay: 9, wood: 1, sparkle: 0.2, tube: 0, mallet: 0.5 } },
+  { title: "Deep marimba", blurb: "Low, with a long hum", base: "marimba", params: { duration: 1.2, bar_decay: 3, tube: 0.55, tube_decay: 10, mallet: 0.1 } },
+  { title: "Organ", blurb: "Big and steady", base: "accordion", params: { attack_ms: 40, detune: 0.5, harmonics: 14, rolloff: 1800, trem_rate: 6, trem_depth: 0.06 } },
+  { title: "Harmonica", blurb: "Bright and breathy", base: "accordion", params: { attack_ms: 30, detune: 4, harmonics: 6, rolloff: 2600, trem_depth: 0.03 } },
 ];
+
+// Sounds made from the same Purple instrument share a color.
+const SWATCH: Record<BaseName, string> = { glockenspiel: "#f2c94c", ukulele: "#e8875b", marimba: "#5fb3a1", accordion: "#7b8fe0" };
 
 const taken = (n: string, except?: Instrument) => (INSTRUMENTS as readonly string[]).includes(n) || draft.instruments.some((i) => i !== except && i.name === n);
 
@@ -53,7 +56,7 @@ function chooser(): View {
       section("Trying", theirs(false)),
       h("h3", {}, "Try a sound"),
       h("div", { class: "cards" }, ...SOUNDS.map((snd) =>
-        h("button", { class: "pick", onclick: () => tryOut(snd.title, snd.base, snd.params) }, h("span", { class: "pick-icon" }, snd.icon), h("b", {}, snd.title), h("span", {}, snd.blurb)))),
+        h("button", { class: "pick", onclick: () => tryOut(snd.title, snd.base, snd.params) }, h("span", { class: "pick-swatch", style: `background:${SWATCH[snd.base]}` }), h("b", {}, snd.title), h("span", {}, snd.blurb)))),
       h("h3", {}, "Or a plain one from Purple"),
       h("div", { class: "row" }, ...BASE_NAMES.map((b) =>
         h("button", { class: "btn secondary small", onclick: () => tryOut(`My ${BASES[b].label.toLowerCase()}`, b, {}) }, BASES[b].label))),

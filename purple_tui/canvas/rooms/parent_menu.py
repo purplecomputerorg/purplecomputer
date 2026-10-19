@@ -18,11 +18,11 @@ from ... import boot_log, diagnostics, i18n
 from ...backlight import set_level as set_backlight_level
 from ... import palette as P
 from ..gfx import FONT_DIR
-from ...audio import adjacent_volume, lock_badge, volume_badge
+from ...audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volume_step
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_bar, draw_field, draw_fill_pill, draw_scrim,
+from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_meter, draw_scrim,
                   draw_text_caret, draw_window, field_height, window_title_height)
 from .sleep_screen import FullScreen
 
@@ -129,6 +129,17 @@ def apply_saved_display_settings():
         set_backlight_level(BRIGHTNESS_DEFAULT)
 
 
+def draw_slider_row(g, rect, y, px, name, on, left, inset, filled, steps, value):
+    """A settings row: name, meter with arrows beside it when focused, value at the right."""
+    meter = pygame.Rect(rect.x + left, y - g.vh(1), rect.w - inset, g.vh(2))
+    g.draw_text(f"{name}:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")
+    if on:
+        g.draw_text("◀", px, meter.x - g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midright")
+        g.draw_text("▶", px, meter.right + g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midleft")
+    draw_meter(g, meter, filled, steps, P.PRIMARY if on else P.MUTED)
+    g.draw_text(value, px, rect.right, y, "mono-bold", P.MUTED, anchor="midright")
+
+
 class DisplaySettingsScreen(Dialog):
     title = "Display"
     hint = f"{LEFT} {RIGHT} adjust   {UP} {DOWN} switch   Esc done"
@@ -148,17 +159,9 @@ class DisplaySettingsScreen(Dialog):
                 ("Contrast", self._contrast, CONTRAST_MIN, CONTRAST_MAX, CONTRAST_STEP, 1.0)]
         px = g.em(0.98)
         for i, (label, value, lo, hi, step, normal) in enumerate(rows):
-            y = rect.y + i * g.vh(7) + g.vh(2)
-            on = i == self._focus
-            g.draw_text(f"{label}:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")
-            bx = rect.x + g.vw(11)
-            bw = rect.w - g.vw(20)
-            if on:
-                g.draw_text("◀", px, bx - g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midright")
-                g.draw_text("▶", px, bx + bw + g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midleft")
-            draw_bar(g, bx, y - g.vh(0.7), bw, g.vh(1.4), (value - lo) / (hi - lo), P.PRIMARY if on else P.MUTED)
             offset = round((value - normal) / step)
-            g.draw_text("Normal" if offset == 0 else f"{offset:+d}", px, rect.right, y, "mono-bold", P.MUTED, anchor="midright")
+            draw_slider_row(g, rect, rect.y + i * g.vh(7) + g.vh(2), px, label, i == self._focus, g.vw(13), g.vw(22),
+                            round((value - lo) / step), round((hi - lo) / step), "Normal" if offset == 0 else f"{offset:+d}")
 
     def _save_and_apply(self):
         apply_display_settings(self._brightness, self._contrast)
@@ -521,14 +524,9 @@ class ParentVolumeModal(Dialog):
         px = g.em(0.98)
         level = self._slider_level()
         y = rect.y + g.vh(2)
-        on = self._focus == "volume"
-        g.draw_text("Volume:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")
-        bx, bw = rect.x + g.vw(9), rect.w - g.vw(24)
-        if on:
-            g.draw_text("◀", px, bx - g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midright")
-            g.draw_text("▶", px, bx + bw + g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midleft")
-        draw_bar(g, bx, y - g.vh(0.7), bw, g.vh(1.4), level / 100, P.PRIMARY if on else P.MUTED)
-        g.draw_text("Silent Mode" if level == 0 else volume_badge(level)[2], px, rect.right, y, "mono-bold", P.MUTED, anchor="midright")
+        draw_slider_row(g, rect, y, px, "Volume", self._focus == "volume", g.vw(9), g.vw(24), volume_step(level), VOLUME_TOP,
+                        "Silent Mode" if level == 0 else volume_badge(level)[2])
+        bx = rect.x + g.vw(9)
         y += g.vh(7)
         on = self._focus == "lock"
         g.draw_text("Limit:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")

@@ -296,14 +296,13 @@ class RoomPicker(Overlay):
 class VolumeModal(Dialog):
     title = "Volume"
     hint = f"{LEFT} {RIGHT} {UP} {DOWN} adjust   Enter close"
-    width_pct = 40
+    width_pct = 48
 
     def body_height(self, g):
         return g.vh(6)
 
     def draw_body(self, g, rect):
-        icon, bars, label = self.app._volume_badge()
-        g.draw_text(f"{icon}  {bars}  {label}", g.em(1.3), rect.centerx, rect.centery, "mono-bold", P.TEXT, anchor="center")
+        self.app.draw_volume(g, g.em(1.3), *rect.center)
 
     async def handle(self, action):
         if isinstance(action, NavigationAction):

@@ -27,7 +27,7 @@ from ..constants import (
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
     is_usb_cached, is_usb_needed, is_usb_present,
 )
-from .gfx import Gfx, _Cache
+from .gfx import Gfx, _Cache, rgb
 from .rooms import ROOM_CLASSES, ROOM_NAMES
 from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
 from ..keyboard import (
@@ -36,9 +36,10 @@ from ..keyboard import (
 )
 from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from ..timeline import RoomTimeline
-from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
+from ..audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
-from .ui import DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
+from .ui import (DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label,
+                 draw_level)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
 PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
@@ -932,7 +933,13 @@ class PurpleApp:
         from .saves import fit
         g = self.g
         work = screen_artwork(self.room, g)
-        return None if work is None else fit(work, g.vh(SAVE_THUMB_VH) * 2, g.vh(SAVE_THUMB_VH))
+        if work is None:
+            return None
+        thumb = fit(work, g.vh(SAVE_THUMB_VH) * 2, g.vh(SAVE_THUMB_VH))
+        framed = pygame.Surface(thumb.get_rect().inflate(2, 2).size)
+        framed.fill(rgb(P.LINE))
+        framed.blit(thumb, (1, 1))
+        return framed
 
     def _check_still_saved(self, room: str):
         """The Saved star stays only while what's on screen is the saved work."""
@@ -1099,6 +1106,18 @@ class PurpleApp:
     def _volume_badge(self) -> tuple[str, str, str]:
         return volume_badge(self._effective_volume(), self._volume_lock)
 
+    def draw_volume(self, g, px: int, cx: int, cy: int) -> pygame.Rect:
+        icon, _, label = self._volume_badge()
+        return draw_level(g, px, cx, cy, icon, volume_step(self._effective_volume()), VOLUME_TOP, label)
+
+    def _notify_volume(self):
+        g = self.g
+        sheet = pygame.Surface((g.w, g.vh(8)), pygame.SRCALPHA)
+        with g.drawing_on(sheet):
+            drawn = self.draw_volume(g, g.vh(2.4), g.w // 2, sheet.get_height() // 2)
+        self.clear_notifications()
+        self.notify("", picture=sheet.subsurface(drawn.clip(sheet.get_rect())).copy())
+
     def _apply_volume_system(self):
         from ..audio import set_system_volume
         if not self._sound_check_running:  # the chime owns the sink until its verdict lands, which reapplies
@@ -1146,16 +1165,12 @@ class PurpleApp:
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
         self._apply_volume_system()
-        icon, bars, label = self._volume_badge()
-        self.clear_notifications()
-        self.notify(f"{icon}  {bars}  {label}")
+        self._notify_volume()
 
     def _notify_volume_lock_blocked(self) -> bool:
         """Silent Mode swallows the volume keys; flash its badge so the press isn't a mystery."""
         if self._volume_lock == 0:
-            icon, bars, label = self._volume_badge()
-            self.clear_notifications()
-            self.notify(f"{icon}  {bars}  {label}")
+            self._notify_volume()
             return True
         return False
 
@@ -1756,19 +1771,15 @@ class PurpleApp:
         pad = g.vh(1.1)
         y = g.h - g.vh(11)
         for t in reversed(self._toasts[-3:]):
-            text = g.text(t.text, g.vh(2.4), "mono-bold", P.TEXT)
-            pic = t.picture
-            gap = pad if pic else 0
-            w = text.get_width() + gap + (pic.get_width() if pic else 0)
-            h = max(text.get_height(), pic.get_height() if pic else 0)
-            pill = pygame.Rect(0, 0, w, h).inflate(pad * 2, pad * 2)
+            parts = [s for s in (t.picture, t.text and g.text(t.text, g.vh(2.4), "mono-bold", P.TEXT)) if s]
+            w = sum(s.get_width() for s in parts) + pad * (len(parts) - 1)
+            pill = pygame.Rect(0, 0, w, max(s.get_height() for s in parts)).inflate(pad * 2, pad * 2)
             pill.midbottom = (g.w // 2, y + pad)
             g.rect(P.SURFACE, pill, radius=g.em(0.5))
             g.rect(P.HAIR, pill, width=1, radius=g.em(0.5))
-            if pic:
-                at = g.surface.blit(pic, pic.get_rect(midleft=(pill.x + pad, pill.centery)))
-                g.rect(P.LINE, at.inflate(2, 2), width=1)
-            g.surface.blit(text, text.get_rect(midright=(pill.right - pad, pill.centery)))
+            x = pill.x + pad
+            for s in parts:
+                x = g.surface.blit(s, s.get_rect(midleft=(x, pill.centery))).right + pad
             y = pill.top - g.vh(1.4)
 
 

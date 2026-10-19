@@ -790,7 +790,29 @@ def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=None
         g.rect(color, (x, y, max(h, int(w * min(1.0, fraction))), h), radius=radius)
 
 
-HOLD_QUIET = 0.35   # of a hold: before this, nothing shows, so a tap never flashes the bar
+def draw_meter(g: Gfx, rect: pygame.Rect, filled: int, steps: int, color=None):
+    """A setting's level in the hold pill's look, filled a step at a time, notched between steps."""
+    r = rect.h // 2
+    g.rect(P.FIELD, rect, radius=r)
+    if filled:
+        g.rect(color or P.PRIMARY, (rect.x, rect.y, max(rect.h, round(rect.w * filled / steps)), rect.h), radius=r)
+    notch = max(1, rect.h // 8)
+    for i in range(1, steps):
+        g.rect(P.SURFACE, (rect.x + round(rect.w * i / steps) - notch // 2, rect.y, notch, rect.h))
+    g.rect(P.LINE, rect, width=1, radius=r)
+
+
+def draw_level(g: Gfx, px: int, cx: int, cy: int, icon: str, filled: int, steps: int, label: str) -> pygame.Rect:
+    """Icon, meter, label; the meter is centered so a long label never slides it over."""
+    h = round(px * 1.1)
+    meter = pygame.Rect(0, 0, h * steps, h)
+    meter.center = (cx, cy)
+    draw_meter(g, meter, filled, steps)
+    icon_r = g.draw_text(icon, px, meter.x - px, cy, "mono-bold", P.TEXT, anchor="midright")
+    return icon_r.union(g.draw_text(label, px, meter.right + px, cy, "mono-bold", P.TEXT, anchor="midleft"))
+
+
+HOLD_QUIET = 0.35  # of a hold: before this, nothing shows, so a tap never flashes the bar
 HOLD_NUDGE_SECONDS = 1.5
 
 

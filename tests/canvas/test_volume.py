@@ -13,7 +13,11 @@ def isolated_settings(tmp_path, monkeypatch):
 
 
 def _last_toast(app):
-    return app._toasts[-1].text
+    """The toast is the drawn meter, so read it back as the badge it was drawn from."""
+    toast = app._toasts[-1]
+    assert toast.picture is not None and not toast.text
+    icon, bars, label = app._volume_badge()
+    return f"{icon}  {bars}  {label}"
 
 
 def test_volume_keys_walk_the_shared_steps_and_show_the_number():

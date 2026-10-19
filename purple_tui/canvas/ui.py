@@ -803,14 +803,11 @@ def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=None
 
 
 def draw_meter(g: Gfx, rect: pygame.Rect, filled: int, steps: int, color=None):
-    """A setting's level in the hold pill's look, filled a step at a time, notched between steps."""
+    """A setting's level in the hold pill's look, filled a step at a time."""
     r = rect.h // 2
     g.rect(P.FIELD, rect, radius=r)
     if filled:
         g.rect(color or P.PRIMARY, (rect.x, rect.y, max(rect.h, round(rect.w * filled / steps)), rect.h), radius=r)
-    notch = max(1, rect.h // 8)
-    for i in range(1, steps):
-        g.rect(P.SURFACE, (rect.x + round(rect.w * i / steps) - notch // 2, rect.y, notch, rect.h))
     g.rect(P.LINE, rect, width=1, radius=r)
 
 

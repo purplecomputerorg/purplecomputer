@@ -86,12 +86,14 @@ function editor(inst: Instrument): View {
   for (const g of groups) {
     sliders.append(h("h3", {}, g));
     for (const spec of base.params.filter((s) => s.group === g)) {
-      const val = h("span", { class: "val" }, fmt(inst.params[spec.key], spec.unit));
-      const range = h("input", { type: "range", min: spec.min, max: spec.max, step: spec.step, value: inst.params[spec.key] });
+      const pos = spec.scale?.toSlider(inst.params[spec.key]) ?? inst.params[spec.key];
+      const val = h("span", { class: "val" }, fmt(pos, spec.unit));
+      const range = h("input", { type: "range", min: spec.min, max: spec.max, step: spec.step, value: pos });
       range.oninput = () => {
-        inst.params[spec.key] = Number(range.value);
+        const s = Number(range.value);
+        inst.params[spec.key] = spec.scale?.fromSlider(s) ?? s;
         inst.sample = false;
-        val.textContent = fmt(inst.params[spec.key], spec.unit);
+        val.textContent = fmt(s, spec.unit);
         changed();
         clearTimeout(replayTimer);
         replayTimer = window.setTimeout(() => playGridKey(inst.name, lastKey), 140);
@@ -128,7 +130,9 @@ function editor(inst: Instrument): View {
   };
 }
 
-const fmt = (v: number, unit?: string) => `${Number.isInteger(v) ? v : v.toFixed(v < 1 ? 3 : 2).replace(/\.?0+$/, "")}${unit ? " " + unit : ""}`;
+const num = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(v < 1 ? 3 : 2).replace(/\.?0+$/, "")}`;
+const fmt = (v: number, unit?: string) =>
+  unit === "%" ? `${num(v * 100)}%` : unit === "×" ? `${num(v)}×` : `${num(v)}${unit ? " " + unit : ""}`;
 
 export function instrumentsView(item: string | null): View {
   const inst = item ? draft.instruments.find((i) => i.name === item) : null;

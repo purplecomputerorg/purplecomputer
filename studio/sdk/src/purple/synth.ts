@@ -8,12 +8,17 @@ const SCOOP_S = 0.07;
 export type BaseName = "marimba" | "ukulele" | "accordion" | "glockenspiel";
 export type Params = Record<string, number>;
 
-export interface ParamSpec { key: string; label: string; hint: string; group: string; min: number; max: number; step: number; unit?: string }
+export interface ParamSpec { key: string; label: string; hint: string; group: string; min: number; max: number; step: number; unit?: string; scale?: Scale }
+// A slider whose position is not the parameter itself, e.g. Sustain moves in ring time, not loop gain.
+export interface Scale { toSlider: (v: number) => number; fromSlider: (s: number) => number }
 export interface Base { label: string; blurb: string; params: ParamSpec[] }
 
-const p = (key: string, label: string, hint: string, group: string, min: number, max: number, step: number, unit?: string): ParamSpec =>
-  ({ key, label, hint, group, min, max, step, unit });
+const p = (key: string, label: string, hint: string, group: string, min: number, max: number, step: number, unit?: string, scale?: Scale): ParamSpec =>
+  ({ key, label, hint, group, min, max, step, unit, scale });
 const LENGTH = "How long each note lasts";
+// Ring time goes as 1 / (1 - damping), so this slider is a multiple of the default ring.
+const LOSS = 1 - exported.synth.defaults.ukulele.damping;
+const SUSTAIN: Scale = { toSlider: (d) => LOSS / (1 - d), fromSlider: (s) => Number((1 - LOSS / s).toFixed(6)) };
 
 // Slider ranges and labels are Studio's; the keys must match synth.DEFAULTS in Python (tested).
 export const BASES: Record<BaseName, Base> = {
@@ -36,10 +41,10 @@ export const BASES: Record<BaseName, Base> = {
     blurb: "A plucked nylon string, modeled as a loop of sound that slowly loses its highs.",
     params: [
       p("duration", "Length", LENGTH, "Shape", 0.3, 2, 0.05, "s"),
-      p("damping", "Sustain", "How long it rings", "Shape", 0.98, 0.999, 0.0005),
+      p("damping", "Sustain", "How long it rings", "Shape", 0.2, 4, 0.1, "×", SUSTAIN),
       p("warmth", "Brightness", "Lower is mellower", "Tone", 0.1, 1, 0.05),
       p("softness", "Soft pluck", "Fingertip, not a pick", "Tone", 0, 6, 1),
-      p("pluck_pos", "Pluck spot", "Lower is twangier", "Tone", 0.1, 0.5, 0.05),
+      p("pluck_pos", "Pluck spot", "Lower is twangier", "Tone", 0.1, 0.5, 0.05, "%"),
       p("body_freq", "Body size", "Lower sounds bigger", "Body", 150, 800, 10, "Hz"),
       p("body_q", "Body ring", "Higher rings sharper", "Body", 1, 10, 0.5),
       p("body_mix", "Body amount", "How much body you hear", "Body", 0, 1, 0.05),
@@ -55,8 +60,8 @@ export const BASES: Record<BaseName, Base> = {
       p("harmonics", "Reediness", "More buzz", "Tone", 1, 20, 1),
       p("rolloff", "Brightness", "Higher is brighter", "Tone", 300, 4000, 50, "Hz"),
       p("trem_rate", "Breath speed", "How fast it pulses", "Breath", 2, 10, 0.5, "Hz"),
-      p("trem_depth", "Breath depth", "How strong the pulse is", "Breath", 0, 0.2, 0.005),
-      p("breath", "Breathiness", "Unsteady, airy breath", "Breath", 0, 2, 0.05),
+      p("trem_depth", "Breath depth", "How strong the pulse is", "Breath", 0, 0.2, 0.005, "%"),
+      p("breath", "Breathiness", "Unsteady, airy breath", "Breath", 0, 2, 0.05, "×"),
       p("scoop", "Scoop", "Slides up into each note", "Breath", 0, 100, 5, "cents"),
     ],
   },
@@ -65,10 +70,10 @@ export const BASES: Record<BaseName, Base> = {
     blurb: "A small metal bar. The bell lives in the 2.8x partial, louder than the fundamental.",
     params: [
       p("duration", "Length", LENGTH, "Shape", 0.3, 3, 0.05, "s"),
-      p("ring", "Ring", "How long it rings", "Shape", 0.3, 3, 0.05),
+      p("ring", "Ring", "How long it rings", "Shape", 0.3, 3, 0.05, "×"),
       p("fundamental", "Fundamental", "The plain note under it", "Tone", 0, 1, 0.05),
       p("bell", "Bell", "The metal bell tone", "Tone", 0, 1.2, 0.05),
-      p("shimmer", "Shimmer", "High sparkle", "Tone", 0, 2, 0.05),
+      p("shimmer", "Shimmer", "High sparkle", "Tone", 0, 2, 0.05, "×"),
       p("ping", "Mallet ping", "Tiny mallet tick", "Tone", 0, 0.6, 0.05),
     ],
   },

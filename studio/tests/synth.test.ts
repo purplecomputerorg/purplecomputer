@@ -22,10 +22,18 @@ describe("synth port against Python renders", () => {
       expect(BASES[base].params.map((s) => s.key).sort()).toEqual(Object.keys(exported.synth.defaults[base]).sort());
       for (const s of BASES[base].params) {
         const d = defaults(base)[s.key];
-        expect(d, `${base}.${s.key}`).toBeGreaterThanOrEqual(s.min);
-        expect(d, `${base}.${s.key}`).toBeLessThanOrEqual(s.max);
+        const pos = s.scale?.toSlider(d) ?? d;
+        expect(pos, `${base}.${s.key}`).toBeGreaterThanOrEqual(s.min);
+        expect(pos, `${base}.${s.key}`).toBeLessThanOrEqual(s.max);
+        if (s.scale) expect(s.scale.fromSlider(pos)).toBeCloseTo(d, 6);
       }
     }
+  });
+
+  it("Sustain moves in multiples of the default ring time", () => {
+    const sustain = BASES.ukulele.params.find((s) => s.key === "damping")!.scale!;
+    expect(sustain.fromSlider(0.2)).toBeCloseTo(0.98, 6);
+    expect(sustain.fromSlider(4)).toBeCloseTo(0.999, 6);
   });
 
   it("is deterministic and sized by duration", () => {

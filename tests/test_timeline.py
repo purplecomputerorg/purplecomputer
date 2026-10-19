@@ -49,11 +49,13 @@ class TestRoomTimeline:
     def test_state_at_across_snapshot_boundary(self, monkeypatch, tmp_path):
         monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
         tl = RoomTimeline("art")
-        count = timeline_mod.SNAPSHOT_EVERY * 2 + 3
-        for i in range(count):
-            tl.record({"n": i})
-        for i in (0, timeline_mod.SNAPSHOT_EVERY, count - 1):
-            assert tl.state_at(i) == {"n": i}
+        big = {f"c:{i}": "x" for i in range(50)}
+        for i in range(200):
+            tl.record({**big, "n": i})
+        snapshots = sum('"s"' in line for line in (tmp_path / "art.jsonl").read_text().splitlines())
+        assert 1 < snapshots < 20       # a snapshot once the deltas since the last outweigh it
+        for i in range(200):
+            assert tl.state_at(i) == {**big, "n": i}
 
     def test_reload_from_disk(self, monkeypatch, tmp_path):
         monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))

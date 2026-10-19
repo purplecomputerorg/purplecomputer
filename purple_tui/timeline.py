@@ -6,7 +6,14 @@ against the previous step, each stamped with the wall-clock second it was taken 
 A {"k": tag} line tags the step before it (a save's digest, so Time Travel can
 show which moments were saved). Replaying the file yields the room's latest state,
 which is how rooms are restored after a restart; scrubbing to any step replays
-from the nearest snapshot line.
+from the nearest snapshot line. A snapshot is written once the deltas since the
+last one outweigh it, which bounds replay cost without a big picture's copies
+filling the file.
+
+Past MAX_FILE_BYTES the older half is thinned, not dropped: every other step
+goes, but how each play session ended and tagged steps (and the step before
+each) stay, so old days get coarser instead of vanishing. Only once there is
+little left to thin does the oldest half go.
 
 A torn final line (power loss mid-append) is dropped on load, losing only that
 step. On the live USB $HOME is tmpfs, so history is session-only there with no
@@ -20,7 +27,8 @@ import time
 from pathlib import Path
 
 MAX_FILE_BYTES = 2_000_000
-SNAPSHOT_EVERY = 20  # full snapshot line every N steps, bounding replay cost
+SESSION_GAP_S = 20 * 60  # a pause this long ends a play session
+_GONE = object()
 
 
 def state_dir(name: str, env: str) -> Path | None:
@@ -45,6 +53,7 @@ class RoomTimeline:
         self._steps: list[dict] = []  # parsed {"s": ...} or {"d": ..., "r": ...} lines
         self._tip: dict | None = None  # state after the last step
         self._loaded = False
+        self._snap_bytes = self._since_snap = 0  # size of the last snapshot line, and of the deltas after it
 
     def _path(self) -> Path | None:
         base = timeline_dir()
@@ -71,6 +80,7 @@ class RoomTimeline:
             if isinstance(step.get("k"), str):
                 self._steps[-1].setdefault("k", []).append(step["k"])
                 continue
+            self._count(step, len(line))
             self._steps.append(step)
         self._tip = self.state_at(len(self._steps) - 1) if self._steps else None
 
@@ -96,7 +106,7 @@ class RoomTimeline:
         self.load()
         if self._steps and tag not in self._steps[-1].get("k", []):
             self._steps[-1].setdefault("k", []).append(tag)
-            self._append_to_disk({"k": tag})
+            self._append_to_disk(json.dumps({"k": tag}))
 
     def state_at(self, index: int) -> dict:
         """Replay to the state after step `index` (from the nearest snapshot)."""
@@ -116,46 +126,80 @@ class RoomTimeline:
         self.load()
         if self._tip is not None and state == self._tip:
             return False
-        if self._tip is None or len(self._steps) % SNAPSHOT_EVERY == 0:
-            step = {"s": state}
-        else:
-            changed = {k: v for k, v in state.items()
-                       if k not in self._tip or self._tip[k] != v}
-            removed = [k for k in self._tip if k not in state]
-            step = {"d": changed, "r": removed}
+        tip = self._tip or {}
+        changed = {k for k in state.keys() | tip.keys() if state.get(k, _GONE) != tip.get(k, _GONE)}
+        step = self._encode(state, changed)
         step["t"] = round(time.time())
-        self._steps.append(step)
         self._tip = dict(state)
-        self._append_to_disk(step)
+        self._append_to_disk(self._push(step))
         return True
 
-    def _append_to_disk(self, step: dict) -> None:
+    def _encode(self, state: dict, changed) -> dict:
+        if not self._steps or self._since_snap >= self._snap_bytes:
+            return {"s": dict(state)}
+        return {"d": {k: state[k] for k in changed if k in state}, "r": [k for k in changed if k not in state]}
+
+    def _count(self, step: dict, size: int) -> None:
+        if "s" in step:
+            self._snap_bytes, self._since_snap = size, 0
+        else:
+            self._since_snap += size
+
+    def _push(self, step: dict) -> str:
+        line = json.dumps(step, separators=(",", ":"))
+        self._count(step, len(line))
+        self._steps.append(step)
+        return line
+
+    def _append_to_disk(self, line: str) -> None:
         path = self._path()
         if path is None:
             return
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "a") as f:
-                f.write(json.dumps(step, separators=(",", ":")) + "\n")
+                f.write(line + "\n")
             if path.stat().st_size > MAX_FILE_BYTES:
                 self._compact()
         except OSError:
             pass
 
     def _compact(self) -> None:
-        """Drop the oldest half of history and rewrite the file atomically."""
-        cut = len(self._steps) // 2
-        first = {k: v for k, v in self._steps[cut].items() if k in ("t", "k")}
-        kept = [{"s": self.state_at(cut), **first}] + self._steps[cut + 1:]
-        self._steps = kept
+        steps, times = self._steps, self.times()
+        half = len(steps) // 2
+
+        def landmark(i):
+            gap = times[i] is not None and times[i + 1] is not None and times[i + 1] - times[i] >= SESSION_GAP_S
+            return gap or "k" in steps[i] or "k" in steps[i + 1]
+        old = [i for i in range(half) if i % 2 or landmark(i)]
+        self._rewrite(set(old if len(old) <= half * 3 // 4 else []) | set(range(half, len(steps))))
+
+    def _rewrite(self, keep: set) -> None:
+        """Re-encode just the steps in `keep`, then replace the file atomically."""
+        old, self._steps = self._steps, []
+        self._snap_bytes = self._since_snap = 0
+        lines, state, changed = [], {}, set()
+        for i, step in enumerate(old):
+            if "s" in step:
+                snap = step["s"]
+                changed |= {k for k in state.keys() | snap.keys() if state.get(k, _GONE) != snap.get(k, _GONE)}
+                state = dict(snap)
+            else:
+                state.update(step.get("d", {}))
+                for key in step.get("r", []):
+                    state.pop(key, None)
+                changed |= step.get("d", {}).keys() | set(step.get("r", []))
+            if i in keep:
+                new = self._encode(state, changed)
+                new.update({k: step[k] for k in ("t", "k") if k in step})
+                lines.append(self._push(new))
+                changed = set()
         path = self._path()
         if path is None:
             return
         tmp = path.with_suffix(".tmp")
         try:
-            with open(tmp, "w") as f:
-                for step in kept:
-                    f.write(json.dumps(step, separators=(",", ":")) + "\n")
+            tmp.write_text("".join(line + "\n" for line in lines))
             tmp.replace(path)
         except OSError:
             pass

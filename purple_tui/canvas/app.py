@@ -59,6 +59,8 @@ LEGEND_KEY_VH = 1.3           # key size on the sticker keyboard in the bottom-l
 LEGEND_POP_VH = 1.67          # letter size on the last key pressed, which pops out to fit it
 LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 1), (ZXCV_ROW, 1.5))   # even half-key stagger
 TIMELINE_MAX_WAIT_S = 15.0
+JUMP_TAG = "jump"             # tags a step that replaced the room in one go (clear, open, a Time Travel landing)
+SCRUB_TICK_S = 1 / 30
 MAX_CODE_LINES = 200          # code lines kept with a room's state (Time Travel, saves)
 SAVE_FLASH_S = 0.45           # the camera-flash fade over the frame when a save lands
 SAVE_THUMB_VH = 7             # height of the saved picture in its toast
@@ -478,11 +480,11 @@ class PurpleApp:
         self._code_lines[room] = [line for _, line in code]
 
     def _start_fresh(self, room: str | None = None):
-        for r in ([room] if room else list(self.rooms)):
-            self.timeline_capture_now(r)
+        def wipe(r):
             self.rooms[r].clear()
             self._code_lines[r] = []
-            self.timeline_capture_now(r)
+        for r in ([room] if room else list(self.rooms)):
+            self._replace_room(r, lambda: wipe(r))
         self.invalidate()
 
     def clear_all_state(self):
@@ -590,8 +592,7 @@ class PurpleApp:
         if self._overlays:
             await self.top.handle(action)
             return
-        if self._time_travel is not None:
-            await self._handle_time_travel_action(action)
+        if self._time_travel is not None and self._time_travel_consumes(action):
             return
         if self._littles_mode and isinstance(action, ControlAction) and action.action == "tab":
             return
@@ -950,6 +951,17 @@ class PurpleApp:
         self._timeline_flush()
         self.key_save.flush()
 
+    def _replace_room(self, room: str, change):
+        """Make a change that replaces the room in one go. If it changed anything, the step
+        it replaced becomes a Time Travel landmark, so a held arrow rests on what was there."""
+        tl = self._timelines[room]
+        self.timeline_capture_now(room)
+        before = len(tl)
+        change()
+        self.timeline_capture_now(room)
+        if len(tl) > before:
+            tl.mark(JUMP_TAG)
+
     def open_save(self, save):
         """Load a save into its room as a new Time Travel step, so what was there stays one step back."""
         room = self.active_room
@@ -957,10 +969,9 @@ class PurpleApp:
         self._silence_music()
         self._timeline_flush()
         try:
-            self.apply_room_state(room, save.state)
+            self._replace_room(room, lambda: self.apply_room_state(room, save.state))
         except Exception:
             return
-        self.timeline_capture_now(room)
         self.invalidate()
 
     def _start_time_travel(self):
@@ -973,14 +984,19 @@ class PurpleApp:
         if len(tl) == 0:
             return
         from . import saves
-        from .panels import TimeTravelBar
+        from .panels import TimeTravelBar, landmarks, sessions
         kept = {s.digest for s in saves.list_saves(room)}
-        saved = [i for i, tags in enumerate(tl.tags()) if kept.intersection(tags)]
-        self._time_travel = {"room": room, "index": len(tl) - 1, "saved": saved}
+        tags = tl.tags()
+        saved = [i for i, t in enumerate(tags) if kept.intersection(t)]
+        jumped = [i - 1 for i, t in enumerate(tags) if i and JUMP_TAG in t]
+        runs = sessions(tl.times(), time.time())
+        self._time_travel = {"room": room, "index": len(tl) - 1, "saved": saved, "sessions": runs,
+                             "landmarks": landmarks(runs, saved + jumped), "hold": None}
         self.set_panel(TimeTravelBar(self))
         self.invalidate()
 
     def _end_time_travel(self):
+        self._stop_scrub()
         self._time_travel = None
         self.set_panel(None)
 
@@ -995,35 +1011,72 @@ class PurpleApp:
         self._end_time_travel()
 
     def _land_time_travel(self):
-        room = self._time_travel["room"]
-        self._end_time_travel()
-        self.timeline_capture_now(room)
+        self._replace_room(self._time_travel["room"], self._end_time_travel)
 
-    def _step_time_travel(self, delta: int):
-        from .panels import stops
+    def _show_step(self, index: int):
         tt = self._time_travel
         tl = self._timelines[tt["room"]]
-        ahead = [s for s in stops(tl.times(), time.time(), tt["saved"]) if (s - tt["index"]) * delta > 0]
-        if not ahead:
-            return
-        index = tt["index"] = min(ahead, key=lambda s: abs(s - tt["index"]))
+        tt["index"] = index = min(max(index, 0), len(tl) - 1)
         try:
             self.apply_room_state(tt["room"], tl.state_at(index))
         except Exception:
             pass
         self.invalidate()
 
+    def _step_time_travel(self, delta: int):
+        self._show_step(self._time_travel["index"] + delta)
+
+    def _press_time_travel(self, direction: str):
+        """A tap moves one step. Held on, it rewinds (or fast-forwards) from slow to fast,
+        resting on each landmark, until the arrow comes up."""
+        from .panels import SCRUB_HOLD_S
+        self._stop_scrub()
+        self._step_time_travel(-1 if direction == "left" else 1)
+        now = time.monotonic()
+        self._time_travel["hold"] = {"direction": direction, "since": now + SCRUB_HOLD_S, "wait": now + SCRUB_HOLD_S,
+                                     "last": now, "carry": 0.0, "timer": self.timers.every(SCRUB_TICK_S, self._scrub_tick)}
+
+    def _stop_scrub(self):
+        tt = self._time_travel
+        if tt and tt["hold"]:
+            tt["hold"]["timer"].stop()
+            tt["hold"] = None
+
+    def _scrub_tick(self):
+        from .panels import SCRUB_REST_S, scrub_rate
+        tt, now = self._time_travel, time.monotonic()
+        hold = tt["hold"]
+        if hold["direction"] not in self._keyboard_state_machine.all_held_arrows():
+            return self._stop_scrub()
+        dt, hold["last"] = now - hold["last"], now
+        if now < hold["wait"]:
+            return
+        index, delta = tt["index"], -1 if hold["direction"] == "left" else 1
+        begin, end, _ = next(run for run in tt["sessions"] if run[0] <= index < run[1])
+        hold["carry"] += scrub_rate(now - hold["since"], end - begin) * dt
+        target, hold["carry"] = index + delta * int(hold["carry"]), hold["carry"] % 1
+        rests = [m for m in tt["landmarks"] if 0 < (m - index) * delta <= (target - index) * delta]
+        if rests:
+            target = min(rests, key=lambda m: abs(m - index))
+            hold["wait"], hold["carry"] = now + SCRUB_REST_S, 0.0
+        if target != index:
+            self._show_step(target)
+
     def time_travel_position(self):
         """The step on show, when each step was taken, and which steps were saved."""
         tt = self._time_travel
         return (tt["index"], self._timelines[tt["room"]].times(), tt["saved"]) if tt else (0, [], [])
 
-    async def _handle_time_travel_action(self, action):
+    def _time_travel_consumes(self, action) -> bool:
+        """Arrows travel, Enter keeps, Esc goes back to now. Typing, Space and Backspace
+        keep the moment on show and carry on from it, so they fall through to the room."""
+        if isinstance(action, CharacterAction) or (
+                isinstance(action, ControlAction) and action.is_down and action.action in ("space", "backspace")):
+            self._land_time_travel()
+            return False
         if isinstance(action, NavigationAction):
-            if action.direction == "left":
-                self._step_time_travel(-1)
-            elif action.direction == "right":
-                self._step_time_travel(1)
+            if action.direction in ("left", "right") and not action.is_repeat:
+                self._press_time_travel(action.direction)
         elif isinstance(action, ControlAction) and action.is_down and not action.is_repeat:
             if action.action == "enter":
                 self._land_time_travel()
@@ -1032,6 +1085,7 @@ class PurpleApp:
                 self._cancel_time_travel()
             elif action.action == "tab" and (turn := getattr(self.rooms[self._time_travel["room"]], "turn_around", None)):
                 turn()                          # a view, not history: look at any moment from either side
+        return True
 
     # ------------------------------------------------------------------ volume
     def _effective_volume(self) -> int:

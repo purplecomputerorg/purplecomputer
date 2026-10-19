@@ -41,11 +41,13 @@ class TestRoomTimeline:
     def test_state_at_across_snapshot_boundary(self, monkeypatch, tmp_path):
         monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
         tl = RoomTimeline("art")
-        count = timeline_mod.SNAPSHOT_EVERY * 2 + 3
-        for i in range(count):
-            tl.record({"n": i})
-        for i in (0, timeline_mod.SNAPSHOT_EVERY, count - 1):
-            assert tl.state_at(i) == {"n": i}
+        big = {f"c:{i}": "x" for i in range(50)}
+        for i in range(200):
+            tl.record({**big, "n": i})
+        snapshots = sum('"s"' in line for line in (tmp_path / "art.jsonl").read_text().splitlines())
+        assert 1 < snapshots < 20       # a snapshot once the deltas since the last outweigh it
+        for i in range(200):
+            assert tl.state_at(i) == {**big, "n": i}
 
     def test_reload_from_disk(self, monkeypatch, tmp_path):
         monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
@@ -94,8 +96,34 @@ class TestRoomTimeline:
             if i == 48:
                 tl.mark("late")
         fresh = RoomTimeline("art")
-        [tagged] = [i for i, tags in enumerate(fresh.tags()) if tags]
-        assert fresh.tags()[tagged] == ["late"] and fresh.state_at(tagged)["n"] == 48
+        tagged = {tags[0]: fresh.state_at(i)["n"] for i, tags in enumerate(fresh.tags()) if tags}
+        assert tagged == {"first": 0, "late": 48}
+
+    def test_compaction_thins_old_history_but_keeps_how_each_session_ended(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+        clock = [NOW - 86400]
+        monkeypatch.setattr(timeline_mod, "time", SimpleNamespace(time=lambda: clock[0]))
+        tl = RoomTimeline("art")
+        for i in range(30):
+            tl.record({"n": i, "pad": "x" * 20})
+        clock[0] = NOW
+        monkeypatch.setattr(timeline_mod, "MAX_FILE_BYTES", 2000)
+        for i in range(30, 60):
+            tl.record({"n": i, "pad": "x" * 20})
+        kept = [RoomTimeline("art").state_at(i)["n"] for i in range(len(tl))]
+        assert 29 in kept and kept[-1] == 59          # yesterday's last picture and now
+        assert kept == sorted(kept) and len(kept) < 60
+        assert set(range(40, 60)) <= set(kept)        # recent steps all stay
+
+    def test_a_dense_picture_keeps_hours_of_steps(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+        tl = RoomTimeline("art")
+        cells = {}
+        for i in range(3000):
+            cells[f"c:{i % 120},{i // 120 % 30}"] = [" ", None, "#e74c3c" if i % 2 else "#3498db", 1]
+            tl.record(dict(cells))
+        assert (tmp_path / "art.jsonl").stat().st_size < timeline_mod.MAX_FILE_BYTES
+        assert len(RoomTimeline("art")) == 3000
 
     def test_dev_mode_without_override_writes_no_files(self, monkeypatch, tmp_path):
         monkeypatch.delenv("PURPLE_TIMELINE_DIR", raising=False)
@@ -127,7 +155,8 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from purple_tui.canvas import panels
-from purple_tui.canvas.harness import make_app, run, type_text
+from purple_tui.canvas.app import JUMP_TAG
+from purple_tui.canvas.harness import make_app, press, run, type_text
 
 NOW = datetime(2026, 10, 13, 15, 0).timestamp()
 
@@ -159,16 +188,19 @@ class TestTimeTravelTrack:
         assert panels.time_ago(NOW - 100 * 86400, NOW) == "3 months ago"
         assert panels.time_ago(None, NOW) == "Earlier"
 
-    def test_old_stretches_have_few_stops_and_the_newest_has_all(self):
-        times = [NOW - 86400] * 40 + [NOW - 30] * 6
-        marks = panels.stops(times, NOW)
-        assert marks[0] == 0 and 39 in marks
-        assert len([m for m in marks if m < 40]) <= panels.OLD_STRETCH_STOPS + 1
-        assert marks[-6:] == list(range(40, 46))
+    def test_merged_old_stretches_say_earlier(self):
+        times = [NOW - i * panels.SESSION_GAP_S * 2 for i in range(20, 0, -1)]
+        assert panels.stretches(times, NOW)[0][2] == "Earlier"
 
-    def test_saved_steps_are_always_stops(self):
-        times = [NOW - 86400] * 40 + [NOW - 30] * 6
-        assert 17 in panels.stops(times, NOW, [17]) and 17 not in panels.stops(times, NOW)
+    def test_landmarks_are_the_start_each_session_end_and_extras(self):
+        runs = panels.sessions([NOW - 86400] * 40 + [NOW - 30] * 6, NOW)
+        assert panels.landmarks(runs, [17]) == [0, 17, 39, 45]
+
+    def test_scrub_starts_slow_doubles_and_caps_at_one_session_crossing(self):
+        assert panels.scrub_rate(0, 1000) == panels.SCRUB_SLOW
+        assert panels.scrub_rate(panels.SCRUB_DOUBLE_S, 1000) == 2 * panels.SCRUB_SLOW
+        assert panels.scrub_rate(60, 1000) == 1000 / panels.SCRUB_CROSS_S
+        assert panels.scrub_rate(60, 2) == panels.SCRUB_SLOW
 
     def test_draws_any_history(self):
         async def scenario():
@@ -304,4 +336,101 @@ def test_scrub_land_appends_instead_of_truncating(monkeypatch, tmp_path):
         assert len(tl) == total + 1  # landed state appended, nothing lost
         assert (2, 1) not in art._grid
         assert tl.state_at(total - 1) != tl.tip()  # old tip still reachable
+    run(scenario())
+
+
+def _two_sessions(monkeypatch, tmp_path, per=30):
+    """An Art history of `per` steps yesterday then `per` today."""
+    monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+    clock = [NOW - 86400]
+    monkeypatch.setattr(timeline_mod, "time", SimpleNamespace(time=lambda: clock[0]))
+    tl = RoomTimeline("art")
+    for i in range(2 * per):
+        if i == per:
+            clock[0] = NOW
+        tl.record({f"c:{i},0": ["x", "#fff", None, 1]})
+    return tl
+
+
+def _held(app, monkeypatch, arrows):
+    monkeypatch.setattr(app._keyboard_state_machine, "all_held_arrows", lambda: set(arrows))
+
+
+def _tick_after(app, seconds):
+    """Run one scrub tick as if the arrow had been held long and `seconds` passed since the last tick."""
+    import time
+    hold, now = app._time_travel["hold"], time.monotonic()
+    hold["since"], hold["wait"], hold["last"] = now - 60, min(hold["wait"], now), now - seconds
+    app._scrub_tick()
+
+
+def test_holding_rewinds_and_rests_on_each_session_end(monkeypatch, tmp_path):
+    _two_sessions(monkeypatch, tmp_path)
+
+    async def scenario():
+        app = make_app()
+        app.action_switch_room("art")
+        app._start_time_travel()
+        _held(app, monkeypatch, {"left"})
+        app._press_time_travel("left")
+        assert app._time_travel["index"] == len(app._timelines["art"]) - 2   # the press itself is one step
+        _tick_after(app, 1.0)
+        assert app._time_travel["index"] == 29      # rests on how yesterday ended, not past it
+        app._scrub_tick()
+        assert app._time_travel["index"] == 29      # still resting
+        _tick_after(app, 1.0)
+        assert app._time_travel["index"] == 0       # the very start is a landmark too
+        _held(app, monkeypatch, set())
+        app._scrub_tick()
+        assert app._time_travel["hold"] is None     # letting go stops right there
+        app._cancel_time_travel()
+    run(scenario())
+
+
+def test_repeats_do_not_step_while_a_hold_drives(monkeypatch, tmp_path):
+    _two_sessions(monkeypatch, tmp_path, per=3)
+
+    async def scenario():
+        app = make_app()
+        app.action_switch_room("art")
+        app._start_time_travel()
+        await press(app, "left")
+        for _ in range(3):
+            await press(app, "left", is_repeat=True)
+        assert app._time_travel["index"] == len(app._timelines["art"]) - 2
+        await press(app, "up")
+        assert app._time_travel["index"] == len(app._timelines["art"]) - 2
+        app._cancel_time_travel()
+    run(scenario())
+
+
+def test_the_moment_before_a_clear_is_a_landmark(monkeypatch, tmp_path):
+    monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+
+    async def scenario():
+        app = make_app()
+        art, tl = _two_paints(app)
+        before = len(tl) - 1
+        app._start_fresh("art")
+        app._start_time_travel()
+        assert before in app._time_travel["landmarks"]
+        app._cancel_time_travel()
+    run(scenario())
+
+
+def test_typing_keeps_the_moment_and_carries_on(monkeypatch, tmp_path):
+    monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+
+    async def scenario():
+        app = make_app()
+        art, tl = _two_paints(app)
+        left_at = len(tl) - 1
+        app._start_time_travel()
+        app._step_time_travel(-1)
+        shown = dict(art._grid)
+        await press(app, "a")
+        assert app._time_travel is None
+        assert (2, 1) not in art._grid                    # still the earlier picture,
+        assert art._grid != shown                         # with the key's paint on it
+        assert JUMP_TAG in tl.tags()[left_at + 1]          # where they left from is a landmark
     run(scenario())

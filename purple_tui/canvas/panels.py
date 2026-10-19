@@ -21,6 +21,7 @@ from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationActi
 from ..loop_station import LOOPING, RECORDING
 from ..music_constants import GRID_KEYS
 from ..palette import get_key_color
+from ..timeline import SESSION_GAP_S
 from . import color_wheel
 from .gfx import rgb
 from .ui import AUTO, DOWN, LEFT, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, hold_status, keycap_size
@@ -158,9 +159,12 @@ _INSTRUMENT_PREFIX = re.compile(r'.*\b(?:choose|select|use|play|instrument)\s+\S
 _DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
 _MAX_CONTEXT_RESULTS = 7
 ICON_STAR = "\U000F04CE"  # nf-md-star
-SESSION_GAP_S = 20 * 60   # a pause this long starts a new stretch on the Time Travel track
 MAX_STRETCHES = 7
-OLD_STRETCH_STOPS = 5
+SCRUB_HOLD_S = 0.35       # an arrow held this long in Time Travel starts rewinding (or fast-forwarding)
+SCRUB_SLOW = 6.0          # steps a second when a hold starts,
+SCRUB_DOUBLE_S = 0.4      # doubling this often,
+SCRUB_CROSS_S = 1.0       # up to crossing a whole session in this long
+SCRUB_REST_S = 0.6        # a held arrow rests this long on each landmark
 
 
 def keyword_autocomplete(room: str):
@@ -652,7 +656,8 @@ class TimeTravelBar:
     """Every step on one track, split into stretches where the kid took a
     break. A stretch is as wide as the log of its steps (today's twice that),
     so months of old history never crowd out today; the words say how long
-    ago it really was. A star marks each moment the kid saved."""
+    ago it really was. A star marks each moment the kid saved. The track only
+    shows where you are: the arrows travel (see PurpleApp._press_time_travel)."""
     kind = "time"
 
     def __init__(self, app):
@@ -660,6 +665,9 @@ class TimeTravelBar:
 
     def height(self, g) -> int:
         return g.vh(11)
+
+    def arrow_hint(self) -> str:
+        return f"Hold to go fast  {LEFT} {RIGHT}"
 
     def draw(self, g, rect):
         index, times, saved = self.app.time_travel_position()
@@ -757,9 +765,8 @@ def time_ago(t, now) -> str:
     return _ago(int(secs // 60), "minute") if secs < 3600 else _ago(int(secs // 3600), "hour")
 
 
-def stretches(times, now) -> list:
-    """[begin, end, day label] runs of steps, split at long pauses and new days,
-    the oldest merged together until there are at most MAX_STRETCHES."""
+def sessions(times, now) -> list:
+    """[begin, end, day label] runs of steps, split at long pauses and new days."""
     runs = []
     for i, t in enumerate(times):
         label, prev = day_label(t, now), times[i - 1] if i else None
@@ -767,20 +774,25 @@ def stretches(times, now) -> list:
             runs[-1][1] = i + 1
         else:
             runs.append([i, i + 1, label])
-    while len(runs) > MAX_STRETCHES:
-        oldest = runs.pop(0)
-        runs[0][0] = oldest[0]
     return runs
 
 
-def stops(times, now, saved=()) -> list:
-    """The steps ← and → land on: every step of the newest stretch and every
-    saved one, but only a few evenly spaced ones (always its last) in each
-    older one, so the knob crosses old history in a handful of presses."""
-    runs = stretches(times, now)
-    marks = {0, *saved, *range(runs[-1][0], runs[-1][1])}
-    for begin, end, _ in runs[:-1]:
-        n = end - begin
-        k = min(n, OLD_STRETCH_STOPS)
-        marks.update(begin + (j + 1) * n // k - 1 for j in range(k))
-    return sorted(marks)
+def stretches(times, now) -> list:
+    """The sessions the track draws: the oldest merged into one "Earlier" until there are at most MAX_STRETCHES."""
+    runs = sessions(times, now)
+    while len(runs) > MAX_STRETCHES:
+        oldest = runs.pop(0)
+        runs[0][0], runs[0][2] = oldest[0], "Earlier"
+    return runs
+
+
+def landmarks(runs, more=()) -> list:
+    """Where a held arrow rests: the very start, how each of the sessions `runs` ended, and `more`."""
+    return sorted({0, *more, *(end - 1 for _, end, _ in runs)})
+
+
+def scrub_rate(held_s: float, session_steps: int) -> float:
+    """Steps a second for an arrow held this long: slow at first so a short hold is precise,
+    doubling until it would cross the whole session in SCRUB_CROSS_S."""
+    top = max(SCRUB_SLOW, session_steps / SCRUB_CROSS_S)
+    return min(top, SCRUB_SLOW * 2 ** (held_s / SCRUB_DOUBLE_S))

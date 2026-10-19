@@ -1,9 +1,9 @@
 import "./fonts";
 import "./styles.css";
 import logo from "../../assets/logo.svg";
-import { features, onChange, pieces, replaceDraft } from "./state";
+import { features, hasWork, onChange, pieces, replaceDraft } from "./state";
 import { recall, remember } from "./saved";
-import { openPackButton } from "./ui/packfile";
+import { clearEverythingButton, clearSectionButton, openPackButton } from "./ui/packfile";
 import { clear, h } from "./ui/dom";
 import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
@@ -29,15 +29,17 @@ interface Section {
   label: string;
   icon: string;
   blurb: string;
+  // What "Clear all" names on this section's pages; colors has its own undo instead.
+  clears?: string;
   view: (item: string | null) => View;
 }
 
 const SECTIONS: Section[] = [
-  { id: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or picture for for them to open and paint on top of", view: picturesView },
-  { id: "voice", label: "Voice", icon: "🎙️", blurb: "Make any key say any sound or recorded voice", view: voiceView },
-  { id: "words", label: "Emoji", icon: "🐶", blurb: "Pick an emoji for any word", view: wordsView },
-  { id: "instruments", label: "Instruments", icon: "🎹", blurb: "Custom instruments for them to play", view: instrumentsView },
-  { id: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
+  { id: "pictures", clears: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or picture for for them to open and paint on top of", view: picturesView },
+  { id: "voice", clears: "recordings", label: "Voice", icon: "🎙️", blurb: "Make any key say any sound or recorded voice", view: voiceView },
+  { id: "words", clears: "emoji words", label: "Emoji", icon: "🐶", blurb: "Pick an emoji for any word", view: wordsView },
+  { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "Custom instruments for them to play", view: instrumentsView },
+  { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
   { id: "colors", label: "Colors", icon: "🎨", blurb: "Make Purple green, or change the colors the letters type", view: colorsView },
 ].filter((s) => features.rooms || s.id !== "rooms");
 type Page = [id: string, label: string, view: (item: string | null) => View];
@@ -62,6 +64,7 @@ function welcomeView(): View {
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
       h("p", { class: "dim" }, "When you're done, download your Purple Pack and put it on Purple with a USB drive."),
       h("p", { class: "dim" }, "Made one before? ", openPackButton("Open your Purple Pack"), " to keep going."),
+      hasWork() ? h("p", { class: "dim" }, "Want a fresh start? ", clearEverythingButton(), ".") : null,
       staysHere("Everything happens in your web browser. Nothing you add is uploaded, and nothing is tracked."),
     ),
     live: { room: "art" },
@@ -109,6 +112,12 @@ const body = h("div", { class: "body" }, main, stage);
 app.append(top, body);
 
 let current: View | null = null;
+const clearBar = h("p", { class: "clear-section" });
+
+function renderClear() {
+  const section = SECTIONS.find((s) => s.id === parseHash()[0]);
+  clearBar.replaceChildren(section?.clears && hasWork(section.id) ? clearSectionButton(section.id, section.clears) : "");
+}
 
 function parseHash(): [section: string, item: string | null] {
   const [section, ...rest] = location.hash.slice(1).split("/");
@@ -127,7 +136,8 @@ function renderTop() {
       h("span", { class: "icon" }, s.icon), h("span", { class: "label" }, s.label), added(s.id) ? h("span", { class: "n" }, String(added(s.id))) : null))),
     h("a", { class: "privacy-link", href: "#privacy", "aria-current": sec === "privacy" ? "page" : null }, "🔒", h("span", {}, " Privacy")),
     h("details", { class: "more-menu" }, h("summary", {}, "More"),
-      h("div", {}, ...MORE.map(([id, label]) => h("a", { href: `#${id}`, "aria-current": sec === id ? "page" : null, onclick: (e: Event) => (e.target as HTMLElement).closest("details")?.removeAttribute("open") }, label)))),
+      h("div", { onclick: (e: Event) => (e.target as HTMLElement).closest("details")?.removeAttribute("open") },
+        ...MORE.map(([id, label]) => h("a", { href: `#${id}`, "aria-current": sec === id ? "page" : null }, label)), clearEverythingButton("clear-all"))),
     h("a", { class: `btn download${sec === "pack" ? " here" : ""}`, href: "#pack" }, "Download", n ? h("span", { class: "n" }, String(n)) : null),
   );
 }
@@ -153,7 +163,8 @@ function route() {
   clear(main);
   if (view.back) main.append(h("a", { class: "back", href: view.back[0] }, `← ${view.back[1]}`));
   if (view.title) main.append(h("div", { class: "editor-head" }, h("h2", {}, view.title)));
-  main.append(view.editor);
+  main.append(view.editor, clearBar);
+  renderClear();
   renderTop();
   renderStage();
   window.scrollTo(0, 0);
@@ -163,7 +174,7 @@ function route() {
 // ?sample seeds a room so a screenshot or a demo lands on a filled editor.
 if (features.rooms && new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name, EXAMPLES[0].source);
 
-onChange(() => { renderTop(); renderPhoneBar(); live.changed(); remember(); });
+onChange(() => { renderTop(); renderClear(); renderPhoneBar(); live.changed(); remember(); });
 window.addEventListener("hashchange", route);
 recall().then((saved) => {
   if (saved) replaceDraft(saved);

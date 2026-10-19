@@ -2,7 +2,7 @@ import { buildPack, packFilename } from "../pack";
 import { addAll, changed, countOf, draft, pieces, tryingPieces } from "../state";
 import { clear, field, h } from "./dom";
 import { putItOnPurple } from "./install";
-import { openPackButton, startOverButton } from "./packfile";
+import { clearEverythingButton, openPackButton } from "./packfile";
 import { staysHere } from "./privacy";
 import type { View } from "./view";
 
@@ -54,7 +54,7 @@ export function downloadView(): View {
       status,
       h("h3", {}, "Then put it on Purple"),
       putItOnPurple(),
-      h("p", { class: "dim small" }, "To change it later, ", openPackButton("open your Purple Pack"), " here, change what you like, and download it again. Or ", startOverButton(), "."),
+      h("p", { class: "dim small" }, "To change it later, ", openPackButton("open your Purple Pack"), " here, change what you like, and download it again. Or ", clearEverythingButton(), " to start fresh."),
     ),
   };
 }

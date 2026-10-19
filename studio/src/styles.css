@@ -63,6 +63,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .more-menu > div { position: absolute; right: 0; top: 40px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; min-width: 210px; display: flex; flex-direction: column; }
 .more-menu a { padding: 8px 12px; border-radius: 10px; text-decoration: none; color: var(--text); font-size: 14px; }
 .more-menu a:hover, .more-menu a[aria-current="page"] { background: var(--fill); }
+.more-menu .clear-all { font: inherit; font-size: 14px; text-align: left; background: none; border: none; border-top: 1px solid var(--line); margin-top: 4px; padding: 10px 12px 8px; color: var(--dim); cursor: pointer; }
+.more-menu .clear-all:hover { color: var(--text); }
 .topbar .btn.download { display: flex; gap: 8px; align-items: center; text-decoration: none; flex-shrink: 0; }
 .topbar .btn.download .n { background: rgba(255, 255, 255, 0.22); border-radius: 999px; padding: 0 8px; font-size: 12px; }
 .topbar .btn.download.here { background: var(--purple-dark); }
@@ -222,6 +224,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .linkbtn { background: none; border: none; font: inherit; color: var(--purple); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 0; }
 .linkbtn:hover { color: var(--purple-dark); }
 .linkbtn.dim { color: var(--dim); }
+.clear-section { margin-top: 36px; font-size: 14px; }
+.clear-section:empty { display: none; }
 
 .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .row.between { justify-content: space-between; }

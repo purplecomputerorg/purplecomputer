@@ -1,8 +1,6 @@
 import { openPack } from "../pack";
-import { allPieces, replaceDraft, type Draft } from "../state";
+import { clearSection, hasWork, replaceDraft, type Draft } from "../state";
 import { filePicker, go, h } from "./dom";
-
-const working = () => allPieces().some((p) => p.items.length);
 
 function swapIn(d?: Draft) {
   replaceDraft(d);
@@ -12,7 +10,7 @@ function swapIn(d?: Draft) {
 export function openPackButton(label: string): HTMLElement {
   const status = h("span", { class: "dim small" });
   const open = async (file: File) => {
-    if (working() && !confirm("Open this Purple Pack instead of what you're working on now?")) return;
+    if (hasWork() && !confirm("Open this Purple Pack instead of what you're working on now?")) return;
     try {
       swapIn(await openPack(file));
     } catch (e) {
@@ -22,6 +20,16 @@ export function openPackButton(label: string): HTMLElement {
   return h("span", {}, filePicker(".purplepack", open, label), status);
 }
 
-export const startOverButton = () => h("button", { class: "linkbtn dim", onclick: () => {
-  if (confirm("Erase everything currently loaded in Purple Studio and start a new Purple Pack?")) swapIn();
-} }, "Start over");
+const KEEP_IT = "Download your Purple Pack first if you want to keep it.";
+
+export const clearEverythingButton = (cls = "linkbtn dim") => h("button", { type: "button", class: cls, onclick: () => {
+  if (!confirm(`Clear everything you've made in Purple Studio and start fresh? ${KEEP_IT}`)) return;
+  replaceDraft();
+  go("");
+} }, "Clear everything");
+
+export const clearSectionButton = (section: string, what: string) => h("button", { type: "button", class: "linkbtn dim", onclick: () => {
+  if (!confirm(`Clear all your ${what}? ${KEEP_IT}`)) return;
+  clearSection(section);
+  go(`#${section}`);
+} }, `Clear all ${what}`);

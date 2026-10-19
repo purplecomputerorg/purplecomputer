@@ -32,7 +32,7 @@ Everything Studio does happens in your browser, on your computer.
 - **Your browser enforces it.** Every Studio page tells the browser it may only talk to Studio's own site (a `Content-Security-Policy` with `connect-src 'self'`), so nothing can be sent anywhere else, even by mistake.
 - **No tracking.** No cookies, analytics, or accounts, and no fonts or icons loaded from other sites.
 - **Purple's voice runs on your computer too.** The first time Purple speaks, Studio downloads its voice once and keeps it in your browser. If your computer's own voice fills in while that loads, Studio only uses voices that run on your machine, never a cloud voice.
-- **Your work is kept in your browser** so a reload or a closed tab doesn't lose it. **Start over**, on the Download and Privacy pages, erases it. Browsers can clear this on their own (Safari after about a week away), so your downloaded Purple Pack is the copy to keep: **Open your Purple Pack** brings it back into Studio.
+- **Your work is kept in your browser** so a reload or a closed tab doesn't lose it. **Clear everything**, in the More menu, erases it, and **Clear all** at the bottom of a page clears just that part. Browsers can clear this on their own (Safari after about a week away), so your downloaded Purple Pack is the copy to keep: **Open your Purple Pack** brings it back into Studio.
 - **The microphone is on only while you're recording.**
 
 The rest of this page is for anyone who wants to look under the hood.

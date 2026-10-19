@@ -92,6 +92,17 @@ export function allPieces(): Piece[] {
   ];
 }
 
+// The parts of the draft each Studio section makes, so one section can be cleared on its own.
+const SECTION_FIELDS: Record<string, (keyof Draft)[]> = {
+  pictures: ["pictures"], voice: ["letters", "phrases"], words: ["words", "synonyms", "ranked"], instruments: ["instruments"], rooms: ["rooms"], colors: ["theme", "colors"],
+};
+export const hasWork = (section?: string) => allPieces().some((p) => (!section || p.section === section) && p.items.length);
+export function clearSection(section: string) {
+  const fresh = emptyDraft();
+  for (const k of SECTION_FIELDS[section]) Object.assign(draft, { [k]: fresh[k] });
+  changed();
+}
+
 export interface Count { id: string; section: string; label: string; one: string; count: number }
 const counted = (kept: boolean): Count[] => allPieces()
   .map(({ items, ...p }) => ({ ...p, count: items.filter((i) => !!i.kept === kept).length }))

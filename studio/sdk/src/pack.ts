@@ -12,7 +12,8 @@ import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 // title: the name as the family typed it, which Purple shows as is; name is the file name.
 // source: the photo Studio crops from, kept for reopening; Purple never reads it.
 export interface PackPicture { name: string; title?: string; ops: PaintOp[]; letters?: LetterOp[]; png?: Uint8Array; source?: Uint8Array }
-export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params }
+// notes: its WAVs already rendered, in SAMPLE_PITCHES order (Studio renders them off the page).
+export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params; notes?: Uint8Array[] }
 // content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Blockly workspace it came from rides beside it.
 export interface PackRoom { name: string; source: string; blocks?: unknown }
 
@@ -75,25 +76,14 @@ export const pictureSourcePath = (name: string) => `studio/pictures/${name}.jpg`
 
 const yieldToUi =() => new Promise((r) => setTimeout(r, 0));
 
-// Every note of an instrument as WAV files, kept for the last few sounds: Studio rebuilds its live
-// pack on each edit, and rendering is most of that work.
-const rendered = new Map<string, Uint8Array[]>();
-const RENDERED_KEPT = 8;
-
-async function renderInstrument(inst: PackInstrument, onProgress?: (msg: string) => void): Promise<Uint8Array[]> {
-  const key = `${inst.base}|${JSON.stringify(inst.params)}`;
-  let notes = rendered.get(key);
-  if (!notes) {
-    notes = [];
-    for (const pitch of SAMPLE_PITCHES) {
-      onProgress?.(`Rendering ${inst.name}: ${pitch.note}${pitch.octave}`);
-      await yieldToUi();
-      notes.push(encodeWav({ samples: renderNote(inst.base, inst.params, pitch.freq), rate: SYNTH_RATE }));
-    }
-    if (rendered.size >= RENDERED_KEPT) rendered.delete(rendered.keys().next().value!);
+// Every note of an instrument as WAV files, in SAMPLE_PITCHES order.
+async function renderNotes(inst: PackInstrument, onProgress?: (msg: string) => void): Promise<Uint8Array[]> {
+  const notes = [];
+  for (const pitch of SAMPLE_PITCHES) {
+    onProgress?.(`Rendering ${inst.name}: ${pitch.note}${pitch.octave}`);
+    await yieldToUi();
+    notes.push(encodeWav({ samples: renderNote(inst.base, inst.params, pitch.freq), rate: SYNTH_RATE }));
   }
-  rendered.delete(key);
-  rendered.set(key, notes);
   return notes;
 }
 
@@ -111,7 +101,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
 
   for (const inst of spec.instruments) {
     entries.push(json(`content/instruments/${inst.name}.json`, { name: inst.title ?? inst.name, base: inst.base, params: inst.params }));
-    const notes = await renderInstrument(inst, onProgress);
+    const notes = inst.notes ?? (await renderNotes(inst, onProgress));
     SAMPLE_PITCHES.forEach((pitch, i) => entries.push({ path: `content/${inst.name}/${pitch.file}.wav`, data: notes[i] }));
   }
 

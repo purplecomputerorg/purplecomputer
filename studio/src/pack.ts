@@ -4,6 +4,7 @@ import { cellsToOps, type ArtPicture } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar } from "@sdk/tar";
 import { decodeWav } from "@sdk/wav";
+import { instrumentNotes } from "./notes";
 import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop } from "./photo";
 import { draft, emptyDraft, type Draft, type Keepable } from "./state";
 
@@ -37,7 +38,8 @@ export async function packSpec(d: Draft = draft, trying = false): Promise<PackSp
     letters: Object.keys(letters), phrases: phrases.map((p) => p.text),
     pictures: added.map(({ name, title, cells, painted }, i) => ({ name, title, cells, painted, crop: sources[i]?.crop })),
   };
-  return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments, rooms, theme, studio };
+  const rendered = await Promise.all(instruments.map(async (i) => ({ ...i, notes: await instrumentNotes(i) })));
+  return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, theme, studio };
 }
 
 export async function buildPack(onProgress?: (msg: string) => void, d: Draft = draft, trying = false): Promise<Blob> {

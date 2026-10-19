@@ -274,8 +274,10 @@ tr.warn td { color: var(--dim); }
 .status { min-height: 22px; color: var(--dim); font-size: 13px; }
 hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 ul.privacy { list-style: none; padding: 0; } ul.privacy li { margin-bottom: 12px; }
-.voice-loading { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 3; padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); color: #fff; font: 600 12px var(--sans); white-space: nowrap; pointer-events: none; }
+.voice-loading, .live-updating { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 3; padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); color: #fff; font: 600 12px var(--sans); white-space: nowrap; pointer-events: none; }
 .voice-loading[hidden] { display: none; }
+.live-updating { top: 8px; right: 8px; bottom: auto; left: auto; transform: none; }
+.live-updating[hidden], .live:not(.ready) .live-updating { display: none; }
 .screen-note { position: absolute; top: 10px; left: 50%; transform: translateX(-50%) rotate(-2deg); z-index: 3; padding: 2px 16px 4px; border-radius: 999px; background: #fff; box-shadow: var(--shadow); color: var(--purple); font: 700 clamp(18px, 3cqw, 26px)/1.2 Caveat, cursive; white-space: nowrap; pointer-events: none; }
 .screen-note[hidden], .live:not(.ready) .screen-note { display: none; }
 @media (pointer: fine) { .live:not(.focused) .screen-note { display: none; } }

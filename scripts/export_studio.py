@@ -91,6 +91,7 @@ def build_export() -> dict:
             # Studio's Piper: the model input "scales" is noise, length, noise_w.
             "piper": {"model": VOICE_MODEL, "speaker": VOICE_SPEAKER,
                       "scales": [_SYNTH_PARAMS[k] for k in ("noise_scale", "length_scale", "noise_w")],
+                      "word_gap": _SYNTH_PARAMS["word_gap"],
                       "espeak_data": ESPEAK_DATA},
         },
         "synth": {"sample_rate": synth.SAMPLE_RATE, "defaults": synth.DEFAULTS},

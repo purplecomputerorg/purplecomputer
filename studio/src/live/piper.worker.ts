@@ -4,7 +4,7 @@
 import type * as Ort from "onnxruntime-web";
 // @ts-expect-error: emscripten output, no types
 import createEspeak from "../../vendor/espeak-ng/espeak.mjs";
-import { CACHE, ESPEAK_DATA, MODEL, SPEAKER, SCALES } from "./piperfiles";
+import { CACHE, ESPEAK_DATA, MODEL, SPEAKER, SCALES, WORD_GAP } from "./piperfiles";
 
 interface Espeak { FS: { mkdirTree(p: string): void; writeFile(p: string, d: Uint8Array): void }; ccall(f: string, r: string, t: string[], a: unknown[]): number | string }
 interface Config { espeak: { voice: string }; audio: { sample_rate: number }; phoneme_id_map: Record<string, number[]> }
@@ -86,6 +86,9 @@ function sentences({ espeak }: Voice, text: string): string[][] {
   return [...out, cur].filter((s) => s.length);
 }
 
+// Each pause between words repeated, as tts._synthesize_with_word_gaps.
+const withWordGaps = (phonemes: string[]) => phonemes.flatMap((p) => (p === " " ? Array<string>(WORD_GAP).fill(p) : [p]));
+
 const ids = ({ config: { phoneme_id_map: m } }: Voice, phonemes: string[]) =>
   [...m["^"], ...m["_"], ...phonemes.flatMap((p) => (m[p] ? [...m[p], ...m["_"]] : [])), ...m["$"]];
 const int64 = (xs: number[], dims?: number[]) => new ort.Tensor("int64", BigInt64Array.from(xs, BigInt), dims);
@@ -94,7 +97,7 @@ const int64 = (xs: number[], dims?: number[]) => new ort.Tensor("int64", BigInt6
 async function speak(voice: Voice, text: string): Promise<Int16Array> {
   const parts: Int16Array[] = [];
   for (const phonemes of sentences(voice, text)) {
-    const input = ids(voice, phonemes);
+    const input = ids(voice, withWordGaps(phonemes));
     const { output } = await voice.session.run({
       input: int64(input, [1, input.length]),
       input_lengths: int64([input.length]),

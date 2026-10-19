@@ -56,7 +56,7 @@ VOICE_NATURAL, VOICE_QUICK = "natural", "quick"
 VOICE_NAMES = {VOICE_NATURAL: "Natural", VOICE_QUICK: "Quick"}
 FLITE_VOICE = "cmu_us_lnh"
 _FLITE = "flite"
-_FLITE_STRETCH = 1.15  # same slowdown as length_scale below, so both voices pace alike
+_FLITE_STRETCH = 1.3  # slower than flite's default, short of drawly; flite has no word-gap control
 
 # Deterministic synthesis parameters (no randomness between runs)
 # Parameter names vary across piper-tts versions, so we try all known variants.
@@ -64,7 +64,8 @@ _SYNTH_PARAMS = {
     "noise_scale": 0.3,
     "noise_w": 0.3,         # some piper builds
     "noise_w_scale": 0.3,   # other piper builds
-    "length_scale": 1.15,  # 15% slower than the model default: kids follow it better
+    "length_scale": 1.6,  # slower than the model default: kids follow it better
+    "word_gap": 2,  # each pause between words repeated: slower without drawing words out further
 }
 
 # Pronunciation overrides: words Piper mispronounces -> phonetic respelling
@@ -578,15 +579,26 @@ def synthesize_to_file(voice, prepared_text: str, wav_path: str, model: str = VO
     """Shared by runtime speech and the clip scripts so the two can't drift. Serialized: espeak's phonemizer is not thread-safe."""
     config = _make_synth_config(model)
     with _synthesis_lock:
-        audio_chunks = list(voice.synthesize(prepared_text, config))
-    if not audio_chunks:
+        audio = list(_synthesize_with_word_gaps(voice, prepared_text, config))
+    if not audio:
         return False
-    first = audio_chunks[0]
+    import numpy as np
     samples = array.array('h')
-    samples.frombytes(b''.join(chunk.audio_int16_bytes for chunk in audio_chunks))
-    samples = postprocess_samples(samples, first.sample_rate)
-    _write_wav(wav_path, samples, first.sample_rate, first.sample_channels, first.sample_width)
+    samples.frombytes((np.clip(np.concatenate(audio), -1.0, 1.0) * 32767).astype(np.int16).tobytes())
+    sample_rate = voice.config.sample_rate
+    _write_wav(wav_path, postprocess_samples(samples, sample_rate), sample_rate)
     return True
+
+
+def _synthesize_with_word_gaps(voice, text: str, config):
+    """PiperVoice.synthesize, with each word gap phoneme repeated word_gap times; yields peak-normalized float audio per sentence."""
+    import numpy as np
+    gap = _SYNTH_PARAMS["word_gap"]
+    for phonemes in voice.phonemize(text):
+        phonemes = [p for ph in phonemes for p in [ph] * (gap if ph == " " else 1)]
+        if phonemes:
+            audio = voice.phoneme_ids_to_audio(voice.phonemes_to_ids(phonemes), config)
+            yield audio / max(float(np.max(np.abs(audio))), 1e-8)
 
 
 def synthesize_with_flite(prepared_text: str, wav_path: str) -> bool:

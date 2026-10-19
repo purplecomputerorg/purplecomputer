@@ -80,7 +80,7 @@ class TestQuickVoice:
         path = tts._synthesize_to_cache("apple.", tts.VOICE_QUICK)
         assert path == tts._cache_path("apple.", tts.VOICE_QUICK) and path.exists()
         cmd = flite[0]
-        assert cmd[0] == "flite" and cmd[cmd.index("--setf") + 1] == "duration_stretch=1.15"
+        assert cmd[0] == "flite" and cmd[cmd.index("--setf") + 1] == f"duration_stretch={tts._FLITE_STRETCH}"
         assert cmd[cmd.index("-t") + 1] == "apple."
 
     def test_natural_without_piper_falls_through_to_flite(self, flite, monkeypatch):

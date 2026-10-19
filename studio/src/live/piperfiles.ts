@@ -2,6 +2,6 @@
 // settings from export.json.
 import exported from "@sdk/purple/export.json";
 
-export const { speaker: SPEAKER, scales: SCALES, espeak_data: ESPEAK_DATA } = exported.voice.piper;
+export const { speaker: SPEAKER, scales: SCALES, word_gap: WORD_GAP, espeak_data: ESPEAK_DATA } = exported.voice.piper;
 export const MODEL = `${exported.voice.piper.model}.onnx`;
 export const CACHE = "purple-voice-1";

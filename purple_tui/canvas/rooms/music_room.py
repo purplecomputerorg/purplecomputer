@@ -41,7 +41,6 @@ class MusicRoom(Room):
     name, label, icon = "music", "Music", ICON_MUSIC
     LANDSCAPE = True
     has_code_panel = True
-    shows_legend = False
     keeps_audio_awake = True
 
     def __init__(self, app):
@@ -309,6 +308,8 @@ class MusicRoom(Room):
     def _hit(self, key: str, mode: str, instrument: int | None = None):
         self.next_color(key)
         self._play_key(key, mode, instrument)
+        if self.app.active_room == self.name:
+            self.app.set_legend(KEY_COLORS.get(key.lower()))
         if mode == MODE_MUSIC:
             self.flash_note(key)
         if self._is_noscreen:

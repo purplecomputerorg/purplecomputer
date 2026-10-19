@@ -414,3 +414,22 @@ def test_loop_panel_keeps_grid_size():
         assert grids[0] == grids[1]
         music._stop_loop()
     run(_test())
+
+
+def test_space_hold_while_looping_stops_loop_and_opens_code():
+    from purple_tui.canvas.harness import make_app, run
+    from purple_tui.canvas.panels import CodePanel
+
+    async def _test():
+        app = make_app()
+        app._code_panel_enabled = True
+        app.action_switch_room("music")
+        music = app.rooms["music"]
+        music._advance_loop_state()
+        music.loop.record_event('A', MODE_MUSIC)
+        music._advance_loop_state()
+        assert music.loop.state == LOOPING
+        music._space_hold_fired()
+        assert music.loop.state == IDLE
+        assert isinstance(app._panel, CodePanel)
+    run(_test())

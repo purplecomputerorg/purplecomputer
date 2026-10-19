@@ -341,7 +341,9 @@ class MusicRoom(Room):
 
     # ---------------------------------------------------------------- code panel
     def open_code_panel(self):
-        if self.code_panel is None and self.app._code_panel_enabled and self.loop.state == IDLE:
+        if self.code_panel is None and self.app._code_panel_enabled:
+            if self.loop.state != IDLE:
+                self._stop_loop()
             self.cleanup_sounds()
             self.code_panel = CodePanel(self.app, "music", self.echo.take())
             self.app.set_panel(self.code_panel)

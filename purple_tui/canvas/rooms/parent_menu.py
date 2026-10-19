@@ -22,7 +22,7 @@ from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_bar, draw_field, draw_scrim,
+from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_bar, draw_field, draw_fill_pill, draw_scrim,
                   draw_text_caret, draw_window, field_height, window_title_height)
 from .sleep_screen import FullScreen
 
@@ -1083,28 +1083,38 @@ class InstallProgressScreen(FullScreen):
             g.draw_markup("Press Enter for technical details.\nEsc to go back. Power button to turn off.", g.vh(2.2),
                           g.vw(10), g.vh(78), "mono-bold", P.MUTED, g.vw(80), "center", P.BG)
             return
-        g.draw_text("Installing Purple Computer", g.vh(4), cx, g.vh(30), "mono-heavy", P.PRIMARY, anchor="center")
-        g.draw_text(self._status, g.vh(2.8), cx, g.vh(42), "mono-bold", P.TEXT, anchor="center")
-        bw = g.vw(50)
-        draw_bar(g, cx - bw // 2, g.vh(50), bw, g.vh(2.4), self._progress / 100)
-        g.draw_text(f"{self._progress:>3d}%", g.vh(2.6), cx + bw // 2 + g.vw(2), g.vh(51.2), "mono-bold", P.TEXT, anchor="midleft")
-        g.draw_text(self._eta_hint(), g.vh(2.4), cx, g.vh(60), "mono", P.MUTED, anchor="center")
+        bot = g.image("bot.png", g.vh(20))
+        g.surface.blit(bot, bot.get_rect(midbottom=(cx, g.vh(33))))
+        g.draw_text("Installing Purple Computer", g.vh(4), cx, g.vh(40), "mono-heavy", P.PRIMARY, anchor="center")
+        g.draw_text(self._status, g.vh(2.6), cx, g.vh(47.5), "mono-bold", P.TEXT, anchor="center")
+        pill = pygame.Rect(0, 0, min(g.vw(60), g.vh(80)), g.vh(5.6))
+        pill.center = (cx, g.vh(56))
+        draw_fill_pill(g, pill, self._progress / 100, f"{self._progress}%")
+        g.draw_text(self._eta_hint(), g.vh(2.4), cx, g.vh(64), "mono", P.MUTED, anchor="center")
+        g.draw_text("Keep the Purple Key plugged in until it's done.", g.vh(2.1), cx, g.vh(90), "mono", P.DIM, anchor="center")
 
 
 class InstallDoneScreen(FullScreen):
     """The install finished; the USB can come out. Enter restarts through the
     static purple-reboot binary, which lives on tmpfs so it survives removal."""
 
-    message = "All done!\n\nYou can remove the USB drive now."
+    image = "bot.png"
+    face = ["All done!"]
+    message = "\nPurple Computer is installed.\nYou can take out the Purple Key now."
     hint = "Press Enter to restart"
+    status = ("If it doesn't restart, hold the power button for\nabout ten seconds, until the screen goes dark.\n"
+              "Then press it once to start Purple.")
 
     async def handle(self, action):
-        if isinstance(action, ControlAction) and action.action == "enter" and action.is_down:
+        if isinstance(action, ControlAction) and action.action == "enter" and action.is_down and self.hint != "Restarting...":
             self.hint = "Restarting..."
             self.app.invalidate()
-            if self.app._evdev_reader:
-                self.app._evdev_reader.release_grab()
-            os.execv(_REBOOT_BIN, [_REBOOT_BIN])
+            self.app.timers.after(0.2, self._reboot)  # a beat so Restarting... reaches the screen first
+
+    def _reboot(self):
+        if self.app._evdev_reader:
+            self.app._evdev_reader.release_grab()
+        os.execv(_REBOOT_BIN, [_REBOOT_BIN])
 
 
 # ---------------------------------------------------------------------------

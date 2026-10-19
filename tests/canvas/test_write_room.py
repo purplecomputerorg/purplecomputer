@@ -54,6 +54,26 @@ def test_typing_inserts_at_the_caret_and_backspace_takes_the_letter_before_it():
     run(go())
 
 
+def test_holding_backspace_takes_letters_then_whole_words(monkeypatch):
+    from purple_tui.canvas.rooms import write_room
+    clock = [100.0]
+    monkeypatch.setattr(write_room.time, "monotonic", lambda: clock[0])
+
+    async def go():
+        app = await _write("The cat\nsat on  the mat")
+        await press(app, "backspace")
+        await press(app, "backspace", is_repeat=True)
+        assert app.room.plain_text() == "The cat\nsat on  the m"
+        clock[0] += 1.0
+        for left in ("The cat\nsat on  the ", "The cat\nsat on  ", "The cat\nsat ",
+                     "The cat\n", "The cat", "The "):
+            await press(app, "backspace", is_repeat=True)
+            await press(app, "backspace", is_repeat=True)
+            assert app.room.plain_text() == left
+            clock[0] += 0.2
+    run(go())
+
+
 def test_up_and_down_move_by_wrapped_line_and_keep_the_column():
     async def go():
         app = await _write(STORY * 2)

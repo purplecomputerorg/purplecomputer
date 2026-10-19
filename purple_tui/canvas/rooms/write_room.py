@@ -3,6 +3,7 @@ the caret, words wrap whole, Enter starts a new line, and the page scrolls to
 keep the caret in view. Plain text only: it prints every page, and a copy to a
 USB drive brings a .txt along with the picture."""
 
+import time
 from bisect import bisect_right
 
 import pygame
@@ -19,6 +20,8 @@ COLS = 60           # wraps the same on every screen, page and save
 MAX_CHARS = 40_000  # about 7,000 words: far past a school report, still a small save
 LEADING = 1.3       # line pitch over the font's own, so a page of text breathes
 HINT = "Type to write! {Enter} for a new line."
+WORDS_AFTER = 1.0   # seconds of holding Backspace before it takes whole words
+WORD_EVERY = 0.15
 
 
 def wrap(text: str, cols: int = COLS) -> list:
@@ -70,6 +73,7 @@ class WriteRoom(Room):
         self.field = TextField()
         self.top = 0        # the first visual line on screen
         self._goal = None   # the column a run of up and down keeps aiming for
+        self._held = self._last_word = 0.0
 
     def arrow_hint(self) -> str:
         return MOVE_HINT
@@ -88,12 +92,12 @@ class WriteRoom(Room):
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
-        f, goal = self.field, None
+        goal = None
         if isinstance(action, NavigationAction):
             goal = self._move(action.direction)
         elif isinstance(action, ControlAction) and action.is_down:
             if action.action == "backspace":
-                f.backspace()
+                self._backspace(action.is_repeat)
             elif action.action in ("space", "enter") and not action.is_repeat:
                 self._type(" " if action.action == "space" else "\n")
             else:
@@ -108,6 +112,27 @@ class WriteRoom(Room):
     def _type(self, s: str):
         if len(self.field.value) + len(s) <= MAX_CHARS:
             self.field.insert(s)
+
+    def _backspace(self, repeat: bool):
+        """A letter at a time, then whole words once Backspace has been held a while."""
+        now = time.monotonic()
+        if not repeat:
+            self._held = now
+        if now - self._held < WORDS_AFTER:
+            self.field.backspace()
+        elif now - self._last_word >= WORD_EVERY:
+            self._last_word = now
+            self._delete_word()
+
+    def _delete_word(self):
+        """Back over the spaces before the caret and the word before them, or one Enter."""
+        f = self.field
+        t, i = f.value, f.cursor
+        j = len(t[:i].rstrip(" "))
+        while j and t[j - 1] not in " \n":
+            j -= 1
+        j = min(j, i - 1) if i and j == i else j
+        f.set(t[:j] + t[i:], j)
 
     def _move(self, direction: str):
         """Left and right step a letter; up and down a visual line, keeping the column. Returns that column."""

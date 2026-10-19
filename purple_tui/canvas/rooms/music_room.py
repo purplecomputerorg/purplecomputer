@@ -612,7 +612,7 @@ class MusicRoom(Room):
             return self._draw_noscreen(g, rect)
         em = g.em
         panel = self.app._panel
-        hint_h = em(FOOTER_EM) if panel is None else 0 if isinstance(panel, LoopPanel) else em(1.0)
+        hint_h = em(FOOTER_EM) if panel is None else 0 if isinstance(panel, (LoopPanel, ReplayPanel)) else em(1.0)
         pad = em(1.6)
         # The header's key chips don't apply while typing code.
         head_h = em(1.0) if self.code_panel is not None else em(4.3)

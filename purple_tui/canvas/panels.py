@@ -616,9 +616,24 @@ def draw_picture(g, rows: list, color: str, rect: pygame.Rect):
                 g.rect({"#": color, "-": P.SURFACE}.get(ch) or get_key_color(ch), (ox + i * cell, oy + j * cell, cell, cell))
 
 
-class LoopPanel:
+def draw_status_row(g, rect, label: str, color, keys: str, frac: float, count: str = ""):
     """One row in the footer Music already keeps under its grid, so the keys
     never shrink: a status pill, the time bar, then the keys that matter."""
+    px, pad, gap = g.em(0.92), g.em(1.6), g.em(1.4)
+    cy = rect.bottom - g.em(1.4) - g.line_height(px, "mono") // 2
+    w, h = g.measure(label, px, "mono-bold")
+    pill = pygame.Rect(0, 0, w + round(px * 1.6), h + round(px * 0.7))
+    pill.midleft = (rect.x + pad, cy)
+    g.rect(color, pill, radius=pill.h // 2)
+    g.draw_text(label, px, pill.centerx, pill.centery, "mono-bold", P.ON_PRIMARY, anchor="center")
+    right = draw_key_hint(g, keys, px, rect.right - pad, cy, color=P.MUTED, anchor="midright").x - gap
+    if count:
+        right = g.draw_text(count, px, right, cy, "mono-bold", color, anchor="midright").x - g.em(0.8)
+    bar_h = g.em(0.55)
+    draw_bar(g, pill.right + gap, cy - bar_h // 2, max(0, right - pill.right - gap), bar_h, frac, color, P.FIELD, bar_h // 2)
+
+
+class LoopPanel:
     kind = "loop"
 
     def __init__(self, app, loop):
@@ -630,31 +645,15 @@ class LoopPanel:
 
     def draw(self, g, rect):
         st = self.loop.state
-        if st not in (RECORDING, LOOPING):
-            return
-        recording = st == RECORDING
-        px, pad, gap = g.em(0.92), g.em(1.6), g.em(1.4)
-        cy = rect.bottom - g.em(1.4) - g.line_height(px, "mono") // 2
-        color = P.DANGER if recording else P.PRIMARY
-        label = "● Recording" if recording else f"{ICON_LOOP} Looping"
-        w, h = g.measure(label, px, "mono-bold")
-        pill = pygame.Rect(0, 0, w + round(px * 1.6), h + round(px * 0.7))
-        pill.midleft = (rect.x + pad, cy)
-        g.rect(color, pill, radius=pill.h // 2)
-        g.draw_text(label, px, pill.centerx, pill.centery, "mono-bold", P.ON_PRIMARY, anchor="center")
-        keys = "{Space} play it back   {Esc} stop" if recording else "keys play on top   {Esc} stop"
-        right = draw_key_hint(g, keys, px, rect.right - pad, cy, color=P.MUTED, anchor="midright").x - gap
-        if recording:
-            right = g.draw_text(f"{int(self.loop.recording_remaining())}s", px, right, cy,
-                                "mono-bold", P.DANGER, anchor="midright").x - g.em(0.8)
-        bar_h = g.em(0.55)
-        frac = self.loop.recording_progress() if recording else self.loop.loop_progress()
-        draw_bar(g, pill.right + gap, cy - bar_h // 2, max(0, right - pill.right - gap), bar_h, frac, color, P.FIELD, bar_h // 2)
+        if st == RECORDING:
+            draw_status_row(g, rect, "● Recording", P.DANGER, "{Space} play it back   {Esc} stop",
+                            self.loop.recording_progress(), f"{int(self.loop.recording_remaining())}s")
+        elif st == LOOPING:
+            draw_status_row(g, rect, f"{ICON_LOOP} Looping", P.PRIMARY, "keys play on top   {Esc} stop",
+                            self.loop.loop_progress())
 
 
 class ReplayPanel:
-    """Under the grid while an opened save plays its music back, big enough to
-    notice: what is playing, how far along, and that any key stops it."""
     kind = "replay"
 
     def __init__(self, app, room):
@@ -662,16 +661,11 @@ class ReplayPanel:
         self.room = room
 
     def height(self, g) -> int:
-        return g.vh(11)
+        return g.em(FOOTER_EM)
 
     def draw(self, g, rect):
-        pad = g.em(2)
-        g.draw_text(f"{ICON_MUSIC}  Playing your saved music", g.vh(2.6), rect.centerx, rect.y + g.vh(2.6),
-                    "mono-heavy", P.TEXT, anchor="center")
-        bar_h = g.vh(1)
-        draw_bar(g, rect.x + pad, rect.y + g.vh(5.2), rect.w - 2 * pad, bar_h, self.room.replay_progress(),
-                 P.PRIMARY, P.FIELD, bar_h // 2)
-        g.draw_text("Press any key to stop", g.vh(1.9), rect.centerx, rect.y + g.vh(8.4), "mono", P.MUTED, anchor="center")
+        draw_status_row(g, rect, f"{ICON_MUSIC} Playing your saved music", P.PRIMARY, "any key stops",
+                        self.room.replay_progress())
 
 
 class TimeTravelBar:

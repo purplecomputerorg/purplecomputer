@@ -20,6 +20,7 @@ Actions (processed left to right):
     room_picker      Open the Esc room picker
     help_videos      Open the Help & Videos screen
     first_boot       Show the first-boot power-cycle screen
+    install_done     Show the install-finished restart screen
     sleep            Show the sleep screen
     doodle | photo   Paint the Secret Menu pictures onto the Art canvas
     time_travel      Open the Time Travel scrubber
@@ -62,6 +63,9 @@ async def run_action(app, action: str):
     elif action in ("first_boot", "sleep"):
         from purple_tui.canvas.rooms.sleep_screen import FirstBootPowerCycleScreen, SleepScreen
         app.push((SleepScreen if action == "sleep" else FirstBootPowerCycleScreen)(app))
+    elif action == "install_done":
+        from purple_tui.canvas.rooms.parent_menu import InstallDoneScreen
+        app.push(InstallDoneScreen(app))
     elif action in ("doodle", "photo"):
         from purple_tui.canvas.secret_doodle import paint_doodle, paint_photo
         (paint_doodle if action == "doodle" else paint_photo)(app)

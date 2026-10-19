@@ -12,7 +12,7 @@ from ...constants import (ICON_BATTERY_MED, ICON_HARDDISK, ICON_HOURGLASS, ICON_
                          ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, is_live_boot)
 from ...keyboard import ControlAction
 from ...power_manager import LID_SHUTDOWN_DELAY, get_power_manager, manual_off_hint
-from ..ui import Overlay
+from ..ui import Overlay, draw_key_hint
 
 
 def _friendly_time(seconds: float) -> str:
@@ -50,22 +50,30 @@ class FullScreen(Overlay):
 
     def draw(self, g):
         g.fill(self.bg)
-        y = g.h // 2 - g.vh(14)
+        with g.drawing_on(pygame.Surface((1, 1))):  # a dry run to measure, so the stack sits centered
+            h = self._draw_stack(g, 0)
+        self._draw_stack(g, max(g.vh(4), (g.h - h) // 2))
+
+    def _draw_stack(self, g, y) -> int:
+        """Bot, face, message, the {Key} hint, then the quieter status; returns the bottom y."""
+        top, cx = y, g.w // 2
         if self.image:
             pic = g.image(self.image, g.vh(26))
-            g.surface.blit(pic, pic.get_rect(midbottom=(g.w // 2, y + g.vh(14))))
-            y += g.vh(16)
+            g.surface.blit(pic, pic.get_rect(midtop=(cx, y)))
+            y += pic.get_height() + g.vh(2)
         for line in self.face:
-            g.draw_text(line or " ", g.vh(4), g.w // 2, y, "mono-bold", P.PRIMARY, anchor="midtop")
+            g.draw_text(line or " ", g.vh(4), cx, y, "mono-bold", P.PRIMARY, anchor="midtop")
             y += g.vh(5)
         if self.message:
             y += g.draw_markup(self.message, g.vh(2.8), g.vw(10), y, "mono-bold", P.PRIMARY, g.vw(80), "center", self.bg, g.vh(0.6))
         if self.hint:
-            y += g.vh(3)
-            y += g.draw_markup(self.hint, g.vh(2.4), g.vw(10), y, "mono", P.MUTED, g.vw(80), "center", self.bg)
-        if self.status:
             y += g.vh(2)
-            g.draw_markup(self.status, g.vh(2.2), g.vw(10), y, "mono", P.MUTED, g.vw(80), "center", self.bg, g.vh(0.4))
+            for line in self.hint.split("\n"):
+                y = draw_key_hint(g, line, g.vh(2.8), cx, y + g.vh(2), color=P.TEXT, anchor="midtop").bottom
+        if self.status:
+            y += g.vh(5)
+            y += g.draw_markup(self.status, g.vh(1.9), g.vw(10), y, "mono", P.DIM, g.vw(80), "center", self.bg, g.vh(0.4))
+        return y - top
 
 
 class AsleepBot(FullScreen):
@@ -244,7 +252,7 @@ def first_boot_power_cycle_needed(audio_ok) -> bool:
 class FirstBootPowerCycleScreen(FullScreen):
     message = ("Almost done!\n\nPurple needs to turn off and on\none time to finish setting up.\n\n"
                "After it turns off, press the\npower button to start Purple.")
-    hint = "Press ENTER to turn off"
+    hint = "Press {Enter} to turn off"
 
     async def handle(self, action):
         if isinstance(action, ControlAction) and action.action == "enter" and action.is_down:

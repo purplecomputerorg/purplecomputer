@@ -1096,7 +1096,7 @@ class InstallDoneScreen(FullScreen):
     image = "bot.png"
     face = ["All done!"]
     message = "\nPurple Computer is installed.\nYou can take out the Purple Key now."
-    hint = "Press Enter to restart"
+    hint = "Press {Enter} to restart"
     status = ("If it doesn't restart, hold the power button for\nabout ten seconds, until the screen goes dark.\n"
               "Then press it once to start Purple.")
 

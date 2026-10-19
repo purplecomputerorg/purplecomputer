@@ -51,6 +51,7 @@ def refresh():
     what was loaded from the old pack (sounds, Open's thumbnails, Play's words) are redone."""
     from purple_tui.canvas import theme
     theme.apply(theme.find())
+    _app.rooms["art"]._repaint_all()  # its cached canvas only repaints cells that changed
     _app.save_pictures.clear()
     _app.rooms["play"].evaluator.content = content.get_content()
     for room in _app.rooms.values():

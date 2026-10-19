@@ -48,7 +48,9 @@ def test_changed_files_reach_the_running_purple_and_rooms_start_it_again(live, t
         app.rooms["music"].sounds._cache[("instrument", "kitchen")] = {"c4": "the old note"}
 
         assert not live.install(ID, [text("content/emoji.json", {"zorb": "🦑"})], ["content/theme.json"], fresh=False)
+        app.rooms["art"]._dirty = set()
         live.refresh()
+        assert app.rooms["art"]._dirty is None
         assert app.rooms["play"].evaluator.content.exact_emoji("zorb") == "🦑"
         assert P.BG == theme._DEFAULTS["roles"]["bg"]
         assert not app.rooms["music"].sounds._cache

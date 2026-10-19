@@ -144,7 +144,6 @@ def _make_screen():
     screen._log_lines = []
     screen._corrupt_key = False
     screen._start_time = 0.0
-    screen._creep_timer = None
     screen._creep_t0 = 0.0
     screen._creep_lo = 0
     screen._creep_hi = 0
@@ -239,7 +238,7 @@ def test_creep_fills_toward_hi_without_reaching_it(monkeypatch):
     seen = []
     for _ in range(200):
         clock["t"] += 1.0
-        screen._creep_tick()
+        screen.tick()
         seen.append(screen._progress)
     assert max(seen) < 98, "creep must never reach the band ceiling"
     assert max(seen) >= 96, "creep should make visible progress within the band"

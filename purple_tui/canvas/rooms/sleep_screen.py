@@ -14,9 +14,6 @@ from ...keyboard import ControlAction
 from ...power_manager import LID_SHUTDOWN_DELAY, get_power_manager, manual_off_hint
 from ..ui import Overlay
 
-_FACE = ["---     ---", "", "   \\___/   ", "", "   z z z   "]
-_BYE_FACE = ["---     ---", "", "   \\___/   ", "", "    Bye!   "]
-
 
 def _friendly_time(seconds: float) -> str:
     minutes = int(seconds / 60)
@@ -38,6 +35,18 @@ class FullScreen(Overlay):
     message = ""
     hint = ""
     status = ""
+    tick_s = 0.0
+    _timer = None
+
+    def on_open(self):
+        self._timer = self.app.timers.every(self.tick_s, self.tick) if self.tick_s else None
+
+    def on_close(self):
+        if self._timer:
+            self._timer.stop()
+
+    def tick(self):
+        pass
 
     def draw(self, g):
         g.fill(self.bg)
@@ -59,24 +68,28 @@ class FullScreen(Overlay):
             g.draw_markup(self.status, g.vh(2.2), g.vw(10), y, "mono", P.MUTED, g.vw(80), "center", self.bg, g.vh(0.4))
 
 
-class SleepScreen(FullScreen):
+class AsleepBot(FullScreen):
     bg = "#140a22"
     image = "bot-asleep.png"
     face = ["z z z"]
+
+
+class SleepScreen(AsleepBot):
     hint = "Press any key to wake"
+    tick_s = 5.0
 
     def on_open(self):
+        super().on_open()
         self._shutdown_initiated = False
         self._update_status()
-        self._timer = self.app.timers.every(5.0, self._tick)
         backlight.set_level(backlight.SLEEP_LEVEL)
 
     def on_close(self):
-        self._timer.stop()
+        super().on_close()
         from .parent_menu import load_display_settings
         backlight.set_level(load_display_settings()["brightness"])
 
-    def _tick(self):
+    def tick(self):
         self._update_status()
         self._check_idle_shutdown()
         self.app.invalidate()
@@ -133,22 +146,19 @@ def power_off(app) -> bool:
     return get_power_manager().shutdown()
 
 
-class ShutdownConfirmScreen(FullScreen):
+class ShutdownConfirmScreen(AsleepBot):
     COUNTDOWN_SECONDS = 3
-    face = _FACE
+    tick_s = 1.0
 
     def on_open(self):
+        super().on_open()
         self._remaining = self.COUNTDOWN_SECONDS
         self._refresh()
-        self._timer = self.app.timers.every(1.0, self._tick)
-
-    def on_close(self):
-        self._timer.stop()
 
     def _refresh(self):
         self.hint = f"Press power button again to shut down ({self._remaining})"
 
-    def _tick(self):
+    def tick(self):
         self._remaining -= 1
         if self._remaining <= 0:
             return self._cancel()
@@ -163,8 +173,8 @@ class ShutdownConfirmScreen(FullScreen):
         self._cancel()
 
 
-class ByeScreen(FullScreen):
-    face = _BYE_FACE
+class ByeScreen(AsleepBot):
+    face = ["Bye!"]
     hint = "Turning off..."
 
     def on_open(self):
@@ -210,13 +220,9 @@ class LiveBootSplash(FullScreen):
             y += h + gap
         g.draw_text(self.hint, hint_px, g.w // 2, card.bottom + em(2.4), "sans", P.TEXT, anchor="midtop")
 
-    def on_open(self):
-        self._timer = self.app.timers.every(0.25, self._refresh)
+    tick_s = 0.25
 
-    def on_close(self):
-        self._timer.stop()
-
-    def _refresh(self):
+    def tick(self):
         warn = self._AUDIO_WARNING if self.app.audio_ok is False else ""
         if warn != self.status:
             self.status = warn

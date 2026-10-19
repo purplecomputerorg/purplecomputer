@@ -782,6 +782,7 @@ class InstallProgressScreen(FullScreen):
 
     _SCROLL_DELAY = 0.25
     _SCROLL_VISIBLE = 25
+    tick_s = 0.5
 
     def __init__(self, app, computer_name: str = "", keep: bool = False):
         super().__init__(app)
@@ -797,7 +798,6 @@ class InstallProgressScreen(FullScreen):
         self._scrolling = False
         self._computer_name = computer_name
         self._start_time = None
-        self._creep_timer = None
         self._creep_t0 = 0.0
         self._creep_lo = self._creep_hi = 0
         self._creep_tau = 1.0
@@ -805,15 +805,14 @@ class InstallProgressScreen(FullScreen):
         self._k = 1.0
 
     def on_open(self):
+        super().on_open()
         self.app.inhibit_idle("install")
         self._start_time = time.monotonic()
-        self._creep_timer = self.app.timers.every(0.5, self._creep_tick)
         threading.Thread(target=self._run_install_thread, daemon=True).start()
 
     def on_close(self):
+        super().on_close()
         self.app.uninhibit_idle("install")
-        if self._creep_timer:
-            self._creep_timer.stop()
         self._stop_diag_scroll()
 
     # --- ETA (unchanged math) ---
@@ -861,7 +860,7 @@ class InstallProgressScreen(FullScreen):
         self._creep_hi = self._creep_lo if pv_driven else hi
         self._creep_tau = max(0.5, nominal_secs * self._k / 3.0)
 
-    def _creep_tick(self):
+    def tick(self):
         if self._phase != "installing" or self._creep_hi <= self._creep_lo:
             return
         t = time.monotonic() - self._creep_t0

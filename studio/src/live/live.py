@@ -17,15 +17,35 @@ _app = None
 _task = None
 
 
+def _rooms():
+    return [(room.key, room.digest) for room in content.get_content().rooms]
+
+
 def install(path):
-    """Also turns on every room in it: the parent made them, here in Studio."""
+    """Also turns on every room in it: the parent made them, here in Studio. True when Purple has
+    to start again to see it (its family rooms changed); refresh() covers everything else."""
+    before = _rooms()
     shutil.rmtree(PACKS, ignore_errors=True)
     if path:
         ok, message = PackInstaller(PACKS).install_pack(Path(path), replace=True)
         print(f"[studio] {message}")
     content._content = None
-    for room in content.get_content().rooms:
-        set_room_on(room.key, room.digest)
+    for key, digest in _rooms():
+        set_room_on(key, digest)
+    return _app is None or _rooms() != before
+
+
+def refresh():
+    """The new pack in the running Purple, which reads its content as it goes: only the theme and
+    what was loaded from the old pack (sounds, Open's thumbnails, Play's words) are redone."""
+    from purple_tui.canvas import theme
+    theme.apply(theme.find())
+    _app.save_pictures.clear()
+    _app.rooms["play"].evaluator.content = content.get_content()
+    for room in _app.rooms.values():
+        if sounds := getattr(room, "sounds", None):
+            sounds.clear()
+    _app.invalidate()
 
 
 async def restart():

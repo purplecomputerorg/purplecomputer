@@ -20,6 +20,7 @@ export type FromFrame =
   | { type: "hello" }
   | { type: "status"; text: string }
   | { type: "voice"; text: string | null }
+  | { type: "restarting" }
   | { type: "loaded" }
   | { type: "failed"; text: string }
   | { type: "focus"; on: boolean }
@@ -81,7 +82,7 @@ new ResizeObserver(copyFrame).observe(canvas);
 
 const placed = (place: Place) => post({ type: "place", place });
 const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
-  if (m.type === "load") return live.load(m.pack).then(() => live.setup(m.setup)).then(placed).then(() => post({ type: "loaded" }));
+  if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(() => live.setup(m.setup)).then(placed).then(() => post({ type: "loaded" }));
   if (m.type === "setup") return live.setup(m.setup).then(placed);
   if (m.type === "key") return live.key(m.char).then(placed);
   if (m.type === "picture") return live.picture().then((picture) => post({ type: "picture", picture }));

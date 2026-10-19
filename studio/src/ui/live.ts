@@ -19,8 +19,8 @@ function tryHint(hint: string): HTMLElement {
 // Why a family room stopped, as Purple's FamilyRoom put it.
 export interface RoomProblem { text: string; line: number | null }
 
-// Quiet time after the last edit before the pack is rebuilt and Purple restarts with it.
-const SETTLE_MS = 700;
+// Quiet time after the last edit before the pack is rebuilt and Purple picks it up.
+const SETTLE_MS = 250;
 // A close-up of Purple's screen: this much bigger, around the spot given here, or else the room's
 // cursor (Art and Blocks follow theirs). A phone starts in it, since the whole screen is too small
 // to read there; a computer starts on the whole screen and can zoom in.
@@ -91,10 +91,10 @@ class LiveScreen {
     });
   }
 
-  // Any change to the draft: rebuild the pack once edits settle.
+  // Any change to the draft: rebuild the pack once edits settle. Purple keeps taking keys unless
+  // the new pack makes it start again.
   changed(): void {
     clearTimeout(this.timer);
-    this.busy(true);
     this.timer = window.setTimeout(() => void this.sync(), SETTLE_MS);
   }
 
@@ -120,7 +120,7 @@ class LiveScreen {
     // only the added ones, as Open does pictures.
     const live = { ...draft, rooms: draft.rooms.filter((r) => r.kept), pictures: draft.pictures.filter((p) => p.kept) };
     const key = JSON.stringify(live, (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
-    if (key === this.sent) return this.busy(false);
+    if (key === this.sent) return;
     this.sent = key;
     const pack = new Uint8Array(await (await buildPack(undefined, live, true)).arrayBuffer());
     this.post({ type: "load", pack, setup: this.setup });
@@ -129,6 +129,7 @@ class LiveScreen {
   private onMessage(m: FromFrame): void {
     if (m.type === "hello") this.hello();
     if (m.type === "failed") { this.status.textContent = "Purple Computer couldn't start in this browser"; this.element.classList.add("failed"); console.warn("Purple failed:", m.text); }
+    if (m.type === "restarting") this.busy(true);
     if (m.type === "loaded") this.busy(false);
     if (m.type === "loaded" && !this.ready) {
       this.ready = true;

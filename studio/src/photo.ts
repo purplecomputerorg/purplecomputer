@@ -163,8 +163,18 @@ export function paintPicture(ctx: Ctx2D, { ops, letters }: ArtPicture, cellPx: n
   }
 }
 
-export async function previewPng(art: ArtPicture, cellPx = 10): Promise<Uint8Array> {
-  const canvas = new OffscreenCanvas(CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * cellPx * CELL_ASPECT);
-  paintPicture(canvas.getContext("2d")!, art, cellPx);
-  return new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
+// Kept by what's painted: the live pack rebuilds every picture's PNG on each edit.
+const previews = new Map<string, Promise<Uint8Array>>();
+
+export function previewPng(art: ArtPicture, cellPx = 10): Promise<Uint8Array> {
+  const key = `${cellPx}|${JSON.stringify(art)}`;
+  let png = previews.get(key);
+  if (!png) {
+    const canvas = new OffscreenCanvas(CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * cellPx * CELL_ASPECT);
+    paintPicture(canvas.getContext("2d")!, art, cellPx);
+    png = canvas.convertToBlob({ type: "image/png" }).then(async (b) => new Uint8Array(await b.arrayBuffer()));
+    if (previews.size >= 32) previews.delete(previews.keys().next().value!);
+    previews.set(key, png);
+  }
+  return png;
 }

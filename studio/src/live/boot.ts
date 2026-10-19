@@ -59,8 +59,9 @@ export interface Place { room: Room; menu: boolean; at: [number, number] | null;
 export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: ArtPicture; family?: { name: string; source: string } }
 
 export interface LivePurple {
-  // Installs a .purplepack (null: none) and starts Purple again so it reads it.
-  load(pack: Uint8Array | null): Promise<void>;
+  // Installs a .purplepack (null: none) into the running Purple, first calling restarting when
+  // Purple has to start again to read it (see install() in live.py).
+  load(pack: Uint8Array | null, restarting?: () => void): Promise<void>;
   // Both resolve to where Purple is afterwards: Esc opens the room picker, picking one changes the
   // room, and keys move the cursor.
   setup(room: RoomSetup): Promise<Place>;
@@ -105,10 +106,12 @@ sys.path.insert(0, "${ROOT}")
     return { room, menu, at, writing };
   };
   const live: LivePurple = {
-    async load(pack) {
+    async load(pack, restarting) {
       if (pack) py.FS.writeFile("/tmp/studio.purplepack", pack);
-      await call(`install(${pack ? `"/tmp/studio.purplepack"` : "None"})`);
-      await call("await restart()");
+      if (await call(`install(${pack ? `"/tmp/studio.purplepack"` : "None"})`)) {
+        restarting?.();
+        await call("await restart()");
+      } else await call("refresh()");
     },
     setup: (room) => place(`setup(**${arg(room)})`),
     key: (char) => place(`await key(${arg(char)})`),

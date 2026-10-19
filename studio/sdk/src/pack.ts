@@ -75,6 +75,28 @@ export const pictureSourcePath = (name: string) => `studio/pictures/${name}.jpg`
 
 const yieldToUi =() => new Promise((r) => setTimeout(r, 0));
 
+// Every note of an instrument as WAV files, kept for the last few sounds: Studio rebuilds its live
+// pack on each edit, and rendering is most of that work.
+const rendered = new Map<string, Uint8Array[]>();
+const RENDERED_KEPT = 8;
+
+async function renderInstrument(inst: PackInstrument, onProgress?: (msg: string) => void): Promise<Uint8Array[]> {
+  const key = `${inst.base}|${JSON.stringify(inst.params)}`;
+  let notes = rendered.get(key);
+  if (!notes) {
+    notes = [];
+    for (const pitch of SAMPLE_PITCHES) {
+      onProgress?.(`Rendering ${inst.name}: ${pitch.note}${pitch.octave}`);
+      await yieldToUi();
+      notes.push(encodeWav({ samples: renderNote(inst.base, inst.params, pitch.freq), rate: SYNTH_RATE }));
+    }
+    if (rendered.size >= RENDERED_KEPT) rendered.delete(rendered.keys().next().value!);
+  }
+  rendered.delete(key);
+  rendered.set(key, notes);
+  return notes;
+}
+
 export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) => void): Promise<TarEntry[]> {
   const entries: TarEntry[] = [json("manifest.json", manifest(spec)), ...emojiEntries(spec)];
 
@@ -89,12 +111,8 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
 
   for (const inst of spec.instruments) {
     entries.push(json(`content/instruments/${inst.name}.json`, { name: inst.title ?? inst.name, base: inst.base, params: inst.params }));
-    for (const pitch of SAMPLE_PITCHES) {
-      onProgress?.(`Rendering ${inst.name}: ${pitch.note}${pitch.octave}`);
-      await yieldToUi();
-      const samples = renderNote(inst.base, inst.params, pitch.freq);
-      entries.push({ path: `content/${inst.name}/${pitch.file}.wav`, data: encodeWav({ samples, rate: SYNTH_RATE }) });
-    }
+    const notes = await renderInstrument(inst, onProgress);
+    SAMPLE_PITCHES.forEach((pitch, i) => entries.push({ path: `content/${inst.name}/${pitch.file}.wav`, data: notes[i] }));
   }
 
   // The rooms run on the library they were made with, whichever Purple they land on.

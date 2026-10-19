@@ -1,6 +1,7 @@
 import type { RoomSetup } from "../live/boot";
 import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, onScreen, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
 import { changed, draft, freeName, titleOf, withSample } from "../state";
+import { KEY_EVENT } from "../keys";
 import { field, h } from "./dom";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
@@ -72,13 +73,16 @@ function more(current: Picture | null): HTMLElement[] {
   ];
 }
 
-const card = (src: string, alt: string, ...body: (Node | null)[]) =>
-  h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px;align-items:flex-start" }, h("img", { class: "photo", src, alt }), h("div", { class: "stack", style: "flex:1;min-width:200px" }, ...body)));
+const card = (side: HTMLElement, ...body: (Node | null)[]) =>
+  h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px;align-items:flex-start" }, side, h("div",{ class: "stack", style: "flex:1;min-width:200px" }, ...body)));
 
 const showPicture = (pic: Picture, writing = false) => liveScreen().show({ room: "art", picture: onScreen(pic), letters: writing });
 
+// Keys that move the cursor, switch modes or open the menu without changing the canvas.
+const NOT_EDITS = new Set(["tab", "escape", "up", "down", "left", "right"]);
+
 // Paint or Write words on Purple's screen, and keeping what's there as the picture.
-function paintedField(pic: Picture): { element: HTMLElement; render: () => void } {
+function paintedField(pic: Picture): { element: HTMLElement; reset: () => void } {
   const live = liveScreen();
   const mode = (label: string, writing: boolean) => h("button", { type: "button", onclick: () => {
     if (live.place.writing !== writing) live.key("tab");
@@ -88,18 +92,27 @@ function paintedField(pic: Picture): { element: HTMLElement; render: () => void 
   const write = mode("Write words", true);
   const how = h("p", { class: "dim small" });
   const kept = h("div", { class: "row", style: "gap:12px" });
+  let edited = false;
+  const reset = () => { edited = false; render(); };
+  const onKey = (e: Event) => {
+    if (!element.isConnected) return removeEventListener(KEY_EVENT, onKey);
+    if (edited || NOT_EDITS.has((e as CustomEvent<string>).detail)) return;
+    edited = true;
+    render();
+  };
+  addEventListener(KEY_EVENT, onKey);
   const keep = async () => {
     pic.painted = await live.picture();
     pic.sample = false;
     changed();
     showPicture(pic, live.place.writing);
-    render();
+    reset();
   };
   const photoOnly = () => {
     pic.painted = undefined;
     changed();
     showPicture(pic);
-    render();
+    reset();
   };
   const render = () => {
     const writing = live.place.writing;
@@ -108,23 +121,24 @@ function paintedField(pic: Picture): { element: HTMLElement; render: () => void 
     how.textContent = writing
       ? "Type on Purple's screen to write on the picture. The arrows move where the words go. Tab goes back to painting."
       : "Type on Purple's screen to paint on the picture. It's just for trying until you save it.";
-    kept.replaceChildren(...(pic.painted
-      ? [h("span", { class: "added" }, "✓ Your edits are saved on this picture"), h("button", { class: "btn small", onclick: keep }, "Save again"),
-        h("button", { class: "linkbtn dim small", onclick: photoOnly }, "Back to just the photo")]
-      : [h("button", { class: "btn small", onclick: keep }, "Save your edits in Studio")]));
+    kept.replaceChildren(
+      ...(pic.painted ? [h("span", { class: "added" }, "✓ Your edits are saved on this picture")] : []),
+      ...(edited ? [h("button", { class: "btn small", onclick: keep }, pic.painted ? "Save again" : "Save your edits in Studio")] : []),
+      ...(pic.painted ? [h("button", { class: "linkbtn dim small", onclick: photoOnly }, "Back to just the photo")] : []));
   };
+  const element = h("div", { class: "stack" }, h("div", { class: "room-buttons crop-modes" }, paint, write), how, kept,
+    h("p", { class: "dim small" }, "When this picture is in your Purple Pack, your kid gets it with what you saved on it."));
   live.onWriting = render;
   render();
-  return { element: h("div", { class: "stack" }, h("div", { class: "room-buttons crop-modes" }, paint, write), how, kept,
-    h("p", { class: "dim small" }, "When this picture is in your Purple Pack, your kid gets it with what you saved on it.")), render };
+  return { element, reset };
 }
 
 // The whole photo on the screen, or a canvas-shaped box of it to drag and resize by its corner.
-function cropper(pic: Picture, onCrop: () => void): HTMLElement {
+function cropper(pic: Picture, alt: string, onCrop: () => void): HTMLElement {
   const { width: W, height: H } = pic.bitmap;
   const handle = h("i", { class: "crop-handle", title: "Drag to resize" }, "⤡");
   const box = h("div", { class: "crop-box" }, h("i", { class: "crop-handle crop-move", title: "Drag to move" }, "✥"), handle);
-  const frame = h("div", { class: "cropper" }, h("img", { src: pic.sourceUrl, alt: "" }), box);
+  const frame = h("div", { class: "cropper" }, h("img", { src: pic.sourceUrl, alt }), box);
   const mode = (label: string, crop: () => Crop | undefined) => h("button", { type: "button", onclick: () => apply(crop()) }, label);
   const whole = mode("Whole picture", () => undefined);
   const fill = mode("Fill the screen", () => pic.crop ?? fillCrop(W, H));
@@ -164,7 +178,7 @@ function cropper(pic: Picture, onCrop: () => void): HTMLElement {
   };
   box.onpointerdown = drag;
   show();
-  return h("div", {}, h("div", { class: "room-buttons crop-modes" }, whole, fill), frame, hint);
+  return h("div", { class: "field" }, h("span", {}, "What part shows on Purple"), h("div", { class: "room-buttons crop-modes" }, whole, fill), frame, hint);
 }
 
 function pictureView(pic: Picture): HTMLElement {
@@ -184,12 +198,11 @@ function pictureView(pic: Picture): HTMLElement {
   };
   const painted = paintedField(pic);
   return h("section", {},
-    card(pic.sourceUrl, ex?.alt ?? "",
+    card(cropper(pic, ex?.alt ?? "", painted.reset),
       tryBar(pic, remove),
       ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
       field("Picture name", name),
       h("div", { class: "field" }, h("span", {}, "Paint on it right now in Studio"), painted.element),
-      h("details", { class: "more-options" }, h("summary", {}, "Change what part shows"), cropper(pic, painted.render)),
       h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
     ...more(pic));
 }

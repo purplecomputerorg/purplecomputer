@@ -250,7 +250,6 @@ input[type="range"] { accent-color: var(--purple); width: 100%; margin: 0; }
 .trybar:has(.added) { background: #e8f3ea; }
 .keep { font: 600 12px var(--sans); padding: 4px 10px; border-radius: 999px; border: 1.5px solid var(--border); background: #fff; color: var(--purple); cursor: pointer; white-space: nowrap; }
 .keep.on { border-color: transparent; background: #e8f3ea; color: #3d7a4e; }
-.photo { width: 140px; height: 140px; object-fit: cover; border-radius: 14px; transform: rotate(-3deg); box-shadow: var(--shadow); border: 4px solid #fff; }
 
 
 table { width: 100%; border-collapse: collapse; font-size: 14px; }

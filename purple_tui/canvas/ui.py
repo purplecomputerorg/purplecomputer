@@ -552,10 +552,16 @@ def draw_field(g: Gfx, box: pygame.Rect, px: int):
     g.rect(P.LINE, box, width=1, radius=round(px * 0.4))
 
 
-def draw_text_caret(g: Gfx, x: int, y: int, px: int):
-    """The block caret at (x, line top); Gfx.blink flashes it in place."""
+def draw_text_caret(g: Gfx, x: int, y: int, px: int, under: str = ""):
+    """The block caret at (x, line top), with `under`, the letter it sits on, in dark
+    on it as a terminal draws one; Gfx.blink flashes it in place."""
     caret = (x, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05))
-    g.draw_caret(caret, lambda: g.rect(P.CARET, caret))
+
+    def draw():
+        g.rect(P.CARET, caret)
+        if under.strip():
+            g.draw_text(under, px, x, y, "mono", P.BG, tr=False)
+    g.draw_caret(caret, draw)
 
 
 def window_title_height(g: Gfx, title: str) -> int:

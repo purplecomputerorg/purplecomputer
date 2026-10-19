@@ -39,15 +39,14 @@ from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from ..timeline import RoomTimeline
 from ..audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
-from .ui import (DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label,
-                 draw_level)
+from .ui import (DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
+                 draw_keycap, draw_label, draw_level)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
 PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
                 printing.READY: "The printer is ready. Press Esc, then P"}
 ARROW_GLYPHS = {"left": LEFT, "up": UP, "down": DOWN, "right": RIGHT}
 ARROW_LIT_S = 0.35            # outlasts the 250ms key-repeat delay, so a held arrow stays lit
-_KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 _EDIT_KEYS = {"home", "end", "page_up", "page_down"}
 BACKSLASH_HOLD = 3.0
 LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
@@ -605,8 +604,8 @@ class PurpleApp:
             if handler:
                 handler()
                 return
-        if isinstance(action, CharacterAction) and action.char in _KID_MATH_REMAP and not editing:
-            action = CharacterAction(char=_KID_MATH_REMAP[action.char], shifted=action.shifted,
+        if isinstance(action, CharacterAction) and action.char in KID_MATH_REMAP and not editing:
+            action = CharacterAction(char=KID_MATH_REMAP[action.char], shifted=action.shifted,
                                      shift_held=action.shift_held, is_repeat=action.is_repeat,
                                      arrow_held=action.arrow_held)
         if self._overlays:
@@ -1718,7 +1717,7 @@ class PurpleApp:
             big = pygame.Rect(0, 0, round(px * 1.35), round(px * 1.35))
             big.center = cap.center
             g.rect(P.BG, big.inflate(4, 4), radius=big.w // 4)
-            draw_color_cap(g, _KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), big, px, radius=big.w // 5)
+            draw_color_cap(g, KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), big, px, radius=big.w // 5)
 
     def _draw_status(self, frame, left=None, right=None, tabs=True):
         """The strip under the viewport: keyboard note, the Esc pill and room

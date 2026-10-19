@@ -27,7 +27,7 @@ from ...music_constants import instruments, pitch_filename
 from ...timeline import state_dir
 from ..sounds import SoundBank
 from ..theme import ROLES
-from ..ui import Overlay
+from ..ui import KID_MATH_KEYS, Overlay
 
 ICON_FAMILY = "\U000F0827"  # nf-md-home_heart
 API = 2
@@ -335,14 +335,14 @@ class FamilyRoom(Overlay):
 
     def _apply(self, reply: dict) -> str | None:
         """Unknown fields, shapes, and sounds are skipped, so a newer library still runs here."""
-        if "scene" in reply:
-            scene = reply["scene"]
-            if not isinstance(scene, list) or len(scene) > MAX_SHAPES:
-                return "it drew too much at once"
-            self._show([s for s in (_shape(s, self._images) for s in scene) if s])
+        scene = reply.get("scene")
+        if "scene" in reply and (not isinstance(scene, list) or len(scene) > MAX_SHAPES):
+            return "it drew too much at once"
         sounds = reply.get("sounds")
         for sound in sounds[:MAX_SOUNDS] if isinstance(sounds, list) else []:
-            self._play(sound)
+            self._play(sound)  # before drawing, so a note isn't late by a render
+        if "scene" in reply:
+            self._show([s for s in (_shape(s, self._images) for s in scene) if s])
         if "keep" in reply:
             keep = reply["keep"]
             if not isinstance(keep, dict) or len(json.dumps(keep).encode()) > KEEP_MAX_BYTES:
@@ -467,7 +467,8 @@ class FamilyRoom(Overlay):
         if getattr(action, "is_repeat", False):
             return None
         if isinstance(action, CharacterAction) and len(action.char) == 1:
-            return {"ev": "key", "key": UNSHIFT_MAP.get(action.char, action.char), "char": action.char}
+            key = KID_MATH_KEYS.get(action.char, action.char)
+            return {"ev": "key", "key": UNSHIFT_MAP.get(key, key), "char": action.char}
         if isinstance(action, NavigationAction):
             return {"ev": "key", "key": action.direction}
         if isinstance(action, ControlAction) and action.is_down and action.action in ("space", "enter", "backspace"):

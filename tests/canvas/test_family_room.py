@@ -269,6 +269,22 @@ def test_a_room_hears_keys_go_up_and_knows_which_are_held(pack):
     run(go())
 
 
+def test_math_keys_reach_a_room_as_themselves(pack):
+    pack("hold", 'from purple import *\ndef on_key(key):\n    write(f"down {key}")\n'
+                 'def on_key_up(key):\n    write(f"up {key} {held(key)}")\n')
+
+    async def go():
+        app = make_app()
+        room = _open(app, "hold")
+        await until(lambda: not room._busy)
+        await press(app, "/")
+        await press(app, "*")
+        await until(lambda: texts(room)[-1:] == ["up 8 False"])
+        assert texts(room)[-4:] == ["down /", "up / False", "down 8", "up 8 False"]
+        room.close()
+    run(go())
+
+
 def test_held_keys_go_up_when_something_covers_the_room(pack):
     pack("hold", 'from purple import *\ndef on_key(key):\n    write("down")\ndef on_key_up(key):\n    write("up")\nevery(0.1, lambda: None)\n')
 

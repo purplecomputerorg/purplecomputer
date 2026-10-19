@@ -21,6 +21,8 @@ from ..keyboard import CharacterAction, ControlAction, NavigationAction
 LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"
 TURN = "\U000F0467"   # nf-md-rotate_right
 MOVE_HINT = f"Arrows move  {LEFT} {UP} {DOWN} {RIGHT}"
+KID_MATH_REMAP = {"=": "+", "/": "÷", "*": "×"}
+KID_MATH_KEYS = {v: k for k, v in KID_MATH_REMAP.items() if k != "="}  # + is also its own key
 
 # ----------------------------------------------------------------------------
 # Timers (asyncio-backed; HoldOrTap needs an object with .stop())

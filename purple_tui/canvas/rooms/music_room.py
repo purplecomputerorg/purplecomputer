@@ -23,14 +23,12 @@ from .. import paper
 from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel, SpaceHold
 from ..sounds import SoundBank
-from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hint_row_h, hold_status
+from ..ui import CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hint_row_h, hold_status
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
-_KID_MATH_UNREMAP = {"÷": "/", "×": "*"}
-_KID_MATH_DISPLAY = {"/": "÷", "*": "×"}
 PITCH_TRANSITION_DURATION = 0.25
 LETTERS_SAME_KEY_DEBOUNCE_S = 0.40
 LETTERS_CROSS_KEY_DEBOUNCE_S = 0.20
@@ -542,7 +540,7 @@ class MusicRoom(Room):
                 return
             self.space.other_key()
             char = action.char
-            lookup = char.upper() if char.isalpha() else _KID_MATH_UNREMAP.get(char, char)
+            lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
             if lookup not in ALL_KEYS:
                 return
             if self.letters_mode and self._letters_debounce_drop(lookup, time.monotonic()):
@@ -684,7 +682,7 @@ class MusicRoom(Room):
                 elif on_paper:
                     g.rect(PAPER_OUTLINE, tile, width=2)
                 fg = (paper.INK_MUTED if on_paper else P.MUTED) if quiet else text_color_for(bg)
-                g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery,
+                g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 flashing = key in self._note_labels or (melodic and self._transition is not None)
                 show = (flashing and not on_paper) or (melodic and self.show_labels)

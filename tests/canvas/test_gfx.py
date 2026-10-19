@@ -114,3 +114,20 @@ def test_caret_outside_a_shrunk_window_stops_blinking():
     g.dirty = False
     g.blink(0)
     assert g.caret is None
+
+
+def test_dim_caret_is_painted_at_the_first_blink_then_swapped():
+    g = Gfx(size=(100, 100), headless=True)
+    g.fill("#000000")
+    dims = []
+
+    def dim():
+        dims.append(1)
+        g.rect("#555555", (10, 10, 5, 5))
+    g.draw_caret((10, 10, 5, 5), lambda: g.rect("#ffffff", (10, 10, 5, 5)), dim)
+    assert dims == []
+    g.dirty = False
+    for shade in (0x55, 0xFF, 0x55):
+        g.blink(0)
+        assert g.surface.get_at((12, 12))[:3] == (shade,) * 3
+    assert dims == [1]

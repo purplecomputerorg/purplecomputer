@@ -98,12 +98,11 @@ class BlocksRoom(Room):
         self._fade_start = self._fade_timer = None
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
-        self._blink_on = True
-        self._blink_timer = None
         self._c = 0
         self._origin = (0, 0)
         self._floor = self._scene = None
         self._front = self._scene_row = None
+        self._composed = self._layer = None
         self._sprites: dict = {}
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
         self.echo = Echo()
@@ -112,14 +111,9 @@ class BlocksRoom(Room):
     # ---------------------------------------------------------------- lifecycle
     def on_enter(self):
         self.app.set_legend(self._color, visible=True)
-        if self._blink_timer is None:
-            self._blink_timer = self.app.timers.every(0.4, self._blink)
 
     def on_leave(self):
         self.code_panel = None
-        if self._blink_timer:
-            self._blink_timer.stop()
-            self._blink_timer = None
 
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
@@ -161,15 +155,6 @@ class BlocksRoom(Room):
 
     def hold_progress(self):
         return self.space.status(self.code_panel is not None)
-
-    def _blink(self):
-        self._blink_on = not self._blink_on
-        self.app.invalidate()
-
-    def _restart_blink(self):
-        self._blink_on = True
-        if self._blink_timer:
-            self._blink_timer.reset()
 
     def cursor_fraction(self, vp):
         x, y = self._corner(*self._view(self._x, self._z), 0)
@@ -417,7 +402,6 @@ class BlocksRoom(Room):
             self._navigate(action)
         elif isinstance(action, CharacterAction):
             self._character(action)
-        self._restart_blink()
         self.app.invalidate()
 
     def _character(self, action):
@@ -587,6 +571,24 @@ class BlocksRoom(Room):
         self._front.set_alpha(FRONT_ALPHA if self._front_covers_cursor() else 255)
         return self._scene, self._front
 
+    def _scene_with_front(self, scene, front) -> pygame.Surface:
+        """The scene with the faded front rows over it, as the cursor's layer
+        would composite them, kept until either changes so a frame only blends near the cursor."""
+        alpha = front.get_alpha()
+        if self._composed is None or self._composed[0] is not scene or self._composed[1] != alpha:
+            layer = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
+            layer.blit(front, (0, 0))
+            out = scene.copy()
+            out.blit(layer, (0, 0))
+            self._composed = (scene, alpha, out)
+        return self._composed[2]
+
+    def _cursor_box(self, vx, vz) -> pygame.Rect:
+        """Scene pixels the cursor can touch: its column and the ceiling cells
+        around it, floor to ceiling, with room for the wire box and pointer."""
+        rects = [self._sprite_rect(vx + dx, vz + dz, y) for dx in (-1, 1) for dz in (-1, 1) for y in (-1, HEIGHT)]
+        return rects[0].unionall(rects[1:]).inflate(self._c, self._c).clip(pygame.Rect((0, 0), self._scene_size()))
+
     def _front_covers_cursor(self) -> bool:
         """Whether a nearer block hides the landing block's top; any block just in front hides its front face."""
         vx, vz = self._view(self._x, self._z)
@@ -647,8 +649,8 @@ class BlocksRoom(Room):
         self._origin = (ox, oy)
         p = self._fade_progress()
         if p is None:
-            g.surface.blit(scene, (ox, oy))
-            self._draw_cursor(g, ox, oy, front)
+            g.surface.blit(self._scene_with_front(scene, front), (ox, oy))
+            self._draw_cursor(g, ox, oy, scene, front)
             self._draw_hold_badge(g, ox, oy, area)
         else:
             self._draw_turning(g, ox, oy, p)
@@ -767,34 +769,44 @@ class BlocksRoom(Room):
                 items.append((depth(x, z, ground - 1) - 1e-6, shadow, (x, z, y, ground, color)))
         return items
 
-    def _draw_cursor(self, g, ox, oy, front):
+    def _draw_cursor(self, g, ox, oy, scene, front):
         """A blinking glass column from the ceiling down onto the see-through
         landing block, with its shadow on whatever it would land on; then the
         faded rows in front; then a patch of ceiling fading out around the
         column, the column's edges faint through it, its outline on down to the
         floor through any blocks below, a ring around each block in it, and a
-        wire box around the landing block on top of everything."""
+        wire box around the landing block on top of everything. Only the
+        patch around the column is redrawn; Gfx.blink swaps it bright and dim."""
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
-        layer = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
+        box = self._cursor_box(vx, vz)
+        at = box.move(ox, oy)
+        if self._layer is None or self._layer.get_size() != scene.get_size():
+            self._layer = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
+        layer = self._layer
         column = self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT - 1 - y)
-        fill, edge = (40, 150) if self._blink_on else (16, 70)
-        self._outline(layer, column, edge, fill)
-        self._shadow(layer, vx, vz, self._ground(y), y, self._color)
-        layer.blit(self._sprite(self._color, 170 if self._blink_on else 100, vz), self._sprite_rect(vx, vz, y))
-        layer.blit(front, (0, 0))
-        g.surface.blit(layer, (ox, oy))
-        layer.fill((0, 0, 0, 0))                # draw calls replace pixels rather than blend, so the see-through top goes on fresh
-        self._ceiling_patch(layer, vx, vz, 0.3 if y == HEIGHT - 1 else 1)   # faint when the box is up against it
-        self._outline(layer, column, edge // 3)
-        if y:                                   # the column carries on down through whatever is below, to the floor
-            self._outline(layer, self._faces(*self._corner(vx, vz, y), levels=y)[1:], edge * 3 // 4, fill)
-        for lo, hi in self._stacks():           # its blocks, ringed so they read as part of it among many columns
-            for poly in self._faces(*self._corner(vx, vz, hi + 1), levels=hi + 1 - lo):
-                pygame.draw.polygon(layer, (*rgb(P.TEXT), 220 if self._blink_on else 120), poly, 2)
-        self._cage(layer, vx, vz, y)
-        self._pointer(layer, vx, vz, y)
-        g.surface.blit(layer, (ox, oy))
+
+        def draw(bright):
+            fill, edge = (40, 150) if bright else (16, 70)
+            g.surface.blit(scene, at, box)
+            layer.fill((0, 0, 0, 0), box)
+            self._outline(layer, column, edge, fill)
+            self._shadow(layer, vx, vz, self._ground(y), y, self._color)
+            layer.blit(self._sprite(self._color, 170 if bright else 100, vz), self._sprite_rect(vx, vz, y))
+            layer.blit(front, box, box)
+            g.surface.blit(layer, at, box)
+            layer.fill((0, 0, 0, 0), box)       # draw calls replace pixels rather than blend, so the see-through top goes on fresh
+            self._ceiling_patch(layer, vx, vz, 0.3 if y == HEIGHT - 1 else 1)   # faint when the box is up against it
+            self._outline(layer, column, edge // 3)
+            if y:                               # the column carries on down through whatever is below, to the floor
+                self._outline(layer, self._faces(*self._corner(vx, vz, y), levels=y)[1:], edge * 3 // 4, fill)
+            for lo, hi in self._stacks():       # its blocks, ringed so they read as part of it among many columns
+                for poly in self._faces(*self._corner(vx, vz, hi + 1), levels=hi + 1 - lo):
+                    pygame.draw.polygon(layer, (*rgb(P.TEXT), 220 if bright else 120), poly, 2)
+            self._cage(layer, vx, vz, y)
+            self._pointer(layer, vx, vz, y)
+            g.surface.blit(layer, at, box)
+        g.draw_caret(at, lambda: draw(True), lambda: draw(False))
 
     def _outline(self, layer, polys, edge, fill=0):
         for poly in polys:

@@ -192,6 +192,9 @@ class Gfx:
             self.surface = self._kms.make_surface(pygame)
         else:
             self._flags = 0 if windowed else pygame.FULLSCREEN
+            if not (windowed or size) and self._cap_screen():
+                pygame.display.quit()   # SDL keeps the desktop size it saw at init
+                pygame.display.init()
             self.surface = pygame.display.set_mode(size or (0, 0), self._flags)
             pygame.display.set_caption("Purple")
             pygame.mouse.set_visible(False)
@@ -210,6 +213,17 @@ class Gfx:
         for name, path in i18n.fonts():
             FACES[name] = str(path)
         self._fallbacks = FALLBACK_FACES[:-1] + tuple(n for n, _ in i18n.fonts()) + FALLBACK_FACES[-1:]
+
+    @staticmethod
+    def _cap_screen() -> bool:
+        from . import screen_size
+        from .. import boot_log
+        info = pygame.display.Info()
+        try:
+            return screen_size.cap(info.current_w, info.current_h, boot_log.heartbeat)
+        except Exception as e:
+            boot_log.heartbeat(f"screen size: cap failed: {e}")
+            return False
 
     def resize(self):
         """Follow the window when the X screen changes size under us (a VM
@@ -494,11 +508,12 @@ class Gfx:
         if rect is None:
             self.dirty = False
 
-    def draw_caret(self, rect, draw):
-        """Run draw() and keep the pixels under rect both ways, so blink() can
-        swap them without repainting the frame."""
+    def draw_caret(self, rect, draw, draw_dim=None):
+        """Run draw() and keep the pixels under rect both ways (bare, or as
+        draw_dim() repaints the whole rect, run at the first blink), so blink()
+        can swap them without repainting the frame."""
         rect = pygame.Rect(rect).clip(self.surface.get_rect())
-        off = self.surface.subsurface(rect).copy()
+        off = draw_dim or self.surface.subsurface(rect).copy()
         draw()
         self.caret = [rect, off, self.surface.subsurface(rect).copy(), True, time.monotonic()]
 
@@ -513,7 +528,11 @@ class Gfx:
         if not self.surface.get_rect().contains(rect) or pygame.image.tobytes(self.surface.subsurface(rect), "RGB") != pygame.image.tobytes(on if shown else off, "RGB"):
             self.caret = None
             return
-        self.surface.blit(off if shown else on, rect)
+        if callable(off):
+            off()
+            c[1] = self.surface.subsurface(rect).copy()
+        else:
+            self.surface.blit(off if shown else on, rect)
         c[3], c[4] = not shown, time.monotonic()
         self.present(rect)
 

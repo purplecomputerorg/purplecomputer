@@ -506,3 +506,20 @@ def test_a_code_row_still_climbs_over_a_tower_in_its_way():
         _code(room, ("right", 3))
         assert {(4, 5, 0), (5, 5, 2), (6, 5, 2)} <= set(room._blocks)
     run(go())
+
+
+def test_cursor_paints_only_inside_its_redraw_box():
+    """The cursor redraws just a patch around its column, so nothing it draws
+    (ceiling patch, wire box, pointer, rings) may reach past that patch."""
+    async def go():
+        app, room = _blocks()
+        for x, z in ((0, 0), (WIDTH - 1, 0), (0, DEPTH - 1), (WIDTH - 1, DEPTH - 1)):
+            for top in (False, True):
+                for way in ("right", "left", "up", "down", RISE, SINK):
+                    room._x, room._z, room._dir, room._next, room._layer = x, z, way, None, None
+                    room._blocks = {(x, z, y): "#ff0000" for y in range(HEIGHT - 1)} if top else {}
+                    room._scene = None
+                    app._draw()
+                    box = room._cursor_box(*room._view(x, z))
+                    assert box.contains(room._layer.get_bounding_rect()), (x, z, top, way)
+    run(go())

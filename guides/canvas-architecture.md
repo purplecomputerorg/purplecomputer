@@ -20,8 +20,9 @@ the response is.
 Design rules, in priority order:
 
 1. Motion only in response to a key. Nothing moves on an idle screen, except
-   the text caret, which blinks by swapping its own pixels (`Gfx.blink`), never
-   by repainting the frame.
+   the carets (text, the Art write caret, the Blocks cursor), which blink by
+   swapping their own pixels (`Gfx.draw_caret`, `Gfx.blink`), never by
+   repainting the frame.
 2. Text and emoji render smoothly at native resolution, any size per element.
 3. A grid exists only where the grid is the content: Music tiles, Art cells,
    the Blocks floor.
@@ -148,7 +149,9 @@ pack is a `FamilyRoom` overlay over the current room: guides/family-rooms.md.
 
 `xinitrc` starts X, matchbox, picom, then `/usr/local/bin/purple`, which execs
 `python3 -m purple_tui`. The app opens a fullscreen SDL window on the X
-session. `LIBGL_ALWAYS_SOFTWARE=1` stays exported so nothing touches a GPU
+session, first switching any screen over 1920x1200 to the largest smaller
+mode of the same shape (`canvas/screen_size.py`), since every frame is drawn
+in software and the panel scales up for free. `LIBGL_ALWAYS_SOFTWARE=1` stays exported so nothing touches a GPU
 driver that lies; the app itself never asks for GL. The UI-ready marker
 (`/tmp/purple-ui-ready`) is touched after the first frame, which is what
 gates the compositor start.

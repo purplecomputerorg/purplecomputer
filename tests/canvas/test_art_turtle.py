@@ -45,9 +45,6 @@ class FakeCanvas:
     def _invalidate_all(self):
         pass
 
-    def _restart_blink(self):
-        pass
-
     def refresh(self):
         pass
 

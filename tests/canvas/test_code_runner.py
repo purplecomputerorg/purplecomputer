@@ -200,7 +200,6 @@ class _FakeCanvas:
 
     def _mark_cursor_dirty(self): pass
     def _invalidate_all(self): pass
-    def _restart_blink(self): pass
     def refresh(self): pass
     def _set_paint_mode(self, on): self._paint_mode = on
     def _post_paint_mode_changed(self): pass

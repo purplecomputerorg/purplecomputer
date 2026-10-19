@@ -5,7 +5,6 @@ holding Backspace makes arrows erase, Tab switches to writing letters, and
 hold Space opens the Logo-style code line."""
 
 import math
-import time
 
 import pygame
 
@@ -228,9 +227,6 @@ class ArtRoom(Room):
         self._arrow_repeat_count = 0
         self._backspace_repeat_count = 0
         self._erasing = False         # Backspace held: arrows clear a trail
-        self._blink_on = True
-        self._blink_stamp = time.monotonic()
-        self._blink_timer = None
         self._tips = _Cache()
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
         self.echo = Echo()
@@ -247,26 +243,6 @@ class ArtRoom(Room):
     def on_leave(self):
         self.code_panel = None
         self._erasing = False
-        self._sync_blink(leaving=True)
-
-    def _sync_blink(self, leaving=False):
-        """Only the write caret blinks, so the timer runs only then: an idle brush must not wake the CPU."""
-        if not leaving and self.app.active_room == self.name and not self._paint_mode and self.code_panel is None:
-            if self._blink_timer is None:
-                self._blink_on = True
-                self._blink_timer = self.app.timers.every(0.4, self._blink)
-        elif self._blink_timer:
-            self._blink_timer.stop()
-            self._blink_timer = None
-
-    def _blink(self):
-        self._blink_on = not self._blink_on
-        self.app.invalidate()
-
-    def _restart_blink(self):
-        self._blink_on = True
-        if self._blink_timer:
-            self._blink_timer.reset()
 
     @property
     def paint_mode(self) -> bool:
@@ -311,7 +287,6 @@ class ArtRoom(Room):
 
     def _post_paint_mode_changed(self):
         self.app.set_legend(self._last_key_color if self._paint_mode else None, visible=True)
-        self._sync_blink()
         self.app.invalidate()
 
     def arrow_hint(self) -> str:
@@ -421,7 +396,6 @@ class ArtRoom(Room):
         if down:
             self._paint_at_cursor()
         self._ease_lift()
-        self._restart_blink()
         self._post_paint_mode_changed()
 
     def set_code_brush(self, down: bool):
@@ -475,7 +449,6 @@ class ArtRoom(Room):
             self._move_in_direction(direction, wrap=True)    # as tapped arrows do, so echoed strokes replay whole
         if action == "paint" and distance:
             self._run_end = (direction, self._cursor_x, self._cursor_y)
-        self._restart_blink()
         self.refresh()
 
     def turn(self, direction: str):
@@ -486,7 +459,6 @@ class ArtRoom(Room):
         elif direction in ("back", "backward", "around"):
             self._heading = self._TURN_RIGHT[self._TURN_RIGHT[self._heading]]
         self._use_heading_cursor = True
-        self._restart_blink()
         self.refresh()
 
     def paint_char(self, char: str, direction: str = "right"):
@@ -509,7 +481,6 @@ class ArtRoom(Room):
         bg = self._get_cell_bg(pos)
         self._set_cell(pos, char, self._ink or (auto_ink(bg) if pos in self._painted_positions else P.TEXT), bg)
         self._advance_after_stamp(direction)
-        self._restart_blink()
         self.app.invalidate()
 
     def _backspace(self):
@@ -588,12 +559,10 @@ class ArtRoom(Room):
             self.code_panel = CodePanel(self.app, "art", self.echo.take())
             self.set_code_mode(True)
             self.app.set_panel(self.code_panel)
-            self._sync_blink()
 
     def close_code_panel(self):
         if self.code_panel is not None:
             self.code_panel = None
-            self._sync_blink()
             self.set_code_mode(False)
             self.app.set_panel(None)
 
@@ -711,7 +680,6 @@ class ArtRoom(Room):
                     self.echo.letter(direction, char)
                 else:
                     self.echo.flush()   # a digit would read as a distance
-            self._restart_blink()
             self.app.invalidate()
 
     def _navigate(self, action, prior_post_stamp_x):
@@ -740,7 +708,6 @@ class ArtRoom(Room):
                     break
                 if trail:
                     trail(direction)
-        self._restart_blink()
         self.app.invalidate()
 
     # ---------------------------------------------------------------- drawing
@@ -832,9 +799,9 @@ class ArtRoom(Room):
 
     def _draw_cursor(self, g, ox, oy, c):
         x, y = ox + self._cursor_x * c, oy + self._cursor_y * c
-        if not self._paint_mode and self._blink_on:  # underline caret: the next letter lands in this cell
-            bar = max(2, c // 4)
-            g.rect(P.ACCENT, (x, y + c - bar, c, bar))
+        if not self._paint_mode:  # underline caret: the next letter lands in this cell
+            bar = (x, y + c - max(2, c // 4), c, max(2, c // 4))
+            g.draw_caret(bar, lambda: g.rect(P.ACCENT, bar))
         tip = "erase" if self._erasing else "brush" if self._paint_mode else None
         turn = HEADING_TURNS[self._heading] if self._use_heading_cursor else None
         if tip or turn is not None:

@@ -69,19 +69,16 @@ def test_pen_lifts_on_clear():
 
 
 def test_only_the_write_caret_blinks():
+    """Blinking swaps the caret's own pixels (Gfx.blink): no room timer, no full repaints."""
     async def _test():
         app, canvas = _art()
-        assert canvas._blink_timer is None  # brush tip: steady, no idle wakeups
-        await _tap(canvas)
-        assert canvas._blink_timer is None
+        app._draw()
+        assert app.g.caret is None  # brush tip: steady
         canvas._set_paint_mode(False)
-        assert canvas._blink_timer is not None  # write caret blinks
-        canvas.open_code_panel()
-        assert canvas._blink_timer is None
-        canvas.close_code_panel()
-        assert canvas._blink_timer is not None
-        app.action_switch_room("play")
-        assert canvas._blink_timer is None
+        app._draw()
+        assert app.g.caret is not None
+        assert app.g.caret[0].h < app.g.vh(5)
+        assert not [n for _, n in app.timers.intervals() if "ArtRoom" in n]
     _run(_test())
 
 

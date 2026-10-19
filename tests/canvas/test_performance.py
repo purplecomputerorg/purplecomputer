@@ -120,9 +120,11 @@ def test_no_subsecond_timers_while_idle():
 
     async def scenario():
         app = make_app()
-        await asyncio.sleep(0.3)
-        offenders = [(p, name) for p, name in app.timers.intervals() if p < 1.0 and p not in (0.1, 0.2)]
-        assert offenders == [], f"sub-second timers while idle: {offenders}"
+        for room in ("play", "art", "music", "blocks"):
+            app.action_switch_room(room)
+            await asyncio.sleep(0.3)
+            offenders = [(p, name) for p, name in app.timers.intervals() if p < 1.0 and p not in (0.1, 0.2)]
+            assert offenders == [], f"sub-second timers while idle in {room}: {offenders}"
     run(scenario())
 
 

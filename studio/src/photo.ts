@@ -1,7 +1,7 @@
 import dinosaur from "./assets/dinosaur.svg";
 import dog from "./assets/dog.jpg";
 import saturn from "./assets/saturn.jpg";
-import greatWave from "./assets/great-wave.jpg";
+import starryNight from "./assets/starry-night.jpg";
 import house from "./assets/sample-drawing.svg";
 import { slug } from "@sdk/pack";
 import type { Keepable } from "./state";
@@ -68,7 +68,7 @@ export const EXAMPLES: Example[] = [
   { name: "dinosaur", src: dinosaur, alt: "A dinosaur to color in" },
   { name: "dog", src: dog, alt: "A black dog looking up" },
   { name: "saturn", src: saturn, alt: "Saturn and its rings", credit: "NASA, from the Cassini spacecraft" },
-  { name: "great-wave", src: greatWave, alt: "A giant wave curling over boats", credit: "Katsushika Hokusai, around 1831" },
+  { name: "starry-night", src: starryNight, alt: "A swirling night sky over a sleepy village", credit: "Vincent van Gogh, 1889" },
 ];
 const examples = new Map<string, Promise<Picture>>();
 export function examplePicture({ name, src }: Example): Promise<Picture> {

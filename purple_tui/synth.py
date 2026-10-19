@@ -168,7 +168,7 @@ def generate_accordion(frequency: float, duration: float | None = None, sample_r
     air_gain = 0.25 * level * p["breath"]
     drift_depth = 7.5 * p["breath"]
     drift_a = 2 * math.pi * 15 / sample_rate
-    # Closed-form phase lag of a pitch that starts `scoop` cents flat and settles in ~70 ms.
+    # Closed-form phase lag of a pitch that starts `scoop` cents flat and closes in with a 70 ms time constant.
     scoop_shift = p["scoop"] * math.log(2) / 1200 * SCOOP_S
     breath_noise = noise(frequency * 1000)
     air_a, air_b = _bandpass(1800, 0.8, sample_rate), _bandpass(1800, 0.8, sample_rate)
@@ -253,7 +253,7 @@ def generate_glockenspiel(frequency: float, duration: float | None = None, sampl
         (1.0, p["fundamental"], 1.4 / ring),
         (2.8, p["bell"] * boost, 2.8 / ring),
         (5.42, 0.45 * p["shimmer"] * boost, 4.2 / ring),
-        (8.6, 0.22 * p["shimmer"] * boost, 6.5 / ring),
+        (8.93, 0.22 * p["shimmer"] * boost, 6.5 / ring),
         (11.7, 0.12 * p["shimmer"] * boost, 9.0 / ring),
     ]
     samples = []

@@ -236,7 +236,7 @@ function glockenspiel(q: Params, freq: number): Float32Array {
     [1, q.fundamental, 1.4 / ring],
     [2.8, q.bell * boost, 2.8 / ring],
     [5.42, 0.45 * q.shimmer * boost, 4.2 / ring],
-    [8.6, 0.22 * q.shimmer * boost, 6.5 / ring],
+    [8.93, 0.22 * q.shimmer * boost, 6.5 / ring],
     [11.7, 0.12 * q.shimmer * boost, 9 / ring],
   ];
   for (let i = 0; i < n; i++) {

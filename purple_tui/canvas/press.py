@@ -5,7 +5,7 @@ import asyncio
 
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 
-CONTROL_KEYS = {"enter", "tab", "space", "escape", "backspace"}
+CONTROL_KEYS = {"enter", "tab", "space", "escape", "backspace", "home", "end", "page_up", "page_down"}
 ARROWS = {"up", "down", "left", "right"}
 
 

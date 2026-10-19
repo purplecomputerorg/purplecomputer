@@ -22,6 +22,8 @@ LEADING = 1.3       # line pitch over the font's own, so a page of text breathes
 HINT = "Type to write! {Enter} for a new line."
 WORDS_AFTER = 1.0   # seconds of holding Backspace before it takes whole words
 WORD_EVERY = 0.15
+JUMPS = {"home": ("left", True), "end": ("right", True),
+         "page_up": ("up", False, False, True), "page_down": ("down", False, False, True)}
 
 
 def wrap(text: str, cols: int = COLS) -> list:
@@ -67,12 +69,16 @@ class WriteRoom(Room):
     STARTS_OFF = True
     about = "a quiet page for stories and letters"
     shows_legend = False
+    edits_text = True
 
     def __init__(self, app):
         super().__init__(app)
         self.field = TextField()
-        self.top = 0        # the first visual line on screen
-        self._goal = None   # the column a run of up and down keeps aiming for
+        self.top = 0          # the first visual line on screen
+        self.rows = 10        # visual lines on screen, for Page Up and Page Down
+        self.clipboard = ""
+        self._anchor = None   # where a Shift selection started
+        self._goal = None     # the column a run of up and down keeps aiming for
         self._held = self._last_word = 0.0
 
     def arrow_hint(self) -> str:
@@ -84,41 +90,69 @@ class WriteRoom(Room):
 
     def restore_timeline_state(self, state: dict):
         self.field.set(state.get("text", "")[:MAX_CHARS], state.get("caret"))
-        self.top, self._goal = 0, None
+        self.top, self._goal, self._anchor = 0, None, None
         self.app.invalidate()
 
     def plain_text(self) -> str:
         return self.field.value
 
+    def selection(self):
+        """(start, end) of the selected text, or None."""
+        a, c = self._anchor, self.field.cursor
+        return None if a is None or a == c else (min(a, c), max(a, c))
+
     # ---------------------------------------------------------------- input
     async def handle(self, action):
         goal = None
         if isinstance(action, NavigationAction):
-            goal = self._move(action.direction)
+            goal = self._move(action.direction, action.ctrl_held, action.shift_held)
         elif isinstance(action, ControlAction) and action.is_down:
             if action.action == "backspace":
                 self._backspace(action.is_repeat)
             elif action.action in ("space", "enter") and not action.is_repeat:
-                self._type(" " if action.action == "space" else "\n")
+                self._replace(" " if action.action == "space" else "\n")
+            elif action.action in JUMPS:
+                goal = self._move(*JUMPS[action.action])
             else:
                 return
         elif isinstance(action, CharacterAction) and not action.is_repeat:
-            self._type(action.char)
+            if action.ctrl_held or action.cmd_held:
+                self._shortcut(action.char.lower())
+            else:
+                self._replace(action.char)
         else:
             return
         self._goal = goal
         self.app.invalidate()
 
-    def _type(self, s: str):
-        if len(self.field.value) + len(s) <= MAX_CHARS:
-            self.field.insert(s)
+    def _replace(self, s: str):
+        """Type s over the selection, or at the caret, as far as MAX_CHARS allows."""
+        f = self.field
+        a, b = self.selection() or (f.cursor, f.cursor)
+        s = s[:MAX_CHARS - len(f.value) + b - a]
+        f.set(f.value[:a] + s + f.value[b:], a + len(s))
+        self._anchor = None
+
+    def _shortcut(self, key: str):
+        """Ctrl or Cmd with A selects all, C copies, X cuts and V pastes."""
+        sel = self.selection()
+        if key == "a":
+            self._anchor, self.field.cursor = 0, len(self.field.value)
+        elif key in ("c", "x") and sel:
+            self.clipboard = self.field.value[sel[0]:sel[1]]
+            if key == "x":
+                self._replace("")
+        elif key == "v":
+            self._replace(self.clipboard)
 
     def _backspace(self, repeat: bool):
-        """A letter at a time, then whole words once Backspace has been held a while."""
+        """The selection, or a letter at a time, then whole words once Backspace has been held a while."""
         now = time.monotonic()
         if not repeat:
             self._held = now
-        if now - self._held < WORDS_AFTER:
+        if self.selection():
+            self._replace("")
+        elif now - self._held < WORDS_AFTER:
             self.field.backspace()
         elif now - self._last_word >= WORD_EVERY:
             self._last_word = now
@@ -134,24 +168,38 @@ class WriteRoom(Room):
         j = min(j, i - 1) if i and j == i else j
         f.set(t[:j] + t[i:], j)
 
-    def _move(self, direction: str):
-        """Left and right step a letter; up and down a visual line, keeping the column. Returns that column."""
-        f = self.field
-        if direction in ("left", "right"):
-            f.move(-1 if direction == "left" else 1)
-            return None
+    def _move(self, direction: str, far: bool = False, extend: bool = False, page: bool = False):
+        """Left and right step a letter, or with `far` go to the line's ends; up and down go a
+        visual line (a screen with `page`) keeping the column, or with `far` to the top or bottom.
+        `extend` grows the selection. Returns the column up and down aim for."""
+        f, sel, goal = self.field, self.selection(), None
         lines = wrap(f.value)
         k = line_of(lines, f.cursor)
-        col = f.cursor - lines[k][0] if self._goal is None else self._goal
-        k += 1 if direction == "down" else -1
-        if k < 0:
-            f.cursor = 0
-        elif k >= len(lines):
-            f.cursor = len(f.value)
+        s, e, soft = lines[k]
+        if far:
+            i = {"up": 0, "down": len(f.value), "left": s, "right": e - soft}[direction]
+        elif direction in ("left", "right"):
+            if sel and not extend:
+                i = sel[direction == "right"]
+            else:
+                i = f.cursor + (1 if direction == "right" else -1)
         else:
-            s, e, soft = lines[k]
-            f.cursor = s + min(col, e - s - soft)
-        return col
+            goal = f.cursor - s if self._goal is None else self._goal
+            i = self._column_on(lines, k + (self.rows if page else 1) * (1 if direction == "down" else -1), goal)
+        if not extend:
+            self._anchor = None
+        elif self._anchor is None:
+            self._anchor = f.cursor
+        f.cursor = max(0, min(i, len(f.value)))
+        return goal
+
+    def _column_on(self, lines: list, k: int, col: int) -> int:
+        if k < 0:
+            return 0
+        if k >= len(lines):
+            return len(self.field.value)
+        s, e, soft = lines[k]
+        return s + min(col, e - s - soft)
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g, rect):
@@ -162,9 +210,10 @@ class WriteRoom(Room):
         page = pygame.Rect(inner.x, inner.y + em(0.5), inner.w, inner.h - foot_h - em(1.0))
         px = text_px(g, page.w - 2 * em(2), em(1.45))
         lh = line_pitch(g, px)
-        col_w = (COLS + 1) * g.measure("M", px, "mono", tr=False)[0]
+        cw = g.measure("M", px, "mono", tr=False)[0]
+        col_w = (COLS + 1) * cw
         x = page.centerx - col_w // 2
-        rows = max(1, page.h // lh)
+        rows = self.rows = max(1, page.h // lh)
         for i in range(rows):
             y = page.y + i * lh + round(px * 1.25)
             g.rect(P.FIELD, pygame.Rect(x, y, col_w, max(1, px // 14)))
@@ -172,7 +221,11 @@ class WriteRoom(Room):
         lines = wrap(text)
         k = line_of(lines, cursor)
         self.top = keep_in_view(self.top, k, rows, len(lines))
+        a, b = self.selection() or (0, 0)
         for i, (s, e, _) in enumerate(lines[self.top:self.top + rows]):
+            if max(s, a) < min(e, b):
+                g.rect(P.LINE, pygame.Rect(x + (max(s, a) - s) * cw, page.y + i * lh,
+                                           (min(e, b) - max(s, a)) * cw, round(px * 1.25)))
             g.draw_text(text[s:e], px, x, page.y + i * lh, "mono", P.TEXT, tr=False)
         before = text[lines[k][0]:cursor]
         draw_text_caret(g, x + (g.measure(before, px, "mono", tr=False)[0] if before else 0),

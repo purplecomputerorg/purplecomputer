@@ -162,6 +162,14 @@ class KeyCode:
     # Modifier keys
     KEY_RIGHTCTRL = 97
     KEY_RIGHTALT = 100
+    KEY_LEFTMETA = 125   # Cmd on Mac keyboards, the Windows key elsewhere
+    KEY_RIGHTMETA = 126
+
+    # Editing keys
+    KEY_HOME = 102
+    KEY_PAGEUP = 104
+    KEY_END = 107
+    KEY_PAGEDOWN = 109
 
     # Media keys (hardware volume buttons)
     KEY_MUTE = 113

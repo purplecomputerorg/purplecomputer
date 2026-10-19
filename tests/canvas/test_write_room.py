@@ -74,6 +74,93 @@ def test_holding_backspace_takes_letters_then_whole_words(monkeypatch):
     run(go())
 
 
+def test_shift_and_arrows_select_and_typing_or_backspace_replaces_it():
+    async def go():
+        app = await _write("big red dog")
+        for _ in range(3):
+            await press(app, "left", shift_held=True)
+        assert app.room.selection() == (8, 11)
+        await type_text(app, "cat")
+        assert (app.room.plain_text(), app.room.selection()) == ("big red cat", None)
+        await press(app, "home")
+        await press(app, "right", shift_held=True)
+        await press(app, "right", shift_held=True)
+        await press(app, "right", shift_held=True)
+        await press(app, "right", shift_held=True)
+        await press(app, "backspace")
+        assert app.room.plain_text() == "red cat"
+        await press(app, "end")
+        await press(app, "left", shift_held=True)
+        await press(app, "left")
+        assert app.room.field.cursor == 6 and app.room.selection() is None
+    run(go())
+
+
+def test_ctrl_or_cmd_cut_copy_paste_and_select_all():
+    async def go():
+        app = await _write("one two")
+        app.room.field.cursor = 3
+        await press(app, "left", shift_held=True, ctrl_held=True)
+        await press(app, "c", ctrl_held=True)
+        await press(app, "end")
+        await press(app, "v", cmd_held=True)
+        assert app.room.plain_text() == "one twoone"
+        await press(app, "a", cmd_held=True)
+        await press(app, "x", ctrl_held=True)
+        assert app.room.plain_text() == ""
+        await press(app, "v", ctrl_held=True)
+        await press(app, "v", ctrl_held=True)
+        assert app.room.plain_text() == "one twoone" * 2
+        app.action_switch_room("play")
+        await press(app, "v", ctrl_held=True)
+        assert app.room.field.value == ""
+    run(go())
+
+
+def test_jump_keys_go_to_the_top_bottom_and_a_screen_at_a_time():
+    async def go():
+        app = await _write((STORY + "\n") * 30)
+        app._draw()
+        f, rows = app.room.field, app.room.rows
+        await press(app, "up", ctrl_held=True)
+        assert f.cursor == 0
+        await press(app, "page_down")
+        assert line_of(wrap(f.value), f.cursor) == rows
+        await press(app, "page_up")
+        assert f.cursor == 0
+        await press(app, "down", ctrl_held=True)
+        assert f.cursor == len(f.value)
+    run(go())
+
+
+def test_write_takes_math_keys_as_typed_while_play_still_turns_them_into_math():
+    async def go():
+        app = await _write("and/or 2=2 *")
+        assert app.room.plain_text() == "and/or 2=2 *"
+        app.action_switch_room("play")
+        await type_text(app, "2=2")
+        assert app.room.field.value == "2 + 2"
+    run(go())
+
+
+def test_only_a_canvas_keyboard_reports_cmd_and_the_jump_keys():
+    from purple_tui.input import KeyCode, RawKeyEvent
+    from purple_tui.keyboard import CharacterAction, ControlAction, KeyboardStateMachine
+
+    def keys(edit_keys):
+        m = KeyboardStateMachine(edit_keys=edit_keys)
+        out = []
+        for code, down in ((KeyCode.KEY_LEFTMETA, True), (KeyCode.KEY_C, True), (KeyCode.KEY_LEFTMETA, False),
+                           (KeyCode.KEY_HOME, True)):
+            out += m.process(RawKeyEvent(keycode=code, is_down=down, timestamp=100.0))
+        return out
+    char, home = keys(True)
+    assert isinstance(char, CharacterAction) and char.cmd_held
+    assert isinstance(home, ControlAction) and home.action == "home"
+    [char] = keys(False)
+    assert not char.cmd_held
+
+
 def test_up_and_down_move_by_wrapped_line_and_keep_the_column():
     async def go():
         app = await _write(STORY * 2)
@@ -197,7 +284,7 @@ async def _kid_rooms():
 
 def test_mashing_keys_never_raises_or_overflows():
     rng = random.Random(156)
-    keys = list("abcxyz.,!?' 0189") + ["enter", "space", "backspace", "tab", "up", "down", "left", "right"]
+    keys = list("abcxyz.,!?' 0189") + ["enter", "space", "backspace", "tab", "up", "down", "left", "right", "home", "end", "page_up", "page_down"]
 
     async def go():
         app = await _write()

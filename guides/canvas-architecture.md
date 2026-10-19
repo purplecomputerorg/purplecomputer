@@ -138,7 +138,10 @@ A room is a `rooms/base.py` `Room` subclass listed in `ROOM_CLASSES`; its
 class attributes (label, icon, arrow hint, code panel, legend, audio) are
 what the app, the Esc menu and the status strip read. `STARTS_OFF` keeps a
 room out of the Esc menu until a parent turns it on in Parent Menu, Rooms
-(Write, the older kids' page of text, is the one that does). A family room from a
+(Write, the older kids' page of text, is the one that does). `edits_text` is
+for a room that edits text like an editor (Write): only it gets Ctrl or Cmd
+letters (cut, copy, paste, select all) and Home, End and the Page keys, and it
+gets `=`, `/` and `*` as typed rather than as Play's math. A family room from a
 pack is a `FamilyRoom` overlay over the current room: guides/family-rooms.md.
 
 ## Boot

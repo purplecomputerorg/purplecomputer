@@ -47,6 +47,7 @@ PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printe
 ARROW_GLYPHS = {"left": LEFT, "up": UP, "down": DOWN, "right": RIGHT}
 ARROW_LIT_S = 0.35            # outlasts the 250ms key-repeat delay, so a held arrow stays lit
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
+_EDIT_KEYS = {"home", "end", "page_up", "page_down"}
 BACKSLASH_HOLD = 3.0
 LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
 CARET_BLINK_S = 0.53          # the classic terminal half-second
@@ -80,6 +81,13 @@ def _battery_icon(pct: int, charging: bool) -> str:
         if pct >= level:
             return icon
     return ICON_BATTERY_EMPTY
+
+
+def _is_shortcut(action) -> bool:
+    """A Ctrl or Cmd letter, or Home, End and the Page keys: only a room that edits text takes them."""
+    if isinstance(action, CharacterAction):
+        return action.ctrl_held or action.cmd_held
+    return isinstance(action, ControlAction) and action.action in _EDIT_KEYS
 
 
 class _Offscreen:
@@ -157,7 +165,7 @@ class PurpleApp:
         self._save_flash_at = None
         self.save_pictures = _Cache(limit=48)  # Open's pictures; saves never change, the theme only when packs do
         self._last_evdev_time = time.monotonic()
-        self._keyboard_state_machine = KeyboardStateMachine()
+        self._keyboard_state_machine = KeyboardStateMachine(edit_keys=True)
         self._keyboard_state_machine.on_sticky_shift_change(self._on_sticky_shift_change)
         self._input_flood_guard = InputFloodGuard()
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
@@ -562,8 +570,9 @@ class PurpleApp:
         if isinstance(action, CharacterAction):
             if self._secret_knock.feed(action):
                 self._unlock_secret_menu()
-            if action.ctrl_held:
-                return
+        editing = self.room.edits_text and not self._overlays
+        if _is_shortcut(action) and not editing:
+            return
         if isinstance(action, ControlAction) and action.action == "escape":
             if action.is_down and not action.is_repeat:
                 self._escape_triggered_long_hold = False
@@ -589,7 +598,7 @@ class PurpleApp:
             if handler:
                 handler()
                 return
-        if isinstance(action, CharacterAction) and action.char in _KID_MATH_REMAP:
+        if isinstance(action, CharacterAction) and action.char in _KID_MATH_REMAP and not editing:
             action = CharacterAction(char=_KID_MATH_REMAP[action.char], shifted=action.shifted,
                                      shift_held=action.shift_held, is_repeat=action.is_repeat,
                                      arrow_held=action.arrow_held)

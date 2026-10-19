@@ -631,7 +631,8 @@ class CharacterAction(KeyAction):
     shift_held: bool = False  # Was physical shift key held? (not caps lock)
     is_repeat: bool = False  # Is this a key repeat?
     arrow_held: str | None = None  # Arrow direction held when this action fired
-    ctrl_held: bool = False  # Was a Ctrl key held? (used only by the secret-menu unlock)
+    ctrl_held: bool = False  # Was a Ctrl key held? (the secret-menu unlock, editing shortcuts)
+    cmd_held: bool = False  # Was Cmd (Meta) held? (editing shortcuts)
     char_held: str | None = None  # Another character key still held when this one went down (chords)
 
 
@@ -644,6 +645,7 @@ class NavigationAction(KeyAction):
     other_arrows_held: set = field(default_factory=set)  # Other arrow directions currently held
     char_held: str | None = None  # Character key held when this action fired
     shift_held: bool = False  # Was physical shift held?
+    ctrl_held: bool = False  # Ctrl or Cmd held (jump to the start or end)
 
 
 @dataclass
@@ -675,6 +677,10 @@ class LongHoldAction(KeyAction):
     key: str  # e.g., 'escape'
 
 
+EDIT_KEYS = {KeyCode.KEY_HOME: 'home', KeyCode.KEY_END: 'end',
+             KeyCode.KEY_PAGEUP: 'page_up', KeyCode.KEY_PAGEDOWN: 'page_down'}
+
+
 class KeyboardStateMachine:
     """
     Consumes RawKeyEvent from EvdevReader, produces high-level KeyAction.
@@ -704,13 +710,15 @@ class KeyboardStateMachine:
     STICKY_SHIFT_GRACE = 8.0     # seconds sticky shift stays active
     BACKSLASH_HOLD_THRESHOLD = 3.0  # seconds for backslash parent menu
 
-    def __init__(self):
+    def __init__(self, edit_keys: bool = False):
         # Key press state: keycode -> timestamp
         self._pressed: dict[int, float] = {}
+        self._edit_keys = edit_keys  # emit Home, End, Page Up and Page Down, and track Cmd
 
         # Modifier state
         self._shift_held = False
         self._ctrl_held = False
+        self._cmd_held = False
         self._space_held = False
 
         # Sticky shift
@@ -768,11 +776,14 @@ class KeyboardStateMachine:
         if not is_repeat:
             self._pressed[keycode] = timestamp
 
-        # Ctrl is consumed silently here (no action emitted): it carries no app
-        # function of its own, only the held-state stamped onto CharacterAction
-        # for the secret-menu unlock.
+        # Ctrl and Cmd are consumed silently here (no action emitted): they carry
+        # no app function of their own, only the held-state stamped onto actions
+        # for the secret-menu unlock and a text room's editing shortcuts.
         if keycode in (KeyCode.KEY_LEFTCTRL, KeyCode.KEY_RIGHTCTRL):
             self._ctrl_held = True
+            return actions
+        if self._edit_keys and keycode in (KeyCode.KEY_LEFTMETA, KeyCode.KEY_RIGHTMETA):
+            self._cmd_held = True
             return actions
 
         # Handle modifiers (only on fresh press)
@@ -828,6 +839,7 @@ class KeyboardStateMachine:
                 other_arrows_held=other_arrows,
                 char_held=self._held_char,
                 shift_held=self._shift_held,
+                ctrl_held=self._ctrl_held or self._cmd_held,
             ))
             self._shift_used_for_char |= self._shift_held
             return actions
@@ -846,6 +858,9 @@ class KeyboardStateMachine:
             return actions
         if keycode == KeyCode.KEY_COMPOSE:
             actions.append(ControlAction(action='menu', is_down=True, is_repeat=is_repeat))
+            return actions
+        if self._edit_keys and keycode in EDIT_KEYS:
+            actions.append(ControlAction(action=EDIT_KEYS[keycode], is_down=True, is_repeat=is_repeat))
             return actions
 
         # Handle media keys for volume and brightness (no repeats)
@@ -880,6 +895,7 @@ class KeyboardStateMachine:
                 is_repeat=is_repeat,
                 arrow_held=self.held_arrow_direction,
                 ctrl_held=self._ctrl_held,
+                cmd_held=self._cmd_held,
                 char_held=chord_with,
             ))
 
@@ -910,6 +926,9 @@ class KeyboardStateMachine:
 
         if keycode in (KeyCode.KEY_LEFTCTRL, KeyCode.KEY_RIGHTCTRL):
             self._ctrl_held = False
+            return actions
+        if keycode in (KeyCode.KEY_LEFTMETA, KeyCode.KEY_RIGHTMETA):
+            self._cmd_held = False
             return actions
 
         # Handle modifier releases (Shift keys)

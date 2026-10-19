@@ -49,6 +49,13 @@ class Room:
     def restore_timeline_state(self, state: dict):
         pass
 
+    def save_extras(self) -> dict:
+        """What a save keeps beyond the Time Travel state."""
+        return {}
+
+    def on_open_save(self):
+        pass
+
     def clear(self):
         self.restore_timeline_state({})
 

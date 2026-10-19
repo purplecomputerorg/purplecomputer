@@ -130,6 +130,15 @@ class LoopStation:
         self._cycle_start = now
         return list(self._loop_events), self._loop_duration
 
+    def play(self, events: list[tuple[str, str, float, int]], duration: float,
+             now: float | None = None) -> None:
+        """Loop these events right away, as if they had just been recorded."""
+        self._recording_events.clear()
+        self._loop_events = sorted(events, key=lambda e: e[2])
+        self._loop_duration = duration
+        self._state = LOOPING
+        self._cycle_start = now if now is not None else self._time_fn()
+
     def start_new_cycle(self, now: float | None = None) -> None:
         """Mark the start of a new playback cycle."""
         now = now if now is not None else self._time_fn()

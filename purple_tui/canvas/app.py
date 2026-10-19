@@ -475,6 +475,9 @@ class PurpleApp:
         state.update({f"code:{i}": line for i, line in enumerate(self._code_lines[room])})
         return state
 
+    def save_state(self, room: str) -> dict:
+        return self.room_state(room) | self.rooms[room].save_extras()
+
     def apply_room_state(self, room: str, state: dict):
         self.rooms[room].restore_timeline_state(state)
         code = sorted((int(k[5:]), v) for k, v in state.items() if k.startswith("code:"))
@@ -906,7 +909,7 @@ class PurpleApp:
         from .paper import artwork
         if artwork(self.room, self.g) is None:
             return False
-        room, state = self.active_room, self.room_state(self.active_room)
+        room, state = self.active_room, self.save_state(self.active_room)
         made = saves.add(room, state, self.room.LANDSCAPE)
         self.timeline_capture_now(room)
         self._timelines[room].mark(saves.digest(state))
@@ -944,7 +947,7 @@ class PurpleApp:
     def _check_still_saved(self, room: str):
         """The Saved star stays only while what's on screen is the saved work."""
         from .saves import digest
-        if room in self._saved_digest and digest(self.room_state(room)) != self._saved_digest[room]:
+        if room in self._saved_digest and digest(self.save_state(room)) != self._saved_digest[room]:
             del self._saved_digest[room]
             self.invalidate()
 
@@ -979,6 +982,7 @@ class PurpleApp:
             self._replace_room(room, lambda: self.apply_room_state(room, save.state))
         except Exception:
             return
+        self.room.on_open_save()
         self.invalidate()
 
     def _start_time_travel(self):

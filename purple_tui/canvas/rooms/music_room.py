@@ -20,7 +20,8 @@ from ...music_constants import (
 )
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
-from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, SpaceHold
+from ..music_replay import Recording
+from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel, SpaceHold
 from ..sounds import SoundBank
 from ..ui import CODE_HINT, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hint_row_h, hold_status
 from .base import Room
@@ -58,6 +59,9 @@ class MusicRoom(Room):
         self.loop = LoopStation()
         self._loop_task = None
         self._loop_timer = None
+        self.recording = Recording(self.color_state)
+        self._replay = None       # (task, colors it ends on, when it started) while a save plays back
+        self._saved_loop = None
         self._last_letter_key = None
         self._last_letter_press_t = float("-inf")
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
@@ -97,7 +101,8 @@ class MusicRoom(Room):
 
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
-        state = {f"k:{k}": v for k, v in self.color_state.items() if v != -1}
+        colors = self._replay[1] if self._replay else self.color_state
+        state = {f"k:{k}": v for k, v in colors.items() if v != -1}
         state.update(instrument=self.instrument_index, root=self.root_index, letters=self.letters_mode, labels=self.show_labels)
         return state
 
@@ -111,12 +116,68 @@ class MusicRoom(Room):
         for key, val in state.items():
             if key.startswith("k:") and key[2:] in self.color_state:
                 self.color_state[key[2:]] = int(val)
+        self.recording = Recording.load(state.get("replay"), self.color_state)
+        self._saved_loop = state.get("loop")
         self._transition = None
         self.echo.reset()
         self.app.invalidate()
 
     def clear(self):
         self.restore_timeline_state({})
+
+    # ---------------------------------------------------------------- saved music
+    def save_extras(self) -> dict:
+        """The last minute of playing, and the loop if one is going."""
+        loop = self._saved_loop if self._replay else self._loop_data()
+        extras = {"replay": self.recording.data()} if self.recording.notes else {}
+        return extras | ({"loop": loop} if loop else {})
+
+    def _loop_data(self):
+        if self.loop.state != LOOPING:
+            return None
+        return {"ms": round(self.loop.loop_duration * 1000),
+                "notes": [[k, m, self._instrument(i)[0], round(o * 1000)] for k, m, o, i in self.loop.loop_events]}
+
+    def on_open_save(self):
+        """Play the save's music from the colors it started on up to the saved ones."""
+        if not self.recording.notes:
+            return self._carry_on()
+        self._replay = (asyncio.create_task(self._replay_notes()), dict(self.color_state), time.monotonic())
+        self.color_state = dict(self.recording.start)
+        self._sync_panels()
+
+    async def _replay_notes(self):
+        played = self.recording.notes[0][3]
+        for key, mode, instrument, ms in self.recording.notes:
+            await asyncio.sleep((ms - played) / 1000)
+            played = ms
+            self._hit(key, mode, self._instrument_index(instrument))
+        self._end_replay()
+
+    def replay_progress(self) -> float:
+        total = self.recording.seconds
+        return min(1.0, (time.monotonic() - self._replay[2]) / total) if self._replay and total else 1.0
+
+    def _end_replay(self, carry_on: bool = True):
+        """The saved colors come back, and a saved loop carries on unless the music is stopping."""
+        if self._replay is None:
+            return
+        task, self.color_state, _ = self._replay
+        self._replay = None
+        if task is not asyncio.current_task():
+            task.cancel()
+        if carry_on:
+            self._carry_on()
+        self._saved_loop = None
+        self._sync_panels()
+        self.app.invalidate()
+
+    def _carry_on(self):
+        loop, self._saved_loop = self._saved_loop, None
+        if loop:
+            self.loop.play([(k, m, ms / 1000, self._instrument_index(i)) for k, m, i, ms in loop["notes"]], loop["ms"] / 1000)
+            self._start_loop_playback()
+            self._sync_panels()
 
     # ---------------------------------------------------------------- sounds
     def _pitch_stem_for_key(self, key: str):
@@ -151,6 +212,12 @@ class MusicRoom(Room):
         available = instruments()
         return available[index % len(available)]
 
+    @staticmethod
+    def _instrument_index(instrument_id: str) -> int:
+        """A saved instrument whose pack was removed plays as the first one."""
+        ids = [i for i, _ in instruments()]
+        return ids.index(instrument_id) if instrument_id in ids else 0
+
     def reset_letter_sounds(self):
         self.sounds.clear()
 
@@ -167,9 +234,12 @@ class MusicRoom(Room):
         self._note_labels.clear()
 
     def _play_key(self, key: str, mode: str, instrument: int | None = None):
+        instrument = self.instrument_index if instrument is None else instrument
+        if self._replay is None:
+            self.recording.add(key, mode, self._instrument(instrument)[0], time.monotonic())
         is_letters_layer = mode == MODE_LETTERS and key in self.sounds.letters()
         scale = 0.2 if is_letters_layer else 1.0
-        self.play_sound_with_instrument(key, self.instrument_index if instrument is None else instrument, scale)
+        self.play_sound_with_instrument(key, instrument, scale)
         if is_letters_layer:
             self.play_letter(key)
 
@@ -181,6 +251,7 @@ class MusicRoom(Room):
     def set_color_index(self, key: str, index: int):
         if key in self.color_state:
             self.color_state[key] = index
+            self.recording = Recording(self.color_state)
             self.app.invalidate()
 
     def get_color(self, key: str) -> str:
@@ -250,6 +321,7 @@ class MusicRoom(Room):
         self._sync_panels()
 
     def _stop_loop(self):
+        self._end_replay(carry_on=False)
         self.loop.stop()
         if self._loop_timer:
             self._loop_timer.stop()
@@ -316,14 +388,18 @@ class MusicRoom(Room):
             self._noscreen_flash(self.get_color(key))
 
     def _sync_panels(self):
-        """The loop panel shows exactly while the loop station isn't idle."""
+        """The replay panel shows while a save plays back, the loop panel while the loop station isn't idle."""
         if self.app.active_room != "music" or self.code_panel is not None:
             return
-        if self.loop.state == IDLE:
-            if isinstance(self.app._panel, LoopPanel):
-                self.app.set_panel(None)
-        elif not isinstance(self.app._panel, LoopPanel):
-            self.app.set_panel(LoopPanel(self.app, self.loop))
+        panel = self.app._panel
+        if self._replay:
+            if not isinstance(panel, ReplayPanel):
+                self.app.set_panel(ReplayPanel(self.app, self))
+        elif self.loop.state != IDLE:
+            if not isinstance(panel, LoopPanel):
+                self.app.set_panel(LoopPanel(self.app, self.loop))
+        elif isinstance(panel, (LoopPanel, ReplayPanel)):
+            self.app.set_panel(None)
         self.app.invalidate()
 
     # ---------------------------------------------------------------- no-screen mode
@@ -416,6 +492,11 @@ class MusicRoom(Room):
         return False
 
     async def handle(self, action):
+        if self._replay and getattr(action, "is_down", True) and not getattr(action, "is_repeat", False):
+            self._end_replay()   # the key that stops it plays as usual; Esc only stops
+            if isinstance(action, ControlAction) and action.action == "escape":
+                self.app._escape_consumed_by_mode = True
+                return
         if isinstance(action, ControlAction) and action.action == "space" and self.space.route(action):
             return
         if self.code_panel is not None:

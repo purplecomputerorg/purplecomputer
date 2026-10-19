@@ -15,7 +15,7 @@ from functools import cache
 import pygame
 
 from .. import palette as P
-from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_LOOP, ICON_ROBOT, ICON_TIME_TRAVEL
+from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_LOOP, ICON_MUSIC, ICON_ROBOT, ICON_TIME_TRAVEL
 from ..content import get_content
 from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ..loop_station import LOOPING, RECORDING
@@ -650,6 +650,28 @@ class LoopPanel:
         bar_h = g.em(0.55)
         frac = self.loop.recording_progress() if recording else self.loop.loop_progress()
         draw_bar(g, pill.right + gap, cy - bar_h // 2, max(0, right - pill.right - gap), bar_h, frac, color, P.FIELD, bar_h // 2)
+
+
+class ReplayPanel:
+    """Under the grid while an opened save plays its music back, big enough to
+    notice: what is playing, how far along, and that any key stops it."""
+    kind = "replay"
+
+    def __init__(self, app, room):
+        self.app = app
+        self.room = room
+
+    def height(self, g) -> int:
+        return g.vh(11)
+
+    def draw(self, g, rect):
+        pad = g.em(2)
+        g.draw_text(f"{ICON_MUSIC}  Playing your saved music", g.vh(2.6), rect.centerx, rect.y + g.vh(2.6),
+                    "mono-heavy", P.TEXT, anchor="center")
+        bar_h = g.vh(1)
+        draw_bar(g, rect.x + pad, rect.y + g.vh(5.2), rect.w - 2 * pad, bar_h, self.room.replay_progress(),
+                 P.PRIMARY, P.FIELD, bar_h // 2)
+        g.draw_text("Press any key to stop", g.vh(1.9), rect.centerx, rect.y + g.vh(8.4), "mono", P.MUTED, anchor="center")
 
 
 class TimeTravelBar:

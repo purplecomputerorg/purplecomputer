@@ -251,7 +251,7 @@ class RoomPickerScreen(PurpleModal):
                     else:
                         yield ExtraOption(ICON_CODE, "Open Code", "Space", id="opt-code-toggle")
 
-            yield Static("Enter pick   Hold Esc for grown-ups", id="modal-hint")
+            yield Static("Enter pick   Hold Esc for Parent Menu", id="modal-hint")
             with Container(id="picker-arrows"):
                 yield Static(arrow_keys_text(), id="picker-arrow-hint")
 

@@ -151,7 +151,7 @@ class WriteRoom(Room):
             g.draw_text(text[s:e], px, x, page.y + i * lh, "mono", P.TEXT, tr=False)
         before = text[lines[k][0]:cursor]
         draw_text_caret(g, x + (g.measure(before, px, "mono", tr=False)[0] if before else 0),
-                        page.y + (k - self.top) * lh, px, text[cursor:cursor + 1])
+                        page.y + (k - self.top) * lh, px, bar=True)
         if len(lines) > rows:
             w = em(0.7)
             track = pygame.Rect(rect.right - em(0.5) - w, page.y, w, rows * lh)

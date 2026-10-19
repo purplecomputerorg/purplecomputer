@@ -252,7 +252,8 @@ class TextField:
             self._underline(g, shown, px, tx, y)
         if self._marks:
             self._draw_marks(g, shown, start, px, tx, y)
-        draw_text_caret(g, tx + g.measure(before, px, "mono", tr=False)[0] if before else tx, y, px)
+        draw_text_caret(g, tx + g.measure(before, px, "mono", tr=False)[0] if before else tx, y, px,
+                        shown[len(before):len(before) + 1])
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
     def traced(self, ideas) -> str:
@@ -552,14 +553,19 @@ def draw_field(g: Gfx, box: pygame.Rect, px: int):
     g.rect(P.LINE, box, width=1, radius=round(px * 0.4))
 
 
-def draw_text_caret(g: Gfx, x: int, y: int, px: int, under: str = ""):
-    """The block caret at (x, line top), with `under`, the letter it sits on, in dark
-    on it as a terminal draws one; Gfx.blink flashes it in place."""
-    caret = (x, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05))
+def draw_text_caret(g: Gfx, x: int, y: int, px: int, under: str = "", bar: bool = False):
+    """The caret at (x, line top): a block with `under`, the letter it sits on, in dark
+    on it as a terminal draws one, or a thick bar between letters; Gfx.blink flashes it."""
+    if bar:
+        w = max(3, round(px * 0.16))
+        caret = (x - w // 2, y, w, round(px * 1.25))
+    else:
+        w = max(2, int(px * 0.55))
+        caret = (x, y + px // 8, w, int(px * 1.05))
 
     def draw():
-        g.rect(P.CARET, caret)
-        if under.strip():
+        g.rect(P.CARET, caret, radius=w // 2 if bar else 0)
+        if under.strip() and not bar:
             g.draw_text(under, px, x, y, "mono", P.BG, tr=False)
     g.draw_caret(caret, draw)
 

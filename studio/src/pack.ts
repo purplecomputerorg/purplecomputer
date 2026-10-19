@@ -2,8 +2,9 @@
 import { buildPack as build, letterPath, packFilename as filename, phrasePath, pictureSourcePath, type PackSpec } from "@sdk/pack";
 import { cellsToOps } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
-import { gunzip, untar } from "@sdk/tar";
+import { gunzip, untar, type TarEntry } from "@sdk/tar";
 import { decodeWav } from "@sdk/wav";
+import type { PackFiles } from "./live/boot";
 import { instrumentNotes } from "./notes";
 import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop, type Words } from "./photo";
 import { draft, emptyDraft, type Draft, type Keepable } from "./state";
@@ -47,6 +48,20 @@ export async function buildPack(onProgress?: (msg: string) => void, d: Draft = d
 }
 
 export const packFilename = () => filename(draft);
+
+// What Purple last got: a pack's id and files. An empty id means it may have nothing.
+export interface Sent { id: string; files: Map<string, Uint8Array> }
+const same = (a: Uint8Array | undefined, b: Uint8Array) => a === b || (!!a && a.length === b.length && a.every((v, i) => v === b[i]));
+
+// A pack as Studio's Purple takes it: whole when it's another pack, else only the files that changed.
+export function packChanges(id: string, entries: TarEntry[], last: Sent): PackFiles {
+  const fresh = id !== last.id;
+  return {
+    id, fresh,
+    files: entries.filter((e) => fresh || !same(last.files.get(e.path), e.data)).map((e) => [e.path, e.data]),
+    removed: fresh ? [] : [...last.files.keys()].filter((path) => !entries.some((e) => e.path === path)),
+  };
+}
 
 // A downloaded Purple Pack, back as the draft it was made from, everything in it added.
 export async function openPack(file: Blob): Promise<Draft> {

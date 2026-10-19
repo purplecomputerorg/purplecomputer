@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, canvasOrigin, fitToCanvas } from "../sdk/src/purple/art";
 import { DEFAULT_PALETTE, contrast } from "../sdk/src/purple/theme";
-import { CANVAS_SHAPE, clampCrop, fillCrop, wordLetters, wordsAt, wrap, type Picture, type Words } from "../src/photo";
+import { CANVAS_SHAPE, clampCrop, downsample, fillCrop, wordLetters, wordsAt, wrap, type Picture, type Words } from "../src/photo";
+
+describe("photo to cells", () => {
+  it("averages each cell's pixels, weighting a pixel split between cells by how much falls in each", () => {
+    // Three pixels wide, one tall: red, green, blue. Two cells split the green one in half.
+    const data = new Uint8ClampedArray([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255]);
+    expect(downsample({ width: 3, height: 1, data } as ImageData, 2, 1)).toEqual([["#aa5500", "#0055aa"]]);
+    expect(downsample({ width: 3, height: 1, data } as ImageData, 1, 1)).toEqual([["#555555"]]);
+  });
+});
 
 describe("cropping to the Art canvas", () => {
   it("fills the canvas from a tall photo and a wide one", () => {

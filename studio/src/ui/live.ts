@@ -2,10 +2,10 @@
 // the whole visit, so it's usually ready before anyone looks. Until it is, and while it restarts
 // with an edit, a quiet message covers it, since it can't take keys then.
 import { buildEntries } from "@sdk/pack";
-import type { PackFiles, Place, Room, RoomSetup } from "../live/boot";
+import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { KEY_EVENT, announceKey } from "../keys";
-import { manifest, packSpec } from "../pack";
+import { manifest, packChanges, packSpec, type Sent } from "../pack";
 import { draft } from "../state";
 import { h } from "./dom";
 
@@ -33,7 +33,6 @@ const ZOOM: Record<Room, { scale: number; at?: [number, number] }> = {
 // The same test as the phone rules in styles.css.
 export const PHONE = matchMedia("(max-width: 700px), (max-height: 500px) and (pointer: coarse)");
 const MOUSE = matchMedia("(pointer: fine)");
-const same = (a: Uint8Array | undefined, b: Uint8Array) => a === b || (!!a && a.length === b.length && a.every((v, i) => v === b[i]));
 const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
 
 class LiveScreen {
@@ -58,8 +57,7 @@ class LiveScreen {
   private timer = 0;
   private sent = "";
   // What Purple has now, so the next pack sends only what changed.
-  private files = new Map<string, Uint8Array>();
-  private packId = "";
+  private last: Sent = { id: "", files: new Map() };
   private syncing = Promise.resolve();
   // Messages wait for the frame's page to be listening; until then the iframe holds about:blank.
   private hello!: () => void;
@@ -127,21 +125,15 @@ class LiveScreen {
     const spec = await packSpec(live, true);
     const entries = await buildEntries(spec);
     const id = manifest(spec).id;
-    const fresh = id !== this.packId;
-    const pack: PackFiles = {
-      id, fresh,
-      files: entries.filter((e) => fresh || !same(this.files.get(e.path), e.data)).map((e) => [e.path, e.data]),
-      removed: fresh ? [] : [...this.files.keys()].filter((path) => !entries.some((e) => e.path === path)),
-    };
-    this.files = new Map(entries.map((e) => [e.path, e.data]));
-    this.packId = id;
+    const pack = packChanges(id, entries, this.last);
+    this.last = { id, files: new Map(entries.map((e) => [e.path, e.data])) };
     if (!pack.files.length && !pack.removed.length) return void (this.updating.hidden = true);
     this.post({ type: "load", pack, setup: this.setup });
   }
 
   private onMessage(m: FromFrame): void {
     if (m.type === "hello") this.hello();
-    if (m.type === "failed") this.packId = "";  // the next pack goes whole, since this one may not have landed
+    if (m.type === "failed") this.last.id = "";  // the next pack goes whole, since this one may not have landed
     if (m.type === "failed") { this.status.textContent = "Purple Computer couldn't start in this browser"; this.element.classList.add("failed"); console.warn("Purple failed:", m.text); }
     if (m.type === "restarting") this.busy(true);
     if (m.type === "loaded") { this.busy(false); this.updating.hidden = true; }

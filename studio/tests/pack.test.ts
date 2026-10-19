@@ -3,7 +3,7 @@ import { buildEntries, manifest, roomTitle, type PackSpec } from "../sdk/src/pac
 import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
 import { gunzip, gzip, tar, untar } from "../sdk/src/tar";
-import { buildPack, openPack, packSpec } from "../src/pack";
+import { buildPack, openPack, packChanges, packSpec } from "../src/pack";
 import { scaleCrop } from "../src/photo";
 import type { Draft } from "../src/state";
 import roomLibrary from "../../purple_tui/roomkit/purple.py?raw";
@@ -110,5 +110,32 @@ describe("pack assembly", () => {
     await expect(buildEntries({ ...base, rooms: [{ name: "purple", source: "" }] })).rejects.toThrow(/not purple/);
     expect(roomTitle("dinosaur-trivia")).toBe("Dinosaur Trivia");
     expect(roomTitle("snake2go_fast")).toBe("Snake2Go Fast");
+  });
+});
+
+describe("updating Studio's Purple", () => {
+  const entries = (files: Record<string, string>) => Object.entries(files).map(([path, data]) => ({ path, data: new TextEncoder().encode(data) }));
+  const paths = (p: { files: [string, Uint8Array][] }) => p.files.map(([path]) => path);
+  const before = { "manifest.json": "{}", "content/emoji.json": '{"dog":"🐶"}', "content/pictures/dog.png": "png" };
+  const last = { id: "pack-1", files: new Map(entries(before).map((e) => [e.path, e.data])) };
+
+  it("sends nothing when nothing changed, and only the changed file after an edit", () => {
+    expect(packChanges("pack-1", entries(before), last)).toEqual({ id: "pack-1", fresh: false, files: [], removed: [] });
+    expect(paths(packChanges("pack-1", entries({ ...before, "content/emoji.json": '{"dog":"🐕"}' }), last))).toEqual(["content/emoji.json"]);
+  });
+
+  it("names the files a removed piece leaves behind", () => {
+    const pack = packChanges("pack-1", entries({ "manifest.json": "{}", "content/emoji.json": '{"dog":"🐶"}' }), last);
+    expect(pack.removed).toEqual(["content/pictures/dog.png"]);
+    expect(pack.files).toEqual([]);
+  });
+
+  it("sends a whole pack when it's another pack, or Purple may have nothing", () => {
+    const now = entries({ "manifest.json": "{}", "content/emoji.json": '{"dog":"🐶"}' });
+    for (const pack of [packChanges("pack-2", now, last), packChanges("pack-1", now, { ...last, id: "" })]) {
+      expect(pack.fresh).toBe(true);
+      expect(paths(pack)).toEqual(["manifest.json", "content/emoji.json"]);
+      expect(pack.removed).toEqual([]);
+    }
   });
 });

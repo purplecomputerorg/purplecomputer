@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { encodeWav, tidy } from "../src/audio";
 import { CLIP_SAMPLE_RATE } from "../sdk/src/purple/sounds";
+import { decodeWav } from "../sdk/src/wav";
 
 const sine = (freq: number, seconds: number, rate = CLIP_SAMPLE_RATE) =>
   Float32Array.from({ length: Math.floor(rate * seconds) }, (_, i) => 0.5 * Math.sin((2 * Math.PI * freq * i) / rate));
@@ -16,6 +17,13 @@ describe("wav", () => {
     expect(v.getUint32(24, true)).toBe(22050);
     expect(v.getUint16(34, true)).toBe(16);
     expect(v.getUint32(40, true)).toBe(wav.length - 44);
+  });
+
+  it("reads back what it wrote, clipping anything past full scale", () => {
+    const samples = Float32Array.from([0, 0.5, -0.25, 1.5, -2]);
+    const back = decodeWav(encodeWav({ samples, rate: 16000 }));
+    expect(back.rate).toBe(16000);
+    [0, 0.5, -0.25, 1, -1].forEach((s, i) => expect(back.samples[i]).toBeCloseTo(s, 4));
   });
 });
 

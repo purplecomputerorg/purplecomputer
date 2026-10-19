@@ -770,12 +770,12 @@ class PurpleApp:
         return type(self.rooms[room])(_Offscreen(self))
 
     def save_artwork(self, save, on_screen=False):
-        """A save's work at page size, drawn by an off-screen copy of its room."""
-        from .paper import artwork
+        """A save's work at page size (screen shape on_screen), drawn by an off-screen copy of its room."""
+        from .paper import artwork, screen_artwork
         try:
             scratch = self.offscreen(save.room)
             scratch.restore_timeline_state(save.state)
-            return artwork(scratch, self.g, on_screen=on_screen)
+            return (screen_artwork if on_screen else artwork)(scratch, self.g)
         except Exception:
             return None
 
@@ -928,10 +928,10 @@ class PurpleApp:
                     picture=self._save_thumb())
 
     def _save_thumb(self):
-        from .paper import artwork
+        from .paper import screen_artwork
         from .saves import fit
         g = self.g
-        work = artwork(self.room, g, (g.vw(40), g.vh(40)), on_screen=True)
+        work = screen_artwork(self.room, g)
         return None if work is None else fit(work, g.vh(SAVE_THUMB_VH) * 2, g.vh(SAVE_THUMB_VH))
 
     def _check_still_saved(self, room: str):

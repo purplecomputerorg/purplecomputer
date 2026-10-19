@@ -3,7 +3,8 @@
 Every page carries a small maker's mark built from the computer's name.
 A room that can print has paper(g, size, on_screen=False), which returns its work
 drawn to fit size on a white ground (or None when there is nothing yet), and
-LANDSCAPE. on_screen draws it in the screen's colors instead, as Open shows it.
+LANDSCAPE. on_screen draws it in the screen's colors instead; screen_artwork is that
+in the screen's shape, as the Saved toast and Open show it.
 """
 
 import pygame
@@ -43,6 +44,10 @@ def artwork(room, g, size=None, on_screen=False):
         return None
     w, h = page_size(room.LANDSCAPE)
     return room.paper(g, size or (w - 2 * MARGIN, h - 2 * MARGIN), on_screen)
+
+
+def screen_artwork(room, g):
+    return artwork(room, g, (g.vw(40), g.vh(40)), on_screen=True)
 
 
 def page(room, g, computer_name: str = ""):

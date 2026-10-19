@@ -54,6 +54,16 @@ class Room:
         return lib if lib.is_file() else None
 
     @property
+    def images(self) -> dict[str, Path]:
+        """The pack's content/images/<name>.png, which its rooms draw by name."""
+        return room_assets(self.path.parents[1] / "images", ".png")
+
+    @property
+    def sounds(self) -> dict[str, Path]:
+        """The pack's content/sounds/<name>.wav, which its rooms play by name."""
+        return room_assets(self.path.parents[1] / "sounds", ".wav")
+
+    @property
     def key(self) -> str:
         return f"{self.pack}/{self.name}"
 
@@ -764,6 +774,26 @@ class ContentManager:
 
 ROOM_NAME = re.compile(r"^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$")  # purple.py is the pack's room library
 ROOM_LIB = "purple.py"
+
+
+ASSET_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def room_assets(folder: Path, suffix: str) -> dict[str, Path]:
+    return {p.stem: p for p in sorted(folder.glob(f"*{suffix}")) if ASSET_NAME.match(p.stem)} if folder.is_dir() else {}
+
+
+def png_size(path: Path) -> tuple[int, int] | None:
+    """Width and height from a PNG's header, without decoding it."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(24)
+    except OSError:
+        return None
+    if len(head) < 24 or not head.startswith(PNG_SIGNATURE) or head[12:16] != b"IHDR":
+        return None
+    return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
 
 
 def room_files(content_dir: Path) -> list[Path]:

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 
+import pygame
 import pytest
 
 from purple_tui import content as content_mod
@@ -21,6 +22,7 @@ from purple_tui.canvas.rooms import family_room
 from purple_tui.canvas.rooms.family_room import FamilyRoom
 from purple_tui.canvas.rooms.parent_menu import FamilyRoomsScreen
 from purple_tui.content import ContentManager
+from purple_tui.keyboard import NavigationAction
 
 SNAKE = '''from purple import *
 snake, heading = [(5, 5)], (1, 0)
@@ -247,6 +249,93 @@ def test_game_over_waits_for_a_key_then_starts_fresh(pack):
         await until(lambda: "Again?" in texts(room))
         await press(app, "b")
         await until(lambda: texts(room) == ["go"])
+        room.close()
+    run(go())
+
+
+def test_a_room_hears_keys_go_up_and_knows_which_are_held(pack):
+    pack("hold", 'from purple import *\ndef on_key(key):\n    write(f"down {key} {held(key)}")\n'
+                 'def on_key_up(key):\n    write(f"up {key} {held(key)}")\n')
+
+    async def go():
+        app = make_app()
+        room = _open(app, "hold")
+        await until(lambda: not room._busy)
+        await press(app, "right", hold=0.1)
+        await press(app, "!")
+        await until(lambda: texts(room)[-1:] == ["up 1 False"])
+        assert texts(room) == ["down right True", "up right False", "down 1 True", "up 1 False"]
+        room.close()
+    run(go())
+
+
+def test_held_keys_go_up_when_something_covers_the_room(pack):
+    pack("hold", 'from purple import *\ndef on_key(key):\n    write("down")\ndef on_key_up(key):\n    write("up")\nevery(0.1, lambda: None)\n')
+
+    async def go():
+        app = make_app()
+        room = _open(app, "hold")
+        await until(lambda: not room._busy)
+        await app._dispatch_keyboard_action(NavigationAction(direction="left"))
+        await until(lambda: texts(room) == ["down"])
+        app.push(FamilyRoomsScreen(app))
+        await until(lambda: texts(room) == ["down", "up"])
+        app.top.close()
+        room.close()
+    run(go())
+
+
+def test_pictures_draw_from_the_pack_or_from_pixels(pack):
+    room_file = pack("pics", 'from purple import *\ngrid.set(0, 0, picture("hero"))\n'
+                             'grid.set(1, 0, pixels(["XX", "XX"], {"X": "#00ff00"}))\n')
+    images = room_file.path.parents[1] / "images"
+    images.mkdir()
+    red = pygame.Surface((4, 4))
+    red.fill((255, 0, 0))
+    pygame.image.save(red, str(images / "hero.png"))
+
+    async def go():
+        app = make_app()
+        room = _open(app, "pics")
+        await until(lambda: room.scene)
+        pictures = [s for s in room.scene if s[0] == "image"]
+        assert [s[5] for s in pictures] == ["hero", ("pixels", ("XX", "XX"), (("X", "#00ff00"),))]
+        app._draw()
+        k = room._surface.get_width() / family_room.SIZE[0]
+        assert room._surface.get_at((int(5 * k), int(5 * k)))[:3] == (255, 0, 0)
+        assert room._surface.get_at((int(15 * k), int(5 * k)))[:3] == (0, 255, 0)
+        room.close()
+    run(go())
+
+
+def test_a_picture_the_pack_doesnt_have_is_skipped(pack):
+    pack("custom", "", lib=lib_sending({"scene": [["image", 0, 0, 10, 10, "nope"], ["image", 0, 0, 10, 10, {"rows": "XX"}]]}))
+
+    async def go():
+        app = make_app()
+        room = _open(app, "custom")
+        await until(lambda: not room._busy)
+        assert room.scene == [] and room.fault is None
+        room.close()
+    run(go())
+
+
+def test_a_room_plays_its_packs_own_sounds(pack, monkeypatch):
+    room_file = pack("meow", 'from purple import *\ndef on_key(key):\n    sound("meow")\n    sound("woof")\n')
+    meow = room_file.path.parents[1] / "sounds" / "meow.wav"
+    meow.parent.mkdir()
+    meow.write_bytes(b"")
+    played = []
+    monkeypatch.setattr(family_room, "play_safe", played.append)
+    monkeypatch.setattr(family_room.SoundBank, "file", lambda self, path: path)
+
+    async def go():
+        app = make_app()
+        room = _open(app, "meow")
+        await until(lambda: not room._busy)
+        await press(app, "a")
+        await until(lambda: played)
+        assert played == [meow]
         room.close()
     run(go())
 

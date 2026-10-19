@@ -14,8 +14,8 @@ import json as _json
 import re as _re
 import traceback as _traceback
 
-__all__ = ["grid", "keep", "show", "write", "clear", "background", "say", "play", "drum",
-           "ask", "every", "after", "game_over"]
+__all__ = ["grid", "keep", "images", "show", "write", "clear", "background", "say", "play", "drum", "sound",
+           "picture", "pixels", "held", "ask", "every", "after", "game_over"]
 
 W, H = 24, 12
 CELL = 10
@@ -27,6 +27,8 @@ _send = None   # the host's: send(reply: dict)
 _recv = None   # the host's: blocking recv() -> event dict
 
 keep = {}      # remembered for next time, up to 4 KB of JSON
+images = {}    # the pack's pictures this room can draw: name -> (width, height)
+_held = set()
 
 
 def _text(value) -> str:
@@ -86,6 +88,34 @@ def drum(name):
     _s.sounds.append(["drum", str(name)])
 
 
+def sound(name):
+    """One of the pack's own sounds, content/sounds/<name>.wav."""
+    _s.sounds.append(["clip", str(name)])
+
+
+def held(key):
+    """Whether a key is down right now: 'left', 'space', 'a'."""
+    return key in _held
+
+
+class _Picture:
+    def __init__(self, source):
+        self.source = source
+
+
+def picture(name):
+    """One of the pack's pictures, content/images/<name>.png, for a grid square."""
+    if name not in images:
+        raise ValueError(f"the pack has no picture called {name!r}")
+    return _Picture(name)
+
+
+def pixels(rows, palette):
+    """A small picture made of characters, for a grid square: pixels([".X.", "XXX"], {"X": "#ffcc00"}).
+    A character not in the palette is see-through."""
+    return _Picture({"rows": list(rows), "palette": dict(palette)})
+
+
 def ask(prompt=""):
     """Wait for the kid to type an answer and press Enter. Returns what they typed."""
     _s.asking = [_text(prompt), ""]
@@ -120,7 +150,7 @@ class _Grid:
     def set(self, *args):
         """grid.set(x, y, thing) or grid.set((x, y), thing)."""
         *where, thing = args
-        _s.cells[self._pos(where)] = _text(thing)
+        _s.cells[self._pos(where)] = thing if isinstance(thing, _Picture) else _text(thing)
 
     def get(self, *where):
         return _s.cells.get(self._pos(where))
@@ -173,7 +203,9 @@ def _scene() -> list:
         ox, oy = (sw - W * CELL) / 2, (sh - H * CELL) / 2
         for (x, y), thing in _s.cells.items():
             cx, cy = ox + x * CELL, oy + y * CELL
-            if _HEX.match(thing):
+            if isinstance(thing, _Picture):
+                shapes.append(["image", cx, cy, CELL, CELL, thing.source])
+            elif _HEX.match(thing):
                 shapes.append(["rect", cx + 0.5, cy + 0.5, CELL - 1, CELL - 1, thing, CELL / 8])
             else:
                 shapes.append(_label(cx + CELL / 2, cy + CELL / 2, CELL * 0.78, thing))
@@ -226,6 +258,10 @@ def _exchange() -> dict:
     ev = _recv()
     if isinstance(ev.get("t"), (int, float)):
         _now[0] = float(ev["t"])
+    if ev.get("ev") == "key":
+        _held.add(ev.get("key"))
+    elif ev.get("ev") == "keyup":
+        _held.discard(ev.get("key"))
     return ev
 
 
@@ -259,6 +295,7 @@ def run(start: dict):
     """Run a room: its top level for the start event, then one event at a time."""
     _size[:] = start.get("size") or _size
     keep.update(start.get("keep") or {})
+    images.update({n: tuple(size) for n, size in (start.get("images") or {}).items()})
     _last["keep"] = _json.dumps(keep, sort_keys=True)
     room = {}
     try:
@@ -269,6 +306,8 @@ def run(start: dict):
                 _begin(start["source"], room)
             elif ev.get("ev") == "key" and callable(room.get("on_key")):
                 room["on_key"](ev.get("key"))
+            elif ev.get("ev") == "keyup" and callable(room.get("on_key_up")):
+                room["on_key_up"](ev.get("key"))
             elif ev.get("ev") == "tick":
                 _fire_timers()
     except Exception as exc:

@@ -57,6 +57,9 @@ class SoundBank:
             self._cache[key] = load()
         return self._cache[key]
 
+    def file(self, path: Path):
+        return self._get(("file", path), lambda: {"sound": _load(path)}).get("sound")
+
     def instrument(self, instrument_id: str) -> dict:
         """Samples keyed by pitch stem ('c4', 'cs5')."""
         def load():

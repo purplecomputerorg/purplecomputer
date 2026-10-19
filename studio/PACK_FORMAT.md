@@ -83,6 +83,10 @@ What a room can call, the keys it receives, and the message protocol are in `gui
 
 Studio saves the Blockly workspace a room was built from beside it as `<name>.blocks.json`, which Purple ignores; it is there so the room can be reopened for editing.
 
+### images/<name>.png and sounds/<name>.wav
+
+What the pack's rooms draw and play by name: `picture("hero")` and `sound("meow")` in a room, `image` shapes and `clip` sounds in the protocol (`guides/family-rooms.md`). Names are lowercase letters, digits, `-` and `_`. Images are PNG, at most 1024 pixels a side and 1 MB; a small sprite drawn big stays crisp. Sounds are WAV in the letters' format. Only rooms of the same pack can use them, and only Purple opens the files.
+
 ### rooms/purple.py
 
 The library the pack's rooms import as `purple`: the copy of `purple_tui/roomkit/purple.py` Studio had when it built the pack. Purple runs the rooms on it, so a pack made by a newer Studio brings its newer library to an older Purple; a pack without one runs on the copy Purple was built with. It runs in the same sealed process as the room, never in Purple itself.
@@ -141,6 +145,7 @@ A second pack with the same `code` adds to the first, its entries winning, so a 
 - every `instruments/<name>.json` names a known base, has only that base's parameters with numeric values, and has a `content/<name>/` directory whose WAVs are 44100 Hz, mono, 16-bit
 - every `pictures/<name>.json` has an `ops` list of `[x, y, "#rrggbb"]` on the canvas
 - every `rooms/<name>.py`, and `rooms/purple.py`, has a valid name, is UTF-8 text that compiles, and is at most 64 KB
+- every file in `images/` is a PNG at most 1024 pixels a side and 1 MB, and every file in `sounds/` a WAV at 22050 Hz, mono, 16-bit, all with valid names
 
 `scripts/purplepack.py check` runs the same function on a directory or a `.purplepack`.
 

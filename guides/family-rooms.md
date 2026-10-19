@@ -26,7 +26,7 @@ def step():
 every(0.25, step)
 ```
 
-The top level runs once when the kid comes in. `on_key(key)` runs for every key: a lowercase letter, digit, or symbol, or `space`, `enter`, `backspace`, `up`, `down`, `left`, `right`. Esc always belongs to Purple.
+The top level runs once when the kid comes in. `on_key(key)` runs for every key: a lowercase letter, digit, or symbol (the key itself, so `1` for `!`), or `space`, `enter`, `backspace`, `up`, `down`, `left`, `right`. `on_key_up(key)` runs when it comes back up, and `held(key)` says whether it is down now, for games where holding an arrow walks. Esc always belongs to Purple.
 
 | Call | What happens |
 | --- | --- |
@@ -37,8 +37,11 @@ The top level runs once when the kid comes in. `on_key(key)` runs for every key:
 | `say(text)` | Purple's voice |
 | `play("C4", "marimba")` | A note on any of Purple's instruments, a family's own included |
 | `drum("snare")` | One of the number-row percussion sounds |
+| `sound("meow")` | The pack's own `content/sounds/meow.wav` |
 | `ask(prompt)` | Waits for a typed answer and Enter, returns it |
-| `grid.set(x, y, thing)` | A square of the 24 by 12 grid holds an emoji, a letter, or a `#rrggbb` color; positions wrap around |
+| `grid.set(x, y, thing)` | A square of the 24 by 12 grid holds an emoji, a letter, a `#rrggbb` color, or a picture; positions wrap around |
+| `picture("hero")` | The pack's `content/images/hero.png`, for a grid square; `images` maps each name to its size |
+| `pixels(rows, palette)` | A small picture written as characters, `pixels([".X.", "XXX"], {"X": "#ffcc00"})`; a character not in the palette is see-through |
 | `grid.get`, `grid.erase`, `grid.clear`, `grid.random_empty` | |
 | `every(seconds, fn)`, `after(seconds, fn)` | Timers; `.stop()` on what they return |
 | `game_over(text)` | Stops the timers and shows text; the next key starts the room over |
@@ -54,8 +57,9 @@ Purple to room:
 
 | Event | Fields |
 | --- | --- |
-| `start` | `api` (1), `size` (`[240, 120]`), `keep`, `lib` (the library's source), `source` (the room's) |
+| `start` | `api` (2), `size` (`[240, 120]`), `keep`, `lib` (the library's source), `source` (the room's), `images` (each pack picture's `[width, height]`) |
 | `key` | `key` as above; `char`, the character as typed, for letters and symbols |
+| `keyup` | `key`, for every `key` Purple sent; when something covers the room, every held key goes up |
 | `tick` | nothing more |
 
 Every event also carries `t`, the room's clock in seconds, which stops while the room is paused.
@@ -65,12 +69,12 @@ Room to Purple, every field optional:
 | Field | Meaning |
 | --- | --- |
 | `scene` | The whole screen as a list of shapes; absent means unchanged |
-| `sounds` | `["say", text]`, `["note", "C4", instrument]`, `["drum", name]`, at most 8 |
+| `sounds` | `["say", text]`, `["note", "C4", instrument]`, `["drum", name]`, `["clip", name]` (the pack's `sounds/<name>.wav`), at most 8 |
 | `wake` | Seconds until the room wants a `tick`; absent or null means no ticks |
 | `keep` | The object to remember; absent means unchanged |
 | `error` | `{text, line}`; the room has stopped |
 
-Shapes are on a 240 by 120 surface that fills the room's viewport, floats allowed: `["rect", x, y, w, h, color, radius]` and `["text", x, y, size, text, color, align]` (`align` is `center`, the default, or `left`; text too wide for the surface is shrunk to fit). A color is `#rrggbb` or a palette role (`text`, `accent`, `muted`, `surface`, and the rest of `canvas/theme.ROLES`), so rooms follow the family's theme.
+Shapes are on a 240 by 120 surface that fills the room's viewport, floats allowed: `["rect", x, y, w, h, color, radius]`, `["text", x, y, size, text, color, align]` (`align` is `center`, the default, or `left`; text too wide for the surface is shrunk to fit), and `["image", x, y, w, h, source]`. An image's source is a pack picture's name or `{"rows": [...], "palette": {char: color}}`, at most 64 by 64; Purple stretches it to the box, blocky when it grows at least twice, smooth otherwise. A color is `#rrggbb` or a palette role (`text`, `accent`, `muted`, `surface`, and the rest of `canvas/theme.ROLES`), so rooms follow the family's theme.
 
 Purple skips fields, shapes, and sounds it doesn't know, so a newer library still runs on an older Purple; the library reads `api` to know what it can ask for. Never change what an existing field means: rooms on Keys already out there depend on it. `just room-compat` runs this checkout's library and rooms on a release's host to catch that.
 
@@ -89,11 +93,11 @@ The worry is a room that hangs, breaks the laptop, gets around the parent's sett
 - **No flashing.** After drawing a scene, Purple shrinks it to 16 by 8 tiles; a scene that changes the brightness of a quarter of them shows at most three times a second, and in between the newest scene waits. Small changes are never held back. This is on the drawn result, so no combination of shapes gets around it.
 - **Purple draws and plays.** Text goes through `Gfx`, so ALL CAPS and the emoji fallbacks apply; sound goes through Purple's volume and speech through its speech filter. Ticks stop while a menu covers the room, after three minutes without a key, and while the screen sleeps.
 - **Esc always leaves.** The room never sees it.
-- **Packs are checked on install.** `pack_manager.py` refuses paths that leave the pack, links, and code anywhere but `rooms/<name>.py` and `rooms/purple.py`. Those are source text that only ever run as above.
+- **Packs are checked on install.** `pack_manager.py` refuses paths that leave the pack, links, and code anywhere but `rooms/<name>.py` and `rooms/purple.py`. Those are source text that only ever run as above. A room draws and plays only its own pack's `images/` and `sounds/`, which Purple reads; the room never sees a file.
 
 ## Performance
 
-Each scene is drawn once into a picture when it arrives, and every frame after just copies it, so a full grid costs the same as an empty one. A full 24 by 12 grid is about 14 KB of JSON and a fraction of a millisecond to decode on a current laptop. The library sends `scene` only when it changed, so a room waiting for a key sends almost nothing, and ticks wait for the reply, so a slow room slows only itself.
+Each scene is drawn once into a picture when it arrives, and every frame after just copies it, so a full grid costs the same as an empty one. Pictures are decoded and scaled once per size, so a screen of 300 sprites redrawn 30 times a second costs about 1.5 ms a frame on a current laptop. A full 24 by 12 grid is about 14 KB of JSON and a fraction of a millisecond to decode on a current laptop. The library sends `scene` only when it changed, so a room waiting for a key sends almost nothing, and ticks wait for the reply, so a slow room slows only itself.
 
 ## Studio
 

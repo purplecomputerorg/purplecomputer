@@ -28,6 +28,7 @@ from ..constants import (
     is_usb_cached, is_usb_needed, is_usb_present,
 )
 from .gfx import Gfx, _Cache, rgb
+from .press import ARROWS
 from .rooms import ROOM_CLASSES, ROOM_NAMES
 from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
 from ..keyboard import (
@@ -516,6 +517,8 @@ class PurpleApp:
             if self._input_flood_guard.should_drop(action):
                 continue
             await self._dispatch_keyboard_action(action)
+        if not event.is_down and (key := event.char or (event.name if event.name in ARROWS else None)):
+            self.release_key(key)
         sm = self._keyboard_state_machine
         if sm.backslash_held and self._backslash_hold_timer is None:
             self._backslash_hold_timer = self.timers.after(BACKSLASH_HOLD, self._check_backslash_hold)
@@ -524,6 +527,10 @@ class PurpleApp:
             self._backslash_hold_timer = None
         if sm.held_char != self._held_char:
             self._track_letter_hold(sm.held_char)
+
+    def release_key(self, key: str):
+        if self.top:
+            self.top.released(key)
 
     def _track_letter_hold(self, char):
         """`held_letter` is the character key down for LETTER_HOLD or longer, else None."""

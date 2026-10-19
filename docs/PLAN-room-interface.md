@@ -4,7 +4,7 @@ Goal: after 2.0 ships, how families build rooms (Blockly, forms, Python, sprites
 
 ## The idea
 
-Purple keeps only what a sandboxed process can't do itself: a screen, a speaker, a voice, a keyboard, a clock, and a small notebook (`keep`). Everything that makes a room a *room* (the grid, `show`, `ask`, timers, `game_over`, sprites later) lives in the guest library, `purple_tui/roomkit/purple.py`, and every pack carries its own copy as `content/rooms/purple.py`. The Key freezes a protocol with nothing left to grow: three events in, one reply out with five optional fields, two shapes, three sounds.
+Purple keeps only what a sandboxed process can't do itself: a screen, a speaker, a voice, a keyboard, a clock, and a small notebook (`keep`). Everything that makes a room a *room* (the grid, `show`, `ask`, timers, `game_over`, a Pygame Zero layer later) lives in the guest library, `purple_tui/roomkit/purple.py`, and every pack carries its own copy as `content/rooms/purple.py`. The Key freezes a protocol with nothing left to grow: four events in, one reply out with five optional fields, three shapes, four sounds.
 
 Two rules keep it simple:
 
@@ -14,6 +14,7 @@ Two rules keep it simple:
 ## Decisions
 
 - **Drawing shapes, not pixels or widgets.** Widgets (the old `show`, `grid`) put room ideas in the OS. Pixels would need a second text and emoji renderer in the guest and heavy frames through a pipe on old laptops, and Purple couldn't apply its text rules. `rect` and `text` are enough to build the rest in the library, and Purple still draws every glyph.
+- **`keyup`, `image`, and `clip`, from the 2.0 survey.** Families asked for a Zelda-like dungeon, a garden, a text adventure, card games, and a game about their late cat. Five games written blind in plain Pygame Zero ran unchanged on Purple's host through a Pygame Zero layer in the library, and what they couldn't do without the host was hold a key down (3 of 5), play their own sounds (5 of 5), and draw their own pictures (3 of 5). So `key` names the physical key and a `keyup` follows it, and a pack's `images/*.png` and `sounds/*.wav` are drawn and played by name, Purple opening the files and telling the room only each picture's size. An `image` can instead carry small inline pixels (64 by 64 at most), the fallback for a library that wants to draw something itself. What remains for the library: polygons, and measuring text in Purple's font.
 - **The surface is 240 by 120** and fills the 48 by 24 unit viewport exactly, so a grid cell is 10 units.
 - **Every event carries `t`**, the room's clock, which stops while the room is paused, so timers don't jump after a menu or a rest. **Key events carry `char`**, the character as typed, so `ask()` keeps capitals; `key` stays lowercase.
 - **Text too wide is shrunk by Purple.** The library can't measure text; this keeps `show()` of a long word on screen without a measuring call in the protocol.

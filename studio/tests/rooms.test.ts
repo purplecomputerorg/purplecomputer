@@ -18,7 +18,7 @@ async function runRoom(source: string, events: Msg[], keep: Msg = {}): Promise<M
   py.FS.writeFile("/purple/runner.py", runnerSource);
   py.runPython("import sys; sys.path.insert(0, '/purple')");
   const replies: Msg[] = [];
-  const start = { ev: "start", t: 0, api: 1, size: [240, 120], keep, lib: purpleSource, source };
+  const start = { ev: "start", t: 0, api: 2, size: [240, 120], keep, lib: purpleSource, source };
   const queue = [start, ...events].map((e) => JSON.stringify(e));
   py.registerJsModule("room_channel", {
     send: (text: string) => replies.push(JSON.parse(text)),

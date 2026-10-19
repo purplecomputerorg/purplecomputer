@@ -399,6 +399,9 @@ class Overlay:
     async def handle(self, action):
         pass
 
+    def released(self, key: str):
+        """An arrow or character key came up: the only key releases that arrive as no action."""
+
     def draw(self, g: Gfx):
         pass
 

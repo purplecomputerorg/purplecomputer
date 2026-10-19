@@ -21,7 +21,8 @@ import pygame
 from ... import palette as P
 from ... import tts
 from ...audio import play_safe
-from ...keyboard import CharacterAction, ControlAction, NavigationAction
+from ...content import png_size
+from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...music_constants import instruments, pitch_filename
 from ...timeline import state_dir
 from ..sounds import SoundBank
@@ -29,7 +30,7 @@ from ..theme import ROLES
 from ..ui import Overlay
 
 ICON_FAMILY = "\U000F0827"  # nf-md-home_heart
-API = 1
+API = 2
 SIZE = (240, 120)           # the room's surface; the viewport is 2:1 on every machine
 RUNNER = Path(__file__).parents[2] / "roomkit" / "runner.py"
 BUILTIN_LIB = RUNNER.parent / "purple.py"
@@ -39,6 +40,8 @@ STEP_TIMEOUT_S = 3.0
 MAX_REPLY_CHARS = 256 * 1024
 MAX_SHAPES = 1000
 MAX_SOUNDS = 8
+MAX_PIXELS = 64             # an inline picture's rows, and characters per row
+PICTURE_CACHE = 512
 TEXT_MAX = 200
 KEEP_MAX_BYTES = 4096
 MIN_WAKE_S, MAX_WAKE_S = 1 / 30, 3600
@@ -140,11 +143,31 @@ def _color(v) -> str | None:
     return v if isinstance(v, str) and (_HEX.match(v) or v in ROLES) else None
 
 
-def _shape(s) -> tuple | None:
+def _pixels(src) -> tuple | None:
+    """{"rows": ["..X.", ...], "palette": {"X": color}}: a character not in the palette is see-through."""
+    rows, palette = src.get("rows"), src.get("palette")
+    if not (isinstance(rows, list) and 0 < len(rows) <= MAX_PIXELS and isinstance(palette, dict)):
+        return None
+    if not all(isinstance(r, str) and len(r) <= MAX_PIXELS for r in rows):
+        return None
+    if not all(isinstance(c, str) and len(c) == 1 and _color(v) for c, v in palette.items()):
+        return None
+    return ("pixels", tuple(rows), tuple(sorted(palette.items())))
+
+
+def _picture_source(src, images) -> str | tuple | None:
+    if isinstance(src, str):
+        return src if src in images else None
+    return _pixels(src) if isinstance(src, dict) else None
+
+
+def _shape(s, images=()) -> tuple | None:
     """A shape from a reply, checked; None for anything malformed or unknown, which is skipped."""
     if not isinstance(s, list) or not s:
         return None
     kind, a = s[0], s[1:]
+    if kind == "image" and len(a) >= 5 and all(map(_num, a[:4])) and (src := _picture_source(a[4], images)):
+        return ("image", *map(float, a[:4]), src)
     if kind == "rect" and len(a) >= 5 and all(map(_num, a[:4])) and _color(a[4]):
         return ("rect", *map(float, a[:4]), a[4], float(a[5]) if len(a) > 5 and _num(a[5]) else 0.0)
     if kind == "text" and len(a) >= 4 and all(map(_num, a[:3])):
@@ -181,6 +204,9 @@ class FamilyRoom(Overlay):
         self._guest = self._token = None
         self._wake = self._watchdog = self._flash_timer = None
         self._keep, self._keep_dirty = load_keep(room), False
+        self._images, self._clips = {}, {}
+        self._pictures: dict = {}    # source -> its picture, decoded once
+        self._scaled: dict = {}      # (source, size) -> the picture at that size
         self._last_key = time.monotonic()
         self._resting = False
         self._reset()
@@ -191,6 +217,7 @@ class FamilyRoom(Overlay):
         self._surface = self._thumb = self._pending = None
         self._last_flash = -math.inf
         self._busy, self._queue = True, []
+        self._held: set = set()      # keys the room was told went down and not yet up
         self._t0, self._paused, self._paused_at = time.monotonic(), 0.0, None
 
     # ---------------------------------------------------------------- process
@@ -208,7 +235,10 @@ class FamilyRoom(Overlay):
             lib = (self.room.lib or BUILTIN_LIB).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as e:
             return self._broken(f"could not read it: {e}")
-        start = {"ev": "start", "t": 0, "api": API, "size": list(SIZE), "keep": self._keep, "lib": lib, "source": source}
+        self._images = {n: (p, size) for n, p in self.room.images.items() if (size := png_size(p))}
+        self._clips = self.room.sounds
+        start = {"ev": "start", "t": 0, "api": API, "size": list(SIZE), "keep": self._keep, "lib": lib, "source": source,
+                 "images": {n: list(size) for n, (_, size) in self._images.items()}}
         token = self._token = object()
         try:
             self._guest = Guest(json.dumps(start, ensure_ascii=False),
@@ -244,19 +274,22 @@ class FamilyRoom(Overlay):
     def _clock(self) -> float:
         return time.monotonic() - self._t0 - self._paused
 
-    def _send(self, event: dict):
+    def _send(self, event: dict) -> bool:
+        """False when the event was dropped. A keyup is never dropped, or the room would think its key still down."""
         if self._guest is None:
-            return
+            return False
         if self._busy:
-            if event["ev"] == "key" and len(self._queue) < QUEUE_MAX:
+            if event["ev"] == "keyup" or (event["ev"] == "key" and sum(e["ev"] == "key" for e in self._queue) < QUEUE_MAX):
                 self._queue.append(event)
-            return
+                return True
+            return False
         if self._paused_at is not None:
             self._paused += time.monotonic() - self._paused_at
             self._paused_at = None
         self._busy = True
         self._arm(STEP_TIMEOUT_S)
         self._guest.send(json.dumps({**event, "t": round(self._clock(), 3)}, ensure_ascii=False))
+        return True
 
     def _tick(self):
         """The room's wake time came. Its clock stops while a menu covers it or the kid has
@@ -267,6 +300,7 @@ class FamilyRoom(Overlay):
             self._resting = True
             self.app.invalidate()
         if idle or self.app.top is not self:
+            self._release_all()  # its releases went to whatever covers it
             if self._paused_at is None:
                 self._paused_at = time.monotonic()
             self._wake = self.app.timers.after(PAUSED_RECHECK_S, self._tick)
@@ -305,7 +339,7 @@ class FamilyRoom(Overlay):
             scene = reply["scene"]
             if not isinstance(scene, list) or len(scene) > MAX_SHAPES:
                 return "it drew too much at once"
-            self._show([s for s in map(_shape, scene) if s])
+            self._show([s for s in (_shape(s, self._images) for s in scene) if s])
         sounds = reply.get("sounds")
         for sound in sounds[:MAX_SOUNDS] if isinstance(sounds, list) else []:
             self._play(sound)
@@ -354,6 +388,11 @@ class FamilyRoom(Overlay):
         surface.fill(P.SURFACE)
         k = size[0] / SIZE[0]
         for kind, x, y, *rest in scene:
+            if kind == "image":
+                w, h, src = rest
+                if img := self._picture(src, (max(1, round(w * k)), max(1, round(h * k)))):
+                    surface.blit(img, (round(x * k), round(y * k)))
+                continue
             if kind == "rect":
                 w, h, color, radius = rest
                 box = pygame.Rect(round(x * k), round(y * k), max(1, round(w * k)), max(1, round(h * k)))
@@ -367,6 +406,40 @@ class FamilyRoom(Overlay):
                 img = g.text(text, max(6, int(px * room / img.get_width())), "sans", _paint(color))
             surface.blit(img, img.get_rect(midleft=(x, y)) if align == "left" else img.get_rect(center=(x, y)))
         return surface
+
+    def _picture(self, src, size) -> pygame.Surface | None:
+        """A pack image or inline pixels at a size: blocky when blown up at least twice, smooth otherwise."""
+        if len(self._scaled) > PICTURE_CACHE:
+            self._pictures.clear()
+            self._scaled.clear()
+        if (src, size) in self._scaled:
+            return self._scaled[(src, size)]
+        if src not in self._pictures:
+            self._pictures[src] = self._decode(src)
+        img = self._pictures[src]
+        if img is not None:
+            blocky = size[0] >= 2 * img.get_width() and size[1] >= 2 * img.get_height()
+            img = (pygame.transform.scale if blocky else pygame.transform.smoothscale)(img, size)
+        self._scaled[(src, size)] = img
+        return img
+
+    def _decode(self, src) -> pygame.Surface | None:
+        if isinstance(src, str):
+            try:
+                loaded = pygame.image.load(str(self._images[src][0]))
+            except (pygame.error, OSError):
+                return None
+            img = pygame.Surface(loaded.get_size(), pygame.SRCALPHA)
+            img.blit(loaded, (0, 0))
+            return img
+        _, rows, palette = src
+        colors = {c: pygame.Color(_paint(v)) for c, v in palette}
+        img = pygame.Surface((max(map(len, rows)) or 1, len(rows)), pygame.SRCALPHA)
+        for y, row in enumerate(rows):
+            for x, c in enumerate(row):
+                if c in colors:
+                    img.set_at((x, y), colors[c])
+        return img
 
     def _audible(self) -> bool:
         return self.app._effective_volume() > 0
@@ -384,14 +457,17 @@ class FamilyRoom(Overlay):
                 play_safe(clip)
         elif kind == "drum" and (clip := self.sounds.drum(args[0])):
             play_safe(clip)
+        elif kind == "clip" and args[0] in self._clips and (clip := self.sounds.file(self._clips[args[0]])):
+            play_safe(clip)
 
     # ---------------------------------------------------------------- keys
     @staticmethod
     def _key_event(action) -> dict | None:
+        """`key` names the key itself (1 for !), so its keyup matches; `char` is what was typed."""
         if getattr(action, "is_repeat", False):
             return None
         if isinstance(action, CharacterAction) and len(action.char) == 1:
-            return {"ev": "key", "key": action.char.lower(), "char": action.char}
+            return {"ev": "key", "key": UNSHIFT_MAP.get(action.char, action.char), "char": action.char}
         if isinstance(action, NavigationAction):
             return {"ev": "key", "key": action.direction}
         if isinstance(action, ControlAction) and action.is_down and action.action in ("space", "enter", "backspace"):
@@ -403,6 +479,8 @@ class FamilyRoom(Overlay):
             if not action.is_down:
                 self.close()  # on release, so a hold still reaches the parent menu
             return
+        if isinstance(action, ControlAction) and not action.is_down:
+            return self.released(action.action)
         event = self._key_event(action)
         if event is None or self.fault:
             return
@@ -410,7 +488,17 @@ class FamilyRoom(Overlay):
         if self._resting:
             self._resting = False
             self.app.invalidate()
-        self._send(event)
+        if self._send(event):
+            self._held.add(event["key"])
+
+    def released(self, key: str):
+        if key in self._held:
+            self._held.discard(key)
+            self._send({"ev": "keyup", "key": key})
+
+    def _release_all(self):
+        for key in list(self._held):
+            self.released(key)
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g):

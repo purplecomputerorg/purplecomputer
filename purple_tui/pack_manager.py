@@ -23,13 +23,15 @@ import wave
 from pathlib import Path
 from typing import Optional
 
-from .content import PACK_FORMAT, ROOM_LIB, ROOM_NAME, is_letter_op, is_paint_op, read_manifest
+from .content import ASSET_NAME, PACK_FORMAT, ROOM_LIB, ROOM_NAME, is_letter_op, is_paint_op, png_size, read_manifest
 
 # Valid content-only pack types (no executable code)
 VALID_PACK_TYPES = ['emoji', 'sounds', 'stories', 'language']
 
 CODE_SUFFIXES = {'.py', '.pyc', '.pyo', '.pyw'}
 ROOM_MAX_BYTES = 64 * 1024
+IMAGE_MAX_SIDE = 1024
+IMAGE_MAX_BYTES = 1024 * 1024
 VOICE_RATE, VOICE_CHANNELS, VOICE_WIDTH = 22050, 1, 2
 SAMPLE_RATE, SAMPLE_CHANNELS, SAMPLE_WIDTH = 44100, 1, 2
 
@@ -140,6 +142,7 @@ def check_pack(pack_dir: Path) -> list[str]:
     problems += _check_instruments(content)
     problems += _check_pictures(content)
     problems += _check_rooms(content)
+    problems += _check_room_assets(content)
     if manifest['type'] == 'language':
         problems += _check_language(pack_dir)
     return problems
@@ -175,6 +178,21 @@ def _check_rooms(content: Path) -> list[str]:
     lib = content / 'rooms' / ROOM_LIB
     files = room_files(content) + ([lib] if lib.is_file() else [])
     return [f"content/rooms/{p}" for path in files if (p := room_source_problem(path))]
+
+
+def _check_room_assets(content: Path) -> list[str]:
+    """content/images/<name>.png and content/sounds/<name>.wav, what the pack's rooms draw and play."""
+    problems = _check_clips(content / 'sounds')
+    for path in sorted((content / 'images').glob('*')) + sorted((content / 'sounds').glob('*')):
+        if not ASSET_NAME.match(path.stem):
+            problems.append(f"content/{path.parent.name}/{path.name}: names are lowercase letters, digits, - and _")
+    for path in sorted((content / 'images').glob('*')):
+        size = png_size(path)
+        if path.suffix != '.png' or size is None:
+            problems.append(f"content/images/{path.name}: only PNG pictures are read here")
+        elif max(size) > IMAGE_MAX_SIDE or path.stat().st_size > IMAGE_MAX_BYTES:
+            problems.append(f"content/images/{path.name}: at most {IMAGE_MAX_SIDE} pixels a side and {IMAGE_MAX_BYTES // 1024 // 1024} MB")
+    return problems
 
 
 def _check_word_maps(content: Path) -> list[str]:

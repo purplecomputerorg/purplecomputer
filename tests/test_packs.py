@@ -115,6 +115,27 @@ class TestLoader:
         lib.write_text("def run(start)\n")
         assert any("rooms/purple.py: line 1" in p for p in check_pack(d))
 
+    def test_rooms_see_the_packs_png_images_and_wav_sounds(self, tmp_path):
+        import pygame
+        d = make_pack(tmp_path)
+        images, sounds = d / "content" / "images", d / "content" / "sounds"
+        images.mkdir()
+        pygame.image.save(pygame.Surface((16, 8)), str(images / "hero.png"))
+        write_wav(sounds / "meow.wav")
+        assert check_pack(d) == []
+        cm = ContentManager(packs_dir=tmp_path)
+        cm.load_all()
+        room, = cm.rooms
+        assert room.images == {"hero": images / "hero.png"} and room.sounds == {"meow": sounds / "meow.wav"}
+        assert content_mod.png_size(images / "hero.png") == (16, 8)
+        (images / "photo.jpg").write_bytes(b"\xff\xd8")
+        (images / "Big Cat.png").write_bytes((images / "hero.png").read_bytes())
+        write_wav(sounds / "fast.wav", rate=44100)
+        problems = check_pack(d)
+        assert any("images/photo.jpg: only PNG" in p for p in problems)
+        assert any("images/Big Cat.png: names are" in p for p in problems)
+        assert any("sounds/fast.wav: expected 22050 Hz" in p for p in problems)
+
     def test_pack_instruments_follow_the_built_ins(self, packs):
         assert instruments() == INSTRUMENTS + [("kitchen", "Kitchen")]
 

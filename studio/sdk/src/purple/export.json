@@ -646,7 +646,9 @@
     "harmonics": 10,
     "rolloff": 1000.0,
     "trem_rate": 5.0,
-    "trem_depth": 0.015
+    "trem_depth": 0.015,
+    "breath": 0.0,
+    "scoop": 0.0
    },
    "glockenspiel": {
     "duration": 1.5,

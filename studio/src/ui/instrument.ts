@@ -14,9 +14,9 @@ const SOUNDS: { title: string; blurb: string; base: BaseName; params: Params }[]
   { title: "Harp", blurb: "Soft, slow plucks", base: "ukulele", params: { duration: 1.8, damping: 0.998, warmth: 0.3, softness: 5, pluck_pos: 0.4, body_mix: 0.15 } },
   { title: "Twangy guitar", blurb: "Bright and twangy", base: "ukulele", params: { warmth: 0.9, softness: 0, pluck_pos: 0.12, body_freq: 250, body_mix: 0.6 } },
   { title: "Xylophone", blurb: "Short, knocky wood", base: "marimba", params: { duration: 0.35, bar_decay: 9, wood: 1, sparkle: 0.2, tube: 0, mallet: 0.5 } },
-  { title: "Deep marimba", blurb: "Low, with a long hum", base: "marimba", params: { duration: 1.2, bar_decay: 3, tube: 0.55, tube_decay: 10, mallet: 0.1 } },
+  { title: "Soft marimba", blurb: "Round, with a long hum", base: "marimba", params: { duration: 1.5, attack_ms: 20, bar_decay: 1.5, wood: 0, sparkle: 0, tube: 0.6, tube_decay: 2, mallet: 0 } },
   { title: "Organ", blurb: "Big and steady", base: "accordion", params: { attack_ms: 40, detune: 0.5, harmonics: 14, rolloff: 1800, trem_rate: 6, trem_depth: 0.06 } },
-  { title: "Harmonica", blurb: "Bright and breathy", base: "accordion", params: { attack_ms: 30, detune: 4, harmonics: 6, rolloff: 2600, trem_depth: 0.03 } },
+  { title: "Harmonica", blurb: "Breathy, with a hand wobble", base: "accordion", params: { duration: 0.8, attack_ms: 50, detune: 0, harmonics: 14, rolloff: 2200, trem_rate: 5.5, trem_depth: 0.14, breath: 1, scoop: 40 } },
 ];
 
 // Sounds made from the same Purple instrument share a color.

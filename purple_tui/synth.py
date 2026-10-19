@@ -13,6 +13,7 @@ import math
 from collections.abc import Iterator
 
 SAMPLE_RATE = 44100
+SCOOP_S = 0.07
 
 # Slider defaults per instrument. Studio reads these from the export; nothing else may redefine them.
 DEFAULTS: dict[str, dict[str, float]] = {
@@ -26,7 +27,7 @@ DEFAULTS: dict[str, dict[str, float]] = {
     },
     "accordion": {
         "duration": 0.55, "attack_ms": 80, "detune": 2.0, "harmonics": 10, "rolloff": 1000.0,
-        "trem_rate": 5.0, "trem_depth": 0.015,
+        "trem_rate": 5.0, "trem_depth": 0.015, "breath": 0.0, "scoop": 0.0,
     },
     "glockenspiel": {
         "duration": 1.5, "ring": 1.0, "fundamental": 0.6, "bell": 0.9, "shimmer": 1.0, "ping": 0.35,
@@ -84,6 +85,22 @@ def _cosine_fade(samples: list[float], duration: float, fade: float, sample_rate
             samples[i] = s * 0.5 * (1 + math.cos(math.pi * (t - start) / fade))
 
 
+def _bandpass(freq: float, q: float, sample_rate: int):
+    """Biquad bandpass (0 dB peak), as a per-sample step function."""
+    w0 = 2 * math.pi * freq / sample_rate
+    alpha = math.sin(w0) / (2 * q)
+    a0 = 1 + alpha
+    b0, b2, a1, a2 = alpha / a0, -alpha / a0, -2 * math.cos(w0) / a0, (1 - alpha) / a0
+    x1 = x2 = y1 = y2 = 0.0
+
+    def step(x0: float) -> float:
+        nonlocal x1, x2, y1, y2
+        y0 = b0 * x0 + b2 * x2 - a1 * y1 - a2 * y2
+        x2, x1, y2, y1 = x1, x0, y1, y0
+        return y0
+    return step
+
+
 def _params(name: str, duration: float | None, overrides: dict[str, float]) -> dict[str, float]:
     p = {**DEFAULTS[name], **overrides}
     if duration is not None:
@@ -128,24 +145,45 @@ def generate_marimba(frequency: float, duration: float | None = None, sample_rat
 
 def generate_accordion(frequency: float, duration: float | None = None, sample_rate: int = SAMPLE_RATE,
                        **overrides: float) -> list[int]:
-    """Accordion: two band-limited sawtooth reeds a few cents apart, with a slow tremolo."""
+    """Accordion: two band-limited sawtooth reeds a few cents apart, with a slow tremolo.
+
+    Optional breath (unsteady pressure plus a little mid-band air) and a scoop up
+    into pitch turn it into a harmonica.
+    """
     p = _params("accordion", duration, overrides)
     nyquist = sample_rate / 2
     num_samples = int(sample_rate * p["duration"])
     freqs = (frequency, frequency * (2 ** (p["detune"] / 1200.0)))
     max_n = min(int(p["harmonics"]), int(nyquist / max(frequency, 1.0)))
+    partials = []
+    for f in freqs:
+        for n in range(1, max_n + 1):
+            fn = f * n
+            if fn >= nyquist:
+                break
+            partials.append((fn, (1.0 / n) * (p["rolloff"] / fn if fn > p["rolloff"] else 1.0)))
     attack_s = p["attack_ms"] / 1000
+    # Breath noise was tuned by ear: air ~28 dB under the reeds, pressure swinging about 25%.
+    level = len(freqs) * math.sqrt(sum(amp * amp for _, amp in partials) / 2)
+    air_gain = 0.25 * level * p["breath"]
+    drift_depth = 7.5 * p["breath"]
+    drift_a = 2 * math.pi * 15 / sample_rate
+    # Closed-form phase lag of a pitch that starts `scoop` cents flat and settles in ~70 ms.
+    scoop_shift = p["scoop"] * math.log(2) / 1200 * SCOOP_S
+    breath_noise = noise(frequency * 1000)
+    air_a, air_b = _bandpass(1800, 0.8, sample_rate), _bandpass(1800, 0.8, sample_rate)
+    drift1 = drift2 = 0.0
     samples = []
     for i in range(num_samples):
         t = i / sample_rate
+        x = next(breath_noise)
+        drift1 += drift_a * (x - drift1)
+        drift2 += drift_a * (drift1 - drift2)
+        tt = t - scoop_shift * (1 - math.exp(-t / SCOOP_S))
         s = 0.0
-        for f in freqs:
-            for n in range(1, max_n + 1):
-                fn = f * n
-                if fn >= nyquist:
-                    break
-                amp = (1.0 / n) * (p["rolloff"] / fn if fn > p["rolloff"] else 1.0)
-                s += amp * math.sin(2 * math.pi * fn * t)
+        for fn, amp in partials:
+            s += amp * math.sin(2 * math.pi * fn * tt)
+        s = s * (1.0 + drift_depth * drift2) + air_gain * air_b(air_a(x))
         trem = 1.0 + p["trem_depth"] * math.sin(2 * math.pi * p["trem_rate"] * t)
         samples.append(s * min(1.0, t / attack_s) * trem)
     _cosine_fade(samples, p["duration"], min(0.12, p["duration"] / 3), sample_rate)
@@ -191,16 +229,9 @@ def generate_ukulele(frequency: float, duration: float | None = None, sample_rat
         pos = (pos + 1) % n
         samples[i] = cur
 
-    w0 = 2 * math.pi * p["body_freq"] / sample_rate
-    alpha = math.sin(w0) / (2 * p["body_q"])
-    a0 = 1 + alpha
-    b0, b2, a1, a2 = alpha / a0, -alpha / a0, -2 * math.cos(w0) / a0, (1 - alpha) / a0
-    x1 = x2 = y1 = y2 = 0.0
+    body = _bandpass(p["body_freq"], p["body_q"], sample_rate)
     for i in range(num_samples):
-        x0 = samples[i]
-        y0 = b0 * x0 + b2 * x2 - a1 * y1 - a2 * y2
-        x2, x1, y2, y1 = x1, x0, y1, y0
-        samples[i] = x0 + p["body_mix"] * y0
+        samples[i] += p["body_mix"] * body(samples[i])
     _cosine_fade(samples, p["duration"], min(0.15, p["duration"] / 3), sample_rate)
     return finalize_samples(samples, peak_level=0.7, freq=frequency)
 

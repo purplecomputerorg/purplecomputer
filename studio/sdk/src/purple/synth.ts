@@ -4,6 +4,7 @@
 import exported from "./export.json";
 
 export const SYNTH_RATE: number = exported.synth.sample_rate;
+const SCOOP_S = 0.07;
 export type BaseName = "marimba" | "ukulele" | "accordion" | "glockenspiel";
 export type Params = Record<string, number>;
 
@@ -55,6 +56,8 @@ export const BASES: Record<BaseName, Base> = {
       p("rolloff", "Brightness", "Higher is brighter", "Tone", 300, 4000, 50, "Hz"),
       p("trem_rate", "Breath speed", "How fast it pulses", "Breath", 2, 10, 0.5, "Hz"),
       p("trem_depth", "Breath depth", "How strong the pulse is", "Breath", 0, 0.2, 0.005),
+      p("breath", "Breathiness", "Unsteady, airy breath", "Breath", 0, 2, 0.05),
+      p("scoop", "Scoop", "Slides up into each note", "Breath", 0, 100, 5, "cents"),
     ],
   },
   glockenspiel: {
@@ -92,6 +95,20 @@ function loudnessCompensatedPeak(freq: number, base: number): number {
 }
 
 const lowFreqPartialBoost = (freq: number) => (freq >= 250 ? 1 : Math.min(2.5, 250 / Math.max(freq, 80)));
+
+// _bandpass: biquad bandpass (0 dB peak) as a per-sample step.
+function bandpass(f: number, q: number) {
+  const w0 = (2 * Math.PI * f) / SYNTH_RATE;
+  const alpha = Math.sin(w0) / (2 * q);
+  const a0 = 1 + alpha;
+  const b0 = alpha / a0, b2 = -alpha / a0, a1 = (-2 * Math.cos(w0)) / a0, a2 = (1 - alpha) / a0;
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  return (x0: number) => {
+    const y0 = b0 * x0 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+    return y0;
+  };
+}
 
 // finalize_samples, returning the int16 values scaled back to [-1, 1] for playback.
 function finalize(samples: Float64Array, peakLevel: number, freq: number): Float32Array {
@@ -143,18 +160,34 @@ function accordion(q: Params, freq: number): Float32Array {
   const nyquist = SYNTH_RATE / 2;
   const freqs = [freq, freq * 2 ** (q.detune / 1200)];
   const maxN = Math.min(Math.trunc(q.harmonics), Math.trunc(nyquist / Math.max(freq, 1)));
+  const partials: [number, number][] = [];
+  for (const f of freqs) {
+    for (let k = 1; k <= maxN; k++) {
+      const fk = f * k;
+      if (fk >= nyquist) break;
+      partials.push([fk, (1 / k) * (fk > q.rolloff ? q.rolloff / fk : 1)]);
+    }
+  }
   const attackS = q.attack_ms / 1000;
+  let sq = 0;
+  for (const [, amp] of partials) sq += amp * amp;
+  const level = freqs.length * Math.sqrt(sq / 2);
+  const airGain = 0.25 * level * q.breath;
+  const driftDepth = 7.5 * q.breath;
+  const driftA = (2 * Math.PI * 15) / SYNTH_RATE;
+  const scoopShift = ((q.scoop * Math.log(2)) / 1200) * SCOOP_S;
+  const breathNoise = noise(freq * 1000);
+  const airA = bandpass(1800, 0.8), airB = bandpass(1800, 0.8);
+  let drift1 = 0, drift2 = 0;
   for (let i = 0; i < n; i++) {
     const t = i / SYNTH_RATE;
+    const x = breathNoise();
+    drift1 += driftA * (x - drift1);
+    drift2 += driftA * (drift1 - drift2);
+    const tt = t - scoopShift * (1 - Math.exp(-t / SCOOP_S));
     let s = 0;
-    for (const f of freqs) {
-      for (let k = 1; k <= maxN; k++) {
-        const fk = f * k;
-        if (fk >= nyquist) break;
-        const amp = (1 / k) * (fk > q.rolloff ? q.rolloff / fk : 1);
-        s += amp * Math.sin(2 * Math.PI * fk * t);
-      }
-    }
+    for (const [fk, amp] of partials) s += amp * Math.sin(2 * Math.PI * fk * tt);
+    s = s * (1 + driftDepth * drift2) + airGain * airB(airA(x));
     const trem = 1 + q.trem_depth * Math.sin(2 * Math.PI * q.trem_rate * t);
     out[i] = s * Math.min(1, t / attackS) * trem;
   }
@@ -188,17 +221,8 @@ function ukulele(q: Params, freq: number): Float32Array {
     pos = (pos + 1) % N;
     out[i] = cur;
   }
-  const w0 = (2 * Math.PI * q.body_freq) / SYNTH_RATE;
-  const alpha = Math.sin(w0) / (2 * q.body_q);
-  const a0 = 1 + alpha;
-  const b0 = alpha / a0, b2 = -alpha / a0, a1 = (-2 * Math.cos(w0)) / a0, a2 = (1 - alpha) / a0;
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let i = 0; i < n; i++) {
-    const x0 = out[i];
-    const y0 = b0 * x0 + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = x0; y2 = y1; y1 = y0;
-    out[i] = x0 + q.body_mix * y0;
-  }
+  const body = bandpass(q.body_freq, q.body_q);
+  for (let i = 0; i < n; i++) out[i] += q.body_mix * body(out[i]);
   cosineFade(out, q.duration, Math.min(0.15, q.duration / 3));
   return finalize(out, 0.7, freq);
 }

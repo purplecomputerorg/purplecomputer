@@ -43,7 +43,7 @@ GOLDEN_FREQS = [261.63, 880.0]
 GOLDEN_VARIED = {
     "marimba": {"duration": 0.3, "wood": 0.9, "tube": 0.4, "mallet": 0.5, "attack_ms": 20},
     "ukulele": {"duration": 0.3, "damping": 0.99, "warmth": 0.7, "softness": 1, "pluck_pos": 0.4, "body_mix": 0.8},
-    "accordion": {"duration": 0.3, "detune": 8, "harmonics": 4, "rolloff": 2500, "trem_depth": 0.1},
+    "accordion": {"duration": 0.3, "detune": 8, "harmonics": 4, "rolloff": 2500, "trem_depth": 0.1, "breath": 1, "scoop": 40},
     "glockenspiel": {"duration": 0.4, "ring": 0.5, "bell": 1.2, "shimmer": 1.8, "ping": 0.6},
 }
 GOLDEN_HEAD = 2000

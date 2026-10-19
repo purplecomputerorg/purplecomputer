@@ -12,7 +12,7 @@ from . import color_wheel, key_save
 from .paper import can_print
 from .rooms.family_room import ICON_FAMILY
 from .library import ICON_OPEN, ICON_SAVE
-from .ui import DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_scrim
+from .ui import DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_key_hint, draw_scrim
 
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
 KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "save": "s", "open": "o", "print": "p",
@@ -25,6 +25,7 @@ FAMILY_LABEL_CHARS = 12
 ROOM_CARD, TOOL_CARD, CARD_H = (10.6, 1.1), (8.6, 0.9), 7.8
 MAX_TOOLS = 7
 PILL_W = 17.0
+CLOSE_CODE_HINT = f"{ICON_ROBOT} Code is open.   {{Space}} closes it"
 
 
 def family_rooms() -> list:
@@ -163,8 +164,9 @@ class RoomPicker(Overlay):
         arrows_h = arrow_keys_size(g, em(0.9))[1]
         room_rows = [r for r in (ROWS, FAMILY) if r in self.rows]
         grid_h = len(room_rows) * card_h + (len(room_rows) - 1) * em(ROOM_CARD[1])
+        banner_h = em(4.2) if self.app._code_panel_active else 0
         box = pygame.Rect(0, 0, em(self.inner_w) + 2 * pad,
-                          pad + head_h + em(1.5) + grid_h + em(1.6) + section_h + em(1.0) + card_h + em(1.6) + arrows_h + pad)
+                          pad + head_h + em(1.5) + banner_h + grid_h + em(1.6) + section_h + em(1.0) + card_h + em(1.6) + arrows_h + pad)
         box.center = (g.w // 2, g.h // 2)
         g.rect(P.SURFACE, box, radius=em(1.0))
         g.rect(P.LINE, box, width=1, radius=em(1.0))
@@ -172,6 +174,9 @@ class RoomPicker(Overlay):
         g.draw_text("Pick a room", em(1.15), box.centerx, y, "mono-bold", P.TEXT, anchor="midtop", track=0.06)
         self._volume_pill(g, box.x + pad, y + head_h // 2)
         y += head_h + em(1.5)
+        if banner_h:
+            self._close_code_banner(g, pygame.Rect(box.x + pad, y, em(self.inner_w), banner_h - em(1.2)))
+            y += banner_h
         for row in room_rows:
             if row == ROWS:
                 cells = [(r.icon, r.label, str(i + 1), False) for i, r in enumerate(self.options)]
@@ -185,6 +190,12 @@ class RoomPicker(Overlay):
         y += section_h + em(1.0)
         self._card_row(g, HERE, [self._tool(t) for t in self.tools], box.x + pad, y, TOOL_CARD)
         self._draw_footer(g, box.centerx, box.bottom - pad - arrows_h // 4)
+
+    def _close_code_banner(self, g, r):
+        """Open code hides the room, so how to close it gets its own band, not just a card."""
+        g.rect(P.FIELD, r, radius=g.em(0.6))
+        g.rect(P.LINE, r, width=1, radius=g.em(0.6))
+        draw_key_hint(g, CLOSE_CODE_HINT, g.em(1.15), r.centerx, r.centery, color=P.ACCENT, anchor="center")
 
     def _card_row(self, g, row, cells, x0, y, card):
         em = g.em

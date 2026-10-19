@@ -141,9 +141,15 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .room-buttons button { font: 600 13px var(--sans); padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; }
 .room-buttons button:hover { background: var(--fill); }
 .room-buttons button[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
-.room-buttons.crop-modes { justify-content: flex-start; margin-bottom: 10px; }
-.cropper { position: relative; display: inline-block; max-width: 100%; line-height: 0; border-radius: 10px; overflow: hidden; user-select: none; }
-.cropper img { display: block; max-width: 100%; max-height: 260px; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.card-head h2 { font-size: 17px; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--fill); }
+.seg button { font: 600 13px var(--sans); padding: 6px 14px; border: none; border-radius: 999px; background: none; color: var(--dim); cursor: pointer; }
+.seg button:hover { color: var(--purple); }
+.seg button[aria-pressed="true"] { background: #fff; color: var(--purple); box-shadow: 0 1px 4px rgba(53, 42, 74, 0.15); }
+.crop-stage { display: flex; justify-content: center; padding: 20px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
+.cropper { position: relative; display: inline-block; max-width: 100%; line-height: 0; border-radius: 10px; overflow: hidden; user-select: none; box-shadow: var(--shadow); }
+.cropper img { display: block; max-width: 100%; max-height: 340px; }
 .crop-box { position: absolute; box-shadow: inset 0 0 0 5px #fff, 0 0 0 9999px rgba(53, 42, 74, 0.55); outline: 3px solid var(--purple); outline-offset: -3px; cursor: move; touch-action: none; }
 .crop-handle { position: absolute; right: 4px; bottom: 4px; width: 30px; height: 30px; border-radius: 50%; background: var(--purple); border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); cursor: nwse-resize; display: grid; place-items: center; color: #fff; font: 700 16px/1 var(--sans); font-style: normal; }
 .crop-move { right: auto; bottom: auto; left: calc(50% - 18px); top: calc(50% - 18px); width: 36px; height: 36px; font-size: 20px; cursor: move; }

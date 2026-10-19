@@ -2,7 +2,7 @@ import type { RoomSetup } from "../live/boot";
 import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, onScreen, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
 import { changed, draft, freeName, titleOf, withSample } from "../state";
 import { KEY_EVENT } from "../keys";
-import { field, go, h } from "./dom";
+import { go, h } from "./dom";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
 import { tryBar, tryChip } from "./trybar";
@@ -82,8 +82,10 @@ function more(current: Picture | null): HTMLElement[] {
   ];
 }
 
-const card = (side: HTMLElement, ...body: (Node | null)[]) =>
-  h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px;align-items:flex-start" }, side, h("div",{ class: "stack", style: "flex:1;min-width:200px" }, ...body)));
+// A card with its title, and the toggle (if any) on the title's right.
+const card = (title: string, toggle: HTMLElement | null, ...body: (Node | null)[]) =>
+  h("div", { class: "card stack" }, h("div", { class: "card-head" }, h("h2", {}, title), toggle), ...body);
+const toggle = (...buttons: HTMLElement[]) => h("div", { class: "seg", role: "group" }, ...buttons);
 
 const showPicture = (pic: Picture, writing = false) => liveScreen().show({ room: "art", picture: onScreen(pic), letters: writing });
 
@@ -91,7 +93,7 @@ const showPicture = (pic: Picture, writing = false) => liveScreen().show({ room:
 const NOT_EDITS = new Set(["tab", "escape", "up", "down", "left", "right"]);
 
 // Paint or Write words on Purple's screen, and keeping what's there as the picture.
-function paintedField(pic: Picture): { element: HTMLElement; reset: () => void } {
+function paintedCard(pic: Picture): { element: HTMLElement; reset: () => void } {
   const live = liveScreen();
   const mode = (label: string, writing: boolean) => h("button", { type: "button", onclick: () => {
     if (live.place.writing !== writing) live.key("tab");
@@ -135,7 +137,7 @@ function paintedField(pic: Picture): { element: HTMLElement; reset: () => void }
       ...(edited ? [h("button", { class: "btn small", onclick: keep }, pic.painted ? "Save again" : "Save your edits in Studio")] : []),
       ...(pic.painted ? [h("button", { class: "linkbtn dim small", onclick: photoOnly }, "Back to just the photo")] : []));
   };
-  const element = h("div", { class: "stack" }, h("div", { class: "room-buttons crop-modes" }, paint, write), how, kept,
+  const element = card("Paint on it in Studio", toggle(paint, write), how, kept,
     h("p", { class: "dim small" }, "When this picture is in your Purple Pack, your kid gets it with what you saved on it."));
   live.onWriting = render;
   render();
@@ -143,18 +145,21 @@ function paintedField(pic: Picture): { element: HTMLElement; reset: () => void }
 }
 
 // The whole photo on the screen, or a canvas-shaped box of it to drag and resize by its corner.
-function cropper(pic: Picture, alt: string, onCrop: () => void): HTMLElement {
+function cropper(pic: Picture, ex: Example | undefined, onCrop: () => void): HTMLElement {
   const { width: W, height: H } = pic.bitmap;
   const handle = h("i", { class: "crop-handle", title: "Drag to resize" }, "⤡");
   const box = h("div", { class: "crop-box" }, h("i", { class: "crop-handle crop-move", title: "Drag to move" }, "✥"), handle);
-  const frame = h("div", { class: "cropper" }, h("img", { src: pic.sourceUrl, alt }), box);
+  const frame = h("div", { class: "cropper" }, h("img", { src: pic.sourceUrl, alt: ex?.alt ?? "" }), box);
   const mode = (label: string, crop: () => Crop | undefined) => h("button", { type: "button", onclick: () => apply(crop()) }, label);
   const whole = mode("Whole picture", () => undefined);
   const fill = mode("Fill the screen", () => pic.crop ?? fillCrop(W, H));
-  const hint = h("p", { class: "dim small" }, "Drag the middle circle to move the box. Drag the corner circle to make it bigger or smaller.");
+  const hint = h("p", { class: "dim small" });
   const pct = (v: number, of: number) => `${(100 * v) / of}%`;
   const show = (c = pic.crop) => {
-    box.hidden = hint.hidden = !c;
+    box.hidden = !c;
+    hint.textContent = c
+      ? "Drag the middle circle to move the box. Drag the corner circle to make it bigger or smaller."
+      : "Purple shows all of the picture. Fill the screen picks a part of it to fill Purple's screen.";
     whole.setAttribute("aria-pressed", String(!c));
     fill.setAttribute("aria-pressed", String(!!c));
     if (c) Object.assign(box.style, { left: pct(c.x, W), top: pct(c.y, H), width: pct(c.w, W), height: pct(c.h, H) });
@@ -187,12 +192,13 @@ function cropper(pic: Picture, alt: string, onCrop: () => void): HTMLElement {
   };
   box.onpointerdown = drag;
   show();
-  return h("div", { class: "field" }, h("span", {}, "What part shows on Purple"), h("div", { class: "room-buttons crop-modes" }, whole, fill), frame, hint);
+  return card("What part shows on Purple", toggle(whole, fill), h("div", { class: "crop-stage" }, frame), hint,
+    ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null);
 }
 
 function pictureView(pic: Picture): HTMLElement {
   const ex = EXAMPLES.find((e) => e.src === pic.sourceUrl);
-  const name = h("input", { type: "text", class: "name-field", value: titleOf(pic), maxLength: 24 });
+  const name = h("input", { type: "text", class: "name-field", value: titleOf(pic), maxLength: 24, "aria-label": "Picture name" });
   name.onchange = () => {
     pic.title = name.value.trim() || titleOf(pic);
     pic.name = pictureName(pic.title, pic);
@@ -200,14 +206,12 @@ function pictureView(pic: Picture): HTMLElement {
     changed();
     history.replaceState(null, "", `#pictures/${encodeURIComponent(pic.name)}`);
   };
-  const painted = paintedField(pic);
+  const painted = paintedCard(pic);
   return h("section", {},
-    card(cropper(pic, ex?.alt ?? "", painted.reset),
-      tryBar(pic, () => drop(pic, true)),
-      ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
-      field("Picture name", name),
-      h("div", { class: "field" }, h("span", {}, "Paint on it right now in Studio"), painted.element),
-      h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
+    tryBar(pic, () => drop(pic, true)),
+    card("Name", null, name, h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
+    cropper(pic, ex, painted.reset),
+    painted.element,
     ...more(pic));
 }
 

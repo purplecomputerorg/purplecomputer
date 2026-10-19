@@ -149,9 +149,10 @@ pack is a `FamilyRoom` overlay over the current room: guides/family-rooms.md.
 
 `xinitrc` starts X, matchbox, picom, then `/usr/local/bin/purple`, which execs
 `python3 -m purple_tui`. The app opens a fullscreen SDL window on the X
-session, first switching any screen over 1920x1200 to the largest smaller
-mode of the same shape (`canvas/screen_size.py`), since every frame is drawn
-in software and the panel scales up for free. `LIBGL_ALWAYS_SOFTWARE=1` stays exported so nothing touches a GPU
+session, first switching a lone screen over 1920x1200 to the largest smaller
+mode of the same shape, set to fill the panel (`canvas/screen_size.py`), since
+every frame is drawn in software and the panel scales up for free. The boot
+log says what it did; touch `/opt/purple/native-resolution` to turn it off. `LIBGL_ALWAYS_SOFTWARE=1` stays exported so nothing touches a GPU
 driver that lies; the app itself never asks for GL. The UI-ready marker
 (`/tmp/purple-ui-ready`) is touched after the first frame, which is what
 gates the compositor start.

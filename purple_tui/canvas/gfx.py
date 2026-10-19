@@ -223,7 +223,7 @@ class Gfx:
             return screen_size.cap(info.current_w, info.current_h, boot_log.heartbeat)
         except Exception as e:
             boot_log.heartbeat(f"screen size: cap failed: {e}")
-            return False
+            return True   # reopen anyway: SDL then reads whatever size X is at now
 
     def resize(self):
         """Follow the window when the X screen changes size under us (a VM

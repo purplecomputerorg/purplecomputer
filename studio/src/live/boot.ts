@@ -53,9 +53,9 @@ function say(text: string): Promise<void> {
 
 // The room a Studio page shows; see setup() in live.py.
 export type Room = "art" | "music" | "play" | "blocks";
-// at: the room's cursor, as fractions of the screen; writing: Art writes letters rather than paints (see place() in live.py).
-export interface Place { room: Room; menu: boolean; at: [number, number] | null; writing: boolean }
-// letters: Music in Say Letters, or Art writing letters.
+// at: the room's cursor, as fractions of the screen (see place() in live.py).
+export interface Place { room: Room; menu: boolean; at: [number, number] | null }
+// letters: Music in Say Letters.
 // picture: painted on the Art canvas as Art's Open paints a pack picture.
 // family: a family room opened over the room, as the Esc menu opens one.
 export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: ArtPicture; family?: { name: string; source: string } }
@@ -73,8 +73,6 @@ export interface LivePurple {
   key(char: string): Promise<Place>;
   // Where Purple is now, after keys it got straight from the browser.
   place(): Promise<Place>;
-  // What's on the Art canvas now.
-  picture(): Promise<ArtPicture>;
 }
 
 export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) => void): Promise<LivePurple> {
@@ -106,10 +104,10 @@ sys.path.insert(0, "${ROOT}")
   const install = py.globals.get("install") as (id: string | undefined, files: unknown, removed: string[], fresh: boolean) => boolean;
   const arg = (v: unknown) => `__import__("json").loads(${JSON.stringify(JSON.stringify(v))})`;
   const place = async (code: string): Promise<Place> => {
-    const proxy = (await call(code)) as { toJs(): [Room, boolean, [number, number] | null, boolean]; destroy(): void };
-    const [room, menu, at, writing] = proxy.toJs();
+    const proxy = (await call(code)) as { toJs(): [Room, boolean, [number, number] | null]; destroy(): void };
+    const [room, menu, at] = proxy.toJs();
     proxy.destroy();
-    return { room, menu, at, writing };
+    return { room, menu, at };
   };
   const live: LivePurple = {
     async load(pack, restarting) {
@@ -125,7 +123,6 @@ sys.path.insert(0, "${ROOT}")
     setup: (room) => place(`setup(**${arg(room)})`),
     key: (char) => place(`await key(${arg(char)})`),
     place: () => place("place()"),
-    picture: async () => JSON.parse((await call("picture()")) as string) as ArtPicture,
   };
   await live.load(null);
   return live;

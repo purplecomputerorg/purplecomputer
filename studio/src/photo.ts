@@ -4,12 +4,14 @@ import saturn from "./assets/saturn.jpg";
 import starryNight from "./assets/starry-night.jpg";
 import { slug } from "@sdk/pack";
 import type { Keepable } from "./state";
-import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, cellsToOps, fitToCanvas, type ArtPicture, type PaintOp } from "@sdk/purple/art";
+import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type ArtPicture, type LetterOp, type PaintOp } from "@sdk/purple/art";
+import { DEFAULT_PALETTE, contrast } from "@sdk/purple/theme";
 
 // crop: the part of the photo on the screen, in its own pixels and the Art canvas's shape; none is the whole photo.
-// painted: Purple's screen as kept after painting or writing on the photo, which goes in the pack in its place.
+// words: written over the photo in Art's letters; x and y are their top left in the photo's cells, centered near the bottom until moved.
 export interface Crop { x: number; y: number; w: number; h: number }
-export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string; bitmap: ImageBitmap; crop?: Crop; painted?: ArtPicture }
+export interface Words { text: string; x?: number; y?: number }
+export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string; bitmap: ImageBitmap; crop?: Crop; words?: Words }
 
 const hex = (r: number, g: number, b: number) =>
   "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
@@ -85,10 +87,8 @@ function pictureFromBitmap(bitmap: ImageBitmap, name: string, sourceUrl: string)
   return pic;
 }
 
-// A new crop is a new painting of the photo, so whatever was kept from the screen goes.
 export function cropTo(pic: Picture, crop?: Crop) {
   pic.crop = crop;
-  pic.painted = undefined;
   const { x, y, w, h } = crop ?? { x: 0, y: 0, w: pic.bitmap.width, h: pic.bitmap.height };
   const [sw, sh] = [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))];
   const ctx = new OffscreenCanvas(sw, sh).getContext("2d")!;
@@ -115,8 +115,36 @@ export function clampCrop(c: Crop, w: number, h: number): Crop {
   return { x: clamp(c.x, 0, w - cw), y: clamp(c.y, 0, h - ch), w: cw, h: ch };
 }
 
-// What Purple paints for a picture: the photo, or what was kept from its screen.
-export const onScreen = (pic: Picture): ArtPicture => pic.painted ?? { ops: pic.ops, letters: [] };
+// The words' lines and top left, kept inside the photo.
+export function wordsAt(pic: Picture): { lines: string[]; x: number; y: number } | null {
+  const [rows, cols] = [pic.cells.length, pic.cells[0].length];
+  const lines = (pic.words?.text ?? "").trimEnd().split("\n").slice(0, rows).map((l) => l.slice(0, cols));
+  const wide = Math.max(...lines.map((l) => l.length));
+  if (!wide) return null;
+  const { x = (cols - wide) >> 1, y = rows - lines.length - 1 } = pic.words!;
+  return { lines, x: clamp(x, 0, cols - wide), y: clamp(y, 0, rows - lines.length) };
+}
+
+// Art's auto ink: whichever of the screen's two inks reads better on the cell (auto_ink in canvas/ui.py).
+const INKS = [DEFAULT_PALETTE.text, DEFAULT_PALETTE.on_primary];
+const autoInk = (bg: string) => INKS.reduce((a, b) => (contrast(b, bg) > contrast(a, bg) ? b : a));
+
+// The words as Art letters on the photo's cells, the way Purple writes them.
+export function wordLetters(pic: Picture): LetterOp[] {
+  const at = wordsAt(pic);
+  if (!at) return [];
+  const [x0, y0] = canvasOrigin(pic.cells[0].length, pic.cells.length);
+  return at.lines.flatMap((line, dy) => [...line].flatMap((char, dx): LetterOp[] => {
+    const [cx, cy] = [at.x + dx, at.y + dy];
+    return char === " " ? [] : [[x0 + cx, y0 + cy, char, autoInk(pic.cells[cy][cx])]];
+  }));
+}
+
+export const onScreen = (pic: Picture): ArtPicture => ({ ops: pic.ops, letters: wordLetters(pic) });
+
+// Purple's Art letters (MartianMonoArt-Bold, declared in styles.css), sized as _letter_px in art_room.py.
+export const ART_FONT = "PurpleArt";
+export const letterPx = (cellPx: number) => Math.max(6, Math.round(cellPx * 0.85));
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -152,7 +180,7 @@ export function paintPicture(ctx: Ctx2D, { ops, letters }: ArtPicture, cellPx: n
   ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * ch);
   fillOps(ctx, ops, cellPx);
-  ctx.font = `bold ${Math.round(ch * 0.85)}px sans-serif`;
+  ctx.font = `${letterPx(cellPx)}px ${ART_FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (const [x, y, char, ink] of letters) {
@@ -169,8 +197,10 @@ export function previewPng(art: ArtPicture, cellPx = 10): Promise<Uint8Array> {
   let png = previews.get(key);
   if (!png) {
     const canvas = new OffscreenCanvas(CANVAS_WIDTH * cellPx, CANVAS_HEIGHT * cellPx * CELL_ASPECT);
-    paintPicture(canvas.getContext("2d")!, art, cellPx);
-    png = canvas.convertToBlob({ type: "image/png" }).then(async (b) => new Uint8Array(await b.arrayBuffer()));
+    png = document.fonts.load(`${cellPx}px ${ART_FONT}`)
+      .then(() => paintPicture(canvas.getContext("2d")!, art, cellPx))
+      .then(() => canvas.convertToBlob({ type: "image/png" }))
+      .then(async (b) => new Uint8Array(await b.arrayBuffer()));
     if (previews.size >= 32) previews.delete(previews.keys().next().value!);
     previews.set(key, png);
   }

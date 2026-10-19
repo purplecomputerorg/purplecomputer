@@ -1,7 +1,6 @@
 // The real Purple on the right: one iframe (purple.html), started when Studio opens and kept for
 // the whole visit, so it's usually ready before anyone looks. Until it is, and while it restarts
 // with an edit, a quiet message covers it, since it can't take keys then.
-import type { ArtPicture } from "@sdk/purple/art";
 import { buildEntries } from "@sdk/pack";
 import type { PackFiles, Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
@@ -53,10 +52,7 @@ class LiveScreen {
   // Set by the Rooms page: a family room's print() output, and why one stopped.
   onPrint = (_text: string) => {};
   onProblem = (_p: RoomProblem) => {};
-  // Set by the Pictures page: Art switched between painting and writing letters.
-  onWriting = (_on: boolean) => {};
-  place: Place = { room: "art", menu: false, at: null, writing: false };
-  private pictureWaits: ((p: ArtPicture) => void)[] = [];
+  place: Place = { room: "art", menu: false, at: null };
   private ready = false;
   private setup: RoomSetup = { room: "art" };
   private timer = 0;
@@ -87,16 +83,8 @@ class LiveScreen {
 
   show(setup: RoomSetup): void {
     this.setup = setup;
-    this.moved({ room: setup.room, menu: false, at: null, writing: setup.room === "art" && !!setup.letters });
+    this.moved({ room: setup.room, menu: false, at: null });
     if (this.ready) this.post({ type: "setup", setup });
-  }
-
-  // What's on Purple's Art canvas, painting and letters, once Purple gets to it.
-  picture(): Promise<ArtPicture> {
-    return new Promise((resolve) => {
-      this.pictureWaits.push(resolve);
-      this.post({ type: "picture" });
-    });
   }
 
   // Any change to the draft: rebuild the pack once edits settle. Purple keeps taking keys unless
@@ -167,7 +155,6 @@ class LiveScreen {
     if (m.type === "voice") { this.voiceNote.textContent = m.text; this.voiceNote.hidden = !m.text; }
     if (m.type === "keydown") announceKey(m.key);
     if (m.type === "place") this.moved(m.place);
-    if (m.type === "picture") this.pictureWaits.shift()?.(m.picture);
     if (m.type === "print") this.onPrint(m.text);
     if (m.type === "problem") this.onProblem({ text: m.text, line: m.line });
   }
@@ -179,11 +166,9 @@ class LiveScreen {
 
   private moved(place: Place): void {
     const same = place.room === this.place.room && place.menu === this.place.menu;
-    const switched = place.writing !== this.place.writing;
     this.place = place;
     this.reframe();
     if (!same) this.onMove();
-    if (switched) this.onWriting(place.writing);
   }
 
   // The whole screen or the close-up; menus and pictures show whole.

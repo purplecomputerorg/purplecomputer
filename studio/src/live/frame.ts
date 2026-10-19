@@ -3,7 +3,6 @@
 // Studio's own pages forbid.
 import { browserKey } from "../keys";
 import { roomGuests } from "../rooms/guests";
-import type { ArtPicture } from "@sdk/purple/art";
 import { bootPurple, type LivePurple, type PackFiles, type Place, type RoomSetup } from "./boot";
 import { onVoiceNote } from "./piper";
 
@@ -12,7 +11,6 @@ export type ToFrame =
   | { type: "setup"; setup: RoomSetup }
   | { type: "key"; char: string }
   | { type: "focus" }
-  | { type: "picture" }
   | { type: "view"; view: View };
 // The part of Purple's screen to show, as fractions of it: x, y, width, height.
 export type View = [number, number, number, number];
@@ -26,7 +24,6 @@ export type FromFrame =
   | { type: "focus"; on: boolean }
   | { type: "keydown"; key: string }
   | { type: "place"; place: Place }
-  | { type: "picture"; picture: ArtPicture }
   | { type: "print"; text: string }
   | { type: "problem"; text: string; line: number | null };
 
@@ -85,7 +82,6 @@ const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
   if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(() => live.setup(m.setup)).then(placed).then(() => post({ type: "loaded" }));
   if (m.type === "setup") return live.setup(m.setup).then(placed);
   if (m.type === "key") return live.key(m.char).then(placed);
-  if (m.type === "picture") return live.picture().then((picture) => post({ type: "picture", picture }));
   canvas.focus();
   return Promise.resolve();
 };

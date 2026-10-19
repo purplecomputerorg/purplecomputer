@@ -1,11 +1,11 @@
 // The app's draft, turned into the plain spec the SDK builds a pack from, and a pack turned back into a draft.
 import { buildPack as build, letterPath, packFilename as filename, phrasePath, pictureSourcePath, type PackSpec } from "@sdk/pack";
-import { cellsToOps, type ArtPicture } from "@sdk/purple/art";
+import { cellsToOps } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar } from "@sdk/tar";
 import { decodeWav } from "@sdk/wav";
 import { instrumentNotes } from "./notes";
-import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop } from "./photo";
+import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop, type Words } from "./photo";
 import { draft, emptyDraft, type Draft, type Keepable } from "./state";
 
 export { manifest } from "@sdk/pack";
@@ -14,7 +14,7 @@ export { manifest } from "@sdk/pack";
 interface Saved extends Pick<PackSpec, "name" | "words" | "synonyms" | "ranked" | "instruments" | "rooms" | "theme"> {
   letters: string[];
   phrases: string[];
-  pictures: { name: string; title?: string; cells: string[][]; crop?: Crop; painted?: ArtPicture }[];
+  pictures: { name: string; title?: string; cells: string[][]; crop?: Crop; words?: Words }[];
 }
 
 // The download holds what the family added; Studio's own Purple also plays what they're trying.
@@ -36,7 +36,7 @@ export async function packSpec(d: Draft = draft, trying = false): Promise<PackSp
   const studio: Saved = {
     name: d.name, words, synonyms, ranked: d.ranked, instruments, rooms, theme,
     letters: Object.keys(letters), phrases: phrases.map((p) => p.text),
-    pictures: added.map(({ name, title, cells, painted }, i) => ({ name, title, cells, painted, crop: sources[i]?.crop })),
+    pictures: added.map((p, i) => ({ name: p.name, title: p.title, cells: p.cells, words: p.words, crop: sources[i]?.crop })),
   };
   const rendered = await Promise.all(instruments.map(async (i) => ({ ...i, notes: await instrumentNotes(i) })));
   return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, theme, studio };

@@ -1,3 +1,5 @@
+/* Purple's own Art letters, so words on a picture look here as they will there. */
+@font-face { font-family: PurpleArt; src: url("../../purple_tui/canvas/fonts/MartianMonoArt-Bold.ttf"); }
 :root {
   --purple: #5c2d91;
   --purple-dark: #4a2473;
@@ -154,6 +156,9 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .crop-handle { position: absolute; right: 4px; bottom: 4px; width: 30px; height: 30px; border-radius: 50%; background: var(--purple); border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); cursor: nwse-resize; display: grid; place-items: center; color: #fff; font: 700 16px/1 var(--sans); font-style: normal; }
 .crop-move { right: auto; bottom: auto; left: calc(50% - 18px); top: calc(50% - 18px); width: 36px; height: 36px; font-size: 20px; cursor: move; }
 .crop-handle:hover { transform: scale(1.12); }
+.crop-words { position: absolute; inset: 0; pointer-events: none; font-family: PurpleArt; }
+.crop-words span { position: absolute; display: grid; place-items: center; pointer-events: auto; cursor: move; touch-action: none; }
+.words-field { width: 100%; min-height: 3.2em; font: 18px/1.4 PurpleArt; resize: vertical; }
 .phone-bar .tray-keys, .phone-hint { display: none; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .room-buttons { margin-bottom: 10px; }

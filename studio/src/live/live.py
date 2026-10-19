@@ -78,8 +78,8 @@ async def restart():
 
 def setup(room, letters=False, instrument=None, picture=None, family=None):
     """The room a Studio page shows: Music in Say Letters or playing an instrument, Art with a
-    picture's paint ops and letters on it, the way Art's Open paints one (writing letters when
-    letters is set), or a family room being tried, opened over the room the way the Esc menu opens one."""
+    picture's paint ops and letters on it, the way Art's Open paints one, or a family room being
+    tried, opened over the room the way the Esc menu opens one."""
     while _app.top:
         _app.pop(_app.top)
     if room != _app.active_room:
@@ -92,7 +92,7 @@ def setup(room, letters=False, instrument=None, picture=None, family=None):
         from purple_tui.canvas.secret_doodle import paint_cells
         paint_cells(_app, picture["ops"], picture.get("letters", []))
     if room == "art":
-        _app.rooms["art"]._set_paint_mode(not letters)
+        _app.rooms["art"]._set_paint_mode(True)
     if family:
         from purple_tui.canvas.rooms.family_room import FamilyRoom
         TRYING.mkdir(parents=True, exist_ok=True)
@@ -112,15 +112,7 @@ async def key(name):
 
 def place():
     """Where Purple is: its room, whether a menu (the room picker, say) is open over it, the
-    room's cursor as fractions of the screen, if it has one (a phone zooms in around it), and
-    whether Art is writing letters rather than painting."""
+    room's cursor as fractions of the screen, if it has one (a phone zooms in around it)."""
     vp, cursor = _app._viewport_rect(), _app._get_cursor_position()
     at = [(vp.x + cursor[0] * vp.w) / _app.g.w, (vp.y + cursor[1] * vp.h) / _app.g.h] if cursor else None
-    return [_app.active_room, bool(_app.top), at, _app.active_room == "art" and not _app.rooms["art"]._paint_mode]
-
-
-def picture():
-    """What's on the Art canvas, as a pack picture's ops and letters."""
-    import json
-    ops, letters = _app.rooms["art"].picture()
-    return json.dumps({"ops": ops, "letters": letters})
+    return [_app.active_room, bool(_app.top), at]

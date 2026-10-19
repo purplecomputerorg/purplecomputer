@@ -1,7 +1,7 @@
 import type { RoomSetup } from "../live/boot";
-import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, onScreen, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
+import { canvasOrigin } from "@sdk/purple/art";
+import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, letterPx, onScreen, pictureFromFile, wordLetters, wordsAt, type Crop, type Example, type Picture } from "../photo";
 import { changed, draft, freeName, titleOf, withSample } from "../state";
-import { KEY_EVENT } from "../keys";
 import { go, h } from "./dom";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
@@ -87,69 +87,75 @@ const card = (title: string, toggle: HTMLElement | null, ...body: (Node | null)[
   h("div", { class: "card stack" }, h("div", { class: "card-head" }, h("h2", {}, title), toggle), ...body);
 const toggle = (...buttons: HTMLElement[]) => h("div", { class: "seg", role: "group" }, ...buttons);
 
-const showPicture = (pic: Picture, writing = false) => liveScreen().show({ room: "art", picture: onScreen(pic), letters: writing });
+const showPicture = (pic: Picture) => liveScreen().show({ room: "art", picture: onScreen(pic) });
 
-// Keys that move the cursor, switch modes or open the menu without changing the canvas.
-const NOT_EDITS = new Set(["tab", "escape", "up", "down", "left", "right"]);
-
-// Paint or Write words on Purple's screen, and keeping what's there as the picture.
-function paintedCard(pic: Picture): { element: HTMLElement; reset: () => void } {
-  const live = liveScreen();
-  const mode = (label: string, writing: boolean) => h("button", { type: "button", onclick: () => {
-    if (live.place.writing !== writing) live.key("tab");
-    live.engage();
-  } }, label);
-  const paint = mode("Paint", false);
-  const write = mode("Write words", true);
-  const how = h("p", { class: "dim small" });
-  const kept = h("div", { class: "row", style: "gap:12px" });
-  let edited = false;
-  const reset = () => { edited = false; render(); };
-  const onKey = (e: Event) => {
-    if (!element.isConnected) return removeEventListener(KEY_EVENT, onKey);
-    if (edited || NOT_EDITS.has((e as CustomEvent<string>).detail)) return;
-    edited = true;
-    render();
-  };
-  addEventListener(KEY_EVENT, onKey);
-  const keep = async () => {
-    pic.painted = await live.picture();
-    pic.sample = false;
-    changed();
-    showPicture(pic, live.place.writing);
-    reset();
-  };
-  const photoOnly = () => {
-    pic.painted = undefined;
-    changed();
-    showPicture(pic);
-    reset();
-  };
-  const render = () => {
-    const writing = live.place.writing;
-    paint.setAttribute("aria-pressed", String(!writing));
-    write.setAttribute("aria-pressed", String(writing));
-    how.textContent = writing
-      ? "Type on Purple's screen to write on the picture. The arrows move where the words go. Tab goes back to painting."
-      : "Type on Purple's screen to paint on the picture. It's just for trying until you save it.";
-    kept.replaceChildren(
-      ...(pic.painted ? [h("span", { class: "added" }, "✓ Your edits are saved on this picture")] : []),
-      ...(edited ? [h("button", { class: "btn small", onclick: keep }, pic.painted ? "Save again" : "Save your edits in Studio")] : []),
-      ...(pic.painted ? [h("button", { class: "linkbtn dim small", onclick: photoOnly }, "Back to just the photo")] : []));
-  };
-  const element = card("Paint on it in Studio", toggle(paint, write), how, kept,
-    h("p", { class: "dim small" }, "When this picture is in your Purple Pack, your kid gets it with what you saved on it."));
-  live.onWriting = render;
-  render();
-  return { element, reset };
+// A picture edit: it's the family's now, and Purple's screen shows it.
+function edited(pic: Picture) {
+  pic.sample = false;
+  changed();
+  showPicture(pic);
 }
 
-// The whole photo on the screen, or a canvas-shaped box of it to drag and resize by its corner.
-function cropper(pic: Picture, ex: Example | undefined, onCrop: () => void): HTMLElement {
+// The words drawn over the photo as Purple writes them, one letter per cell, and dragged a cell at a time.
+function wordsOverlay(pic: Picture, frame: HTMLElement): { element: HTMLElement; render: () => void } {
+  const { width: W, height: H } = pic.bitmap;
+  const element = h("div", { class: "crop-words" });
+  const pct = (v: number, of: number) => `${(100 * v) / of}%`;
+  // The photo's cells in its own pixels: the crop, or all of it.
+  const grid = () => {
+    const r = pic.crop ?? { x: 0, y: 0, w: W, h: H };
+    const [rows, cols] = [pic.cells.length, pic.cells[0].length];
+    return { ...r, cw: r.w / cols, ch: r.h / rows, origin: canvasOrigin(cols, rows) };
+  };
+  const cellPx = () => grid().cw * (frame.clientWidth / W);
+  const render = () => {
+    const { x: rx, y: ry, cw, ch, origin: [x0, y0] } = grid();
+    element.style.fontSize = `${letterPx(cellPx())}px`;
+    element.replaceChildren(...wordLetters(pic).map(([x, y, char, ink]) => {
+      const span = h("span", {}, char);
+      Object.assign(span.style, { left: pct(rx + (x - x0) * cw, W), top: pct(ry + (y - y0) * ch, H), width: pct(cw, W), height: pct(ch, H), color: ink });
+      return span;
+    }));
+  };
+  element.onpointerdown = (e: PointerEvent) => {
+    const start = wordsAt(pic);
+    if (!start) return;
+    e.preventDefault();
+    const move = (m: PointerEvent) => {
+      const [dx, dy] = [m.clientX - e.clientX, m.clientY - e.clientY].map((d) => Math.round(d / cellPx()));
+      pic.words = { ...pic.words!, x: start.x + dx, y: start.y + dy };
+      const { x, y } = wordsAt(pic)!;
+      pic.words = { ...pic.words, x, y };
+      render();
+    };
+    // On the window, since each move draws the letters anew.
+    const up = () => {
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", up);
+      edited(pic);
+    };
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", up);
+  };
+  new ResizeObserver(render).observe(frame);
+  return { element, render };
+}
+
+// The whole photo on the screen, or a canvas-shaped box of it to drag and resize by its corner, and words to write on it.
+function cropper(pic: Picture, ex: Example | undefined): HTMLElement {
   const { width: W, height: H } = pic.bitmap;
   const handle = h("i", { class: "crop-handle", title: "Drag to resize" }, "⤡");
   const box = h("div", { class: "crop-box" }, h("i", { class: "crop-handle crop-move", title: "Drag to move" }, "✥"), handle);
   const frame = h("div", { class: "cropper" }, h("img", { src: pic.sourceUrl, alt: ex?.alt ?? "" }), box);
+  const words = wordsOverlay(pic, frame);
+  frame.append(words.element);
+  const text = h("textarea", { class: "words-field", maxLength: 200, placeholder: "Happy birthday!", "aria-label": "Words on the picture" });
+  text.value = pic.words?.text ?? "";
+  text.oninput = () => {
+    pic.words = { ...pic.words, text: text.value };
+    words.render();
+    edited(pic);
+  };
   const mode = (label: string, crop: () => Crop | undefined) => h("button", { type: "button", onclick: () => apply(crop()) }, label);
   const whole = mode("Whole picture", () => undefined);
   const fill = mode("Fill the screen", () => pic.crop ?? fillCrop(W, H));
@@ -165,13 +171,10 @@ function cropper(pic: Picture, ex: Example | undefined, onCrop: () => void): HTM
     if (c) Object.assign(box.style, { left: pct(c.x, W), top: pct(c.y, H), width: pct(c.w, W), height: pct(c.h, H) });
   };
   const apply = (c?: Crop) => {
-    if (pic.painted && !confirm("Changing this takes off what you painted and wrote on the picture. Change it anyway?")) return show();
     cropTo(pic, c);
-    pic.sample = false;
     show();
-    changed();
-    onCrop();
-    showPicture(pic);
+    words.render();
+    edited(pic);
   };
   const drag = (e: PointerEvent) => {
     e.preventDefault();
@@ -192,8 +195,10 @@ function cropper(pic: Picture, ex: Example | undefined, onCrop: () => void): HTM
   };
   box.onpointerdown = drag;
   show();
-  return card("What part shows on Purple", toggle(whole, fill), h("div", { class: "crop-stage" }, frame), hint,
-    ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null);
+  return card("What shows on Purple", toggle(whole, fill), h("div", { class: "crop-stage" }, frame), hint,
+    ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
+    h("h3", {}, "Words on the picture (if you like)"), text,
+    h("p", { class: "dim small" }, "They show in Purple's own letters, the size they'll be on the screen. Drag them on the picture to move them."));
 }
 
 function pictureView(pic: Picture): HTMLElement {
@@ -206,12 +211,10 @@ function pictureView(pic: Picture): HTMLElement {
     changed();
     history.replaceState(null, "", `#pictures/${encodeURIComponent(pic.name)}`);
   };
-  const painted = paintedCard(pic);
   return h("section", {},
     tryBar(pic, () => drop(pic, true)),
     card("Name", null, name, h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
-    cropper(pic, ex, painted.reset),
-    painted.element,
+    cropper(pic, ex),
     ...more(pic));
 }
 
@@ -220,15 +223,14 @@ const caption = "Type on the keyboard to paint on the picture, the way your kid 
 export function picturesView(item: string | null): View {
   // Purple's screen shows the picture painted on, added or not; Open lists only the added ones.
   const setup: RoomSetup = { room: "art" };
-  const cleanup = () => (liveScreen().onWriting = () => {});
-  const view = (title: string, editor: HTMLElement, text = caption): View => ({ title, editor, live: setup, caption: text, cleanup });
+  const view = (title: string, editor: HTMLElement): View => ({ title, editor, live: setup, caption });
   const pic = item ? draft.pictures.find((p) => p.name === item) : null;
   if (pic) {
     setup.picture = onScreen(pic);
     const live = liveScreen();
-    return { ...view(titleOf(pic), pictureView(pic), "Paint or write on the picture, the way your kid will. Only what you save goes in your Purple Pack."),
+    return { ...view(titleOf(pic), pictureView(pic)),
       mounted: () => { live.prompt("Type to paint on it!"); live.engage(); },
-      cleanup: () => { cleanup(); live.prompt(null); } };
+      cleanup: () => live.prompt(null) };
   }
   const first = draft.pictures.find((p) => p.kept) ?? draft.pictures[0];
   setup.picture = first && onScreen(first);

@@ -1,13 +1,12 @@
 import { openPack } from "../pack";
 import { allPieces, replaceDraft, type Draft } from "../state";
-import { filePicker, h } from "./dom";
+import { filePicker, go, h } from "./dom";
 
 const working = () => allPieces().some((p) => p.items.length);
 
 function swapIn(d?: Draft) {
   replaceDraft(d);
-  if (location.hash === "#pack") window.dispatchEvent(new HashChangeEvent("hashchange"));
-  else location.hash = "#pack";
+  go("#pack");
 }
 
 export function openPackButton(label: string): HTMLElement {

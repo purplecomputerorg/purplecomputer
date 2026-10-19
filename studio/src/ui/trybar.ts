@@ -22,6 +22,11 @@ export function tryBar(item: Keepable, remove?: () => void): HTMLElement {
   return bar;
 }
 
+// A try in a list, with an × in its corner that throws it away.
+export const tryChip = (link: HTMLElement, label: string, remove: () => void): HTMLElement =>
+  h("span", { class: "try-chip" }, link,
+    h("button", { type: "button", class: "drop", title: `Throw away ${label}`, "aria-label": `Throw away ${label}`, onclick: remove }, "×"));
+
 // For one row of a list: Add, or Added (which takes it off again).
 export function keepButton(item: Keepable, onChange: () => void): HTMLElement {
   return h("button", { type: "button", class: `keep${item.kept ? " on" : ""}`, title: item.kept ? "In your Purple Pack. Click to take it out." : "Add to my Purple Pack",

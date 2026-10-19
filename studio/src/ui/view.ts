@@ -2,6 +2,8 @@ import type { RoomSetup } from "../live/boot";
 
 export interface View {
   title: string;
+  // The list page this one came from: [href, label].
+  back?: [string, string];
   editor: HTMLElement;
   // The real Purple, set up in this room.
   live?: RoomSetup;

@@ -16,6 +16,12 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = 
 
 export const clear = (el: Element) => el.replaceChildren();
 
+// Goes to a page, drawing it again when it's the one showing.
+export function go(hash: string) {
+  if (location.hash === hash) window.dispatchEvent(new HashChangeEvent("hashchange"));
+  else location.hash = hash;
+}
+
 export function field(label: string, input: HTMLElement): HTMLLabelElement {
   return h("label", { class: "field" }, h("span", {}, label), input);
 }

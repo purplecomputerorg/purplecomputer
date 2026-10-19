@@ -5,11 +5,18 @@ import { EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../exam
 import type { RoomSetup } from "../live/boot";
 import { addRoom } from "../pybridge";
 import { changed, draft, freeName, type RoomDraft } from "../state";
-import { field, h } from "./dom";
+import { field, go, h } from "./dom";
 import { liveScreen, type RoomProblem } from "./live";
-import { tryBar } from "./trybar";
+import { tryBar, tryChip } from "./trybar";
 import { templateForm } from "./templateform";
 import type { View } from "./view";
+
+function drop(room: RoomDraft) {
+  if (!confirm(`Throw away ${roomTitle(room.name)}?`)) return;
+  draft.rooms = draft.rooms.filter((r) => r !== room);
+  changed();
+  go("#rooms");
+}
 
 function list(): View {
   const nameIn = h("input", { type: "text", placeholder: "Farm" });
@@ -40,8 +47,10 @@ function list(): View {
         choice("🐍", EXAMPLES[0].label, `${EXAMPLES[0].about} Written in Python, ready to change.`, () => open(EXAMPLES[0].name, EXAMPLES[0].source, { blocks: null, template: null }))),
       ...([true, false] as const).map((kept) => {
         const rooms = draft.rooms.filter((r) => !!r.kept === kept);
-        return rooms.length ? h("div", {}, h("h3", {}, kept ? "In your Purple Pack" : "Trying"), h("div", { class: "row" }, ...rooms.map((r) =>
-          h("a", { class: "btn secondary small", href: `#rooms/${encodeURIComponent(r.name)}` }, roomTitle(r.name))))) : null;
+        return rooms.length ? h("div", {}, h("h3", {}, kept ? "In your Purple Pack" : "Trying"), h("div", { class: "row" }, ...rooms.map((r) => {
+          const link = h("a", { class: "btn secondary small", href: `#rooms/${encodeURIComponent(r.name)}` }, roomTitle(r.name));
+          return kept ? link : tryChip(link, roomTitle(r.name), () => drop(r));
+        }))) : null;
       }),
     ),
   };
@@ -160,19 +169,13 @@ function editor(room: RoomDraft): View {
   tabs.blocks.onclick = () => showTab("blocks");
   tabs.python.onclick = () => showTab("python");
 
-  const remove = () => {
-    if (!confirm(`Throw away ${roomTitle(room.name)}?`)) return;
-    draft.rooms = draft.rooms.filter((r) => r !== room);
-    changed();
-    location.hash = "#rooms";
-  };
-
   return {
     title: roomTitle(room.name),
+    back: ["#rooms", "All rooms"],
     editor: h(
       "section",
       {},
-      tryBar(room, remove),
+      tryBar(room, () => drop(room)),
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, tabs.blocks, tabs.python),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),
       panes.blocks,

@@ -2,8 +2,8 @@ import { INSTRUMENTS } from "@sdk/purple/sounds";
 import { BASES, BASE_NAMES, defaults, type BaseName, type Params } from "@sdk/purple/synth";
 import { playGridKey } from "../sounds";
 import { changed, draft, freeName, titleOf, withSample, type Instrument } from "../state";
-import { tryBar } from "./trybar";
-import { field, h, pageKeys } from "./dom";
+import { tryBar, tryChip } from "./trybar";
+import { field, go, h, pageKeys } from "./dom";
 import { liveScreen } from "./live";
 import type { View } from "./view";
 
@@ -31,9 +31,17 @@ function tryOut(title: string, base: BaseName, params: Params) {
   location.hash = `#instruments/${encodeURIComponent(name)}`;
 }
 
+function drop(inst: Instrument) {
+  draft.instruments = draft.instruments.filter((i) => i !== inst);
+  changed();
+  go("#instruments");
+}
+
 function chooser(): View {
-  const theirs = (kept: boolean) => draft.instruments.filter((i) => !!i.kept === kept).map((i) =>
-    h("a", { class: "btn secondary small", href: `#instruments/${encodeURIComponent(i.name)}` }, titleOf(i)));
+  const theirs = (kept: boolean) => draft.instruments.filter((i) => !!i.kept === kept).map((i) => {
+    const link = h("a", { class: "btn secondary small", href: `#instruments/${encodeURIComponent(i.name)}` }, titleOf(i));
+    return kept ? link : tryChip(link, titleOf(i), () => drop(i));
+  });
   const section = (title: string, links: HTMLElement[]) => (links.length ? h("div", {}, h("h3", {}, title), h("div", { class: "row" }, ...links)) : null);
   return {
     title: "Instruments",
@@ -100,18 +108,13 @@ function editor(inst: Instrument): View {
     changed();
     location.hash = `#instruments/${encodeURIComponent(inst.name)}`;
   };
-  const remove = () => {
-    draft.instruments = draft.instruments.filter((i) => i !== inst);
-    changed();
-    location.hash = "#instruments";
-  };
-
   return {
     title: titleOf(inst),
+    back: ["#instruments", "All instruments"],
     editor: h(
       "section",
       {},
-      tryBar(inst, remove),
+      tryBar(inst, () => drop(inst)),
       h("div", { class: "card" }, field("Name", nameIn), h("p", { class: "dim small" }, `Made from Purple's ${base.label}.`)),
       h("div", { class: "card" }, h("p", { class: "dim small", style: "margin-top:0" }, "Type on your keyboard to play it. Moving a slider plays the last note again."), sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to a plain ${base.label}`))),
     ),

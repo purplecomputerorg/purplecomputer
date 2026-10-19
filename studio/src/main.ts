@@ -151,6 +151,7 @@ function route() {
   const view = section ? section.view(item) : PAGES[sec] ? PAGES[sec](item) : welcomeView();
   current = view;
   clear(main);
+  if (view.back) main.append(h("a", { class: "back", href: view.back[0] }, `← ${view.back[1]}`));
   if (view.title) main.append(h("div", { class: "editor-head" }, h("h2", {}, view.title)));
   main.append(view.editor);
   renderTop();

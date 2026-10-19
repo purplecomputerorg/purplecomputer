@@ -2,10 +2,10 @@ import type { RoomSetup } from "../live/boot";
 import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, examplePicture, fillCrop, onScreen, pictureFromFile, type Crop, type Example, type Picture } from "../photo";
 import { changed, draft, freeName, titleOf, withSample } from "../state";
 import { KEY_EVENT } from "../keys";
-import { field, h } from "./dom";
+import { field, go, h } from "./dom";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
-import { tryBar } from "./trybar";
+import { tryBar, tryChip } from "./trybar";
 import type { View } from "./view";
 
 const goTo = (name: string) => (location.hash = `#pictures/${encodeURIComponent(name)}`);
@@ -57,7 +57,16 @@ async function tryExample(ex: Example) {
 const thumb = (title: string, src: string, current: boolean, attrs: Record<string, unknown>) =>
   h("a", { ...attrs, "aria-current": current ? "page" : null }, h("img", { src, alt: "" }), h("span", {}, title));
 const theirs = (list: Picture[], current: string | null) => h("div", { class: "photo-list" },
-  ...list.map((p) => thumb(titleOf(p), p.sourceUrl, p.name === current, { href: `#pictures/${encodeURIComponent(p.name)}` })));
+  ...list.map((p) => {
+    const link = thumb(titleOf(p), p.sourceUrl, p.name === current, { href: `#pictures/${encodeURIComponent(p.name)}` });
+    return p.kept ? link : tryChip(link, titleOf(p), () => drop(p, p.name === current));
+  }));
+
+function drop(pic: Picture, showing: boolean) {
+  draft.pictures = draft.pictures.filter((p) => p !== pic);
+  changed();
+  go(showing ? "#pictures" : location.hash);
+}
 
 function more(current: Picture | null): HTMLElement[] {
   const kept = draft.pictures.filter((p) => p.kept);
@@ -191,15 +200,10 @@ function pictureView(pic: Picture): HTMLElement {
     changed();
     history.replaceState(null, "", `#pictures/${encodeURIComponent(pic.name)}`);
   };
-  const remove = () => {
-    draft.pictures = draft.pictures.filter((p) => p !== pic);
-    changed();
-    location.hash = "#pictures";
-  };
   const painted = paintedField(pic);
   return h("section", {},
     card(cropper(pic, ex?.alt ?? "", painted.reset),
-      tryBar(pic, remove),
+      tryBar(pic, () => drop(pic, true)),
       ex?.credit ? h("p", { class: "dim small" }, ex.credit) : null,
       field("Picture name", name),
       h("div", { class: "field" }, h("span", {}, "Paint on it right now in Studio"), painted.element),

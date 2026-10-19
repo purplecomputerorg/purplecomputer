@@ -94,6 +94,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .word-row .was { display: none; }
 }
 
+.back { display: inline-block; margin-bottom: 6px; font-size: 14px; color: var(--dim); text-decoration: none; }
+.back:hover { color: var(--purple); }
 .editor-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; margin-bottom: 14px; }
 .tag { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
 
@@ -248,6 +250,9 @@ input[type="range"] { accent-color: var(--purple); width: 100%; margin: 0; }
 .trybar .trying { color: var(--purple-dark); font-weight: 600; }
 .trybar .added { color: #3d7a4e; font-weight: 600; }
 .trybar:has(.added) { background: #e8f3ea; }
+.try-chip { position: relative; display: inline-flex; }
+.try-chip .drop { position: absolute; top: -7px; right: -7px; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: #fff; color: var(--dim); font-size: 13px; line-height: 1; cursor: pointer; box-shadow: var(--shadow); }
+.try-chip .drop:hover { color: #fff; background: var(--purple); border-color: var(--purple); }
 .keep { font: 600 12px var(--sans); padding: 4px 10px; border-radius: 999px; border: 1.5px solid var(--border); background: #fff; color: var(--purple); cursor: pointer; white-space: nowrap; }
 .keep.on { border-color: transparent; background: #e8f3ea; color: #3d7a4e; }
 

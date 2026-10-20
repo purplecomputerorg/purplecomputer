@@ -698,6 +698,7 @@
    "7": "triangle",
    "8": "tambourine",
    "9": "bongo"
-  }
+  },
+  "say_max": 200
  }
 }

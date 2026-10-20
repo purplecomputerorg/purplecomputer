@@ -6,6 +6,7 @@ import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { KEY_EVENT, announceKey } from "../keys";
 import { manifest, packChanges, packSpec, type Sent } from "../pack";
+import { onRoomVoice, roomVoiceVersion } from "../roomvoice";
 import { draft } from "../state";
 import { h } from "./dom";
 
@@ -70,6 +71,7 @@ class LiveScreen {
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
     addEventListener(KEY_EVENT, () => (this.note.hidden = true));
+    onRoomVoice(() => this.queueSync());
     this.queueSync();
   }
 
@@ -119,7 +121,7 @@ class LiveScreen {
     // The room being tried opens straight on the screen (RoomSetup.family), so the Esc menu lists
     // only the added ones, as Open does pictures.
     const live = { ...draft, rooms: draft.rooms.filter((r) => r.kept), pictures: draft.pictures.filter((p) => p.kept) };
-    const key = JSON.stringify(live, (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
+    const key = JSON.stringify([live, roomVoiceVersion()], (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
     if (key === this.sent) return void (this.updating.hidden = true);
     this.sent = key;
     const spec = await packSpec(live, true);

@@ -19,6 +19,8 @@ export interface PackRoom { name: string; source: string; blocks?: unknown }
 // content/images/<name>.png and content/sounds/<name>.wav: what rooms draw with picture() and play with sound().
 export type RoomFileKind = "images" | "sounds";
 export interface PackRoomFile { kind: RoomFileKind; name: string; data: Uint8Array }
+// content/room-voice/<phrase>.wav: a line the pack's rooms say (fixedSays), spoken ahead of time.
+export interface PackRoomLine { text: string; clip: Clip }
 
 export interface PackSpec {
   // The file name without .purplepack.
@@ -36,6 +38,7 @@ export interface PackSpec {
   instruments: PackInstrument[];
   rooms: PackRoom[];
   roomFiles?: PackRoomFile[];
+  roomVoice?: PackRoomLine[];
   theme: Theme | null;
 }
 
@@ -78,6 +81,7 @@ export function emojiEntries(spec: PackSpec): TarEntry[] {
 
 export const letterPath = (key: string) => `content/letters/${LETTER_FILES[key] ?? key}.wav`;
 export const phrasePath = (text: string) => `content/voice/${voiceClipFilename(text)}`;
+export const roomLinePath = (text: string) => `content/room-voice/${voiceClipFilename(text)}`;
 export const picturePngPath = (name: string) => `content/pictures/${name}.png`;
 export const pictureSourcePath = (name: string) => `studio/pictures/${name}.jpg`;
 
@@ -120,6 +124,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
     if (room.blocks) entries.push(json(`content/rooms/${room.name}.blocks.json`, room.blocks));
   }
   for (const f of spec.roomFiles ?? []) entries.push({ path: roomFilePath(f), data: f.data });
+  for (const line of spec.roomVoice ?? []) entries.push({ path: roomLinePath(line.text), data: encodeWav(line.clip) });
 
   if (spec.theme) entries.push(json("content/theme.json", themeJson(spec.theme)));
   if (spec.studio) entries.push(json("studio.json", spec.studio));

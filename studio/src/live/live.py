@@ -87,7 +87,7 @@ def setup(room, letters=False, instrument=None, picture=None, family=None):
     if family:
         from purple_tui.canvas.rooms.family_room import FamilyRoom
         TRYING.mkdir(parents=True, exist_ok=True)
-        for kind in ("images", "sounds"):
+        for kind in ("images", "sounds", "room-voice"):
             link = TRYING.parent / kind
             link.unlink(missing_ok=True)
             link.symlink_to(PACKS / family["pack"] / "content" / kind)

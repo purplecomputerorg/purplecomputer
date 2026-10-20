@@ -6,8 +6,9 @@ Also fetches the Pyodide wheels Purple needs (pygame-ce and friends) and Purple'
 since the page may only load files from its own site.
 
 Writes studio/.cache/purple.zip, studio/.cache/pyodide/*.whl, studio/.cache/voice/ (the voice model
-and the espeak-ng English data it phonemizes with), and studio/.cache/purple-room-check.pyz, the room
-checker (purple_tui/roomkit/check.py) as one file anyone with Python 3 can run.
+and the espeak-ng English data it phonemizes with, and in voice/kokoro/ the room voice Make a Room
+speaks a room's fixed lines in), and studio/.cache/purple-room-check.pyz, the room checker
+(purple_tui/roomkit/check.py) as one file anyone with Python 3 can run.
 Usage: just studio-bundle
 """
 
@@ -30,6 +31,11 @@ WHEELS = ["pygame-ce", "fonttools", "rich", "wcwidth"]
 LOCK = ROOT / "studio" / "node_modules" / "pyodide" / "pyodide-lock.json"
 EXPORT = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
 VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium"
+# The room voice (studio/src/roomvoice.ts): Kokoro, Apache-2.0. int8 is the faster build under WebAssembly.
+KOKORO_FILES = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+KOKORO_CONFIG = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/config.json"
+KOKORO_LICENSE = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+KOKORO = {"model": "kokoro-v1.0.int8.onnx", "voice": "af_heart", "speed": 0.85, "rate": 24000}
 # What the room checker imports: the pack rules and the room library, all standard library.
 CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/pack_manager.py", "purple_tui/synth.py",
            "purple_tui/constants.py", "purple_tui/roomkit/purple.py", "purple_tui/roomkit/runner.py",
@@ -70,6 +76,25 @@ def fetch_voice() -> None:
         shutil.copyfile(data / name, out / "espeak-ng-data" / name)
 
 
+def fetch_kokoro() -> None:
+    """The model, one voice's style vectors as raw float32, and kokoro.json: the settings and Kokoro's phoneme vocabulary."""
+    import numpy as np
+    out = OUT.parent / "voice" / "kokoro"
+    out.mkdir(parents=True, exist_ok=True)
+    for url, name in ((f"{KOKORO_FILES}/{KOKORO['model']}", KOKORO["model"]), (KOKORO_LICENSE, "LICENSE.txt")):
+        if not (out / name).exists():
+            urllib.request.urlretrieve(url, out / name)
+    if not (out / f"{KOKORO['voice']}.bin").exists():
+        with tempfile.TemporaryDirectory() as tmp:
+            urllib.request.urlretrieve(f"{KOKORO_FILES}/voices-v1.0.bin", f"{tmp}/voices.bin")
+            np.load(f"{tmp}/voices.bin")[KOKORO["voice"]].astype("<f4").tofile(out / f"{KOKORO['voice']}.bin")
+    config = OUT.parent / "kokoro-config.json"
+    if not config.exists():
+        urllib.request.urlretrieve(KOKORO_CONFIG, config)
+    vocab = json.loads(config.read_text())["vocab"]
+    (out / "kokoro.json").write_text(json.dumps({**KOKORO, "vocab": vocab}, ensure_ascii=False))
+
+
 def build_checker(out: Path) -> Path:
     with tempfile.TemporaryDirectory() as tmp:
         for f in CHECKER:
@@ -85,6 +110,7 @@ def main() -> None:
     build_checker(OUT.parent / "purple-room-check.pyz")
     fetch_wheels()
     fetch_voice()
+    fetch_kokoro()
     files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:

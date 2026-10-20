@@ -28,7 +28,7 @@ Room to Purple, every field optional:
 | Field | Meaning |
 | --- | --- |
 | `scene` | The whole screen as a list of shapes; absent means unchanged |
-| `sounds` | `["say", text]`, `["note", "C4", instrument]`, `["drum", name]`, `["clip", name]` (the pack's `sounds/<name>.wav`), at most 8; a reply's `say`s are spoken in order, cutting off speech from before |
+| `sounds` | `["say", text]`, `["note", "C4", instrument]`, `["drum", name]`, `["clip", name]` (the pack's `sounds/<name>.wav`), at most 8; a reply's `say`s are spoken in order, cutting off speech from before, each from the pack's `room-voice/` when Studio rendered that line |
 | `wake` | Seconds until the room wants a `tick`; absent or null means no ticks |
 | `keep` | The object to remember; absent means unchanged |
 | `error` | `{text, line}`; the room has stopped |

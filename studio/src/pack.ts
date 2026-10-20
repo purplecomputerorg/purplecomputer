@@ -6,6 +6,7 @@ import { gunzip, untar, type TarEntry } from "@sdk/tar";
 import { decodeWav } from "@sdk/wav";
 import type { PackFiles } from "./live/boot";
 import { instrumentNotes } from "./notes";
+import { roomVoice } from "./roomvoice";
 import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop, type Words } from "./photo";
 import { draft, emptyDraft, type Draft, type Keepable, type RoomDraft, type RoomFile } from "./state";
 
@@ -19,7 +20,7 @@ interface Saved extends Pick<PackSpec, "name" | "words" | "synonyms" | "ranked" 
 }
 
 // The download holds what the family added; Studio's own Purple also plays what they're trying.
-export async function packSpec(d: Draft = draft, trying = false): Promise<PackSpec> {
+export async function packSpec(d: Draft = draft, trying = false, onProgress?: (msg: string) => void): Promise<PackSpec> {
   const ok = (x: Keepable) => trying || !!x.kept;
   const words = d.words.filter(ok);
   const added = d.pictures.filter(ok);
@@ -41,11 +42,13 @@ export async function packSpec(d: Draft = draft, trying = false): Promise<PackSp
     pictures: added.map((p, i) => ({ name: p.name, title: p.title, cells: p.cells, words: p.words, crop: sources[i]?.crop })),
   };
   const rendered = await Promise.all(instruments.map(async (i) => ({ ...i, notes: await instrumentNotes(i) })));
-  return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, roomFiles, theme, studio };
+  // The preview opens the room being tried from this pack's files too, added or not.
+  const voiced = await roomVoice((trying ? draft.rooms : rooms).map((r) => r.source), !trying, onProgress);
+  return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, roomFiles, roomVoice: voiced, theme, studio };
 }
 
 export async function buildPack(onProgress?: (msg: string) => void, d: Draft = draft, trying = false): Promise<Blob> {
-  return build(await packSpec(d, trying), onProgress);
+  return build(await packSpec(d, trying, onProgress), onProgress);
 }
 
 export const packFilename = () => filename(draft);

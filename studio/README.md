@@ -73,6 +73,7 @@ Vite, TypeScript, and plain DOM, with no backend. Three runtime dependencies: Bl
 - `src/live/browser.py` turns what a browser can't do into no-ops before Purple loads (threads, the mixer's subprocess probe, freetype glyph checks) and routes speech to recorded clips or Piper.
 - `src/live/live.py` installs a pack, restarts the app, and opens the room a page asks for.
 - **Voice:** Piper, with the same model, speaker, and settings as Purple, phonemized by espeak-ng built to WebAssembly (`vendor/espeak-ng/`, GPL-3.0, source linked under the screen) and run in `src/live/piper.worker.ts`. Purple's own `tts` then trims, levels, and caches the audio, so a phrase sounds the way it does on Purple. The model is cached with the browser's Cache API.
+- **Room voice:** a room's fixed `say("...")` lines are spoken ahead of time in Kokoro (Apache-2.0, `af_heart`, the int8 model `studio_bundle.py` fetches into `voice/kokoro/`), in `src/roomvoice.worker.ts` on the same espeak-ng, and ride in the pack as `content/room-voice/`, which only that pack's rooms play. Too slow for Purple's laptops to run live, quick enough here. Each line is kept in the Cache API; a download waits for every line, the preview speaks the rest in Piper until they're ready.
 
 ### Room code is untrusted
 

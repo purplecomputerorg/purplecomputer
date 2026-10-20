@@ -114,8 +114,8 @@ def _patch_speech():
         tts._write_wav(wav, tts.postprocess_samples(array.array("h", voice.pcm.to_bytes()), voice.rate), voice.rate)
         return tts._store_cache(prepared, wav, tts.VOICE_NATURAL) or wav
 
-    async def say(text, speech_id):
-        clip = tts._get_voice_clip(text) or await piper(text)
+    async def say(text, speech_id, room_voice):
+        clip = tts._get_voice_clip(text, room_voice) or await piper(text)
         if speech_id != tts._speech_id:
             return
         if not clip:
@@ -124,7 +124,7 @@ def _patch_speech():
         while channel and channel.get_busy():
             await asyncio.sleep(0.05)
 
-    async def sequence(items, speech_id, gap, on_playing, on_done):
+    async def sequence(items, speech_id, gap, on_playing, on_done, room_voice):
         try:
             for n, (index, text) in enumerate(items):
                 if n:
@@ -133,19 +133,19 @@ def _patch_speech():
                     return
                 if on_playing:
                     on_playing(index)
-                await say(text, speech_id)
+                await say(text, speech_id, room_voice)
         finally:
             if on_done:
                 on_done()
 
-    def speak_many(texts, gap=0.5, on_playing=None, on_done=None):
+    def speak_many(texts, gap=0.5, on_playing=None, on_done=None, room_voice=None):
         if tts._muted:
             return False
         items = [(i, f) for i, t in enumerate(texts) if t and t.strip() and (f := filter_speech(t)) and f.strip()]
         if not items:
             return False
         tts.stop()
-        asyncio.ensure_future(sequence(items, tts._speech_id, gap, on_playing, on_done))
+        asyncio.ensure_future(sequence(items, tts._speech_id, gap, on_playing, on_done, room_voice))
         return True
 
     stop = tts.stop

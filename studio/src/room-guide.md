@@ -43,7 +43,7 @@ Esc always belongs to Purple: it leaves the room, and your room never sees it.
 | `status(text)` | A line along the top, for a score or what to do next. `status()` takes it away. |
 | `clear()` | Empties the screen: the middle, the lines, the top line, and the grid. |
 | `background("#2a1845")` | The room's color, written as # and six letters or numbers. |
-| `say(text)` | Purple says it out loud. Everything said in one key or timer is spoken in order; the next key's `say` cuts off anything still being said. Notes, drums, and sounds play at the same time as speech. |
+| `say(text)` | Purple says it out loud. Everything said in one key or timer is spoken in order; the next key's `say` cuts off anything still being said. Notes, drums, and sounds play at the same time as speech. A `say` with its words written right in it, like `say("Hello!")`, speaks in Purple's room voice; words built while the room runs, like `say(name)` or `say(f"{n} stars")`, speak in Purple's everyday voice. |
 | `play("C4", "marimba")` | A note from C2 to C6, sharps like `"F#4"`. Instruments: marimba, ukulele, accordion, glockenspiel, or one made in this pack. |
 | `drum("snare")` | kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, or gong. |
 | `sound("meow")` | One of the pack's own sounds. |

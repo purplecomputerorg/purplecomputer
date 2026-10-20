@@ -87,6 +87,10 @@ Studio saves the Blockly workspace a room was built from beside it as `<name>.bl
 
 What the pack's rooms draw and play by name: `picture("hero")` and `sound("meow")` in a room, `image` shapes and `clip` sounds in the protocol (`guides/family-rooms.md`). Names are lowercase letters, digits, `-` and `_`. Images are PNG, at most 1024 pixels a side and 1 MB; a small sprite drawn big stays crisp. Sounds are WAV in the letters' format. Only rooms of the same pack can use them, and only Purple opens the files.
 
+### room-voice/<phrase>.wav
+
+A line the pack's rooms say, spoken ahead of time: when a room of this pack says exactly that text, Purple plays the clip instead of synthesizing it, before any `voice/` clip. Named and formatted like `voice/`. Play and every other room never hear them. Studio writes one for each `say("...")` with fixed text in a room's code, in its room voice (Kokoro, `studio/src/roomvoice.ts`); a Purple without this folder's support ignores it and speaks the line itself.
+
 ### rooms/purple.py
 
 The library the pack's rooms import as `purple`: the copy of `purple_tui/roomkit/purple.py` Studio had when it built the pack. Purple runs the rooms on it, so a pack made by a newer Studio brings its newer library to an older Purple; a pack without one runs on the copy Purple was built with. It runs in the same sealed process as the room, never in Purple itself.

@@ -419,7 +419,7 @@ def test_a_room_plays_its_packs_own_sounds(pack, monkeypatch):
 def test_everything_one_key_says_is_spoken_in_order(pack, monkeypatch):
     pack("chatty", 'from purple import *\ndef on_key(key):\n    say("A pair!")\n    say("Go again.")\n')
     spoken = []
-    monkeypatch.setattr(family_room.tts, "speak_many", lambda texts, gap: spoken.append(texts))
+    monkeypatch.setattr(family_room.tts, "speak_many", lambda texts, gap, room_voice: spoken.append((texts, room_voice)))
     monkeypatch.setattr(FamilyRoom, "_audible", lambda self: True)
 
     async def go():
@@ -428,7 +428,7 @@ def test_everything_one_key_says_is_spoken_in_order(pack, monkeypatch):
         await until(lambda: not room._busy)
         await press(app, "a")
         await until(lambda: spoken)
-        assert spoken == [["A pair!", "Go again."]]
+        assert spoken == [(["A pair!", "Go again."], room.room.voice)]
         room.close()
     run(go())
 

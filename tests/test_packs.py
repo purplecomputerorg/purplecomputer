@@ -176,6 +176,12 @@ class TestLoader:
         assert tts._get_voice_clip("Hi there") == tmp_path / "the-tests-pack" / "content" / "voice" / "hi_there.wav"
         assert tts._get_voice_clip("definitely not a clip") is None
 
+    def test_a_rooms_own_line_beats_every_other_clip_only_in_that_room(self, packs, tmp_path):
+        room_voice = tmp_path / "the-tests-pack" / "content" / "room-voice"
+        write_wav(room_voice / "hi_there.wav")
+        assert tts._get_voice_clip("Hi there", room_voice) == room_voice / "hi_there.wav"
+        assert tts._get_voice_clip("Hi there") == tmp_path / "the-tests-pack" / "content" / "voice" / "hi_there.wav"
+
 
 class TestCheckPack:
     def test_studio_shaped_pack_is_clean(self, tmp_path):
@@ -183,6 +189,7 @@ class TestCheckPack:
 
     @pytest.mark.parametrize("break_it, expect", [
         (lambda d: write_wav(d / "content" / "letters" / "b.wav", rate=44100), "letters/b.wav: expected 22050 Hz"),
+        (lambda d: write_wav(d / "content" / "room-voice" / "hi.wav", rate=24000), "room-voice/hi.wav: expected 22050 Hz"),
         (lambda d: (d / "content" / "kitchen.py").write_text("print(1)"), "may not contain code"),
         (lambda d: (d / "content" / "emoji.json").write_text('{"cat": 3}'), "emoji.json: every entry"),
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "marimba", "params": {"reverb": 1}})), "no parameter 'reverb'"),

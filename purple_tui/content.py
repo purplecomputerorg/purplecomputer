@@ -64,6 +64,11 @@ class Room:
         return room_assets(self.path.parents[1] / "sounds", ".wav")
 
     @property
+    def voice(self) -> Path:
+        """The pack's content/room-voice/: its rooms' lines, rendered by Studio, spoken in place of the voice Play uses."""
+        return self.path.parents[1] / "room-voice"
+
+    @property
     def key(self) -> str:
         return f"{self.pack}/{self.name}"
 

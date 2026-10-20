@@ -337,15 +337,15 @@ def voice_clip_filename(text: str) -> str:
     return text.strip().lower().replace(" ", "_") + ".wav"
 
 
-def _get_voice_clip(text: str) -> Path | None:
-    """Check if a pre-generated voice clip exists for this text."""
+def _get_voice_clip(text: str, room_voice: Path | None = None) -> Path | None:
+    """Check if a pre-generated voice clip exists for this text; a family room's own lines come first."""
     filename = voice_clip_filename(text)
     # Clips are short curated phrases; a longer name would also make
     # Path.exists() raise ENAMETOOLONG (filesystem cap is 255 bytes)
     if len(filename.encode()) > 255:
         return None
     from .content import get_content
-    for clips_dir in get_content().pack_dirs("voice") + [VOICE_CLIPS_DIR]:
+    for clips_dir in ([room_voice] if room_voice else []) + get_content().pack_dirs("voice") + [VOICE_CLIPS_DIR]:
         if (clips_dir / filename).exists():
             return clips_dir / filename
     return None
@@ -723,7 +723,7 @@ def speak(text: str, on_playing: callable = None, on_done: callable = None, lang
 
 
 def speak_many(texts: list[str], gap: float = 0.5,
-               on_playing: callable = None, on_done: callable = None) -> bool:
+               on_playing: callable = None, on_done: callable = None, room_voice: Path | None = None) -> bool:
     """
     Speak texts in order with a pause between items.
     Cancels any currently playing or generating speech first; a later
@@ -737,6 +737,7 @@ def speak_many(texts: list[str], gap: float = 0.5,
             when that item starts playing
         on_done: Called from background thread when the sequence finishes
             (or is cancelled)
+        room_voice: A family room's rendered lines, checked before any other clip
 
     Returns:
         True if speech was started, False otherwise
@@ -764,14 +765,14 @@ def speak_many(texts: list[str], gap: float = 0.5,
     my_id = _speech_id
 
     thread = threading.Thread(
-        target=_speak_seq, args=(items, my_id, gap, on_playing, on_done), daemon=True
+        target=_speak_seq, args=(items, my_id, gap, on_playing, on_done, room_voice), daemon=True
     )
     thread.start()
     return True
 
 
 def _speak_seq(items: list[tuple], speech_id: int, gap: float,
-               on_playing: callable = None, on_done: callable = None) -> None:
+               on_playing: callable = None, on_done: callable = None, room_voice: Path | None = None) -> None:
     """Speak a sequence of (index, text) items from a background thread."""
     try:
         for n, (index, text, lang) in enumerate(items):
@@ -782,7 +783,7 @@ def _speak_seq(items: list[tuple], speech_id: int, gap: float,
                 return
             cb = (lambda idx=index: on_playing(idx)) if on_playing else None
             try:
-                _speak_sync(text, speech_id, cb, lang)
+                _speak_sync(text, speech_id, cb, lang, room_voice)
             except Exception as e:
                 # A failed item must not silently kill the whole thread
                 _dbg(f"speak_seq: item raised {type(e).__name__}: {e}")
@@ -794,7 +795,7 @@ def _speak_seq(items: list[tuple], speech_id: int, gap: float,
                 pass
 
 
-def _speak_sync(text: str, speech_id: int, on_playing: callable = None, lang=None) -> bool:
+def _speak_sync(text: str, speech_id: int, on_playing: callable = None, lang=None, room_voice: Path | None = None) -> bool:
     """Synchronous speech, called from background thread"""
     global _current_channel, _speech_id
 
@@ -816,7 +817,7 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None, lang=Non
         prepared, engine = _normalize_for_cache(text) + ".", _LANG_ENGINE + lang.voice
     else:
         # Check for pre-generated voice clip first (hand-curated clips take priority)
-        clip_path = _get_voice_clip(text)
+        clip_path = _get_voice_clip(text, room_voice)
         if clip_path:
             _dbg(f"speak_sync: voice clip {clip_path}")
             return _play_clip(clip_path, speech_id, on_playing)

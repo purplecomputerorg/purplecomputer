@@ -24,6 +24,7 @@ from purple_tui.music_constants import (  # noqa: E402
     DEFAULT_ROOT_INDEX, FRIENDLY_KEYS, GRID_KEYS, INSTRUMENTS, PERCUSSION, pitch_filename, pitch_for, reachable_pitches,
 )
 from purple_tui.canvas.rooms.art_room import CANVAS_ALT, CANVAS_BG  # noqa: E402
+from purple_tui.canvas.rooms.family_room import TEXT_MAX  # noqa: E402
 from purple_tui.palette import KEY_COLORS  # noqa: E402
 from purple_tui.canvas.sounds import CLIP_NAMES, SAMPLE_VOLUME  # noqa: E402
 from purple_tui.roomkit.purple import H as ROOM_H, W as ROOM_W  # noqa: E402
@@ -101,6 +102,7 @@ def build_export() -> dict:
             "keys": ["space", "enter", "backspace", "up", "down", "left", "right"],
             "drums": sorted(set(PERCUSSION.values())),
             "drum_keys": PERCUSSION,
+            "say_max": TEXT_MAX,
         },
     }
 

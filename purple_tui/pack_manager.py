@@ -182,7 +182,7 @@ def _check_rooms(content: Path) -> list[str]:
 
 def _check_room_assets(content: Path) -> list[str]:
     """content/images/<name>.png and content/sounds/<name>.wav, what the pack's rooms draw and play."""
-    problems = _check_clips(content / 'sounds')
+    problems = _check_clips(content / 'sounds') + _check_clips(content / 'room-voice')
     for path in sorted((content / 'images').glob('*')) + sorted((content / 'sounds').glob('*')):
         if not ASSET_NAME.match(path.stem):
             problems.append(f"content/{path.parent.name}/{path.name}: names are lowercase letters, digits, - and _")

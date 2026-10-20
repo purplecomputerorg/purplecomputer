@@ -187,7 +187,7 @@ def test_the_spoken_line_is_said_in_the_language(shipped, code, line, out):
 def test_english_and_chinese_text_pick_their_own_voice(langs, monkeypatch):
     clips, engines = [], []
     monkeypatch.setattr(tts, "_ensure_mixer", lambda: True)
-    monkeypatch.setattr(tts, "_get_voice_clip", lambda text: clips.append(text))
+    monkeypatch.setattr(tts, "_get_voice_clip", lambda text, room_voice=None: clips.append(text))
     monkeypatch.setattr(tts, "_get_cached", lambda text, engine: engines.append(engine) or "cached")
     monkeypatch.setattr(tts, "_play_clip", lambda path, *a: path == "cached")
     monkeypatch.setattr(tts, "find_voice_model", lambda model=None: "model")

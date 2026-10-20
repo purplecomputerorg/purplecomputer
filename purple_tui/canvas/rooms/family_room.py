@@ -488,7 +488,7 @@ class FamilyRoom(Overlay):
         if not sounds or not self._audible():
             return
         if says := [s[1] for s in sounds if s[0] == "say"]:
-            tts.speak_many(says, gap=0.3)
+            tts.speak_many(says, gap=0.3, room_voice=self.room.voice)
         for s in sounds:
             self._sound(*s)
 

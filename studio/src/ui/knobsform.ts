@@ -15,8 +15,9 @@ interface Ctx { onEdit: () => void; redraw: () => void; pages: string[]; links: 
 const COLOR = /^#[0-9a-f]{6}$/i;
 const LONG = 40;
 const nested = (v: Lit) => v.t === "list" || v.t === "tuple" || v.t === "dict";
-// Short plain values fit on one line; long words (a map row, a sentence) get a line each.
-const inline = (items: Lit[]) => items.length <= 8 && items.every((x) => !nested(x) && !(x.t === "str" && x.v.length > 12));
+// Short plain values fit on one line; long words (a map row, a sentence) get a line each. Emoji wrap however many.
+const inline = (items: Lit[]) => items.every((x) => x.t === "str" && isEmoji(x.v))
+  || (items.length <= 8 && items.every((x) => !nested(x) && !(x.t === "str" && x.v.length > 12)));
 const keyText = (k: Lit) => (k.t === "str" ? k.v : k.t === "num" ? String(k.v) : "");
 const fit = (s: string) => Math.min(LONG, Math.max(2, [...s].length + 1));
 const labelled = (label: string | undefined, el: HTMLElement) => (label ? field(label, el) : el);

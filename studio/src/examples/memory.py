@@ -5,7 +5,7 @@ from purple import *
 # Memory for two players taking turns, laid out like the Music room: each card is a letter key. Press a
 # card's letter to turn it over. Find a pair and you go again.
 
-# The pictures on the cards, two of each: your family's favorite things. Up to 13 fit.
+# The pictures on the cards, two of each: your family's favorite things. Up to 13 fit, and every game shuffles them onto the letter keys, so their order here doesn't matter.
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
 # The two players: each one's mark and name.
 # Labels: mark, name

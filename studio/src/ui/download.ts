@@ -36,7 +36,7 @@ export function downloadView(): View {
   const nameIn = h("input", { type: "text", value: draft.name, oninput: () => { draft.name = nameIn.value; changed(); } });
   const summary = h("div");
   const trying = h("div");
-  const leftOut = h("p", { class: "dim small" });
+  const leftOut = h("span", { class: "dim small" });
   const status = h("div", { class: "status" });
   const button = h("button", { class: "btn logo" }, "Download my Purple Pack");
 
@@ -82,8 +82,7 @@ export function downloadView(): View {
       trying,
       h("div", { class: "card" }, h("h3", { style: "margin-top:0" }, "In your Purple Pack"), summary),
       field("File name", h("div", { class: "row", style: "flex-wrap:nowrap" }, nameIn, h("span", { class: "mono dim" }, ".purplepack"))),
-      h("div", { class: "row", style: "margin-top:22px" }, button),
-      leftOut,
+      h("div", { class: "row", style: "margin-top:22px" }, button, leftOut),
       status,
       h("h3", {}, "Then put it on Purple"),
       putItOnPurple(),

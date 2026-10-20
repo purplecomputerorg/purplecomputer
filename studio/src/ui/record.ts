@@ -14,11 +14,11 @@ async function finish(blob: Blob, onClip: (clip: Clip) => void, say: (text: stri
   }
 }
 
-// A Record button that turns into Stop while it listens.
+// A Record button that turns into Stop while it listens. small: a round button that fits in a form's row.
 export function recordButton(onClip: (clip: Clip) => void, say: (text: string) => void, small = false): HTMLButtonElement {
   const recorder = new Recorder();
-  const label = "● Record";
-  const button = h("button", { class: small ? "btn record small" : "btn record" }, label);
+  const [label, stop] = small ? ["●", "■"] : ["● Record", "■ Stop"];
+  const button = h("button", { class: small ? "rec-mini" : "btn record", title: "Record a sound", "aria-label": "Record a sound" }, label);
   button.onclick = async () => {
     if (recorder.active) {
       button.textContent = label;
@@ -28,7 +28,7 @@ export function recordButton(onClip: (clip: Clip) => void, say: (text: string) =
     }
     try {
       await recorder.start();
-      button.textContent = "■ Stop";
+      button.textContent = stop;
       button.classList.add("recording");
       say("Recording. Press Stop when you're done.");
     } catch {

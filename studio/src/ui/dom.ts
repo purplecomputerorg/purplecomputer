@@ -26,6 +26,10 @@ export function field(label: string, input: HTMLElement): HTMLLabelElement {
   return h("label", { class: "field" }, h("span", {}, label), input);
 }
 
+// The forms' shared remove and add buttons, so every list in a room's settings grows and shrinks the same way.
+export const removeButton = (onclick: () => void) => h("button", { class: "x", title: "Remove", "aria-label": "Remove", onclick }, "×");
+export const addRowButton = (label: string, onclick: () => void) => h("button", { class: "add-row", onclick }, `+ ${label}`);
+
 export function filePicker(accept: string, onFile: (f: File) => void, label = "or choose a file"): HTMLElement {
   const input = h("input", { type: "file", accept, hidden: true, onchange: () => input.files?.[0] && onFile(input.files[0]) });
   return h("span", {}, h("button", { class: "linkbtn dim", onclick: () => input.click() }, label), input);

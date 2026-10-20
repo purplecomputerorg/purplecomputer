@@ -244,7 +244,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .stack > * { margin-block: 0; }
 
 .field { display: block; margin: 10px 0; }
-.field > span { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 5px; }
+.field > span:first-child { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 5px; }
 input[type="text"], input[type="password"], select, textarea {
   font: inherit; color: var(--text); background: #fff; border: 1.5px solid var(--line); border-radius: 12px;
   padding: 9px 14px; width: 100%; outline: none;
@@ -319,38 +319,85 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .rule > .linkbtn { justify-self: start; padding-left: 22px; }
 .rule input.bad, .form-row input.bad { border-color: #d77; }
 .push { margin-left: auto; }
-.knob-head { margin-bottom: 14px; }
-.knob-head h2 { font-size: 17px; }
-.knob-head p { margin: 4px 0 0; }
+/* The picture keyboard and quiz forms: rows that share columns under one line of headings */
+.sheet { display: grid; grid-template-columns: var(--cols); gap: 8px 10px; align-items: center; }
+.sheet-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
+.sheet-other { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sheet > .add-row { grid-column: 1 / -1; }
+/* A narrow card puts a key's sound on a second line, under its word */
+.form-card { container: form / inline-size; }
+@container form (max-width: 480px) {
+  .sheet:has(.sound-in) { grid-template-columns: 3.25em 3.5em minmax(0, 1fr) 26px; }
+  .sheet-row > .sound-in { grid-column: 2 / 4; }
+  .sheet:has(.sound-in) .sheet-row > .x { grid-column: 4; grid-row: 1; }
+  .sheet:has(.sound-in) .sheet-head > :nth-child(4) { display: none; }
+}
+.sheet input[type="text"] { width: 100%; min-width: 0; }
+.sound-in { display: flex; align-items: center; gap: 6px; }
+.sound-in select { width: auto; }
+.sheet .sound-in input { width: 3.5em; }
+.q-block { position: relative; display: grid; gap: 12px; padding: 14px 40px 14px 14px; margin-bottom: 12px; border-radius: 12px; background: var(--bg); }
+.q-block > .x { position: absolute; top: 10px; right: 8px; }
+.q-ask { display: flex; gap: 10px; align-items: center; }
+.q-ask input { flex: 1; font-weight: 600; }
+.tag.right { color: var(--purple); background: var(--fill); justify-self: start; }
+.sheet .tag { justify-self: start; color: var(--dim); }
+.rec-mini { width: 30px; height: 30px; flex-shrink: 0; padding: 0; border-radius: 50%; border: 1.5px solid var(--line); background: #fff; color: var(--danger); font-size: 13px; line-height: 1; cursor: pointer; }
+.rec-mini:hover { border-color: var(--border); background: var(--fill); }
+.rec-mini.recording { background: var(--danger); border-color: var(--danger); color: #fff; }
+.clear-pick { display: block; margin-top: 8px; }
+/* A room's settings: one card, each knob a section; a single value sits on its title's line */
+.card.knobs { padding: 4px 22px; }
+.knob { padding: 18px 0; }
+.knob + .knob { border-top: 1px solid var(--line); }
+.knob.one-line { display: flex; align-items: center; justify-content: space-between; gap: 8px 20px; }
+.knob-head { margin-bottom: 12px; }
+.one-line > .knob-head { margin: 0; }
+.knob-head h2 { font-size: 15px; letter-spacing: -0.01em; }
+.knob-head p { margin: 2px 0 0; }
+/* Fields in a room's settings and forms are a size smaller than the rest of Studio's, so a row reads as one line */
+:is(.knobs, .form-card) :is(input[type="text"], select, textarea) { font-size: 14px; padding: 6px 10px; border-radius: 10px; }
+:is(.knobs, .form-card) input[type="number"].num { width: 4.5em; padding: 6px 8px; font-size: 14px; }
+:is(.knobs, .form-card) .emoji-cell { width: 52px; height: 36px; font-size: 20px; border-radius: 10px; }
+:is(.knobs, .form-card) .emoji-cell.empty { font-size: 12px; }
+:is(.knobs, .form-card) .emoji-cell img { width: 26px; height: 26px; }
+input[type="color"] { width: 30px; height: 30px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 1.5px var(--line); }
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
+input[type="color"]:hover { box-shadow: 0 0 0 2px var(--border); }
+.col-heads span, .sheet-head span { font-size: 11px; font-weight: 600; color: var(--dim); }
+.add-row { justify-self: start; font: 600 13px var(--sans); padding: 5px 12px; border: 1.5px dashed var(--border); border-radius: 999px; background: none; color: var(--purple); cursor: pointer; }
+.add-row:hover { background: var(--fill); border-style: solid; }
 /* Rows share one grid, so their inputs and ✕s line up down the list */
 .knob-rows { display: grid; grid-template-columns: repeat(var(--cols), max-content); gap: 8px; align-items: center; }
 .knob-rows > .form-row, .knob-rows > .form-row > .knob-inline { display: contents; }
 .knob-rows > .form-row > :first-child, .knob-rows > .form-row > .knob-inline:first-child > :first-child { grid-column: 1; }
 .knob-rows > .form-row > .x { grid-column: -2; }
 .knob-rows > .form-row > input[type="text"], .knob-rows > .form-row > .knob-inline > input[type="text"] { width: 100%; }
-.knob-rows > .add-slot { grid-column: 1 / -1; }
+.knob-rows > .add-row { grid-column: 1 / -1; margin-top: 2px; }
 .knob-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 input.mono-in { font-family: var(--mono); font-size: 13px; }
 .knob .field { margin: 0; }
-.knob .field > span { margin-bottom: 3px; }
+.knob .field > span:first-child { margin-bottom: 3px; font-size: 11px; }
 .knob-inline > .knob-item { display: inline-flex; align-items: center; gap: 4px; }
 /* Entries hold wrapping words, so they take the card's width instead of sizing the grid to their text */
 .knob-rows:has(> .knob-entry) { grid-template-columns: minmax(0, 1fr); }
 .x { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--dim); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 .x:hover { background: var(--fill); color: var(--purple-dark); }
 .tile { position: relative; }
-.tile > .x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; font-size: 14px; background: #fff; border: 1.5px solid var(--line); }
+.tile > .x { position: absolute; top: -7px; right: -7px; width: 20px; height: 20px; font-size: 13px; background: #fff; border: 1.5px solid var(--line); }
 @media (hover: hover) {
   .knob-item > .x { opacity: 0; transition: opacity 0.12s; }
   .knob-item:hover > .x, .knob-item:focus-within > .x { opacity: 1; }
 }
 input.key-in { text-align: center; padding-inline: 8px; }
 textarea.words-in { field-sizing: content; width: 100%; min-width: 0; resize: vertical; line-height: 1.45; }
-.knob-entry { position: relative; padding: 14px 16px; border: 1.5px solid var(--line); border-radius: 14px; }
+.knob-entry { position: relative; padding: 12px 40px 12px 14px; border-radius: 12px; background: var(--bg); }
 .knob-entry > .x { position: absolute; top: 8px; right: 8px; }
-.entry-fields { display: flex; flex-wrap: wrap; align-items: start; gap: 12px 16px; }
+.entry-fields { display: flex; flex-wrap: wrap; align-items: start; gap: 10px 14px; }
 .entry-fields > :has(textarea) { flex-basis: 100%; }
-.add-slot { min-width: 3.2em; min-height: 42px; align-self: stretch; border: 1.5px dashed var(--border); border-radius: 12px; background: none; color: var(--purple); font: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
+.add-slot { min-width: 52px; min-height: 36px; align-self: stretch; border: 1.5px dashed var(--border); border-radius: 12px; background: none; color: var(--purple); font: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
 .add-slot:hover { background: var(--fill); border-style: solid; }
 input.room-name.just-yours { animation: just-yours 1.8s ease-out; }
 @keyframes just-yours { 0%, 40% { background: var(--fill); border-color: var(--border); } }
@@ -410,7 +457,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 h3 + .cards { margin-top: 0; }
 .pick { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: inherit; text-decoration: none; background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 16px 18px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pick.featured { border-color: var(--border); background: var(--fill); }
-.to-python { margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; background: var(--fill); }
+.to-python { margin: 0 0 4px; color: var(--dim); }
 .pick:hover { border-color: var(--border); background: var(--fill); color: inherit; }
 .pick-icon { font-size: 28px; line-height: 1; margin-bottom: 8px; }
 .pick-swatch { width: 28px; height: 8px; border-radius: 4px; margin-bottom: 10px; }
@@ -466,6 +513,7 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .emoji-grid p { grid-column: 1 / -1; margin: 6px; }
 .picture-grid { margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .picture-grid button:first-child:not(:hover) { background: none; }
+.picture-grid .linkbtn { font-size: 13px; height: auto; }
 .picture-grid img, .emoji-cell img { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; vertical-align: middle; }
 
 /* Voice */

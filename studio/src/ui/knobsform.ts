@@ -2,7 +2,7 @@
 // rows that can grow and shrink. Each edit changes the knob in place and calls onEdit.
 import { roomTitle } from "@sdk/pack";
 import type { Knob, Lit } from "../knobs";
-import { field, h } from "./dom";
+import { addRowButton, field, h, removeButton } from "./dom";
 import { emojiCell, isEmoji } from "./emojipicker";
 import { roomPictures } from "./roomfiles";
 import { isMap, legendFor, legendNames, mapPainter } from "./mappainter";
@@ -39,7 +39,7 @@ function text(v: Str, { onEdit, taken, pictures }: Edit): HTMLElement {
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
     return el;
   }
-  if (isFace(v.v, pictures)) return h("span", { class: "emoji-wrap" }, emojiCell(v.v, () => "", (e) => { v.v = e; onEdit(); }, taken, pictures));
+  if (isFace(v.v, pictures)) return h("span", { class: "emoji-wrap" }, emojiCell(v.v, () => "", (e) => { v.v = e; onEdit(); }, { taken, pictures }));
   return textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: fit(v.v), class: `inline${v.v.length > 12 ? " mono-in" : ""}` });
 }
 
@@ -86,36 +86,41 @@ function focusIfFresh(v: Lit, el: HTMLElement): HTMLElement {
 }
 
 const changed = (ctx: Ctx) => { ctx.redraw(); ctx.onEdit(); };
-const remove = (ctx: Ctx, fn: () => void, label?: string) => {
-  const onclick = () => { fn(); changed(ctx); };
-  return label ? h("button", { class: "linkbtn dim small", onclick }, label) : h("button", { class: "x", title: "Remove", "aria-label": "Remove", onclick }, "×");
+const remove = (ctx: Ctx, fn: () => void) => removeButton(() => { fn(); changed(ctx); });
+// A tile's "+" sits among the tiles it adds to; rows get a small button under them.
+const addSlot = (ctx: Ctx, push: () => Lit, tile = false) => {
+  const onclick = () => { fresh = push(); changed(ctx); };
+  return tile ? h("button", { class: "add-slot", title: "Add another", "aria-label": "Add another", onclick }, "+") : addRowButton("Add another", onclick);
 };
-const addSlot = (ctx: Ctx, push: () => Lit) =>
-  h("button", { class: "add-slot", title: "Add another", "aria-label": "Add another", onclick: () => { fresh = push(); changed(ctx); } }, "+");
 
 const row = (...cells: (HTMLElement | null)[]) => h("div", { class: "form-row knob-item" }, ...cells);
 // An inline group's items each take a grid column, so every row's columns line up.
 const width = (r: Element) => [...r.children].reduce((n, c) => n + (c.classList.contains("knob-inline") ? c.children.length : 1), 0);
-function rows(items: HTMLElement[], add: HTMLElement | null): HTMLElement {
-  const el = h("div", { class: "knob-rows" }, ...items, add);
+// heads: the columns' names, shown once above the rows instead of beside every field.
+function rows(items: HTMLElement[], add: HTMLElement | null, heads: string[] = []): HTMLElement {
+  const head = heads.some(Boolean) ? h("div", { class: "form-row col-heads" }, ...heads.map((t) => h("span", {}, t))) : null;
+  const el = h("div", { class: "knob-rows" }, head, ...items, add);
   el.style.setProperty("--cols", String(Math.max(1, ...items.filter((r) => r.classList.contains("form-row")).map(width))));
   return el;
 }
 
 function list(items: Lit[], growable: boolean, ctx: Ctx, labels: string[]): HTMLElement {
   growable &&= items.length > 0;
-  const add = () => (growable ? addSlot(ctx, () => { items.push(structuredClone(items.at(-1)!)); return items.at(-1)!; }) : null);
+  const tiles = inline(items, ctx.pictures);
+  const add = () => (growable ? addSlot(ctx, () => { items.push(structuredClone(items.at(-1)!)); return items.at(-1)!; }, tiles) : null);
   const drop = (i: number) => (growable && items.length > 1 ? remove(ctx, () => items.splice(i, 1)) : null);
   // An emoji list redraws on every pick, so a repeat (an added copy left as it was) shows as one.
   const taken = emojiOnly(items, ctx.pictures) ? () => items.map((x) => (x as Str).v) : undefined;
   const sub = taken ? { ...ctx, taken, onEdit: () => changed(ctx) } : ctx;
   const repeat = (x: Lit) => !!taken && taken().filter((e) => e === (x as Str).v).length > 1;
-  const item = (x: Lit) => editor(x, sub, [], nested(x) ? labels : []);
-  if (inline(items, ctx.pictures)) {
+  // Rows of plain values, like a drum's picture, name, and color, name their columns once.
+  const heads = items.every((x) => x.t === "tuple" && !x.items.some(nested)) ? labels : [];
+  const item = (x: Lit) => editor(x, sub, [], nested(x) && !heads.length ? labels : []);
+  if (tiles) {
     return h("span", { class: "knob-inline" },
       ...items.map((x, i) => h("span", { class: `knob-item tile${repeat(x) ? " bad" : ""}` }, labelled(labels[i], item(x)), drop(i))), add());
   }
-  return rows(items.map((x, i) => row(item(x), drop(i))), add());
+  return rows(items.map((x, i) => row(item(x), drop(i))), add(), heads);
 }
 
 // A new entry's key: the next free number when keys are numbers, else the first label and a number.
@@ -158,10 +163,11 @@ function dict(d: Dict, ctx: Ctx, peers: Lit[], labels: string[]): HTMLElement {
   const fields = (x: Lit) => x.t === "tuple"
     ? x.items.map((y, j) => labelled(labels[j + 1], editor(y, ctx, values.map((p) => (p.t === "tuple" ? p.items[j] : p)).filter(Boolean))))
     : [labelled(labels[1], value(x))];
-  const entry = ([k, x]: [Lit, Lit], i: number) => d.entries.some(([, y]) => nested(y))
+  const entries = d.entries.some(([, y]) => nested(y));
+  const entry = ([k, x]: [Lit, Lit], i: number) => entries
     ? h("div", { class: "knob-entry knob-item" }, remove(ctx, drop(i)), h("div", { class: "entry-fields" }, key(k), ...fields(x)))
-    : row(key(k), h("span", { class: "dim" }, "→"), labelled(labels[1], value(x)), remove(ctx, drop(i)));
-  return rows(d.entries.map(entry), template ? addSlot(ctx, add) : null);
+    : row(focusIfFresh(k, keyIn(d, k, ctx)), h("span", { class: "dim" }, "→"), value(x), remove(ctx, drop(i)));
+  return rows(d.entries.map(entry), template ? addSlot(ctx, add) : null, entries ? [] : [labels[0], "", labels[1]]);
 }
 
 function linksOf(v: Lit): Pick<Ctx, "pages" | "links" | "relink"> {
@@ -179,9 +185,10 @@ export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
   // Maps paint with the legend's emoji and colors, so they redraw whenever another knob changes.
   const maps: (() => void)[] = [];
   const edited = () => { onEdit(); maps.forEach((m) => m()); };
-  return h("div", {},
+  return h("div", { class: "card knobs" },
     ...knobs.map((k) => {
-      const card = h("div", { class: "card knob" });
+      const one = !nested(k.value) && !(k.value.t === "str" && k.value.v.length > LONG);
+      const card = h("section", { class: `knob${one ? " one-line" : ""}` });
       const head = () => h("div", { class: "knob-head" }, h("h2", {}, roomTitle(k.name.toLowerCase().replace(/_/g, "-"))), k.about && h("p", { class: "dim small" }, k.about));
       if (isMap(k.value)) {
         const map = k.value as { items: Lit[] };

@@ -62,9 +62,13 @@ function picturesRow(pick: (name: string) => void, taken: string[]): HTMLElement
     h("p", { class: "row" }, add, note));
 }
 
-// Opens under anchor with the search box focused; Enter picks the first match, Esc closes. pictures: the
-// pack's own pictures are offered too, picked by name.
-export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void, taken: string[] = [], pictures = false): void {
+// taken: emoji to leave out. pictures: the family's pictures are offered too, picked by name. empty: what an
+// unpicked cell shows. clear: the label for leaving it unpicked, for a field where that means something.
+export interface PickOptions { taken?: () => string[]; pictures?: boolean; empty?: string; clear?: string }
+
+// Opens under anchor with the search box focused; Enter picks the first match, Esc closes.
+export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void, { taken: takenNow, pictures, clear }: PickOptions = {}): void {
+  const taken = takenNow?.() ?? [];
   closeEmojiPicker();
   const search = h("input", { type: "text", class: "emoji-search", placeholder: "Search, like dog or star", value: query });
   const grid = h("div", { class: "emoji-grid" });
@@ -85,7 +89,9 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
       if (first) pick(first.emoji);
     }
   });
-  const pop = h("div", { class: "emoji-pop" }, search, pictures ? picturesRow(pick, taken) : null, grid);
+  const pop = h("div", { class: "emoji-pop" }, search,
+    clear ? h("button", { type: "button", class: "linkbtn small clear-pick", onclick: () => pick("") }, clear) : null,
+    pictures ? picturesRow(pick, taken) : null, grid);
   open = pop;
   render();
   anchor.after(pop);
@@ -98,15 +104,15 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
   document.addEventListener("mousedown", outside);
 }
 
-// A button showing an emoji (or one of the pack's pictures) that opens the picker, searching for query().
+// A button showing an emoji (or one of the family's pictures) that opens the picker, searching for query().
 // Wrap it in .emoji-wrap.
-export function emojiCell(value: string, query: () => string, onPick: (emoji: string) => void, taken = (): string[] => [], pictures = false): HTMLButtonElement {
-  const face = (v: string) => (pictures && roomPicture(v)) || v || "Pick";
+export function emojiCell(value: string, query: () => string, onPick: (emoji: string) => void, options: PickOptions = {}): HTMLButtonElement {
+  const face = (v: string) => (options.pictures && roomPicture(v)) || v || (options.empty ?? "Pick");
   const cell = h("button", { type: "button", class: `emoji-cell${value ? "" : " empty"}`, "aria-label": "Pick an emoji" }, face(value));
   cell.onclick = () => openEmojiPicker(cell, query(), (e) => {
     cell.replaceChildren(face(e));
-    cell.classList.remove("empty");
+    cell.classList.toggle("empty", !e);
     onPick(e);
-  }, taken(), pictures);
+  }, options);
   return cell;
 }

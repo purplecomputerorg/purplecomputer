@@ -15,7 +15,7 @@ import re as _re
 import traceback as _traceback
 
 __all__ = ["grid", "keep", "images", "sounds", "show", "write", "status", "clear", "background", "say", "play", "drum", "sound",
-           "picture", "pixels", "held", "ask", "every", "after", "game_over"]
+           "picture", "pixels", "held", "ask", "every", "after", "game_over", "state"]
 
 W, H = 24, 12
 CELL = 10
@@ -24,6 +24,12 @@ KEEP_MAX_BYTES = 4096
 _HEX = _re.compile(r"^#[0-9a-fA-F]{6}$")
 _NOTE = _re.compile(r"^[A-Ga-g]#?\d$")
 DRUMS = ("kick", "snare", "hi-hat", "clap", "cowbell", "woodblock", "triangle", "tambourine", "bongo", "gong")
+# The theme's colors by name: Purple paints them in the family's theme.
+ROLES = ("bg", "surface", "tile", "field", "hair", "line", "primary", "on_primary", "accent", "text", "muted", "dim")
+
+
+def _is_color(thing) -> bool:
+    return isinstance(thing, str) and bool(_HEX.match(thing) or thing in ROLES)
 
 _send = None   # the host's: send(reply: dict)
 _recv = None   # the host's: blocking recv() -> event dict
@@ -80,8 +86,8 @@ def clear():
 
 
 def background(color):
-    if not (isinstance(color, str) and _HEX.match(color)):
-        raise ValueError(f"background needs a color like '#2a1845', not {color!r}")
+    if not _is_color(color):
+        raise ValueError(f"background needs a color like '#2a1845' or 'tile', not {color!r}")
     _s.background = color
 
 
@@ -153,6 +159,13 @@ def ask(prompt=""):
             _s.asking[1] = _text(_s.asking[1] + (" " if key == "space" else ev.get("char", key) if len(key) == 1 else ""))
 
 
+class state:
+    """What a room changes as it plays: game = state(turn=0), then game.turn = 1 in any function, no global needed."""
+
+    def __init__(self, **values):
+        self.__dict__.update(values)
+
+
 def game_over(text="Press a key to play again"):
     """Stop the timers and show text; the next key starts the room over."""
     _s.timers.clear()
@@ -165,7 +178,7 @@ def _pos(args):
 
 
 class _Layer:
-    """W x H squares, (0, 0) top left. A square holds an emoji, a letter, a '#rrggbb' color, or a picture.
+    """W x H squares, (0, 0) top left. A square holds an emoji, a letter, a color ('#rrggbb' or a theme color like 'tile'), or a picture.
     Every call takes x, y or one (x, y)."""
 
     w, h = W, H
@@ -270,7 +283,7 @@ def _thing(x, y, thing, size) -> list:
     if isinstance(thing, _Picture):
         return ["image", x, y, CELL * thing.w, CELL * thing.h, thing.source]
     side = CELL * size
-    if _HEX.match(thing):
+    if _is_color(thing):
         return ["rect", x + 0.5, y + 0.5, side - 1, side - 1, thing, side / 8]
     return _label(x + side / 2, y + side / 2, side * 0.78, thing)
 

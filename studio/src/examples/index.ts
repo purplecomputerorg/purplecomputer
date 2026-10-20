@@ -194,8 +194,8 @@ export interface Example { name: string; icon: string; label: string; about: str
 export const EXAMPLES: Example[] = [
   { name: "explore", icon: "🗺️", label: "A world to walk around", about: "Walk with the arrows, find the stars, and the door opens. The world is drawn with letters you can change.", source: explore },
   { name: "garden", icon: "🌻", label: "A garden", about: "Plant seeds and water them. It remembers the garden for next time.", source: garden },
-  { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off, then press Enter to hear them play round and round, and again to stop.", source: beats },
-  { name: "memory", icon: "🃏", label: "Memory for two", about: "Take turns turning over cards to find the pairs. No score: it ends when every pair is found.", source: memory },
+  { name: "beats", icon: "🥁", label: "A beat maker", about: "Each row of keys is a drum and each key a beat: press one to turn it on or off, then Space to hear them play round and round, and again to stop.", source: beats },
+  { name: "memory", icon: "🃏", label: "Memory for two", about: "Take turns turning over cards to find the pairs. Each card is a letter key: press it to turn the card over. No score: it ends when every pair is found.", source: memory },
   { name: "story", icon: "📖", label: "A story with choices", about: "Purple reads each page, and number keys pick what happens next.", source: story },
   { name: "snake", icon: "🐍", label: "A wandering snake", about: "The smallest room: a snake that moves a square each time an arrow is pressed, leaving flowers behind it.", source: snake },
 ];

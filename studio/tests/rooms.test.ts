@@ -53,6 +53,23 @@ describe("family rooms in Studio's Python", () => {
     expect(replies.at(-1)).toMatchObject({ error: { text: expect.stringContaining(END) } });
   }, 60_000);
 
+  it("runs the memory example: a card on each letter key, turned over by pressing it", async () => {
+    const replies = await runRoom(example("memory"), [{ ev: "key", key: "q" }, { ev: "key", key: "m" }, { ev: "key", key: "w" }]);
+    expect(texts(replies[0])).toEqual([..."QWERTYUIOPASDFGHJK", "🔴 Red's turn"]);
+    const [q] = texts(replies[1]);
+    expect(q).toMatch(/\p{Extended_Pictographic}/u);
+    expect(replies[2]).not.toHaveProperty("scene");
+    expect(texts(replies[3]).slice(0, 2)).not.toContain("W");
+  }, 60_000);
+
+  it("runs the beat maker: a beat on each key, its drum's picture when on, Space to play", async () => {
+    const replies = await runRoom(example("beats"), [{ ev: "key", key: "q" }, { ev: "key", key: "space" }]);
+    expect(texts(replies[0]).slice(4, 6)).toEqual(["1", "2"]);
+    expect(texts(replies[1])).toContain("🐸");
+    expect(texts(replies[1])).not.toContain("Q");
+    expect(replies[2].wake).not.toBeNull();
+  }, 60_000);
+
   it("runs the picture quiz: a wrong pick goes away, the right one moves on to the next question", async () => {
     const keys = ["1", "2", "3"].map((key) => ({ ev: "key", key }));
     const replies = await runRoom(quizSource(TEMPLATES.quiz.defaults()), [...keys, { ev: "key", key: "space" }, { ev: "tick", t: 2 }]);

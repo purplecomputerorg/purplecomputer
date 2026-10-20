@@ -130,14 +130,14 @@ function editor(room: RoomDraft): View {
     location.replace(href(name));
   };
 
-  // Every change goes through here: the first one makes a try the family's, so it's time to name it.
+  // Every change goes through here: the first one makes a try the family's. Focus stays put, so the
+  // page doesn't jump away from what they just changed.
   const edited = (source: string, ms: number) => {
     room.source = source;
     if (room.sample) {
       room.sample = false;
-      nameNote.textContent = "It's yours now. Give it a name.";
-      nameIn.focus();
-      nameIn.select();
+      nameNote.textContent = "It's yours now. Click its name to change it.";
+      nameIn.classList.add("just-yours");
     }
     changed();
     later(ms);

@@ -11,8 +11,7 @@ LENGTH = 4
 TRAIL = ["🌼", "🌸", "🌷"]
 
 snake = [(12 - i, 6) for i in range(LENGTH)]
-heading = (1, 0)
-steps = 0
+game = state(heading=(1, 0), steps=0)
 turns = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 
 for square in snake:
@@ -20,20 +19,19 @@ for square in snake:
 
 
 def on_key(key):
-    global heading
     if key in turns:
-        heading = turns[key]
+        game.heading = turns[key]
     if key in turns or key == "space":
         step()
 
 
 def step():
-    global steps
     x, y = snake[0]
-    head = ((x + heading[0]) % grid.w, (y + heading[1]) % grid.h)
+    dx, dy = game.heading
+    head = ((x + dx) % grid.w, (y + dy) % grid.h)
     snake.insert(0, head)
     grid.set(head, SNAKE)
     tail = snake.pop()
     if tail not in snake:
-        grid.set(tail, TRAIL[steps % len(TRAIL)])
-    steps += 1
+        grid.set(tail, TRAIL[game.steps % len(TRAIL)])
+    game.steps += 1

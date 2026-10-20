@@ -43,12 +43,12 @@ TALK = {"F": "🦊 Hello! Find all the stars and the door will open."}
 hero = pixels(HERO_ROWS, HERO_COLORS)
 moves = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 stars = sum(row.count("*") for row in MAP)
-found = 0
-x, y = next((c, r) for r, row in enumerate(MAP) for c, ch in enumerate(row) if ch == "Y")
+start = next((c, r) for r, row in enumerate(MAP) for c, ch in enumerate(row) if ch == "Y")
+game = state(x=start[0], y=start[1], found=0, held_for=0)
 
 
 def show_stars():
-    status(f"⭐ {found} of {stars}" if found < stars else "⭐ All the stars! The door is open.")
+    status(f"⭐ {game.found} of {stars}" if game.found < stars else "⭐ All the stars! The door is open.")
 
 
 for r, row in enumerate(MAP):
@@ -56,48 +56,42 @@ for r, row in enumerate(MAP):
         grid.floor.set(c, r, GROUND[(c + r) % 2])
         if ch in THINGS:
             grid.set(c, r, THINGS[ch])
-grid.set(x, y, hero)
+grid.set(start, hero)
 show_stars()
 
 
 def step(dx, dy):
-    global x, y, found
-    nx, ny = x + dx, y + dy
+    nx, ny = game.x + dx, game.y + dy
     here = MAP[ny][nx]
     if here in TALK:
         play("E5")
         return status(TALK[here])
-    if here in WALLS and not (here == "D" and found == stars):
+    if here in WALLS and not (here == "D" and game.found == stars):
         return drum("woodblock")
-    grid.erase(x, y)
-    x, y = nx, ny
-    if grid.get(x, y) == "⭐":
-        found += 1
+    grid.erase(game.x, game.y)
+    game.x, game.y = nx, ny
+    if grid.get(nx, ny) == "⭐":
+        game.found += 1
         play("C5")
     show_stars()
     if here == "D":
         play("G5")
         game_over("You found the way out! Press a key to walk again.")
-    grid.set(x, y, hero)
-
-
-held_for = 0
+    grid.set(nx, ny, hero)
 
 
 def on_key(key):
-    global held_for
     if key in moves:
-        held_for = 0
+        game.held_for = 0
         step(*moves[key])
 
 
 # on_key takes the first step. Holding the arrow a moment longer keeps walking, a step each time walk()
 # runs, so a quick tap is still just one step.
 def walk():
-    global held_for
     key = next((k for k in moves if held(k)), None)
-    held_for = held_for + 1 if key else 0
-    if held_for > 2:
+    game.held_for = game.held_for + 1 if key else 0
+    if game.held_for > 2:
         step(*moves[key])
 
 

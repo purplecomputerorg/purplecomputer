@@ -1,66 +1,56 @@
 from purple import *
 
-# A beat maker: each row is a drum, each column a beat. Arrows move, Space turns a beat on or off,
-# Enter starts and stops the music.
+# A beat maker on the keyboard: each row of keys is a drum, and each key in it a beat. Press a key to
+# turn its beat on or off, and Space to start and stop the music.
 
-# The drums, top to bottom: the picture beside each row and the drum it plays.
-ROWS = [("🐘", "kick"), ("🐸", "snare"), ("🐝", "hi-hat"), ("👏", "clap")]
-# How many beats before the music comes round again.
-STEPS = 16
+# The drums, top row of keys to bottom: the picture for each and the drum it plays.
+ROWS = (("🐘", "kick"), ("🐸", "snare"), ("🐝", "hi-hat"), ("👏", "clap"))
 # Seconds from one beat to the next: smaller is faster.
 SPEED = 0.2
-# The color of a beat that's off.
-OFF = "#3a2f5c"
-# The color of a beat that's on.
-ON = "#f2b134"
-# The color above the beat playing now.
-NOW = "#5c4c8f"
 
-top, left = 3, 4
-beats = [[False] * STEPS for _ in ROWS]
-row, col, at = 0, 0, -1
-loop = None
+KEYS = ("12345678", "qwertyui", "asdfghjk", "zxcvbnm,")
+spots = {key: (r, c, (4 + c * 2 + r, 1 + r * 3)) for r, row in enumerate(KEYS) for c, key in enumerate(row)}
+beats = set()
+game = state(at=-1, loop=None)
 
 
-def square(r, c):
-    grid.set(left + c, top + r * 2, ON if beats[r][c] else OFF)
+def square(key):
+    r, c, spot = spots[key]
+    grid.floor.set(spot, "line" if c == game.at else "tile", size=2)
+    grid.set(spot, ROWS[r][0] if key in beats else key.upper(), size=2)
 
 
-for r, (animal, _) in enumerate(ROWS):
-    grid.set(left - 2, top + r * 2, animal)
-    for c in range(STEPS):
-        square(r, c)
-grid.cursor(left, top)
-status("Space adds a beat. Enter plays.")
+def draw():
+    for key in spots:
+        square(key)
 
 
 def tick():
-    global at
-    if at >= 0:
-        grid.floor.erase(left + at, top - 1)
-    at = (at + 1) % STEPS
-    grid.floor.set(left + at, top - 1, NOW)
-    for r, (_, name) in enumerate(ROWS):
-        if beats[r][at]:
-            drum(name)
+    game.at = (game.at + 1) % len(KEYS[0])
+    draw()
+    for key in beats:
+        r, c, _ = spots[key]
+        if c == game.at:
+            drum(ROWS[r][1])
 
 
 def on_key(key):
-    global row, col, loop, at
-    if key in ("up", "down"):
-        row = (row + (1 if key == "down" else -1)) % len(ROWS)
-    elif key in ("left", "right"):
-        col = (col + (1 if key == "right" else -1)) % STEPS
+    if key in spots:
+        if key in beats:
+            beats.remove(key)
+        else:
+            beats.add(key)
+            drum(ROWS[spots[key][0]][1])
+        square(key)
+    elif key == "space" and game.loop:
+        game.loop.stop()
+        game.loop, game.at = None, -1
+        draw()
     elif key == "space":
-        beats[row][col] = not beats[row][col]
-        square(row, col)
-        if beats[row][col]:
-            drum(ROWS[row][1])
-    elif key == "enter" and loop:
-        loop.stop()
-        loop = None
-        grid.floor.erase(left + at, top - 1)
-        at = -1
-    elif key == "enter":
-        loop = every(SPEED, tick)
-    grid.cursor(left + col, top + row * 2)
+        game.loop = every(SPEED, tick)
+
+
+for r, (animal, _) in enumerate(ROWS):
+    grid.set(1 + r, 1 + r * 3, animal, size=2)
+draw()
+status("Press a key for a beat. Space plays.")

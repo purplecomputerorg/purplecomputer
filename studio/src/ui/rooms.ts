@@ -15,7 +15,7 @@ import { tryBar, yoursList } from "./trybar";
 import { templateForm } from "./templateform";
 import type { View } from "./view";
 
-const ICONS: Record<Made["kind"], string> = { rules: "🧱", trivia: "❓", soundboard: "🔊" };
+export const ICONS: Record<Made["kind"], string> = { rules: "🧱", trivia: "❓", soundboard: "🔊" };
 const sourceOf = (made: Made) => (made.kind === "rules" ? rulesSource(made.rules) : templateSource(made));
 const href = (name: string) => `#rooms/${encodeURIComponent(name)}`;
 // A room name nothing else uses; a try being replaced doesn't count.

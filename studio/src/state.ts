@@ -92,12 +92,12 @@ export function allPieces(): Piece[] {
     { id: "letter_recordings", section: "voice", label: "keys in your voice", one: "key in your voice", items: Object.values(draft.letters) },
     { id: "phrases", section: "voice", label: "phrases in your voice", one: "phrase in your voice", items: draft.phrases },
     { id: "words", section: "words", label: "words", one: "word", items: draft.words },
-    { id: "autocomplete_picks", section: "words", label: "words suggested first", one: "word suggested first", items: draft.ranked.map(() => ({ kept: true })) },
+    { id: "autocomplete_picks", section: "words", label: "words suggested first", one: "word suggested first", items: draft.ranked.map((word) => ({ kept: true, word })) },
     { id: "synonyms", section: "words", label: "nicknames", one: "nickname", items: draft.synonyms },
     { id: "instruments", section: "instruments", label: "instruments", one: "instrument", items: draft.instruments },
     { id: "rooms", section: "rooms", label: "rooms", one: "room", items: draft.rooms },
     { id: "room_files", section: "rooms", label: "room pictures and sounds", one: "room picture or sound", items: draft.roomFiles },
-    { id: "colors", section: "colors", label: "new colors", one: "new set of colors", items: draft.theme ? [draft.colors] : [] },
+    { id: "colors", section: "colors", label: "sets of colors", one: "set of colors", items: draft.theme ? [draft.colors] : [] },
   ];
 }
 
@@ -112,9 +112,10 @@ export function clearSection(section: string) {
   changed();
 }
 
-export interface Count { id: string; section: string; label: string; one: string; count: number }
+export type Count = Piece & { count: number };
 const counted = (kept: boolean): Count[] => allPieces()
-  .map(({ items, ...p }) => ({ ...p, count: items.filter((i) => !!i.kept === kept).length }))
+  .map((p) => ({ ...p, items: p.items.filter((i) => !!i.kept === kept) }))
+  .map((p) => ({ ...p, count: p.items.length }))
   .filter((p) => p.count > 0);
 export const countOf = (p: Count) => `${p.count} ${p.count === 1 ? p.one : p.label}`;
 // What the family has added (the download), and what they're still trying.

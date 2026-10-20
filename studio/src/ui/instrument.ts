@@ -20,7 +20,7 @@ const SOUNDS: { title: string; blurb: string; base: BaseName; params: Params }[]
 ];
 
 // Sounds made from the same Purple instrument share a color.
-const SWATCH: Record<BaseName, string> = { glockenspiel: "#f2c94c", ukulele: "#e8875b", marimba: "#5fb3a1", accordion: "#7b8fe0" };
+export const SWATCH: Record<BaseName, string> = { glockenspiel: "#f2c94c", ukulele: "#e8875b", marimba: "#5fb3a1", accordion: "#7b8fe0" };
 
 const taken = (n: string, except?: Instrument) => (INSTRUMENTS as readonly string[]).includes(n) || draft.instruments.some((i) => i !== except && i.name === n);
 

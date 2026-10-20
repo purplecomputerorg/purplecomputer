@@ -470,3 +470,19 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .live.ready:not(.focused) .playable-hint { opacity: 1; pointer-events: auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .live-status i { animation: none; } }
+
+.pack-group { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.pack-group:last-child { border-bottom: 0; }
+.pack-heading { display: block; font-weight: 700; color: var(--text); text-decoration: none; margin-bottom: 8px; }
+.pack-heading:hover { color: var(--purple); }
+.pack-items { display: flex; flex-wrap: wrap; gap: 8px; }
+.pack-item { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 4px 10px 4px 4px; border-radius: 10px; background: var(--fill); font-size: 14px; }
+.pack-item > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pack-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 7px; }
+.pack-item .pick-swatch { margin: 0 0 0 6px; }
+.pack-item .mini-screen { width: 64px; padding: 8px 7px; }
+.pack-icon { font-size: 20px; line-height: 1; padding-left: 6px; }
+.unadded { border: 2px solid var(--danger); background: #fdf3f4; }
+.unadded h3 { margin-top: 0; color: var(--danger); }
+.unadded .pack-item { background: var(--card); }
+.pack-colors { display: inline-flex; align-items: center; gap: 4px; }

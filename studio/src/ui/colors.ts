@@ -20,7 +20,7 @@ const SCREEN_ROLES: [Role, string][] = [
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 // A small picture of a screen in a palette: the ground, the panel with a canvas, a line of text.
-function miniScreen(theme: Theme): HTMLElement {
+export function miniScreen(theme: Theme): HTMLElement {
   const p = themePalette(theme);
   return h("span", { class: "mini-screen", style: `background:${p.bg}` },
     h("span", { style: `background:${p.surface};border-color:${p.line}` }, h("i", { style: `background:${p.canvas}` }), h("em", { style: `color:${p.text}` }, "Hi!")));

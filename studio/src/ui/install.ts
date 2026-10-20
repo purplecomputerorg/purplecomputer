@@ -37,7 +37,7 @@ export function formatView(): View {
     "  <instrument>/c1.wav … d7.wav one note per file        Music room",
     "  instruments/<name>.json      the slider numbers       re-rendered by Purple's own synth",
     ...(features.rooms ? ["  rooms/<name>.py              a room you made          room picker, family rooms"] : []),
-    "  theme.json                   background and key rows  not read yet",
+    "  theme.json                   screen and key colors    every room",
   ].join("\n");
   return {
     title: "What is in a Purple Pack",

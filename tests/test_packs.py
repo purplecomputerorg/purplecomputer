@@ -252,6 +252,20 @@ class TestUsbUpdater:
         assert [msg for _, _, msg in update_from(stick, waiting)][:2] == ["already waiting"] * 2
         assert not (tmp_path / "home" / ".purple" / "packs").exists()
 
+    def test_two_copies_of_one_pack_set_aside_only_the_newer(self, tmp_path):
+        stick = tmp_path / "stick"
+        stick.mkdir()
+        new = make_pack(tmp_path / "new", "a-pack")
+        (new / "content" / "theme.json").write_text("{}")
+        build_pack(make_pack(tmp_path / "old", "a-pack"), stick / "a-pack (1).purplepack")
+        build_pack(new, stick / "a-pack.purplepack")
+        os.utime(stick / "a-pack (1).purplepack", (1, 1))
+        waiting = tmp_path / "waiting"
+        for _ in range(2):
+            results = update_from(stick, waiting)
+            assert [(name, ok) for name, ok, _ in results] == [("a-pack (1).purplepack", False), ("a-pack.purplepack", True)]
+            assert [d.name for d in waiting.iterdir()] == [sha256(stick / "a-pack.purplepack")]
+
 
 class TestRender:
     def test_python_renders_the_missing_samples(self, tmp_path):

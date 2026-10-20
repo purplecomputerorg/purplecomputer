@@ -21,7 +21,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from .pack_manager import check_pack, extract_pack
+from .pack_manager import check_pack, extract_pack, read_manifest
 
 APP_USER = "purple"
 LOG_PATH = Path("/var/log/purple/usb-update.log")
@@ -50,19 +50,28 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def stage(pack: Path, waiting: Path) -> tuple[bool, str]:
-    """Unpack and check one pack into waiting/<sha256>. Dot-named while it is being written,
-    so the app never sees half a pack."""
+def _first_copy(dest: Path, seen: set, msg: str) -> tuple[bool, str]:
+    pack_id = (read_manifest(dest) or {}).get("id")
+    if pack_id in seen:
+        shutil.rmtree(dest, ignore_errors=True)
+        return False, "a newer copy of this pack is on the drive"
+    seen.add(pack_id)
+    return True, msg
+
+
+def stage(pack: Path, waiting: Path, seen: set) -> tuple[bool, str]:
+    """Unpack and check one pack into waiting/<sha256>, unless a pack with its id is in seen.
+    Dot-named while it is being written, so the app never sees half a pack."""
     dest = waiting / sha256(pack)
     if dest.exists():
-        return True, "already waiting"
+        return _first_copy(dest, seen, "already waiting")
     tmp = Path(tempfile.mkdtemp(prefix=".", dir=waiting))
     try:
         refused = extract_pack(pack, tmp) or "; ".join(check_pack(tmp)[:5])
         if refused:
             return False, refused
         tmp.rename(dest)
-        return True, "waiting to be added"
+        return _first_copy(dest, seen, "waiting to be added")
     except (tarfile.TarError, OSError) as e:
         return False, f"unreadable: {e}"
     finally:
@@ -76,7 +85,10 @@ def update_from(mount: Path, waiting: Path | None = None) -> list[tuple[str, boo
     reading = waiting / READING
     reading.touch()
     try:
-        results = [(p.name, *stage(p, waiting)) for p in sorted(mount.glob("*.purplepack"))]
+        # Newest file first, so two downloads of one pack offer the newer and skip the other.
+        packs = sorted(mount.glob("*.purplepack"), key=lambda p: (-p.stat().st_mtime, p.name))
+        seen: set = set()
+        results = sorted((p.name, *stage(p, waiting, seen)) for p in packs)
     finally:
         reading.unlink(missing_ok=True)
     try:

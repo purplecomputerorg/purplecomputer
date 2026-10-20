@@ -22,7 +22,7 @@ from purple_tui.canvas.rooms import family_room
 from purple_tui.canvas.rooms.family_room import FamilyRoom
 from purple_tui.canvas.rooms.parent_menu import FamilyRoomsScreen
 from purple_tui.content import ContentManager
-from purple_tui.keyboard import NavigationAction
+from purple_tui.keyboard import ControlAction, NavigationAction
 from purple_tui.music_constants import PERCUSSION
 from purple_tui.roomkit import purple as purple_lib
 
@@ -117,6 +117,22 @@ def test_snake_moves_on_its_timer_and_turns_with_arrows(pack):
         assert room.fault is None
         await press(app, "escape")
         assert app.top is None and room._guest is None
+    run(go())
+
+
+def test_esc_that_closes_the_parent_menu_leaves_the_room_open(pack):
+    pack("snake", SNAKE)
+
+    async def go():
+        app = make_app()
+        room = _open(app, "snake")
+        await app._dispatch_keyboard_action(ControlAction(action="escape", is_down=True))
+        app.action_parent_menu()  # what holding Esc does
+        await app._dispatch_keyboard_action(ControlAction(action="escape", is_down=False))
+        await press(app, "escape")
+        assert app.top is room
+        await press(app, "escape")
+        assert app.top is None
     run(go())
 
 

@@ -136,6 +136,7 @@ class PurpleApp:
         self._music_key_switching_enabled = True
         self._escape_consumed_by_mode = False
         self._escape_triggered_long_hold = False
+        self._escape_pressed_on = None  # the overlay on top when Esc went down
         self._escape_hold_timer = None
         self._escape_down_at = None
         self._backslash_hold_timer = None
@@ -591,13 +592,13 @@ class PurpleApp:
                     self._escape_consumed_by_mode = True
                 if self._stop_code_execution():
                     self._escape_consumed_by_mode = True
-                self._modal_open_at_escape_press = bool(self._overlays)
+                self._escape_pressed_on = self.top
                 self._start_escape_hold_timer()
             elif not action.is_down:
                 self._cancel_escape_hold_timer()
                 consumed = self._escape_consumed_by_mode
                 self._escape_consumed_by_mode = False
-                if not self._escape_triggered_long_hold and not self._modal_open_at_escape_press and not consumed:
+                if not self._escape_triggered_long_hold and self._escape_pressed_on is None and not consumed:
                     if not self._overlays and not self._littles_mode:
                         self._show_room_picker()
                         return

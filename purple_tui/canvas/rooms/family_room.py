@@ -534,8 +534,8 @@ class FamilyRoom(Overlay):
 
     async def handle(self, action):
         if isinstance(action, ControlAction) and action.action == "escape":
-            if not action.is_down:
-                self.close()  # on release, so a hold still reaches the parent menu
+            if not action.is_down and self.app._escape_pressed_on is self:
+                self.close()  # on release, so a hold still reaches the parent menu; not a press that closed one
             return
         if isinstance(action, ControlAction) and not action.is_down:
             return self.released(action.action)

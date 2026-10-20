@@ -1,5 +1,5 @@
-// Every room Studio starts from, in one place: the forms (trivia, soundboard) that write a room's
-// Python, and the starter rooms the Rooms page and the Room guide show. Form text goes into the code
+// Every room Studio starts from, in one place: the forms (picture keyboard, picture quiz) that write a
+// room's Python, and the starter rooms the Rooms page and the Room guide show. Form text goes into the code
 // only as JSON string literals, which are valid Python strings, so nothing typed can become code.
 import { PURPLE } from "@sdk";
 import beats from "./beats.py?raw";
@@ -20,38 +20,106 @@ export function normalizeKey(v: string): string | null {
   return chars.length ? chars[0] : null;
 }
 
-export interface TriviaRow { emoji: string; question: string; answer: string }
-export interface TriviaData { rows: TriviaRow[] }
+// An emoji field also takes the name of one of the pack's pictures, and a note field one of its sounds:
+// the room tells them apart by what the pack has.
+export interface QuizChoice { emoji: string; word: string }
+export interface QuizRow { question: string; emoji: string; right: QuizChoice; others: QuizChoice[] }
+export interface QuizData { rows: QuizRow[] }
 export interface Sound { emoji: string; word: string; note: string }
 export interface SoundboardData { rows: (Sound & { key: string })[]; other: Sound }
-export type TemplateDraft = { kind: "trivia"; data: TriviaData } | { kind: "soundboard"; data: SoundboardData };
+export type TemplateDraft = { kind: "quiz"; data: QuizData } | { kind: "soundboard"; data: SoundboardData };
 
-export function triviaSource({ rows }: TriviaData): string {
-  const questions = rows.filter((r) => r.question.trim() && r.answer.trim())
-    .map((r) => `    (${lit(r.emoji.trim())}, ${lit(r.question.trim())}, ${lit(r.answer.trim())}),`);
-  return `from purple import *
+export const MAX_OTHERS = 3;
+const filled = (c: QuizChoice) => !!(c.emoji.trim() || c.word.trim());
 
-# Made with the trivia form in Purple Studio. Type an answer and press Enter.
+export function quizSource({ rows }: QuizData): string {
+  const choice = (c: QuizChoice) => `(${lit(c.emoji.trim())}, ${lit(c.word.trim())})`;
+  const questions = rows.filter((r) => r.question.trim() && filled(r.right))
+    .map((r) => `    (${lit(r.question.trim())}, ${lit(r.emoji.trim())}, ${choice(r.right)}, [${r.others.filter(filled).slice(0, MAX_OTHERS).map(choice).join(", ")}]),`);
+  return `import random
 
-# The questions: each one's picture, the question Purple reads out, and its answer.
+from purple import *
+
+# Made with the picture quiz form in Purple Studio. Purple reads each question out loud, and a number key
+# picks a picture. A wrong pick goes away, so every question ends on the right one. Space asks again.
+
+# Each question: what Purple asks, its picture, the right choice, and the other choices. A choice is its
+# picture (an emoji, or one of your pictures) and the word Purple says when it's picked.
 QUESTIONS = [
 ${questions.join("\n")}
 ]
 
-for picture, question, answer in QUESTIONS:
+SIDE = 3
+asked = 0
+choices = []
+spots = []
+waiting = False
+
+
+def place(x, y, thing, side):
+    """An emoji, or one of the pack's pictures fitted in a side by side square. Returns the square it's in."""
+    if thing not in images:
+        grid.set(x, y, thing, size=side)
+        return (x, y)
+    w, h = images[thing]
+    p = picture(thing, side) if w >= h else picture(thing, max(1, round(side * w / h)), side)
+    spot = (x + (side - p.w) // 2, y + (side - p.h) // 2)
+    grid.set(spot, p)
+    return spot
+
+
+def ask_next():
+    global choices, spots, waiting
+    waiting = False
     clear()
-    show(picture)
+    if asked == len(QUESTIONS):
+        show("🎉")
+        write("That was all of them!")
+        play("G5")
+        game_over("Press a key to play again")
+        return
+    question, face, right, others = QUESTIONS[asked]
+    if face:
+        place(10, 0, face, 4)
+    choices = [right] + others
+    random.shuffle(choices)
+    left = (grid.w - 6 * len(choices) + 3) // 2
+    spots = []
+    for i, (thing, word) in enumerate(choices):
+        x = left + 6 * i
+        grid.set(x + 1, 8, str(i + 1))
+        spots.append((place(x, 5, thing or word, SIDE), (x + 1, 8)))
     write(question)
     say(question)
-    if ask("Your answer").strip().lower() == answer.lower():
-        play("C5")
-    else:
-        say(f"It was {answer}.")
 
-clear()
-show("🎉")
-write("That was all of them!")
-play("G5")
+
+def pick(i):
+    global asked, waiting
+    thing, word = choices[i]
+    if word:
+        say(word)
+    if choices[i] == QUESTIONS[asked][2]:
+        play("G5")
+        asked += 1
+        waiting = True
+        after(1.5, ask_next)
+    else:
+        play("E3")
+        for spot in spots[i]:
+            grid.erase(spot)
+        spots[i] = None
+
+
+def on_key(key):
+    if waiting:
+        return
+    if key == "space":
+        say(QUESTIONS[asked][0])
+    elif key.isdigit() and 0 < int(key) <= len(choices) and spots[int(key) - 1]:
+        pick(int(key) - 1)
+
+
+ask_next()
 `;
 }
 
@@ -61,56 +129,64 @@ export function soundboardSource({ rows, other }: SoundboardData): string {
     .map(([k, r]) => `    ${lit(k!)}: ${sound(r)},`);
   return `from purple import *
 
-# Made with the soundboard form in Purple Studio. Every key shows something and plays a note, and says its word if it has one.
+# Made with the picture keyboard form in Purple Studio. Each key shows its picture, says its word, and plays its sound.
 
-# Each key's picture, word, and note.
-SOUNDS = {
+# Each key's picture (an emoji, or one of your pictures), word, and sound (a note like "C4", or one of your sounds).
+KEYS = {
 ${keys.join("\n")}
 }
-# What every other key does.
+# What every other key does. A blank picture shows the key itself.
 OTHER_KEYS = ${sound(other)}
 
 show("🎹")
 
 
 def on_key(key):
-    picture, word, note = SOUNDS.get(key, OTHER_KEYS)
-    show(picture or key)
+    face, word, noise = KEYS.get(key, OTHER_KEYS)
+    show(picture(face) if face in images else face or key)
     if word:
         say(word)
-    if note:
-        play(note)
+    if noise in sounds:
+        sound(noise)
+    elif noise:
+        play(noise)
 `;
 }
 
+const choice = (emoji: string, word: string): QuizChoice => ({ emoji, word });
+
 export const TEMPLATES = {
-  trivia: {
-    label: "Trivia",
-    about: "Questions with a picture, answered by typing. For kids who read.",
-    source: triviaSource,
-    defaults: (): TriviaData => ({ rows: [
-      { emoji: "🦕", question: "Which dinosaur had a very long neck?", answer: "brachiosaurus" },
-      { emoji: "🦖", question: "Which dinosaur had tiny arms and big teeth?", answer: "t rex" },
-      { emoji: "🦴", question: "What do we call bones that turned to stone?", answer: "fossils" },
-    ] }),
-  },
   soundboard: {
-    label: "Soundboard",
-    about: "Each key shows a picture and plays a note. For the littlest ones.",
+    name: "picture-keyboard",
+    label: "A picture keyboard",
+    icon: "🎹",
+    about: "Each key shows a picture, says a word, and plays a sound. Use your own photos and voice: G is Grandma saying hi. For the littlest ones.",
     source: soundboardSource,
     defaults: (): SoundboardData => ({
       rows: [
-        { key: "c", emoji: "🐄", word: "", note: "C4" },
-        { key: "d", emoji: "🐶", word: "", note: "D4" },
-        { key: "p", emoji: "🐖", word: "", note: "E4" },
-        { key: "s", emoji: "🐑", word: "", note: "G4" },
+        { key: "c", emoji: "🐄", word: "cow", note: "C4" },
+        { key: "d", emoji: "🐶", word: "dog", note: "D4" },
+        { key: "p", emoji: "🐖", word: "pig", note: "E4" },
+        { key: "s", emoji: "🐑", word: "sheep", note: "G4" },
       ],
       other: { emoji: "", word: "", note: "A4" },
     }),
   },
+  quiz: {
+    name: "picture-quiz",
+    label: "A picture quiz",
+    icon: "❓",
+    about: "Purple asks a question out loud, and your kid presses 1, 2, or 3 to pick a picture. No reading, no typing, no score.",
+    source: quizSource,
+    defaults: (): QuizData => ({ rows: [
+      { question: "Which one says moo?", emoji: "", right: choice("🐄", "cow"), others: [choice("🐖", "pig"), choice("🐑", "sheep")] },
+      { question: "Which one can fly?", emoji: "", right: choice("🐦", "bird"), others: [choice("🐟", "fish"), choice("🐢", "turtle")] },
+      { question: "What do we need in the rain?", emoji: "🌧️", right: choice("☂️", "umbrella"), others: [choice("🕶️", "sunglasses"), choice("🩴", "flip flops")] },
+    ] }),
+  },
 } as const;
 
-export const templateSource = (t: TemplateDraft) => (t.kind === "trivia" ? triviaSource(t.data) : soundboardSource(t.data));
+export const templateSource = (t: TemplateDraft) => (t.kind === "quiz" ? quizSource(t.data) : soundboardSource(t.data));
 
 export interface Example { name: string; icon: string; label: string; about: string; source: string }
 

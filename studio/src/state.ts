@@ -21,6 +21,8 @@ export interface Letter extends Keepable { clip: Clip }
 export interface Instrument extends Keepable { name: string; title?: string; base: BaseName; params: Params }
 // What a room's Python is generated from, kept so it reopens: rules or a form. Null when the Python is the room's own.
 export type Made = { kind: "rules"; rules: Rule[] } | TemplateDraft;
+// The typed-answer trivia form is gone: a room made with it keeps its Python.
+export const madeOf = (made: unknown): Made | null => (made && (made as { kind: string }).kind !== "trivia" ? made as Made : null);
 export interface RoomDraft extends Keepable { name: string; source: string; made: Made | null }
 // A picture or sound the pack's rooms draw with picture("name") and play with sound("name"), as Purple reads it.
 export interface RoomFile extends Keepable { kind: RoomFileKind; name: string; data: Uint8Array }

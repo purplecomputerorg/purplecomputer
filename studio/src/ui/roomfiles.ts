@@ -17,13 +17,16 @@ async function png(file: Blob): Promise<Uint8Array> {
 
 const wav = async (file: Blob) => encodeWav(await decodeToClip(file));
 
-export async function addRoomFile(kind: RoomFileKind, file: File): Promise<RoomFile> {
-  const name = freeName(file.name.replace(/\.[^.]+$/, ""), (n) => draft.roomFiles.some((f) => f.kind === kind && f.name === n), kind === "images" ? "picture" : "sound");
-  const added: RoomFile = { kind, name, data: await (kind === "images" ? png : wav)(file), kept: true };
+export function addRoomData(kind: RoomFileKind, text: string, data: Uint8Array): RoomFile {
+  const name = freeName(text, (n) => draft.roomFiles.some((f) => f.kind === kind && f.name === n), kind === "images" ? "picture" : "sound");
+  const added: RoomFile = { kind, name, data, kept: true };
   draft.roomFiles.push(added);
   changed();
   return added;
 }
+
+export const addRoomFile = async (kind: RoomFileKind, file: File): Promise<RoomFile> =>
+  addRoomData(kind, file.name.replace(/\.[^.]+$/, ""), await (kind === "images" ? png : wav)(file));
 
 // A new name everywhere the pack's rooms use the old one: their Python and their rules.
 function rename(f: RoomFile, text: string) {
@@ -48,13 +51,13 @@ const face = (f: RoomFile) => f.kind === "images"
 
 // The pack's pictures and sounds as a tray: clicking one gives a room its call (into the Python when
 // onPick takes it, else onto the clipboard), and each can be renamed or thrown away.
-export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement {
+export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & { refresh: () => void } {
   const box = h("div", {});
   const status = h("span", { class: "dim small" });
   const pick = async (f: RoomFile) => {
     if (onPick?.(call(f))) return void (status.textContent = "");
     await navigator.clipboard?.writeText(call(f)).catch(() => {});
-    status.textContent = `Copied ${call(f)}. Rules and Knobs list it in their pickers.`;
+    status.textContent = `Copied ${call(f)}. The forms and Knobs list it in their pickers.`;
   };
   const render = () => box.replaceChildren(h("div", { class: "tray" },
     h("h3", {}, "Pictures and sounds for your rooms"),
@@ -81,7 +84,7 @@ export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement {
     render();
   };
   render();
-  return box;
+  return Object.assign(box, { refresh: render });
 }
 
 const call = (f: RoomFile) => (f.kind === "images" ? `picture("${f.name}")` : `sound("${f.name}")`);

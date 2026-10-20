@@ -8,7 +8,7 @@ import type { PackFiles } from "./live/boot";
 import { instrumentNotes } from "./notes";
 import { roomVoice } from "./roomvoice";
 import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop, type Words } from "./photo";
-import { draft, emptyDraft, type Draft, type Keepable, type Made, type RoomDraft, type RoomFile } from "./state";
+import { draft, emptyDraft, madeOf, type Draft, type Keepable, type RoomDraft, type RoomFile } from "./state";
 
 export { manifest } from "@sdk/pack";
 
@@ -83,7 +83,7 @@ function handMadeRooms(files: Map<string, Uint8Array>): RoomDraft[] {
     const name = /^content\/rooms\/([^/]+)\.py$/.exec(path)?.[1];
     if (!name || !ROOM_NAME.test(name)) return [];
     const made = files.get(`content/rooms/${name}.studio.json`);
-    return [kept({ name, source: text(data), made: made ? JSON.parse(text(made)) : null })];
+    return [kept({ name, source: text(data), made: made ? madeOf(JSON.parse(text(made))) : null })];
   });
 }
 
@@ -113,7 +113,7 @@ export async function openPack(file: Blob): Promise<Draft> {
     synonyms: s.synonyms.map(kept),
     ranked: s.ranked,
     instruments: s.instruments.map(kept),
-    rooms: s.rooms.map((r) => kept({ name: r.name, source: r.source, made: (r.made as Made) ?? null })),
+    rooms: s.rooms.map((r) => kept({ name: r.name, source: r.source, made: madeOf(r.made) })),
     roomFiles: roomFiles(files),
     theme: s.theme,
     colors: s.theme ? { kept: true } : {},

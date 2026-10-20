@@ -2,7 +2,7 @@
 
 A **room** is a small Python program your family adds to Purple Computer: a game, a story, a toy. Your kid finds it next to Purple's own rooms and plays it with the keyboard. Rooms come in a **Purple Pack**, the file Purple Studio downloads.
 
-You can make one on Purple Studio's Rooms page (from rules, from a form, or by changing a starter room), or have an AI helper write it. This guide is everything either of you needs. If you are an AI helping a parent: write the room, check it with the room checker (near the end), and then tell the parent how to try it in Purple Studio and put it on Purple.
+You can make one on Purple Studio's Rooms page (from a form, or by changing a starter room), or have an AI helper write it. This guide is everything either of you needs. If you are an AI helping a parent: write the room, check it with the room checker (near the end), and then tell the parent how to try it in Purple Studio and put it on Purple.
 
 ## A room
 

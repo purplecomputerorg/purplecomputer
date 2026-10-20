@@ -3,7 +3,7 @@ import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 import { BLANK_ROOM, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
 import { readKnobs, writeKnobs } from "../knobs";
 import type { RoomSetup } from "../live/boot";
-import { blankRules, rulesSource } from "../rules";
+import { rulesSource } from "../rules";
 import { changed, draft, freeName, withSample, type Made, type RoomDraft } from "../state";
 import { go, h } from "./dom";
 import { knobsForm } from "./knobsform";
@@ -15,7 +15,8 @@ import { tryBar, yoursList } from "./trybar";
 import { templateForm } from "./templateform";
 import type { View } from "./view";
 
-export const ICONS: Record<Made["kind"], string> = { rules: "🧱", trivia: "❓", soundboard: "🔊" };
+// Rules aren't offered any more, but a room made from them still opens in them.
+export const ICONS: Record<Made["kind"], string> = { rules: "🧱", quiz: TEMPLATES.quiz.icon, soundboard: TEMPLATES.soundboard.icon };
 const sourceOf = (made: Made) => (made.kind === "rules" ? rulesSource(made.rules) : templateSource(made));
 const href = (name: string) => `#rooms/${encodeURIComponent(name)}`;
 // A room name nothing else uses; a try being replaced doesn't count.
@@ -53,15 +54,14 @@ function list(): View {
       {},
       h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Your kid finds it next to Purple's rooms."),
       yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, iconOf(r)) }), drop),
-      h("h3", {}, "Pick a way to start"),
+      h("h3", {}, "Start from one of these"),
       h("div", { class: "cards" },
-        choice("🧱", "Rules", "When a key is pressed, show, play, or say something. Built from menus, no typing code.", () => tryRoom("my-room", { kind: "rules", rules: blankRules() })),
         ...(Object.keys(TEMPLATES) as TemplateDraft["kind"][]).map((kind) =>
-          choice(ICONS[kind], TEMPLATES[kind].label, TEMPLATES[kind].about, () => tryRoom(kind, template(kind)))),
-        choice("✏️", "Python from nothing", "An empty room to write yourself, or to paste in what an AI helper wrote.", () => tryRoom("my-room", null))),
-      h("h3", {}, "Or change one of these"),
-      h("div", { class: "cards" }, ...EXAMPLES.map((e) => choice(e.icon, e.label, e.about, () => tryRoom(e.name, null, e.source)))),
-      h("p", { class: "dim" }, "Made a Purple Pack with an AI helper, or by hand? ", openPackButton("Open it here"), " to try its rooms and change them."),
+          choice(ICONS[kind], TEMPLATES[kind].label, TEMPLATES[kind].about, () => tryRoom(TEMPLATES[kind].name, template(kind)))),
+        ...EXAMPLES.map((e) => choice(e.icon, e.label, e.about, () => tryRoom(e.name, null, e.source)))),
+      h("p", { class: "dim" }, "Writing the Python yourself, or with an AI helper? ",
+        h("button", { class: "linkbtn", onclick: () => tryRoom("my-room", null) }, "Start with an empty room"),
+        ". Made a Purple Pack already? ", openPackButton("Open it here"), " to try its rooms and change them."),
       roomFilesBox(),
     ),
   };
@@ -165,6 +165,7 @@ function editor(room: RoomDraft): View {
     location.hash = href(name);
   };
 
+  const tray = roomFilesBox((call) => insert(call));
   const made = room.made;
   const tabs: Tab[] = [...(made ? ["made" as const] : readKnobs(room.source).length ? ["knobs" as const] : []), "python"];
   const LABELS: Record<Tab, string> = { made: made?.kind === "rules" ? "Rules" : "Form", knobs: "Knobs", python: "Python" };
@@ -176,7 +177,7 @@ function editor(room: RoomDraft): View {
     tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(tabs[i] === which)));
     if (which === "made" && made) {
       const onEdit = () => edited(sourceOf(made), 500);
-      pane.replaceChildren(made.kind === "rules" ? rulesForm(made.rules, onEdit) : templateForm(made, onEdit));
+      pane.replaceChildren(made.kind === "rules" ? rulesForm(made.rules, onEdit) : templateForm(made, onEdit, tray.refresh));
     } else if (which === "knobs") {
       const knobs = readKnobs(room.source);
       pane.replaceChildren(knobs.length ? knobsForm(knobs, () => edited(writeKnobs(room.source, knobs), 500))
@@ -197,7 +198,7 @@ function editor(room: RoomDraft): View {
       {},
       h("div", { class: "editor-head" }, nameIn, nameNote),
       tryBar(room, () => confirm(`Throw away ${roomTitle(room.name)}?`) && drop([room])),
-      roomFilesBox((call) => insert(call)),
+      tray,
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, ...tabButtons),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),
       pane,

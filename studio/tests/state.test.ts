@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { addAll, clearSection, draft, emptyDraft, freeName, hasWork, onChange, pieces, replaceDraft, tryingPieces, withSample, type WordEntry } from "../src/state";
+import { addAll, clearSection, draft, emptyDraft, freeName, hasWork, madeOf, onChange, pieces, replaceDraft, tryingPieces, withSample, type WordEntry } from "../src/state";
+
+describe("rooms saved before the picture quiz", () => {
+  it("keeps a trivia room's Python but not its old form, and keeps every other form", () => {
+    expect(madeOf({ kind: "trivia", data: { rows: [] } })).toBeNull();
+    expect(madeOf(undefined)).toBeNull();
+    expect(madeOf({ kind: "rules", rules: [] })).toEqual({ kind: "rules", rules: [] });
+  });
+});
 
 describe("clearing", () => {
   it("clears one section and leaves the rest", () => {

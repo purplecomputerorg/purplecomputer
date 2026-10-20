@@ -3,7 +3,7 @@ import { loadPyodide } from "pyodide";
 import purpleSource from "../../purple_tui/roomkit/purple.py?raw";
 import runnerSource from "../../purple_tui/roomkit/runner.py?raw";
 import guest from "../src/rooms/guest.py?raw";
-import { EXAMPLES, TEMPLATES, soundboardSource, triviaSource } from "../src/examples";
+import { EXAMPLES, TEMPLATES, quizSource, soundboardSource } from "../src/examples";
 import { blankRules, rulesSource, type Rule } from "../src/rules";
 
 type Msg = Record<string, unknown>;
@@ -12,13 +12,13 @@ const END = "end of the scripted events";
 
 // Runs a room in a fresh Pyodide the way the worker does (runner.py behind the guest wall), with
 // Purple replaced by a script of events after the start event. Returns every reply the room sent.
-async function runRoom(source: string, events: Msg[], keep: Msg = {}): Promise<Msg[]> {
+async function runRoom(source: string, events: Msg[], keep: Msg = {}, files: Msg = {}): Promise<Msg[]> {
   const py = await loadPyodide({ indexURL: decodeURIComponent(new URL("../node_modules/pyodide/", import.meta.url).pathname) });
   py.FS.mkdirTree("/purple");
   py.FS.writeFile("/purple/runner.py", runnerSource);
   py.runPython("import sys; sys.path.insert(0, '/purple')");
   const replies: Msg[] = [];
-  const start = { ev: "start", t: 0, api: 2, size: [240, 120], keep, lib: purpleSource, source };
+  const start = { ev: "start", t: 0, api: 2, size: [240, 120], keep, lib: purpleSource, source, ...files };
   const queue = [start, ...events].map((e) => JSON.stringify(e));
   py.registerJsModule("room_channel", {
     send: (text: string) => replies.push(JSON.parse(text)),
@@ -37,8 +37,6 @@ const shapes = (r: Msg) => (r.scene ?? []) as Shape[];
 const texts = (r: Msg) => shapes(r).filter((s) => s[0] === "text").map((s) => s[4]);
 // Grid squares a reply drew: [column, row, color] for each square that isn't the background.
 const squares = (r: Msg) => shapes(r).slice(1).filter((s) => s[0] === "rect").map((s) => [Math.floor((s[1] as number) / 10), Math.floor((s[2] as number) / 10), s[5]]);
-const typed = (text: string) => [...text].map((c) => (c === " " ? { ev: "key", key: "space" } : { ev: "key", key: c.toLowerCase(), char: c }));
-const enter = { ev: "key", key: "enter" };
 const GREEN = "#5ec46a";
 
 describe("family rooms in Studio's Python", () => {
@@ -55,22 +53,34 @@ describe("family rooms in Studio's Python", () => {
     expect(replies.at(-1)).toMatchObject({ error: { text: expect.stringContaining(END) } });
   }, 60_000);
 
-  it("runs the trivia example: asks, takes a typed answer, and plays a note for a right one", async () => {
-    const replies = await runRoom(triviaSource(TEMPLATES.trivia.defaults()), [...typed("Brachiosaurus "), enter]);
-    expect(texts(replies[0])).toEqual(["🦕", "Which dinosaur had a very long neck?", "Your answer", "Answer → _"]);
-    expect(replies[0].sounds).toEqual([["say", "Which dinosaur had a very long neck?"]]);
-    expect(texts(replies[3])).toContain("Answer → Bra_");
-    const answered = replies[typed("Brachiosaurus ").length + 1];
-    expect(answered.sounds).toEqual([["note", "C5", "marimba"], ["say", "Which dinosaur had tiny arms and big teeth?"]]);
+  it("runs the picture quiz: a wrong pick goes away, the right one moves on to the next question", async () => {
+    const keys = ["1", "2", "3"].map((key) => ({ ev: "key", key }));
+    const replies = await runRoom(quizSource(TEMPLATES.quiz.defaults()), [...keys, { ev: "key", key: "space" }, { ev: "tick", t: 2 }]);
+    expect(texts(replies[0]).sort()).toEqual(["1", "2", "3", "Which one says moo?", "🐄", "🐑", "🐖"].sort());
+    expect(replies[0].sounds).toEqual([["say", "Which one says moo?"]]);
+    const picks = replies.slice(1, 4);
+    const right = picks.findIndex((r) => (r.sounds as unknown[] | undefined)?.some((s) => JSON.stringify(s) === '["note","G5","marimba"]'));
+    expect(picks[right].sounds).toEqual([["say", "cow"], ["note", "G5", "marimba"]]);
+    for (const wrong of picks.slice(0, right)) {
+      const [[, word]] = wrong.sounds as [string, string][];
+      expect(texts(wrong)).not.toContain(word === "pig" ? "🐖" : "🐑");
+      expect(wrong.sounds).toContainEqual(["note", "E3", "marimba"]);
+    }
+    for (const after of replies.slice(right + 2, 5)) expect(after.sounds).toBeUndefined();
+    expect(texts(replies[5])).toContain("Which one can fly?");
   }, 60_000);
 
-  it("keeps whatever a parent types in the trivia form as text, never code", async () => {
+  it("draws a parent's own pictures in the quiz, and keeps what they type as text, never code", async () => {
     const tricky = `it's "big" \\ \n"); import os; ("`;
-    const source = triviaSource({ rows: [{ emoji: "🦕", question: tricky, answer: "yes" }, { emoji: "", question: "", answer: "skipped" }] });
+    const source = quizSource({ rows: [
+      { question: tricky, emoji: "grandma", right: { emoji: "grandma", word: "Grandma" }, others: [{ emoji: "", word: "" }] },
+      { question: "", emoji: "", right: { emoji: "🐄", word: "" }, others: [] },
+    ] });
     expect(source).not.toMatch(/^import os/m);
-    const replies = await runRoom(source, [...typed("YES"), enter]);
+    const replies = await runRoom(source, [{ ev: "key", key: "1" }], {}, { images: { grandma: [200, 300] } });
     expect(texts(replies[0])).toContain(tricky);
-    expect(replies.at(-2)!.sounds).toContainEqual(["note", "C5", "marimba"]);
+    expect(shapes(replies[0]).filter((s) => s[0] === "image").map((s) => s[5])).toEqual(["grandma", "grandma"]);
+    expect(replies[1].sounds).toEqual([["say", "Grandma"], ["note", "G5", "marimba"]]);
   }, 60_000);
 
   it("runs a soundboard: each key's sound, the fallback, and the key itself when no picture", async () => {
@@ -83,6 +93,13 @@ describe("family rooms in Studio's Python", () => {
     expect([texts(replies[1]), replies[1].sounds]).toEqual([["🐄"], [["say", 'cow\'s "moo"'], ["note", "C4", "marimba"]]]);
     expect([texts(replies[2]), replies[2].sounds]).toEqual([["⭐"], undefined]);
     expect([texts(replies[3]), replies[3].sounds]).toEqual([["z"], [["note", "A4", "marimba"]]]);
+  }, 60_000);
+
+  it("plays a parent's own picture and recording on a picture keyboard key", async () => {
+    const source = soundboardSource({ rows: [{ key: "m", emoji: "cat", word: "", note: "meow" }], other: { emoji: "", word: "", note: "" } });
+    const replies = await runRoom(source, [{ ev: "key", key: "m" }], {}, { images: { cat: [100, 100] }, sounds: ["meow"] });
+    expect(shapes(replies[1]).filter((s) => s[0] === "image").map((s) => s[5])).toEqual(["cat"]);
+    expect(replies[1].sounds).toEqual([["clip", "meow"]]);
   }, 60_000);
 
   it("remembers what a room keeps, and hands it back next time", async () => {

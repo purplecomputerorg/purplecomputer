@@ -323,6 +323,8 @@
   "(Technical: no FAT, exFAT or NTFS USB drive found.)": "(Técnico: no se encontró una USB FAT, exFAT o NTFS.)",
   "Copying pictures...": "Copiando dibujos...",
   "Couldn't copy to that USB drive.": "No se pudo copiar a esa USB.",
+  "The USB drive is full.": "La USB está llena.",
+  "The pictures that fit were copied.": "Se copiaron los dibujos que cabían.",
   "Copied {0} picture{1}.": "Copiado{1}: {0} dibujo{1}.",
   "They are in the \"{0}\" folder.": "Están en la carpeta \"{0}\".",
   "You can unplug the USB drive now.": "Ya puedes desconectar la USB.",

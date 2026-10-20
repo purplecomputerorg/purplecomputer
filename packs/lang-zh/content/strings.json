@@ -345,6 +345,8 @@
   "(Technical: no FAT, exFAT or NTFS USB drive found.)": "（技术信息：没有找到 FAT、exFAT 或 NTFS 格式的 USB 盘。）",
   "Copying pictures...": "正在复制图片...",
   "Couldn't copy to that USB drive.": "复制到这个 USB 盘失败了。",
+  "The USB drive is full.": "USB 盘满了。",
+  "The pictures that fit were copied.": "放得下的图片已经复制好了。",
   "Copied {0} picture{1}.": "复制了 {0} 张图片。",
   "They are in the \"{0}\" folder.": "它们在“{0}”文件夹里。",
   "You can unplug the USB drive now.": "现在可以拔掉 USB 盘了。",

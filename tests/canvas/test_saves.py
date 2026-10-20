@@ -152,6 +152,19 @@ def test_export_writes_each_save_once(tmp_path):
     run(go())
 
 
+def test_export_finds_a_purple_keys_data_partition_not_its_efi(monkeypatch):
+    import json
+    import subprocess
+    from purple_tui.canvas.rooms import save_export
+    key = {"name": "/dev/sdb", "tran": "usb", "children": [
+        {"name": "/dev/sdb1", "fstype": "iso9660", "parttype": "0x0"},
+        {"name": "/dev/sdb2", "fstype": "vfat", "parttype": "0xef"},
+        {"name": "/dev/sdb3", "fstype": "vfat", "parttype": "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"}]}
+    out = json.dumps({"blockdevices": [key]})
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, out, ""))
+    assert save_export.find_stick() == ("/dev/sdb3", None)
+
+
 def test_reinstall_keeps_by_default_and_start_fresh_asks_again():
     async def go():
         from purple_tui.canvas.rooms.parent_menu import ReinstallConfirmScreen, StartFreshConfirmScreen

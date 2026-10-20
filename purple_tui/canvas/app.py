@@ -722,7 +722,8 @@ class PurpleApp:
         if offer:
             self._offer_packs(offer)
         elif was_reading:
-            self.notify("Already added" if known else "Couldn't read that Purple Pack. Try downloading it from Purple Studio again.", timeout=4)
+            self.notify("Already added. You can unplug the USB drive now." if known
+                        else "Couldn't read that Purple Pack. Try downloading it from Purple Studio again.", timeout=4)
 
     def _offer_packs(self, waiting):
         from .. import pack_arrivals
@@ -730,6 +731,7 @@ class PurpleApp:
         body = "\n".join(m["name"] for _, m in waiting) + "\nPictures, words, and sounds from Purple Studio."
         if pack_arrivals.has_rooms(waiting):
             body += "\nIts rooms stay off until a grown-up turns them on in the Parent Menu."
+        body += "\nYou can unplug the USB drive now."
         self._offering_packs = True
         self.push(Confirm(self, "New Purple Pack", body, yes="Add", no="Not now", default_no=False),
                   on_close=lambda yes: self._answer_packs(waiting, yes))

@@ -120,5 +120,5 @@ def test_a_drive_being_read_says_so_then_says_how_it_went(drive):
         await press(app, "enter")
 
         await read(app, drive)
-        assert app.top is None and app._toasts[-1].text == "Already added"
+        assert app.top is None and app._toasts[-1].text.startswith("Already added")
     run(go())

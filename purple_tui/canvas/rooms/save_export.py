@@ -7,6 +7,7 @@ by when they were saved, with a .txt of the same name for work that has words
 
 import json
 import os
+import shutil
 import subprocess
 import threading
 from pathlib import Path
@@ -19,26 +20,32 @@ from ..ui import Dialog
 
 MOUNT = "/run/purple-export"
 FOLDER = "Purple Computer"
-_PURPLE_LABELS = {"PURPLE_INSTALLER", "PURPLE_DEBUG", "PURPLEUSB", "PURPLE_ROOT", "PURPLE_EFI"}
 _FILESYSTEMS = {"vfat", "exfat", "ntfs"}
+_EFI_TYPES = {"c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "0xef"}  # GPT and MBR; a Purple Key's EFI partition is FAT too
 
 
 def find_stick() -> tuple:
-    """(device, mountpoint or None) for a plugged-in USB drive that isn't a Purple Key, else (None, None)."""
+    """(device, mountpoint or None) for a data partition on a plugged-in USB drive, a Purple Key's PURPLEUSB included, else (None, None)."""
     try:
-        out = subprocess.run(["lsblk", "-J", "-p", "-o", "NAME,TRAN,FSTYPE,LABEL,MOUNTPOINT"],
+        out = subprocess.run(["lsblk", "-J", "-p", "-o", "NAME,TRAN,FSTYPE,PARTTYPE,MOUNTPOINT"],
                              capture_output=True, text=True, timeout=10).stdout
         disks = json.loads(out).get("blockdevices", [])
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return None, None
     for disk in disks:
-        parts = disk.get("children") or [disk]
-        if disk.get("tran") != "usb" or any(p.get("label") in _PURPLE_LABELS for p in parts):
+        if disk.get("tran") != "usb":
             continue
-        for p in parts:
-            if p.get("fstype") in _FILESYSTEMS:
+        for p in disk.get("children") or [disk]:
+            if p.get("fstype") in _FILESYSTEMS and (p.get("parttype") or "").lower() not in _EFI_TYPES:
                 return p["name"], p.get("mountpoint")
     return None, None
+
+
+def _nearly_full(path) -> bool:
+    try:
+        return shutil.disk_usage(path).free < 1 << 20
+    except OSError:
+        return False
 
 
 def export_saves(dest: Path, export_for) -> int:
@@ -110,6 +117,9 @@ class SaveExportScreen(Dialog):
             copied = export_saves(Path(mnt), self._export)
             os.sync()
         except (OSError, subprocess.SubprocessError, pygame.error) as e:
+            if _nearly_full(mnt):  # pygame.image.save reports a full drive as a plain pygame.error
+                return self._say("The USB drive is full.", "", "The pictures that fit were copied.",
+                                 "You can unplug the USB drive now.", done=True)
             return self._say("Couldn't copy to that USB drive.", "", f"(Technical: {e})", done=True)
         finally:
             if not mounted:

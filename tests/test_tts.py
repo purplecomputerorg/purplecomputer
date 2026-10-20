@@ -31,6 +31,21 @@ class TestCache:
         assert tts._get_cached(long_text, tts.VOICE_QUICK) is None  # the two voices never share clips
 
 
+class TestPreparedText:
+    @pytest.mark.parametrize("text, prepared", [
+        ("Pick a seed with a number, then press space to plant it.", "pick a seed with a number, then press space to plant it."),
+        ("Hi!", "hi!"), ("hello?!", "hello?"), ("We\u2019ll go!!", "we'll go!"), ("3.5", "3.5."), ("3:30", "3:30"),
+        # espeak would say these marks and symbols aloud
+        (".hello", "hello"), ("hi.there", "hi there"), ("!!!", "."), ("$5 & 10%", "5 10"),
+    ])
+    def test_keeps_the_punctuation_espeak_speaks_with(self, text, prepared):
+        assert tts._prepare_text(text) == prepared
+
+    def test_a_question_and_a_statement_are_cached_apart(self):
+        assert tts._cache_path(tts._prepare_text("Ready?"), tts.VOICE_NATURAL) != tts._cache_path(tts._prepare_text("Ready."), tts.VOICE_NATURAL)
+        assert tts._prepare_text("Ready!") == tts._prepare_text("ready!!!")
+
+
 class TestVoiceClipLookup:
     def test_short_text(self):
         # Just must not raise; clip may or may not exist locally

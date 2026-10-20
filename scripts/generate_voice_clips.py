@@ -19,7 +19,7 @@ VOICE_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "voice"
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from purple_tui.tts import (  # noqa: E402
-    _fix_pronunciation, find_voice_model, load_voice, synthesize_to_file, voice_clip_filename,
+    _SYNTH_PARAMS, _fix_pronunciation, find_voice_model, load_voice, synthesize_to_file, voice_clip_filename,
 )
 
 # Static phrases (UI feedback, etc.)
@@ -246,6 +246,8 @@ def main():
         # Generate variants for new demo phrases only (not static UI phrases)
         variant_phrases = demo_phrases if demo_phrases else all_phrases
         print(f"Generating {args.variants} variants for {len(variant_phrases)} phrases...")
+        # The live voice has no noise, so every render is the same take; auditioning needs different ones.
+        _SYNTH_PARAMS.update(noise_scale=0.3, noise_w=0.3, noise_w_scale=0.3)
         print()
         for phrase in variant_phrases:
             base = voice_clip_filename(phrase).removesuffix(".wav")

@@ -601,9 +601,9 @@
    "model": "en_US-libritts_r-medium",
    "speaker": 166,
    "scales": [
-    0.3,
+    0.0,
     1.6,
-    0.3
+    0.0
    ],
    "word_gap": 2,
    "espeak_data": [

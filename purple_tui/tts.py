@@ -58,12 +58,12 @@ FLITE_VOICE = "cmu_us_lnh"
 _FLITE = "flite"
 _FLITE_STRETCH = 1.3  # slower than flite's default, short of drawly; flite has no word-gap control
 
-# Deterministic synthesis parameters (no randomness between runs)
+# Noise 0: any other value gives a different take each render, and each machine caches its own.
 # Parameter names vary across piper-tts versions, so we try all known variants.
 _SYNTH_PARAMS = {
-    "noise_scale": 0.3,
-    "noise_w": 0.3,         # some piper builds
-    "noise_w_scale": 0.3,   # other piper builds
+    "noise_scale": 0.0,
+    "noise_w": 0.0,         # some piper builds
+    "noise_w_scale": 0.0,   # other piper builds
     "length_scale": 1.6,  # slower than the model default: kids follow it better
     "word_gap": 2,  # each pause between words repeated: slower without drawing words out further
 }
@@ -102,18 +102,27 @@ def _fix_pronunciation(text: str) -> str:
     return text
 
 
-def _normalize_for_cache(text: str) -> str:
-    """Strip characters that don't affect TTS pronunciation.
+# Punctuation espeak reads as pauses and sentence tone; other symbols it would say aloud ("dollar").
+_SPOKEN_MARKS = ".,?!:;"
 
-    Piper ignores most punctuation, so "hello" and "hello!" sound identical.
-    Normalizing before cache key generation ensures they share a cache entry.
-    """
-    # Keep letters, digits, spaces (whitespace affects pacing)
-    text = re.sub(r"[^\w\s]", "", text, flags=re.UNICODE)
-    # Collapse multiple spaces
-    text = re.sub(r"\s+", " ", text).strip()
-    # Lowercase for consistent keys
-    return text.lower()
+
+def _keep_mark(m: re.Match) -> str:
+    """A mark ending a word, or inside a number (3.5, 3:30); elsewhere espeak names it ("dot hello")."""
+    before, after = m.string[m.start() - 1:m.start()], m.string[m.end():m.end() + 1]
+    ends_word = before.isalnum() and (not after or after.isspace())
+    return m.group() if ends_word or (before.isdigit() and after.isdigit()) else " "
+
+
+def _normalize_text(text: str) -> str:
+    """What Piper speaks and the cache keys on: lowercase, apostrophes and _SPOKEN_MARKS kept (one of a run), other symbols dropped."""
+    text = re.sub(rf"[^\w\s'{_SPOKEN_MARKS}]", "", text.replace("\u2019", "'"), flags=re.UNICODE)
+    text = re.sub(rf"([{_SPOKEN_MARKS}])[{_SPOKEN_MARKS}]+", r"\1", text)
+    text = re.sub(rf"[{_SPOKEN_MARKS}]", _keep_mark, text)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _end_sentence(text: str) -> str:
+    return text if text.endswith(tuple(_SPOKEN_MARKS)) else text + "."
 
 
 def _prepare_text(text: str) -> str:
@@ -121,8 +130,8 @@ def _prepare_text(text: str) -> str:
 
     1. If input is exactly one letter A-Z (upper or lower), replace with phonetic spelling.
     2. Apply pronunciation overrides.
-    3. Normalize punctuation/case for cache consistency.
-    4. If result is < 4 characters, append a period for prosody stability.
+    3. Normalize punctuation and case (_normalize_text).
+    4. If result is < 4 characters, end it as a sentence for prosody stability.
     """
     stripped = text.strip()
 
@@ -133,14 +142,10 @@ def _prepare_text(text: str) -> str:
     # Pronunciation fixes
     stripped = _fix_pronunciation(stripped)
 
-    # Normalize punctuation and case for cache consistency
-    stripped = _normalize_for_cache(stripped)
+    stripped = _normalize_text(stripped)
 
     # Micro-context padding for very short utterances
-    if len(stripped) < 4:
-        stripped = stripped + "."
-
-    return stripped
+    return _end_sentence(stripped) if len(stripped) < 4 else stripped
 
 
 # --- WAV post-processing ---
@@ -814,7 +819,7 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None, lang=Non
         if not lang.voice or find_voice_model(lang.voice) is None:
             _dbg(f"speak_sync: no voice for {lang.code}")
             return False
-        prepared, engine = _normalize_for_cache(text) + ".", _LANG_ENGINE + lang.voice
+        prepared, engine = _end_sentence(_normalize_text(text)), _LANG_ENGINE + lang.voice
     else:
         # Check for pre-generated voice clip first (hand-curated clips take priority)
         clip_path = _get_voice_clip(text, room_voice)

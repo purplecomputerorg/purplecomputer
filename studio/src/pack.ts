@@ -16,7 +16,9 @@ export { manifest } from "@sdk/pack";
 interface Saved extends Pick<PackSpec, "name" | "words" | "synonyms" | "ranked" | "instruments" | "rooms" | "theme"> {
   letters: string[];
   phrases: string[];
-  pictures: { name: string; title?: string; cells: string[][]; crop?: Crop; words?: Words }[];
+  pictures: { name: string; title?: string; cells: string[][]; crop?: Crop; words?: Words; shelfId?: string }[];
+  // Each room picture's shelf id by name, so reopening on this computer finds the same pictures.
+  roomShelf?: Record<string, string>;
 }
 
 // The download holds what the family added; Studio's own Purple also plays what they're trying.
@@ -39,7 +41,8 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   const studio: Saved = {
     name: d.name, words, synonyms, ranked: d.ranked, instruments, rooms, theme,
     letters: Object.keys(letters), phrases: phrases.map((p) => p.text),
-    pictures: added.map((p, i) => ({ name: p.name, title: p.title, cells: p.cells, words: p.words, crop: sources[i]?.crop })),
+    pictures: added.map((p, i) => ({ name: p.name, title: p.title, cells: p.cells, words: p.words, crop: sources[i]?.crop, shelfId: p.shelfId })),
+    roomShelf: Object.fromEntries(roomFiles.flatMap((f) => (f.shelfId ? [[f.name, f.shelfId]] : []))),
   };
   const rendered = await Promise.all(instruments.map(async (i) => ({ ...i, notes: await instrumentNotes(i) })));
   // The preview opens the room being tried from this pack's files too, added or not.
@@ -114,7 +117,7 @@ export async function openPack(file: Blob): Promise<Draft> {
     ranked: s.ranked,
     instruments: s.instruments.map(kept),
     rooms: s.rooms.map((r) => kept({ name: r.name, source: r.source, made: madeOf(r.made) })),
-    roomFiles: roomFiles(files),
+    roomFiles: roomFiles(files).map((f) => ({ ...f, shelfId: f.kind === "images" ? s.roomShelf?.[f.name] : undefined })),
     theme: s.theme,
     colors: s.theme ? { kept: true } : {},
     letters: Object.fromEntries(s.letters.map((k) => [k, kept({ clip: decodeWav(read(letterPath(k))) })])),

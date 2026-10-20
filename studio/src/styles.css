@@ -154,6 +154,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .crop-stage { display: flex; justify-content: center; padding: 20px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
 .cropper { position: relative; display: inline-block; max-width: 100%; line-height: 0; border-radius: 10px; overflow: hidden; user-select: none; box-shadow: var(--shadow); }
 .cropper img { display: block; max-width: 100%; max-height: 340px; }
+.shelf-photo { display: block; max-width: 100%; max-height: 240px; border-radius: 12px; }
 .crop-box {
   --dash-x: repeating-linear-gradient(90deg, var(--purple) 0 14px, #fff 14px 28px);
   --dash-y: repeating-linear-gradient(180deg, var(--purple) 0 14px, #fff 14px 28px);

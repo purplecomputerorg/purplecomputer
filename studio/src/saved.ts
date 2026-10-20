@@ -1,8 +1,11 @@
 // The draft kept in this browser, so a reload or a closed tab loses nothing. Best effort only: Safari clears it
 // after a week away, which is why the downloaded Purple Pack, reopened with openPack, is the copy that lasts.
+import type { Shelved } from "./shelf";
 import { draft, madeOf, type Draft, type Made, type RoomDraft } from "./state";
 
 const KEY = "draft";
+// The family's pictures, kept apart from any one draft.
+const SHELF = "shelf";
 
 function store<T>(mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -28,3 +31,6 @@ export function remember() {
   clearTimeout(pending);
   pending = setTimeout(() => store("readwrite", (s) => s.put(draft, KEY)).catch(() => {}), 300);
 }
+
+export const recallShelf = (): Promise<Shelved[]> => store<Shelved[] | undefined>("readonly", (s) => s.get(SHELF)).then((x) => x ?? []).catch(() => []);
+export const rememberShelf = (items: Shelved[]) => store("readwrite", (s) => s.put(items, SHELF)).catch(() => {});

@@ -2,6 +2,8 @@
 // any sound the browser can play becomes the WAV Purple plays.
 import { ROOM_FILE_NAME, type RoomFileKind } from "@sdk/pack";
 import { decodeToClip, encodeWav } from "../audio";
+import { dataUrl } from "../photo";
+import { roomFileOf, shelf, shelve, type Shelved } from "../shelf";
 import { changed, draft, freeName, type RoomFile } from "../state";
 import { filePicker, h } from "./dom";
 
@@ -17,19 +19,31 @@ async function png(file: Blob): Promise<Uint8Array> {
 
 const wav = async (file: Blob) => encodeWav(await decodeToClip(file));
 
-export function addRoomData(kind: RoomFileKind, text: string, data: Uint8Array): RoomFile {
+export function addRoomData(kind: RoomFileKind, text: string, data: Uint8Array, shelfId?: string): RoomFile {
   const name = freeName(text, (n) => draft.roomFiles.some((f) => f.kind === kind && f.name === n), kind === "images" ? "picture" : "sound");
-  const added: RoomFile = { kind, name, data, kept: true };
+  const added: RoomFile = { kind, name, data, kept: true, shelfId };
   draft.roomFiles.push(added);
   changed();
   return added;
 }
 
-export const addRoomFile = async (kind: RoomFileKind, file: File): Promise<RoomFile> =>
-  addRoomData(kind, file.name.replace(/\.[^.]+$/, ""), await (kind === "images" ? png : wav)(file));
+// A picture from the shelf, for the pack's rooms: the copy they already have, or a new one.
+export async function roomFileFor(item: Shelved): Promise<RoomFile> {
+  return roomFileOf(item) ?? addRoomData("images", item.name, await png(await (await fetch(item.src)).blob()), item.id);
+}
+
+// A new photo goes on the shelf too, so any pack can use it again.
+export async function addRoomFile(kind: RoomFileKind, file: File): Promise<RoomFile> {
+  const text = file.name.replace(/\.[^.]+$/, "");
+  return kind === "images" ? roomFileFor(shelve(await dataUrl(file), text)) : addRoomData(kind, text, await wav(file));
+}
+
+// The shelf's pictures this pack's rooms don't have yet.
+export const shelfOnly = () => shelf.filter((s) => !roomFileOf(s));
+export const shelfThumb = (s: Shelved) => h("img", { src: s.src, alt: s.name });
 
 // A new name everywhere the pack's rooms use the old one: their Python and their rules.
-function rename(f: RoomFile, text: string) {
+export function renameRoomFile(f: RoomFile, text: string) {
   const name = freeName(text, (n) => draft.roomFiles.some((x) => x !== f && x.kind === f.kind && x.name === n), f.name);
   if (name === f.name || !ROOM_FILE_NAME.test(name)) return;
   const [before, after] = [call(f), call({ ...f, name })];
@@ -74,18 +88,23 @@ export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & 
     draft.roomFiles.length
       ? h("div", { class: "photo-list" }, ...draft.roomFiles.map((f) => h("div", { class: "try-chip tray-item" },
         h("button", { type: "button", title: `Use ${call(f)}`, onclick: () => pick(f) }, face(f)),
-        h("button", { type: "button", class: "linkbtn small", title: "Rename", onclick: () => { const t = prompt("A new name", f.name); if (t) { rename(f, t); render(); } } }, f.name),
+        h("button", { type: "button", class: "linkbtn small", title: "Rename", onclick: () => { const t = prompt("A new name", f.name); if (t) { renameRoomFile(f, t); render(); } } }, f.name),
         h("button", { type: "button", class: "drop", title: `Throw away ${f.name}`, "aria-label": `Throw away ${f.name}`, onclick: () => drop(f) }, "×"))))
       : h("p", { class: "dim small" }, "A photo of your pet, a voice saying hello: add them here, and any room in this Purple Pack can use them."),
+    shelfOnly().length ? h("div", {}, h("p", { class: "dim small" }, "From your pictures:"),
+      h("div", { class: "photo-list" }, ...shelfOnly().map((s) => h("div", { class: "try-chip tray-item" },
+        h("button", { type: "button", title: `Add ${s.name} for your rooms`, onclick: () => roomFileFor(s).then(render, failed) }, shelfThumb(s)),
+        h("span", { class: "dim" }, s.name))))) : null,
     h("p", { class: "row" }, filePicker("image/*", add("images"), "Add a picture"), filePicker("audio/*", add("sounds"), "Add a sound"), status),
   ));
+  const failed = (e: unknown) => (status.textContent = ` That file didn't open. (Technical: ${e instanceof Error ? e.message : String(e)})`);
   const add = (kind: RoomFileKind) => async (file: File) => {
     try {
       await addRoomFile(kind, file);
       status.textContent = "";
       render();
     } catch (e) {
-      status.textContent = ` That file didn't open. (Technical: ${e instanceof Error ? e.message : String(e)})`;
+      failed(e);
     }
   };
   const drop = (f: RoomFile) => {

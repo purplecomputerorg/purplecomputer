@@ -25,7 +25,8 @@ export type Made = { kind: "rules"; rules: Rule[] } | TemplateDraft;
 export const madeOf = (made: unknown): Made | null => (made && (made as { kind: string }).kind !== "trivia" ? made as Made : null);
 export interface RoomDraft extends Keepable { name: string; source: string; made: Made | null }
 // A picture or sound the pack's rooms draw with picture("name") and play with sound("name"), as Purple reads it.
-export interface RoomFile extends Keepable { kind: RoomFileKind; name: string; data: Uint8Array }
+// shelfId: for a picture, the one on the family's shelf (shelf.ts) it was made from.
+export interface RoomFile extends Keepable { kind: RoomFileKind; name: string; data: Uint8Array; shelfId?: string }
 
 export interface Draft {
   // The pack's id on Purple, made once per Purple Pack, so downloading it again under any name replaces it.

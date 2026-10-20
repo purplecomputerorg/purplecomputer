@@ -2,7 +2,6 @@ import dinosaur from "./assets/dinosaur.svg";
 import dog from "./assets/dog.jpg";
 import saturn from "./assets/saturn.jpg";
 import starryNight from "./assets/starry-night.jpg";
-import { slug } from "@sdk/pack";
 import type { Keepable } from "./state";
 import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type ArtPicture, type LetterOp, type PaintOp } from "@sdk/purple/art";
 import { DEFAULT_PALETTE, contrast } from "@sdk/purple/theme";
@@ -11,7 +10,8 @@ import { DEFAULT_PALETTE, contrast } from "@sdk/purple/theme";
 // words: written over the photo in Art's letters; x and y are their top left in the photo's cells, centered near the bottom until moved.
 export interface Crop { x: number; y: number; w: number; h: number }
 export interface Words { text: string; x?: number; y?: number }
-export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string; bitmap: ImageBitmap; crop?: Crop; words?: Words }
+// shelfId: the picture on the family's shelf (shelf.ts) it was painted from.
+export interface Picture extends Keepable { name: string; title?: string; cells: string[][]; ops: PaintOp[]; sourceUrl: string; bitmap: ImageBitmap; crop?: Crop; words?: Words; shelfId?: string }
 
 const hex = (r: number, g: number, b: number) =>
   "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
@@ -57,8 +57,11 @@ export const dataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => 
   r.readAsDataURL(blob);
 });
 
-export async function pictureFromFile(file: File): Promise<Picture> {
-  return pictureFromBitmap(await createImageBitmap(file), slug(file.name.replace(/\.[^.]+$/, "")) || "picture", await dataUrl(file));
+export async function pictureFromSrc(src: string, name: string): Promise<Picture> {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  return pictureFromBitmap(await createImageBitmap(img), name, src);
 }
 
 // Studio's examples, painted the same way as a family's pictures. One goes in the pack only if
@@ -72,12 +75,7 @@ export const EXAMPLES: Example[] = [
 ];
 const examples = new Map<string, Promise<Picture>>();
 export function examplePicture({ name, src }: Example): Promise<Picture> {
-  if (!examples.has(name)) examples.set(name, (async () => {
-    const img = new Image();
-    img.src = src;
-    await img.decode();
-    return pictureFromBitmap(await createImageBitmap(img), name, src);
-  })());
+  if (!examples.has(name)) examples.set(name, pictureFromSrc(src, name));
   return examples.get(name)!;
 }
 

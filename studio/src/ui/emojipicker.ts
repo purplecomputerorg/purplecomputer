@@ -3,7 +3,7 @@
 // emoji works too.
 import { CORE_EMOJI, CORE_RANKED_WORDS, CORE_SYNONYMS } from "@sdk/purple/core";
 import { filePicker, h } from "./dom";
-import { addRoomFile, roomPicture, roomPictures } from "./roomfiles";
+import { addRoomFile, roomFileFor, roomPicture, roomPictures, shelfOnly, shelfThumb } from "./roomfiles";
 
 const INDEX: [name: string, emoji: string][] = [
   ...Object.entries(CORE_EMOJI),
@@ -50,13 +50,15 @@ export function closeEmojiPicker(): void {
   open = null;
 }
 
-// The pack's own pictures to pick from, and a photo to add, for a setting that takes them.
+// The pack's own pictures to pick from, then the rest of the family's, and a photo to add, for a setting that takes them.
 function picturesRow(pick: (name: string) => void, taken: string[]): HTMLElement {
   const note = h("span", { class: "dim small" });
-  const add = filePicker("image/*", (file) => addRoomFile("images", file).then((f) => pick(f.name))
-    .catch(() => (note.textContent = "That picture didn't open. Try a photo saved as JPG or PNG.")), "Add a photo");
+  const picked = (made: Promise<{ name: string }>) => made.then((f) => pick(f.name))
+    .catch(() => (note.textContent = "That picture didn't open. Try a photo saved as JPG or PNG."));
+  const add = filePicker("image/*", (file) => picked(addRoomFile("images", file)), "Add a photo");
   return h("div", { class: "emoji-grid picture-grid" },
     ...roomPictures().filter((f) => !taken.includes(f.name)).map((f) => h("button", { type: "button", title: f.name, onclick: () => pick(f.name) }, roomPicture(f.name))),
+    ...shelfOnly().map((s) => h("button", { type: "button", title: s.name, onclick: () => picked(roomFileFor(s)) }, shelfThumb(s))),
     h("p", { class: "row" }, add, note));
 }
 

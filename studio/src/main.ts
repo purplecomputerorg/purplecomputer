@@ -3,6 +3,7 @@ import "./styles.css";
 import logo from "../../assets/logo.svg";
 import { features, hasWork, onChange, pieces, replaceDraft } from "./state";
 import { recall, remember } from "./saved";
+import { loadShelf, shelveDraft } from "./shelf";
 import { clearEverythingButton, clearSectionButton, openPackButton } from "./ui/packfile";
 import { clear, h } from "./ui/dom";
 import { colorsView } from "./ui/colors";
@@ -176,7 +177,10 @@ if (features.rooms && new URLSearchParams(location.search).has("sample")) addRoo
 
 onChange(() => { renderTop(); renderClear(); renderPhoneBar(); live.changed(); remember(); });
 window.addEventListener("hashchange", route);
-recall().then((saved) => {
-  if (saved) replaceDraft(saved);
+Promise.all([recall(), loadShelf()]).then(([saved]) => {
+  if (saved) {
+    shelveDraft(saved);
+    replaceDraft(saved);
+  }
   route();
 });

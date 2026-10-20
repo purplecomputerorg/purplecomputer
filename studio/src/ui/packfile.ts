@@ -1,8 +1,10 @@
 import { openPack } from "../pack";
+import { shelveDraft } from "../shelf";
 import { clearSection, hasWork, replaceDraft, type Draft } from "../state";
 import { filePicker, go, h } from "./dom";
 
 function swapIn(d?: Draft) {
+  if (d) shelveDraft(d);
   replaceDraft(d);
   go("#pack");
 }

@@ -7,7 +7,7 @@ import { MAX_OTHERS, normalizeKey, type QuizChoice, type QuizData, type Sound, t
 import { draft } from "../state";
 import { filePicker, h } from "./dom";
 import { recordButton } from "./record";
-import { addRoomData, addRoomFile } from "./roomfiles";
+import { addRoomData, addRoomFile, roomFileFor, shelfOnly } from "./roomfiles";
 import { select, textIn } from "./rulesform";
 
 const mine = (kind: RoomFileKind) => draft.roomFiles.filter((f) => f.kind === kind).map((f) => f.name);
@@ -20,17 +20,24 @@ const checked = (el: HTMLInputElement, check: (v: string) => boolean) => {
 
 interface Ctx { onEdit: () => void; say: (text: string) => void; rerender: () => void }
 
-// An emoji, or one of the pack's pictures: picked from the list, or added right here.
+// An emoji, or one of the family's pictures: the pack's, or one from the shelf, or added right here.
 function pictureIn(o: { emoji: string }, c: Ctx, placeholder: string): HTMLElement {
   const pictures = mine("images");
+  const shelved = shelfOnly();
   const isMine = pictures.includes(o.emoji);
-  const text = textIn(isMine ? "" : o.emoji, (v) => { o.emoji = v; pick.value = ""; c.onEdit(); }, { size: 5, placeholder });
-  const pick = select([["", "or a picture of mine"], ...pictures.map((n): [string, string] => [n, n])], isMine ? o.emoji : "",
-    (v) => { o.emoji = v; text.value = ""; c.onEdit(); });
-  const add = filePicker("image/*", (file) => addRoomFile("images", file)
+  const use = (made: Promise<{ name: string }>) => made
     .then((f) => { o.emoji = f.name; c.rerender(); c.onEdit(); })
-    .catch(() => c.say("That picture didn't open. Try a photo saved as JPG or PNG.")), pictures.length ? "add one" : "or add a photo");
-  return h("span", { class: "row" }, text, pictures.length ? pick : null, add);
+    .catch(() => c.say("That picture didn't open. Try a photo saved as JPG or PNG."));
+  const text = textIn(isMine ? "" : o.emoji, (v) => { o.emoji = v; pick.value = ""; c.onEdit(); }, { size: 5, placeholder });
+  const pick = select([["", "or a picture of mine"], ...pictures.map((n): [string, string] => [n, n]), ...shelved.map((s, i): [string, string] => [`#${i}`, s.name])],
+    isMine ? o.emoji : "", (v) => {
+      if (v.startsWith("#")) return void use(roomFileFor(shelved[Number(v.slice(1))]));
+      o.emoji = v;
+      text.value = "";
+      c.onEdit();
+    });
+  const add = filePicker("image/*", (file) => use(addRoomFile("images", file)), pictures.length ? "add one" : "or add a photo");
+  return h("span", { class: "row" }, text, pictures.length || shelved.length ? pick : null, add);
 }
 
 // A note, or one of the pack's sounds: picked from the list, or recorded right here.

@@ -325,17 +325,9 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .sheet-other { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .sheet > .add-row { grid-column: 1 / -1; }
 /* A narrow card puts a key's sound on a second line, under its word */
-.form-card { container: form / inline-size; }
-@container form (max-width: 480px) {
-  .sheet:has(.sound-in) { grid-template-columns: 3.25em 3.5em minmax(0, 1fr) 26px; }
-  .sheet-row > .sound-in { grid-column: 2 / 4; }
-  .sheet:has(.sound-in) .sheet-row > .x { grid-column: 4; grid-row: 1; }
-  .sheet:has(.sound-in) .sheet-head > :nth-child(4) { display: none; }
-}
 .sheet input[type="text"] { width: 100%; min-width: 0; }
 .sound-in { display: flex; align-items: center; gap: 6px; }
-.sound-in select { width: auto; }
-.sheet .sound-in input { width: 3.5em; }
+.sound-in select { width: 6.5em; text-overflow: ellipsis; }
 .q-block { position: relative; display: grid; gap: 12px; padding: 14px 40px 14px 14px; margin-bottom: 12px; border-radius: 12px; background: var(--bg); }
 .q-block > .x { position: absolute; top: 10px; right: 8px; }
 .q-ask { display: flex; gap: 10px; align-items: center; }

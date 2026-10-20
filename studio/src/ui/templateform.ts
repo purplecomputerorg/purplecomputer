@@ -26,19 +26,19 @@ interface Ctx { onEdit: () => void; say: (text: string) => void; rerender: () =>
 const pictureIn = (o: { emoji: string }, c: Ctx, query: () => string, blank?: { empty: string; clear: string }) =>
   h("span", { class: "emoji-wrap" }, emojiCell(o.emoji, query, (e) => { o.emoji = e; c.rerender(); c.onEdit(); }, { pictures: true, ...blank }));
 
-// A note, or one of the pack's sounds: picked from the list, or recorded right here.
+const NOTES = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5"];
+
+// A note, or one of the pack's sounds: picked from one short list, or recorded right here.
 function soundIn(o: Sound, c: Ctx, nameFor: () => string): HTMLElement {
-  const sounds = mine("sounds");
-  const kind = sounds.includes(o.note) ? o.note : o.note.trim() ? "note" : "";
-  const pick = select([["", "no sound"], ["note", "a note"], ...sounds.map((n): [string, string] => [n, `my sound: ${n}`])], kind,
-    (v) => { o.note = v === "note" ? "C4" : v; c.rerender(); c.onEdit(); });
-  const note = kind === "note" && checked(textIn(o.note, (v) => { o.note = v; c.onEdit(); }, { size: 3, class: "inline key-in", title: "A note looks like C4 or F#3" }), (v) => !!parseNote(v));
+  const notes = NOTES.includes(o.note) || !parseNote(o.note) ? NOTES : [o.note, ...NOTES];
+  const pick = select([["", "No sound"], ...[...notes, ...mine("sounds")].map((n): [string, string] => [n, n])], o.note,
+    (v) => { o.note = v; c.onEdit(); });
   const record = recordButton((clip) => {
     o.note = addRoomData("sounds", nameFor(), encodeWav(clip)).name;
     c.rerender();
     c.onEdit();
   }, c.say, true);
-  return h("span", { class: "sound-in" }, pick, note, record);
+  return h("span", { class: "sound-in" }, pick, record);
 }
 
 const wordIn = (o: { word: string }, c: Ctx, placeholder: string) => textIn(o.word, (v) => { o.word = v; c.onEdit(); }, { placeholder });
@@ -52,16 +52,16 @@ const row = (...cells: (Node | null)[]) => h("div", { class: "sheet-row knob-ite
 
 function soundboardForm(data: SoundboardData, c: Ctx): Node[] {
   const KEY = { empty: "Key", clear: "Show the key itself" };
-  const cells = (s: Sound & { emoji: string }, name: () => string) =>
-    [pictureIn(s, c, () => s.word, KEY), wordIn(s, c, "cow"), soundIn(s, c, name)];
+  const cells = (s: Sound & { emoji: string }, name: () => string, hint = "cow") =>
+    [pictureIn(s, c, () => s.word, KEY), wordIn(s, c, hint), soundIn(s, c, name)];
   return [
-    h("p", { class: "dim small" }, "A key is a letter, a number, or space, enter, up, down, left, right. A key with no picture shows itself."),
-    sheet("4em 4.25em minmax(5em, 1fr) auto 26px", ["Key", "Picture", "Purple says", "Sound"],
+    h("p", { class: "dim small" }, "A key is a letter, a number, or space, enter, up, down, left, right. A key with no picture shows itself. Others is every key not in the list."),
+    sheet("3.5em 52px minmax(4em, 1fr) auto 26px", ["Key", "Picture", "Purple says", "Sound"],
       ...data.rows.map((r, i) => row(
         checked(textIn(r.key, (v) => { r.key = v; c.onEdit(); }, { placeholder: "c", class: "inline key-in" }), (v) => !!normalizeKey(v)),
         ...cells(r, () => r.word || `key-${r.key}`), remove(data.rows, i, c))),
       add("Add a key", () => data.rows.push({ key: "", emoji: "", word: "", note: "" }), c),
-      h("div", { class: "sheet-row sheet-other" }, h("span", { class: "dim small" }, "Any other"), ...cells(data.other, () => data.other.word || "other-keys"))),
+      h("div", { class: "sheet-row sheet-other" }, h("span", { class: "tag" }, "Others"), ...cells(data.other, () => data.other.word || "other-keys", "nothing"))),
   ];
 }
 

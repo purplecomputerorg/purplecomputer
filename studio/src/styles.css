@@ -320,10 +320,26 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .push { margin-left: auto; }
 .knob .card-head { margin-bottom: 12px; }
 .knob code { font-size: 11px; }
-.knob-rows { display: grid; gap: 6px; }
-.knob-rows > .linkbtn { justify-self: start; }
-.knob-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* Rows share one grid, so their inputs and ✕s line up down the list */
+.knob-rows { display: grid; grid-template-columns: repeat(var(--cols), max-content); gap: 8px; align-items: center; }
+.knob-rows > .form-row, .knob-rows > .form-row > .knob-inline { display: contents; }
+.knob-rows > .form-row > :first-child, .knob-rows > .form-row > .knob-inline:first-child > :first-child { grid-column: 1; }
+.knob-rows > .form-row > .x { grid-column: -2; }
+.knob-rows > .form-row > input[type="text"], .knob-rows > .form-row > .knob-inline > input[type="text"] { width: 100%; }
+.knob-rows > .add-slot { grid-column: 1 / -1; }
+.knob-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 input.mono-in { font-family: var(--mono); font-size: 13px; }
+input.emoji-in { width: 3.2em; padding-inline: 0; text-align: center; }
+.x { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--dim); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
+.x:hover { background: var(--fill); color: var(--purple-dark); }
+.tile { position: relative; display: inline-flex; }
+.tile > .x { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; font-size: 14px; background: #fff; border: 1.5px solid var(--line); opacity: 0; }
+.tile:hover > .x, .tile:focus-within > .x { opacity: 1; }
+@media (hover: none) { .tile > .x { opacity: 1; } }
+.add-slot { min-width: 3.2em; min-height: 42px; align-self: stretch; border: 1.5px dashed var(--border); border-radius: 12px; background: none; color: var(--purple); font: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
+.add-slot:hover { background: var(--fill); border-style: solid; }
+input.room-name.just-yours { animation: just-yours 1.8s ease-out; }
+@keyframes just-yours { 0%, 40% { background: var(--fill); border-color: var(--border); } }
 .py-help { font-size: 14px; margin: 0 0 10px; }
 .py-help p { margin: 0 0 6px; }
 .lib-name { font-family: var(--mono); font-size: 12px; text-decoration: none; background: var(--fill); padding: 1px 7px; border-radius: 6px; }

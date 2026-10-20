@@ -6,9 +6,12 @@ import { h } from "./dom";
 import { textIn } from "./rulesform";
 
 const COLOR = /^#[0-9a-f]{6}$/i;
+const isEmoji = (s: string) => /^\p{Extended_Pictographic}/u.test(s) && !/[\p{L}\p{N}]/u.test(s);
 const nested = (v: Lit) => v.t === "list" || v.t === "tuple" || v.t === "dict";
 // Short plain values fit on one line; long words (a map row, a sentence) get a line each.
 const inline = (items: Lit[]) => items.length <= 8 && items.every((x) => !nested(x) && !(x.t === "str" && x.v.length > 12));
+// The item just added: it gets focus once drawn, so the family can type over the copy.
+let fresh: Lit | null = null;
 
 function scalar(v: Lit, onEdit: () => void): HTMLElement {
   if (v.t === "str" && COLOR.test(v.v)) {
@@ -16,7 +19,10 @@ function scalar(v: Lit, onEdit: () => void): HTMLElement {
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
     return el;
   }
-  if (v.t === "str") return textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: Math.min(40, Math.max(4, [...v.v].length + 2)), class: `inline${v.v.length > 12 ? " mono-in" : ""}` });
+  if (v.t === "str") {
+    const look = isEmoji(v.v) ? " emoji-in" : v.v.length > 12 ? " mono-in" : "";
+    return textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: Math.min(40, Math.max(4, [...v.v].length + 2)), class: `inline${look}` });
+  }
   if (v.t === "num") {
     const el = h("input", { type: "number", class: "inline num", value: String(v.v) });
     el.addEventListener("input", () => { if (Number.isFinite(el.valueAsNumber)) { v.v = el.valueAsNumber; onEdit(); } });
@@ -31,25 +37,45 @@ function scalar(v: Lit, onEdit: () => void): HTMLElement {
 }
 
 function editor(v: Lit, onEdit: () => void, redraw: () => void): HTMLElement {
-  if (!nested(v)) return scalar(v, onEdit);
+  const el = nested(v) ? group(v, onEdit, redraw) : scalar(v, onEdit);
+  if (v === fresh) {
+    fresh = null;
+    queueMicrotask(() => {
+      const input = (el.matches("input") ? el : el.querySelector("input")) as HTMLInputElement | null;
+      input?.focus();
+      if (input?.type === "text") input.select();
+    });
+  }
+  return el;
+}
+
+// An inline group's items each take a grid column, so every row's columns line up.
+const cells = (row: (HTMLElement | null)[]) => row.reduce((n, c) => n + (!c ? 0 : c.classList.contains("knob-inline") ? c.children.length : 1), 0);
+
+function group(v: Lit, onEdit: () => void, redraw: () => void): HTMLElement {
   const changed = () => { redraw(); onEdit(); };
-  const remove = (fn: () => void) => h("button", { class: "linkbtn dim small", title: "Remove", onclick: () => { fn(); changed(); } }, "✕");
+  const remove = (fn: () => void) => h("button", { class: "x", title: "Remove", "aria-label": "Remove", onclick: () => { fn(); changed(); } }, "×");
+  const addSlot = (push: () => Lit) => h("button", { class: "add-slot", title: "Add another", "aria-label": "Add another", onclick: () => { fresh = push(); changed(); } }, "+");
+  const rows = (cellRows: (HTMLElement | null)[][], add: HTMLElement | null) => {
+    const el = h("div", { class: "knob-rows" }, ...cellRows.map((c) => h("div", { class: "form-row" }, ...c)), add);
+    el.style.setProperty("--cols", String(Math.max(1, ...cellRows.map(cells))));
+    return el;
+  };
   if (v.t === "dict") {
-    const add = () => { const last = v.entries.at(-1)!; v.entries.push([{ t: "str", v: "" }, structuredClone(last[1])]); changed(); };
-    return h("div", { class: "knob-rows" },
-      ...v.entries.map((e, i) => h("div", { class: "form-row" }, editor(e[0], onEdit, redraw), "→", editor(e[1], onEdit, redraw), remove(() => v.entries.splice(i, 1)))),
-      v.entries.length ? h("button", { class: "linkbtn small", onclick: add }, "+ add one") : null);
+    const add = () => { const key: Lit = { t: "str", v: "" }; v.entries.push([key, structuredClone(v.entries.at(-1)![1])]); return key; };
+    return rows(v.entries.map((e, i) => [editor(e[0], onEdit, redraw), h("span", { class: "dim" }, "→"), editor(e[1], onEdit, redraw),
+      v.entries.length > 1 ? remove(() => v.entries.splice(i, 1)) : null]), v.entries.length ? addSlot(add) : null);
   }
   const items = (v as { items: Lit[] }).items;
   const growable = v.t === "list" && items.length > 0;
-  const add = () => { items.push(structuredClone(items.at(-1)!)); changed(); };
+  const removable = growable && items.length > 1;
+  const add = () => { items.push(structuredClone(items.at(-1)!)); return items.at(-1)!; };
   if (inline(items)) {
-    return h("span", { class: "knob-inline" }, ...items.flatMap((x, i) => [editor(x, onEdit, redraw), growable && items.length > 1 ? remove(() => items.splice(i, 1)) : null]),
-      growable ? h("button", { class: "linkbtn small", title: "Add one", onclick: add }, "+") : null);
+    return h("span", { class: "knob-inline" },
+      ...items.map((x, i) => removable ? h("span", { class: "tile" }, editor(x, onEdit, redraw), remove(() => items.splice(i, 1))) : editor(x, onEdit, redraw)),
+      growable ? addSlot(add) : null);
   }
-  return h("div", { class: "knob-rows" },
-    ...items.map((x, i) => h("div", { class: "form-row" }, editor(x, onEdit, redraw), growable ? remove(() => items.splice(i, 1)) : null)),
-    growable ? h("button", { class: "linkbtn small", onclick: add }, "+ add one") : null);
+  return rows(items.map((x, i) => [editor(x, onEdit, redraw), removable ? remove(() => items.splice(i, 1)) : null]), growable ? addSlot(add) : null);
 }
 
 export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {

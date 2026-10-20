@@ -324,6 +324,20 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .knob-rows > .linkbtn { justify-self: start; }
 .knob-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 input.mono-in { font-family: var(--mono); font-size: 13px; }
+.knob .field { margin: 0; }
+.knob .field > span { margin-bottom: 3px; }
+.knob-inline > .knob-item { display: inline-flex; align-items: center; gap: 4px; }
+.linkbtn.x { text-decoration: none; }
+@media (hover: hover) {
+  .knob-item > .x { opacity: 0; transition: opacity 0.12s; }
+  .knob-item:hover > .x, .knob-item:focus-within > .x { opacity: 1; }
+}
+input.emoji-in, input.key-in { text-align: center; padding-inline: 8px; }
+textarea.words-in { field-sizing: content; resize: vertical; line-height: 1.45; }
+.knob-entry { display: grid; gap: 10px; padding: 14px 16px; border: 1.5px solid var(--line); border-radius: 14px; }
+.entry-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; }
+.entry-fields { display: flex; flex-wrap: wrap; align-items: start; gap: 10px 16px; }
+.entry-fields > :has(textarea) { flex-basis: 100%; }
 .py-help { font-size: 14px; margin: 0 0 10px; }
 .py-help p { margin: 0 0 6px; }
 .lib-name { font-family: var(--mono); font-size: 12px; text-decoration: none; background: var(--fill); padding: 1px 7px; border-radius: 6px; }

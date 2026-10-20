@@ -1,6 +1,7 @@
 // A room's knobs: the ALL_CAPS settings at the top of its Python, each written as a plain value (words,
 // numbers, lists, dicts). Studio shows them as a form and writes edits back in place, so the rest of the
-// Python, hand edits included, is never touched.
+// Python, hand edits included, is never touched. A "# Labels: page, picture, words" line above a knob names
+// the parts of each entry: its key first, then each part of its value.
 
 export type Lit =
   | { t: "str"; v: string }
@@ -10,9 +11,9 @@ export type Lit =
   | { t: "list" | "tuple"; items: Lit[] }
   | { t: "dict"; entries: [Lit, Lit][] };
 
-// One setting: its name, the comment right above it, where its value sits in the source, and the value as
+// One setting: its name, the comment right above it, its labels, where its value sits in the source, and the value as
 // last written, so an unchanged one keeps the room's own line breaks.
-export interface Knob { name: string; about: string; value: Lit; start: number; end: number; multiline: boolean; written: string }
+export interface Knob { name: string; about: string; labels: string[]; value: Lit; start: number; end: number; multiline: boolean; written: string }
 
 class Parser {
   constructor(private s: string, public i: number) {}
@@ -83,6 +84,7 @@ class Parser {
 }
 
 const SETTING = /^([A-Z][A-Z0-9_]*)[ \t]*=[ \t]*/;
+const LABELS = /^Labels:\s*/;
 const PASSING = /^\s*(#.*)?$|^(from|import) /;
 
 // The settings at the top of the file, up to the first line that isn't one (or a comment or an import).
@@ -101,7 +103,8 @@ export function readKnobs(source: string): Knob[] {
         if (!/^\s*(#.*)?$/.test(rest)) break;
         const start = at + m[0].length;
         const multiline = source.slice(start, p.i).includes("\n");
-        knobs.push({ name: m[1], about: about.join(" "), value, start, end: p.i, multiline, written: literal(value, multiline) });
+        const hint = about.find((l) => LABELS.test(l));
+        knobs.push({ name: m[1], about: about.filter((l) => l !== hint).join(" "), labels: hint?.replace(LABELS, "").split(",").map((l) => l.trim()) ?? [], value, start, end: p.i, multiline, written: literal(value, multiline) });
         at = p.i;
         about = [];
         continue;

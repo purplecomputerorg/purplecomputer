@@ -44,6 +44,11 @@ describe("knobs", () => {
     expect(writeKnobs(out, knobs)).toContain("SPEED = 3\n");
   });
 
+  it("takes a Labels line out of the comment and splits it", () => {
+    const [k] = readKnobs('from purple import *\n# The pages.\n# Labels: page, picture,words\nPAGES = {}\n');
+    expect([k.about, k.labels]).toEqual(["The pages.", ["page", "picture", "words"]]);
+  });
+
   it("gives up on anything that isn't a plain value", () => {
     expect(readKnobs('from purple import *\nA = 1\nB = f"{A}"\nC = 2\n').map((k) => k.name)).toEqual(["A"]);
     expect(readKnobs("from purple import *\nA = [1, 2] + [3]\n")).toEqual([]);

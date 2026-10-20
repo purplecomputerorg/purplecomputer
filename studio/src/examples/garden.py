@@ -4,6 +4,7 @@ from purple import *
 # Space to plant, then to water. Each plant grows a step every time it's watered.
 
 # The seeds: the number key that picks each one, its name, and how it looks as it grows.
+# Labels: number key, name, how it grows
 SEEDS = {
     "1": ("sunflower", ["🌱", "🌿", "🌻"]),
     "2": ("tulip", ["🌱", "🌿", "🌷"]),

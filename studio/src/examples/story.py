@@ -3,6 +3,7 @@ from purple import *
 # A story where your kid picks what happens. Write your own: add pages, and point the numbers at them.
 
 # The pages: each one's name, its picture, the words Purple reads out, and the page each number leads to.
+# Labels: page, picture, words, numbers
 PAGES = {
     "start": ("🏡", "Mia finds a map under her bed. Press 1 to go to the forest, or 2 to go to the sea.",
               {"1": "forest", "2": "sea"}),

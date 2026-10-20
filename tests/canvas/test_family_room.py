@@ -21,7 +21,7 @@ from purple_tui.canvas.room_picker import FAMILY, RoomPicker
 from purple_tui.canvas import theme
 from purple_tui.canvas.rooms import family_room
 from purple_tui.canvas.rooms.family_room import FamilyRoom
-from purple_tui.canvas.rooms.parent_menu import ICON_UNCHECKED, FamilyRoomsScreen
+from purple_tui.canvas.rooms.rooms_screen import RoomsScreen
 from purple_tui.content import ContentManager
 from purple_tui.keyboard import ControlAction, NavigationAction
 from purple_tui.music_constants import PERCUSSION
@@ -338,7 +338,7 @@ def test_held_keys_go_up_when_something_covers_the_room(pack):
         await until(lambda: not room._busy)
         await app._dispatch_keyboard_action(NavigationAction(direction="left"))
         await until(lambda: texts(room) == ["down"])
-        app.push(FamilyRoomsScreen(app))
+        app.push(RoomsScreen(app))
         await until(lambda: texts(room) == ["down", "up"])
         app.top.close()
         room.close()
@@ -563,42 +563,67 @@ def test_a_changed_room_waits_to_be_turned_on_again(pack):
     run(go())
 
 
+def _family_states(screen) -> list:
+    return [screen._state(item, settings.get_rooms_on()) for row in screen.rows for item in row if item[0] == "family"]
+
+
 def test_parent_menu_turns_rooms_on_and_off(pack):
     pack("snake", SNAKE)
     pack("worm", SNAKE)
 
     async def go():
         app = make_app()
-        screen = FamilyRoomsScreen(app)
+        screen = RoomsScreen(app)
         app.push(screen)
-        assert [o[1:] for o in screen.options] == [(f"{ICON_UNCHECKED} Snake", "Off"), (f"{ICON_UNCHECKED} Worm", "Off"), ("Done",)]
-        app._draw()  # draws an unselected room row too
+        assert screen.labels[2][1] == "F" and [x.name for _, x in screen.rows[2]] == ["snake", "worm"]
+        assert _family_states(screen) == ["off", "off"]
+        app._draw()
+        await press(app, "down")
         await press(app, "enter")
-        assert screen.options[0][2] == "On: in the Esc menu"
+        assert _family_states(screen) == ["on", "off"]
         assert [r.name for r in RoomPicker(app).family] == ["snake"]
         await press(app, "enter")
         assert RoomPicker(app).family == []
     run(go())
 
 
+def test_the_esc_menu_holds_six_family_rooms_and_the_seventh_waits(pack):
+    for n in range(7):
+        pack(f"room{n}", SNAKE)
+    for r in content_mod.get_content().rooms[:6]:
+        settings.set_room_on(r.key, r.digest)
+
+    async def go():
+        app = make_app()
+        screen = RoomsScreen(app)
+        app.push(screen)
+        assert _family_states(screen)[-1] == "full" and "6 of 6" in screen.description
+        screen.row, screen.col = 3, 0
+        await press(app, "enter")
+        assert _family_states(screen)[-1] == "full" and app._toasts
+    run(go())
+
+
 def test_a_long_room_list_scrolls_inside_the_screen(pack):
-    for n in range(15):
+    for n in range(30):
         pack(f"room{n}", SNAKE)
 
     async def go():
         app = make_app(size=(1366, 768))
-        screen = FamilyRoomsScreen(app)
+        screen = RoomsScreen(app)
         app.push(screen)
         app._draw()
         assert 0 <= screen.box.top and screen.box.bottom <= app.g.h
         shown = screen._shown(app.g)
-        assert shown < len(screen.options)
-        await press(app, "up")  # wraps to Done
+        assert shown < len(screen.rows) - 1
+        for _ in range(len(screen.rows)):
+            await press(app, "down")
         app._draw()
-        assert screen._first == len(screen.options) - shown
-        await press(app, "down")
+        assert screen._first == len(screen.rows) - shown
+        for _ in range(len(screen.rows)):
+            await press(app, "up")
         app._draw()
-        assert screen._first == 0
+        assert screen._first == 1
     run(go())
 
 

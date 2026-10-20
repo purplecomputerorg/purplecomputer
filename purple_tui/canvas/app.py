@@ -763,9 +763,9 @@ class PurpleApp:
 
     def _pick_new_rooms(self, packs):
         from ..content import get_content
-        from .rooms.parent_menu import FamilyRoomsScreen
+        from .rooms.rooms_screen import RoomsScreen
         if any(r.pack in packs for r in get_content().rooms):
-            self.push(FamilyRoomsScreen(self, packs))
+            self.push(RoomsScreen(self, packs))
 
     def refresh_packs(self, reread=True):
         """The packs changed under a running Purple: read them again, and redo what was drawn or
@@ -871,8 +871,6 @@ class PurpleApp:
     def _on_parent_menu_dismissed(self, result):
         self.clear_notifications()
         self.key_save.changed()  # settings live on the Key too
-        if isinstance(result, dict) and "littles_mode" in result:
-            self._apply_littles_mode(result["littles_mode"])
 
     def _apply_littles_mode(self, mode):
         self._littles_mode = mode

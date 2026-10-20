@@ -24,6 +24,7 @@ from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_meter, draw_scrim,
                   draw_text_caret, draw_window, field_height, window_title_height)
+from .rooms_screen import RoomsScreen, rooms_label
 from .sleep_screen import FullScreen
 from .. import old_install
 from ..old_install import PAYLOAD_PATH
@@ -219,6 +220,10 @@ class LittlesModeScreen(Picker):
         self.close(value)
 
 
+def littles_name(mode) -> str:
+    return next((o[1] for o in LittlesModeScreen.OPTIONS if o[0] == mode), str(mode).title())
+
+
 class _YesNo(Picker):
     OPTIONS = [(True, "Yes"), (False, "No")]
     escape_value = CANCELLED
@@ -237,80 +242,6 @@ class CodePanelScreen(_YesNo):
     def getter():
         from ...settings import get_code_panel
         return get_code_panel()
-
-
-class RoomsScreen(Picker):
-    """Each built-in room, on or off. The last room on stays on."""
-    title = "Rooms"
-    DESCRIPTION = "Only the rooms you turn on show in the Esc menu."
-
-    def __init__(self, app):
-        super().__init__(app)
-        self.options = self._options()
-
-    def _options(self) -> list:
-        on = self.app.kid_rooms
-        def note(name):
-            return "Off" if name not in on else "On: the last room stays on" if len(on) == 1 else "On"
-        return [(name, r.label, ": ".join(filter(None, (note(name), r.about))))
-                for name, r in self.app.rooms.items()] + [(None, "Done")]
-
-    def _on_confirm(self, name):
-        if name is None:
-            return self.close(True)
-        on = self.app.kid_rooms
-        if on != [name]:
-            self.app.set_room_off(name, name in on)
-            self.options = self._options()
-            self.app.invalidate()
-
-
-def _rooms_label(app) -> str:
-    return f"Rooms: {len(app.kid_rooms)} of {len(app.rooms)} On"
-
-
-ICON_CHECKED = "\U000F0132"    # nf-md-checkbox_marked
-ICON_UNCHECKED = "\U000F0131"  # nf-md-checkbox_blank_outline
-
-
-def _room_state(room, on: dict) -> str:
-    if on.get(room.key) == room.digest:
-        return "on"
-    return "changed" if room.key in on else "off"
-
-
-class FamilyRoomsScreen(Picker):
-    """Each room from a pack, turned on one at a time. A room that changes after it was turned
-    on (a new pack with the same name, say) waits here until it's turned on again. Given packs,
-    it lists only their rooms: the step right after a pack is added."""
-    title = "Family Rooms"
-    DESCRIPTION = "Rooms from Purple Studio. Only the ones you turn on show in the Esc menu."
-    JUST_ADDED = "Pick the rooms to turn on now. You can change this later in the Parent Menu, under Family Rooms."
-    NOTES = {"on": "On: in the Esc menu", "changed": "Changed since you turned it on: off for now", "off": "Off"}
-
-    def __init__(self, app, packs=None):
-        self.packs = packs
-        if packs is not None:
-            self.DESCRIPTION = self.JUST_ADDED
-        super().__init__(app, self._options())
-
-    def _options(self) -> list:
-        from ...content import get_content
-        from ...settings import get_rooms_on
-        on = get_rooms_on()
-        return [self._row(r, _room_state(r, on)) for r in get_content().rooms
-                if self.packs is None or r.pack in self.packs] + [(None, "Done")]
-
-    def _row(self, room, state: str) -> tuple:
-        return room, f"{ICON_CHECKED if state == 'on' else ICON_UNCHECKED} {room.title}", self.NOTES[state]
-
-    def _on_confirm(self, room):
-        if room is None:
-            return self.close(True)
-        from ...settings import get_rooms_on, set_room_on
-        set_room_on(room.key, None if _room_state(room, get_rooms_on()) == "on" else room.digest)
-        self.options = self._options()
-        self.app.invalidate()
 
 
 class PurplePacksScreen(Picker):
@@ -1273,17 +1204,8 @@ def _is_dev_environment() -> bool:
     return bool(os.environ.get("PURPLE_TEST_BATTERY")) or (Path(__file__).parents[3] / ".git").is_dir()
 
 
-def _family_rooms_label() -> str:
-    from ...content import get_content
-    from ...settings import get_rooms_on
-    on = get_rooms_on()
-    rooms = get_content().rooms
-    return f"Family Rooms: {sum(_room_state(r, on) == 'on' for r in rooms)} of {len(rooms)} On"
-
-
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
-    from ...content import get_content
     from ...pack_manager import get_installer
     from ...settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
                             get_music_looping, get_parent_pin, get_secret_unlocked, get_voice, get_volume_lock)
@@ -1293,16 +1215,11 @@ def _get_menu_items(app) -> list:
     else:
         items.append(("menu-rename", "Rename this Computer" if app.computer_name() != DEFAULT_COMPUTER_NAME else "Name this Computer"))
     items.append(("sec-kid", "Activities"))
-    littles = get_littles_mode()
-    names = {"music": "Music", "music_noscreen": "No-Screen Music", "art": "Art"}
-    items.append(("menu-littles", f"Littles Mode: {names.get(littles, littles.title())}" if littles else "Littles Mode: Off"))
-    if not littles:
-        items.append(("menu-rooms", _rooms_label(app)))
+    items.append(("menu-rooms", rooms_label(app)))
+    if not get_littles_mode():
         items.append(("menu-code-panel", "Allow Code Space: Yes" if get_code_panel() else "Allow Code Space: No"))
         items.append(("menu-music-looping", "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"))
         items.append(("menu-music-key-switching", "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"))
-        if get_content().rooms:
-            items.append(("menu-family-rooms", _family_rooms_label()))
     if get_installer().list_installed():
         items.append(("menu-purple-packs", _purple_packs_label()))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
@@ -1418,8 +1335,7 @@ class ParentMenu(Overlay):
         if self._disabled(item_id):
             return
         handler = {
-            "menu-littles": self._open_littles_mode, "menu-code-panel": self._open_code_panel,
-            "menu-rooms": self._open_rooms, "menu-family-rooms": self._open_family_rooms,
+            "menu-code-panel": self._open_code_panel, "menu-rooms": self._open_rooms,
             "menu-purple-packs": lambda: self.app.push(PurplePacksScreen(self.app), on_close=lambda _: self._relabel("menu-purple-packs", _purple_packs_label())),
             "menu-music-looping": self._open_music_looping, "menu-music-key-switching": self._open_music_key_switching,
             "menu-all-caps": self._open_all_caps, "menu-secret": self._open_secret_menu,
@@ -1440,9 +1356,6 @@ class ParentMenu(Overlay):
             handler()
 
     # --- item handlers ---
-    def _open_littles_mode(self):
-        self.app.push(LittlesModeScreen(self.app), on_close=lambda r: r is not CANCELLED and self.close({"littles_mode": r}))
-
     def _open_code_panel(self):
         def apply(v):
             if v is CANCELLED:
@@ -1456,10 +1369,14 @@ class ParentMenu(Overlay):
         self.app.push(CodePanelScreen(self.app), on_close=apply)
 
     def _open_rooms(self):
-        self.app.push(RoomsScreen(self.app), on_close=lambda _: self._relabel("menu-rooms", _rooms_label(self.app)))
+        self.app.push(RoomsScreen(self.app), on_close=lambda _: self._refresh_items())
 
-    def _open_family_rooms(self):
-        self.app.push(FamilyRoomsScreen(self.app), on_close=lambda _: self._relabel("menu-family-rooms", _family_rooms_label()))
+    def _refresh_items(self):
+        """Littles Mode may have changed under the Rooms screen, which hides or shows other rows."""
+        current = self.items[self.selected][0]
+        self.items = _get_menu_items(self.app)
+        self.selected = next(i for i, (iid, _) in enumerate(self.items) if iid == current)
+        self.app.invalidate()
 
     def _open_music_looping(self):
         def apply(v):

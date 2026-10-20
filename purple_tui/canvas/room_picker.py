@@ -36,13 +36,57 @@ def family_rooms() -> list:
     return [r for r in get_content().rooms if on.get(r.key) == r.digest][:MAX_FAMILY_ROOMS]
 
 
-def _short(title: str) -> str:
+def short_title(title: str) -> str:
     return title if len(title) <= FAMILY_LABEL_CHARS else title[:FAMILY_LABEL_CHARS - 1] + "…"
 
 
-def _row_width(n: int, card) -> float:
+def row_width(n: int, card) -> float:
     w, gap = card
     return n * w + max(0, n - 1) * gap
+
+
+def row_centers(n: int, card, inner_w: float) -> list:
+    """Each card's center x in em from the inner left edge, so up and down land on the card nearest above or below."""
+    w, gap = card
+    return [inner_w / 2 + (i - (n - 1) / 2) * (w + gap) for i in range(n)]
+
+
+def nearest(centers: list, x: float) -> int:
+    return min(range(len(centers)), key=lambda c: abs(centers[c] - x))
+
+
+def draw_card(g, r, icon, label, lines=(), selected=False, dim=False, lit=False, badge=""):
+    """Glyph above name, short lines beneath. Selected is filled, lit is outlined and shaded, dim is quiet."""
+    em = g.em
+    if selected:
+        g.rect(P.PRIMARY, r, radius=em(0.6))
+    elif lit:
+        g.rect(P.FIELD, r, radius=em(0.6))
+    if not selected:
+        g.rect(P.LINE if lit else P.HAIR, r, width=1, radius=em(0.6))
+    fg = P.ON_PRIMARY if selected else (P.DIM if dim else P.TEXT)
+    if icon == "colors":
+        dot = color_wheel.disc(round(em(1.75)))
+        g.surface.blit(dot, dot.get_rect(center=(r.centerx, r.y + em(2.0))))
+    else:
+        g.draw_text(icon, em(1.75), r.centerx, r.y + em(2.0), "nerd", fg if (selected or dim) else P.ACCENT, anchor="center")
+    if badge:
+        g.draw_text(badge, em(1.1), r.right - em(1.0), r.y + em(1.0), "nerd", fg if selected else P.ACCENT, anchor="center")
+    g.draw_text(label, em(1.0), r.centerx, r.y + em(4.1), "mono-bold", fg, anchor="center")
+    for i, line in enumerate(lines):
+        g.draw_text(line, em(0.9), r.centerx, r.y + em(5.6 + 1.1 * i), "mono", fg if selected else P.DIM, anchor="center")
+
+
+def draw_section(g, icon, label, x0, x1, cy):
+    """A hairline with a glyph and name in its middle."""
+    em = g.em
+    icon_w = g.measure(icon, em(1.1), "nerd")[0]
+    text_w = g.measure(label, em(0.95), "mono-bold")[0]
+    left = (x0 + x1 - icon_w - em(0.5) - text_w) // 2
+    g.draw_text(icon, em(1.1), left, cy, "nerd", P.ACCENT, anchor="midleft")
+    right = g.draw_text(label, em(0.95), left + icon_w + em(0.5), cy, "mono-bold", P.MUTED, anchor="midleft").right
+    g.rect(P.HAIR, pygame.Rect(x0, cy, left - em(1.0) - x0, 1))
+    g.rect(P.HAIR, pygame.Rect(right + em(1.0), cy, x1 - right - em(1.0), 1))
 
 
 class RoomPicker(Overlay):
@@ -57,19 +101,16 @@ class RoomPicker(Overlay):
         self.family = family_rooms()
         self.rows = [VOLUME, ROWS] + ([FAMILY] if self.family else []) + [HERE]
         self.printer = printing.status()
-        self.inner_w = max(_row_width(len(self.options), ROOM_CARD), _row_width(len(self.family), ROOM_CARD),
-                           _row_width(MAX_TOOLS, TOOL_CARD))
+        self.inner_w = max(row_width(len(self.options), ROOM_CARD), row_width(len(self.family), ROOM_CARD),
+                           row_width(MAX_TOOLS, TOOL_CARD))
 
     def _items(self, row) -> list:
         return {VOLUME: ["volume"], ROWS: self.options, FAMILY: self.family, HERE: self.tools}[row]
 
     def _centers(self, row) -> list:
-        """Each card's center x in em from the inner left edge, so up and down land on the card nearest above or below."""
         if row == VOLUME:
             return [self.inner_w - PILL_W / 2]
-        n = len(self._items(row))
-        w, gap = TOOL_CARD if row == HERE else ROOM_CARD
-        return [self.inner_w / 2 + (i - (n - 1) / 2) * (w + gap) for i in range(n)]
+        return row_centers(len(self._items(row)), TOOL_CARD if row == HERE else ROOM_CARD, self.inner_w)
 
     def _disabled_volume(self):
         """Icon + label for the Volume pill when the keys are dead: Silent Mode or no audio."""
@@ -115,8 +156,7 @@ class RoomPicker(Overlay):
             x = self._centers(self.row)[self.col]
             i = self.rows.index(self.row) + (1 if d == "down" else -1)
             self.row = self.rows[max(0, min(len(self.rows) - 1, i))]
-            centers = self._centers(self.row)
-            self.col = min(range(len(centers)), key=lambda c: abs(centers[c] - x))
+            self.col = nearest(self._centers(self.row), x)
         self.app.invalidate()
 
     def _activate(self):
@@ -181,12 +221,12 @@ class RoomPicker(Overlay):
             if row == ROWS:
                 cells = [(r.icon, r.label, str(i + 1), False) for i, r in enumerate(self.options)]
             else:
-                cells = [(ICON_FAMILY, _short(r.title), "", False) for r in self.family]
+                cells = [(ICON_FAMILY, short_title(r.title), "", False) for r in self.family]
             self._card_row(g, row, cells, box.x + pad, y, ROOM_CARD)
             y += card_h + em(ROOM_CARD[1])
         y += em(1.6) - em(ROOM_CARD[1])
         here = self.app.rooms[self.app.active_room]
-        self._section(g, here.icon, f"In {here.label}", box.x + pad, box.right - pad, y + section_h // 2)
+        draw_section(g, here.icon, f"In {here.label}", box.x + pad, box.right - pad, y + section_h // 2)
         y += section_h + em(1.0)
         self._card_row(g, HERE, [self._tool(t) for t in self.tools], box.x + pad, y, TOOL_CARD)
         self._draw_footer(g, box.centerx, box.bottom - pad - arrows_h // 4)
@@ -205,33 +245,9 @@ class RoomPicker(Overlay):
             self._cell(g, r, *cell, (self.row, self.col) == (row, col))
 
     def _cell(self, g, r, icon, label, key, disabled, on):
-        """Glyph above name, the key beneath, "or Enter" on the picked one."""
-        em = g.em
-        self._card(g, r, on)
-        fg = P.ON_PRIMARY if on else (P.DIM if disabled else P.TEXT)
-        if icon == "colors":
-            dot = color_wheel.disc(round(em(1.75)))
-            g.surface.blit(dot, dot.get_rect(center=(r.centerx, r.y + em(2.0))))
-        else:
-            g.draw_text(icon, em(1.75), r.centerx, r.y + em(2.0), "nerd", fg if (on or disabled) else P.ACCENT, anchor="center")
-        g.draw_text(label, em(1.0), r.centerx, r.y + em(4.1), "mono-bold", fg, anchor="center")
-        if key:
-            g.draw_text(f"Press {key}", em(0.9), r.centerx, r.y + em(5.6), "mono", fg if on else P.DIM, anchor="center")
-        if key and on:
-            g.draw_text("or Enter", em(0.9), r.centerx, r.y + em(6.7), "mono", fg, anchor="center")
-        elif on and not disabled and not key:
-            g.draw_text("Press Enter", em(0.9), r.centerx, r.y + em(5.6), "mono", fg, anchor="center")
-
-    def _section(self, g, icon, label, x0, x1, cy):
-        """A hairline with the room's glyph and name in its middle."""
-        em = g.em
-        icon_w = g.measure(icon, em(1.1), "nerd")[0]
-        text_w = g.measure(label, em(0.95), "mono-bold")[0]
-        left = (x0 + x1 - icon_w - em(0.5) - text_w) // 2
-        g.draw_text(icon, em(1.1), left, cy, "nerd", P.ACCENT, anchor="midleft")
-        right = g.draw_text(label, em(0.95), left + icon_w + em(0.5), cy, "mono-bold", P.MUTED, anchor="midleft").right
-        g.rect(P.HAIR, pygame.Rect(x0, cy, left - em(1.0) - x0, 1))
-        g.rect(P.HAIR, pygame.Rect(right + em(1.0), cy, x1 - right - em(1.0), 1))
+        """The key beneath the name, "or Enter" on the picked one."""
+        enter = ("or Enter" if key else "" if disabled else "Press Enter") if on else ""
+        draw_card(g, r, icon, label, [t for t in (key and f"Press {key}", enter) if t], on, disabled)
 
     def _tool(self, tool):
         """Icon, label, key, disabled for one of this room's tools."""
@@ -285,12 +301,6 @@ class RoomPicker(Overlay):
         x = cx - (label_w + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
         x = g.draw_text(label, px, x, y, "mono", P.MUTED, anchor="midleft").right + g.em(0.9)
         draw_arrow_keys(g, px, x, y, color=P.ACCENT)
-
-    def _card(self, g, r, on):
-        if on:
-            g.rect(P.PRIMARY, r, radius=g.em(0.6))
-        else:
-            g.rect(P.HAIR, r, width=1, radius=g.em(0.6))
 
 
 class VolumeModal(Dialog):

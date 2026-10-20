@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL
+from .constants import SUPPORT_EMAIL, CHORD_HOLD_THRESHOLD
 
 
 # ============================================================================
@@ -883,7 +883,10 @@ class KeyboardStateMachine:
         if char:
             # Apply shift/caps
             final_char = self._apply_shift(char)
-            chord_with = self._held_char if not is_repeat and keycode != self._held_char_keycode else None
+            held_since = self._pressed.get(self._held_char_keycode)
+            chord_with = self._held_char if (
+                not is_repeat and keycode != self._held_char_keycode and held_since is not None
+                and timestamp - held_since >= CHORD_HOLD_THRESHOLD) else None
             # Track held character (so NavigationAction can carry it)
             if not is_repeat:
                 self._held_char = final_char

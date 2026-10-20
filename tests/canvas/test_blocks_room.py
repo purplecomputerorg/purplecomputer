@@ -14,6 +14,7 @@ import time
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, SINK, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
+from purple_tui.constants import CHORD_HOLD_THRESHOLD
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import ControlAction, KeyboardStateMachine, NavigationAction
 from purple_tui.palette import get_key_color
@@ -293,13 +294,22 @@ def test_holding_a_chord_keeps_building_the_mix():
 
 def test_keyboard_reports_the_still_held_letter_and_shift():
     sm = KeyboardStateMachine()
-    down = lambda code: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=time.monotonic()))
+    down = lambda code, t=0.0: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=t))
     assert down(KeyCode.KEY_B)[0].char_held is None
-    assert down(KeyCode.KEY_Y)[0].char_held == "b"
+    assert down(KeyCode.KEY_Y, CHORD_HOLD_THRESHOLD)[0].char_held == "b"
     down(KeyCode.KEY_LEFTSHIFT)
     assert down(KeyCode.KEY_UP)[0].shift_held
     down(KeyCode.KEY_SPACE)
     assert down(KeyCode.KEY_ENTER)[0].space_held
+
+
+def test_a_quick_overlap_is_mashing_not_a_chord():
+    sm = KeyboardStateMachine()
+    down = lambda code, t: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=t))
+    down(KeyCode.KEY_B, 0.0)
+    assert down(KeyCode.KEY_Y, CHORD_HOLD_THRESHOLD / 2)[0].char_held is None
+    assert down(KeyCode.KEY_R, CHORD_HOLD_THRESHOLD)[0].char_held is None
+    assert down(KeyCode.KEY_UP, CHORD_HOLD_THRESHOLD)[0].char_held == "r"
 
 
 def test_holding_a_letter_or_space_while_arrowing_lays_a_line():

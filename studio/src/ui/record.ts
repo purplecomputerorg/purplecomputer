@@ -14,23 +14,28 @@ async function finish(blob: Blob, onClip: (clip: Clip) => void, say: (text: stri
   }
 }
 
-// A Record button that turns into Stop while it listens. small: a round button that fits in a form's row.
+const MIC = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+
+// A Record button that turns into Stop while it listens. small: a round microphone button that fits in a form's row.
 export function recordButton(onClip: (clip: Clip) => void, say: (text: string) => void, small = false): HTMLButtonElement {
   const recorder = new Recorder();
-  const [label, stop] = small ? ["●", "■"] : ["● Record", "■ Stop"];
-  const button = h("button", { class: small ? "rec-mini" : "btn record", title: "Record a sound", "aria-label": "Record a sound" }, label);
+  const button = h("button", { class: small ? "rec-mini" : "btn record", title: "Record a sound", "aria-label": "Record a sound" });
+  const show = (on: boolean) => {
+    if (small) button.innerHTML = on ? "■" : MIC;
+    else button.textContent = on ? "■ Stop" : "● Record";
+    button.classList.toggle("recording", on);
+  };
+  show(false);
   button.onclick = async () => {
     if (recorder.active) {
-      button.textContent = label;
-      button.classList.remove("recording");
+      show(false);
       await finish(await recorder.stop(), onClip, say);
       return;
     }
     try {
       await recorder.start();
-      button.textContent = stop;
-      button.classList.add("recording");
-      say("Recording. Press Stop when you're done.");
+      show(true);
+      say("Recording. Press the button again when you're done.");
     } catch {
       say("The microphone is not available. You can choose a file instead.");
     }

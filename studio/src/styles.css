@@ -327,15 +327,15 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 /* A narrow card puts a key's sound on a second line, under its word */
 .sheet input[type="text"] { width: 100%; min-width: 0; }
 .sound-in { display: flex; align-items: center; gap: 6px; }
-.sound-in select { width: 6.5em; text-overflow: ellipsis; }
+.sound-in select { width: 7em; text-overflow: ellipsis; }
 .q-block { position: relative; display: grid; gap: 12px; padding: 14px 40px 14px 14px; margin-bottom: 12px; border-radius: 12px; background: var(--bg); }
 .q-block > .x { position: absolute; top: 10px; right: 8px; }
 .q-ask { display: flex; gap: 10px; align-items: center; }
 .q-ask input { flex: 1; font-weight: 600; }
 .tag.right { color: var(--purple); background: var(--fill); justify-self: start; }
 .sheet .tag { justify-self: start; color: var(--dim); }
-.rec-mini { width: 30px; height: 30px; flex-shrink: 0; padding: 0; border-radius: 50%; border: 1.5px solid var(--line); background: #fff; color: var(--danger); font-size: 13px; line-height: 1; cursor: pointer; }
-.rec-mini:hover { border-color: var(--border); background: var(--fill); }
+.rec-mini { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; padding: 0; border-radius: 50%; border: 1.5px solid var(--border); background: var(--fill); color: var(--purple); font-size: 13px; line-height: 1; cursor: pointer; }
+.rec-mini:hover { background: #fff; border-color: var(--purple); }
 .rec-mini.recording { background: var(--danger); border-color: var(--danger); color: #fff; }
 .clear-pick { display: block; margin-top: 8px; }
 /* A room's settings: one card, each knob a section; a single value sits on its title's line */

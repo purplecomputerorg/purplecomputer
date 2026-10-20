@@ -1,5 +1,6 @@
 // The forms behind the picture keyboard and picture quiz. Each edit changes the form data in place
 // and calls onEdit; the room's Python is regenerated from the data, never edited here.
+import { roomTitle } from "@sdk/pack";
 import { parseNote } from "@sdk/purple/sounds";
 import { encodeWav } from "../audio";
 import type { RoomFileKind } from "@sdk/pack";
@@ -9,7 +10,7 @@ import { addRowButton, h, removeButton } from "./dom";
 import { emojiCell } from "./emojipicker";
 import { recordButton } from "./record";
 import { addRoomData } from "./roomfiles";
-import { select, textIn } from "./rulesform";
+import { textIn } from "./rulesform";
 
 const mine = (kind: RoomFileKind) => draft.roomFiles.filter((f) => f.kind === kind).map((f) => f.name);
 const checked = (el: HTMLInputElement, check: (v: string) => boolean) => {
@@ -31,8 +32,12 @@ const NOTES = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5"];
 // A note, or one of the pack's sounds: picked from one short list, or recorded right here.
 function soundIn(o: Sound, c: Ctx, nameFor: () => string): HTMLElement {
   const notes = NOTES.includes(o.note) || !parseNote(o.note) ? NOTES : [o.note, ...NOTES];
-  const pick = select([["", "No sound"], ...[...notes, ...mine("sounds")].map((n): [string, string] => [n, n])], o.note,
-    (v) => { o.note = v; c.onEdit(); });
+  const opts = (names: string[], label: (n: string) => string) => names.map((n) => h("option", { value: n }, label(n)));
+  const pick = h("select", { class: "inline", onchange: () => { o.note = pick.value; c.onEdit(); } },
+    h("option", { value: "" }, "No sound"),
+    h("optgroup", { label: "Notes" }, ...opts(notes, (n) => `♪ ${n}`)),
+    mine("sounds").length ? h("optgroup", { label: "Your sounds" }, ...opts(mine("sounds"), (n) => `🎤 ${roomTitle(n)}`)) : null);
+  pick.value = o.note;
   const record = recordButton((clip) => {
     o.note = addRoomData("sounds", nameFor(), encodeWav(clip)).name;
     c.rerender();

@@ -688,7 +688,7 @@ def _dot(colors: tuple, d: int) -> pygame.Surface:
 
 
 HOLD = "hold "
-SHIFTED = dict(zip("\\[];',./-=`", "|{}:\"<>?_+~"))
+SHIFTED = dict(zip("[];',./-=`", "{}:\"<>?_+~"))
 
 
 def keycap_size(g: Gfx, text: str, px: int) -> tuple:

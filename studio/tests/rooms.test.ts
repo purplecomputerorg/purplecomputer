@@ -55,6 +55,23 @@ describe("family rooms in Studio's Python", () => {
     expect(replies.at(-1)).toMatchObject({ error: { text: expect.stringContaining(END) } });
   }, 60_000);
 
+  it("runs the memory example: a card on each letter key, turned over by pressing it", async () => {
+    const replies = await runRoom(example("memory"), [{ ev: "key", key: "q" }, { ev: "key", key: "m" }, { ev: "key", key: "w" }]);
+    expect(texts(replies[0])).toEqual([..."QWERTYUIOPASDFGHJK", "🔴 Red's turn"]);
+    const [q] = texts(replies[1]);
+    expect(q).toMatch(/\p{Extended_Pictographic}/u);
+    expect(replies[2]).not.toHaveProperty("scene");
+    expect(texts(replies[3]).slice(0, 2)).not.toContain("W");
+  }, 60_000);
+
+  it("runs the beat maker: a beat on each key, its drum's picture when on, Space to play", async () => {
+    const replies = await runRoom(example("beats"), [{ ev: "key", key: "q" }, { ev: "key", key: "space" }]);
+    expect(texts(replies[0]).slice(4, 6)).toEqual(["1", "2"]);
+    expect(texts(replies[1])).toContain("🐸");
+    expect(texts(replies[1])).not.toContain("Q");
+    expect(replies[2].wake).not.toBeNull();
+  }, 60_000);
+
   it("runs the trivia example: asks, takes a typed answer, and plays a note for a right one", async () => {
     const replies = await runRoom(triviaSource(TEMPLATES.trivia.defaults()), [...typed("Brachiosaurus "), enter]);
     expect(texts(replies[0])).toEqual(["🦕", "Which dinosaur had a very long neck?", "Your answer", "Answer → _"]);

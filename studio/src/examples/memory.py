@@ -2,46 +2,42 @@ import random
 
 from purple import *
 
-# Memory for two players taking turns. Arrows pick a card, Space turns it over. Find a pair and
-# you go again.
+# Memory for two players taking turns. The cards sit where their keys are on the keyboard: press a
+# card's letter to turn it over. Find a pair and you go again.
 
-# The pictures on the cards, two of each: your family's favorite things.
+# The pictures on the cards, two of each: your family's favorite things. Up to 13 fit.
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
 # The two players: each one's mark and name.
-PLAYERS = [("🔴", "Red"), ("🔵", "Blue")]
-# The back of a card.
-BACK = "🟪"
+PLAYERS = (("🔴", "Red"), ("🔵", "Blue"))
 
-spots = [(3 + c * 3, 2 + r * 3) for r in range(3) for c in range(6)][:len(CARDS) * 2]
-faces = CARDS * 2
-random.shuffle(faces)
+KEYS = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
+spots = {key: (2 + x * 2 + r, 2 + r * 3) for r, row in enumerate(KEYS) for x, key in enumerate(row)}
+cards = CARDS[:13] * 2
+random.shuffle(cards)
+faces = dict(zip(spots, cards))
 shown = set()      # cards matched for good
 up = []            # the one or two cards turned over this turn
-pick, turn = 0, 0
+game = state(turn=0)
 
 
 def draw():
-    for i, spot in enumerate(spots):
-        grid.set(spot, faces[i] if i in shown or i in up else BACK, size=2)
-    grid.cursor(spots[pick])
-    mark, name = PLAYERS[turn]
+    for key, face in faces.items():
+        face_up = key in shown or key in up
+        grid.floor.set(spots[key], "primary" if face_up else "tile", size=2)
+        grid.set(spots[key], face if face_up else key.upper(), size=2)
+    mark, name = PLAYERS[game.turn]
     status(f"{mark} {name}'s turn")
 
 
 def turn_back():
-    global turn
     up.clear()
-    turn = 1 - turn
+    game.turn = 1 - game.turn
     draw()
 
 
 def on_key(key):
-    global pick
-    if key in ("left", "right", "up", "down") and len(up) < 2:
-        step = {"left": -1, "right": 1, "up": -6, "down": 6}[key]
-        pick = (pick + step) % len(spots)
-    elif key in ("space", "enter") and len(up) < 2 and pick not in shown and pick not in up:
-        up.append(pick)
+    if key in faces and len(up) < 2 and key not in shown and key not in up:
+        up.append(key)
         play("E5")
         if len(up) == 2 and faces[up[0]] == faces[up[1]]:
             shown.update(up)
@@ -50,7 +46,7 @@ def on_key(key):
         elif len(up) == 2:
             after(1.5, turn_back)
     draw()
-    if len(shown) == len(spots):
+    if len(shown) == len(faces):
         play("C5")
         game_over("All the pairs! Press a key to play again.")
 

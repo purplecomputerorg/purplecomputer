@@ -2,16 +2,18 @@ import random
 
 from purple import *
 
-# Memory for two players taking turns. The cards sit where their keys are on the keyboard: press a
+# Memory for two players taking turns, laid out like the Music room: each card is a letter key. Press a
 # card's letter to turn it over. Find a pair and you go again.
 
 # The pictures on the cards, two of each: your family's favorite things. Up to 13 fit.
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
 # The two players: each one's mark and name.
+# Labels: mark, name
 PLAYERS = (("🔴", "Red"), ("🔵", "Blue"))
 
-KEYS = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
-spots = {key: (2 + x * 2 + r, 2 + r * 3) for r, row in enumerate(KEYS) for x, key in enumerate(row)}
+# Each row of keys and its color, the same as the Music room's.
+rows = (("qwertyuiop", "#e44444"), ("asdfghjkl", "#e2c63a"), ("zxcvbnm", "#2e6ae1"))
+spots = {key: (2 + x * 2, 4 + r * 2, color) for r, (keys, color) in enumerate(rows) for x, key in enumerate(keys)}
 cards = CARDS[:13] * 2
 random.shuffle(cards)
 faces = dict(zip(spots, cards))
@@ -22,9 +24,13 @@ game = state(turn=0)
 
 def draw():
     for key, face in faces.items():
-        face_up = key in shown or key in up
-        grid.floor.set(spots[key], "primary" if face_up else "tile", size=2)
-        grid.set(spots[key], face if face_up else key.upper(), size=2)
+        x, y, color = spots[key]
+        if key in shown or key in up:
+            grid.floor.set(x, y, color, size=2)
+            grid.set(x, y, face, size=2)
+        else:
+            grid.floor.erase(x, y)
+            grid.set(x, y, key.upper(), size=2)
     mark, name = PLAYERS[game.turn]
     status(f"{mark} {name}'s turn")
 

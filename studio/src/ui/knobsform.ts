@@ -3,7 +3,7 @@
 import { roomTitle } from "@sdk/pack";
 import type { Knob, Lit } from "../knobs";
 import { field, h } from "./dom";
-import { isEmoji } from "./emojipicker";
+import { emojiCell, isEmoji } from "./emojipicker";
 import { select, textIn } from "./rulesform";
 
 type Dict = Extract<Lit, { t: "dict" }>;
@@ -31,8 +31,8 @@ function text(v: Str, onEdit: () => void): HTMLElement {
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
     return el;
   }
-  const emoji = isEmoji(v.v);
-  return textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: emoji ? 2 : fit(v.v), class: `inline${emoji ? " emoji-in" : v.v.length > 12 ? " mono-in" : ""}` });
+  if (isEmoji(v.v)) return h("span", { class: "emoji-wrap" }, emojiCell(v.v, () => "", (e) => { v.v = e; onEdit(); }));
+  return textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: fit(v.v), class: `inline${v.v.length > 12 ? " mono-in" : ""}` });
 }
 
 function scalar(v: Lit, onEdit: () => void): HTMLElement {
@@ -66,6 +66,9 @@ function focusIfFresh(v: Lit, el: HTMLElement): HTMLElement {
   if (v !== fresh) return el;
   fresh = null;
   queueMicrotask(() => {
+    // A new emoji opens the picker straight away, since its copy is never what the family wants.
+    const cell = el.querySelector<HTMLButtonElement>(".emoji-cell");
+    if (cell) return cell.click();
     const input = (el.matches("input, textarea") ? el : el.querySelector("input, textarea")) as HTMLInputElement | null;
     input?.focus();
     if (input?.type === "text" || input?.type === "textarea") input.select();

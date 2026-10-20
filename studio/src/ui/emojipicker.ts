@@ -82,3 +82,14 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
   };
   document.addEventListener("mousedown", outside);
 }
+
+// A button showing an emoji that opens the picker, searching for query(). Wrap it in .emoji-wrap.
+export function emojiCell(value: string, query: () => string, onPick: (emoji: string) => void): HTMLButtonElement {
+  const cell = h("button", { type: "button", class: `emoji-cell${value ? "" : " empty"}`, "aria-label": "Pick an emoji" }, value || "Pick");
+  cell.onclick = () => openEmojiPicker(cell, query(), (e) => {
+    cell.textContent = e;
+    cell.classList.remove("empty");
+    onPick(e);
+  });
+  return cell;
+}

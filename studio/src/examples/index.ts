@@ -49,7 +49,6 @@ QUESTIONS = [
 ${questions.join("\n")}
 ]
 
-SIDE = 3
 asked = 0
 choices = []
 spots = []
@@ -88,7 +87,7 @@ def ask_next():
     for i, (thing, word) in enumerate(choices):
         x = left + 6 * i
         grid.set(x + 1, 8, str(i + 1))
-        spots.append((place(x, 5, thing or word, SIDE), (x + 1, 8)))
+        spots.append((place(x, 5, thing or word, 3), (x + 1, 8)))
     write(question)
     say(question)
 

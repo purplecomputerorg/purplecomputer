@@ -19,12 +19,18 @@ MAP = [
 ]
 # What each letter in the world is: an emoji, or a color.
 THINGS = {"T": "🌳", "~": "#3b82c4", "*": "⭐", "F": "🦊", "D": "🚪"}
-# The letters the hero can't walk through. The door opens once every star is found.
-WALLS = "T~D"
 # The grass's two colors.
 GROUND = ("#4f9d4a", "#57a852")
-# The hero, a tiny picture: each letter is a color from HERO_COLORS, and . is see-through.
-HERO_ROWS = [
+# The hero's colors: H hair, S skin, K eyes and shoes, B shirt.
+HERO_COLORS = {"H": "#6b3e1e", "S": "#f2c49b", "K": "#222222", "B": "#e0457b"}
+# What someone in the world says when the hero bumps into them.
+TALK = {"F": "🦊 Hello! Find all the stars and the door will open."}
+
+# The letters the hero can't walk through. The door opens once every star is found.
+walls = "T~D"
+# The hero, a tiny picture: each letter is a color from HERO_COLORS, and . is see-through. Or
+# picture("name") for a photo you added on the Rooms page.
+hero = pixels([
     "..HHHH..",
     ".HSSSSH.",
     "..SKSK..",
@@ -33,14 +39,7 @@ HERO_ROWS = [
     "S.BBBB.S",
     "..B..B..",
     "..K..K..",
-]
-# The hero's colors.
-HERO_COLORS = {"H": "#6b3e1e", "S": "#f2c49b", "K": "#222222", "B": "#e0457b"}
-# What someone in the world says when the hero bumps into them.
-TALK = {"F": "🦊 Hello! Find all the stars and the door will open."}
-
-# Or picture("name") for a photo you added on the Rooms page.
-hero = pixels(HERO_ROWS, HERO_COLORS)
+], HERO_COLORS)
 moves = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 stars = sum(row.count("*") for row in MAP)
 start = next((c, r) for r, row in enumerate(MAP) for c, ch in enumerate(row) if ch == "Y")
@@ -66,7 +65,7 @@ def step(dx, dy):
     if here in TALK:
         play("E5")
         return status(TALK[here])
-    if here in WALLS and not (here == "D" and game.found == stars):
+    if here in walls and not (here == "D" and game.found == stars):
         return drum("woodblock")
     grid.erase(game.x, game.y)
     game.x, game.y = nx, ny

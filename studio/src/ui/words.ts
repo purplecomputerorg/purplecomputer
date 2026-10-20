@@ -2,7 +2,7 @@ import { CORE_EMOJI } from "@sdk/purple/core";
 import { changed, draft, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
 import { h } from "./dom";
-import { closeEmojiPicker, openEmojiPicker } from "./emojipicker";
+import { closeEmojiPicker, emojiCell } from "./emojipicker";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -23,7 +23,13 @@ function wordTable(): HTMLElement {
   function row(entry: WordEntry | null): HTMLElement {
     const pending = { emoji: entry?.emoji ?? "" };
     const word = h("input", { type: "text", value: entry?.word ?? "", placeholder: entry ? "" : "Type a word, like biscuit", "aria-label": "Word", autocomplete: "off", spellcheck: false });
-    const emoji = h("button", { type: "button", class: `emoji-cell${pending.emoji ? "" : " empty"}`, "aria-label": "Pick an emoji" }, pending.emoji || "Pick");
+    const emoji = emojiCell(pending.emoji, () => clean(word.value), (e) => {
+      pending.emoji = e;
+      if (entry) { entry.emoji = e; changed(); showWas(); rows.querySelector<HTMLInputElement>(".blank input")?.focus(); }
+      else if (word.value.trim()) commit();
+      else word.focus();
+    });
+    const pick = () => emoji.click();
     const was = h("span", { class: "dim small was" });
     const showWas = () => {
       const core = CORE_EMOJI[clean(word.value)];
@@ -41,15 +47,6 @@ function wordTable(): HTMLElement {
       render();
       return true;
     };
-    const pick = () => openEmojiPicker(emoji, clean(word.value), (e) => {
-      pending.emoji = e;
-      emoji.textContent = e;
-      emoji.classList.remove("empty");
-      if (entry) { entry.emoji = e; changed(); showWas(); rows.querySelector<HTMLInputElement>(".blank input")?.focus(); }
-      else if (word.value.trim()) commit();
-      else word.focus();
-    });
-    emoji.onclick = pick;
     word.addEventListener("input", showWas);
     word.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;

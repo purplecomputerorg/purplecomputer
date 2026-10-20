@@ -33,6 +33,10 @@ The top of the file runs once when your kid comes in. After that, Purple calls:
 
 Esc always belongs to Purple: it leaves the room, and your room never sees it.
 
+### Settings a family can change
+
+ALL_CAPS names at the very top of the file, each set to plain words, numbers, colors, lists, or dicts, show up in Studio as a form, with a comment line above each saying what it is. Keep them to what's fun to change: the pictures, words, colors, sounds, and speed. Name everything else in lowercase, below them, so the form stays short. A `# Labels: page, picture, words` line above a setting names the parts of each entry.
+
 ## What a room can call
 
 | Call | What happens |

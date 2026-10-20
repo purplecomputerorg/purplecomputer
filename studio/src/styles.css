@@ -318,8 +318,9 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .rule > .linkbtn { justify-self: start; padding-left: 22px; }
 .rule input.bad, .form-row input.bad { border-color: #d77; }
 .push { margin-left: auto; }
-.knob .card-head { margin-bottom: 12px; }
-.knob code { font-size: 11px; }
+.knob-head { margin-bottom: 14px; }
+.knob-head h2 { font-size: 17px; }
+.knob-head p { margin: 4px 0 0; }
 /* Rows share one grid, so their inputs and ✕s line up down the list */
 .knob-rows { display: grid; grid-template-columns: repeat(var(--cols), max-content); gap: 8px; align-items: center; }
 .knob-rows > .form-row, .knob-rows > .form-row > .knob-inline { display: contents; }
@@ -332,7 +333,8 @@ input.mono-in { font-family: var(--mono); font-size: 13px; }
 .knob .field { margin: 0; }
 .knob .field > span { margin-bottom: 3px; }
 .knob-inline > .knob-item { display: inline-flex; align-items: center; gap: 4px; }
-.knob-rows > .knob-entry { grid-column: 1 / -1; }
+/* Entries hold wrapping words, so they take the card's width instead of sizing the grid to their text */
+.knob-rows:has(> .knob-entry) { grid-template-columns: minmax(0, 1fr); }
 .x { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--dim); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 .x:hover { background: var(--fill); color: var(--purple-dark); }
 .tile { position: relative; }
@@ -342,10 +344,10 @@ input.mono-in { font-family: var(--mono); font-size: 13px; }
   .knob-item:hover > .x, .knob-item:focus-within > .x { opacity: 1; }
 }
 input.key-in { text-align: center; padding-inline: 8px; }
-textarea.words-in { field-sizing: content; resize: vertical; line-height: 1.45; }
-.knob-entry { display: grid; gap: 10px; padding: 14px 16px; border: 1.5px solid var(--line); border-radius: 14px; }
-.entry-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; }
-.entry-fields { display: flex; flex-wrap: wrap; align-items: start; gap: 10px 16px; }
+textarea.words-in { field-sizing: content; width: 100%; min-width: 0; resize: vertical; line-height: 1.45; }
+.knob-entry { position: relative; padding: 14px 16px; border: 1.5px solid var(--line); border-radius: 14px; }
+.knob-entry > .x { position: absolute; top: 8px; right: 8px; }
+.entry-fields { display: flex; flex-wrap: wrap; align-items: start; gap: 12px 16px; }
 .entry-fields > :has(textarea) { flex-basis: 100%; }
 .add-slot { min-width: 3.2em; min-height: 42px; align-self: stretch; border: 1.5px dashed var(--border); border-radius: 12px; background: none; color: var(--purple); font: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
 .add-slot:hover { background: var(--fill); border-style: solid; }

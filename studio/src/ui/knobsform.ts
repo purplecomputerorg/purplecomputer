@@ -159,9 +159,7 @@ function dict(d: Dict, ctx: Ctx, peers: Lit[], labels: string[]): HTMLElement {
     ? x.items.map((y, j) => labelled(labels[j + 1], editor(y, ctx, values.map((p) => (p.t === "tuple" ? p.items[j] : p)).filter(Boolean))))
     : [labelled(labels[1], value(x))];
   const entry = ([k, x]: [Lit, Lit], i: number) => d.entries.some(([, y]) => nested(y))
-    ? h("div", { class: "knob-entry" },
-      h("div", { class: "entry-head" }, key(k), remove(ctx, drop(i), "✕ remove")),
-      h("div", { class: "entry-fields" }, ...fields(x)))
+    ? h("div", { class: "knob-entry knob-item" }, remove(ctx, drop(i)), h("div", { class: "entry-fields" }, key(k), ...fields(x)))
     : row(key(k), h("span", { class: "dim" }, "→"), labelled(labels[1], value(x)), remove(ctx, drop(i)));
   return rows(d.entries.map(entry), template ? addSlot(ctx, add) : null);
 }
@@ -184,7 +182,7 @@ export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
   return h("div", {}, h("p", { class: "dim small" }, "The settings at the top of this room's Python. Change them here, and the Python changes to match."),
     ...knobs.map((k) => {
       const card = h("div", { class: "card knob" });
-      const head = () => h("div", { class: "card-head" }, h("h2", {}, k.about || roomTitle(k.name.toLowerCase().replace(/_/g, "-"))), h("code", {}, k.name));
+      const head = () => h("div", { class: "knob-head" }, h("h2", {}, roomTitle(k.name.toLowerCase().replace(/_/g, "-"))), k.about && h("p", { class: "dim small" }, k.about));
       if (isMap(k.value)) {
         const map = k.value as { items: Lit[] };
         const legend = legendFor(map, knobs.map((o) => o.value));

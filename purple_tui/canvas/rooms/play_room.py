@@ -405,7 +405,7 @@ class PlayRoom(Room):
                 f.insert_operator(action.char)
             else:
                 f.insert(action.char)
-            self.app.set_legend(get_key_color(action.char))
+            self.app.set_legend(get_key_color(action.char), fade=True)
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g, rect):

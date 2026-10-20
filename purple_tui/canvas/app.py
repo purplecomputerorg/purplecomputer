@@ -59,6 +59,7 @@ STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the 
 TIMELINE_DEBOUNCE_S = 3.0
 LEGEND_KEY_VH = 1.3           # key size on the sticker keyboard in the bottom-left corner
 LEGEND_POP_VH = 1.67          # letter size on the last key pressed, which pops out to fit it
+LEGEND_POP_S = 2.0            # a popped key that isn't the loaded color drops back after this
 LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 1), (ZXCV_ROW, 1.5))   # even half-key stagger
 TIMELINE_MAX_WAIT_S = 15.0
 JUMP_TAG = "jump"             # tags a step that replaced the room in one go (clear, open, a Time Travel landing)
@@ -181,7 +182,7 @@ class PurpleApp:
         theme.apply(theme.find())
         self.rooms = {c.name: c(self) for c in ROOM_CLASSES}
         self._panel = None          # bottom panel drawn inside the viewport: code / loop / time
-        self._legend_key = None
+        self._legend_key = self._legend_fade = None
         self._legend_visible = True
         self._computer_name = None
         self._frame_note = None
@@ -437,8 +438,7 @@ class PurpleApp:
                 self.room.open_code_panel()
             else:
                 self._code_panel_active = False
-        self._legend_key = None
-        self._legend_visible = self.room.shows_legend
+        self.set_legend(None, self.room.shows_legend)
         self._update_shift_indicator()
         self.invalidate()
 
@@ -448,9 +448,16 @@ class PurpleApp:
         self._code_panel_active = panel is not None and getattr(panel, "kind", "") == "code"
         self.invalidate()
 
-    def set_legend(self, color: str | None, visible: bool = True):
+    def set_legend(self, color: str | None, visible: bool = True, fade: bool = False):
+        if self._legend_fade:
+            self._legend_fade.stop()
         self._legend_visible = visible
         self._legend_key = _key_for_color(color)
+        self._legend_fade = self.timers.after(LEGEND_POP_S, self._unpop_legend) if fade and self._legend_key else None
+        self.invalidate()
+
+    def _unpop_legend(self):
+        self._legend_key = self._legend_fade = None
         self.invalidate()
 
     def _silence_music(self):

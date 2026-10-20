@@ -380,7 +380,7 @@ class MusicRoom(Room):
         self.next_color(key)
         self._play_key(key, mode, instrument)
         if self.app.active_room == self.name:
-            self.app.set_legend(KEY_COLORS.get(key.lower()))
+            self.app.set_legend(KEY_COLORS.get(key.lower()), fade=True)
         if mode == MODE_MUSIC:
             self.flash_note(key)
         if self._is_noscreen:

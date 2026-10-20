@@ -18,7 +18,8 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo, SpaceHold
-from ..ui import AUTO, MOVE_HINT, auto_ink, draw_key_hint, hint_row_h, draw_label, draw_mode_switch
+from ..ui import (AUTO, MOVE_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
+                  status_row_h, status_row_px, swatch_dot)
 from .base import Room
 
 COLS, ROWS = ART_COLS, ART_ROWS
@@ -718,7 +719,11 @@ class ArtRoom(Room):
         pad, gap = g.em(0.7), g.em(0.5)
         inner = rect.inflate(-2 * pad, -2 * pad)
         chrome_h = 0 if self.app._panel is not None else hint_row_h(g)
+        status_h = status_row_h(g) if self.code_panel is not None else 0
         area = inner.inflate(0, -2 * (chrome_h + gap))
+        if status_h:
+            area.y, area.h = area.y + status_h, area.h - status_h
+            draw_status_row(g, pygame.Rect(inner.x, inner.y, inner.w, status_h), self._code_status(g))
         c = self._cell = max(3, min(area.w // COLS, area.h // ROWS))
         ox = area.x + (area.w - c * COLS) // 2
         oy = area.y + (area.h - c * ROWS) // 2
@@ -808,6 +813,13 @@ class ArtRoom(Room):
             key = (c, self._last_key_color, tip, turn, round(self._lift, 2))
             sprite = self._tips.get_or(key, lambda: _brush_tip(*key))
             g.surface.blit(sprite, sprite.get_rect(center=(x + c // 2, y + c // 2)))
+
+    def _code_status(self, g) -> tuple:
+        """What code can change, in its own words: paint, write, color, brush."""
+        dot = swatch_dot(self.brush_color, status_row_px(g))
+        if not self._paint_mode:
+            return ((dot, "Write"),)
+        return (dot, "Paint"), (None, "Brush down" if self._code_brush_down else "Brush up")
 
     def _draw_header(self, g, r):
         """The Tab switch between Paint and ABC, with the brush beside it."""

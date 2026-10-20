@@ -23,7 +23,8 @@ from .. import paper
 from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel, SpaceHold
 from ..sounds import SoundBank
-from ..ui import CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch, hint_row_h, hold_status
+from ..ui import (CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch,
+                  draw_status_row, hint_row_h, hold_status, status_row_h)
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -612,10 +613,12 @@ class MusicRoom(Room):
         panel = self.app._panel
         hint_h = em(FOOTER_EM) if panel is None else 0 if isinstance(panel, (LoopPanel, ReplayPanel)) else em(1.0)
         pad = em(1.6)
-        # The header's key chips don't apply while typing code.
-        head_h = em(1.0) if self.code_panel is not None else em(4.3)
         if self.code_panel is None:
+            head_h = em(4.3)
             self._draw_header(g, rect)
+        else:
+            head_h = status_row_h(g) + em(0.4)
+            draw_status_row(g, pygame.Rect(rect.x, rect.y + em(0.4), rect.w, status_row_h(g)), self._code_status(g))
         grid = pygame.Rect(rect.x + pad, rect.y + head_h, rect.w - 2 * pad, rect.h - head_h - hint_h)
         self._draw_grid(g, grid)
         if self.app._panel is None:
@@ -642,6 +645,12 @@ class MusicRoom(Room):
         bar.h = hint_row_h(g)
         draw_mode_switch(g, bar, ("Sounds", "ABC"), 1 if self.letters_mode else 0,
                          chips=(("Enter", ICON_MUSIC, instrument, False, "sound"), ("Space", None, "notes", self.show_labels)))
+
+    def _code_status(self, g) -> tuple:
+        """What code can change, in its own words: choose, letters, key."""
+        return ((ICON_MUSIC, self._instrument(self.instrument_index)[1]),
+                (ICON_KEYBOARD, "Letters on" if self.letters_mode else "Letters off"),
+                (None, f"Key of {FRIENDLY_KEY_NAMES[self.root_index]}"))
 
     def arrow_hint(self) -> str:
         if not self.app._music_key_switching_enabled:

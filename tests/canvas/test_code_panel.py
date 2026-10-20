@@ -210,6 +210,21 @@ def test_open_code_hides_the_room_header_key_chips(name, monkeypatch):
     run(go())
 
 
+@pytest.mark.parametrize("name, code, shown", [
+    ("music", ["letters on", "key g"], ["Letters on", "Key of G"]),
+    ("art", ["write on"], ["Write"]),
+    ("art", ["brush up"], ["Paint", "Brush up"]),
+])
+def test_code_status_row_shows_what_code_changed(name, code, shown):
+    async def go():
+        app, room = await _room(name)
+        room.open_code_panel()
+        await room.run_code(code)
+        texts = [t for _, t in room._code_status(app.g)]
+        assert all(s in texts for s in shown)
+    run(go())
+
+
 def test_tab_on_an_empty_code_line_does_not_crash():
     async def go():
         app, art = await _room("art")

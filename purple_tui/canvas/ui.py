@@ -820,6 +820,36 @@ def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, s
     return left + gap
 
 
+def status_row_px(g: Gfx) -> int:
+    return g.vh(1.5)
+
+
+def status_row_h(g: Gfx) -> int:
+    """The code panel's settings row: a small header with no keys, since code changes these."""
+    return g.line_height(status_row_px(g), "mono") + g.em(0.5)
+
+
+def draw_status_row(g: Gfx, r: pygame.Rect, items: tuple):
+    """Quiet outlined pills centered in r, each (mark, text); mark is a surface, an icon glyph or None."""
+    px = status_row_px(g)
+    gap, pad = px // 2, round(px * 0.7)
+    widths = [(m.get_width() if isinstance(m, pygame.Surface) else g.measure(m, px, "mono")[0]) + gap if m else 0
+              for m, _ in items]
+    widths = [w + g.measure(t, px, "mono")[0] + 2 * pad for w, (_, t) in zip(widths, items)]
+    x = r.centerx - (sum(widths) + px * (len(items) - 1)) // 2
+    h = g.line_height(px, "mono") + round(px * 0.4)
+    for w, (mark, text) in zip(widths, items):
+        pill = pygame.Rect(x, r.centery - h // 2, w, h)
+        g.rect(P.HAIR, pill, width=1, radius=h // 2)
+        tx = x + pad
+        if isinstance(mark, pygame.Surface):
+            tx = g.surface.blit(mark, mark.get_rect(midleft=(tx, r.centery))).right + gap
+        elif mark:
+            tx = g.draw_text(mark, px, tx, r.centery, "mono", P.MUTED, anchor="midleft").right + gap
+        g.draw_text(text, px, tx, r.centery, "mono", P.MUTED, anchor="midleft")
+        x += w + px
+
+
 def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=None, track=None, radius=0):
     color, track = color or P.PRIMARY, track or P.LINE
     g.rect(track, (x, y, w, h), radius=radius)

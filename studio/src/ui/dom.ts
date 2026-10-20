@@ -30,9 +30,9 @@ export function field(label: string, input: HTMLElement): HTMLLabelElement {
 export const removeButton = (onclick: () => void) => h("button", { class: "x", title: "Remove", "aria-label": "Remove", onclick }, "×");
 export const addRowButton = (label: string, onclick: () => void) => h("button", { class: "add-row", onclick }, `+ ${label}`);
 
-export function filePicker(accept: string, onFile: (f: File) => void, label = "or choose a file"): HTMLElement {
+export function filePicker(accept: string, onFile: (f: File) => void, label = "or choose a file", cls = "linkbtn dim"): HTMLElement {
   const input = h("input", { type: "file", accept, hidden: true, onchange: () => input.files?.[0] && onFile(input.files[0]) });
-  return h("span", {}, h("button", { class: "linkbtn dim", onclick: () => input.click() }, label), input);
+  return h("span", {}, h("button", { type: "button", class: cls, onclick: () => input.click() }, label), input);
 }
 
 // True when a key is going into a text field, so page-wide key shortcuts leave it alone.

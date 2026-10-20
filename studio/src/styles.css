@@ -337,7 +337,7 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .rec-mini { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; padding: 0; border-radius: 50%; border: 1.5px solid var(--border); background: var(--fill); color: var(--purple); font-size: 13px; line-height: 1; cursor: pointer; }
 .rec-mini:hover { background: #fff; border-color: var(--purple); }
 .rec-mini.recording { background: var(--danger); border-color: var(--danger); color: #fff; }
-.clear-pick { display: block; margin-top: 8px; }
+.clear-pick { display: block; margin: 10px 2px 0; font-size: 13px; }
 /* A room's settings: one card, each knob a section; a single value sits on its title's line */
 .card.knobs { padding: 4px 22px; }
 .knob { padding: 18px 0; }
@@ -503,10 +503,19 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .emoji-grid button { font-size: 22px; height: 38px; border: none; background: none; border-radius: 8px; cursor: pointer; padding: 0; }
 .emoji-grid button:hover, .emoji-grid button:first-child { background: var(--fill); }
 .emoji-grid p { grid-column: 1 / -1; margin: 6px; }
-.picture-grid { margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.picture-grid button:first-child:not(:hover) { background: none; }
-.picture-grid .linkbtn { font-size: 13px; height: auto; }
-.picture-grid img, .emoji-cell img { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; vertical-align: middle; }
+.emoji-cell img { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; vertical-align: middle; }
+.pick-label { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; margin: 14px 2px 6px; }
+.pick-label + .emoji-grid { margin-top: 0; }
+.pick-note { margin: 6px 2px 0; }
+.pick-note:empty { display: none; }
+.picture-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-height: 150px; overflow-y: auto; padding: 2px; }
+.picture-grid > span { display: contents; }
+.picture-grid button { aspect-ratio: 1; padding: 0; border: 1.5px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; cursor: pointer; }
+.picture-grid button:hover, .picture-grid button:focus-visible { border-color: var(--purple); outline: none; }
+.picture-grid img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.picture-grid .add-photo { display: flex; flex-direction: column; align-items: center; justify-content: center; border-style: dashed; border-color: var(--border); background: #fff; color: var(--purple); font: 600 11px/1.2 var(--sans); }
+.picture-grid .add-photo::before { content: "+"; font-size: 22px; font-weight: 400; line-height: 1; }
+.picture-grid .add-photo:hover { background: var(--fill); }
 
 /* Voice */
 .tabs a.tab { text-decoration: none; }

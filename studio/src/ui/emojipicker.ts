@@ -50,16 +50,19 @@ export function closeEmojiPicker(): void {
   open = null;
 }
 
-// The pack's own pictures to pick from, then the rest of the family's, and a photo to add, for a setting that takes them.
-function picturesRow(pick: (name: string) => void, taken: string[]): HTMLElement {
-  const note = h("span", { class: "dim small" });
+const label = (text: string) => h("p", { class: "pick-label" }, text);
+
+// A photo to add, the pack's own pictures, then the rest of the family's, for a setting that takes them.
+function picturesSection(pick: (name: string) => void, taken: string[]): HTMLElement[] {
+  const note = h("p", { class: "dim small pick-note" });
   const picked = (made: Promise<{ name: string }>) => made.then((f) => pick(f.name))
     .catch(() => (note.textContent = "That picture didn't open. Try a photo saved as JPG or PNG."));
-  const add = filePicker("image/*", (file) => picked(addRoomFile("images", file)), "Add a photo");
-  return h("div", { class: "emoji-grid picture-grid" },
-    ...roomPictures().filter((f) => !taken.includes(f.name)).map((f) => h("button", { type: "button", title: f.name, onclick: () => pick(f.name) }, roomPicture(f.name))),
-    ...shelfOnly().map((s) => h("button", { type: "button", title: s.name, onclick: () => picked(roomFileFor(s)) }, shelfThumb(s))),
-    h("p", { class: "row" }, add, note));
+  const tile = (title: string, onclick: () => void, img: Node | null) => h("button", { type: "button", title, onclick }, img);
+  return [label("Pictures"), h("div", { class: "picture-grid" },
+    filePicker("image/*", (file) => picked(addRoomFile("images", file)), "Add photo", "add-photo"),
+    ...roomPictures().filter((f) => !taken.includes(f.name)).map((f) => tile(f.name, () => pick(f.name), roomPicture(f.name))),
+    ...shelfOnly().map((s) => tile(s.name, () => picked(roomFileFor(s)), shelfThumb(s)))),
+  note, label("Emoji")];
 }
 
 // taken: emoji to leave out. pictures: the family's pictures are offered too, picked by name. empty: what an
@@ -91,7 +94,7 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
   });
   const pop = h("div", { class: "emoji-pop" }, search,
     clear ? h("button", { type: "button", class: "linkbtn small clear-pick", onclick: () => pick("") }, clear) : null,
-    pictures ? picturesRow(pick, taken) : null, grid);
+    ...(pictures ? picturesSection(pick, taken) : []), grid);
   open = pop;
   render();
   anchor.after(pop);

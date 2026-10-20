@@ -25,6 +25,8 @@ from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_meter, draw_scrim,
                   draw_text_caret, draw_window, field_height, window_title_height)
 from .sleep_screen import FullScreen
+from .. import old_install
+from ..old_install import PAYLOAD_PATH
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
 
@@ -1202,32 +1204,16 @@ class TerminalScreen(FullScreen):
 # Menu
 # ---------------------------------------------------------------------------
 _USB_LABELS = ("PURPLE_INSTALLER", "PURPLE_DEBUG")
-_PAYLOAD_PATH = Path("/cdrom/purple/install.sh")
 _KEEP_DIR = "/run/purple-keep"
 _CONFIRM_SCREENS = {None: InstallConfirmScreen, "found": ReinstallConfirmScreen, "unreadable": UnreadableReinstallScreen}
-
-
-def _find_old_install() -> tuple:
-    """("found", old name), ("unreadable", ""), or (None, "") when the disk holds no Purple."""
-    if not _PAYLOAD_PATH.exists():
-        return None, ""
-    try:
-        out = subprocess.run(["sudo", "bash", str(_PAYLOAD_PATH), "--probe"],
-                             capture_output=True, text=True, timeout=60).stdout
-    except Exception:
-        return None, ""
-    for line in out.splitlines():
-        if line.startswith("[PURPLE-FOUND-UNREADABLE]"):
-            return "unreadable", ""
-        if line.startswith("[PURPLE-FOUND]"):
-            return "found", line[len("[PURPLE-FOUND]"):].strip()
-    return None, ""
 
 
 def _boot_mode_hint() -> str:
     from .. import key_save
     if not is_live_boot():
         return "Installed on this computer."
+    if old_install.known()[0] == "found":
+        return "Running from USB.\nPurple is also on this laptop.\nInstall to update it."
     if key_save.active() and is_usb_cached():
         if not is_usb_present():
             return "Running from USB. Not yet installed.\nUSB removed: new work won't be kept.\nInstall to keep it without the USB."
@@ -1256,7 +1242,7 @@ def _try_remount_usb(dev: str) -> bool:
     try:
         subprocess.run(["sudo", "umount", "-l", "/cdrom"], capture_output=True, timeout=5)
         subprocess.run(["sudo", "mount", "-o", "ro,nosuid,nodev", dev, "/cdrom"], capture_output=True, timeout=5)
-        return _PAYLOAD_PATH.exists()
+        return PAYLOAD_PATH.exists()
     except (subprocess.TimeoutExpired, OSError):
         return False
 
@@ -1267,7 +1253,7 @@ def _is_usb_payload_available() -> bool:
     dev = _find_usb_device()
     if dev is None:
         return False
-    return _PAYLOAD_PATH.exists() or _try_remount_usb(dev)
+    return PAYLOAD_PATH.exists() or _try_remount_usb(dev)
 
 
 def _is_dev_environment() -> bool:
@@ -1371,7 +1357,7 @@ class ParentMenu(Overlay):
         dev = _find_usb_device()
         if dev is None:
             available, self._usb_remount_attempted = False, False
-        elif _PAYLOAD_PATH.exists():
+        elif PAYLOAD_PATH.exists():
             available, self._usb_remount_attempted = True, False
         elif not self._usb_remount_attempted:
             self._usb_remount_attempted = True
@@ -1567,7 +1553,7 @@ class ParentMenu(Overlay):
         if self._probing:
             return
         self._probing = True
-        threading.Thread(target=lambda: self.app.call_from_thread(self._ask_install, *_find_old_install()),
+        threading.Thread(target=lambda: self.app.call_from_thread(self._ask_install, *old_install.probe()),
                          daemon=True).start()
 
     def _ask_install(self, old, old_name):

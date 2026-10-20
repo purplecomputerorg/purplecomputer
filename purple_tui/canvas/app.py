@@ -239,6 +239,9 @@ class PurpleApp:
         if os.environ.get("PURPLE_DEMO_AUTOSTART"):
             default_preroll = "0" if os.environ.get("PURPLE_RECORD_GO_FILE") else "5"
             self.timers.after(float(os.environ.get("PURPLE_DEMO_PREROLL", default_preroll)), self.start_demo)
+        if is_live_boot():
+            from . import old_install
+            old_install.start()
         if os.environ.get("PURPLE_DEV_MODE") != "1" and is_live_boot():
             from .rooms.sleep_screen import LiveBootSplash
             self.push(LiveBootSplash(self))

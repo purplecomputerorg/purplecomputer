@@ -12,6 +12,7 @@ from ...constants import (ICON_BATTERY_MED, ICON_HARDDISK, ICON_HOURGLASS, ICON_
                          ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, is_live_boot)
 from ...keyboard import ControlAction
 from ...power_manager import LID_SHUTDOWN_DELAY, get_power_manager, manual_off_hint
+from .. import old_install
 from ..ui import Overlay, draw_key_hint
 
 
@@ -197,6 +198,7 @@ class LiveBootSplash(FullScreen):
     _NOTES = [(ICON_KEYBOARD, "Purple is keyboard only, on purpose. Kids explore by typing."),
               (ICON_USB, "You're running from the Purple Key, so you'll need it to start Purple again."),
               (ICON_HARDDISK, "To install Purple and keep it, hold Esc to open the Parent Menu.")]
+    _INSTALLED_NOTE = (ICON_HARDDISK, "Purple is already on this laptop, with your kid's work. To update it, hold Esc.")
     _AUDIO_WARNING = (ICON_VOLUME_OFF, "Sound is not working on this computer. Plug in a USB audio adapter, "
                                        "or open the Parent Menu to see Support info.")
     hint = "Press any key to start"
@@ -209,7 +211,8 @@ class LiveBootSplash(FullScreen):
             return round(u * n)
 
         px, icon_w, gap, pad = em(1.0), em(2.4), em(1.0), em(1.6)
-        notes = self._NOTES + ([self._AUDIO_WARNING] if self.status else [])
+        notes = self._NOTES[:-1] + [self._INSTALLED_NOTE if self._installed else self._NOTES[-1]] \
+            + ([self._AUDIO_WARNING] if self.status else [])
         sizes = [g.markup_size(text, px, "sans", min(g.vw(90), em(42)) - icon_w - 2 * pad) for _, text in notes]
         card = pygame.Rect(0, 0, icon_w + max(w for w, _ in sizes) + 2 * pad, sum(h for _, h in sizes) + gap * (len(notes) - 1) + 2 * pad)
         bot_h, title_px, hint_px = g.vh(15), em(1.8), em(1.0)
@@ -230,10 +233,13 @@ class LiveBootSplash(FullScreen):
 
     tick_s = 0.25
 
+    _installed = False
+
     def tick(self):
         warn = self._AUDIO_WARNING if self.app.audio_ok is False else ""
-        if warn != self.status:
-            self.status = warn
+        installed = old_install.known()[0] == "found"
+        if (warn, installed) != (self.status, self._installed):
+            self.status, self._installed = warn, installed
             self.app.invalidate()
 
     async def handle(self, action):

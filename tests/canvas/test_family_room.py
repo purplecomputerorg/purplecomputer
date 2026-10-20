@@ -18,6 +18,7 @@ from purple_tui import content as content_mod
 from purple_tui import settings
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.room_picker import FAMILY, RoomPicker
+from purple_tui.canvas import theme
 from purple_tui.canvas.rooms import family_room
 from purple_tui.canvas.rooms.family_room import FamilyRoom
 from purple_tui.canvas.rooms.parent_menu import FamilyRoomsScreen
@@ -467,6 +468,25 @@ def test_a_line_still_being_said_is_not_restarted(pack, monkeypatch):
 
 def test_the_library_knows_purples_drums():
     assert sorted(purple_lib.DRUMS) == sorted(PERCUSSION.values())
+
+
+def test_the_library_knows_the_theme_colors():
+    assert list(purple_lib.ROLES) == theme.ROLES
+
+
+def test_theme_colors_paint_the_grid_and_the_background(pack):
+    pack("themed", 'from purple import *\nbackground("surface")\ngame = state(at=1)\ngame.at += 1\n'
+                   'grid.set(game.at, 0, "tile")\ngrid.set(0, 0, "Q")\n')
+
+    async def go():
+        app = make_app()
+        room = _open(app, "themed")
+        await until(lambda: room.scene)
+        assert room.scene[0][5] == "surface"
+        assert room.scene[1][:3] == ("rect", 20.5, 0.5) and room.scene[1][5] == "tile"
+        assert room.scene[2][4] == "Q"
+        room.close()
+    run(go())
 
 
 def test_esc_menu_lists_only_rooms_a_parent_turned_on(pack):

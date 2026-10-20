@@ -41,7 +41,7 @@ Esc always belongs to Purple: it leaves the room, and your room never sees it.
 | `write(text)` | A line of text under the middle. The last 5 stay, good for stories and questions. |
 | `status(text)` | A line along the top, for a score or what to do next. `status()` takes it away. |
 | `clear()` | Empties the screen: the middle, the lines, the top line, and the grid. |
-| `background("#2a1845")` | The room's color, written as # and six letters or numbers. |
+| `background("#2a1845")` | The room's color: # and six letters or numbers, or a theme color (below). |
 | `say(text)` | Purple says it out loud. Everything said in one key or timer is spoken in order; the next key's `say` cuts off anything still being said, unless it says the same words again, which then just carry on. Notes, drums, and sounds play at the same time as speech. A `say` with its words written right in it, like `say("Hello!")`, speaks in Purple's room voice; words built while the room runs, like `say(name)` or `say(f"{n} stars")`, speak in Purple's everyday voice. |
 | `play("C4", "marimba")` | A note from C2 to C6, sharps like `"F#4"`. Instruments: marimba, ukulele, accordion, glockenspiel, or one made in this pack. |
 | `drum("snare")` | kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, or gong. |
@@ -56,6 +56,7 @@ Esc always belongs to Purple: it leaves the room, and your room never sees it.
 | `pixels(rows, colors)` | A small picture written as letters (below). |
 | `every(seconds, fn)`, `after(seconds, fn)` | Call `fn` over and over, or once, at least 0.1 seconds apart. Both give back a timer you can `.stop()`. |
 | `game_over(text)` | Stops the timers and shows the text. The next key starts the room over from the top, with fresh variables; `keep` stays. |
+| `state(score=0)` | A place for what changes as the room plays: `game = state(score=0)` at the top, then `game.score += 1` in any function, with no `global` needed. |
 | `keep` | A dict Purple remembers for next time: `keep["best"] = 12`. Words, numbers, lists, and dicts, up to 4 KB. Purple saves it when your kid leaves the room. |
 | `images`, `sounds` | The pack's picture names (each with its size in pixels) and sound names. |
 
@@ -66,8 +67,10 @@ A mistake, like `drum("snar")` or a picture the pack doesn't have, stops the roo
 The screen is a **grid of 24 by 12 squares**. `(0, 0)` is the top left, and `grid.w` and `grid.h` are 24 and 12. Going off one edge comes back on the other, so `x = 24` is `x = 0`. A square holds one of:
 
 - an emoji or a letter: `grid.set(3, 4, "🌻")`
-- a color: `grid.set(3, 4, "#2f9e44")`
+- a color: `grid.set(3, 4, "#2f9e44")`, or a theme color by name: `grid.set(3, 4, "tile")`
 - a picture: `grid.set(3, 4, picture("cat"))`
+
+Theme colors follow the family's theme, the way Purple's own rooms do: `surface` (the room's ground), `tile` (a key or card), `field`, `line`, `primary` (something picked or turned over), `accent`, `text`, `muted`, `dim`. Use them for a game's own pieces, like cards and beat squares, and `#` colors for things in its world, like grass and water.
 
 An emoji, letter, or color can cover more than one square: `grid.set(3, 4, "🐶", size=2)` is 2 by 2 squares, from (3, 4) right and down. A picture covers as many as you ask for: `picture("cat", 4)` is 4 squares wide and as tall as its shape needs, and `picture("cat", 4, 3)` is 4 by 3. A big thing belongs to its top-left square: `grid.get` and `grid.erase` use that square, and the others stay empty. It doesn't wrap around, so keep it on the screen.
 
@@ -133,6 +136,7 @@ Purple won't let the screen flash: a change that brightens or darkens a big part
 - Keep goals short. When a round ends, say so warmly, and start again on a key.
 - No timers that make a kid lose by being slow, unless the game is about being quick and your kid asked for it.
 - Arrows to move, Space or Enter to act, letters and numbers as themselves: those are the keys kids know.
+- A room about picking things can lay them out like the keyboard, as Memory and the beat maker do: the key to press is the one under the square, with no cursor to steer.
 - Calm beats busy. Purple is a quiet place.
 
 ## Starter rooms

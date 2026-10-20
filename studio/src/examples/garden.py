@@ -14,8 +14,7 @@ SEEDS = {
 # The soil's two colors, laid like a checkerboard.
 SOIL = ("#7a5230", "#6f4a2b")
 
-seed = "1"
-x, y = 12, 6
+game = state(seed="1", x=12, y=6)
 moves = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 # keep remembers the garden for next time: (x, y) squares can't be saved, so it's "x,y" -> [seed, step].
 plants = keep.setdefault("plants", {})
@@ -28,27 +27,27 @@ for spot, (kind, stage) in plants.items():
 
 
 def show_seed():
-    status(f"Seed: {SEEDS[seed][1][-1]} {SEEDS[seed][0]}   1 to 5 picks a seed")
-    grid.cursor(x, y)
+    name, looks = SEEDS[game.seed]
+    status(f"Seed: {looks[-1]} {name}   1 to 5 picks a seed")
+    grid.cursor(game.x, game.y)
 
 
 def on_key(key):
-    global seed, x, y
     if key in SEEDS:
-        seed = key
+        game.seed = key
         play("G4", "glockenspiel")
     elif key in moves:
         dx, dy = moves[key]
-        x, y = (x + dx) % grid.w, max(1, min(grid.h - 1, y + dy))
+        game.x, game.y = (game.x + dx) % grid.w, max(1, min(grid.h - 1, game.y + dy))
     elif key == "space":
         return tend()
     show_seed()
 
 
 def tend():
-    spot = f"{x},{y}"
+    spot = f"{game.x},{game.y}"
     if spot not in plants:
-        plants[spot] = [seed, 0]
+        plants[spot] = [game.seed, 0]
         drum("bongo")
     elif plants[spot][1] < 2:
         plants[spot][1] += 1
@@ -58,7 +57,7 @@ def tend():
         play("C5", "glockenspiel")
         status(f"The {name} is all grown! {looks[-1]}")
     kind, stage = plants[spot]
-    grid.set(x, y, SEEDS[kind][1][stage])
+    grid.set(game.x, game.y, SEEDS[kind][1][stage])
 
 
 show_seed()

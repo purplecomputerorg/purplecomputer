@@ -17,9 +17,11 @@ PAGES = {
 }
 
 
+game = state(page="start")
+
+
 def turn_to(name):
-    global page
-    page = name
+    game.page = name
     picture, words, _ = PAGES[name]
     clear()
     show(picture)
@@ -30,14 +32,14 @@ def turn_to(name):
 
 
 def on_key(key):
-    choices = PAGES[page][2]
+    choices = PAGES[game.page][2]
     if key in choices:
         play("G4")
         turn_to(choices[key])
     elif key == "space" and not choices:
         turn_to("start")
     elif key == "space":
-        say(PAGES[page][1])
+        say(PAGES[game.page][1])
 
 
 turn_to("start")

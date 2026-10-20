@@ -34,4 +34,5 @@ if [ -z "$PURPLE_DEMO_AUTOSTART" ] && [ -z "$PURPLE_FULLSCREEN" ]; then
 fi
 
 cd "$PROJECT_ROOT"
-exec python -m purple_tui
+# A kid switch exits for a restart, which xinitrc does on the ISO.
+while python -m purple_tui && [ -e /tmp/purple-kid-picked ]; do :; done

@@ -6,7 +6,7 @@ from pathlib import Path
 from ..settings import add_kid, get_kid, get_kids, kid_path, remove_kid, set_kid
 from .ui import CANCELLED, DOWN, UP, Confirm, Picker
 
-PICKED = Path("/tmp/purple-kid-picked")  # the next start skips Who's playing
+PICKED = Path("/tmp/purple-kid-picked")  # the next start skips Pick your computer
 
 
 def name_file(kid: str | None = None) -> Path:
@@ -75,7 +75,7 @@ def ask_name(app, kid: str | None, title: str, description: str, then):
 
 
 class WhoIsPlaying(Picker):
-    title = "Who's playing?"
+    title = "Pick your computer"
     hint = f"{UP} {DOWN}   Enter"
 
     def __init__(self, app):

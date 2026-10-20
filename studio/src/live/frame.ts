@@ -32,8 +32,9 @@ const sdl = document.getElementById("canvas") as HTMLCanvasElement;
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
 const post = (m: FromFrame) => parent.postMessage(m, location.origin);
 // For Purple's FamilyRoom (browser.py): rooms run in workers from this page.
+const guests = roomGuests((text) => post({ type: "print", text }));
 Object.assign(globalThis, {
-  purpleRoomGuest: roomGuests((text) => post({ type: "print", text })),
+  purpleRoomGuest: guests,
   purpleRoomProblem: (text: string, line: number | null) => post({ type: "problem", text, line: line ?? null }),
 });
 onVoiceNote((text) => post({ type: "voice", text }));
@@ -102,5 +103,6 @@ addEventListener("message", (e: MessageEvent<ToFrame>) => {
   }
   run((live) => handle(live, e.data));
 });
-booted.catch((err) => post({ type: "failed", text: String(err?.message ?? err) }));
+// The spare room waits for Purple, so the two don't download Pyodide side by side on a first visit.
+booted.then(() => guests.warm(), (err) => post({ type: "failed", text: String(err?.message ?? err) }));
 post({ type: "hello" });

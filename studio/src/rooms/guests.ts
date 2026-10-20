@@ -22,6 +22,8 @@ export interface RoomGuests {
   start(onLine: (line: string | null) => void): number;
   send(id: number, line: string): void;
   stop(id: number): void;
+  // Loads a spare ahead of the first room, so it opens as fast as the ones after it.
+  warm(): void;
 }
 
 export function roomGuests(print: (text: string) => void): RoomGuests {
@@ -68,6 +70,9 @@ export function roomGuests(print: (text: string) => void): RoomGuests {
       g.worker.onmessage = null;  // Purple has let go; a message already on its way goes nowhere
       g.worker.terminate();
       running.delete(id);
+    },
+    warm() {
+      if (globalThis.crossOriginIsolated) spare ??= spawn();
     },
   };
 }

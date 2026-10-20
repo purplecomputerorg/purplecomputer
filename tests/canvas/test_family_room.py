@@ -196,6 +196,31 @@ def test_the_packs_own_library_runs_and_unknown_shapes_and_fields_are_skipped(pa
     run(go())
 
 
+def test_a_slow_room_shows_getting_ready_until_it_answers_and_a_fast_one_never_does(pack, monkeypatch):
+    slow = "import time\n" + lib_sending({"scene": [["text", 120, 60, 20, "Here", "text"]]}).replace(
+        "def run(start):\n", "def run(start):\n    time.sleep(0.8)\n")
+    pack("slow", "", lib=slow)
+
+    async def go():
+        app = make_app()
+        room = _open(app, "slow")
+        drawn = []
+        real = app.g.draw_text
+        monkeypatch.setattr(app.g, "draw_text", lambda s, *a, **k: drawn.append(s) or real(s, *a, **k))
+
+        def shows_hint():
+            drawn.clear()
+            room.draw(app.g)
+            return "Getting ready..." in drawn
+        assert not shows_hint()
+        await asyncio.sleep(family_room.READY_HINT_S + 0.1)
+        assert shows_hint()
+        await until(lambda: room.scene)
+        assert not shows_hint()
+        room.close()
+    run(go())
+
+
 def test_too_many_shapes_is_stopped(pack):
     pack("greedy", "", lib=lib_sending({"scene": [["rect", 0, 0, 1, 1, "#000000"]] * (family_room.MAX_SHAPES + 1)}))
 

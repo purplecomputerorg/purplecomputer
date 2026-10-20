@@ -42,6 +42,7 @@ PICTURE_CACHE = 512
 TEXT_MAX = 200
 PAUSED_RECHECK_S = 0.5
 IDLE_PAUSE_S = 180
+READY_HINT_S = 0.3        # a room still silent this long shows it's coming, so a fast one never flashes it
 QUEUE_MAX = 8
 # Flashes: the scene shrunk to these tiles; a change that moves at least FLASH_AREA of them by
 # FLASH_DELTA in luminance shows at most once per FLASH_GAP_S (WCAG 2.3.1's three per second).
@@ -212,7 +213,7 @@ class FamilyRoom(Overlay):
         self.room = room
         self.sounds = SoundBank()
         self._guest = self._token = None
-        self._wake = self._watchdog = self._flash_timer = None
+        self._wake = self._watchdog = self._flash_timer = self._hint = None
         self._keep, self._keep_dirty = load_keep(room), False
         self._images, self._clips = {}, {}
         self._pictures: dict = {}    # source -> its picture, decoded once
@@ -257,13 +258,14 @@ class FamilyRoom(Overlay):
         except OSError as e:
             return self._broken(f"could not start: {e}")
         self._arm(START_TIMEOUT_S)
+        self._hint = self.app.timers.after(READY_HINT_S, self.app.invalidate)
         self.app.invalidate()
 
     def _stop(self):
-        for t in (self._wake, self._watchdog, self._flash_timer):
+        for t in (self._wake, self._watchdog, self._flash_timer, self._hint):
             if t:
                 t.stop()
-        self._wake = self._watchdog = self._flash_timer = None
+        self._wake = self._watchdog = self._flash_timer = self._hint = None
         guest, self._guest, self._token = self._guest, None, None
         if guest:
             guest.stop()
@@ -341,6 +343,9 @@ class FamilyRoom(Overlay):
             return self._broken(problem)
         self._busy = False
         self._watchdog.stop()
+        if self._hint:
+            self._hint.stop()
+            self._hint = None
         if self._queue:
             self._send(self._queue.pop(0))
 
@@ -573,6 +578,8 @@ class FamilyRoom(Overlay):
             if self._surface is None or self._surface.get_size() != vp.size:
                 self._surface = self._render(self.scene, vp.size)
             g.surface.blit(self._surface, vp.topleft)
+        elif self._hint and not self._hint.active:
+            g.draw_text("Getting ready...", int(vp.h * 0.06), vp.centerx, vp.centery, "mono", P.MUTED, anchor="center")
         if self._resting and not self.fault:
             px = int(vp.h * 0.05)
             g.draw_text("Resting. Press a key to keep going", px, vp.centerx, vp.bottom - px * 2.2, "mono", P.MUTED,

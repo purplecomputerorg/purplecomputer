@@ -179,7 +179,7 @@ export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
   // Maps paint with the legend's emoji and colors, so they redraw whenever another knob changes.
   const maps: (() => void)[] = [];
   const edited = () => { onEdit(); maps.forEach((m) => m()); };
-  return h("div", {}, h("p", { class: "dim small" }, "The settings at the top of this room's Python. Change them here, and the Python changes to match."),
+  return h("div", {},
     ...knobs.map((k) => {
       const card = h("div", { class: "card knob" });
       const head = () => h("div", { class: "knob-head" }, h("h2", {}, roomTitle(k.name.toLowerCase().replace(/_/g, "-"))), k.about && h("p", { class: "dim small" }, k.about));

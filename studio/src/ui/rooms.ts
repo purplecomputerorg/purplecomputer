@@ -56,19 +56,18 @@ function list(): View {
       yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, iconOf(r)) }), drop),
       h("h3", {}, "Start from one of these"),
       h("div", { class: "cards" },
+        choice("✏️", "Write it in Python", "An empty room to write yourself, or with an AI helper.", () => tryRoom("my-room", null), "pick featured"),
         ...(Object.keys(TEMPLATES) as TemplateDraft["kind"][]).map((kind) =>
           choice(ICONS[kind], TEMPLATES[kind].label, TEMPLATES[kind].about, () => tryRoom(TEMPLATES[kind].name, template(kind)))),
         ...EXAMPLES.map((e) => choice(e.icon, e.label, e.about, () => tryRoom(e.name, null, e.source)))),
-      h("p", { class: "dim" }, "Writing the Python yourself, or with an AI helper? ",
-        h("button", { class: "linkbtn", onclick: () => tryRoom("my-room", null) }, "Start with an empty room"),
-        ". Made a Purple Pack already? ", openPackButton("Open it here"), " to try its rooms and change them."),
+      h("p", { class: "dim" }, "Made a Purple Pack already? ", openPackButton("Open it here"), " to try its rooms and change them."),
       roomFilesBox(),
     ),
   };
 }
 
-const choice = (icon: string, label: string, about: string, go: () => void) =>
-  h("button", { class: "pick", onclick: go }, h("span", { class: "pick-icon" }, icon), h("b", {}, label), h("span", {}, about));
+const choice = (icon: string, label: string, about: string, go: () => void, cls = "pick") =>
+  h("button", { class: cls, onclick: go }, h("span", { class: "pick-icon" }, icon), h("b", {}, label), h("span", {}, about));
 
 function problemBox(): { element: HTMLElement; show(p: RoomProblem | null): void } {
   const element = h("div", { class: "problem", hidden: true });
@@ -172,15 +171,21 @@ function editor(room: RoomDraft): View {
   let tab: Tab = tabs[0];
   const pane = h("div", {});
   const tabButtons = tabs.map((t) => h("button", { class: "tab", role: "tab", onclick: () => showTab(t) }, LABELS[t]));
+  // Forms and knobs cover only part of a room; the way to the rest stays in view above them.
+  const toPython = (text: string) => h("p", { class: "to-python small" }, text,
+    made ? h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy") : h("button", { class: "linkbtn", onclick: () => showTab("python") }, "Open the Python"),
+    made ? " to write the rest yourself." : " to change anything else.");
   const showTab = (which: Tab) => {
     tab = which;
     tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(tabs[i] === which)));
     if (which === "made" && made) {
       const onEdit = () => edited(sourceOf(made), 500);
-      pane.replaceChildren(made.kind === "rules" ? rulesForm(made.rules, onEdit) : templateForm(made, onEdit, tray.refresh));
+      pane.replaceChildren(toPython("This form writes the room's Python for you. "),
+        made.kind === "rules" ? rulesForm(made.rules, onEdit) : templateForm(made, onEdit, tray.refresh));
     } else if (which === "knobs") {
       const knobs = readKnobs(room.source);
-      pane.replaceChildren(knobs.length ? knobsForm(knobs, () => edited(writeKnobs(room.source, knobs), 500))
+      pane.replaceChildren(toPython("Knobs are the settings at the top of this room's Python, and the Python changes to match. "),
+        knobs.length ? knobsForm(knobs, () => edited(writeKnobs(room.source, knobs), 500))
         : h("p", { class: "note" }, "The settings at the top of the Python can't be read as knobs right now. Everything still works in Python."));
     } else {
       code.value = room.source;

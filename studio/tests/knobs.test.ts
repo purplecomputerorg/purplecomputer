@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { EXAMPLES } from "../src/examples";
-import { readKnobs, writeKnobs } from "../src/knobs";
+import { type Lit, readKnobs, writeKnobs } from "../src/knobs";
 import { searchEmoji } from "../src/ui/emojipicker";
+import { isMap, legendFor } from "../src/ui/mappainter";
 
 const ROOM = `from purple import *
 
@@ -80,5 +81,14 @@ describe("knobs", () => {
     expect(searchEmoji("dog", 32, ["🐶"]).map((r) => r.emoji)).not.toContain("🐶");
     expect(searchEmoji("", 32, ["🐶"]).map((r) => r.emoji)).not.toContain("🐶");
     expect(searchEmoji("🐶", 32, ["🐶"])).toEqual([]);
+  });
+
+  it("paints a map of even rows, using a dict of one-letter keys as its legend", () => {
+    const knobs = readKnobs(EXAMPLES.find((e) => e.name === "explore")!.source);
+    expect(knobs.filter((k) => isMap(k.value)).map((k) => k.name)).toEqual(["MAP"]);
+    const map = knobs.find((k) => k.name === "MAP")!.value as { items: Lit[] };
+    expect(legendFor(map, knobs.map((k) => k.value))).toBe(knobs.find((k) => k.name === "THINGS")!.value);
+    const uneven = readKnobs('X = ["abc", "abcd", "abc"]\n')[0].value;
+    expect(isMap(uneven)).toBe(false);
   });
 });

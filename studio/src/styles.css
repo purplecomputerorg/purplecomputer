@@ -517,3 +517,12 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .unadded h3 { margin-top: 0; color: var(--danger); }
 .unadded .pack-item { background: var(--card); }
 .pack-colors { display: inline-flex; align-items: center; gap: 4px; }
+.map-painter { display: grid; gap: 12px; }
+.map-brushes { display: flex; flex-wrap: wrap; gap: 8px; }
+.map-brush { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border: 1.5px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; font: inherit; }
+.map-brush.on { border-color: var(--purple); background: var(--fill); }
+.map-brush > .map-cell { width: 28px; border-radius: 6px; border: 1px solid var(--line); }
+.map-grid { display: grid; grid-template-columns: repeat(var(--cols), 1fr); max-width: 720px; border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; touch-action: none; user-select: none; cursor: crosshair; }
+.map-cell { aspect-ratio: 1; display: grid; place-items: center; font-size: clamp(10px, 2vw, 20px); line-height: 1; background: #eef4e8; }
+.map-cell.letter { font: 700 13px var(--mono, monospace); color: var(--purple); }
+.map-grid > .map-cell:hover { outline: 2px solid var(--purple); outline-offset: -2px; }

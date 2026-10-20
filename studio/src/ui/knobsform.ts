@@ -5,6 +5,7 @@ import type { Knob, Lit } from "../knobs";
 import { field, h } from "./dom";
 import { emojiCell, isEmoji } from "./emojipicker";
 import { roomPictures } from "./roomfiles";
+import { isMap, legendFor, legendNames, mapPainter } from "./mappainter";
 import { select, textIn } from "./rulesform";
 
 type Dict = Extract<Lit, { t: "dict" }>;
@@ -177,11 +178,22 @@ function linksOf(v: Lit): Pick<Ctx, "pages" | "links" | "relink"> {
 }
 
 export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
+  // Maps paint with the legend's emoji and colors, so they redraw whenever another knob changes.
+  const maps: (() => void)[] = [];
+  const edited = () => { onEdit(); maps.forEach((m) => m()); };
   return h("div", {}, h("p", { class: "dim small" }, "The settings at the top of this room's Python. Change them here, and the Python changes to match."),
     ...knobs.map((k) => {
       const card = h("div", { class: "card knob" });
-      const redraw = () => card.replaceChildren(h("div", { class: "card-head" }, h("h2", {}, k.about || roomTitle(k.name.toLowerCase().replace(/_/g, "-"))), h("code", {}, k.name)),
-        editor(k.value, { onEdit, redraw, pictures: PICTURES.test(k.about), ...linksOf(k.value) }, [], k.labels));
+      const head = () => h("div", { class: "card-head" }, h("h2", {}, k.about || roomTitle(k.name.toLowerCase().replace(/_/g, "-"))), h("code", {}, k.name));
+      if (isMap(k.value)) {
+        const map = k.value as { items: Lit[] };
+        const legend = legendFor(map, knobs.map((o) => o.value));
+        const [painter, redraw] = mapPainter(map, () => legendNames(legend), onEdit);
+        maps.push(redraw);
+        card.replaceChildren(head(), painter);
+        return card;
+      }
+      const redraw = () => card.replaceChildren(head(), editor(k.value, { onEdit: edited, redraw, pictures: PICTURES.test(k.about), ...linksOf(k.value) }, [], k.labels));
       redraw();
       return card;
     }));

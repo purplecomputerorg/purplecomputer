@@ -449,6 +449,7 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .emoji-wrap { position: relative; }
 .emoji-cell { width: 64px; height: 42px; font-size: 24px; border-radius: 12px; border: 1.5px solid var(--line); background: #fff; cursor: pointer; padding: 0; }
 .emoji-cell:hover, .emoji-cell:focus-visible { border-color: var(--border); background: var(--fill); outline: none; }
+.tile.bad .emoji-cell { border-color: #d77; }
 .emoji-cell.empty { font: 600 13px var(--sans); color: var(--purple); border-style: dashed; border-color: var(--border); }
 .word-row .was { white-space: nowrap; overflow: hidden; }
 .remove { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; border-radius: 8px; height: 28px; }

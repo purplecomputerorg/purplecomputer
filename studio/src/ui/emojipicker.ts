@@ -25,13 +25,14 @@ const POPULAR = [...new Set(CORE_RANKED_WORDS.map((w) => CORE_EMOJI[w]).filter(B
 const LETTERS = /[a-z0-9]/i;
 export const isEmoji = (s: string) => !!s.trim() && !LETTERS.test(s);
 
-export function searchEmoji(query: string, limit = 32): { emoji: string; name: string }[] {
+// taken: emoji already used beside this one, left out so a list never repeats.
+export function searchEmoji(query: string, limit = 32, taken: string[] = []): { emoji: string; name: string }[] {
   const q = query.trim().toLowerCase();
-  if (isEmoji(q)) return [{ emoji: q, name: "" }];
+  if (isEmoji(q)) return taken.includes(q) ? [] : [{ emoji: q, name: "" }];
   const names = new Map<string, string>(INDEX.map(([n, e]) => [e, n]));
-  if (!q) return POPULAR.slice(0, limit).map((emoji) => ({ emoji, name: names.get(emoji) ?? "" }));
+  if (!q) return POPULAR.filter((e) => !taken.includes(e)).slice(0, limit).map((emoji) => ({ emoji, name: names.get(emoji) ?? "" }));
   const score = (n: string) => (n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 3);
-  const seen = new Set<string>();
+  const seen = new Set(taken);
   const rank = INDEX.map(([n], i) => score(n) * 2 + (i < CORE_SIZE ? 0 : 1));
   return INDEX.map((e, i) => [e, rank[i]] as const).filter(([[n]]) => score(n) < 3)
     .sort((a, b) => a[1] - b[1] || a[0][0].length - b[0][0].length)
@@ -49,16 +50,16 @@ export function closeEmojiPicker(): void {
 }
 
 // Opens under anchor with the search box focused; Enter picks the first match, Esc closes.
-export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void): void {
+export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void, taken: string[] = []): void {
   closeEmojiPicker();
   const search = h("input", { type: "text", class: "emoji-search", placeholder: "Search, like dog or star", value: query });
   const grid = h("div", { class: "emoji-grid" });
   const pick = (emoji: string) => { closeEmojiPicker(); onPick(emoji); };
   const render = () => {
-    const found = searchEmoji(search.value);
+    const found = searchEmoji(search.value, 32, taken);
     grid.replaceChildren(...(found.length
       ? found.map((r) => h("button", { type: "button", title: r.name, onclick: () => pick(r.emoji) }, r.emoji))
-      : [h("p", { class: "dim small" }, "Nothing by that name. Try a simpler word, or paste any emoji.")]));
+      : [h("p", { class: "dim small" }, isEmoji(search.value) ? "That one's already here. Pick a different one." : "Nothing by that name. Try a simpler word, or paste any emoji.")]));
   };
   search.addEventListener("input", render);
   void loadAll().then(() => open === pop && render());
@@ -66,7 +67,7 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
     if (e.key === "Escape") { e.preventDefault(); closeEmojiPicker(); anchor.focus(); }
     if (e.key === "Enter") {
       e.preventDefault();
-      const first = searchEmoji(search.value, 1)[0];
+      const first = searchEmoji(search.value, 1, taken)[0];
       if (first) pick(first.emoji);
     }
   });
@@ -84,12 +85,12 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
 }
 
 // A button showing an emoji that opens the picker, searching for query(). Wrap it in .emoji-wrap.
-export function emojiCell(value: string, query: () => string, onPick: (emoji: string) => void): HTMLButtonElement {
+export function emojiCell(value: string, query: () => string, onPick: (emoji: string) => void, taken = (): string[] => []): HTMLButtonElement {
   const cell = h("button", { type: "button", class: `emoji-cell${value ? "" : " empty"}`, "aria-label": "Pick an emoji" }, value || "Pick");
   cell.onclick = () => openEmojiPicker(cell, query(), (e) => {
     cell.textContent = e;
     cell.classList.remove("empty");
     onPick(e);
-  });
+  }, taken());
   return cell;
 }

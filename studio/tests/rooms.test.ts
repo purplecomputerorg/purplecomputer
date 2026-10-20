@@ -55,7 +55,7 @@ describe("family rooms in Studio's Python", () => {
 
   it("runs the memory example: a card on each letter key, turned over by pressing it", async () => {
     const replies = await runRoom(example("memory"), [{ ev: "key", key: "q" }, { ev: "key", key: "m" }, { ev: "key", key: "w" }]);
-    expect(texts(replies[0])).toEqual([..."QWERTYUIOPASDFGHJK", "🔴 Red's turn"]);
+    expect(texts(replies[0])).toEqual([..."QWERTYUIOASDFGHJKL", "🔴 Red's turn"]);
     const [q] = texts(replies[1]);
     expect(q).toMatch(/\p{Extended_Pictographic}/u);
     expect(replies[2]).not.toHaveProperty("scene");

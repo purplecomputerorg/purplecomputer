@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EXAMPLES } from "../src/examples";
 import { readKnobs, writeKnobs } from "../src/knobs";
+import { searchEmoji } from "../src/ui/emojipicker";
 
 const ROOM = `from purple import *
 
@@ -72,5 +73,12 @@ describe("knobs", () => {
       story: ["PAGES"],
       snake: ["SNAKE", "LENGTH", "TRAIL"],
     });
+  });
+
+  it("leaves out emoji already in the list, so an emoji setting never repeats one", () => {
+    expect(searchEmoji("dog").map((r) => r.emoji)).toContain("🐶");
+    expect(searchEmoji("dog", 32, ["🐶"]).map((r) => r.emoji)).not.toContain("🐶");
+    expect(searchEmoji("", 32, ["🐶"]).map((r) => r.emoji)).not.toContain("🐶");
+    expect(searchEmoji("🐶", 32, ["🐶"])).toEqual([]);
   });
 });

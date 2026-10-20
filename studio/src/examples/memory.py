@@ -5,7 +5,7 @@ from purple import *
 # Memory for two players taking turns, laid out like the Music room: each card is a letter key. Press a
 # card's letter to turn it over. Find a pair and you go again.
 
-# The pictures on the cards, two of each: your family's favorite things. Up to 13 fit, and every game shuffles them onto the letter keys, so their order here doesn't matter.
+# The pictures on the cards, up to 13. Each one makes a pair, shuffled every game.
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
 # The two players: each one's mark and name.
 # Labels: mark, name
@@ -13,9 +13,17 @@ PLAYERS = (("🔴", "Red"), ("🔵", "Blue"))
 
 # Each row of keys and its color, the same as the Music room's.
 rows = (("qwertyuiop", "#e44444"), ("asdfghjkl", "#e2c63a"), ("zxcvbnm", "#2e6ae1"))
-spots = {key: (2 + x * 2, 4 + r * 2, color) for r, (keys, color) in enumerate(rows) for x, key in enumerate(keys)}
 cards = CARDS[:13] * 2
 random.shuffle(cards)
+# As few rows as fit the cards, each about as full as the others, so the rows end together.
+used = next(n for n in (1, 2, 3) if len(cards) <= sum(len(keys) for keys, _ in rows[:n]))
+per_row = []
+left = len(cards)
+for i, (keys, _) in enumerate(reversed(rows[:used])):
+    per_row.insert(0, min(len(keys), left // (used - i)))
+    left -= per_row[0]
+spots = {key: (2 + x * 2, 4 + r * 2, color)
+         for r, ((keys, color), n) in enumerate(zip(rows, per_row)) for x, key in enumerate(keys[:n])}
 faces = dict(zip(spots, cards))
 shown = set()      # cards matched for good
 up = []            # the one or two cards turned over this turn

@@ -9,14 +9,15 @@ import { select, textIn } from "./rulesform";
 type Dict = Extract<Lit, { t: "dict" }>;
 type Str = Extract<Lit, { t: "str" }>;
 // pages: the knob's own keys when its entries point at each other by name (a story's pages); links: the
-// dicts holding those names, shown as dropdowns.
-interface Ctx { onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>; relink: (from: string, to: string) => void }
+// dicts holding those names, shown as dropdowns. taken: the emoji in the list being edited, so none repeats.
+interface Ctx { onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>; relink: (from: string, to: string) => void; taken?: () => string[] }
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 const LONG = 40;
 const nested = (v: Lit) => v.t === "list" || v.t === "tuple" || v.t === "dict";
+const emojiOnly = (items: Lit[]) => items.every((x) => x.t === "str" && isEmoji(x.v));
 // Short plain values fit on one line; long words (a map row, a sentence) get a line each. Emoji wrap however many.
-const inline = (items: Lit[]) => items.every((x) => x.t === "str" && isEmoji(x.v))
+const inline = (items: Lit[]) => emojiOnly(items)
   || (items.length <= 8 && items.every((x) => !nested(x) && !(x.t === "str" && x.v.length > 12)));
 const keyText = (k: Lit) => (k.t === "str" ? k.v : k.t === "num" ? String(k.v) : "");
 const fit = (s: string) => Math.min(LONG, Math.max(2, [...s].length + 1));
@@ -26,23 +27,23 @@ let fresh: Lit | null = null;
 const dictsIn = (v: Lit): Dict[] =>
   v.t === "dict" ? [v, ...v.entries.flatMap(([, x]) => dictsIn(x))] : v.t === "list" || v.t === "tuple" ? v.items.flatMap(dictsIn) : [];
 
-function text(v: Str, onEdit: () => void): HTMLElement {
+function text(v: Str, onEdit: () => void, taken?: () => string[]): HTMLElement {
   if (v.v.length > LONG) {
     const el = h("textarea", { class: "words-in", rows: 2, value: v.v });
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
     return el;
   }
-  if (isEmoji(v.v)) return h("span", { class: "emoji-wrap" }, emojiCell(v.v, () => "", (e) => { v.v = e; onEdit(); }));
+  if (isEmoji(v.v)) return h("span", { class: "emoji-wrap" }, emojiCell(v.v, () => "", (e) => { v.v = e; onEdit(); }, taken));
   return textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: fit(v.v), class: `inline${v.v.length > 12 ? " mono-in" : ""}` });
 }
 
-function scalar(v: Lit, onEdit: () => void): HTMLElement {
+function scalar(v: Lit, onEdit: () => void, taken?: () => string[]): HTMLElement {
   if (v.t === "str" && COLOR.test(v.v)) {
     const el = h("input", { type: "color", value: v.v });
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
     return el;
   }
-  if (v.t === "str") return text(v, onEdit);
+  if (v.t === "str") return text(v, onEdit, taken);
   if (v.t === "num") {
     const el = h("input", { type: "number", class: "inline num", value: String(v.v) });
     el.addEventListener("input", () => { if (Number.isFinite(el.valueAsNumber)) { v.v = el.valueAsNumber; onEdit(); } });
@@ -60,7 +61,7 @@ function scalar(v: Lit, onEdit: () => void): HTMLElement {
 function editor(v: Lit, ctx: Ctx, peers: Lit[] = [], labels: string[] = []): HTMLElement {
   if (v.t === "dict") return focusIfFresh(v, dict(v, ctx, peers, labels));
   if (v.t === "list" || v.t === "tuple") return focusIfFresh(v, list(v.items, v.t === "list", ctx, labels));
-  return focusIfFresh(v, scalar(v, ctx.onEdit));
+  return focusIfFresh(v, scalar(v, ctx.onEdit, ctx.taken));
 }
 
 function focusIfFresh(v: Lit, el: HTMLElement): HTMLElement {
@@ -98,10 +99,14 @@ function list(items: Lit[], growable: boolean, ctx: Ctx, labels: string[]): HTML
   growable &&= items.length > 0;
   const add = () => (growable ? addSlot(ctx, () => { items.push(structuredClone(items.at(-1)!)); return items.at(-1)!; }) : null);
   const drop = (i: number) => (growable && items.length > 1 ? remove(ctx, () => items.splice(i, 1)) : null);
-  const item = (x: Lit) => editor(x, ctx, [], nested(x) ? labels : []);
+  // An emoji list redraws on every pick, so a repeat (an added copy left as it was) shows as one.
+  const taken = emojiOnly(items) ? () => items.map((x) => (x as Str).v) : undefined;
+  const sub = taken ? { ...ctx, taken, onEdit: () => changed(ctx) } : ctx;
+  const repeat = (x: Lit) => !!taken && taken().filter((e) => e === (x as Str).v).length > 1;
+  const item = (x: Lit) => editor(x, sub, [], nested(x) ? labels : []);
   if (inline(items)) {
     return h("span", { class: "knob-inline" },
-      ...items.map((x, i) => h("span", { class: "knob-item tile" }, labelled(labels[i], item(x)), drop(i))), add());
+      ...items.map((x, i) => h("span", { class: `knob-item tile${repeat(x) ? " bad" : ""}` }, labelled(labels[i], item(x)), drop(i))), add());
   }
   return rows(items.map((x, i) => row(item(x), drop(i))), add());
 }

@@ -161,6 +161,8 @@ class TestAllowedWords:
         # Allowed words survive inside sentences even though the normalized
         # (spaceless) form contains a blocked substring across the word
         "say hello", "say fluke", "say flukes", "the temperature fluctuates",
+        # A blocked word straddling two words, not spelled out
+        "Pick a seed with a number, then press space to plant it.", "push it", "hit it", "as soon as",
     ])
     def test_allowed_word_in_sentence_passes(self, text):
         assert filter_speech(text) == text

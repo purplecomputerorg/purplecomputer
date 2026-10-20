@@ -116,6 +116,22 @@ def _find_blocked(normalized: str) -> list[str]:
     return found
 
 
+def _find_blocked_across(text: str, normalized: str) -> list[str]:
+    """Blocked words in the spaceless text that sit inside one word or span whole words
+    ("s h i t"), not ones straddling two words ("plant it")."""
+    starts, ends, at = set(), set(), 0
+    for word in re.findall(r"[a-z]+", text.lower()):
+        starts.add(at)
+        at += len(word)
+        ends.add(at)
+
+    def counts(i: int, n: int) -> bool:
+        return (i in starts and i + n in ends) or not starts.intersection(range(i + 1, i + n))
+
+    return [bw for bw in _find_blocked(normalized)
+            if any(counts(m.start(), len(bw)) for m in re.finditer(f"(?={re.escape(bw)})", normalized))]
+
+
 def _scrub(normalized: str, blocked_matches: list[str]) -> str:
     """Remove all blocked substrings from normalized text."""
     result = normalized
@@ -175,7 +191,7 @@ def _filter_english(text: str) -> str:
                         if w and _normalize(w) in _ALLOWED_WORDS}
 
     # Check the full normalized string
-    blocked_matches = _find_blocked(normalized)
+    blocked_matches = _find_blocked_across(text, normalized)
     if blocked_matches:
         # Keep only matches that aren't substrings of an allowed input word
         real_blocked = [bw for bw in blocked_matches

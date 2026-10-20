@@ -17,7 +17,7 @@ const blocklyMedia = resolve(here, "node_modules/blockly/media");
 const espeakDir = resolve(here, "vendor/espeak-ng");
 const ESPEAK_SOURCE = ["README.md", "espeak_bridge.c", "build.sh"];
 // Files fetched or built for the in-browser Purple by scripts/studio_bundle.py: Pyodide's pygame-ce
-// wheel, purple.zip, and Purple's voice (voice/).
+// wheel, purple.zip, Purple's voice (voice/), and the room checker the Room guide links to.
 const cacheDir = resolve(here, ".cache");
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
 
@@ -62,7 +62,7 @@ function pyodideAssets(): Plugin {
       };
       copyAll(pyodideDir, resolve(here, "dist/pyodide"), (f) => PYODIDE_FILES.includes(f));
       copyAll(join(cacheDir, "pyodide"), resolve(here, "dist/pyodide"), (f) => f.endsWith(".whl"));
-      copyAll(cacheDir, resolve(here, "dist/purple"), (f) => f === "purple.zip");
+      copyAll(cacheDir, resolve(here, "dist/purple"), (f) => f === "purple.zip" || f === "purple-room-check.pyz");
       copyAll(ortDir, resolve(here, "dist/ort"), (f) => ORT_FILES.includes(f));
       copyAll(blocklyMedia, resolve(here, "dist/blockly"), () => true);
       if (existsSync(join(cacheDir, "voice"))) cpSync(join(cacheDir, "voice"), resolve(here, "dist/voice"), { recursive: true });

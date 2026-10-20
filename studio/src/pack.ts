@@ -1,5 +1,5 @@
 // The app's draft, turned into the plain spec the SDK builds a pack from, and a pack turned back into a draft.
-import { buildPack as build, letterPath, packFilename as filename, phrasePath, pictureSourcePath, type PackSpec } from "@sdk/pack";
+import { buildPack as build, letterPath, packFilename as filename, phrasePath, pictureSourcePath, ROOM_FILE_NAME, ROOM_NAME, roomFilePath, type PackSpec, type RoomFileKind } from "@sdk/pack";
 import { cellsToOps } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar, type TarEntry } from "@sdk/tar";
@@ -7,7 +7,7 @@ import { decodeWav } from "@sdk/wav";
 import type { PackFiles } from "./live/boot";
 import { instrumentNotes } from "./notes";
 import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop, type Words } from "./photo";
-import { draft, emptyDraft, type Draft, type Keepable } from "./state";
+import { draft, emptyDraft, type Draft, type Keepable, type RoomDraft, type RoomFile } from "./state";
 
 export { manifest } from "@sdk/pack";
 
@@ -33,6 +33,7 @@ export async function packSpec(d: Draft = draft, trying = false): Promise<PackSp
   const synonyms = d.synonyms.filter(ok);
   const instruments = d.instruments.filter(ok);
   const rooms = d.rooms.filter(ok).map((r) => ({ name: r.name, source: r.source, blocks: r.blocks }));
+  const roomFiles = d.roomFiles.filter(ok);
   const theme = ok(d.colors) ? d.theme : null;
   const studio: Saved = {
     name: d.name, words, synonyms, ranked: d.ranked, instruments, rooms, theme,
@@ -40,7 +41,7 @@ export async function packSpec(d: Draft = draft, trying = false): Promise<PackSp
     pictures: added.map((p, i) => ({ name: p.name, title: p.title, cells: p.cells, words: p.words, crop: sources[i]?.crop })),
   };
   const rendered = await Promise.all(instruments.map(async (i) => ({ ...i, notes: await instrumentNotes(i) })));
-  return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, theme, studio };
+  return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, roomFiles, theme, studio };
 }
 
 export async function buildPack(onProgress?: (msg: string) => void, d: Draft = draft, trying = false): Promise<Blob> {
@@ -63,7 +64,28 @@ export function packChanges(id: string, entries: TarEntry[], last: Sent): PackFi
   };
 }
 
-// A downloaded Purple Pack, back as the draft it was made from, everything in it added.
+const kept = <T extends object>(x: T) => ({ ...x, kept: true });
+
+// What any pack's rooms draw and play, whoever made it.
+const roomFiles = (files: Map<string, Uint8Array>): RoomFile[] => (["images", "sounds"] as RoomFileKind[]).flatMap((kind) =>
+  [...files].flatMap(([path, data]) => {
+    const name = path.slice(`content/${kind}/`.length).replace(/\.\w+$/, "");
+    return ROOM_FILE_NAME.test(name) && path === roomFilePath({ kind, name }) ? [kept({ kind, name, data })] : [];
+  }));
+
+// The rooms of a pack made without Studio (by hand, or with an AI helper), as Python.
+function handMadeRooms(files: Map<string, Uint8Array>): RoomDraft[] {
+  const text = (data: Uint8Array) => new TextDecoder().decode(data);
+  return [...files].flatMap(([path, data]) => {
+    const name = /^content\/rooms\/([^/]+)\.py$/.exec(path)?.[1];
+    if (!name || !ROOM_NAME.test(name)) return [];
+    const blocks = files.get(`content/rooms/${name}.blocks.json`);
+    return [kept({ name, source: text(data), blocks: blocks ? JSON.parse(text(blocks)) : null, template: null })];
+  });
+}
+
+// A Purple Pack, back as a draft with everything in it added: all of it when Studio made it, and the
+// rooms with their pictures and sounds when it was made some other way.
 export async function openPack(file: Blob): Promise<Draft> {
   const files = new Map(untar(await gunzip(new Uint8Array(await file.arrayBuffer()))).map((e) => [e.path, e.data]));
   const read = (path: string) => {
@@ -73,17 +95,23 @@ export async function openPack(file: Blob): Promise<Draft> {
   };
   const readJson = (path: string) => JSON.parse(new TextDecoder().decode(read(path)));
   const image = (path: string, type: string) => new Blob([read(path) as BlobPart], { type });
+  const m = readJson("manifest.json");
+  if (!files.has("studio.json")) {
+    const rooms = handMadeRooms(files);
+    if (!rooms.length) throw new Error("studio.json is missing and there are no rooms");
+    return { ...emptyDraft(), id: m.id, name: m.name, rooms, roomFiles: roomFiles(files) };
+  }
   const s: Saved = readJson("studio.json");
-  const kept = <T extends object>(x: T) => ({ ...x, kept: true });
   return {
     ...emptyDraft(),
-    id: readJson("manifest.json").id,
+    id: m.id,
     name: s.name,
     words: s.words.map(kept),
     synonyms: s.synonyms.map(kept),
     ranked: s.ranked,
     instruments: s.instruments.map(kept),
     rooms: s.rooms.map((r) => kept({ ...r, blocks: r.blocks ?? null, template: null })),
+    roomFiles: roomFiles(files),
     theme: s.theme,
     colors: s.theme ? { kept: true } : {},
     letters: Object.fromEntries(s.letters.map((k) => [k, kept({ clip: decodeWav(read(letterPath(k))) })])),

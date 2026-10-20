@@ -51,7 +51,6 @@ def _watch():
 
 
 def main():
-    import os
     import resource
     _watch()
     for name, value in LIMITS.items():
@@ -59,9 +58,16 @@ def main():
             resource.setrlimit(getattr(resource, name), (value, value))
         except (ValueError, OSError):
             pass
-    out = os.fdopen(os.dup(1), "w")
+    serve(*stdio())
+
+
+def stdio():
+    """recv_line and send_line on this process's stdin and stdout; a room's print() goes to stderr."""
+    import os
+    out = os.fdopen(os.dup(1), "w", encoding="utf-8")
     os.dup2(2, 1)
     sys.stdout = sys.stderr
+    sys.stdin.reconfigure(encoding="utf-8")
 
     def send_line(text):
         out.write(text + "\n")
@@ -73,7 +79,7 @@ def main():
             sys.exit(0)
         return line
 
-    serve(recv_line, send_line)
+    return recv_line, send_line
 
 
 if __name__ == "__main__":

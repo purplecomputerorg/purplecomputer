@@ -6,7 +6,8 @@ Also fetches the Pyodide wheels Purple needs (pygame-ce and friends) and Purple'
 since the page may only load files from its own site.
 
 Writes studio/.cache/purple.zip, studio/.cache/pyodide/*.whl, studio/.cache/voice/ (the voice model
-and the espeak-ng English data it phonemizes with).
+and the espeak-ng English data it phonemizes with), and studio/.cache/purple-room-check.pyz, the room
+checker (purple_tui/roomkit/check.py) as one file anyone with Python 3 can run.
 Usage: just studio-bundle
 """
 
@@ -15,6 +16,8 @@ import shutil
 import subprocess
 import urllib.request
 import sys
+import tempfile
+import zipapp
 import zipfile
 from pathlib import Path
 
@@ -27,6 +30,10 @@ WHEELS = ["pygame-ce", "fonttools", "rich", "wcwidth"]
 LOCK = ROOT / "studio" / "node_modules" / "pyodide" / "pyodide-lock.json"
 EXPORT = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
 VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium"
+# What the room checker imports: the pack rules and the room library, all standard library.
+CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/pack_manager.py", "purple_tui/synth.py",
+           "purple_tui/constants.py", "purple_tui/roomkit/purple.py", "purple_tui/roomkit/runner.py",
+           "purple_tui/roomkit/limits.py", "purple_tui/roomkit/check.py"]
 EMOJI_FONTS = [Path("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"), Path.home() / ".local/share/fonts/NotoColorEmoji.ttf"]
 
 
@@ -63,7 +70,19 @@ def fetch_voice() -> None:
         shutil.copyfile(data / name, out / "espeak-ng-data" / name)
 
 
+def build_checker(out: Path) -> Path:
+    with tempfile.TemporaryDirectory() as tmp:
+        for f in CHECKER:
+            (Path(tmp) / f).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / f, Path(tmp) / f)
+        (Path(tmp) / "purple_tui/roomkit/__init__.py").touch()
+        (Path(tmp) / "__main__.py").write_text("import sys\nfrom purple_tui.roomkit.check import main\nsys.exit(main())\n")
+        zipapp.create_archive(tmp, out, interpreter="/usr/bin/env python3")
+    return out
+
+
 def main() -> None:
+    build_checker(OUT.parent / "purple-room-check.pyz")
     fetch_wheels()
     fetch_voice()
     files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()

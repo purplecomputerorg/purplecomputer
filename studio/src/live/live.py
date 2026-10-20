@@ -70,7 +70,7 @@ async def restart():
 def setup(room, letters=False, instrument=None, picture=None, family=None):
     """The room a Studio page shows: Music in Say Letters or playing an instrument, Art with a
     picture's paint ops and letters on it, the way Art's Open paints one, or a family room being
-    tried, opened over the room the way the Esc menu opens one."""
+    tried, opened over the room the way the Esc menu opens one, drawing and playing its pack's files."""
     while _app.top:
         _app.pop(_app.top)
     if room != _app.active_room:
@@ -87,6 +87,10 @@ def setup(room, letters=False, instrument=None, picture=None, family=None):
     if family:
         from purple_tui.canvas.rooms.family_room import FamilyRoom
         TRYING.mkdir(parents=True, exist_ok=True)
+        for kind in ("images", "sounds"):
+            link = TRYING.parent / kind
+            link.unlink(missing_ok=True)
+            link.symlink_to(PACKS / family["pack"] / "content" / kind)
         path = TRYING / f"{family['name']}.py"
         path.write_text(family["source"])
         _app.push(FamilyRoom(_app, content.Room(family["name"], path)))

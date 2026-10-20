@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { buildEntries, manifest, roomTitle, type PackSpec } from "../sdk/src/pack";
 import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
-import { gunzip, gzip, tar, untar } from "../sdk/src/tar";
+import { gzip, tar } from "../sdk/src/tar";
 import { buildPack, openPack, packChanges, packSpec } from "../src/pack";
 import { scaleCrop } from "../src/photo";
 import type { Draft } from "../src/state";
 import roomLibrary from "../../purple_tui/roomkit/purple.py?raw";
 
 const base: PackSpec = { name: "", pictures: [], letters: {}, phrases: [], words: [], synonyms: [], ranked: [], instruments: [], rooms: [], theme: null };
-const draftBase: Draft = { ...base, id: "pack-test", letters: {}, pictures: [], rooms: [], colors: {} };
+const draftBase: Draft = { ...base, id: "pack-test", letters: {}, pictures: [], rooms: [], roomFiles: [], colors: {} };
 
 describe("pack assembly", () => {
   it("ranks a family's own words after anything ranked by hand, leaving Purple's ranked words alone", async () => {
@@ -64,10 +64,36 @@ describe("pack assembly", () => {
     expect(scaleCrop(undefined, 0.5)).toBeUndefined();
   });
 
-  it("says why a file that isn't a Studio Purple Pack can't be opened", async () => {
-    const handMade = await buildPack(undefined, { ...draftBase, words: [{ word: "cat", emoji: "🐈", kept: true }] });
-    const entries = untar(await gunzip(new Uint8Array(await handMade.arrayBuffer()))).filter((e) => e.path !== "studio.json");
-    await expect(openPack(new Blob([(await gzip(tar(entries))) as BlobPart]))).rejects.toThrow(/studio.json is missing/);
+  const packOf = async (files: Record<string, string | Uint8Array>) =>
+    new Blob([(await gzip(tar(Object.entries(files).map(([path, data]) => ({ path, data: typeof data === "string" ? new TextEncoder().encode(data) : data }))))) as BlobPart]);
+
+  it("opens a pack made by hand or by an AI helper as its rooms, with their pictures and sounds", async () => {
+    const png = new Uint8Array([137, 80, 78, 71]);
+    const back = await openPack(await packOf({
+      "manifest.json": JSON.stringify({ id: "pack-cat", name: "Our Cat", version: "1.0.0", type: "emoji" }),
+      "content/rooms/cat.py": "from purple import *\nshow(picture('mochi'))\n",
+      "content/rooms/purple.py": "# a library",
+      "content/images/mochi.png": png,
+      "content/images/Not OK.png": png,
+      "content/sounds/purr.wav": png,
+    }));
+    expect([back.id, back.name]).toEqual(["pack-cat", "Our Cat"]);
+    expect(back.rooms).toEqual([{ name: "cat", source: "from purple import *\nshow(picture('mochi'))\n", blocks: null, template: null, kept: true }]);
+    expect(back.roomFiles.map((f) => [f.kind, f.name, f.data])).toEqual([["images", "mochi", png], ["sounds", "purr", png]]);
+    const paths = (await buildEntries(await packSpec(back))).map((e) => e.path);
+    expect(paths).toEqual(expect.arrayContaining(["content/rooms/cat.py", "content/images/mochi.png", "content/sounds/purr.wav"]));
+  });
+
+  it("says why a file with nothing Studio can open can't be opened", async () => {
+    const words = await packOf({ "manifest.json": JSON.stringify({ id: "w", name: "W", version: "1.0.0", type: "emoji" }), "content/emoji.json": "{}" });
+    await expect(openPack(words)).rejects.toThrow(/studio.json is missing/);
+  });
+
+  it("keeps a room's pictures and sounds when a Studio pack is reopened", async () => {
+    const png = new Uint8Array([1, 2, 3]);
+    const d: Draft = { ...draftBase, rooms: [{ name: "pets", source: "", blocks: null, template: null, kept: true }], roomFiles: [{ kind: "images", name: "rex", data: png, kept: true }] };
+    const back = await openPack(await buildPack(undefined, d));
+    expect(back.roomFiles).toEqual([{ kind: "images", name: "rex", data: png, kept: true }]);
   });
 
   it("renders an instrument into one file per reachable pitch plus its numbers", async () => {

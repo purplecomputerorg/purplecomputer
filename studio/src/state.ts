@@ -2,11 +2,12 @@ import type { Clip } from "./audio";
 import type { Picture } from "./photo";
 import type { TemplateDraft } from "./examples";
 import { roomTitle, slug } from "@sdk/pack";
+import type { RoomFileKind } from "@sdk/pack";
 import type { Theme } from "@sdk/purple/theme";
 import type { BaseName, Params } from "@sdk/purple/synth";
 
-// Off until room customization ships: no Rooms page, Room guide, or pack.room. Mutable so tests can turn it on.
-export const features = { rooms: false };
+// Set false to hide the Rooms page, Room guide, and pack.room. Mutable so tests can flip it.
+export const features = { rooms: true };
 
 // Everything starts as a try: Studio's Purple plays it, and it goes in the download once the family
 // adds it (kept). A sample is one of Studio's examples, tried and not yet changed or added.
@@ -20,6 +21,8 @@ export interface Instrument extends Keepable { name: string; title?: string; bas
 // A room is its Python (what Purple runs) plus what it was made from, blocks or a form, so either can be
 // reopened. Both are null once the Python has been edited by hand.
 export interface RoomDraft extends Keepable { name: string; source: string; blocks: unknown | null; template: TemplateDraft | null }
+// A picture or sound the pack's rooms draw with picture("name") and play with sound("name"), as Purple reads it.
+export interface RoomFile extends Keepable { kind: RoomFileKind; name: string; data: Uint8Array }
 
 export interface Draft {
   // The pack's id on Purple, made once per Purple Pack, so downloading it again under any name replaces it.
@@ -33,6 +36,7 @@ export interface Draft {
   ranked: string[];
   instruments: Instrument[];
   rooms: RoomDraft[];
+  roomFiles: RoomFile[];
   theme: Theme | null;
   // The colors are one piece: this says whether they're added.
   colors: Keepable;
@@ -49,6 +53,7 @@ export const emptyDraft = (): Draft => ({
   ranked: [],
   instruments: [],
   rooms: [],
+  roomFiles: [],
   theme: null,
   colors: {},
 });
@@ -88,13 +93,14 @@ export function allPieces(): Piece[] {
     { id: "synonyms", section: "words", label: "nicknames", one: "nickname", items: draft.synonyms },
     { id: "instruments", section: "instruments", label: "instruments", one: "instrument", items: draft.instruments },
     { id: "rooms", section: "rooms", label: "rooms", one: "room", items: draft.rooms },
+    { id: "room_files", section: "rooms", label: "room pictures and sounds", one: "room picture or sound", items: draft.roomFiles },
     { id: "colors", section: "colors", label: "new colors", one: "new set of colors", items: draft.theme ? [draft.colors] : [] },
   ];
 }
 
 // The parts of the draft each Studio section makes, so one section can be cleared on its own.
 const SECTION_FIELDS: Record<string, (keyof Draft)[]> = {
-  pictures: ["pictures"], voice: ["letters", "phrases"], words: ["words", "synonyms", "ranked"], instruments: ["instruments"], rooms: ["rooms"], colors: ["theme", "colors"],
+  pictures: ["pictures"], voice: ["letters", "phrases"], words: ["words", "synonyms", "ranked"], instruments: ["instruments"], rooms: ["rooms", "roomFiles"], colors: ["theme", "colors"],
 };
 export const hasWork = (section?: string) => allPieces().some((p) => (!section || p.section === section) && p.items.length);
 export function clearSection(section: string) {

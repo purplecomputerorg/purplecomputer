@@ -1,8 +1,13 @@
 // Every room Studio starts from, in one place: the forms (trivia, soundboard) that write a room's
-// Python, and the examples the Rooms page and the Room guide show. Form text goes into the code
+// Python, and the starter rooms the Rooms page and the Room guide show. Form text goes into the code
 // only as JSON string literals, which are valid Python strings, so nothing typed can become code.
 import { PURPLE } from "@sdk";
+import beats from "./beats.py?raw";
+import explore from "./explore.py?raw";
+import garden from "./garden.py?raw";
+import memory from "./memory.py?raw";
 import snake from "./snake.py?raw";
+import story from "./story.py?raw";
 
 const SPECIAL_KEYS: string[] = PURPLE.room.keys;
 const lit = (s: string) => JSON.stringify(s);
@@ -102,9 +107,24 @@ export const TEMPLATES = {
 
 export const templateSource = (t: TemplateDraft) => (t.kind === "trivia" ? triviaSource(t.data) : soundboardSource(t.data));
 
-export interface Example { name: string; label: string; about: string; source: string }
+export interface Example { name: string; icon: string; label: string; about: string; source: string }
 
+// Starters: each one a kind of room families asked for, short enough to read and change.
 export const EXAMPLES: Example[] = [
-  { name: "snake", label: "Snake", about: "A snake that keeps moving. Arrow keys turn it.", source: snake },
-  { name: "dinosaur-trivia", label: "Dinosaur trivia", about: "Three questions, made with the trivia form.", source: triviaSource(TEMPLATES.trivia.defaults()) },
+  { name: "explore", icon: "🗺️", label: "A world to walk around", about: "Walk with the arrows, find stars, meet a fox. The world is drawn with letters you can change.", source: explore },
+  { name: "garden", icon: "🌻", label: "A garden", about: "Plant seeds and water them. It remembers the garden for next time.", source: garden },
+  { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off, then press Enter to hear them loop.", source: beats },
+  { name: "memory", icon: "🃏", label: "Memory for two", about: "Take turns turning over cards to find the pairs.", source: memory },
+  { name: "story", icon: "📖", label: "A story with choices", about: "Purple reads each page, and number keys pick what happens next.", source: story },
+  { name: "snake", icon: "🐍", label: "Snake", about: "The smallest game: a snake that keeps moving. Arrow keys turn it.", source: snake },
 ];
+
+export const BLANK_ROOM = `from purple import *
+
+show("👋")
+say("Hello!")
+
+
+def on_key(key):
+    show(key)
+`;

@@ -23,6 +23,8 @@ from purple_tui.canvas.rooms.family_room import FamilyRoom
 from purple_tui.canvas.rooms.parent_menu import FamilyRoomsScreen
 from purple_tui.content import ContentManager
 from purple_tui.keyboard import NavigationAction
+from purple_tui.music_constants import PERCUSSION
+from purple_tui.roomkit import purple as purple_lib
 
 SNAKE = '''from purple import *
 snake, heading = [(5, 5)], (1, 0)
@@ -93,7 +95,7 @@ def _open(app, name):
 
 
 def texts(room) -> list:
-    return [s[4] for s in room.scene if s[0] == "text"]
+    return [line for s in room.scene if s[0] == "text" for line in s[4].split("\n")]
 
 
 def cells(room) -> dict:
@@ -171,7 +173,7 @@ def test_the_packs_own_library_runs_and_unknown_shapes_and_fields_are_skipped(pa
         app = make_app()
         room = _open(app, "custom")
         await until(lambda: room.scene)
-        assert room.scene == [("text", 120.0, 60.0, 20.0, "From the pack", "accent", "center")] and room.fault is None
+        assert room.scene == [("text", 120.0, 60.0, 20.0, "From the pack", "accent", "center", 0.0, 0.0, None, 0.0, 0.0)] and room.fault is None
         app._draw()
         room.close()
     run(go())
@@ -324,6 +326,61 @@ def test_pictures_draw_from_the_pack_or_from_pixels(pack):
     run(go())
 
 
+def test_the_grid_has_a_floor_a_cursor_big_pictures_and_text_over_it(pack):
+    pack("garden", 'from purple import *\ngrid.floor.set(0, 0, "#00aa00")\ngrid.set(0, 0, "🌻")\ngrid.cursor(0, 0)\n'
+                   'grid.set(2, 2, pixels(["XX", "XX", "XX", "XX"], {"X": "#ff0000"}, 2))\n'
+                   'status("Score 3")\nwrite("Plant a seed")\nshow("Hi")\n')
+
+    async def go():
+        app = make_app()
+        room = _open(app, "garden")
+        await until(lambda: room.scene)
+        kinds = [s[0] for s in room.scene]
+        assert kinds == ["rect", "rect", "text", "image", "rect", "text", "text", "text"]
+        floor, flower, picture, ring = room.scene[1], room.scene[2], room.scene[3], room.scene[4]
+        assert floor[5] == "#00aa00" and flower[4] == "🌻"
+        assert picture[1:5] == (20.0, 20.0, 20.0, 40.0)
+        assert ring[5:] == ("accent", 10 / 6, 1.0)
+        big, lines, status = room.scene[5:]
+        assert (big[4], lines[4], status[4]) == ("Hi", "Plant a seed", "Score 3")
+        assert status[6] == "top" and status[9] == "surface"
+        app._draw()
+        room.close()
+    run(go())
+
+
+def test_text_on_a_rooms_own_background_stays_readable(pack):
+    pack("light", 'from purple import *\nbackground("#f5d7a8")\nshow("Biscuit")\n')
+
+    async def go():
+        app = make_app()
+        room = _open(app, "light")
+        await until(lambda: texts(room))
+        assert room.scene[1][5] == purple_lib._INKS[True]["text"]
+        room.close()
+    run(go())
+
+
+def test_long_text_wraps_and_shrinks_into_its_box(pack):
+    words = " ".join(["word"] * 60)
+    pack("custom", "", lib=lib_sending({"scene": [["text", 120, 60, 30, words, "text", {"width": 200, "height": 40, "box": "#ff0000", "pad": 2}],
+                                                   ["text", 120, 110, 8, "[bold]as typed", "text", {"anchor": "nowhere"}]]}))
+
+    async def go():
+        app = make_app()
+        room = _open(app, "custom")
+        await until(lambda: room.scene)
+        assert room.scene[1][6:] == ("center", 0.0, 0.0, None, 0.0, 0.0)
+        app._draw()
+        k = room._surface.get_width() / family_room.SIZE[0]
+        red = [y for y in range(room._surface.get_height()) if room._surface.get_at((int(120 * k), y))[:3] == (255, 0, 0)]
+        assert red and (red[-1] - red[0]) / k <= 44
+        lines = room._fit("[bold]as typed", 40, "#ffffff", 0, 0, 1000)
+        assert len(lines) == 1 and len(lines[0][2]) == 1
+        room.close()
+    run(go())
+
+
 def test_a_picture_the_pack_doesnt_have_is_skipped(pack):
     pack("custom", "", lib=lib_sending({"scene": [["image", 0, 0, 10, 10, "nope"], ["image", 0, 0, 10, 10, {"rows": "XX"}]]}))
 
@@ -337,7 +394,7 @@ def test_a_picture_the_pack_doesnt_have_is_skipped(pack):
 
 
 def test_a_room_plays_its_packs_own_sounds(pack, monkeypatch):
-    room_file = pack("meow", 'from purple import *\ndef on_key(key):\n    sound("meow")\n    sound("woof")\n')
+    room_file = pack("meow", 'from purple import *\ndef on_key(key):\n    sound("meow")\n    sound("woof") if key == "w" else None\n')
     meow = room_file.path.parents[1] / "sounds" / "meow.wav"
     meow.parent.mkdir()
     meow.write_bytes(b"")
@@ -352,8 +409,32 @@ def test_a_room_plays_its_packs_own_sounds(pack, monkeypatch):
         await press(app, "a")
         await until(lambda: played)
         assert played == [meow]
+        await press(app, "w")
+        await until(lambda: room.fault)
+        assert room.fault == "ValueError: the pack has no sound called 'woof' (line 4)"
         room.close()
     run(go())
+
+
+def test_everything_one_key_says_is_spoken_in_order(pack, monkeypatch):
+    pack("chatty", 'from purple import *\ndef on_key(key):\n    say("A pair!")\n    say("Go again.")\n')
+    spoken = []
+    monkeypatch.setattr(family_room.tts, "speak_many", lambda texts, gap: spoken.append(texts))
+    monkeypatch.setattr(FamilyRoom, "_audible", lambda self: True)
+
+    async def go():
+        app = make_app()
+        room = _open(app, "chatty")
+        await until(lambda: not room._busy)
+        await press(app, "a")
+        await until(lambda: spoken)
+        assert spoken == [["A pair!", "Go again."]]
+        room.close()
+    run(go())
+
+
+def test_the_library_knows_purples_drums():
+    assert sorted(purple_lib.DRUMS) == sorted(PERCUSSION.values())
 
 
 def test_esc_menu_lists_only_rooms_a_parent_turned_on(pack):

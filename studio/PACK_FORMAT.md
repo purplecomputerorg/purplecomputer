@@ -79,7 +79,7 @@ def on_key(key):
 
 A family-made room: a Python file that runs as a guest. Purple starts it in a sealed process of its own that can't touch anything else on the machine, and the room can only answer Purple's events with what to show and play. A room that errors, hangs, or asks for too much is ended and shows a calm "this room needs fixing" card. Once a parent turns a room on in the Parent Menu's Family Rooms list, the room picker (a tap of Esc) shows it in a row of family rooms; Esc always leaves. `<name>` is lowercase letters, digits, and dashes, never `purple`, and the picker shows it title-cased (`dinosaur-trivia` becomes Dinosaur Trivia).
 
-What a room can call, the keys it receives, and the message protocol are in `guides/family-rooms.md`; `purple_tui/roomkit/purple.py` is the module itself. Studio runs the same file in its preview, so what a parent tries there is what the kid gets.
+What a room can call and the keys it receives are in Studio's Room guide (`studio/src/room-guide.md`), and the message protocol in `guides/family-rooms.md`; `purple_tui/roomkit/purple.py` is the module itself. `purple_tui/roomkit/check.py` tries a pack's rooms without Purple. Studio runs the same file in its preview, so what a parent tries there is what the kid gets.
 
 Studio saves the Blockly workspace a room was built from beside it as `<name>.blocks.json`, which Purple ignores; it is there so the room can be reopened for editing.
 

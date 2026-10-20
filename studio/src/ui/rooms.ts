@@ -1,12 +1,14 @@
 import * as Blockly from "blockly";
 import { ROOM_NAME, roomTitle } from "@sdk/pack";
 import { BLANK_BLOCKS, TOOLBOX, defineBlocks, sourceFromBlocks, toPython } from "../blocks";
-import { EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
+import { BLANK_ROOM, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
 import type { RoomSetup } from "../live/boot";
 import { addRoom } from "../pybridge";
 import { changed, draft, freeName, type RoomDraft } from "../state";
 import { field, go, h } from "./dom";
 import { liveScreen, type RoomProblem } from "./live";
+import { openPackButton } from "./packfile";
+import { roomFilesBox } from "./roomfiles";
 import { tryBar, tryChip } from "./trybar";
 import { templateForm } from "./templateform";
 import type { View } from "./view";
@@ -44,7 +46,11 @@ function list(): View {
           return choice(kind === "trivia" ? "❓" : "🔊", t.label, t.about, () => open(kind, templateSource(template), { blocks: null, template }));
         }),
         choice("🧱", "Blocks", "Snap blocks together to make anything. No typing code.", () => open("my-room", sourceFromBlocks(BLANK_BLOCKS), { blocks: BLANK_BLOCKS, template: null })),
-        choice("🐍", EXAMPLES[0].label, `${EXAMPLES[0].about} Written in Python, ready to change.`, () => open(EXAMPLES[0].name, EXAMPLES[0].source, { blocks: null, template: null }))),
+        choice("✏️", "Python from nothing", "An empty room to write yourself, or to paste in what an AI helper wrote.", () => open("my-room", BLANK_ROOM, { blocks: null, template: null }))),
+      h("h3", {}, "Or change one of these"),
+      h("div", { class: "cards" }, ...EXAMPLES.map((e) => choice(e.icon, e.label, e.about, () => open(e.name, e.source, { blocks: null, template: null })))),
+      h("p", { class: "dim" }, "Made a Purple Pack with an AI helper, or by hand? ", openPackButton("Open it here"), " to try its rooms and change them."),
+      roomFilesBox(),
       ...([true, false] as const).map((kept) => {
         const rooms = draft.rooms.filter((r) => !!r.kept === kept);
         return rooms.length ? h("div", {}, h("h3", {}, kept ? "In your Purple Pack" : "Trying"), h("div", { class: "row" }, ...rooms.map((r) => {
@@ -82,11 +88,12 @@ function editor(room: RoomDraft): View {
   const out = h("pre", { class: "console" });
   const live = liveScreen();
   // The room opens over Play on the real Purple, as the Esc menu opens it on a laptop.
-  const setup: RoomSetup = { room: "play", family: { name: room.name, source: room.source } };
+  const family = () => ({ name: room.name, source: room.source, pack: draft.id });
+  const setup: RoomSetup = { room: "play", family: family() };
   const restart = () => {
     out.textContent = "";
     problems.show(null);
-    setup.family = { name: room.name, source: room.source };
+    setup.family = family();
     live.show(setup);
   };
   let timer = 0;
@@ -182,6 +189,7 @@ function editor(room: RoomDraft): View {
       panes.python,
       problems.element,
       out,
+      roomFilesBox(),
       h("p", { class: "dim small" }, "What a room can call is on the ", h("a", { href: "#guide" }, "Room guide"), "."),
     ),
     live: setup,

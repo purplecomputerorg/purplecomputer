@@ -16,6 +16,9 @@ export interface PackPicture { name: string; title?: string; ops: PaintOp[]; let
 export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params; notes?: Uint8Array[] }
 // content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Blockly workspace it came from rides beside it.
 export interface PackRoom { name: string; source: string; blocks?: unknown }
+// content/images/<name>.png and content/sounds/<name>.wav: what rooms draw with picture() and play with sound().
+export type RoomFileKind = "images" | "sounds";
+export interface PackRoomFile { kind: RoomFileKind; name: string; data: Uint8Array }
 
 export interface PackSpec {
   // The file name without .purplepack.
@@ -32,6 +35,7 @@ export interface PackSpec {
   pictures: PackPicture[];
   instruments: PackInstrument[];
   rooms: PackRoom[];
+  roomFiles?: PackRoomFile[];
   theme: Theme | null;
 }
 
@@ -44,6 +48,9 @@ const json = (path: string, value: unknown) => text(path, JSON.stringify(value, 
 export const slug = (s: string) => s.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 // purple is taken: content/rooms/purple.py is the library the pack's rooms run on.
 export const ROOM_NAME = /^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$/;
+// content.ASSET_NAME: a room picture's or sound's name.
+export const ROOM_FILE_NAME = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+export const roomFilePath = (f: Pick<PackRoomFile, "kind" | "name">) => `content/${f.kind}/${f.name}.${f.kind === "images" ? "png" : "wav"}`;
 // content.display_name: what Purple shows for a room called `name`.
 export const roomTitle = (name: string) =>
   name.replace(/[-_]/g, " ").trim().replace(/[a-zA-Z]+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).slice(0, 24);
@@ -112,6 +119,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
     entries.push(text(`content/rooms/${room.name}.py`, room.source.endsWith("\n") ? room.source : room.source + "\n"));
     if (room.blocks) entries.push(json(`content/rooms/${room.name}.blocks.json`, room.blocks));
   }
+  for (const f of spec.roomFiles ?? []) entries.push({ path: roomFilePath(f), data: f.data });
 
   if (spec.theme) entries.push(json("content/theme.json", themeJson(spec.theme)));
   if (spec.studio) entries.push(json("studio.json", spec.studio));

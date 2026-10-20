@@ -25,6 +25,8 @@ from ...content import png_size
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...music_constants import instruments, pitch_filename
 from ...timeline import state_dir
+from ...roomkit.limits import (KEEP_MAX_BYTES, MAX_REPLY_CHARS, MAX_SHAPES, MAX_SOUNDS, MAX_WAKE_S, MIN_WAKE_S,
+                               START_TIMEOUT_S, STEP_TIMEOUT_S)
 from ..sounds import SoundBank
 from ..theme import ROLES
 from ..ui import KID_MATH_KEYS, Overlay
@@ -35,16 +37,9 @@ SIZE = (240, 120)           # the room's surface; the viewport is 2:1 on every m
 RUNNER = Path(__file__).parents[2] / "roomkit" / "runner.py"
 BUILTIN_LIB = RUNNER.parent / "purple.py"
 RUN_ROOM = Path("/usr/local/bin/purple-room-run")   # the ISO's sealed launcher (scripts/purple-room-run.sh)
-START_TIMEOUT_S = 8.0       # python3 startup on the slowest laptops, plus the room's top level
-STEP_TIMEOUT_S = 3.0
-MAX_REPLY_CHARS = 256 * 1024
-MAX_SHAPES = 1000
-MAX_SOUNDS = 8
 MAX_PIXELS = 64             # an inline picture's rows, and characters per row
 PICTURE_CACHE = 512
 TEXT_MAX = 200
-KEEP_MAX_BYTES = 4096
-MIN_WAKE_S, MAX_WAKE_S = 1 / 30, 3600
 PAUSED_RECHECK_S = 0.5
 IDLE_PAUSE_S = 180
 QUEUE_MAX = 8
@@ -54,6 +49,9 @@ FLASH_TILES = (16, 8)
 FLASH_DELTA = 0.1
 FLASH_AREA = 0.25
 FLASH_GAP_S = 1 / 3
+# A text shape's anchor: which point of its block sits at (x, y), as a pygame.Rect attribute.
+ANCHORS = {"center": "center", "left": "midleft", "right": "midright", "top": "midtop", "bottom": "midbottom",
+           "topleft": "topleft", "topright": "topright", "bottomleft": "bottomleft", "bottomright": "bottomright"}
 _NOTE = re.compile(r"^([A-Ga-g])(#?)(\d)$")
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 _ram_keeps: dict = {}
@@ -161,6 +159,19 @@ def _picture_source(src, images) -> str | tuple | None:
     return _pixels(src) if isinstance(src, dict) else None
 
 
+def _size_or_0(v) -> float:
+    return float(v) if _num(v) and v > 0 else 0.0
+
+
+def _text_shape(a) -> tuple:
+    """("text", x, y, size, text, color, anchor, width, height, box, pad, radius): see guides/family-rooms.md."""
+    how = a[5] if len(a) > 5 and isinstance(a[5], dict) else {}
+    return ("text", *map(float, a[:3]), str(a[3])[:TEXT_MAX], (_color(a[4]) if len(a) > 4 else None) or "text",
+            how.get("anchor") if how.get("anchor") in ANCHORS else "center",
+            *(_size_or_0(how.get(k)) for k in ("width", "height")), _color(how.get("box")),
+            *(_size_or_0(how.get(k)) for k in ("pad", "radius")))
+
+
 def _shape(s, images=()) -> tuple | None:
     """A shape from a reply, checked; None for anything malformed or unknown, which is skipped."""
     if not isinstance(s, list) or not s:
@@ -169,10 +180,9 @@ def _shape(s, images=()) -> tuple | None:
     if kind == "image" and len(a) >= 5 and all(map(_num, a[:4])) and (src := _picture_source(a[4], images)):
         return ("image", *map(float, a[:4]), src)
     if kind == "rect" and len(a) >= 5 and all(map(_num, a[:4])) and _color(a[4]):
-        return ("rect", *map(float, a[:4]), a[4], float(a[5]) if len(a) > 5 and _num(a[5]) else 0.0)
+        return ("rect", *map(float, a[:4]), a[4], *(_size_or_0(a[i]) if len(a) > i else 0.0 for i in (5, 6)))
     if kind == "text" and len(a) >= 4 and all(map(_num, a[:3])):
-        color = _color(a[4]) if len(a) > 4 else "text"
-        return ("text", *map(float, a[:3]), str(a[3])[:TEXT_MAX], color or "text", "left" if a[5:6] == ["left"] else "center")
+        return _text_shape(a)
     return None
 
 
@@ -238,7 +248,7 @@ class FamilyRoom(Overlay):
         self._images = {n: (p, size) for n, p in self.room.images.items() if (size := png_size(p))}
         self._clips = self.room.sounds
         start = {"ev": "start", "t": 0, "api": API, "size": list(SIZE), "keep": self._keep, "lib": lib, "source": source,
-                 "images": {n: list(size) for n, (_, size) in self._images.items()}}
+                 "images": {n: list(size) for n, (_, size) in self._images.items()}, "sounds": sorted(self._clips)}
         token = self._token = object()
         try:
             self._guest = Guest(json.dumps(start, ensure_ascii=False),
@@ -339,8 +349,7 @@ class FamilyRoom(Overlay):
         if "scene" in reply and (not isinstance(scene, list) or len(scene) > MAX_SHAPES):
             return "it drew too much at once"
         sounds = reply.get("sounds")
-        for sound in sounds[:MAX_SOUNDS] if isinstance(sounds, list) else []:
-            self._play(sound)  # before drawing, so a note isn't late by a render
+        self._play(sounds[:MAX_SOUNDS] if isinstance(sounds, list) else [])  # before drawing, so a note isn't late by a render
         if "scene" in reply:
             self._show([s for s in (_shape(s, self._images) for s in scene) if s])
         if "keep" in reply:
@@ -383,7 +392,6 @@ class FamilyRoom(Overlay):
 
     def _render(self, scene: list, size) -> pygame.Surface:
         """The scene drawn once, at the viewport's size; every frame after just copies it."""
-        g = self.app.g
         surface = pygame.Surface(size, depth=32)
         surface.fill(P.SURFACE)
         k = size[0] / SIZE[0]
@@ -394,18 +402,48 @@ class FamilyRoom(Overlay):
                     surface.blit(img, (round(x * k), round(y * k)))
                 continue
             if kind == "rect":
-                w, h, color, radius = rest
+                w, h, color, radius, line = rest
                 box = pygame.Rect(round(x * k), round(y * k), max(1, round(w * k)), max(1, round(h * k)))
-                pygame.draw.rect(surface, _paint(color), box, border_radius=max(0, round(radius * k)))
+                pygame.draw.rect(surface, _paint(color), box, max(0, round(line * k)) if line else 0,
+                                 border_radius=max(0, round(radius * k)))
                 continue
-            px, text, color, align = rest
-            x, y, px = x * k, y * k, max(6, round(px * k))
-            room = size[0] - x if align == "left" else 2 * min(x, size[0] - x)
-            img = g.text(text, px, "sans", _paint(color))
-            if room > 0 and img.get_width() > room:
-                img = g.text(text, max(6, int(px * room / img.get_width())), "sans", _paint(color))
-            surface.blit(img, img.get_rect(midleft=(x, y)) if align == "left" else img.get_rect(center=(x, y)))
+            self._text(surface, k, x * k, y * k, *rest)
         return surface
+
+    def _text(self, surface, k, x, y, px, text, color, anchor, width, height, box, pad, radius):
+        side = ANCHORS[anchor]
+        sw = surface.get_width()
+        fits = sw - x if "left" in side else x if "right" in side else 2 * min(x, sw - x)
+        lines = self._fit(text, max(6, round(px * k)), _paint(color), width * k, height * k, fits)
+        block = pygame.Rect(0, 0, max(w for w, _, _ in lines), sum(h for _, h, _ in lines))
+        setattr(block, side, (round(x), round(y)))
+        if box:
+            pygame.draw.rect(surface, _paint(box), block.inflate(2 * pad * k, 2 * pad * k), border_radius=round(radius * k))
+        top = block.y
+        for w, h, pieces in lines:
+            left = block.x + (0 if "left" in side else block.w - w if "right" in side else (block.w - w) // 2)
+            for img, at, _ in pieces:
+                surface.blit(img, (left + at, top + (h - img.get_height()) // 2))
+            top += h
+
+    def _lines(self, text, px, color, width) -> list:
+        """Gfx.layout's lines; a grid square's one short line skips layout, which costs three times as much."""
+        g = self.app.g
+        if width or "\n" in text:
+            return g.layout(text.replace("[", "\\["), px, "sans", color, max_width=width or None)
+        img = g.text(text, px, "sans", color)
+        return [(img.get_width(), img.get_height(), [(img, 0, None)])]
+
+    def _fit(self, text, px, color, width, height, fits) -> list:
+        """Lines at the biggest size up to px that fit: wrapped at width when there is one, else one
+        line no wider than fits, and no taller than height when there is one."""
+        while True:
+            lines = self._lines(text, px, color, width)
+            w, h = max(w for w, _, _ in lines), sum(h for _, h, _ in lines)
+            scale = min(1 if width or w <= fits or fits <= 0 else fits / w, h and height / h if height and h > height else 1)
+            if scale >= 1 or px <= 6:
+                return lines
+            px = max(6, min(px - 1, int(px * (scale ** 0.5 if width else scale))))
 
     def _picture(self, src, size) -> pygame.Surface | None:
         """A pack image or inline pixels at a size: blocky when blown up at least twice, smooth otherwise."""
@@ -444,13 +482,18 @@ class FamilyRoom(Overlay):
     def _audible(self) -> bool:
         return self.app._effective_volume() > 0
 
-    def _play(self, sound):
-        if not isinstance(sound, list) or len(sound) < 2 or not self._audible():
+    def _play(self, sounds: list):
+        """One reply's sounds; its say()s are spoken one after another, and cut off what's still being said."""
+        sounds = [[str(a)[:TEXT_MAX] for a in s] for s in sounds if isinstance(s, list) and len(s) > 1]
+        if not sounds or not self._audible():
             return
-        kind, *args = [str(a)[:TEXT_MAX] for a in sound]
-        if kind == "say":
-            tts.speak(args[0])
-        elif kind == "note" and (m := _NOTE.match(args[0])):
+        if says := [s[1] for s in sounds if s[0] == "say"]:
+            tts.speak_many(says, gap=0.3)
+        for s in sounds:
+            self._sound(*s)
+
+    def _sound(self, kind, *args):
+        if kind == "note" and (m := _NOTE.match(args[0])):
             wanted = args[1].lower() if len(args) > 1 else ""
             inst = next((i for i, n in instruments() if wanted in (i.lower(), n.lower())), instruments()[0][0])
             if clip := self.sounds.instrument(inst).get(pitch_filename(m[1].upper() + m[2], int(m[3]))):

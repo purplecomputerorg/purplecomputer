@@ -14,7 +14,7 @@ import json as _json
 import re as _re
 import traceback as _traceback
 
-__all__ = ["grid", "keep", "images", "show", "write", "clear", "background", "say", "play", "drum", "sound",
+__all__ = ["grid", "keep", "images", "sounds", "show", "write", "status", "clear", "background", "say", "play", "drum", "sound",
            "picture", "pixels", "held", "ask", "every", "after", "game_over"]
 
 W, H = 24, 12
@@ -22,12 +22,15 @@ CELL = 10
 LINES_KEPT = 5
 KEEP_MAX_BYTES = 4096
 _HEX = _re.compile(r"^#[0-9a-fA-F]{6}$")
+_NOTE = _re.compile(r"^[A-Ga-g]#?\d$")
+DRUMS = ("kick", "snare", "hi-hat", "clap", "cowbell", "woodblock", "triangle", "tambourine", "bongo", "gong")
 
 _send = None   # the host's: send(reply: dict)
 _recv = None   # the host's: blocking recv() -> event dict
 
 keep = {}      # remembered for next time, up to 4 KB of JSON
 images = {}    # the pack's pictures this room can draw: name -> (width, height)
+sounds = set() # the pack's own sounds this room can play
 _held = set()
 
 
@@ -38,9 +41,12 @@ def _text(value) -> str:
 class _Screen:
     def __init__(self):
         self.background = "surface"
-        self.big = ""
+        self.big = ""        # text, or a picture
         self.lines = []
+        self.status = ""
         self.cells = {}
+        self.floor = {}
+        self.cursor = None
         self.timers = {}
         self.sounds = []
         self.asking = None   # [prompt, typed so far] while ask() waits
@@ -52,9 +58,9 @@ _size = [240, 120]
 _now = [0.0]
 
 
-def show(text):
-    """Big in the middle of the screen, replacing what was there."""
-    _s.big = _text(text)
+def show(thing):
+    """Big in the middle of the screen, replacing what was there: text, or a picture."""
+    _s.big = thing if isinstance(thing, _Picture) else _text(thing)
 
 
 def write(text):
@@ -62,10 +68,15 @@ def write(text):
     _s.lines = (_s.lines + [_text(text)])[-LINES_KEPT:]
 
 
+def status(text=""):
+    """A line along the top, for a score or what to do; status() takes it away."""
+    _s.status = _text(text)
+
+
 def clear():
-    """Empty the screen: the middle, the lines, and the grid."""
-    _s.big, _s.lines = "", []
-    _s.cells.clear()
+    """Empty the screen: the middle, the lines, the top line, and the grid."""
+    _s.big, _s.lines, _s.status = "", [], ""
+    grid.clear()
 
 
 def background(color):
@@ -80,17 +91,23 @@ def say(text):
 
 def play(note, instrument="marimba"):
     """A note like 'C4' or 'F#3' on one of Purple's instruments."""
+    if not _NOTE.match(str(note)):
+        raise ValueError(f"a note looks like 'C4' or 'F#3', not {note!r}")
     _s.sounds.append(["note", str(note), str(instrument)])
 
 
 def drum(name):
     """kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, or gong."""
-    _s.sounds.append(["drum", str(name)])
+    if name not in DRUMS:
+        raise ValueError(f"there's no drum called {name!r}; try {', '.join(DRUMS)}")
+    _s.sounds.append(["drum", name])
 
 
 def sound(name):
     """One of the pack's own sounds, content/sounds/<name>.wav."""
-    _s.sounds.append(["clip", str(name)])
+    if name not in sounds:
+        raise ValueError(f"the pack has no sound called {name!r}")
+    _s.sounds.append(["clip", name])
 
 
 def held(key):
@@ -99,21 +116,26 @@ def held(key):
 
 
 class _Picture:
-    def __init__(self, source):
+    """w by h squares; h left out keeps the picture's shape."""
+
+    def __init__(self, source, shape, w, h):
         self.source = source
+        self.w = max(1, min(W, int(w)))
+        self.h = max(1, min(H, int(h))) if h is not None else max(1, min(H, round(self.w * shape[1] / shape[0])))
 
 
-def picture(name):
-    """One of the pack's pictures, content/images/<name>.png, for a grid square."""
+def picture(name, w=1, h=None):
+    """One of the pack's pictures, content/images/<name>.png, w squares wide."""
     if name not in images:
         raise ValueError(f"the pack has no picture called {name!r}")
-    return _Picture(name)
+    return _Picture(name, images[name], w, h)
 
 
-def pixels(rows, palette):
-    """A small picture made of characters, for a grid square: pixels([".X.", "XXX"], {"X": "#ffcc00"}).
+def pixels(rows, palette, w=1, h=None):
+    """A small picture made of characters: pixels([".X.", "XXX"], {"X": "#ffcc00"}).
     A character not in the palette is see-through."""
-    return _Picture({"rows": list(rows), "palette": dict(palette)})
+    rows = list(rows)
+    return _Picture({"rows": rows, "palette": dict(palette)}, (max(map(len, rows), default=1) or 1, len(rows) or 1), w, h)
 
 
 def ask(prompt=""):
@@ -137,34 +159,61 @@ def game_over(text="Press a key to play again"):
     _s.over = _text(text)
 
 
-class _Grid:
-    """W x H squares, (0, 0) top left. A square holds an emoji, a letter, or a '#rrggbb' color."""
+def _pos(args):
+    x, y = args if len(args) == 2 else args[0]
+    return int(x) % W, int(y) % H
+
+
+class _Layer:
+    """W x H squares, (0, 0) top left. A square holds an emoji, a letter, a '#rrggbb' color, or a picture.
+    Every call takes x, y or one (x, y)."""
 
     w, h = W, H
 
-    @staticmethod
-    def _pos(args):
-        x, y = args if len(args) == 2 else args[0]
-        return int(x) % W, int(y) % H
+    def __init__(self, name):
+        self._name = name
 
-    def set(self, *args):
-        """grid.set(x, y, thing) or grid.set((x, y), thing)."""
+    @property
+    def _cells(self) -> dict:
+        return getattr(_s, self._name)
+
+    def set(self, *args, size=1):
+        """size: an emoji, letter, or color as big as size by size squares, from this one right and down."""
         *where, thing = args
-        _s.cells[self._pos(where)] = thing if isinstance(thing, _Picture) else _text(thing)
+        self._cells[_pos(where)] = (thing if isinstance(thing, _Picture) else _text(thing), max(1, min(H, int(size))))
 
     def get(self, *where):
-        return _s.cells.get(self._pos(where))
+        return self._cells.get(_pos(where), (None,))[0]
 
     def erase(self, *where):
-        _s.cells.pop(self._pos(where), None)
+        self._cells.pop(_pos(where), None)
 
     def clear(self):
-        _s.cells.clear()
+        self._cells.clear()
 
     def random_empty(self):
+        """An (x, y) with nothing in it, or None when every square is full."""
         import random
-        free = [(x, y) for x in range(W) for y in range(H) if (x, y) not in _s.cells]
-        return random.choice(free) if free else (0, 0)
+        free = [(x, y) for x in range(W) for y in range(H) if (x, y) not in self._cells]
+        return random.choice(free) if free else None
+
+
+class _Grid(_Layer):
+    """The grid kids see. grid.floor is a layer under it, so a hero can stand on grass."""
+
+    def __init__(self):
+        super().__init__("cells")
+        self.floor = _Layer("floor")
+
+    def clear(self):
+        """Empties the grid, its floor, and the cursor."""
+        _s.cells.clear()
+        _s.floor.clear()
+        _s.cursor = None
+
+    def cursor(self, *where):
+        """A ring around one square, or around a bigger thing in it, to show what's picked; grid.cursor() takes it away."""
+        _s.cursor = _pos(where) if where and where[0] is not None else None
 
 
 grid = _Grid()
@@ -192,37 +241,82 @@ def after(seconds, fn):
 
 # ---------------------------------------------------------------- the scene
 
-def _label(x, y, size, text, color="text", align="center"):
-    return ["text", round(x, 1), round(y, 1), round(size, 1), text, color, align]
+# Text straight on a room's own background color, light or dark, instead of the theme's roles.
+_INKS = {True: {"text": "#2a1845", "muted": "#5b4a75", "accent": "#7a2fb8"},
+         False: {"text": "#f4eefb", "muted": "#cbbfe0", "accent": "#e3b8ff"}}
+
+
+def _ink(color):
+    bg = _s.background
+    if not _HEX.match(bg):
+        return color
+    light = sum(k * int(bg[i:i + 2], 16) for k, i in ((0.299, 1), (0.587, 3), (0.114, 5))) > 150
+    return _INKS[light].get(color, color)
+
+
+def _label(x, y, size, text, color="text", **how):
+    """how: anchor (center, left, right, top, bottom, topleft, ...), width to wrap at, height to shrink into,
+    box (a color behind), pad, radius."""
+    shape = ["text", round(x, 1), round(y, 1), round(size, 1), text, color if "box" in how else _ink(color)]
+    return shape + [how] if how else shape
+
+
+def _span(thing, size) -> tuple:
+    """How many squares across and down a thing in the grid covers."""
+    return (thing.w, thing.h) if isinstance(thing, _Picture) else (size, size)
+
+
+def _thing(x, y, thing, size) -> list:
+    if isinstance(thing, _Picture):
+        return ["image", x, y, CELL * thing.w, CELL * thing.h, thing.source]
+    side = CELL * size
+    if _HEX.match(thing):
+        return ["rect", x + 0.5, y + 0.5, side - 1, side - 1, thing, side / 8]
+    return _label(x + side / 2, y + side / 2, side * 0.78, thing)
+
+
+def _big(sw, sh, thing, box) -> list:
+    if not isinstance(thing, _Picture):
+        return _label(sw / 2, sh * 0.34, sh * 0.24, thing, width=sw * 0.9, height=sh * 0.46, **box)
+    k = min(sw * 0.8 / thing.w, sh * 0.46 / thing.h)
+    w, h = thing.w * k, thing.h * k
+    return ["image", (sw - w) / 2, sh * 0.34 - h / 2, w, h, thing.source]
 
 
 def _scene() -> list:
     sw, sh = _size
     shapes = [["rect", 0, 0, sw, sh, _s.background, 0]]
-    if _s.cells:
+    on_grid = bool(_s.cells or _s.floor or _s.cursor)
+    box = {"box": "surface", "pad": 2, "radius": 2} if on_grid else {}
+    if on_grid:
         ox, oy = (sw - W * CELL) / 2, (sh - H * CELL) / 2
-        for (x, y), thing in _s.cells.items():
-            cx, cy = ox + x * CELL, oy + y * CELL
-            if isinstance(thing, _Picture):
-                shapes.append(["image", cx, cy, CELL, CELL, thing.source])
-            elif _HEX.match(thing):
-                shapes.append(["rect", cx + 0.5, cy + 0.5, CELL - 1, CELL - 1, thing, CELL / 8])
-            else:
-                shapes.append(_label(cx + CELL / 2, cy + CELL / 2, CELL * 0.78, thing))
-    else:
-        if _s.big:
-            shapes.append(_label(sw / 2, sh * 0.36, sh * 0.24, _s.big))
-        px = sh * 0.055
-        shapes += [_label(sw / 2, sh * 0.6 + i * px * 1.35 + px / 2, px, line) for i, line in enumerate(_s.lines)]
+        for layer in (_s.floor, _s.cells):
+            shapes += [_thing(ox + x * CELL, oy + y * CELL, *item) for (x, y), item in layer.items()]
+        if _s.cursor:
+            x, y = _s.cursor
+            w, h = _span(*_s.cells.get(_s.cursor, (None, 1)))
+            shapes.append(["rect", ox + x * CELL, oy + y * CELL, w * CELL, h * CELL, "accent", CELL / 6, 1])
+    if _s.big:
+        shapes.append(_big(sw, sh, _s.big, box))
     px = sh * 0.05
-    y = sh - px * 1.7
+    bottom = sh - px * 1.2
+    if _s.lines:
+        text = "\n".join(_s.lines)
+        if on_grid:
+            lift = px * 3.2 if _s.asking else px * 1.6 if _s.over is not None else 0
+            shapes.append(_label(sw / 2, bottom - lift, px * 1.1, text, anchor="bottom", width=sw * 0.9, **box))
+        else:
+            shapes.append(_label(sw / 2, sh * 0.6, px * 1.1, text, anchor="top", width=sw * 0.9))
+    if _s.status:
+        shapes.append(_label(sw / 2, 1, px * 0.95, _s.status, anchor="top", width=sw * 0.9, height=CELL - 2,
+                             **(box and {**box, "pad": 1, "radius": 1.5})))
     if _s.asking:
         prompt, typed = _s.asking
         if prompt:
-            shapes.append(_label(px, y - px * 1.5, px, prompt, "muted", "left"))
-        shapes.append(_label(px, y, px, f"Answer → {typed}_", "accent", "left"))
+            shapes.append(_label(px, bottom - px * 1.6, px, prompt, "muted", anchor="bottomleft", **box))
+        shapes.append(_label(px, bottom, px, f"Answer → {typed}_", "accent", anchor="bottomleft", **box))
     elif _s.over is not None:
-        shapes.append(_label(sw / 2, y, px, _s.over, "accent"))
+        shapes.append(_label(sw / 2, bottom, px, _s.over, "accent", anchor="bottom", **box))
     return shapes
 
 
@@ -296,6 +390,7 @@ def run(start: dict):
     _size[:] = start.get("size") or _size
     keep.update(start.get("keep") or {})
     images.update({n: tuple(size) for n, size in (start.get("images") or {}).items()})
+    sounds.update(start.get("sounds") or ())
     _last["keep"] = _json.dumps(keep, sort_keys=True)
     room = {}
     try:

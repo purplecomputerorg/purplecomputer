@@ -3,7 +3,7 @@ import { loadPyodide } from "pyodide";
 import purpleSource from "../../purple_tui/roomkit/purple.py?raw";
 import runnerSource from "../../purple_tui/roomkit/runner.py?raw";
 import guest from "../src/rooms/guest.py?raw";
-import { EXAMPLES, soundboardSource, triviaSource } from "../src/examples";
+import { EXAMPLES, TEMPLATES, soundboardSource, triviaSource } from "../src/examples";
 import { BLANK_BLOCKS, sourceFromBlocks } from "../src/blocks";
 
 type Msg = Record<string, unknown>;
@@ -53,7 +53,7 @@ describe("family rooms in Studio's Python", () => {
   }, 60_000);
 
   it("runs the trivia example: asks, takes a typed answer, and plays a note for a right one", async () => {
-    const replies = await runRoom(example("dinosaur-trivia"), [...typed("Brachiosaurus "), enter]);
+    const replies = await runRoom(triviaSource(TEMPLATES.trivia.defaults()), [...typed("Brachiosaurus "), enter]);
     expect(texts(replies[0])).toEqual(["🦕", "Which dinosaur had a very long neck?", "Your answer", "Answer → _"]);
     expect(replies[0].sounds).toEqual([["say", "Which dinosaur had a very long neck?"]]);
     expect(texts(replies[3])).toContain("Answer → Bra_");

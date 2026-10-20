@@ -322,9 +322,10 @@ pre code { background: none; color: inherit; padding: 0; }
 .form-row.head span { font-size: 12px; color: var(--dim); font-weight: 600; }
 .form-row input.bad { border-color: #d77; }
 .form-rows > .btn { justify-self: start; margin-top: 4px; }
-.guide dl { margin: 0; }
-.guide dt { font-weight: 600; margin-top: 12px; }
-.guide dd { margin: 2px 0 0; color: var(--dim); }
+.guide table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.guide th, .guide td { text-align: left; vertical-align: top; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); }
+.guide td:first-child { width: 38%; }
+.guide h2 { margin: 8px 0 12px; }
 
 /* Python console */
 textarea { resize: vertical; line-height: 1.5; }

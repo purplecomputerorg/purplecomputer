@@ -55,7 +55,8 @@ export function downloadView(): View {
   }
   render();
 
-  button.onclick = async () => {
+  const download = async () => {
+    if (button.disabled) return;
     button.disabled = true;
     try {
       const blob = await buildPack((msg) => (status.textContent = `${msg}…`));
@@ -68,9 +69,11 @@ export function downloadView(): View {
     }
     button.disabled = false;
   };
+  button.onclick = download;
 
   return {
     title: "Your Purple Pack",
+    download,
     editor: h(
       "section",
       {},

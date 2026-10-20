@@ -53,7 +53,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .tabs-nav a:hover { background: var(--fill-hover); }
 .tabs-nav a[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .tabs-nav .icon { font-size: 15px; }
-.tabs-nav .n { font-size: 11px; font-weight: 700; color: var(--purple); background: #fff; border-radius: 999px; padding: 0 6px; }
+.tabs-nav .n { font-size: 11px; font-weight: 700; color: #fff; background: var(--purple); border-radius: 999px; padding: 0 6px; }
 .privacy-link { flex-shrink: 0; font-size: 14px; color: var(--dim); text-decoration: none; padding: 7px 10px; border-radius: 999px; }
 .privacy-link:hover, .privacy-link[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .more-menu { position: relative; flex-shrink: 0; }
@@ -66,7 +66,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .more-menu .clear-all { font: inherit; font-size: 14px; text-align: left; background: none; border: none; border-top: 1px solid var(--line); margin-top: 4px; padding: 10px 12px 8px; color: var(--dim); cursor: pointer; }
 .more-menu .clear-all:hover { color: var(--text); }
 .topbar .btn.download { display: flex; gap: 8px; align-items: center; text-decoration: none; flex-shrink: 0; }
-.topbar .btn.download .n { background: rgba(255, 255, 255, 0.22); border-radius: 999px; padding: 0 8px; font-size: 12px; }
+.topbar .btn.download .n { background: #fff; color: var(--purple); font-weight: 700; border-radius: 999px; padding: 0 8px; font-size: 12px; }
 .topbar .btn.download.here { background: var(--purple-dark); }
 
 .body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); min-height: calc(100vh - 60px); }

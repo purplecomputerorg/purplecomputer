@@ -14,7 +14,7 @@ const keep = (item: Keepable, kept: boolean) => {
 export function tryBar(item: Keepable, remove?: () => void): HTMLElement {
   const bar = h("div", { class: "trybar" });
   const render = () => bar.replaceChildren(...[...(item.kept
-    ? [h("span", { class: "added" }, "✓ In your Purple Pack"), h("button", { class: "linkbtn dim small", onclick: () => { keep(item, false); render(); } }, "Take it out")]
+    ? [h("span", { class: "added" }, "✓ In your Purple Pack. Changes you make here go in it too."), h("button", { class: "linkbtn dim small", onclick: () => { keep(item, false); render(); } }, "Take it out")]
     : [h("span", { class: "trying" }, "Just trying it. It isn't in your Purple Pack yet."),
       h("button", { class: "btn small", onclick: () => { keep(item, true); render(); } }, "Add to my Purple Pack"),
       remove ? h("button", { class: "linkbtn dim small", onclick: remove }, "Never mind") : null])].filter((e) => e !== null));
@@ -43,7 +43,7 @@ export function yoursList<T extends Keepable>(items: T[], card: (item: T) => You
     head.replaceChildren(h("h3", {}, "Yours"), h("div", { class: "row" }, ...(choosing
       ? [h("button", { class: "linkbtn dim small", onclick: () => boxes.forEach((b) => { b.checked = true; b.dispatchEvent(new Event("change")); }) }, "Choose all"),
         h("button", { class: "linkbtn dim small", onclick: () => render(false) }, "Cancel"), bin]
-      : [h("button", { class: "linkbtn dim small", onclick: () => render(true) }, "Choose several to throw away")])));
+      : theirs.length > 1 ? [h("button", { class: "linkbtn dim small", onclick: () => render(true) }, "Choose several to throw away")] : [])));
     list.replaceChildren(...theirs.map((item) => {
       const c = card(item);
       const face = h(choosing ? "span" : "a", { class: "your-face", href: choosing ? null : c.href }, c.face, h("b", {}, c.title));

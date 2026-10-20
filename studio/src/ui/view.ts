@@ -14,4 +14,6 @@ export interface View {
   // Called once the editor is in the document, for things that need a laid-out element (Blockly).
   mounted?: () => void;
   cleanup?: () => void;
+  // What the topbar's Download button does while this page is open, instead of linking here.
+  download?: () => void;
 }

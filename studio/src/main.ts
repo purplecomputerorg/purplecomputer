@@ -138,7 +138,7 @@ function renderTop() {
     h("details", { class: "more-menu" }, h("summary", {}, "More"),
       h("div", { onclick: (e: Event) => (e.target as HTMLElement).closest("details")?.removeAttribute("open") },
         ...MORE.map(([id, label]) => h("a", { href: `#${id}`, "aria-current": sec === id ? "page" : null }, label)), clearEverythingButton("clear-all"))),
-    h("a", { class: `btn download${sec === "pack" ? " here" : ""}`, href: "#pack" }, "Download", n ? h("span", { class: "n" }, String(n)) : null),
+    h("a", { class: `btn download${sec === "pack" ? " here" : ""}`, href: "#pack", onclick: (e: Event) => { if (current?.download) { e.preventDefault(); current.download(); } } }, "Download", n ? h("span", { class: "n" }, String(n)) : null),
   );
 }
 

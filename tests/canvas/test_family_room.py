@@ -504,13 +504,14 @@ def test_a_changed_room_waits_to_be_turned_on_again(pack):
 
 def test_parent_menu_turns_rooms_on_and_off(pack):
     pack("snake", SNAKE)
+    pack("worm", SNAKE)
 
     async def go():
         app = make_app()
         screen = FamilyRoomsScreen(app)
         app.push(screen)
-        assert [o[1:] for o in screen.options] == [("Snake", "Off"), ("Done",)]
-        app._draw()
+        assert [o[1:] for o in screen.options] == [("Snake", "Off"), ("Worm", "Off"), ("Done",)]
+        app._draw()  # draws an unselected room row too
         await press(app, "enter")
         assert screen.options[0][2] == "On: in the Esc menu"
         assert [r.name for r in RoomPicker(app).family] == ["snake"]

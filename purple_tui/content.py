@@ -33,7 +33,7 @@ class Instrument:
     path: Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class Room:
     """A family room: content/rooms/<name>.py, run as a guest (guides/family-rooms.md)."""
     name: str

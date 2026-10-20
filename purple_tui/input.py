@@ -317,6 +317,7 @@ class EvdevReader:
         callback: Callable[[RawKeyEvent], Awaitable[None]],
         device_path: Optional[str] = None,
         grab: bool = True,
+        on_ignored_key: Optional[Callable[[], None]] = None,
     ):
         """
         Initialize the evdev reader.
@@ -325,8 +326,11 @@ class EvdevReader:
             callback: Async function called for each RawKeyEvent
             device_path: Path to input device, or None to auto-detect
             grab: If True, grab device exclusively (other apps won't see keys)
+            on_ignored_key: Called on key down while keys go to a terminal or
+                another VT instead of Purple, so idle timing still sees typing
         """
         self._callback = callback
+        self._on_ignored_key = on_ignored_key
         self._device_path = device_path
         self._grab = grab
         self._devices: list = []  # All keyboard evdev devices
@@ -468,6 +472,11 @@ class EvdevReader:
         self._tasks = []
 
         logger.info("EvdevReader: stopped")
+
+    @property
+    def away(self) -> bool:
+        """Keys are going to a terminal or another VT, not to Purple."""
+        return self._suspended or self._vt_away
 
     @staticmethod
     def _is_on_tty1() -> bool:
@@ -665,24 +674,23 @@ class EvdevReader:
                     # While switched away to another VT, check if user
                     # returned to tty1 (via Ctrl+Alt+F1 on tty2). Reacquire
                     # grab and resume normal operation.
-                    if self._vt_away:
-                        # Guard: chvt is async (Popen), so key-up events from
-                        # the switch combo arrive before chvt completes. Without
-                        # this cooldown, _is_on_tty1() returns True (still on
-                        # tty1), causing an immediate grab reacquire that blocks
-                        # tty2 input once chvt finishes.
-                        if time.monotonic() - self._vt_away_time > 0.5 and self._is_on_tty1():
-                            logger.info("VT switch: back on tty1, reacquiring grab")
-                            self._vt_away = False
-                            if not self._suspended:
-                                self.reacquire_grab()
-                        else:
-                            continue  # Don't forward events while away
+                    # Guard: chvt is async (Popen), so key-up events from
+                    # the switch combo arrive before chvt completes. Without
+                    # this cooldown, _is_on_tty1() returns True (still on
+                    # tty1), causing an immediate grab reacquire that blocks
+                    # tty2 input once chvt finishes.
+                    if self._vt_away and time.monotonic() - self._vt_away_time > 0.5 and self._is_on_tty1():
+                        logger.info("VT switch: back on tty1, reacquiring grab")
+                        self._vt_away = False
+                        if not self._suspended:
+                            self.reacquire_grab()
 
-                    # Same-screen X terminal is focused: X delivers keys to it,
-                    # Purple ignores them. Grab is released; Ctrl+Alt+F1 above is
-                    # the rescue out.
-                    if self._suspended:
+                    # Away on another VT, or a same-screen X terminal is focused
+                    # (X delivers keys to it; Ctrl+Alt+F1 above is the rescue
+                    # out): Purple ignores the key.
+                    if self._vt_away or self._suspended:
+                        if is_down and self._on_ignored_key:
+                            self._on_ignored_key()
                         continue
 
                     scancode = self._pending_scancodes.pop(dev_path, 0)

@@ -59,3 +59,28 @@ def test_lifting_an_idle_inhibitor_resets_idle():
         app.uninhibit_idle("terminal")
         assert pm.get_idle_seconds() < 5
     run(go())
+
+
+def test_away_skips_sleep_face_and_shuts_down_on_its_own_timer(monkeypatch):
+    """With the terminal open or on another VT, a sleep face can't be seen or
+    woken, so idle goes straight to shutdown on the longer away threshold."""
+    from types import SimpleNamespace
+
+    from purple_tui import power_manager
+    from purple_tui.power_manager import get_power_manager
+    monkeypatch.setattr(power_manager, "can_power_back_on", lambda: True)
+
+    async def go():
+        app = make_app()
+        shown = []
+        monkeypatch.setattr(app, "_show_sleep_screen", lambda: shown.append("sleep"))
+        monkeypatch.setattr(app, "_show_bye_screen", lambda: shown.append("bye"))
+        app._evdev_reader = SimpleNamespace(away=True)
+        pm = get_power_manager()
+        pm._last_activity -= pm.get_idle_shutdown_threshold(away=True) - 60
+        app._check_idle_state()
+        assert shown == []
+        pm._last_activity -= 120
+        app._check_idle_state()
+        assert shown == ["bye"]
+    run(go())

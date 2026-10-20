@@ -296,6 +296,30 @@ class TestMultiDeviceEvents:
 
         _run(_test())
 
+    def test_keys_while_terminal_open_count_as_activity_only(self):
+        """Keys typed into the terminal must not reach Purple, but must keep
+        the idle clock from powering off mid-session."""
+        async def _test():
+            cb = AsyncCallback()
+            ignored = []
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            reader = EvdevReader(callback=cb, grab=False, on_ignored_key=lambda: ignored.append(1))
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]):
+                await reader.start()
+            reader.suspend_for_x_terminal(on_rescue=lambda: None)
+            assert reader.away
+            kbd.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_A, 1, 1.0))
+            kbd.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_A, 0, 1.1))
+            await asyncio.sleep(0.05)
+            reader.resume_from_x_terminal()
+            kbd.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_B, 1, 2.0))
+            await asyncio.sleep(0.05)
+            await reader.stop()
+            assert ignored == [1]
+            assert [c.keycode for c in cb.calls] == [KeyCode.KEY_B]
+
+        _run(_test())
+
     def test_scancodes_tracked_per_device(self):
         """Scancodes should be independent per device (no cross-contamination)."""
         async def _test():

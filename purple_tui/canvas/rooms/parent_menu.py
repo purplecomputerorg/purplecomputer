@@ -1119,13 +1119,10 @@ class TerminalScreen(FullScreen):
         boot_log.heartbeat("terminal: xterm opened")
         if reader is not None:
             reader.suspend_for_x_terminal(on_rescue=self._proc.terminate)
-        # Terminal typing never reaches Purple's idle clock
-        self.app.inhibit_idle("terminal")
         try:
             await asyncio.get_running_loop().run_in_executor(None, self._proc.wait)
         finally:
             boot_log.heartbeat(f"terminal: xterm exited ({self._proc.returncode})")
-            self.app.uninhibit_idle("terminal")
             if reader is not None:
                 reader.resume_from_x_terminal()
             self._running = False

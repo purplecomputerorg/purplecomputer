@@ -149,6 +149,14 @@ if HAS_PYTEST:
             power_manager._charger_state = None
             assert power_manager.get_idle_shutdown_threshold() == BATTERY_IDLE_SHUTDOWN
 
+        def test_away_shutdown_never_shorter_than_normal(self, power_manager):
+            """Terminal or other VT: at least AWAY_IDLE_SHUTDOWN, never below the charger hour."""
+            from purple_tui.power_manager import AWAY_IDLE_SHUTDOWN
+            power_manager._charger_state = False
+            assert power_manager.get_idle_shutdown_threshold(away=True) == AWAY_IDLE_SHUTDOWN
+            power_manager._charger_state = True
+            assert power_manager.get_idle_shutdown_threshold(away=True) == CHARGER_IDLE_SHUTDOWN
+
     class TestDemoMode:
         """Test demo mode timing values."""
 

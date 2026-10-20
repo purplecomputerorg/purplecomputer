@@ -67,6 +67,10 @@ CHARGER_IDLE_SHUTDOWN = _get_timing(60 * 60, 15)  # 60 min / 15 sec: shutdown
 BATTERY_IDLE_SLEEP = _get_timing(2 * 60, 2)     # 2 min / 2 sec: show sleeping face
 BATTERY_IDLE_SHUTDOWN = _get_timing(10 * 60, 10) # 10 min / 10 sec: shutdown
 
+# Terminal open or switched to another VT: keys can't wake a sleep face there,
+# so skip it; at least long enough that a quiet running command isn't cut off
+AWAY_IDLE_SHUTDOWN = _get_timing(30 * 60, 20)   # 30 min / 20 sec: shutdown floor
+
 # Lid closed (regardless of charger)
 LID_SHUTDOWN_DELAY = _get_timing(10 * 60, 8)    # 10 min / 8 sec: shutdown after lid close
 
@@ -414,7 +418,7 @@ class PowerManager:
             return CHARGER_IDLE_SLEEP
         return BATTERY_IDLE_SLEEP
 
-    def get_idle_shutdown_threshold(self) -> int:
+    def get_idle_shutdown_threshold(self, away: bool = False) -> int:
         """Get the idle seconds threshold for auto-shutdown.
 
         Longer timeout on charger (60 min) vs battery (10 min); never where
@@ -422,9 +426,8 @@ class PowerManager:
         """
         if not can_power_back_on():
             return float("inf")
-        if self._charger_state is True:
-            return CHARGER_IDLE_SHUTDOWN
-        return BATTERY_IDLE_SHUTDOWN
+        normal = CHARGER_IDLE_SHUTDOWN if self._charger_state is True else BATTERY_IDLE_SHUTDOWN
+        return max(normal, AWAY_IDLE_SHUTDOWN) if away else normal
 
     def shutdown(self) -> bool:
         """

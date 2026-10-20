@@ -273,7 +273,8 @@ class PurpleApp:
         if os.environ.get("PURPLE_NO_EVDEV") == "1":
             return
         from ..power_manager import POWER_HOLD_SHUTDOWN, _power_log
-        self._evdev_reader = EvdevReader(callback=self._handle_raw_key_event, grab=not is_debug())
+        self._evdev_reader = EvdevReader(callback=self._handle_raw_key_event, grab=not is_debug(),
+                                         on_ignored_key=self._record_user_activity)
         await self._evdev_reader.start()
         try:
             self._power_button_reader = PowerButtonReader(callback=self._handle_power_button_event,
@@ -1314,12 +1315,16 @@ class PurpleApp:
             if self._is_sleep_or_bye_active() or self._idle_inhibitors:
                 return
             idle = pm.get_idle_seconds()
-            if idle >= pm.get_idle_sleep_threshold():
+            away = self._evdev_reader is not None and self._evdev_reader.away
+            if not away and idle >= pm.get_idle_sleep_threshold():
                 _power_log(f"IDLE SLEEP: idle {idle:.0f}s >= {pm.get_idle_sleep_threshold()}s, charger={charger}")
                 self._show_sleep_screen()
                 return
-            if idle >= pm.get_idle_shutdown_threshold():
-                _power_log(f"IDLE SHUTDOWN: idle {idle:.0f}s >= {pm.get_idle_shutdown_threshold()}s, charger={charger}")
+            shutdown = pm.get_idle_shutdown_threshold(away)
+            if away and int(idle) % 60 < 5:
+                _power_log(f"TICK: away idle {idle:.0f}s/{shutdown}s")
+            if idle >= shutdown:
+                _power_log(f"IDLE SHUTDOWN: idle {idle:.0f}s >= {shutdown}s, charger={charger}, away={away}")
                 self._show_bye_screen()
         except Exception:
             pass

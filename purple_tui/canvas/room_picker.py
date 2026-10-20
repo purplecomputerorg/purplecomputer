@@ -19,7 +19,8 @@ KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "save": "s", "open": "o
         "colors": color_wheel.OPEN_KEY}
 PRINTER_LABELS = {printing.NONE: "No Printer", printing.SETTING_UP: "Starting Up", printing.BROKEN: "Can't Print"}
 VOLUME, ROWS, FAMILY, HERE = "volume", "rooms", "family", "here"
-MAX_FAMILY_ROOMS = 6
+FAMILY_KEYS = "67890"  # fixed, so turning a built-in room off never renumbers a family room
+MAX_FAMILY_ROOMS = len(FAMILY_KEYS)
 FAMILY_LABEL_CHARS = 12
 # Card geometry in em, (width, gap): room cards are wider than the tools under them.
 ROOM_CARD, TOOL_CARD, CARD_H = (10.6, 1.1), (8.6, 0.9), 7.8
@@ -132,6 +133,8 @@ class RoomPicker(Overlay):
             ch = action.char.lower()
             if ch.isdigit() and 0 < int(ch) <= len(self.options):
                 return self.close({"room": self.options[int(ch) - 1].name})
+            if ch in FAMILY_KEYS[:len(self.family)]:
+                return self.close({"family": self.family[FAMILY_KEYS.index(ch)].name})
             item = next((k for k, v in KEYS.items() if v == ch and k in self.tools + ["volume"]), None)
             if item:
                 self.row = VOLUME if item == "volume" else HERE
@@ -221,7 +224,7 @@ class RoomPicker(Overlay):
             if row == ROWS:
                 cells = [(r.icon, r.label, str(i + 1), False) for i, r in enumerate(self.options)]
             else:
-                cells = [(ICON_FAMILY, short_title(r.title), "", False) for r in self.family]
+                cells = [(ICON_FAMILY, short_title(r.title), k, False) for r, k in zip(self.family, FAMILY_KEYS)]
             self._card_row(g, row, cells, box.x + pad, y, ROOM_CARD)
             y += card_h + em(ROOM_CARD[1])
         y += em(1.6) - em(ROOM_CARD[1])

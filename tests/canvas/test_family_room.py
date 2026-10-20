@@ -551,6 +551,23 @@ def test_esc_menu_lists_only_rooms_a_parent_turned_on(pack):
     run(go())
 
 
+def test_esc_menu_family_rooms_take_number_keys_from_6(pack):
+    for name in ("snake", "worm"):
+        r = pack(name, SNAKE)
+        settings.set_room_on(r.key, r.digest)
+
+    async def go():
+        app = make_app()
+        await press(app, "escape")
+        await press(app, "8")
+        assert not isinstance(app.top, (RoomPicker, FamilyRoom))
+        await press(app, "escape")
+        await press(app, "7")
+        assert isinstance(app.top, FamilyRoom) and app.top.room.name == "worm"
+        app.top.close()
+    run(go())
+
+
 def test_a_changed_room_waits_to_be_turned_on_again(pack):
     snake = pack("snake", SNAKE)
     settings.set_room_on(snake.key, snake.digest)
@@ -587,18 +604,18 @@ def test_parent_menu_turns_rooms_on_and_off(pack):
     run(go())
 
 
-def test_the_esc_menu_holds_six_family_rooms_and_the_seventh_waits(pack):
-    for n in range(7):
+def test_the_esc_menu_holds_five_family_rooms_and_the_sixth_waits(pack):
+    for n in range(6):
         pack(f"room{n}", SNAKE)
-    for r in content_mod.get_content().rooms[:6]:
+    for r in content_mod.get_content().rooms[:5]:
         settings.set_room_on(r.key, r.digest)
 
     async def go():
         app = make_app()
         screen = RoomsScreen(app)
         app.push(screen)
-        assert _family_states(screen)[-1] == "full" and "6 of 6" in screen.description
-        screen.row, screen.col = 3, 0
+        assert _family_states(screen)[-1] == "full" and "5 of 5" in screen.description
+        screen.row, screen.col = len(screen.rows) - 1, len(screen.rows[-1]) - 1
         await press(app, "enter")
         assert _family_states(screen)[-1] == "full" and app._toasts
     run(go())

@@ -49,7 +49,7 @@ def make_pack(root: Path, pack_id: str = "the-tests-pack", fmt: int | None = 1, 
     (c / "pictures" / "grandmas-dog.json").write_text(json.dumps({"name": "Grandma's dog", "ops": [[0, 0, "#000000"]], "letters": [[1, 0, "D", "#ffffff"]]}))
     (c / "rooms").mkdir()
     (c / "rooms" / "farm.py").write_text('from purple import *\n\ndef on_key(key):\n    show("🐄")\n    say("cow")\n')
-    (c / "rooms" / "farm.blocks.json").write_text("{}")
+    (c / "rooms" / "farm.studio.json").write_text("{}")
     if instrument:
         (c / "instruments").mkdir()
         (c / "instruments" / f"{instrument}.json").write_text(json.dumps(

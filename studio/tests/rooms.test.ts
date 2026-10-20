@@ -4,7 +4,7 @@ import purpleSource from "../../purple_tui/roomkit/purple.py?raw";
 import runnerSource from "../../purple_tui/roomkit/runner.py?raw";
 import guest from "../src/rooms/guest.py?raw";
 import { EXAMPLES, TEMPLATES, soundboardSource, triviaSource } from "../src/examples";
-import { BLANK_BLOCKS, sourceFromBlocks } from "../src/blocks";
+import { blankRules, rulesSource, type Rule } from "../src/rules";
 
 type Msg = Record<string, unknown>;
 type Shape = [string, ...unknown[]];
@@ -42,13 +42,16 @@ const enter = { ev: "key", key: "enter" };
 const GREEN = "#5ec46a";
 
 describe("family rooms in Studio's Python", () => {
-  it("runs the Snake example: draws it, moves on ticks, and turns on an arrow key", async () => {
-    const replies = await runRoom(example("snake"), [{ ev: "tick", t: 0.2 }, { ev: "key", key: "down", t: 0.3 }, { ev: "tick", t: 0.4 }]);
+  it("runs the Snake example: a square each arrow, flowers behind it, and nothing on its own", async () => {
+    const replies = await runRoom(example("snake"), [{ ev: "key", key: "down" }, { ev: "key", key: "space" }, { ev: "key", key: "a" }]);
     expect(squares(replies[0])).toEqual([[12, 6, GREEN], [11, 6, GREEN], [10, 6, GREEN], [9, 6, GREEN]]);
-    expect(replies[0].wake).toBeCloseTo(0.2);
-    expect(squares(replies[1])).toEqual([[12, 6, GREEN], [11, 6, GREEN], [10, 6, GREEN], [13, 6, GREEN]]);
-    expect(replies[2]).not.toHaveProperty("scene");
-    expect(squares(replies[3])).toContainEqual([13, 7, GREEN]);
+    expect(replies[0].wake).toBeNull();
+    expect(squares(replies[1])).toContainEqual([12, 7, GREEN]);
+    expect(squares(replies[1])).not.toContainEqual([9, 6, GREEN]);
+    expect(texts(replies[1])).toEqual(["🌼"]);
+    expect(squares(replies[2])).toContainEqual([12, 8, GREEN]);
+    expect(texts(replies[2]).sort()).toEqual(["🌸", "🌼"]);
+    expect(replies[3]).not.toHaveProperty("scene");
     expect(replies.at(-1)).toMatchObject({ error: { text: expect.stringContaining(END) } });
   }, 60_000);
 
@@ -58,7 +61,7 @@ describe("family rooms in Studio's Python", () => {
     expect(replies[0].sounds).toEqual([["say", "Which dinosaur had a very long neck?"]]);
     expect(texts(replies[3])).toContain("Answer → Bra_");
     const answered = replies[typed("Brachiosaurus ").length + 1];
-    expect(answered.sounds).toEqual([["note", "C5", "marimba"], ["say", "Yes!"], ["say", "Which dinosaur had tiny arms and big teeth?"]]);
+    expect(answered.sounds).toEqual([["note", "C5", "marimba"], ["say", "Which dinosaur had tiny arms and big teeth?"]]);
   }, 60_000);
 
   it("keeps whatever a parent types in the trivia form as text, never code", async () => {
@@ -103,10 +106,27 @@ describe("family rooms in Studio's Python", () => {
     }
   }, 120_000);
 
-  it("turns blocks into a room that runs", async () => {
-    const source = sourceFromBlocks(BLANK_BLOCKS);
-    expect(source).toBe("from purple import *\n\n\ndef on_key(key):\n    show(key)\n\n\nshow('👋')\n");
+  it("turns rules into a room that runs", async () => {
+    const source = rulesSource(blankRules());
+    expect(source).toBe('from purple import *\n\n# Made with rules in Purple Studio.\n\ndef on_key(key):\n    show(key)\n\n\nshow("👋")\n');
     const replies = await runRoom(source, [{ ev: "key", key: "q" }]);
     expect([texts(replies[0]), texts(replies[1])]).toEqual([["👋"], ["q"]]);
+  }, 60_000);
+
+  it("runs every kind of rule, keys first and any other key last", async () => {
+    const rules: Rule[] = [
+      { when: { kind: "other" }, actions: [{ kind: "write", text: 'it\'s "x"' }] },
+      { when: { kind: "key", key: "c" }, actions: [{ kind: "show", thing: { kind: "text", value: "🐄" } }, { kind: "play", note: "C4", instrument: "marimba" }] },
+      { when: { kind: "key", key: "space" }, actions: [{ kind: "put", thing: { kind: "pick", value: "🌼" }, x: 3, y: 4 }, { kind: "drum", name: "kick" }] },
+      { when: { kind: "every", seconds: 2 }, actions: [{ kind: "background", color: "#173a2a" }] },
+      { when: { kind: "start" }, actions: [{ kind: "say", text: "" }, { kind: "clear" }] },
+    ];
+    const source = rulesSource(rules);
+    expect(source).toContain("import random");
+    expect(source).toContain("every(2, every_1)");
+    const replies = await runRoom(source, ["c", "space", "z"].map((key) => ({ ev: "key", key })));
+    expect([texts(replies[1]), replies[1].sounds]).toEqual([["🐄"], [["note", "C4", "marimba"]]]);
+    expect([texts(replies[2]).sort(), replies[2].sounds]).toEqual([["🌼", "🐄"], [["drum", "kick"]]]);
+    expect(texts(replies[3])).toContain('it\'s "x"');
   }, 60_000);
 });

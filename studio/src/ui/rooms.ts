@@ -1,17 +1,30 @@
-import * as Blockly from "blockly";
 import { ROOM_NAME, roomTitle } from "@sdk/pack";
-import { BLANK_BLOCKS, TOOLBOX, defineBlocks, sourceFromBlocks, toPython } from "../blocks";
+import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 import { BLANK_ROOM, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
+import { readKnobs, writeKnobs } from "../knobs";
 import type { RoomSetup } from "../live/boot";
-import { addRoom } from "../pybridge";
-import { changed, draft, freeName, type RoomDraft } from "../state";
-import { field, go, h } from "./dom";
+import { blankRules, rulesSource } from "../rules";
+import { changed, draft, freeName, withSample, type Made, type RoomDraft } from "../state";
+import { go, h } from "./dom";
+import { knobsForm } from "./knobsform";
 import { liveScreen, type RoomProblem } from "./live";
 import { openPackButton } from "./packfile";
 import { roomFilesBox } from "./roomfiles";
-import { tryBar, tryChip } from "./trybar";
+import { rulesForm } from "./rulesform";
+import { tryBar, yoursList } from "./trybar";
 import { templateForm } from "./templateform";
 import type { View } from "./view";
+
+const ICONS: Record<Made["kind"], string> = { rules: "🧱", trivia: "❓", soundboard: "🔊" };
+const sourceOf = (made: Made) => (made.kind === "rules" ? rulesSource(made.rules) : templateSource(made));
+const href = (name: string) => `#rooms/${encodeURIComponent(name)}`;
+// A room name nothing else uses; a try being replaced doesn't count.
+const roomName = (text: string, except?: RoomDraft) =>
+  freeName(text, (n) => n === "purple" || draft.rooms.some((r) => r !== except && (!r.sample || r.kept) && r.name === n), "my-room");
+
+// The names `from purple import *` brings in, and the ones Purple calls when the room defines them.
+export const LIBRARY_NAMES: string[] = JSON.parse(/__all__ = (\[[^\]]*\])/.exec(roomLibrary)![1].replace(/'/g, '"'));
+const CALLED = ["on_key", "on_key_up"];
 
 function drop(room: RoomDraft) {
   if (!confirm(`Throw away ${roomTitle(room.name)}?`)) return;
@@ -20,44 +33,33 @@ function drop(room: RoomDraft) {
   go("#rooms");
 }
 
+// Opening a way to start only tries it: it becomes the family's room when they change something.
+function tryRoom(base: string, made: Made | null, source = made ? sourceOf(made) : BLANK_ROOM) {
+  const name = roomName(base);
+  draft.rooms = withSample(draft.rooms, { name, source, made });
+  changed();
+  location.hash = href(name);
+}
+
 function list(): View {
-  const nameIn = h("input", { type: "text", placeholder: "Farm" });
-  const status = h("div", { class: "status" });
-  const open = (base: string, source: string, made: Pick<RoomDraft, "blocks" | "template">) => {
-    const name = freeName(nameIn.value || base, (n) => draft.rooms.some((r) => r.name === n));
-    if (!ROOM_NAME.test(name)) {
-      status.textContent = "Use letters, numbers, and dashes for the name (Purple is taken).";
-      return;
-    }
-    addRoom(name, source, made);
-    location.hash = `#rooms/${encodeURIComponent(name)}`;
-  };
+  const template = (kind: TemplateDraft["kind"]) => ({ kind, data: TEMPLATES[kind].defaults() }) as TemplateDraft;
   return {
     title: "Rooms",
     editor: h(
       "section",
       {},
       h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Your kid finds it next to Purple's rooms."),
-      h("div", { class: "name-field" }, field("Its name on Purple (optional)", nameIn), status),
+      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, r.made ? ICONS[r.made.kind] : "🐍") }), drop),
       h("h3", {}, "Pick a way to start"),
       h("div", { class: "cards" },
-        ...(Object.entries(TEMPLATES) as [TemplateDraft["kind"], (typeof TEMPLATES)[TemplateDraft["kind"]]][]).map(([kind, t]) => {
-          const template = { kind, data: t.defaults() } as TemplateDraft;
-          return choice(kind === "trivia" ? "❓" : "🔊", t.label, t.about, () => open(kind, templateSource(template), { blocks: null, template }));
-        }),
-        choice("🧱", "Blocks", "Snap blocks together to make anything. No typing code.", () => open("my-room", sourceFromBlocks(BLANK_BLOCKS), { blocks: BLANK_BLOCKS, template: null })),
-        choice("✏️", "Python from nothing", "An empty room to write yourself, or to paste in what an AI helper wrote.", () => open("my-room", BLANK_ROOM, { blocks: null, template: null }))),
+        choice("🧱", "Rules", "When a key is pressed, show, play, or say something. Built from menus, no typing code.", () => tryRoom("my-room", { kind: "rules", rules: blankRules() })),
+        ...(Object.keys(TEMPLATES) as TemplateDraft["kind"][]).map((kind) =>
+          choice(ICONS[kind], TEMPLATES[kind].label, TEMPLATES[kind].about, () => tryRoom(kind, template(kind)))),
+        choice("✏️", "Python from nothing", "An empty room to write yourself, or to paste in what an AI helper wrote.", () => tryRoom("my-room", null))),
       h("h3", {}, "Or change one of these"),
-      h("div", { class: "cards" }, ...EXAMPLES.map((e) => choice(e.icon, e.label, e.about, () => open(e.name, e.source, { blocks: null, template: null })))),
+      h("div", { class: "cards" }, ...EXAMPLES.map((e) => choice(e.icon, e.label, e.about, () => tryRoom(e.name, null, e.source)))),
       h("p", { class: "dim" }, "Made a Purple Pack with an AI helper, or by hand? ", openPackButton("Open it here"), " to try its rooms and change them."),
       roomFilesBox(),
-      ...([true, false] as const).map((kept) => {
-        const rooms = draft.rooms.filter((r) => !!r.kept === kept);
-        return rooms.length ? h("div", {}, h("h3", {}, kept ? "In your Purple Pack" : "Trying"), h("div", { class: "row" }, ...rooms.map((r) => {
-          const link = h("a", { class: "btn secondary small", href: `#rooms/${encodeURIComponent(r.name)}` }, roomTitle(r.name));
-          return kept ? link : tryChip(link, roomTitle(r.name), () => drop(r));
-        }))) : null;
-      }),
     ),
   };
 }
@@ -82,8 +84,23 @@ function problemBox(): { element: HTMLElement; show(p: RoomProblem | null): void
   };
 }
 
+// Above the Python: it's the whole room, what Purple calls, and which names come from Purple.
+function pythonHelp(source: string): HTMLElement {
+  const code = source.replace(/#.*$/gm, "").replace(/"[^"\n]*"|'[^'\n]*'/g, '""');
+  const uses = (n: string) => new RegExp(`\\b${n}\\b`).test(code);
+  const called = CALLED.filter(uses);
+  return h("div", { class: "py-help" },
+    h("p", {}, "This is the whole room. Purple runs it from the top when your kid comes in",
+      ...(called.length ? [", then calls ", ...called.flatMap((n, i) => [i ? " and " : "", h("code", {}, `${n}(key)`)]), " for each key"] : []),
+      ". Everything not from Purple is the room's own."),
+    h("p", { class: "row small" }, h("span", { class: "dim" }, "From Purple:"),
+      ...LIBRARY_NAMES.filter(uses).map((n) => h("a", { class: "lib-name", href: `#guide/${n}` }, n)),
+      h("a", { class: "push", href: "#library" }, "See Purple's room library")));
+}
+
+type Tab = "made" | "knobs" | "python";
+
 function editor(room: RoomDraft): View {
-  defineBlocks();
   const problems = problemBox();
   const out = h("pre", { class: "console" });
   const live = liveScreen();
@@ -99,111 +116,102 @@ function editor(room: RoomDraft): View {
   let timer = 0;
   const later = (ms: number) => { clearTimeout(timer); timer = window.setTimeout(restart, ms); };
 
-  const code = h("textarea", { class: "code", rows: 24, spellcheck: false }, room.source);
-  const workspaceDiv = h("div", { class: "blockly" });
-  const detached = h("div", { class: "note" }, "This room is Python now, so blocks and forms can't show it. ",
-    h("button", { class: "linkbtn", onclick: () => {
-      if (!confirm("Start this room over from blocks? The Python you wrote will be replaced.")) return;
-      room.blocks = BLANK_BLOCKS;
-      room.template = null;
-      room.source = sourceFromBlocks(BLANK_BLOCKS);
-      code.value = room.source;
-      changed();
-      showTab("blocks");
-      restart();
-    } }, "Start over with blocks"));
-  let ws: Blockly.WorkspaceSvg | null = null;
-
-  const fromBlocks = () => {
-    if (!ws || !room.blocks) return;
-    room.blocks = Blockly.serialization.workspaces.save(ws);
-    room.source = toPython(ws);
-    code.value = room.source;
+  const nameIn = h("input", { type: "text", class: "room-name", value: roomTitle(room.name), "aria-label": "Room name", maxLength: 40 });
+  const nameNote = h("span", { class: "dim small" });
+  nameIn.onchange = () => {
+    const name = roomName(nameIn.value, room);
+    if (!ROOM_NAME.test(name)) return void (nameNote.textContent = "Use letters, numbers, and spaces.");
+    room.name = name;
+    room.sample = false;
     changed();
-    later(400);
+    location.replace(href(name));
   };
 
-  const fromForm = () => {
-    if (!room.template) return;
-    room.source = templateSource(room.template);
-    code.value = room.source;
+  // Every change goes through here: the first one makes a try the family's, so it's time to name it.
+  const edited = (source: string, ms: number) => {
+    room.source = source;
+    if (room.sample) {
+      room.sample = false;
+      nameNote.textContent = "It's yours now. Give it a name.";
+      nameIn.focus();
+      nameIn.select();
+    }
     changed();
-    later(500);
+    later(ms);
   };
 
-  code.addEventListener("input", () => {
-    const madeFrom = room.blocks ? "the blocks" : room.template ? "the form" : "";
-    if (madeFrom && !confirm(`Editing the Python by hand leaves ${madeFrom} behind; from here on this room is Python. Keep going?`)) {
-      code.value = room.source;
-      return;
-    }
-    if (madeFrom) {
-      room.blocks = null;
-      room.template = null;
-      ws?.dispose();
-      ws = null;
-      tabs.blocks.textContent = "Blocks";
-    }
-    room.source = code.value;
-    changed();
-    later(700);
-  });
+  const code = h("textarea", { class: "code", rows: 24, spellcheck: false, readOnly: !!room.made });
+  code.addEventListener("input", () => edited(code.value, 700));
   code.addEventListener("keydown", (e) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      code.setRangeText("    ", code.selectionStart, code.selectionEnd, "end");
-      code.dispatchEvent(new Event("input"));
-    }
+    if (e.key !== "Tab" || code.readOnly) return;
+    e.preventDefault();
+    code.setRangeText("    ", code.selectionStart, code.selectionEnd, "end");
+    code.dispatchEvent(new Event("input"));
   });
-
-  const panes = { blocks: h("div", {}), python: h("div", {}, code) };
-  const tabs = { blocks: h("button", { class: "tab" }, room.template ? "Form" : "Blocks"), python: h("button", { class: "tab" }, "Python") };
-  const showTab = (which: "blocks" | "python") => {
-    for (const k of ["blocks", "python"] as const) {
-      panes[k].hidden = k !== which;
-      tabs[k].setAttribute("aria-selected", String(k === which));
-    }
-    if (which !== "blocks") return;
-    if (room.template) return void panes.blocks.replaceChildren(templateForm(room.template, fromForm));
-    panes.blocks.replaceChildren(room.blocks ? workspaceDiv : detached);
-    if (room.blocks && !ws) {
-      ws = Blockly.inject(workspaceDiv, { media: "blockly/", toolbox: TOOLBOX, renderer: "zelos", zoom: { controls: true, wheel: false, startScale: 0.85 }, trashcan: true, move: { scrollbars: true, drag: true, wheel: true } });
-      ws.setTheme(Blockly.registry.getObject(Blockly.registry.Type.THEME, "purple") as Blockly.Theme);
-      Blockly.serialization.workspaces.load(room.blocks as object, ws);
-      ws.addChangeListener((e: Blockly.Events.Abstract) => { if (!e.isUiEvent) fromBlocks(); });
-    } else ws && Blockly.svgResize(ws);
+  const insert = (text: string) => {
+    if (code.readOnly || tab !== "python") return false;
+    code.setRangeText(text, code.selectionStart, code.selectionEnd, "end");
+    code.focus();
+    code.dispatchEvent(new Event("input"));
+    return true;
   };
-  tabs.blocks.onclick = () => showTab("blocks");
-  tabs.python.onclick = () => showTab("python");
+  const pythonCopy = () => {
+    const name = roomName(`${room.name}-python`);
+    draft.rooms = [...draft.rooms, { name, source: room.source, made: null }];
+    changed();
+    location.hash = href(name);
+  };
+
+  const made = room.made;
+  const tabs: Tab[] = [...(made ? ["made" as const] : readKnobs(room.source).length ? ["knobs" as const] : []), "python"];
+  const LABELS: Record<Tab, string> = { made: made?.kind === "rules" ? "Rules" : "Form", knobs: "Knobs", python: "Python" };
+  let tab: Tab = tabs[0];
+  const pane = h("div", {});
+  const tabButtons = tabs.map((t) => h("button", { class: "tab", role: "tab", onclick: () => showTab(t) }, LABELS[t]));
+  const showTab = (which: Tab) => {
+    tab = which;
+    tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(tabs[i] === which)));
+    if (which === "made" && made) {
+      const onEdit = () => edited(sourceOf(made), 500);
+      pane.replaceChildren(made.kind === "rules" ? rulesForm(made.rules, onEdit) : templateForm(made, onEdit));
+    } else if (which === "knobs") {
+      const knobs = readKnobs(room.source);
+      pane.replaceChildren(knobs.length ? knobsForm(knobs, () => edited(writeKnobs(room.source, knobs), 500))
+        : h("p", { class: "note" }, "The settings at the top of the Python can't be read as knobs right now. Everything still works in Python."));
+    } else {
+      code.value = room.source;
+      pane.replaceChildren(pythonHelp(room.source),
+        made ? h("p", { class: "note" }, `Made from ${LABELS.made.toLowerCase()}, so its Python changes when they do. `, h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy"), " to write it yourself.") : "",
+        code);
+    }
+  };
 
   return {
-    title: roomTitle(room.name),
+    title: "",
     back: ["#rooms", "All rooms"],
     editor: h(
       "section",
       {},
+      h("div", { class: "editor-head" }, nameIn, nameNote),
       tryBar(room, () => drop(room)),
-      h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, tabs.blocks, tabs.python),
+      roomFilesBox((call) => insert(call)),
+      h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, ...tabButtons),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),
-      panes.blocks,
-      panes.python,
+      pane,
       problems.element,
       out,
-      roomFilesBox(),
       h("p", { class: "dim small" }, "What a room can call is on the ", h("a", { href: "#guide" }, "Room guide"), "."),
     ),
     live: setup,
-    caption: "Your room, running on the real Purple. Esc leaves it, as on Purple; ▶ starts it again.",
+    caption: "Your room, running on the real Purple. Esc leaves it; it waits in the Esc menu, where it shows up on Purple once you turn it on in the Parent Menu.",
     mounted: () => {
-      showTab(room.blocks || room.template ? "blocks" : "python");
+      showTab(tab);
       live.onPrint = (t) => { out.textContent = (out.textContent + t + "\n").split("\n").slice(-40).join("\n"); };
       live.onProblem = (p) => problems.show(p);
       live.focus();
     },
     cleanup: () => {
       clearTimeout(timer);
-      ws?.dispose();
-      ws = null;
       live.onPrint = live.onProblem = () => {};
     },
   };

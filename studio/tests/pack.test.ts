@@ -78,7 +78,7 @@ describe("pack assembly", () => {
       "content/sounds/purr.wav": png,
     }));
     expect([back.id, back.name]).toEqual(["pack-cat", "Our Cat"]);
-    expect(back.rooms).toEqual([{ name: "cat", source: "from purple import *\nshow(picture('mochi'))\n", blocks: null, template: null, kept: true }]);
+    expect(back.rooms).toEqual([{ name: "cat", source: "from purple import *\nshow(picture('mochi'))\n", made: null, kept: true }]);
     expect(back.roomFiles.map((f) => [f.kind, f.name, f.data])).toEqual([["images", "mochi", png], ["sounds", "purr", png]]);
     const paths = (await buildEntries(await packSpec(back))).map((e) => e.path);
     expect(paths).toEqual(expect.arrayContaining(["content/rooms/cat.py", "content/images/mochi.png", "content/sounds/purr.wav"]));
@@ -91,7 +91,7 @@ describe("pack assembly", () => {
 
   it("keeps a room's pictures and sounds when a Studio pack is reopened", async () => {
     const png = new Uint8Array([1, 2, 3]);
-    const d: Draft = { ...draftBase, rooms: [{ name: "pets", source: "", blocks: null, template: null, kept: true }], roomFiles: [{ kind: "images", name: "rex", data: png, kept: true }] };
+    const d: Draft = { ...draftBase, rooms: [{ name: "pets", source: "", made: null, kept: true }], roomFiles: [{ kind: "images", name: "rex", data: png, kept: true }] };
     const back = await openPack(await buildPack(undefined, d));
     expect(back.roomFiles).toEqual([{ kind: "images", name: "rex", data: png, kept: true }]);
   });
@@ -122,11 +122,11 @@ describe("pack assembly", () => {
     expect(await read("content/pictures/palm.json")).toEqual({ name: "palm", ops: [[0, 0, "#00ff00"]] });
   });
 
-  it("writes a room's Python next to the blocks it came from, and the library it runs on", async () => {
+  it("writes a room's Python next to the rules it came from, and the library it runs on", async () => {
     const source = "from purple import *\nshow('🐄')";
-    const spec: PackSpec = { ...base, rooms: [{ name: "farm", source, blocks: { blocks: { languageVersion: 0, blocks: [] } } }] };
+    const spec: PackSpec = { ...base, rooms: [{ name: "farm", source, made: { kind: "rules", rules: [] } }] };
     const entries = await buildEntries(spec);
-    expect(entries.map((e) => e.path)).toEqual(["manifest.json", "content/rooms/purple.py", "content/rooms/farm.py", "content/rooms/farm.blocks.json"]);
+    expect(entries.map((e) => e.path)).toEqual(["manifest.json", "content/rooms/purple.py", "content/rooms/farm.py", "content/rooms/farm.studio.json"]);
     expect(new TextDecoder().decode(entries[1].data)).toBe(roomLibrary);
     expect(new TextDecoder().decode(entries[2].data)).toBe(source + "\n");
   });

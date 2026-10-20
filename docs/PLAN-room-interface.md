@@ -51,4 +51,4 @@ Still to do, before 2.0:
 
 - Never change what an existing protocol field means; only add fields Purple can ignore.
 - The pack format stays `format: 1`. Only add optional files.
-- Studio versions its `.blocks.json` and migrates old workspaces when the blocks change, so parents' rooms reopen.
+- Studio versions its `.studio.json` (rules and forms) and migrates old ones when they change, so parents' rooms reopen.

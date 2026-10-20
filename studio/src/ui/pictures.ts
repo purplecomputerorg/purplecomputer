@@ -5,7 +5,7 @@ import { changed, draft, freeName, titleOf, withSample } from "../state";
 import { go, h } from "./dom";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
-import { tryBar, tryChip } from "./trybar";
+import { tryBar, yoursList } from "./trybar";
 import type { View } from "./view";
 
 const goTo = (name: string) => (location.hash = `#pictures/${encodeURIComponent(name)}`);
@@ -56,24 +56,16 @@ async function tryExample(ex: Example) {
 // Pictures to pick from, each with its name; the one being looked at is marked.
 const thumb = (title: string, src: string, current: boolean, attrs: Record<string, unknown>) =>
   h("a", { ...attrs, "aria-current": current ? "page" : null }, h("img", { src, alt: "" }), h("span", {}, title));
-const theirs = (list: Picture[], current: string | null) => h("div", { class: "photo-list" },
-  ...list.map((p) => {
-    const link = thumb(titleOf(p), p.sourceUrl, p.name === current, { href: `#pictures/${encodeURIComponent(p.name)}` });
-    return p.kept ? link : tryChip(link, titleOf(p), () => drop(p, p.name === current));
-  }));
-
 function drop(pic: Picture, showing: boolean) {
   draft.pictures = draft.pictures.filter((p) => p !== pic);
   changed();
   go(showing ? "#pictures" : location.hash);
 }
 
-function more(current: Picture | null): HTMLElement[] {
-  const kept = draft.pictures.filter((p) => p.kept);
-  const trying = draft.pictures.filter((p) => !p.kept);
+function more(current: Picture | null): (HTMLElement | null)[] {
   return [
-    h("div", {}, h("h3", {}, "In your Purple Pack"), kept.length ? theirs(kept, current?.name ?? null) : h("p", { class: "dim small" }, "Nothing yet. Add your own, or try one of ours.")),
-    ...(trying.length ? [h("h3", {}, "Trying"), theirs(trying, current?.name ?? null)] : []),
+    yoursList(draft.pictures, (p) => ({ href: `#pictures/${encodeURIComponent(p.name)}`, title: titleOf(p), face: h("img", { src: p.sourceUrl, alt: "" }), current: p === current }),
+      (p) => drop(p, p === current)),
     h("h3", {}, "Add your own"), dropZone(),
     staysHere("Your pictures are turned into paintings right here in your browser. They are never uploaded."),
     h("h3", {}, "Try one of ours"),

@@ -1,8 +1,8 @@
 import { INSTRUMENTS } from "@sdk/purple/sounds";
 import { BASES, BASE_NAMES, defaults, type BaseName, type Params } from "@sdk/purple/synth";
 import { playGridKey } from "../sounds";
-import { changed, draft, freeName, titleOf, withSample, type Instrument } from "../state";
-import { tryBar, tryChip } from "./trybar";
+import { changed, draft, freeName, isTheirs, titleOf, withSample, type Instrument } from "../state";
+import { tryBar, yoursList } from "./trybar";
 import { field, go, h, pageKeys } from "./dom";
 import { liveScreen } from "./live";
 import type { View } from "./view";
@@ -26,7 +26,7 @@ const taken = (n: string, except?: Instrument) => (INSTRUMENTS as readonly strin
 
 // Trying a sound replaces the last one tried, unless it was changed or added.
 function tryOut(title: string, base: BaseName, params: Params) {
-  const others = draft.instruments.filter((i) => !i.sample || i.kept);
+  const others = draft.instruments.filter(isTheirs);
   const name = freeName(title, (n) => (INSTRUMENTS as readonly string[]).includes(n) || others.some((i) => i.name === n));
   const n = name.match(/-(\d+)$/)?.[1];
   draft.instruments = withSample(draft.instruments, { name, title: n && !title.endsWith(n) ? `${title} ${n}` : title, base, params: { ...defaults(base), ...params } });
@@ -41,19 +41,13 @@ function drop(inst: Instrument) {
 }
 
 function chooser(): View {
-  const theirs = (kept: boolean) => draft.instruments.filter((i) => !!i.kept === kept).map((i) => {
-    const link = h("a", { class: "btn secondary small", href: `#instruments/${encodeURIComponent(i.name)}` }, titleOf(i));
-    return kept ? link : tryChip(link, titleOf(i), () => drop(i));
-  });
-  const section = (title: string, links: HTMLElement[]) => (links.length ? h("div", {}, h("h3", {}, title), h("div", { class: "row" }, ...links)) : null);
   return {
     title: "Instruments",
     editor: h(
       "section",
       {},
       h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, change how it sounds, and add it to your Purple Pack when you like it."),
-      section("In your Purple Pack", theirs(true)),
-      section("Trying", theirs(false)),
+      yoursList(draft.instruments, (i) => ({ href: `#instruments/${encodeURIComponent(i.name)}`, title: titleOf(i), face: h("span", { class: "pick-swatch", style: `background:${SWATCH[i.base]}` }) }), drop),
       h("h3", {}, "Try a sound"),
       h("div", { class: "cards" }, ...SOUNDS.map((snd) =>
         h("button", { class: "pick", onclick: () => tryOut(snd.title, snd.base, snd.params) }, h("span", { class: "pick-swatch", style: `background:${SWATCH[snd.base]}` }), h("b", {}, snd.title), h("span", {}, snd.blurb)))),

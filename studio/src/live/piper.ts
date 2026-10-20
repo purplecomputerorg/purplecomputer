@@ -61,3 +61,11 @@ export function piperSay(text: string): Promise<Speech | null> {
     worker!.postMessage({ id: next, text });
   });
 }
+
+// Drops every line asked for so far: those not spoken yet answer null and never play late.
+export function piperHush() {
+  if (!waiting.size) return;
+  worker?.postMessage({ drop: next });
+  for (const done of waiting.values()) done(null);
+  waiting.clear();
+}

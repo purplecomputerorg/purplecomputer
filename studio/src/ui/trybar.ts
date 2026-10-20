@@ -1,6 +1,6 @@
 // The one way every page shows whether something is in the family's Purple Pack yet. Everything starts as
 // a try that Studio's Purple plays; adding it puts it in the download.
-import { changed, type Keepable } from "../state";
+import { changed, isTheirs, type Keepable } from "../state";
 import { h } from "./dom";
 
 const keep = (item: Keepable, kept: boolean) => {
@@ -22,10 +22,22 @@ export function tryBar(item: Keepable, remove?: () => void): HTMLElement {
   return bar;
 }
 
-// A try in a list, with an × in its corner that throws it away.
-export const tryChip = (link: HTMLElement, label: string, remove: () => void): HTMLElement =>
-  h("span", { class: "try-chip" }, link,
-    h("button", { type: "button", class: "drop", title: `Throw away ${label}`, "aria-label": `Throw away ${label}`, onclick: remove }, "×"));
+export interface YourCard { href: string; title: string; face: Node; current?: boolean }
+
+// What the family made on a list page, one card each with an "In my Pack" switch and an × that throws it
+// away. Examples only tried aren't theirs yet, so they aren't listed.
+export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (item: T) => void): HTMLElement | null {
+  const theirs = items.filter(isTheirs);
+  if (!theirs.length) return null;
+  return h("div", {}, h("h3", {}, "Yours"), h("div", { class: "yours" }, ...theirs.map((item) => {
+    const c = card(item);
+    const inPack = h("input", { type: "checkbox", checked: !!item.kept, onchange: () => keep(item, inPack.checked) });
+    return h("div", { class: "your-card", "aria-current": c.current ? "page" : null },
+      h("a", { class: "your-face", href: c.href }, c.face, h("b", {}, c.title)),
+      h("label", { class: "pack-switch" }, inPack, "In my Pack"),
+      h("button", { type: "button", class: "drop", title: `Throw away ${c.title}`, "aria-label": `Throw away ${c.title}`, onclick: () => remove(item) }, "×"));
+  })));
+}
 
 // For one row of a list: Add, or Added (which takes it off again).
 export function keepButton(item: Keepable, onChange: () => void): HTMLElement {

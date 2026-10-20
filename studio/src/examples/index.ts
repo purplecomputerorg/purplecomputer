@@ -32,6 +32,8 @@ export function triviaSource({ rows }: TriviaData): string {
   return `from purple import *
 
 # Made with the trivia form in Purple Studio. Type an answer and press Enter.
+
+# The questions: each one's picture, the question Purple reads out, and its answer.
 QUESTIONS = [
 ${questions.join("\n")}
 ]
@@ -43,13 +45,13 @@ for picture, question, answer in QUESTIONS:
     say(question)
     if ask("Your answer").strip().lower() == answer.lower():
         play("C5")
-        say("Yes!")
     else:
-        say(f"Good try! It was {answer}.")
+        say(f"It was {answer}.")
 
 clear()
 show("🎉")
-say("That was all of them!")
+write("That was all of them!")
+play("G5")
 `;
 }
 
@@ -59,10 +61,13 @@ export function soundboardSource({ rows, other }: SoundboardData): string {
     .map(([k, r]) => `    ${lit(k!)}: ${sound(r)},`);
   return `from purple import *
 
-# Made with the soundboard form in Purple Studio. Every key shows something, says it, and plays a note.
+# Made with the soundboard form in Purple Studio. Every key shows something and plays a note, and says its word if it has one.
+
+# Each key's picture, word, and note.
 SOUNDS = {
 ${keys.join("\n")}
 }
+# What every other key does.
 OTHER_KEYS = ${sound(other)}
 
 show("🎹")
@@ -91,14 +96,14 @@ export const TEMPLATES = {
   },
   soundboard: {
     label: "Soundboard",
-    about: "Each key shows a picture, says a word, and plays a note. For the littlest ones.",
+    about: "Each key shows a picture and plays a note. For the littlest ones.",
     source: soundboardSource,
     defaults: (): SoundboardData => ({
       rows: [
-        { key: "c", emoji: "🐄", word: "cow", note: "C4" },
-        { key: "d", emoji: "🐶", word: "dog", note: "D4" },
-        { key: "p", emoji: "🐖", word: "pig", note: "E4" },
-        { key: "s", emoji: "🐑", word: "sheep", note: "G4" },
+        { key: "c", emoji: "🐄", word: "", note: "C4" },
+        { key: "d", emoji: "🐶", word: "", note: "D4" },
+        { key: "p", emoji: "🐖", word: "", note: "E4" },
+        { key: "s", emoji: "🐑", word: "", note: "G4" },
       ],
       other: { emoji: "", word: "", note: "A4" },
     }),
@@ -111,18 +116,17 @@ export interface Example { name: string; icon: string; label: string; about: str
 
 // Starters: each one a kind of room families asked for, short enough to read and change.
 export const EXAMPLES: Example[] = [
-  { name: "explore", icon: "🗺️", label: "A world to walk around", about: "Walk with the arrows, find stars, meet a fox. The world is drawn with letters you can change.", source: explore },
+  { name: "explore", icon: "🗺️", label: "A world to walk around", about: "Walk with the arrows, find the stars, and the door opens. The world is drawn with letters you can change.", source: explore },
   { name: "garden", icon: "🌻", label: "A garden", about: "Plant seeds and water them. It remembers the garden for next time.", source: garden },
-  { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off, then press Enter to hear them loop.", source: beats },
-  { name: "memory", icon: "🃏", label: "Memory for two", about: "Take turns turning over cards to find the pairs.", source: memory },
+  { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off, then press Enter to hear them play round and round, and again to stop.", source: beats },
+  { name: "memory", icon: "🃏", label: "Memory for two", about: "Take turns turning over cards to find the pairs. No score: it ends when every pair is found.", source: memory },
   { name: "story", icon: "📖", label: "A story with choices", about: "Purple reads each page, and number keys pick what happens next.", source: story },
-  { name: "snake", icon: "🐍", label: "Snake", about: "The smallest game: a snake that keeps moving. Arrow keys turn it.", source: snake },
+  { name: "snake", icon: "🐍", label: "A wandering snake", about: "The smallest room: a snake that moves a square each time an arrow is pressed, leaving flowers behind it.", source: snake },
 ];
 
 export const BLANK_ROOM = `from purple import *
 
 show("👋")
-say("Hello!")
 
 
 def on_key(key):

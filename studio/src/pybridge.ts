@@ -5,8 +5,8 @@ import { ROOM_NAME } from "@sdk/pack";
 import { BASES, defaults, type BaseName } from "@sdk/purple/synth";
 import { changed, draft, features, pieces, slug, type RoomDraft } from "./state";
 
-export function addRoom(name: string, source: string, made: Pick<RoomDraft, "blocks" | "template" | "kept"> = { blocks: null, template: null }): RoomDraft {
-  const room: RoomDraft = { name, source, ...made };
+export function addRoom(name: string, source: string, kept = false): RoomDraft {
+  const room: RoomDraft = { name, source, made: null, kept };
   draft.rooms = [...draft.rooms.filter((r) => r.name !== name), room];
   changed();
   return room;
@@ -41,7 +41,7 @@ export const bridge = {
   add_room(name: string, source: string): string {
     if (!features.rooms) return "rooms are turned off in Purple Studio for now";
     if (!ROOM_NAME.test(name)) return "a room name is lowercase letters, digits, and dashes";
-    addRoom(name, source, { blocks: null, template: null, kept: true });
+    addRoom(name, source, true);
     return "";
   },
   summary(): string {

@@ -8,7 +8,7 @@ import type { PackFiles } from "./live/boot";
 import { instrumentNotes } from "./notes";
 import { roomVoice } from "./roomvoice";
 import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop, type Words } from "./photo";
-import { draft, emptyDraft, type Draft, type Keepable, type RoomDraft, type RoomFile } from "./state";
+import { draft, emptyDraft, type Draft, type Keepable, type Made, type RoomDraft, type RoomFile } from "./state";
 
 export { manifest } from "@sdk/pack";
 
@@ -33,7 +33,7 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   const phrases = d.phrases.filter(ok);
   const synonyms = d.synonyms.filter(ok);
   const instruments = d.instruments.filter(ok);
-  const rooms = d.rooms.filter(ok).map((r) => ({ name: r.name, source: r.source, blocks: r.blocks }));
+  const rooms = d.rooms.filter(ok).map((r) => ({ name: r.name, source: r.source, made: r.made }));
   const roomFiles = d.roomFiles.filter(ok);
   const theme = ok(d.colors) ? d.theme : null;
   const studio: Saved = {
@@ -82,8 +82,8 @@ function handMadeRooms(files: Map<string, Uint8Array>): RoomDraft[] {
   return [...files].flatMap(([path, data]) => {
     const name = /^content\/rooms\/([^/]+)\.py$/.exec(path)?.[1];
     if (!name || !ROOM_NAME.test(name)) return [];
-    const blocks = files.get(`content/rooms/${name}.blocks.json`);
-    return [kept({ name, source: text(data), blocks: blocks ? JSON.parse(text(blocks)) : null, template: null })];
+    const made = files.get(`content/rooms/${name}.studio.json`);
+    return [kept({ name, source: text(data), made: made ? JSON.parse(text(made)) : null })];
   });
 }
 
@@ -113,7 +113,7 @@ export async function openPack(file: Blob): Promise<Draft> {
     synonyms: s.synonyms.map(kept),
     ranked: s.ranked,
     instruments: s.instruments.map(kept),
-    rooms: s.rooms.map((r) => kept({ ...r, blocks: r.blocks ?? null, template: null })),
+    rooms: s.rooms.map((r) => kept({ name: r.name, source: r.source, made: (r.made as Made) ?? null })),
     roomFiles: roomFiles(files),
     theme: s.theme,
     colors: s.theme ? { kept: true } : {},

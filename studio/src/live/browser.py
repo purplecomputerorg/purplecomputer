@@ -120,9 +120,11 @@ def _patch_speech():
             return
         if not clip:
             return await purpleSay(text)
-        channel = play_safe(pygame.mixer.Sound(str(clip)))
-        while channel and channel.get_busy():
+        channel = tts._current_channel = play_safe(pygame.mixer.Sound(str(clip)))
+        while channel and channel.get_busy() and speech_id == tts._speech_id:
             await asyncio.sleep(0.05)
+        if tts._current_channel is channel:
+            tts._current_channel = None
 
     async def sequence(items, speech_id, gap, on_playing, on_done, room_voice):
         try:

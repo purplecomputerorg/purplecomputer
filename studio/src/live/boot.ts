@@ -3,7 +3,7 @@
 import type { ArtPicture } from "@sdk/purple/art";
 import browserShim from "./browser.py?raw";
 import controller from "./live.py?raw";
-import { piperSay, startIfCached } from "./piper";
+import { piperHush, piperSay, startIfCached } from "./piper";
 
 const ROOT = "/home/pyodide/purple";
 
@@ -57,8 +57,9 @@ export type Room = "art" | "music" | "play" | "blocks";
 export interface Place { room: Room; menu: boolean; at: [number, number] | null }
 // letters: Music in Say Letters.
 // picture: painted on the Art canvas as Art's Open paints a pack picture.
-// family: a family room opened over the room, as the Esc menu opens one, with its pack's pictures and sounds.
-export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: ArtPicture; family?: { name: string; source: string; pack: string } }
+// family: a family room opened over the room, as the Esc menu opens one, with its pack's pictures and
+// sounds; rooms: the family's others not in the pack, listed in the Esc menu beside it.
+export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: ArtPicture; family?: { name: string; source: string; pack: string; rooms?: [name: string, source: string][] } }
 
 // A pack's files since the last one Purple got (all of them when fresh), as install() in live.py takes them.
 export interface PackFiles { id: string; fresh: boolean; files: [path: string, data: Uint8Array][]; removed: string[] }
@@ -89,7 +90,7 @@ export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) 
   py.canvas.setCanvas2D(canvas);
   const emoji = new FontFace("PurpleEmoji", py.FS.readFile(`${ROOT}/fonts/NotoColorEmoji.ttf`).slice());
   document.fonts.add(await emoji.load());
-  Object.assign(globalThis, { purpleDrawEmoji: drawEmoji, purpleSay: say, purplePiper: piperSay, purpleHush: () => speechSynthesis.cancel() });
+  Object.assign(globalThis, { purpleDrawEmoji: drawEmoji, purpleSay: say, purplePiper: piperSay, purpleHush: () => (speechSynthesis.cancel(), piperHush()) });
   void startIfCached();
   log("Starting Purple…");
   await py.runPythonAsync(`

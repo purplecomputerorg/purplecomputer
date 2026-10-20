@@ -802,7 +802,7 @@ def png_size(path: Path) -> tuple[int, int] | None:
 
 
 def room_files(content_dir: Path) -> list[Path]:
-    """content/rooms/<name>.py; Studio's <name>.blocks.json beside them is for Studio only."""
+    """content/rooms/<name>.py; Studio's <name>.studio.json beside them is for Studio only."""
     return sorted(p for p in (content_dir / "rooms").glob("*.py") if ROOM_NAME.match(p.stem))
 
 

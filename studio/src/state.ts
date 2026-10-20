@@ -1,6 +1,7 @@
 import type { Clip } from "./audio";
 import type { Picture } from "./photo";
 import type { TemplateDraft } from "./examples";
+import type { Rule } from "./rules";
 import { roomTitle, slug } from "@sdk/pack";
 import type { RoomFileKind } from "@sdk/pack";
 import type { Theme } from "@sdk/purple/theme";
@@ -18,9 +19,9 @@ export interface Phrase extends Keepable { text: string; clip: Clip }
 export interface Letter extends Keepable { clip: Clip }
 // title: the name as the family typed it, which Purple shows as is; name is its file name in the pack.
 export interface Instrument extends Keepable { name: string; title?: string; base: BaseName; params: Params }
-// A room is its Python (what Purple runs) plus what it was made from, blocks or a form, so either can be
-// reopened. Both are null once the Python has been edited by hand.
-export interface RoomDraft extends Keepable { name: string; source: string; blocks: unknown | null; template: TemplateDraft | null }
+// What a room's Python is generated from, kept so it reopens: rules or a form. Null when the Python is the room's own.
+export type Made = { kind: "rules"; rules: Rule[] } | TemplateDraft;
+export interface RoomDraft extends Keepable { name: string; source: string; made: Made | null }
 // A picture or sound the pack's rooms draw with picture("name") and play with sound("name"), as Purple reads it.
 export interface RoomFile extends Keepable { kind: RoomFileKind; name: string; data: Uint8Array }
 
@@ -78,7 +79,9 @@ export function freeName(text: string, taken: (name: string) => boolean, fallbac
 export const titleOf = (p: { name: string; title?: string }) => p.title || roomTitle(p.name);
 
 // Trying one of Studio's examples replaces the last one tried, unless the family changed or added it.
-export const withSample = <T extends Keepable>(list: T[], item: T): T[] => [...list.filter((x) => !x.sample || x.kept), { ...item, sample: true }];
+export const withSample = <T extends Keepable>(list: T[], item: T): T[] => [...list.filter(isTheirs), { ...item, sample: true }];
+// Changed or added: an example only tried isn't the family's yet, so their lists leave it out.
+export const isTheirs = (x: Keepable) => !x.sample || !!x.kept;
 
 export interface Piece { id: string; section: string; label: string; one: string; items: Keepable[] }
 

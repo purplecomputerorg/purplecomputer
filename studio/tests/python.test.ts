@@ -32,7 +32,7 @@ pack.room("farm", """
     expect(draft.synonyms).toEqual([{ alias: "tracter", word: "tractor", kept: true }]);
     expect(draft.ranked).toEqual(["tractor", "cow"]);
     expect(draft.instruments[0]).toMatchObject({ name: "kitchen-marimba", base: "marimba", params: { wood: 0.9 } });
-    expect(draft.rooms[0]).toEqual({ name: "farm", source: 'from purple import *\nshow("🐄")\n', blocks: null, template: null, kept: true });
+    expect(draft.rooms[0]).toEqual({ name: "farm", source: 'from purple import *\nshow("🐄")\n', made: null, kept: true });
     expect(JSON.parse(String(await py.runPythonAsync("json.dumps(pack.summary())")))).toEqual({ words: 1, synonyms: 1, autocomplete_picks: 2, instruments: 1, rooms: 1 });
   });
 

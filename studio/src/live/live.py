@@ -19,7 +19,7 @@ _task = None
 
 
 def _rooms():
-    return [(room.key, room.digest) for room in content.get_content().rooms]
+    return [(room.key, room.digest) for room in content.get_content().rooms if TRYING not in room.path.parents]
 
 
 def install(pack_id=None, files=(), removed=(), fresh=True):
@@ -86,16 +86,29 @@ def setup(room, letters=False, instrument=None, picture=None, family=None):
         _app.rooms["art"]._set_paint_mode(True)
     if family:
         from purple_tui.canvas.rooms.family_room import FamilyRoom
-        TRYING.mkdir(parents=True, exist_ok=True)
-        for kind in ("images", "sounds", "room-voice"):
-            link = TRYING.parent / kind
-            link.unlink(missing_ok=True)
-            link.symlink_to(PACKS / family["pack"] / "content" / kind)
-        path = TRYING / f"{family['name']}.py"
-        path.write_text(family["source"])
-        _app.push(FamilyRoom(_app, content.Room(family["name"], path)))
+        _app.push(FamilyRoom(_app, _try(family)))
     _app.invalidate()
     return place()
+
+
+def _try(family):
+    """The family's rooms not in the pack and the one being tried, laid out beside the pack's and
+    turned on, so the Esc menu lists them all and opens them again. Returns the one being tried."""
+    shutil.rmtree(TRYING, ignore_errors=True)
+    TRYING.mkdir(parents=True)
+    for kind in ("images", "sounds", "room-voice"):
+        link = TRYING.parent / kind
+        link.unlink(missing_ok=True)
+        link.symlink_to(PACKS / family["pack"] / "content" / kind)
+    sources = dict(family.get("rooms") or ())
+    sources[family["name"]] = family["source"]
+    tried = [content.Room(name, TRYING / f"{name}.py") for name in sources]
+    for room in tried:
+        room.path.write_text(sources[room.name])
+        set_room_on(room.key, room.digest)
+    loaded = content.get_content()
+    loaded.rooms = [r for r in loaded.rooms if r.name not in sources and TRYING not in r.path.parents] + tried
+    return next(r for r in tried if r.name == family["name"])
 
 
 async def key(name):

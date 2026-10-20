@@ -14,7 +14,7 @@ import { privacyView, staysHere } from "./ui/privacy";
 import { pythonView } from "./ui/python";
 import { EXAMPLES } from "./examples";
 import { addRoom } from "./pybridge";
-import { guideView } from "./ui/guide";
+import { guideView, libraryView } from "./ui/guide";
 import { typingKeys } from "./keys";
 import type { Room } from "./live/boot";
 import { Laptop } from "./ui/laptop";
@@ -39,8 +39,8 @@ const SECTIONS: Section[] = [
   { id: "voice", clears: "recordings", label: "Voice", icon: "🎙️", blurb: "Make any key say any sound or recorded voice", view: voiceView },
   { id: "words", clears: "emoji words", label: "Emoji", icon: "🐶", blurb: "Pick an emoji for any word", view: wordsView },
   { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "Custom instruments for them to play", view: instrumentsView },
-  { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
   { id: "colors", label: "Colors", icon: "🎨", blurb: "Make Purple green, or change the colors the letters type", view: colorsView },
+  { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
 ].filter((s) => features.rooms || s.id !== "rooms");
 type Page = [id: string, label: string, view: (item: string | null) => View];
 const MORE = ([
@@ -50,7 +50,7 @@ const MORE = ([
   ["format", "What is in a Purple Pack", formatView],
   ["privacy", "Your privacy", privacyView],
 ] satisfies Page[]).filter(([id]) => features.rooms || id !== "guide");
-const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
+const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, library: libraryView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
 
 function welcomeView(): View {
   return {

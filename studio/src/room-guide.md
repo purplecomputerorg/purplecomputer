@@ -2,28 +2,27 @@
 
 A **room** is a small Python program your family adds to Purple Computer: a game, a story, a toy. Your kid finds it next to Purple's own rooms and plays it with the keyboard. Rooms come in a **Purple Pack**, the file Purple Studio downloads.
 
-You can make one on Purple Studio's Rooms page (from a form, from blocks, or by changing a starter room), or have an AI helper write it. This guide is everything either of you needs. If you are an AI helping a parent: write the room, check it with the room checker (near the end), and then tell the parent how to try it in Purple Studio and put it on Purple.
+You can make one on Purple Studio's Rooms page (from rules, from a form, or by changing a starter room), or have an AI helper write it. This guide is everything either of you needs. If you are an AI helping a parent: write the room, check it with the room checker (near the end), and then tell the parent how to try it in Purple Studio and put it on Purple.
 
 ## A room
 
 ```python
 from purple import *
 
-snake, heading = [(12, 6)], (1, 0)
+snake = [(12, 6), (11, 6), (10, 6)]
 TURNS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 
 def on_key(key):
-    global heading
-    heading = TURNS.get(key, heading)
-
-def step():
+    if key not in TURNS:
+        return
     x, y = snake[0]
-    head = ((x + heading[0]) % grid.w, (y + heading[1]) % grid.h)
+    dx, dy = TURNS[key]
+    head = ((x + dx) % grid.w, (y + dy) % grid.h)
     snake.insert(0, head)
-    grid.erase(snake.pop())
     grid.set(head, "🟩")
-
-every(0.25, step)
+    tail = snake.pop()
+    if tail not in snake:
+        grid.set(tail, "🌼")
 ```
 
 The top of the file runs once when your kid comes in. After that, Purple calls:
@@ -43,7 +42,7 @@ Esc always belongs to Purple: it leaves the room, and your room never sees it.
 | `status(text)` | A line along the top, for a score or what to do next. `status()` takes it away. |
 | `clear()` | Empties the screen: the middle, the lines, the top line, and the grid. |
 | `background("#2a1845")` | The room's color, written as # and six letters or numbers. |
-| `say(text)` | Purple says it out loud. Everything said in one key or timer is spoken in order; the next key's `say` cuts off anything still being said. Notes, drums, and sounds play at the same time as speech. A `say` with its words written right in it, like `say("Hello!")`, speaks in Purple's room voice; words built while the room runs, like `say(name)` or `say(f"{n} stars")`, speak in Purple's everyday voice. |
+| `say(text)` | Purple says it out loud. Everything said in one key or timer is spoken in order; the next key's `say` cuts off anything still being said, unless it says the same words again, which then just carry on. Notes, drums, and sounds play at the same time as speech. A `say` with its words written right in it, like `say("Hello!")`, speaks in Purple's room voice; words built while the room runs, like `say(name)` or `say(f"{n} stars")`, speak in Purple's everyday voice. |
 | `play("C4", "marimba")` | A note from C2 to C6, sharps like `"F#4"`. Instruments: marimba, ukulele, accordion, glockenspiel, or one made in this pack. |
 | `drum("snare")` | kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, or gong. |
 | `sound("meow")` | One of the pack's own sounds. |
@@ -138,7 +137,7 @@ Purple won't let the screen flash: a change that brightens or darkens a big part
 
 ## Starter rooms
 
-Studio's Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for two players, a story with choices, and Snake, the smallest game. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
+Studio's Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for two players, a story with choices, and a wandering snake, the smallest room. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
 
 ## A Purple Pack made by hand
 

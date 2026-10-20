@@ -63,7 +63,7 @@ Studio is static files, but the host has to send three headers on every file (`v
 
 ## How it's built
 
-Vite, TypeScript, and plain DOM, with no backend. Three runtime dependencies: Blockly for the room editor, Pyodide to run Purple's Python in the browser, and onnxruntime-web for Purple's voice. Everything that doesn't touch the page (tar and gzip, WAV encoding, the synth, the pack builder) lives in `sdk/`, a plain TypeScript library with no dependencies; see `sdk/README.md`. `PACK_FORMAT.md` describes every file in a pack and how to build one by hand.
+Vite, TypeScript, and plain DOM, with no backend. Two runtime dependencies: Pyodide to run Purple's Python in the browser, and onnxruntime-web for Purple's voice. Everything that doesn't touch the page (tar and gzip, WAV encoding, the synth, the pack builder) lives in `sdk/`, a plain TypeScript library with no dependencies; see `sdk/README.md`. `PACK_FORMAT.md` describes every file in a pack and how to build one by hand.
 
 ### The live Purple
 

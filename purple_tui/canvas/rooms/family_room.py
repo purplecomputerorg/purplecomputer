@@ -219,6 +219,7 @@ class FamilyRoom(Overlay):
         self._scaled: dict = {}      # (source, size) -> the picture at that size
         self._last_key = time.monotonic()
         self._resting = False
+        self._saying = None          # the say()s still being spoken
         self._reset()
 
     def _reset(self):
@@ -488,9 +489,22 @@ class FamilyRoom(Overlay):
         if not sounds or not self._audible():
             return
         if says := [s[1] for s in sounds if s[0] == "say"]:
-            tts.speak_many(says, gap=0.3, room_voice=self.room.voice)
+            self._say(says)
         for s in sounds:
             self._sound(*s)
+
+    def _say(self, says: list):
+        """Cuts off what's still being said, unless it's these same words: a key pressed again
+        mid-line would restart it and stutter."""
+        if says == self._saying:
+            return
+        self._saying = says
+
+        def done():
+            if self._saying is says:
+                self._saying = None
+        if not tts.speak_many(says, gap=0.3, on_done=done, room_voice=self.room.voice):
+            done()
 
     def _sound(self, kind, *args):
         if kind == "note" and (m := _NOTE.match(args[0])):

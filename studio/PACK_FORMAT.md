@@ -81,7 +81,7 @@ A family-made room: a Python file that runs as a guest. Purple starts it in a se
 
 What a room can call and the keys it receives are in Studio's Room guide (`studio/src/room-guide.md`), and the message protocol in `guides/family-rooms.md`; `purple_tui/roomkit/purple.py` is the module itself. `purple_tui/roomkit/check.py` tries a pack's rooms without Purple. Studio runs the same file in its preview, so what a parent tries there is what the kid gets.
 
-Studio saves the Blockly workspace a room was built from beside it as `<name>.blocks.json`, which Purple ignores; it is there so the room can be reopened for editing.
+Studio saves the rules or form a room was made from beside it as `<name>.studio.json`, which Purple ignores; it is there so the room reopens the way it was made.
 
 ### images/<name>.png and sounds/<name>.wav
 

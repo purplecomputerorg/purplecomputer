@@ -1,35 +1,45 @@
 from purple import *
 
 # A beat maker: each row is a drum, each column a beat. Arrows move, Space turns a beat on or off,
-# Enter starts and stops the music. Change ROWS for other drums, or STEPS for a longer loop.
-ROWS = [("🐘", "kick"), ("🐸", "snare"), ("🐝", "hi-hat"), ("👏", "clap")]
-STEPS = 16
-TOP, LEFT = 3, 4
-OFF, ON, NOW = "#3a2f5c", "#f2b134", "#5c4c8f"
+# Enter starts and stops the music.
 
+# The drums, top to bottom: the picture beside each row and the drum it plays.
+ROWS = [("🐘", "kick"), ("🐸", "snare"), ("🐝", "hi-hat"), ("👏", "clap")]
+# How many beats before the music comes round again.
+STEPS = 16
+# Seconds from one beat to the next: smaller is faster.
+SPEED = 0.2
+# The color of a beat that's off.
+OFF = "#3a2f5c"
+# The color of a beat that's on.
+ON = "#f2b134"
+# The color above the beat playing now.
+NOW = "#5c4c8f"
+
+top, left = 3, 4
 beats = [[False] * STEPS for _ in ROWS]
 row, col, at = 0, 0, -1
 loop = None
 
 
 def square(r, c):
-    grid.set(LEFT + c, TOP + r * 2, ON if beats[r][c] else OFF)
+    grid.set(left + c, top + r * 2, ON if beats[r][c] else OFF)
 
 
 for r, (animal, _) in enumerate(ROWS):
-    grid.set(LEFT - 2, TOP + r * 2, animal)
+    grid.set(left - 2, top + r * 2, animal)
     for c in range(STEPS):
         square(r, c)
-grid.cursor(LEFT, TOP)
+grid.cursor(left, top)
 status("Space adds a beat. Enter plays.")
 
 
 def tick():
     global at
     if at >= 0:
-        grid.floor.erase(LEFT + at, TOP - 1)
+        grid.floor.erase(left + at, top - 1)
     at = (at + 1) % STEPS
-    grid.floor.set(LEFT + at, TOP - 1, NOW)
+    grid.floor.set(left + at, top - 1, NOW)
     for r, (_, name) in enumerate(ROWS):
         if beats[r][at]:
             drum(name)
@@ -49,8 +59,8 @@ def on_key(key):
     elif key == "enter" and loop:
         loop.stop()
         loop = None
-        grid.floor.erase(LEFT + at, TOP - 1)
+        grid.floor.erase(left + at, top - 1)
         at = -1
     elif key == "enter":
-        loop = every(0.2, tick)
-    grid.cursor(LEFT + col, TOP + row * 2)
+        loop = every(SPEED, tick)
+    grid.cursor(left + col, top + row * 2)

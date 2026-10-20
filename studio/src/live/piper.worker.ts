@@ -31,9 +31,10 @@ const ids = ({ config: { phoneme_id_map: m } }: Voice, phonemes: string[]) =>
 const int64 = (xs: number[], dims?: number[]) => new ort.Tensor("int64", BigInt64Array.from(xs, BigInt), dims);
 
 // Each sentence normalized to full scale, then to 16 bits, as Piper's synthesize().
-async function speak(voice: Voice, text: string): Promise<Int16Array> {
+async function speak(voice: Voice, text: string, hushed: () => boolean): Promise<Int16Array> {
   const parts: Int16Array[] = [];
   for (const phonemes of sentences(voice.espeak, text)) {
+    if (hushed()) break;
     const input = ids(voice, withWordGaps(phonemes));
     const { output } = await voice.session.run({
       input: int64(input, [1, input.length]),
@@ -52,14 +53,17 @@ async function speak(voice: Voice, text: string): Promise<Int16Array> {
 }
 
 let voice: Promise<Voice> | null = null;
-self.onmessage = async ({ data }: MessageEvent<{ base: string } | { id: number; text: string }>) => {
+// Lines up to this id were hushed before they were spoken.
+let dropped = 0;
+self.onmessage = async ({ data }: MessageEvent<{ base: string } | { drop: number } | { id: number; text: string }>) => {
   if ("base" in data) {
     voice = start(data.base);
     return voice.then(() => self.postMessage({ ready: true }), (e) => self.postMessage({ failed: String(e) }));
   }
+  if ("drop" in data) return void (dropped = data.drop);
   try {
     const v = await voice!;
-    const pcm = await speak(v, data.text);
+    const pcm = await speak(v, data.text, () => data.id <= dropped);
     (self as unknown as Worker).postMessage({ id: data.id, pcm, rate: v.config.audio.sample_rate }, [pcm.buffer]);
   } catch (e) {
     self.postMessage({ id: data.id, error: String(e) });

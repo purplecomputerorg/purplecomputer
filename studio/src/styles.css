@@ -276,8 +276,8 @@ input[type="range"] { accent-color: var(--purple); width: 100%; margin: 0; }
 .trybar .added { color: #3d7a4e; font-weight: 600; }
 .trybar:has(.added) { background: #e8f3ea; }
 .try-chip { position: relative; display: inline-flex; }
-.try-chip .drop { position: absolute; top: -7px; right: -7px; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: #fff; color: var(--dim); font-size: 13px; line-height: 1; cursor: pointer; box-shadow: var(--shadow); }
-.try-chip .drop:hover { color: #fff; background: var(--purple); border-color: var(--purple); }
+.try-chip .drop, .your-card .drop { position: absolute; top: -7px; right: -7px; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: #fff; color: var(--dim); font-size: 13px; line-height: 1; cursor: pointer; box-shadow: var(--shadow); }
+.try-chip .drop:hover, .your-card .drop:hover { color: #fff; background: var(--purple); border-color: var(--purple); }
 .keep { font: 600 12px var(--sans); padding: 4px 10px; border-radius: 999px; border: 1.5px solid var(--border); background: #fff; color: var(--purple); cursor: pointer; white-space: nowrap; }
 .keep.on { border-color: transparent; background: #e8f3ea; color: #3d7a4e; }
 
@@ -306,9 +306,43 @@ ul.privacy { list-style: none; padding: 0; } ul.privacy li { margin-bottom: 12px
 pre { background: #2a1845; color: #e8daf0; padding: 14px 18px; border-radius: 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
 pre code { background: none; color: inherit; padding: 0; }
 
-/* Rooms: the block editor */
-.blockly { height: 560px; border-radius: 16px; border: 1px solid var(--line); overflow: hidden; background: #fbfaf8; }
-.blocklyToolboxDiv { border-right: 1px solid var(--line); }
+/* Rooms: the name, rules, knobs, the Python's header, and the pictures and sounds tray */
+input.room-name { font: 600 22px var(--display); letter-spacing: -0.02em; border-color: transparent; background: none; padding: 4px 8px; margin-left: -8px; width: auto; min-width: 12ch; }
+input.room-name:hover { border-color: var(--line); background: #fff; }
+input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 10px; }
+.rules { display: grid; gap: 12px; justify-items: start; }
+.rule { justify-self: stretch; display: grid; gap: 8px; padding: 14px 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.rule-when, .rule-do { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rule-do { padding-left: 22px; }
+.rule-do::before { content: "→"; color: var(--dim); margin-left: -22px; width: 14px; }
+.rule > .linkbtn { justify-self: start; padding-left: 22px; }
+.rule input.bad, .form-row input.bad { border-color: #d77; }
+.push { margin-left: auto; }
+.knob .card-head { margin-bottom: 12px; }
+.knob code { font-size: 11px; }
+.knob-rows { display: grid; gap: 6px; }
+.knob-rows > .linkbtn { justify-self: start; }
+.knob-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+input.mono-in { font-family: var(--mono); font-size: 13px; }
+.py-help { font-size: 14px; margin: 0 0 10px; }
+.py-help p { margin: 0 0 6px; }
+.lib-name { font-family: var(--mono); font-size: 12px; text-decoration: none; background: var(--fill); padding: 1px 7px; border-radius: 6px; }
+.tray-item { flex-direction: column; align-items: center; gap: 4px; width: 84px; font-size: 12px; }
+.tray-item > button:first-child { padding: 0; border: none; background: none; cursor: pointer; }
+.tray-item img, .sound-face { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 3px solid #fff; box-shadow: var(--shadow); }
+.sound-face { display: grid; place-items: center; font-size: 28px; background: var(--fill); box-sizing: border-box; }
+/* Yours: what the family made, on the Rooms, Instruments, and Pictures pages */
+.yours { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.your-card { position: relative; display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+.your-card[aria-current="page"] { border-color: var(--purple); }
+.your-face { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); min-width: 0; }
+.your-face b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.your-face img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; }
+.your-face .pick-icon, .your-face .pick-swatch { margin: 0; flex-shrink: 0; }
+.pack-switch { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); cursor: pointer; }
+.pack-switch input { accent-color: var(--purple); width: 16px; height: 16px; }
+.pack-switch:has(input:checked) { color: #3d7a4e; font-weight: 600; }
+.guide .flash { background: var(--fill); transition: background 1.5s; }
 
 /* Room editor tabs, the problem box, and the Room guide */
 .tabs { display: flex; gap: 4px; margin: 0 0 12px; }

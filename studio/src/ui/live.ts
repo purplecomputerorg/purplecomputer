@@ -84,7 +84,7 @@ class LiveScreen {
   show(setup: RoomSetup): void {
     this.setup = setup;
     this.moved({ room: setup.room, menu: false, at: null });
-    if (this.ready) this.post({ type: "setup", setup });
+    if (this.ready) this.post({ type: "setup", setup: this.withRooms() });
   }
 
   // Any change to the draft: rebuild the pack once edits settle. Purple keeps taking keys unless
@@ -117,9 +117,15 @@ class LiveScreen {
     this.syncing = this.syncing.then(() => this.sync()).catch((err) => console.warn("[studio] Purple's pack:", err));
   }
 
+  // A family room goes with the rest of the family's rooms not in the pack, so the Esc menu lists
+  // them all; the pack has only the added ones, so trying rooms doesn't start Purple again.
+  private withRooms(): RoomSetup {
+    const { family } = this.setup;
+    return family ? { ...this.setup, family: { ...family, rooms: draft.rooms.filter((r) => !r.kept).map((r) => [r.name, r.source]) } } : this.setup;
+  }
+
   private async sync(): Promise<void> {
-    // The room being tried opens straight on the screen (RoomSetup.family), so the Esc menu lists
-    // only the added ones, as Open does pictures.
+    // Open lists only the added pictures.
     const live = { ...draft, rooms: draft.rooms.filter((r) => r.kept), pictures: draft.pictures.filter((p) => p.kept) };
     const key = JSON.stringify([live, roomVoiceVersion()], (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
     if (key === this.sent) return void (this.updating.hidden = true);
@@ -130,7 +136,7 @@ class LiveScreen {
     const pack = packChanges(id, entries, this.last);
     this.last = { id, files: new Map(entries.map((e) => [e.path, e.data])) };
     if (!pack.files.length && !pack.removed.length) return void (this.updating.hidden = true);
-    this.post({ type: "load", pack, setup: this.setup });
+    this.post({ type: "load", pack, setup: this.withRooms() });
   }
 
   private onMessage(m: FromFrame): void {
@@ -142,7 +148,7 @@ class LiveScreen {
     if (m.type === "loaded" && !this.ready) {
       this.ready = true;
       this.element.classList.add("ready");
-      this.post({ type: "setup", setup: this.setup });
+      this.post({ type: "setup", setup: this.withRooms() });
     }
     if (m.type === "focus") this.element.classList.toggle("focused", m.on);
     if (m.type === "focus" && m.on) this.element.classList.add("tried");

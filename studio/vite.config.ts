@@ -11,8 +11,6 @@ const pyodideDir = resolve(here, "node_modules/pyodide");
 // threads start from the file the runtime is in.
 const ortDir = resolve(here, "node_modules/onnxruntime-web/dist");
 const ORT_FILES = ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm"];
-// Blockly's icons and sounds, which it would otherwise fetch from static.blockly.com.
-const blocklyMedia = resolve(here, "node_modules/blockly/media");
 // espeak-ng's source offer, served beside the voice (see vendor/espeak-ng/README.md).
 const espeakDir = resolve(here, "vendor/espeak-ng");
 const ESPEAK_SOURCE = ["README.md", "espeak_bridge.c", "build.sh"];
@@ -48,7 +46,6 @@ function pyodideAssets(): Plugin {
       serve("/pyodide", [pyodideDir, join(cacheDir, "pyodide")]);
       serve("/purple", [cacheDir]);
       serve("/ort", [ortDir], (f) => ORT_FILES.includes(f));
-      serve("/blockly", [blocklyMedia]);
       serve("/voice/espeak-ng", [espeakDir], (f) => ESPEAK_SOURCE.includes(f));
       serve("/voice", [join(cacheDir, "voice")]);
     },
@@ -64,7 +61,6 @@ function pyodideAssets(): Plugin {
       copyAll(join(cacheDir, "pyodide"), resolve(here, "dist/pyodide"), (f) => f.endsWith(".whl"));
       copyAll(cacheDir, resolve(here, "dist/purple"), (f) => f === "purple.zip" || f === "purple-room-check.pyz");
       copyAll(ortDir, resolve(here, "dist/ort"), (f) => ORT_FILES.includes(f));
-      copyAll(blocklyMedia, resolve(here, "dist/blockly"), () => true);
       if (existsSync(join(cacheDir, "voice"))) cpSync(join(cacheDir, "voice"), resolve(here, "dist/voice"), { recursive: true });
       copyAll(espeakDir, resolve(here, "dist/voice/espeak-ng"), (f) => ESPEAK_SOURCE.includes(f));
       // Vercel's Build Output API config, so `just studio-deploy` sends the same headers as vite.

@@ -419,7 +419,7 @@ def test_a_room_plays_its_packs_own_sounds(pack, monkeypatch):
 def test_everything_one_key_says_is_spoken_in_order(pack, monkeypatch):
     pack("chatty", 'from purple import *\ndef on_key(key):\n    say("A pair!")\n    say("Go again.")\n')
     spoken = []
-    monkeypatch.setattr(family_room.tts, "speak_many", lambda texts, gap, room_voice: spoken.append((texts, room_voice)))
+    monkeypatch.setattr(family_room.tts, "speak_many", lambda texts, gap, on_done, room_voice: spoken.append((texts, room_voice)))
     monkeypatch.setattr(FamilyRoom, "_audible", lambda self: True)
 
     async def go():
@@ -429,6 +429,38 @@ def test_everything_one_key_says_is_spoken_in_order(pack, monkeypatch):
         await press(app, "a")
         await until(lambda: spoken)
         assert spoken == [(["A pair!", "Go again."], room.room.voice)]
+        room.close()
+    run(go())
+
+
+def test_a_line_still_being_said_is_not_restarted(pack, monkeypatch):
+    pack("cow", 'from purple import *\ndef on_key(key):\n    say("Moo" if key == "m" else "Baa")\n')
+    spoken, done = [], []
+
+    def speak_many(texts, gap, on_done, room_voice):
+        spoken.append(texts)
+        done.append(on_done)
+        return True
+    monkeypatch.setattr(family_room.tts, "speak_many", speak_many)
+    monkeypatch.setattr(FamilyRoom, "_audible", lambda self: True)
+
+    async def go():
+        app = make_app()
+        room = _open(app, "cow")
+        await until(lambda: not room._busy)
+        for key in "mm":
+            await press(app, key)
+            await until(lambda: not room._queue and not room._busy)
+        assert spoken == [["Moo"]]
+        await press(app, "b")
+        await until(lambda: len(spoken) == 2)
+        done[0]()  # the cut off Moo finishing must not let a Baa still playing restart
+        await press(app, "b")
+        await until(lambda: not room._queue and not room._busy)
+        assert spoken == [["Moo"], ["Baa"]]
+        done[1]()
+        await press(app, "b")
+        await until(lambda: len(spoken) == 3)
         room.close()
     run(go())
 

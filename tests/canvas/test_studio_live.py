@@ -85,3 +85,20 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
         assert (await live.key("escape"))[1]
         assert live.setup("play")[:2] == ["play", False]
     run(go())
+
+
+def test_the_familys_rooms_wait_in_the_esc_menu(live, tmp_path, monkeypatch):
+    monkeypatch.setattr(live, "TRYING", tmp_path / "trying" / "content" / "rooms")
+    say = 'from purple import *\n\ndef on_key(key):\n    say("{}")\n'
+
+    async def go():
+        live.install(ID, files(tmp_path / "pack") + [text("content/rooms/farm.py", say.format("moo"))])
+        live._app = app = make_app()
+        family = {"name": "zoo", "source": say.format("roar"), "pack": ID, "rooms": [["zoo", "old"], ["sea", say.format("splash")]]}
+        live.setup("play", family=family)
+        assert type(app.top).__name__ == "FamilyRoom" and app.top.room.path.read_text() == family["source"]
+        await live.key("escape")
+        await live.key("escape")
+        assert [r.name for r in app.top.family] == ["farm", "zoo", "sea"]
+        assert not live.install(ID, [text("content/emoji.json", {"zorb": "🦑"})], fresh=False)
+    run(go())

@@ -38,7 +38,8 @@ def state_dir(name: str, env: str) -> Path | None:
         return Path(override)
     if os.environ.get("PURPLE_DEV_MODE") == "1":
         return None
-    return Path.home() / ".config" / "purple" / name
+    from .settings import kid_path
+    return kid_path(Path.home() / ".config" / "purple" / name)
 
 
 def timeline_dir() -> Path | None:

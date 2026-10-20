@@ -39,7 +39,7 @@ from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from ..timeline import RoomTimeline
 from ..audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
-from .ui import (DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
+from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
                  draw_keycap, draw_label, draw_level)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
@@ -247,6 +247,9 @@ class PurpleApp:
         if os.environ.get("PURPLE_DEV_MODE") != "1" and is_live_boot():
             from .rooms.sleep_screen import LiveBootSplash
             self.push(LiveBootSplash(self))
+        if not is_live_boot():
+            from . import kids
+            kids.ask_at_boot(self)
         self._screenshot_timer = None
         if os.environ.get("PURPLE_DEV_MODE") == "1":
             self._screenshot_timer = self.timers.every(0.2, self._check_screenshot_trigger)
@@ -752,15 +755,29 @@ class PurpleApp:
             self._settle_offer(waiting, False)
 
     def _settle_offer(self, waiting, add):
+        """A pack added again keeps who it's for; new ones ask, once there's more than one kid."""
+        from ..pack_manager import get_installer
+        from . import kids
+        new = [m["id"] for _, m in waiting if not (get_installer().packs_dir / m["id"]).exists()]
+        if add and new and kids.many():
+            self.push(kids.WhoGetsIt(self), on_close=lambda kid: self._add_packs(waiting, kid, new))
+        else:
+            self._add_packs(waiting, None if add else CANCELLED, new)
+
+    def _add_packs(self, waiting, kid, new):
         from .. import pack_arrivals
+        from ..settings import set_pack_kid
         self._offering_packs = False
-        if not add:
+        if kid is CANCELLED:
             return pack_arrivals.decline(waiting)
         failed = pack_arrivals.add(waiting)
+        added = [m for _, m in waiting if m["name"] not in failed]
+        for m in added:
+            if m["id"] in new:
+                set_pack_kid(m["id"], kid)
         self.refresh_packs()
-        names = ", ".join(m["name"] for _, m in waiting if m["name"] not in failed)
-        self.notify(f"Couldn't add {', '.join(failed)}" if failed else f"Added {names}", timeout=3)
-        self._pick_new_rooms({m["id"] for _, m in waiting if m["name"] not in failed})
+        self.notify(f"Couldn't add {', '.join(failed)}" if failed else f"Added {', '.join(m['name'] for m in added)}", timeout=3)
+        self._pick_new_rooms({m["id"] for m in added})
 
     def _pick_new_rooms(self, packs):
         from ..content import get_content
@@ -864,7 +881,6 @@ class PurpleApp:
             set_littles_mode(None)
             self._apply_littles_mode(None)
         elif result == "switch":
-            from .ui import CANCELLED
             self.push(LittlesModeScreen(self), on_close=lambda m: m is not CANCELLED and self._apply_littles_mode(m))
         elif result == "parent":
             self.push(ParentMenu(self), on_close=self._on_parent_menu_dismissed)
@@ -1590,8 +1606,8 @@ class PurpleApp:
 
     def computer_name(self) -> str:
         if self._computer_name is None:
-            self._computer_name = _read(str(Path.home() / ".purple/computer_name.txt")).strip() \
-                or _read("/opt/purple/computer_name.txt").strip() or "My Purple Computer"
+            from .kids import computer_name
+            self._computer_name = computer_name()
         return self._computer_name
 
     def set_computer_name(self, name: str):

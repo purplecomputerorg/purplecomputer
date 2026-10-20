@@ -232,8 +232,10 @@ class ContentManager:
             self._load_pack(pack_dir)
 
         # Then user-installed packs, newest last so it wins a word two packs both define
+        from .settings import gets_pack
         for pack_dir in _pack_dirs(self.packs_dir, newest_last=True):
-            self._load_pack(pack_dir, user=True)
+            if gets_pack(pack_dir.name):
+                self._load_pack(pack_dir, user=True)
 
         self._load_language_words()
         self._loaded = True

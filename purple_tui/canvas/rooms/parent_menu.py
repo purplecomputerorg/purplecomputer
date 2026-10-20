@@ -26,6 +26,7 @@ from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Pi
                   draw_text_caret, draw_window, field_height, window_title_height)
 from .rooms_screen import RoomsScreen, rooms_label
 from .sleep_screen import FullScreen
+from ..kids import KidsScreen, computer_name, many, write_computer_name
 from .. import old_install
 from ..old_install import PAYLOAD_PATH
 
@@ -254,20 +255,40 @@ class PurplePacksScreen(Picker):
 
     def _options(self) -> list:
         from ...pack_manager import get_installer
-        return [(p["id"], p["name"], "Enter to remove") for p in get_installer().list_installed()] + [(None, "Done")]
+        return [(p["id"], p["name"], _pack_for(p["id"]) if many() else "Enter to remove")
+                for p in get_installer().list_installed()] + [(None, "Done")]
 
     def _on_confirm(self, pack_id):
         if pack_id is None:
             return self.close(True)
         name = self.options[self.selected][1]
+        if not many():
+            return self._ask_remove(pack_id, name)
+        from ...settings import get_kids
+        picker = Picker(self.app, [(("for", None), "For everyone")] + [(("for", k), f"Just {computer_name(k)}") for k in get_kids()]
+                        + [("remove", f"Remove {name}"), (None, "Never mind")])
+        picker.title, picker.dim_values = name, {"remove"}
+        self.app.push(picker, on_close=lambda choice: self._chose(pack_id, name, choice))
+
+    def _chose(self, pack_id, name, choice):
+        from ...settings import set_pack_kid
+        if choice == "remove":
+            self._ask_remove(pack_id, name)
+        elif choice:
+            set_pack_kid(pack_id, choice[1])
+            self.app.refresh_packs()
+            self.options = self._options()
+
+    def _ask_remove(self, pack_id, name):
         self.app.push(Confirm(self.app, f"Remove {name}?", "Plug in a USB drive with it to add it again.",
                               yes="Remove", no="Keep"), on_close=lambda yes: yes is True and self._remove(pack_id))
 
     def _remove(self, pack_id: str):
         from ...pack_manager import get_installer
-        from ...settings import set_pack_added
+        from ...settings import set_pack_added, set_pack_kid
         if get_installer().uninstall_pack(pack_id)[0]:
             set_pack_added(pack_id, None)
+            set_pack_kid(pack_id, None)
             self.app.refresh_packs()
         self.options = self._options()
         self.selected = min(self.selected, len(self.options) - 1)
@@ -277,6 +298,19 @@ class PurplePacksScreen(Picker):
 def _purple_packs_label() -> str:
     from ...pack_manager import get_installer
     return f"Purple Packs: {len(get_installer().list_installed())}"
+
+
+def _pack_for(pack_id: str) -> str:
+    from ...settings import get_pack_kid
+    kid = get_pack_kid(pack_id)
+    return "For everyone" if kid is None else f"Just {computer_name(kid)}"
+
+
+def _kids_label() -> str:
+    from ...settings import get_kids
+    if is_live_boot():
+        return "Kids (install Purple first)"
+    return f"Kids: {len(get_kids())}" if many() else "Kids"
 
 
 class MusicLoopingScreen(_YesNo):
@@ -643,9 +677,10 @@ class ComputerNameScreen(_Entry):
 
     _MIN_LEN = 3
 
-    def __init__(self, app, title="Name this computer", description="Optional. Leave blank to skip.", initial=""):
+    def __init__(self, app, title="Name this computer", description="Optional. Leave blank to skip.", initial="", taken=()):
         super().__init__(app, title, description)
         self._name = initial
+        self._taken = taken
 
     def fill_field(self, g, box, px):
         draw_field(g, box, px)
@@ -668,6 +703,8 @@ class ComputerNameScreen(_Entry):
                     return self.close("")
                 if len(trimmed) < self._MIN_LEN:
                     self._error = f"Use {self._MIN_LEN}+ letters or leave blank."
+                elif trimmed[:_NAME_MAX] in self._taken:
+                    self._error = "Another computer here has that name."
                 else:
                     return self.close(trimmed[:_NAME_MAX])
             elif key == "backspace" and self._name:
@@ -1201,6 +1238,10 @@ def _is_dev_environment() -> bool:
     return bool(os.environ.get("PURPLE_TEST_BATTERY")) or (Path(__file__).parents[3] / ".git").is_dir()
 
 
+def _rename_label(app) -> str:
+    return "Rename this Computer" if app.computer_name() != DEFAULT_COMPUTER_NAME else "Name this Computer"
+
+
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
     from ...pack_manager import get_installer
@@ -1210,7 +1251,8 @@ def _get_menu_items(app) -> list:
     if is_live_boot():
         items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
     else:
-        items.append(("menu-rename", "Rename this Computer" if app.computer_name() != DEFAULT_COMPUTER_NAME else "Name this Computer"))
+        items.append(("menu-rename", _rename_label(app)))
+    items.append(("menu-kids", _kids_label()))
     items.append(("sec-kid", "Activities"))
     items.append(("menu-rooms", rooms_label(app)))
     if not get_littles_mode():
@@ -1278,7 +1320,7 @@ class ParentMenu(Overlay):
     def _disabled(self, item_id) -> bool:
         if item_id == "menu-install":
             return self.items[[i for i, _ in self.items].index(item_id)][1] != "Install on this Computer"
-        return item_id == "menu-volume" and self.app.audio_ok is False
+        return item_id == "menu-volume" and self.app.audio_ok is False or item_id == "menu-kids" and is_live_boot()
 
     def _refresh_install_item(self):
         dev = _find_usb_device()
@@ -1340,6 +1382,8 @@ class ParentMenu(Overlay):
             "menu-volume": self._open_volume, "menu-voice": self._open_voice,
             "menu-language": self._open_language, "menu-second-language": self._open_second_language,
             "menu-install": self._install_to_disk, "menu-rename": self._rename_computer,
+            "menu-kids": lambda: self.app.push(KidsScreen(self.app), on_close=lambda _: (
+                self._relabel("menu-kids", _kids_label()), self._relabel("menu-rename", _rename_label(self.app)))),
             "menu-export": lambda: self.app.push(__import__("purple_tui.canvas.rooms.save_export", fromlist=["SaveExportScreen"]).SaveExportScreen(self.app)),
             "menu-shell": lambda: (self.close(), self.app.push(TerminalScreen(self.app))),
             "menu-demo": lambda: (self.close(), self.app.start_demo()),
@@ -1558,14 +1602,3 @@ class ParentMenu(Overlay):
         g.draw_markup("Purple is keyboard only, on purpose.\nKids explore by typing.", em(0.85), box.x, foot + em(2.3),
                       "mono", P.DIM, box.w, "center", P.SURFACE)
         g.draw_text(diagnostics.get_version_label() or "", em(0.8), box.centerx, foot + em(5.3), "mono", P.DIM, anchor="center")
-
-def write_computer_name(name: str):
-    path = Path.home() / ".purple" / "computer_name.txt"
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if name:
-            path.write_text(name)
-        elif path.exists():
-            path.unlink()
-    except OSError:
-        pass

@@ -731,7 +731,7 @@ class PurpleApp:
         from .ui import Confirm
         body = "\n".join(m["name"] for _, m in waiting) + "\nPictures, words, and sounds from Purple Studio."
         if pack_arrivals.has_rooms(waiting):
-            body += "\nIts rooms stay off until a grown-up turns them on in the Parent Menu."
+            body += "\nNext, you pick which of its rooms to turn on."
         body += "\nYou can unplug the USB drive now."
         self._offering_packs = True
         self.push(Confirm(self, "New Purple Pack", body, yes="Add", no="Not now", default_no=False),
@@ -752,6 +752,13 @@ class PurpleApp:
         self.refresh_packs()
         names = ", ".join(m["name"] for _, m in waiting if m["name"] not in failed)
         self.notify(f"Couldn't add {', '.join(failed)}" if failed else f"Added {names}", timeout=3)
+        self._pick_new_rooms({m["id"] for _, m in waiting if m["name"] not in failed})
+
+    def _pick_new_rooms(self, packs):
+        from ..content import get_content
+        from .rooms.parent_menu import FamilyRoomsScreen
+        if any(r.pack in packs for r in get_content().rooms):
+            self.push(FamilyRoomsScreen(self, packs))
 
     def refresh_packs(self, reread=True):
         """The packs changed under a running Purple: read them again, and redo what was drawn or

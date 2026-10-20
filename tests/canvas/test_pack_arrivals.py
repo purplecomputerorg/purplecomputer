@@ -6,7 +6,8 @@ import pytest
 
 from purple_tui import content, pack_arrivals, settings
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.parent_menu import PinEntry
+from purple_tui.canvas.room_picker import family_rooms
+from purple_tui.canvas.rooms.parent_menu import FamilyRoomsScreen, PinEntry
 from purple_tui.canvas.ui import Confirm
 from purple_tui.usb_updater import sha256, update_from
 from scripts.purplepack import build_pack
@@ -47,11 +48,28 @@ def test_add_puts_the_pack_in_use_at_once(drive):
         app = make_app()
         assert zorb() is None
         sha = offered(app, drive)
-        assert "rooms stay off" in app.top.DESCRIPTION
+        assert "pick which of its rooms" in app.top.DESCRIPTION
         await press(app, "enter")
         assert zorb() == "🐙"
         assert settings.get_packs_added() == {ID: sha}
         assert not any(pack_arrivals.WAITING_DIR.iterdir())
+    run(go())
+
+
+def test_after_add_the_parent_picks_which_rooms_to_turn_on(drive):
+    async def go():
+        app = make_app()
+        offered(app, drive)
+        await press(app, "enter")
+        screen = app.top
+        assert isinstance(screen, FamilyRoomsScreen) and "Parent Menu" in screen.DESCRIPTION
+        assert [o[0].pack for o in screen.options[:-1]] and all(o[0].pack == ID for o in screen.options[:-1])
+        assert family_rooms() == []
+        await press(app, "enter")
+        assert [r.pack for r in family_rooms()] == [ID]
+        await press(app, "up")
+        await press(app, "enter")
+        assert app.top is None
     run(go())
 
 
@@ -118,6 +136,7 @@ def test_a_drive_being_read_says_so_then_says_how_it_went(drive):
         await read(app, drive)
         assert isinstance(app.top, Confirm) and not app._toasts
         await press(app, "enter")
+        app.top.close()
 
         await read(app, drive)
         assert app.top is None and app._toasts[-1].text.startswith("Already added")

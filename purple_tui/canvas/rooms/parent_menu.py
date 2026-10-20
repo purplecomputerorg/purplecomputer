@@ -269,6 +269,10 @@ def _rooms_label(app) -> str:
     return f"Rooms: {len(app.kid_rooms)} of {len(app.rooms)} On"
 
 
+ICON_CHECKED = "\U000F0132"    # nf-md-checkbox_marked
+ICON_UNCHECKED = "\U000F0131"  # nf-md-checkbox_blank_outline
+
+
 def _room_state(room, on: dict) -> str:
     if on.get(room.key) == room.digest:
         return "on"
@@ -277,19 +281,28 @@ def _room_state(room, on: dict) -> str:
 
 class FamilyRoomsScreen(Picker):
     """Each room from a pack, turned on one at a time. A room that changes after it was turned
-    on (a new pack with the same name, say) waits here until it's turned on again."""
+    on (a new pack with the same name, say) waits here until it's turned on again. Given packs,
+    it lists only their rooms: the step right after a pack is added."""
     title = "Family Rooms"
     DESCRIPTION = "Rooms from Purple Studio. Only the ones you turn on show in the Esc menu."
+    JUST_ADDED = "Pick the rooms to turn on now. You can change this later in the Parent Menu, under Family Rooms."
     NOTES = {"on": "On: in the Esc menu", "changed": "Changed since you turned it on: off for now", "off": "Off"}
 
-    def __init__(self, app):
+    def __init__(self, app, packs=None):
+        self.packs = packs
+        if packs is not None:
+            self.DESCRIPTION = self.JUST_ADDED
         super().__init__(app, self._options())
 
     def _options(self) -> list:
         from ...content import get_content
         from ...settings import get_rooms_on
         on = get_rooms_on()
-        return [(r, r.title, self.NOTES[_room_state(r, on)]) for r in get_content().rooms] + [(None, "Done")]
+        return [self._row(r, _room_state(r, on)) for r in get_content().rooms
+                if self.packs is None or r.pack in self.packs] + [(None, "Done")]
+
+    def _row(self, room, state: str) -> tuple:
+        return room, f"{ICON_CHECKED if state == 'on' else ICON_UNCHECKED} {room.title}", self.NOTES[state]
 
     def _on_confirm(self, room):
         if room is None:

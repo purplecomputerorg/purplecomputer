@@ -21,7 +21,7 @@ from purple_tui.canvas.room_picker import FAMILY, RoomPicker
 from purple_tui.canvas import theme
 from purple_tui.canvas.rooms import family_room
 from purple_tui.canvas.rooms.family_room import FamilyRoom
-from purple_tui.canvas.rooms.parent_menu import FamilyRoomsScreen
+from purple_tui.canvas.rooms.parent_menu import ICON_UNCHECKED, FamilyRoomsScreen
 from purple_tui.content import ContentManager
 from purple_tui.keyboard import ControlAction, NavigationAction
 from purple_tui.music_constants import PERCUSSION
@@ -546,7 +546,7 @@ def test_parent_menu_turns_rooms_on_and_off(pack):
         app = make_app()
         screen = FamilyRoomsScreen(app)
         app.push(screen)
-        assert [o[1:] for o in screen.options] == [("Snake", "Off"), ("Worm", "Off"), ("Done",)]
+        assert [o[1:] for o in screen.options] == [(f"{ICON_UNCHECKED} Snake", "Off"), (f"{ICON_UNCHECKED} Worm", "Off"), ("Done",)]
         app._draw()  # draws an unselected room row too
         await press(app, "enter")
         assert screen.options[0][2] == "On: in the Esc menu"

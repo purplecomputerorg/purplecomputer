@@ -2,14 +2,14 @@ import random
 
 from purple import *
 
-# Memory for two players taking turns, laid out like the Music room: each card is a letter key. Press a
-# card's letter to turn it over. Find a pair and you go again.
+# Memory for one player or a few taking turns, laid out like the Music room: each card is a letter key.
+# Press a card's letter to turn it over. Find a pair and you go again.
 
-# The pictures on the cards, up to 13. Each one makes a pair, shuffled every game.
+# The pictures on the cards, up to 13: emoji, or your pictures, or both. Each one makes a pair, shuffled every game.
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
-# The two players: each one's mark and name.
+# The players, taking turns in this order: each one's mark and name.
 # Labels: mark, name
-PLAYERS = (("🔴", "Red"), ("🔵", "Blue"))
+PLAYERS = [("🔴", "Red"), ("🔵", "Blue")]
 
 # Each row of keys and its color, the same as the Music room's.
 rows = (("qwertyuiop", "#e44444"), ("asdfghjkl", "#e2c63a"), ("zxcvbnm", "#2e6ae1"))
@@ -30,22 +30,29 @@ up = []            # the one or two cards turned over this turn
 game = state(turn=0)
 
 
+def face_up(x, y, face):
+    if face not in images:
+        return grid.set(x, y, face, size=2)
+    w, h = images[face]
+    grid.set(x, y, picture(face, 2) if w >= h else picture(face, max(1, round(2 * w / h)), 2))
+
+
 def draw():
     for key, face in faces.items():
         x, y, color = spots[key]
         if key in shown or key in up:
             grid.floor.set(x, y, color, size=2)
-            grid.set(x, y, face, size=2)
+            face_up(x, y, face)
         else:
             grid.floor.erase(x, y)
             grid.set(x, y, key.upper(), size=2)
     mark, name = PLAYERS[game.turn]
-    status(f"{mark} {name}'s turn")
+    status(f"{mark} {name}'s turn" if len(PLAYERS) > 1 else "")
 
 
 def turn_back():
     up.clear()
-    game.turn = 1 - game.turn
+    game.turn = (game.turn + 1) % len(PLAYERS)
     draw()
 
 

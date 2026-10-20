@@ -45,9 +45,19 @@ function rename(f: RoomFile, text: string) {
   changed();
 }
 
-const face = (f: RoomFile) => f.kind === "images"
-  ? h("img", { src: URL.createObjectURL(new Blob([f.data as BlobPart], { type: "image/png" })), alt: "" })
-  : h("span", { class: "sound-face" }, "🔊");
+export const roomPictures = () => draft.roomFiles.filter((f) => f.kind === "images");
+const urls = new WeakMap<RoomFile, string>();
+const thumb = (f: RoomFile) => {
+  if (!urls.has(f)) urls.set(f, URL.createObjectURL(new Blob([f.data as BlobPart], { type: "image/png" })));
+  return h("img", { src: urls.get(f), alt: f.name });
+};
+// One of the pack's pictures by name, as a thumbnail; null when the pack has none by that name.
+export function roomPicture(name: string): HTMLImageElement | null {
+  const f = roomPictures().find((p) => p.name === name);
+  return f ? thumb(f) : null;
+}
+
+const face = (f: RoomFile) => (f.kind === "images" ? thumb(f) : h("span", { class: "sound-face" }, "🔊"));
 
 // The pack's pictures and sounds as a tray: clicking one gives a room its call (into the Python when
 // onPick takes it, else onto the clipboard), and each can be renamed or thrown away.

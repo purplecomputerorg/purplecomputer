@@ -35,7 +35,7 @@ Esc always belongs to Purple: it leaves the room, and your room never sees it.
 
 ### Settings a family can change
 
-ALL_CAPS names at the very top of the file, each set to plain words, numbers, colors, lists, or dicts, show up in Studio as a form, with a comment line above each saying what it is. Keep them to what's fun to change: the pictures, words, colors, sounds, and speed. Name everything else in lowercase, below them, so the form stays short. A `# Labels: page, picture, words` line above a setting names the parts of each entry.
+ALL_CAPS names at the very top of the file, each set to plain words, numbers, colors, lists, or dicts, show up in Studio as a form, with a comment line above each saying what it is. Keep them to what's fun to change: the pictures, words, colors, sounds, and speed. Name everything else in lowercase, below them, so the form stays short. A `# Labels: page, picture, words` line above a setting names the parts of each entry. When a setting's comment says it takes "your pictures", its emoji picker offers the pack's own pictures too, written as their names: draw one with `picture(name)` when `name in images`.
 
 ## What a room can call
 
@@ -145,7 +145,7 @@ Purple won't let the screen flash: a change that brightens or darkens a big part
 
 ## Starter rooms
 
-Studio's Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for two players, a story with choices, and a wandering snake, the smallest room. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
+Studio's Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for any number of players, a story with choices, and a wandering snake, the smallest room. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
 
 ## A Purple Pack made by hand
 

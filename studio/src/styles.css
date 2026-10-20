@@ -459,6 +459,9 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .emoji-grid button { font-size: 22px; height: 38px; border: none; background: none; border-radius: 8px; cursor: pointer; padding: 0; }
 .emoji-grid button:hover, .emoji-grid button:first-child { background: var(--fill); }
 .emoji-grid p { grid-column: 1 / -1; margin: 6px; }
+.picture-grid { margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.picture-grid button:first-child:not(:hover) { background: none; }
+.picture-grid img, .emoji-cell img { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; vertical-align: middle; }
 
 /* Voice */
 .tabs a.tab { text-decoration: none; }

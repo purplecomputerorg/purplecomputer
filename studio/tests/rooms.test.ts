@@ -62,6 +62,14 @@ describe("family rooms in Studio's Python", () => {
     expect(texts(replies[3]).slice(0, 2)).not.toContain("W");
   }, 60_000);
 
+  it("plays memory alone with a parent's own picture beside an emoji, and no turn line", async () => {
+    const source = example("memory").replace(/^CARDS = .*$/m, 'CARDS = ["grandma", "🐶"]').replace(/^PLAYERS = .*$/m, 'PLAYERS = [("🔴", "Red")]');
+    const keys = ["q", "w", "e", "r"].map((key) => ({ ev: "key", key }));
+    const replies = await runRoom(source, keys, {}, { images: { grandma: [300, 200] } });
+    expect(texts(replies[0])).toEqual([..."QWER"]);
+    expect(replies.slice(1).flatMap((r) => shapes(r).filter((s) => s[0] === "image").map((s) => s[5]))).toContain("grandma");
+  }, 60_000);
+
   it("runs the beat maker: a beat on each key, its drum's picture when on, Space to play", async () => {
     const replies = await runRoom(example("beats"), [{ ev: "key", key: "q" }, { ev: "key", key: "space" }]);
     expect(texts(replies[0]).slice(4, 6)).toEqual(["1", "2"]);

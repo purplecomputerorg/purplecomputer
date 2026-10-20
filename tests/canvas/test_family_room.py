@@ -536,6 +536,27 @@ def test_parent_menu_turns_rooms_on_and_off(pack):
     run(go())
 
 
+def test_a_long_room_list_scrolls_inside_the_screen(pack):
+    for n in range(15):
+        pack(f"room{n}", SNAKE)
+
+    async def go():
+        app = make_app(size=(1366, 768))
+        screen = FamilyRoomsScreen(app)
+        app.push(screen)
+        app._draw()
+        assert 0 <= screen.box.top and screen.box.bottom <= app.g.h
+        shown = screen._shown(app.g)
+        assert shown < len(screen.options)
+        await press(app, "up")  # wraps to Done
+        app._draw()
+        assert screen._first == len(screen.options) - shown
+        await press(app, "down")
+        app._draw()
+        assert screen._first == 0
+    run(go())
+
+
 def test_on_the_iso_rooms_start_through_the_sealed_launcher(monkeypatch, tmp_path):
     script = open("build-scripts/00-build-golden-image.sh").read()
     rule = next(line for line in script.splitlines() if line.startswith("purple ALL=(root)"))

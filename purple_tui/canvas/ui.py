@@ -430,15 +430,23 @@ class Dialog(Overlay):
         """The width draw_body gets; measure body text against this."""
         return self.box_width(g) - 2 * g.vw(3)
 
+    def _chrome(self, g: Gfx) -> tuple[int, int, int]:
+        """(padding, hint height, everything but the body's height)."""
+        pad = g.em(1.2)
+        hint_h = g.markup_size(self.hint, g.em(0.85), "mono", self.inner_width(g))[1] if self.hint else 0
+        return pad, hint_h, window_title_height(g, self.title) + 2 * pad + (pad // 2 if self.hint else 0) + hint_h
+
+    def body_limit(self, g: Gfx) -> int:
+        """The tallest body that keeps the box on screen."""
+        return g.h - g.vh(4) - self._chrome(g)[2]
+
     def draw(self, g: Gfx):
         if self.scrim:
             draw_scrim(g)
-        pad = g.em(1.2)
-        hint_h = g.markup_size(self.hint, g.em(0.85), "mono", self.inner_width(g))[1] if self.hint else 0
+        pad, hint_h, chrome = self._chrome(g)
         body_h = self.body_height(g)
         w = self.box_width(g)
-        h = window_title_height(g, self.title) + pad + body_h + (pad // 2 if self.hint else 0) + hint_h + pad
-        box = pygame.Rect(0, 0, w, h)
+        box = pygame.Rect(0, 0, w, chrome + body_h)
         box.center = (g.w // 2, g.h // 2)
         y = draw_window(g, box, self.title) + pad
         inner = pygame.Rect(box.x + g.vw(3), y, self.inner_width(g), body_h)
@@ -470,23 +478,33 @@ class Picker(Dialog):
         super().__init__(app)
         self.options = list(options if options is not None else self.OPTIONS)
         self.selected = self.default_selected
+        self._first = 0  # the top row shown when they don't all fit
 
     def option_height(self, g: Gfx) -> int:
         return g.em(3.2) if any(len(o) == 3 for o in self.options) else g.em(1.9)
 
+    def _desc_height(self, g: Gfx) -> int:
+        return g.markup_size(self.DESCRIPTION, g.em(0.92), "mono", self.inner_width(g))[1] + g.em(0.8) if self.DESCRIPTION else 0
+
+    def _shown(self, g: Gfx) -> int:
+        """How many rows fit on screen."""
+        step = self.option_height(g) + g.em(0.3)
+        return max(1, min(len(self.options), (self.body_limit(g) - self._desc_height(g)) // step))
+
     def body_height(self, g: Gfx) -> int:
-        desc = g.markup_size(self.DESCRIPTION, g.em(0.92), "mono", self.inner_width(g))[1] + g.em(0.8) if self.DESCRIPTION else 0
-        return desc + len(self.options) * (self.option_height(g) + g.em(0.3))
+        return self._desc_height(g) + self._shown(g) * (self.option_height(g) + g.em(0.3))
 
     def draw_body(self, g: Gfx, rect: pygame.Rect):
         """Rows in the Parent Menu's idiom: plain mono, the chosen one on
-        the selection plate."""
+        the selection plate. Rows that don't fit scroll with the selection."""
         y = rect.y
         px = g.em(0.98)
         if self.DESCRIPTION:
             y += g.draw_markup(self.DESCRIPTION, g.em(0.92), rect.x, y, "mono", P.MUTED, rect.w, "center", P.SURFACE) + g.em(0.8)
-        oh = self.option_height(g)
-        for i, opt in enumerate(self.options):
+        oh, n = self.option_height(g), self._shown(g)
+        self._first = min(max(self._first, self.selected - n + 1), self.selected, len(self.options) - n)
+        last = self._first + n - 1
+        for i, opt in enumerate(self.options[self._first:last + 1], self._first):
             box = pygame.Rect(rect.x, y, rect.w, oh)
             on = i == self.selected
             if on:
@@ -497,6 +515,8 @@ class Picker(Dialog):
                 g.draw_text(opt[2], g.em(0.85), box.centerx, box.centery + g.em(0.65), "mono", color if on else P.MUTED, anchor="center")
             else:
                 g.draw_text(opt[1], px, box.centerx, box.centery, "mono-bold" if on else "mono", color, anchor="center")
+            if more := UP if i == self._first > 0 else DOWN if i == last < len(self.options) - 1 else None:
+                g.draw_text(more, px, box.right - g.em(0.8), box.centery, "mono", color if on else P.MUTED, anchor="center")
             y += oh + g.em(0.3)
 
     def selected_item_label(self):

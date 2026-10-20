@@ -159,7 +159,7 @@ export const TEMPLATES = {
     name: "picture-keyboard",
     label: "A picture keyboard",
     icon: "🎹",
-    about: "Each key shows a picture, says a word, and plays a sound. Use your own photos and voice: G is Grandma saying hi. For the littlest ones.",
+    about: "Each key shows a picture, says a word, and plays a sound. Try your own photos and voice.",
     source: soundboardSource,
     defaults: (): SoundboardData => ({
       rows: [
@@ -175,7 +175,7 @@ export const TEMPLATES = {
     name: "picture-quiz",
     label: "A picture quiz",
     icon: "❓",
-    about: "Purple asks a question out loud, and your kid presses 1, 2, or 3 to pick a picture. No reading, no typing, no score.",
+    about: "Purple asks out loud, and a number key picks the picture. No reading needed.",
     source: quizSource,
     defaults: (): QuizData => ({ rows: [
       { question: "Which one says moo?", emoji: "", right: choice("🐄", "cow"), others: [choice("🐖", "pig"), choice("🐑", "sheep")] },
@@ -191,12 +191,12 @@ export interface Example { name: string; icon: string; label: string; about: str
 
 // Starters: each one a kind of room families asked for, short enough to read and change.
 export const EXAMPLES: Example[] = [
-  { name: "explore", icon: "🗺️", label: "A world to walk around", about: "Walk with the arrows, find the stars, and the door opens. The world is drawn with letters you can change.", source: explore },
-  { name: "garden", icon: "🌻", label: "A garden", about: "Every letter is a patch of soil: plant seeds and water them. It remembers the garden for next time.", source: garden },
-  { name: "beats", icon: "🥁", label: "A beat maker", about: "Each row of keys is a drum and each key a beat: press one to turn it on or off, then Space to hear them play round and round, and again to stop.", source: beats },
-  { name: "memory", icon: "🃏", label: "Memory", about: "Play alone or take turns turning over cards to find the pairs. Each card is a letter key: press it to turn the card over. No score: it ends when every pair is found.", source: memory },
+  { name: "explore", icon: "🗺️", label: "A world to walk around", about: "Walk with the arrows and find the stars to open the door. Draw the map yourself.", source: explore },
   { name: "story", icon: "📖", label: "A story with choices", about: "Purple reads each page, and number keys pick what happens next.", source: story },
-  { name: "snake", icon: "🐍", label: "A wandering snake", about: "The smallest room: a snake that moves a square each time an arrow is pressed, leaving flowers behind it.", source: snake },
+  { name: "memory", icon: "🃏", label: "Memory", about: "Turn over cards to find the pairs, alone or taking turns.", source: memory },
+  { name: "garden", icon: "🌻", label: "A garden", about: "Plant seeds on the letter keys and water them to grow. It remembers the garden.", source: garden },
+  { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off with the keys, then Space plays them round and round.", source: beats },
+  { name: "snake", icon: "🐍", label: "A wandering snake", about: "Arrows move a snake that leaves flowers. The smallest room to read.", source: snake },
 ];
 
 export const BLANK_ROOM = `from purple import *

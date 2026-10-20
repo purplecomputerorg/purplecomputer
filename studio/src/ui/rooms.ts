@@ -56,18 +56,23 @@ function list(): View {
       yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, iconOf(r)) }), drop),
       h("h3", {}, "Start from one of these"),
       h("div", { class: "cards" },
-        choice("✏️", "Write it in Python", "An empty room to write yourself, or with an AI helper.", () => tryRoom("my-room", null), "pick featured"),
-        ...(Object.keys(TEMPLATES) as TemplateDraft["kind"][]).map((kind) =>
-          choice(ICONS[kind], TEMPLATES[kind].label, TEMPLATES[kind].about, () => tryRoom(TEMPLATES[kind].name, template(kind)))),
-        ...EXAMPLES.map((e) => choice(e.icon, e.label, e.about, () => tryRoom(e.name, null, e.source)))),
+        ...[
+          ...(Object.keys(TEMPLATES) as TemplateDraft["kind"][]).map((kind) => ({ ...TEMPLATES[kind], go: () => tryRoom(TEMPLATES[kind].name, template(kind)) })),
+          ...EXAMPLES.map((e) => ({ ...e, go: () => tryRoom(e.name, null, e.source) })),
+        ].sort((a, b) => ORDER.indexOf(a.name) - ORDER.indexOf(b.name)).map((s) => choice(s, s.go)),
+        choice({ icon: "✏️", label: "Write it in Python", about: "A blank room to write yourself, or with an AI helper." }, () => tryRoom("my-room", null), "pick featured")),
       h("p", { class: "dim" }, "Made a Purple Pack already? ", openPackButton("Open it here"), " to try its rooms and change them."),
       roomFilesBox(),
     ),
   };
 }
 
-const choice = (icon: string, label: string, about: string, go: () => void, cls = "pick") =>
-  h("button", { class: cls, onclick: go }, h("span", { class: "pick-icon" }, icon), h("b", {}, label), h("span", {}, about));
+// The starters' order on the Rooms page: the liveliest first.
+const ORDER = ["explore", "memory", "beats", "story", "garden", "picture-quiz", "picture-keyboard", "snake"];
+
+const choice = (s: { icon: string; label: string; about: string }, go: () => void, cls = "pick") =>
+  h("button", { class: cls, onclick: go }, h("span", { class: "pick-icon" }, s.icon),
+    h("b", {}, s.label), h("span", {}, s.about));
 
 function problemBox(): { element: HTMLElement; show(p: RoomProblem | null): void } {
   const element = h("div", { class: "problem", hidden: true });

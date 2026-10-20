@@ -9,7 +9,7 @@ import { draft } from "../state";
 import { addRowButton, h, removeButton } from "./dom";
 import { emojiCell } from "./emojipicker";
 import { recordButton } from "./record";
-import { addRoomData } from "./roomfiles";
+import { addRoomData, hearRoomSound } from "./roomfiles";
 import { textIn } from "./rulesform";
 
 const mine = (kind: RoomFileKind) => draft.roomFiles.filter((f) => f.kind === kind).map((f) => f.name);
@@ -33,7 +33,7 @@ const NOTES = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5"];
 function soundIn(o: Sound, c: Ctx, nameFor: () => string): HTMLElement {
   const notes = NOTES.includes(o.note) || !parseNote(o.note) ? NOTES : [o.note, ...NOTES];
   const opts = (names: string[], label: (n: string) => string) => names.map((n) => h("option", { value: n }, label(n)));
-  const pick = h("select", { class: "inline", onchange: () => { o.note = pick.value; c.onEdit(); } },
+  const pick = h("select", { class: "inline", onchange: () => { o.note = pick.value; hearRoomSound(o.note); c.onEdit(); } },
     h("option", { value: "" }, "No sound"),
     h("optgroup", { label: "Notes" }, ...opts(notes, (n) => `♪ ${n}`)),
     mine("sounds").length ? h("optgroup", { label: "Your sounds" }, ...opts(mine("sounds"), (n) => `🎤 ${roomTitle(n)}`)) : null);

@@ -400,6 +400,7 @@ input.room-name.just-yours { animation: just-yours 1.8s ease-out; }
 .tray-item > button:first-child { padding: 0; border: none; background: none; cursor: pointer; }
 .tray-item img, .sound-face { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 3px solid #fff; box-shadow: var(--shadow); }
 .sound-face { display: grid; place-items: center; font-size: 28px; background: var(--fill); box-sizing: border-box; }
+.tray-item .hear { position: absolute; top: 46px; left: 4px; width: 26px; height: 26px; padding: 0 0 0 2px; border-radius: 50%; border: none; background: var(--purple); color: #fff; font-size: 11px; cursor: pointer; box-shadow: var(--shadow); }
 /* Yours: what the family made, on the Rooms, Instruments, and Pictures pages */
 .yours { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
 .your-card { position: relative; display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }

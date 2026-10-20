@@ -1,7 +1,7 @@
 // A pack's own pictures and sounds for its rooms: a photo becomes a PNG no bigger than Purple takes,
 // any sound the browser can play becomes the WAV Purple plays.
 import { ROOM_FILE_NAME, type RoomFileKind } from "@sdk/pack";
-import { decodeToClip, encodeWav } from "../audio";
+import { audioContext, decodeToClip, encodeWav, playBuffer } from "../audio";
 import { dataUrl } from "../photo";
 import { roomFileOf, shelf, shelve, type Shelved } from "../shelf";
 import { changed, draft, freeName, type RoomFile } from "../state";
@@ -73,6 +73,13 @@ export function roomPicture(name: string): HTMLImageElement | null {
 
 const face = (f: RoomFile) => (f.kind === "images" ? thumb(f) : h("span", { class: "sound-face" }, "🔊"));
 
+// Plays one of the pack's sounds by name; false when the pack has none by that name.
+export function hearRoomSound(name: string): boolean {
+  const f = draft.roomFiles.find((x) => x.kind === "sounds" && x.name === name);
+  if (f) void audioContext().decodeAudioData(f.data.slice().buffer).then((b) => playBuffer(b));
+  return !!f;
+}
+
 // The pack's pictures and sounds as a tray: clicking one gives a room its call (into the Python when
 // onPick takes it, else onto the clipboard), and each can be renamed or thrown away.
 export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & { refresh: () => void } {
@@ -88,6 +95,7 @@ export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & 
     draft.roomFiles.length
       ? h("div", { class: "photo-list" }, ...draft.roomFiles.map((f) => h("div", { class: "try-chip tray-item" },
         h("button", { type: "button", title: `Use ${call(f)}`, onclick: () => pick(f) }, face(f)),
+        f.kind === "sounds" ? h("button", { type: "button", class: "hear", title: `Hear ${f.name}`, "aria-label": `Hear ${f.name}`, onclick: () => hearRoomSound(f.name) }, "▶") : null,
         h("button", { type: "button", class: "linkbtn small", title: "Rename", onclick: () => { const t = prompt("A new name", f.name); if (t) { renameRoomFile(f, t); render(); } } }, f.name),
         h("button", { type: "button", class: "drop", title: `Throw away ${f.name}`, "aria-label": `Throw away ${f.name}`, onclick: () => drop(f) }, "×"))))
       : h("p", { class: "dim small" }, "A photo of your pet, a voice saying hello: add them here, and any room in this Purple Pack can use them."),

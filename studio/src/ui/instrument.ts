@@ -34,8 +34,8 @@ function tryOut(title: string, base: BaseName, params: Params) {
   location.hash = `#instruments/${encodeURIComponent(name)}`;
 }
 
-function drop(inst: Instrument) {
-  draft.instruments = draft.instruments.filter((i) => i !== inst);
+function drop(gone: Instrument[]) {
+  draft.instruments = draft.instruments.filter((i) => !gone.includes(i));
   changed();
   go("#instruments");
 }
@@ -113,7 +113,7 @@ function editor(inst: Instrument): View {
     editor: h(
       "section",
       {},
-      tryBar(inst, () => drop(inst)),
+      tryBar(inst, () => drop([inst])),
       h("div", { class: "card" }, field("Name", nameIn), h("p", { class: "dim small" }, `Made from Purple's ${base.label}.`)),
       h("div", { class: "card" }, h("p", { class: "dim small", style: "margin-top:0" }, "Type on your keyboard to play it. Moving a slider plays the last note again."), sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to a plain ${base.label}`))),
     ),

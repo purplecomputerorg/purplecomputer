@@ -335,13 +335,14 @@ input.mono-in { font-family: var(--mono); font-size: 13px; }
 .yours { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
 .your-card { position: relative; display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
 .your-card[aria-current="page"] { border-color: var(--purple); }
-.your-face { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); min-width: 0; }
+.your-face { display: flex; padding-right: 22px; align-items: center; gap: 10px; text-decoration: none; color: var(--text); min-width: 0; }
 .your-face b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .your-face img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; }
 .your-face .pick-icon, .your-face .pick-swatch { margin: 0; flex-shrink: 0; }
-.pack-switch { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); cursor: pointer; }
-.pack-switch input { accent-color: var(--purple); width: 16px; height: 16px; }
-.pack-switch:has(input:checked) { color: #3d7a4e; font-weight: 600; }
+.your-card .keep { justify-self: start; }
+label.your-card { cursor: pointer; }
+.your-card .choose { position: absolute; top: 10px; right: 10px; margin: 0; accent-color: var(--magenta); width: 18px; height: 18px; }
+.your-card:has(.choose:checked) { border-color: var(--magenta); }
 .guide .flash { background: var(--fill); transition: background 1.5s; }
 
 /* Room editor tabs, the problem box, and the Room guide */

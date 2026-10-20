@@ -56,8 +56,8 @@ async function tryExample(ex: Example) {
 // Pictures to pick from, each with its name; the one being looked at is marked.
 const thumb = (title: string, src: string, current: boolean, attrs: Record<string, unknown>) =>
   h("a", { ...attrs, "aria-current": current ? "page" : null }, h("img", { src, alt: "" }), h("span", {}, title));
-function drop(pic: Picture, showing: boolean) {
-  draft.pictures = draft.pictures.filter((p) => p !== pic);
+function drop(gone: Picture[], showing: boolean) {
+  draft.pictures = draft.pictures.filter((p) => !gone.includes(p));
   changed();
   go(showing ? "#pictures" : location.hash);
 }
@@ -65,7 +65,7 @@ function drop(pic: Picture, showing: boolean) {
 function more(current: Picture | null): (HTMLElement | null)[] {
   return [
     yoursList(draft.pictures, (p) => ({ href: `#pictures/${encodeURIComponent(p.name)}`, title: titleOf(p), face: h("img", { src: p.sourceUrl, alt: "" }), current: p === current }),
-      (p) => drop(p, p === current)),
+      (gone) => drop(gone, !!current && gone.includes(current))),
     h("h3", {}, "Add your own"), dropZone(),
     staysHere("Your pictures are turned into paintings right here in your browser. They are never uploaded."),
     h("h3", {}, "Try one of ours"),
@@ -216,7 +216,7 @@ function pictureView(pic: Picture): HTMLElement {
     history.replaceState(null, "", `#pictures/${encodeURIComponent(pic.name)}`);
   };
   return h("section", {},
-    tryBar(pic, () => drop(pic, true)),
+    tryBar(pic, () => drop([pic], true)),
     card("Name", null, name, h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).")),
     cropper(pic, ex),
     ...more(pic));

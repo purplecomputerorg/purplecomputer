@@ -24,25 +24,52 @@ export function tryBar(item: Keepable, remove?: () => void): HTMLElement {
 
 export interface YourCard { href: string; title: string; face: Node; current?: boolean }
 
-// What the family made on a list page, one card each with an "In my Pack" switch and an × that throws it
-// away. Examples only tried aren't theirs yet, so they aren't listed.
-export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (item: T) => void): HTMLElement | null {
+// What the family made on a list page, one card each with an Add to my Pack button and an × that throws it
+// away; "Choose several" throws away many at once. Examples only tried aren't theirs yet, so they aren't listed.
+export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (gone: T[]) => void): HTMLElement | null {
   const theirs = items.filter(isTheirs);
   if (!theirs.length) return null;
-  return h("div", {}, h("h3", {}, "Yours"), h("div", { class: "yours" }, ...theirs.map((item) => {
-    const c = card(item);
-    const inPack = h("input", { type: "checkbox", checked: !!item.kept, onchange: () => keep(item, inPack.checked) });
-    return h("div", { class: "your-card", "aria-current": c.current ? "page" : null },
-      h("a", { class: "your-face", href: c.href }, c.face, h("b", {}, c.title)),
-      h("label", { class: "pack-switch" }, inPack, "In my Pack"),
-      h("button", { type: "button", class: "drop", title: `Throw away ${c.title}`, "aria-label": `Throw away ${c.title}`, onclick: () => remove(item) }, "×"));
-  })));
+  const throwAway = (gone: T[], what: string) => confirm(`Throw away ${what}?`) && remove(gone);
+  const chosen = new Set<T>();
+  const bin = h("button", { type: "button", class: "btn small", onclick: () => throwAway([...chosen], chosen.size > 1 ? `these ${chosen.size}` : "this one") });
+  const counted = () => { bin.disabled = !chosen.size; bin.textContent = chosen.size ? `Throw away ${chosen.size}` : "Throw away"; };
+  const head = h("div", { class: "row between" });
+  const list = h("div", { class: "yours" });
+  const render = (choosing: boolean) => {
+    chosen.clear();
+    counted();
+    const boxes: HTMLInputElement[] = [];
+    const tick = (box: HTMLInputElement, item: T) => { box.checked ? chosen.add(item) : chosen.delete(item); counted(); };
+    head.replaceChildren(h("h3", {}, "Yours"), h("div", { class: "row" }, ...(choosing
+      ? [h("button", { class: "linkbtn dim small", onclick: () => boxes.forEach((b) => { b.checked = true; b.dispatchEvent(new Event("change")); }) }, "Choose all"),
+        h("button", { class: "linkbtn dim small", onclick: () => render(false) }, "Cancel"), bin]
+      : [h("button", { class: "linkbtn dim small", onclick: () => render(true) }, "Choose several to throw away")])));
+    list.replaceChildren(...theirs.map((item) => {
+      const c = card(item);
+      const face = h(choosing ? "span" : "a", { class: "your-face", href: choosing ? null : c.href }, c.face, h("b", {}, c.title));
+      if (choosing) {
+        const box = h("input", { type: "checkbox", class: "choose", "aria-label": `Choose ${c.title}`, onchange: () => tick(box, item) });
+        boxes.push(box);
+        return h("label", { class: "your-card" }, face, box);
+      }
+      return h("div", { class: "your-card", "aria-current": c.current ? "page" : null }, face, keepButton(item),
+        h("button", { type: "button", class: "drop", title: `Throw away ${c.title}`, "aria-label": `Throw away ${c.title}`, onclick: () => throwAway([item], c.title) }, "×"));
+    }));
+  };
+  render(false);
+  return h("div", {}, head, list);
 }
 
-// For one row of a list: Add, or Added (which takes it off again).
-export function keepButton(item: Keepable, onChange: () => void): HTMLElement {
-  return h("button", { type: "button", class: `keep${item.kept ? " on" : ""}`, title: item.kept ? "In your Purple Pack. Click to take it out." : "Add to my Purple Pack",
-    onclick: () => { keep(item, !item.kept); onChange(); } }, item.kept ? "✓ Added" : "Add");
+// Add, or In my Pack (which takes it out again).
+export function keepButton(item: Keepable, onChange?: () => void): HTMLElement {
+  const button = h("button", { type: "button", onclick: () => { keep(item, !item.kept); paint(); onChange?.(); } });
+  const paint = () => {
+    button.className = `keep${item.kept ? " on" : ""}`;
+    button.title = item.kept ? "In the Purple Pack you download. Click to take it out." : "Put it in the Purple Pack you download";
+    button.textContent = item.kept ? "✓ In my Pack" : "Add to my Pack";
+  };
+  paint();
+  return button;
 }
 
 // Under a list: how many are still tries, and one button to add them all.

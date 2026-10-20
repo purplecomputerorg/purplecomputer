@@ -26,9 +26,12 @@ const roomName = (text: string, except?: RoomDraft) =>
 export const LIBRARY_NAMES: string[] = JSON.parse(/__all__ = (\[[^\]]*\])/.exec(roomLibrary)![1].replace(/'/g, '"'));
 const CALLED = ["on_key", "on_key_up"];
 
-function drop(room: RoomDraft) {
-  if (!confirm(`Throw away ${roomTitle(room.name)}?`)) return;
-  draft.rooms = draft.rooms.filter((r) => r !== room);
+// A starter's own icon follows it, as garden-3 came from garden; Python with no starter is a pencil, like its card.
+const iconOf = (room: RoomDraft) =>
+  room.made ? ICONS[room.made.kind] : (EXAMPLES.find((e) => e.name === room.name.replace(/-\d+$/, ""))?.icon ?? "✏️");
+
+function drop(gone: RoomDraft[]) {
+  draft.rooms = draft.rooms.filter((r) => !gone.includes(r));
   changed();
   go("#rooms");
 }
@@ -49,7 +52,7 @@ function list(): View {
       "section",
       {},
       h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Your kid finds it next to Purple's rooms."),
-      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, r.made ? ICONS[r.made.kind] : "🐍") }), drop),
+      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, iconOf(r)) }), drop),
       h("h3", {}, "Pick a way to start"),
       h("div", { class: "cards" },
         choice("🧱", "Rules", "When a key is pressed, show, play, or say something. Built from menus, no typing code.", () => tryRoom("my-room", { kind: "rules", rules: blankRules() })),
@@ -193,7 +196,7 @@ function editor(room: RoomDraft): View {
       "section",
       {},
       h("div", { class: "editor-head" }, nameIn, nameNote),
-      tryBar(room, () => drop(room)),
+      tryBar(room, () => confirm(`Throw away ${roomTitle(room.name)}?`) && drop([room])),
       roomFilesBox((call) => insert(call)),
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, ...tabButtons),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),

@@ -3,8 +3,9 @@ the pack as Purple's installer does, then plays each room on a fast clock with a
 letters, typing, and a few hundred random keys, and says what went wrong and on which line.
 --show prints each room's screen as text after every step of --keys.
 
-Usage:  python3 purple-room-check.pyz <pack folder or .purplepack> [--room NAME] [--keys "right right space"] [--show]
-In Purple's repo: just python -m purple_tui.roomkit.check <pack>"""
+Usage:  python3 purple-room-check.pyz [pack folder, .purplepack, or a room's .py] [--room NAME] [--keys "right right space"] [--show]
+With nothing named, it lists the rooms it finds here, in Downloads, and in Purple's packs, and asks.
+In Purple's repo: just check-room"""
 
 import argparse
 import inspect
@@ -18,7 +19,7 @@ import threading
 import time
 from pathlib import Path
 
-from purple_tui.content import ROOM_LIB, png_size, room_files
+from purple_tui.content import ROOM_LIB, ROOM_NAME, png_size, room_files
 from purple_tui.pack_manager import check_pack, extract_pack
 from purple_tui.roomkit import limits as L
 from purple_tui.roomkit import purple as builtin_lib
@@ -30,6 +31,8 @@ TRY_KEYS = ("right right right down down space enter left up space a b c 1 2 3 y
             "down down down down down down down down down down down down down right right right right right right right "
             "right right right right right right right right right right right right right right space").split()
 RANDOM_KEYS = 300
+PLACES = (Path.cwd(), Path.home() / "Downloads", Path.home() / ".purple" / "packs", Path.home() / ".purple" / "packs-waiting")
+FINDS = ("*.purplepack", "content/rooms/*.py", "*/content/rooms/*.py", "*/*/content/rooms/*.py")
 STEP_S = 0.15          # the room's clock between keys
 IDLE_S = 20            # then this long with no keys at all
 GUEST = "import sys; sys.path.insert(0, sys.argv[1]); from purple_tui.roomkit import runner; runner.serve(*runner.stdio())"
@@ -156,6 +159,40 @@ def unpack(path: Path, scratch: Path) -> tuple[Path, list]:
     return scratch, check_pack(scratch)
 
 
+def findable() -> list[Path]:
+    """Rooms and packs near at hand, newest first."""
+    found = {p.resolve() for place in PLACES for pattern in FINDS for p in place.glob(pattern)
+             if p.suffix == ".purplepack" or ROOM_NAME.match(p.stem)}
+    return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def ask() -> Path:
+    found = findable()
+    for n, p in enumerate(found[:30], 1):
+        print(f"{n:3}. {p.stem:24} {p.parent}")
+    print("" if found else "No rooms here, in Downloads, or in Purple's packs.")
+    answer = input("Which one? Type its number, or a path" + (" (Enter for 1): " if found else ": ")).strip().strip("'\"")
+    if not (answer or found):
+        sys.exit(1)
+    if answer.isdigit() and 0 < int(answer) <= len(found):
+        return found[int(answer) - 1]
+    if not answer and found:
+        return found[0]
+    return Path(answer).expanduser()
+
+
+def gather(path: Path, scratch: Path, only) -> tuple[list, Path, list]:
+    """The rooms to try, their content folder, and why Purple would refuse their pack."""
+    if path.suffix == ".py":
+        path = path.resolve()
+        pack = next((p for p in path.parents if (p / "manifest.json").is_file()), None)
+        if not pack:  # a room on its own, with no pack to check
+            return [path], path.parent.parent, []
+        path, only = pack, path.stem
+    pack, problems = unpack(path, scratch)
+    return [p for p in room_files(pack / "content") if not only or p.stem == only], pack / "content", problems
+
+
 def try_room(path: Path, content: Path, keys: list, show: bool) -> bool:
     images = {p.stem: size for p in sorted((content / "images").glob("*.png")) if (size := png_size(p))}
     sounds = sorted(p.stem for p in (content / "sounds").glob("*.wav"))
@@ -198,19 +235,18 @@ def try_room(path: Path, content: Path, keys: list, show: bool) -> bool:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("pack", type=Path, help="the pack folder (with manifest.json and content/) or a .purplepack")
+    ap.add_argument("pack", type=Path, nargs="?", help="the pack folder (with manifest.json and content/), a .purplepack, or one room's .py; leave it out to pick from a list")
     ap.add_argument("--room", help="only this room")
     ap.add_argument("--keys", default=" ".join(TRY_KEYS), help="keys to press, by name, separated by spaces")
     ap.add_argument("--show", action="store_true", help="print the screen after each key instead of trying random keys")
     args = ap.parse_args(argv)
     with tempfile.TemporaryDirectory() as scratch:
-        pack, problems = unpack(args.pack, Path(scratch))
+        rooms, content, problems = gather(args.pack or ask(), Path(scratch), args.room)
         for problem in problems:
             print(f"Purple would refuse this pack: {problem}")
-        rooms = [p for p in room_files(pack / "content") if not args.room or p.stem == args.room]
         if not rooms:
             print("No rooms found: they go in content/rooms/<name>.py")
-        ok = [try_room(p, pack / "content", args.keys.split(), args.show) for p in rooms]
+        ok = [try_room(p, content, args.keys.split(), args.show) for p in rooms]
     print("\nAll good." if ok and all(ok) and not problems else "\nSomething needs fixing; see above.")
     return 0 if ok and all(ok) and not problems else 1
 

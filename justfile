@@ -403,6 +403,10 @@ python *args:
 pystdin:
     @{{venv}}/bin/python -
 
+# Try family rooms the way Purple runs them: asks which, or name a pack, .purplepack, or room .py (--show, --keys "right space")
+check-room *args:
+    @cd "{{invocation_directory()}}" && PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 -m purple_tui.roomkit.check {{args}}
+
 # Purple Studio (parent-facing web app, studio/): dev server
 studio: studio-bundle
     cd studio && npm install --no-audit --no-fund

@@ -593,3 +593,6 @@ class FamilyRoom(Overlay):
                     "sans", P.MUTED, anchor="center")
         g.draw_text(f"(Technical: {self.fault})", int(px * 0.7), vp.centerx, vp.centery + px * 1.8,
                     "mono", P.DIM, anchor="center")
+        if Guest is ProcessGuest:  # Studio's preview has no Parent Menu terminal
+            g.draw_text("To see why: Parent Menu, Open Terminal, type check-room", int(px * 0.7), vp.centerx,
+                        vp.centery + px * 2.8, "sans", P.DIM, anchor="center")

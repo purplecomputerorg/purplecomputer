@@ -42,6 +42,24 @@ def test_a_broken_room_names_its_line(make_pack, capsys):
     assert "NEEDS FIXING: line 4: ValueError: there's no drum called 'snar'" in capsys.readouterr().out
 
 
+def test_a_room_file_is_tried_alone_with_its_pack(make_pack, capsys, tmp_path):
+    pack = make_pack(good="from purple import *\n", oops='from purple import *\ndef on_key(key):\n    drum("snar")\n')
+    assert check.main([str(pack / "content" / "rooms" / "oops.py")]) == 1
+    out = capsys.readouterr().out
+    assert "oops:" in out and "good:" not in out
+    loose = tmp_path / "loose.py"
+    loose.write_text("from purple import *\n")
+    assert check.main([str(loose)]) == 0
+
+
+def test_with_nothing_named_it_asks_which(make_pack, capsys, monkeypatch):
+    pack = make_pack(walk="from purple import *\n")
+    monkeypatch.setattr(check, "PLACES", (pack.parent,))
+    monkeypatch.setattr("builtins.input", lambda _: "1")
+    assert check.main([]) == 0
+    assert "  1. walk" in capsys.readouterr().out
+
+
 def test_a_room_that_hangs_is_caught(make_pack, capsys, monkeypatch):
     monkeypatch.setattr(check.L, "STEP_TIMEOUT_S", 0.5)
     pack = make_pack(stuck='from purple import *\ndef on_key(key):\n    while key == "down":\n        pass\n')

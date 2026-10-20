@@ -162,6 +162,7 @@
   "This room needs fixing": "这个房间需要修一修",
   "A grown-up can fix it in Purple Studio.  Esc goes back.": "大人可以在 Purple Studio 里修好它。按 Esc 返回。",
   "(Technical: {0})": "（技术信息：{0}）",
+  "To see why: Parent Menu, Open Terminal, type check-room": "想知道原因：家长菜单，打开终端，输入 check-room",
   "Help & Videos": "帮助和视频",
   "Questions? {0}": "有问题？{0}",
   "Scan for videos and other help:": "扫码看视频和其他帮助：",

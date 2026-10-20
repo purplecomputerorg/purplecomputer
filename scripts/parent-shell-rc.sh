@@ -7,6 +7,7 @@
 
 echo ""
 echo "  Purple Computer terminal"
+echo "  Type check-room to see why a family room stopped."
 echo "  Type exit and press Enter to go back to Purple."
 echo ""
 

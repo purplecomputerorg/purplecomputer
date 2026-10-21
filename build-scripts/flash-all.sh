@@ -41,6 +41,8 @@ Options:
   --ignore-denylist  Flash drives even if their serial is in .flash-denylist.conf
   --ref <c>     Flash that commit's build: its archive from 'just build --ref <c>',
                 or the build of it still in the output dir
+  --main        Flash the newest build from main
+  --release     Flash the newest build from release/1.x
   --help        Show this help
 EOF
 }
@@ -63,6 +65,7 @@ while [[ -n "${1:-}" ]]; do
         --yes|-y)     SKIP_CONFIRM=true; shift ;;
         --no-settle)  SKIP_SETTLE=true; shift ;;
         --ignore-denylist) export PURPLE_IGNORE_DENYLIST=1; shift ;;
+        --main|--release) use_newest_build_on "$1"; shift ;;
         --ref)        use_build_of_ref "$2" || { log_error "Cannot resolve git commit '$2'"; exit 1; }; shift 2 ;;
         *)            POSITIONAL+=("$1"); shift ;;
     esac

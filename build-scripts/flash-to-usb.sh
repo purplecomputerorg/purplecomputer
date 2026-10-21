@@ -35,6 +35,8 @@ usage() {
     echo "                   if present, else standard)"
     echo "  --ref <commit>   Flash that commit's build: its archive from 'just build"
     echo "                   --ref <commit>', or the build of it still in the output dir"
+    echo "  --main           Flash the newest build from main"
+    echo "  --release        Flash the newest build from release/1.x"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
     echo "  --ignore-denylist  Flash drives even if their serial is in $(denylist_path)"
     echo "  --no-settle      Skip the post-flash QEMU boot-settle (first real boot will be slow)"
@@ -461,6 +463,10 @@ main() {
                 ;;
             --yes|-y)
                 SKIP_CONFIRM=true
+                shift
+                ;;
+            --main|--release)
+                use_newest_build_on "$1"
                 shift
                 ;;
             --ref)

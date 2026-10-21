@@ -295,7 +295,7 @@ read-log path *args:
     @python3 scripts/purple-log-summary.py "{{path}}" {{args}}
 
 # Symlink a built ISO into ~/isos and print the scp line to pull it to your Mac (same picker as flash).
-# just link-iso [--debug|--no-backup] [--ref <commit>] [iso-path]
+# just link-iso [--debug|--no-backup] [--main|--release|--ref <commit>] [iso-path]
 link-iso *args:
     ./build-scripts/link-iso.sh {{args}}
 
@@ -336,6 +336,7 @@ build-pi *args:
 
 # Flash ISO to USB drive (asks which of the newest build's ISOs to use).
 # just flash --ref <commit> flashes that commit's build: archived (see just build --ref) or still in the output dir
+# just flash --main | --release flashes the newest build from that branch (flash-all takes the same flags)
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 

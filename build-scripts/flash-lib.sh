@@ -677,6 +677,25 @@ built_from_commit() {
     true
 }
 
+# stdin: ISO paths; keeps the ones whose commit is on branch $1 (all when empty).
+built_on_branch() {
+    local iso c
+    while read -r iso; do
+        c="$(iso_commit "$iso")"
+        [[ -z "$1" ]] || { [[ -n "$c" ]] && git -C "$PROJECT_DIR" merge-base --is-ancestor "$c" "$1" 2>/dev/null; } && echo "$iso"
+    done
+    true
+}
+
+# use_newest_build_on <flag>: --main or --release picks the newest build from that branch.
+BUILD_BRANCH_FILTER=""
+use_newest_build_on() {
+    case "$1" in
+        --main)    BUILD_BRANCH_FILTER=main ;;
+        --release) BUILD_BRANCH_FILTER=release/1.x ;;
+    esac
+}
+
 # use_build_of_ref <commit-ish>: point every ISO helper at that commit's build.
 # 'just build --ref' archives under its own dir; a build made on the normal
 # path is found by the commit stamped in its sidecars. Fails on an unknown ref.
@@ -695,12 +714,14 @@ use_build_of_ref() {
 # place corrupt-test ISOs (deliberately damaged test artifacts) are excluded
 # from auto-picking.
 list_build_isos() {
-    ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v corrupt-test | built_from_commit "$BUILD_COMMIT_FILTER"
+    ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v corrupt-test | built_from_commit "$BUILD_COMMIT_FILTER" | built_on_branch "$BUILD_BRANCH_FILTER"
 }
 
 # Where the ISOs being looked for live, for error messages.
 build_source_label() {
-    [[ -n "$BUILD_COMMIT_FILTER" ]] && echo "built from commit ${BUILD_COMMIT_FILTER:0:7} in $OUTPUT_DIR" || echo "in $OUTPUT_DIR"
+    if [[ -n "$BUILD_COMMIT_FILTER" ]]; then echo "built from commit ${BUILD_COMMIT_FILTER:0:7} in $OUTPUT_DIR"
+    elif [[ -n "$BUILD_BRANCH_FILTER" ]]; then echo "built from $BUILD_BRANCH_FILTER in $OUTPUT_DIR"
+    else echo "in $OUTPUT_DIR"; fi
 }
 
 # stdin: ISO paths; keeps only the given variant (default: standard).

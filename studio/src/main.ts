@@ -60,6 +60,7 @@ function welcomeView(): View {
       "section",
       {},
       h("h1", {}, "Make Purple your own"),
+      h("p", { class: "lead" }, "For Purple Computer customers: Purple Studio lets you customize it for your family. Make changes here and transfer them to your Purple Computer with a USB drive."),
       h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
       h("div", { class: "cards" }, ...SECTIONS.map((s) =>
         h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),

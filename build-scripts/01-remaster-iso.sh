@@ -28,11 +28,9 @@ log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 # Fast build: use minimal compression for faster iteration
 if [ "${FAST_BUILD:-0}" = "1" ]; then
     ZSTD_LEVEL=1
-    ISO_TAG="-fast"
     log_info "FAST BUILD: using minimal compression"
 else
     ZSTD_LEVEL=19
-    ISO_TAG=""
 fi
 
 create_live_boot_hook() {
@@ -909,7 +907,8 @@ README_EOF
     # Step 9: Build normal ISO
     log_step "9/11: Building normal ISO..."
 
-    OUTPUT_ISO="$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${ISO_TAG}.iso"
+    ISO_STEM="$(planned_build_stem "$BUILD_COMMIT")"
+    OUTPUT_ISO="$(variant_path "$ISO_STEM" standard)"
 
     # Build an installer ISO from the current iso-new tree via xorriso modify
     # mode (load original, update files, replace EFI image), with checksum and
@@ -947,7 +946,7 @@ README_EOF
     if [ "${PURPLE_WITH_BACKUP_ISO:-0}" = "1" ]; then
         log_info "Building with-backup ISO (adds a second golden image copy)..."
         cp --reflink=auto "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os-backup.img.zst"
-        build_installer_iso "${OUTPUT_ISO%.iso}.with-backup.iso" "PURPLE_INSTALLER"
+        build_installer_iso "$(variant_path "$ISO_STEM" backup)" "PURPLE_INSTALLER"
         rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst"
         log_info "With-backup ISO built successfully!"
     fi
@@ -957,7 +956,7 @@ README_EOF
     # instead of behind the held P key.
     log_step "10/11: Building debug ISO..."
 
-    DEBUG_ISO="$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${ISO_TAG}.debug.iso"
+    DEBUG_ISO="$(variant_path "$ISO_STEM" debug)"
 
     # Save normal GRUB config and write debug version
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"

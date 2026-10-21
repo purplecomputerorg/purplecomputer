@@ -359,7 +359,7 @@ Downloads the official Ubuntu Server 24.04 ISO, swaps in our squashfs, and injec
 7. Add payload files to ISO root (`/purple/`: golden image + install.sh)
 8. Rebuild ISO with xorriso
 
-**Output:** `purple-installer-YYYYMMDD.iso` (~4-5 GB)
+**Output:** `purple-installer-YYYYMMDD-<commit>.iso` (~4-5 GB)
 
 **Key insight:** The kernel and signed boot stack remain untouched. We replace the squashfs with our own and add one casper-bottom hook to the initramfs.
 
@@ -750,7 +750,7 @@ Hold Escape for 1 second. If Escape doesn't work (e.g., Touch Bar Macs), try the
 │       ├── iso-contents/              # Extracted ISO
 │       └── initrd-work/               # Extracted initramfs
 └── output/
-    └── purple-installer-YYYYMMDD.iso  # Final ISO
+    └── purple-installer-YYYYMMDD-<commit>.iso  # Final ISO
 ```
 
 **Source files:**

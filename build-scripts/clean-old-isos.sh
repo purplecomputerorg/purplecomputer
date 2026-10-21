@@ -3,7 +3,7 @@
 # .sha256 and .version sidecars.
 #
 # Keeps the newest few builds and drops everything older. A build is one stem
-# (purple-installer-YYYYMMDD), so its .iso, .debug.iso and .with-backup.iso
+# (purple-installer-YYYYMMDD-<commit>), so its .iso, .debug.iso and .with-backup.iso
 # variants count as one build between them, not three.
 #
 # corrupt-test ISOs go at any age: each is a full ~9GB copy of a build's

@@ -734,7 +734,7 @@ filter_variant() {
 }
 
 # Path prefix (no variant suffix) of the most recently built ISO,
-# e.g. /opt/purple-installer/output/purple-installer-20260719
+# e.g. /opt/purple-installer/output/purple-installer-20260719-3acddd02
 latest_build_stem() {
     local newest
     newest="$(list_build_isos | head -1)"

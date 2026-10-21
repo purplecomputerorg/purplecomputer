@@ -4,7 +4,7 @@
 #   step: optional step number to start from (0-1, default: 0)
 #     0 = build golden image (pre-built Ubuntu system)
 #     1 = remaster Ubuntu Server ISO (inject hook into initramfs)
-#   --pi: build the Raspberry Pi card image (purple-pi-<date>.img.xz) instead of the ISOs
+#   --pi: build the Raspberry Pi card image (purple-pi-<date>-<commit>.img.xz) instead of the ISOs
 
 set -e
 
@@ -120,7 +120,7 @@ main() {
     if [ "$PI_BUILD" = "1" ]; then
         log_info "Build plan: Raspberry Pi card image (arm64, emulated, the slow step)"
         log_info "Will produce in $OUTPUT_DIR:"
-        log_info "  purple-pi-$(date +%Y%m%d)$([ "$FAST_BUILD" = "1" ] && echo -fast).img.xz"
+        log_info "  $(basename "$(planned_build_stem "$PURPLE_COMMIT" purple-pi)").img.xz"
     else
         skip_if_already_built
         if [ "$START_STEP" -ge 1 ]; then

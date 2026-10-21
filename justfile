@@ -330,7 +330,7 @@ clean-isos *args:
 build *args:
     ./build-scripts/build-in-docker.sh {{args}}
 
-# Build the Raspberry Pi card image (Pi 4, 400, 5, 500): /opt/purple-installer/output/purple-pi-<date>.img.xz
+# Build the Raspberry Pi card image (Pi 4, 400, 5, 500): /opt/purple-installer/output/purple-pi-<date>-<commit>.img.xz
 build-pi *args:
     ./build-scripts/build-in-docker.sh --pi {{args}}
 

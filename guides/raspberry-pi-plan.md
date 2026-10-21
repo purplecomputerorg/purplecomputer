@@ -8,7 +8,7 @@ Plan (September 2026) for running Purple on Raspberry Pi 4, Pi 400, Pi 5 and Pi 
 
 | Decision | Choice | Why |
 |---|---|---|
-| Artifact | Separate `purple-pi-<date>.img.xz`, same pipeline and commit as the ISOs | Pi firmware boots a FAT partition with `config.txt`; none of shim, GRUB, casper or the ISO applies. The SD card is the computer, so there is no live session and no install flow. |
+| Artifact | Separate `purple-pi-<date>-<commit>.img.xz`, same pipeline and commit as the ISOs | Pi firmware boots a FAT partition with `config.txt`; none of shim, GRUB, casper or the ISO applies. The SD card is the computer, so there is no live session and no install flow. |
 | Distro | Debian trixie arm64 plus `archive.raspberrypi.com` for kernel and firmware (Raspberry Pi OS's recipe, as pi-gen does it) | The i386 image already builds trixie through the same script, and the app already runs on trixie's Python 3.13. Raspberry Pi's kernel, firmware and Mesa are the best tested on these boards; its kernel hook handles chroots without `flash-kernel` workarounds. |
 | Models | Pi 4 (4GB+), Pi 400, Pi 5, Pi 500/500+ from one image | Firmware picks `kernel8.img` (Pi 4 family) or `kernel_2712.img` (Pi 5 family) itself. |
 | Media | SD card by default; the same image also boots from USB (default EEPROM boot order is SD, then USB) | |
@@ -33,7 +33,7 @@ The sleep-screen and bye-screen UI exists in both UIs, so that part is two commi
 
 ## Build (as built)
 
-`just build-pi` (`--fast` for quick compression) runs `build-in-docker.sh --pi`, which runs `PURPLE_ARCH=arm64 00-build-golden-image.sh` and writes `purple-pi-<date>.img.xz` plus `.version` to `/opt/purple-installer/output/` and symlinks it into `~/isos` (`link-iso.sh`) for scp or Cyberduck.
+`just build-pi` (`--fast` for quick compression) runs `build-in-docker.sh --pi`, which runs `PURPLE_ARCH=arm64 00-build-golden-image.sh` and writes `purple-pi-<date>-<commit>.img.xz` plus `.version` to `/opt/purple-installer/output/` and symlinks it into `~/isos` (`link-iso.sh`) for scp or Cyberduck.
 
 1. **Per-image switches.** The profile block at the top of `00-build-golden-image.sh` sets `BOOT` (efi or pi), `GLAMOR`, `PIPER`, `MODULES_EXTRA`, `MODULE_CHECKS`, `SOUND_MODULE_DIR` and the boot tooling to install and verify; the body reads those instead of `PURPLE_ARCH`. GRUB/shim setup is `setup_efi_boot`, the firmware prune `prune_firmware` and the squashfs `build_live_squashfs`, moved verbatim so the amd64 and i386 paths are unchanged.
 2. **Pi path.** Debootstrap trixie arm64, install the pinned `raspberrypi-archive-keyring` deb, add `archive.raspberrypi.com`, install `raspi-firmware linux-image-rpi-v8 linux-image-rpi-2712` with p1 mounted at `/boot/firmware` (the packages' hooks copy kernels, initramfs, dtbs and overlays there). `setup_pi_boot` writes `config.txt` and `cmdline.txt`, then fails the build if any file a supported board needs is missing. `populate_pi_data` seeds p3 from `/home/purple`; `publish_pi_image` xz-compresses the card.

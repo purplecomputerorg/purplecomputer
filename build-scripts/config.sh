@@ -50,18 +50,19 @@ planned_iso_variants() {
     return 0
 }
 
-# Path stem (no variant suffix) a build would write today, given FAST_BUILD.
-# Mirrors the naming in 01-remaster-iso.sh.
+# planned_build_stem <commit> [name]: path stem (no variant suffix) a build of
+# that commit writes today, given FAST_BUILD; name defaults to purple-installer.
+# The commit keeps a same-day build of another branch from overwriting this one.
 planned_build_stem() {
     local tag=""
     [ "${FAST_BUILD:-0}" = "1" ] && tag="-fast"
-    echo "$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${tag}"
+    echo "$OUTPUT_DIR/${2:-purple-installer}-$(date +%Y%m%d)-${1}${tag}"
 }
 
 # Human-readable list of the ISO files a build will produce.
 planned_iso_names() {
     local stem variant
-    stem="$(planned_build_stem)"
+    stem="$(planned_build_stem "$PURPLE_COMMIT")"
     for variant in $(planned_iso_variants); do
         echo "$(basename "$(variant_path "$stem" "$variant")")  ($(variant_label "$variant"))"
     done

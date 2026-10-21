@@ -396,9 +396,8 @@ populate_pi_data() {
 
 # The card image goes straight to the output dir: Raspberry Pi Imager flashes .img.xz as is.
 publish_pi_image() {
-    local tag="" out
-    [ "${FAST_BUILD:-0}" != "1" ] || tag="-fast"
-    out="$OUTPUT_DIR/purple-pi-$(date +%Y%m%d)${tag}.img.xz"
+    local out
+    out="$(planned_build_stem "$git_hash" purple-pi).img.xz"
     mkdir -p "$OUTPUT_DIR"
     log_info "Compressing Pi image..."
     xz -"$XZ_LEVEL" -T0 -c "$GOLDEN_IMAGE" > "$out.part"

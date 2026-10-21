@@ -67,7 +67,7 @@ def test_a_parent_adds_a_kid_and_switches_to_them(home):
     async def go():
         app = make_app()
         menu = dict(_get_menu_items(app))
-        assert menu["menu-kids"] == "Kids"
+        assert menu["menu-kids"] == "Kid Profiles"
         app.push(kids.KidsScreen(app))
         await press(app, "down")
         await press(app, "enter")
@@ -112,6 +112,6 @@ def test_kids_wait_for_purple_to_be_installed(monkeypatch):
 
     async def go():
         app = make_app()
-        assert dict(_get_menu_items(app))["menu-kids"] == "Kids (install Purple first)"
+        assert dict(_get_menu_items(app))["menu-kids"] == "Kid Profiles (install Purple first)"
         assert parent_menu.ParentMenu(app)._disabled("menu-kids")
     run(go())

@@ -99,7 +99,7 @@ class WhoGetsIt(Picker):
 
 
 class KidsScreen(Picker):
-    title = "Kids"
+    title = "Kid Profiles"
     DESCRIPTION = "Each kid gets their own computer here, with their own settings, saved work, and Time Travel."
 
     def __init__(self, app):

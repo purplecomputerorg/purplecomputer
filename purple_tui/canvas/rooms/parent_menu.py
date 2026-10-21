@@ -309,8 +309,8 @@ def _pack_for(pack_id: str) -> str:
 def _kids_label() -> str:
     from ...settings import get_kids
     if is_live_boot():
-        return "Kids (install Purple first)"
-    return f"Kids: {len(get_kids())}" if many() else "Kids"
+        return "Kid Profiles (install Purple first)"
+    return f"Kid Profiles: {len(get_kids())}" if many() else "Kid Profiles"
 
 
 class MusicLoopingScreen(_YesNo):

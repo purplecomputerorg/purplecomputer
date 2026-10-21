@@ -162,9 +162,9 @@ cat /mnt/var/log/purple/boot.log.prev
 
 ### 3. Ctrl+Alt+F2 into tty2
 
-On laptops with real function keys, `Ctrl+Alt+F2` switches to tty2. From there: `cat /var/log/purple/boot.log` for the currently-hung boot, or any of the other diagnostic commands.
+On laptops with real function keys, holding `Ctrl+Alt+F2` for 3 seconds switches to tty2 (keyd enforces the hold so kids can't hit it by mashing). From there: `cat /var/log/purple/boot.log` for the currently-hung boot, or any of the other diagnostic commands.
 
-**Touch Bar Macs (no physical F-keys):** keyd remaps Right Alt to F2 at the kernel level (`config/keyd/default.conf`), so press `Ctrl+Alt+RightAlt` to reach tty2. No USB keyboard needed. See the "keyd at boot time" section below. If keyd is not running (dev, VMs, or a broken golden image), there is no F2 without a USB keyboard, so fall back to option 2.
+**Touch Bar Macs (no physical F-keys):** keyd remaps Right Alt to F2 at the kernel level (`config/keyd/default.conf`), so hold `Ctrl+Alt+RightAlt` (Ctrl+Option+right Option) for 3 seconds to reach tty2. No USB keyboard needed. See the "keyd at boot time" section below. If keyd is not running (dev, VMs, or a broken golden image), there is no F2 without a USB keyboard, so fall back to option 2.
 
 ---
 
@@ -340,7 +340,7 @@ The startup race to watch for: `keyd.service` is `Type=simple`, so systemd consi
 
 ### Verifying keyd at runtime during a hang
 
-Get to a shell (tty2 via `Ctrl+Alt+RightAlt`, or the parent-menu shell on debug ISO), then:
+Get to a shell (tty2 by holding `Ctrl+Alt+RightAlt` for 3 seconds, or the parent-menu shell on debug ISO), then:
 
 ```
 systemctl status keyd                       # is it active?

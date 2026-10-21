@@ -144,7 +144,7 @@ The TUI grabs all keyboard devices (`EVIOCGRAB`):
 Purple needs two system-level keyboard remaps:
 
 1. **grave/tilde → Escape** — top-left corner key is easier for pre-readers than reaching for Esc, and this needs to work at rescue shells and during Purple startup, not only after the app starts.
-2. **RightAlt → F2** — laptops without physical F-keys (2016–2017 Touch Bar MacBooks) cannot type `Ctrl+Alt+F2` to reach tty2. Remapping a real key to F2 restores the standard VT-switch chord.
+2. **RightAlt → F2** — laptops without physical F-keys (2016–2017 Touch Bar MacBooks) cannot type `Ctrl+Alt+F2` to reach tty2. Remapping a real key to F2 restores the standard VT-switch chord. With Ctrl+Alt held, RightAlt and F2 only send Ctrl+Alt+F2 after a 3 second hold, and F3 to F6 do nothing, so kids mashing the bottom corners don't land on a console.
 
 Both are "system-level" in the sense that we want them to apply *regardless of which process is reading the keyboard*: Purple, a getty, the tty2 debug shell, early systemd, all of them.
 

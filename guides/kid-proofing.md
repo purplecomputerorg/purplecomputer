@@ -45,7 +45,7 @@ EndSection
 |----------|-----------------|----------------|
 | Ctrl+Alt+Backspace | Kills X server instantly | Ignored |
 
-**`DontVTSwitch` is intentionally NOT set.** Ctrl+Alt+F2 reaches an autologin bash shell on tty2 (enabled on both ISOs). 4-7 year olds won't accidentally chord three keys, and if they did they'd land on a plain text shell (autologin as the `purple` user, which has passwordless sudo, so treat it as an escape hatch, not a sandbox); Ctrl+Alt+F1 returns to Purple. Keeping the escape hatch is worth more than the theoretical accidental-press risk.
+**`DontVTSwitch` is intentionally NOT set.** Ctrl+Alt+F2 reaches an autologin bash shell on tty2 (enabled on both ISOs). Kids do hit it: Ctrl, Option and right Option sit together at a MacBook's bottom corners, and keyd maps right Option to F2. So keyd sends Ctrl+Alt+F2 only after a 3 second hold and swallows Ctrl+Alt+F3 to F6 (`config/keyd/default.conf`). Landing there means a plain text shell (autologin as the `purple` user, which has passwordless sudo, so treat it as an escape hatch, not a sandbox); Ctrl+Alt+F1 returns to Purple.
 
 ---
 

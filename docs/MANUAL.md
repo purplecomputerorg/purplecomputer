@@ -684,7 +684,7 @@ sudo smartctl -a /dev/sda
 Purple Computer runs on tty1. To get a root shell on tty2 for debugging:
 
 **From the keyboard (emergency escape hatch):** Two options:
-- **Ctrl+Alt+F2**: Immediate switch (standard Linux VT switching, reimplemented via evdev since the kernel's built-in version is disabled by Alacritty's K_OFF mode)
+- **Ctrl+Alt+F2** held for 3 seconds (Ctrl+Alt+RightAlt on Macs without F-keys; keyd enforces the hold so kids mashing keys don't trigger it): standard Linux VT switching, reimplemented via evdev since the kernel's built-in version is disabled by Alacritty's K_OFF mode)
 - **Ctrl+\\** (Ctrl+Backslash) held for 3 seconds: Same effect, alternative combo
 
 Both release the evdev grab so tty2 receives keyboard input. Both work even when the TUI is completely frozen. Note: these only work once the app's evdev handler has started (a few seconds after the purple screen appears).

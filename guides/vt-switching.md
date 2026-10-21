@@ -6,12 +6,12 @@ How to switch from the Purple Computer UI to a shell on tty2 for debugging (auto
 
 | Combo | Effect | Hold needed? |
 |-------|--------|-------------|
-| **Ctrl+Alt+F2** | Switch to tty2 | No (immediate) |
+| **Ctrl+Alt+F2** (or Ctrl+Alt+RightAlt) | Switch to tty2 | 3 seconds (keyd) |
 | **Ctrl+\\** (Ctrl+Backslash) | Switch to tty2 | 3 seconds |
 | **Ctrl+Alt+F1** | Switch back to tty1 | No (immediate) |
 | **Ctrl+\\** again | Switch back to tty1 | 3 seconds |
 
-All combos release the evdev grab so tty2 actually receives keyboard input.
+All combos release the evdev grab so tty2 actually receives keyboard input. keyd sends Ctrl+Alt+F2 only after a 3 second hold and swallows Ctrl+Alt+F3 to F6, so a kid mashing the bottom corners stays in Purple (`config/keyd/default.conf`); everything below sees the combo only once keyd lets it through.
 
 ## The Problem
 

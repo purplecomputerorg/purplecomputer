@@ -625,7 +625,7 @@ class EvdevReader:
                     if keycode in (KeyCode.KEY_LEFTALT, KeyCode.KEY_RIGHTALT):
                         self._alt_held = is_down
 
-                    # Ctrl+Alt+F2: immediate VT switch (standard Linux combo)
+                    # Ctrl+Alt+F2: VT switch (keyd only sends it after a 3s hold)
                     # Ctrl+Alt+F1: immediate switch back
                     if keycode == KeyCode.KEY_F2 and is_down and self._ctrl_held and self._alt_held:
                         if not self._vt_away:

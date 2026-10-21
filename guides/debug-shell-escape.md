@@ -5,7 +5,7 @@ When the app freezes or shows a blank screen on the debug ISO, use SysRq to esca
 ## Steps
 
 1. **Alt + PrtSc + R** (releases the keyboard from the app's evdev grab)
-2. **Ctrl + Alt + F2** (switches to tty2, which has an auto-login shell)
+2. **Ctrl + Alt + F2**, held 3 seconds (switches to tty2, which has an auto-login shell)
 3. Debug as needed
 4. **Ctrl + Alt + F1** to return to the app
 

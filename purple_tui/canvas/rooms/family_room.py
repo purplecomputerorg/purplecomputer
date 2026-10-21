@@ -26,7 +26,7 @@ from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationA
 from ...music_constants import instruments, pitch_filename
 from ...timeline import state_dir
 from ...roomkit.limits import (KEEP_MAX_BYTES, MAX_REPLY_CHARS, MAX_SHAPES, MAX_SOUNDS, MAX_WAKE_S, MIN_WAKE_S,
-                               START_TIMEOUT_S, STEP_TIMEOUT_S)
+                               START_TIMEOUT_S, STEP_TIMEOUT_S, sealed)
 from ..sounds import SoundBank
 from ..theme import ROLES
 from ..ui import KID_MATH_KEYS, Overlay
@@ -36,7 +36,6 @@ API = 2
 SIZE = (240, 120)           # the room's surface; the viewport is 2:1 on every machine
 RUNNER = Path(__file__).parents[2] / "roomkit" / "runner.py"
 BUILTIN_LIB = RUNNER.parent / "purple.py"
-RUN_ROOM = Path("/usr/local/bin/purple-room-run")   # the ISO's sealed launcher (scripts/purple-room-run.sh)
 MAX_PIXELS = 64             # an inline picture's rows, and characters per row
 PICTURE_CACHE = 512
 TEXT_MAX = 200
@@ -60,9 +59,7 @@ _ram_keeps: dict = {}
 
 def command() -> list:
     """The ISO seals the room with purple-room-run; a dev machine runs it as itself."""
-    if RUN_ROOM.exists():
-        return ["sudo", "-n", str(RUN_ROOM)]
-    return [sys.executable, "-I", "-S", str(RUNNER)]
+    return sealed() or [sys.executable, "-I", "-S", str(RUNNER)]
 
 
 class ProcessGuest:

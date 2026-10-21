@@ -16,7 +16,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 from pathlib import Path
 
 from purple_tui.content import ROOM_LIB, ROOM_NAME, png_size, room_files
@@ -45,19 +44,22 @@ class Stopped(Exception):
 class Room:
     """One room in its own process, spoken to as Purple speaks to it, on a clock that only moves when told."""
 
-    def __init__(self, path: Path, lib: str, images: dict, sounds: list):
+    def __init__(self, images: dict):
         self.t, self.next_tick, self.scene, self.max_shapes, self.heard, self.just_heard = 0.0, None, [], 0, set(), []
         self.images = images
         root = Path(__file__).resolve().parents[2]
-        self.proc = subprocess.Popen([sys.executable, "-I", "-S", "-c", GUEST, str(root)], stdin=subprocess.PIPE,
+        self.proc = subprocess.Popen(L.sealed() or [sys.executable, "-I", "-S", "-c", GUEST, str(root)], stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
         self.lines: queue.Queue = queue.Queue()
         threading.Thread(target=lambda: [self.lines.put(line) for line in self.proc.stdout] + [self.lines.put(None)],
                          daemon=True).start()
         self.prints: list = []
-        threading.Thread(target=lambda: self.prints.extend(self.proc.stderr), daemon=True).start()
+        self.printer = threading.Thread(target=lambda: self.prints.extend(self.proc.stderr), daemon=True)
+        self.printer.start()
+
+    def start(self, path: Path, lib: str, sounds: list):
         self.send({"ev": "start", "t": 0, "api": 2, "size": list(SIZE), "keep": {}, "lib": lib,
-                   "source": path.read_text(encoding="utf-8"), "images": {n: list(s) for n, s in images.items()},
+                   "source": path.read_text(encoding="utf-8"), "images": {n: list(s) for n, s in self.images.items()},
                    "sounds": sounds}, L.START_TIMEOUT_S)
 
     def send(self, event: dict, timeout=None):
@@ -109,7 +111,10 @@ class Room:
         self.wait(STEP_S)
 
     def close(self):
+        """Closing stdin ends a sealed room (runner._watch); then its last prints are read."""
+        self.proc.stdin.close()
         self.proc.kill()
+        self.printer.join(1)
 
 
 def _picture_name(source) -> str:
@@ -199,9 +204,9 @@ def try_room(path: Path, content: Path, keys: list, show: bool) -> bool:
     lib_path = content / "rooms" / ROOM_LIB
     lib = lib_path.read_text(encoding="utf-8") if lib_path.is_file() else inspect.getsource(builtin_lib)
     print(f"\n{path.stem}:")
-    room = None
+    room = Room(images)
     try:
-        room = Room(path, lib, images, sounds)
+        room.start(path, lib, sounds)
         for key in [None, *keys]:
             if key:
                 room.press(key)
@@ -216,14 +221,12 @@ def try_room(path: Path, content: Path, keys: list, show: bool) -> bool:
             room.wait(IDLE_S)
     except Stopped as stopped:
         print(f"  NEEDS FIXING: {stopped}")
-        print("  Last screen:\n" + "\n".join("    " + line for line in screen(room.scene if room else []).splitlines()))
+        print("  Last screen:\n" + "\n".join("    " + line for line in screen(room.scene).splitlines()))
         return False
     finally:
-        if room:
-            room.close()
-            time.sleep(0.05)
-            if room.prints:
-                print("  It printed:\n" + "".join(f"    {line}" for line in room.prints[-10:]))
+        room.close()
+        if room.prints:
+            print("  It printed:\n" + "".join(f"    {line}" for line in room.prints[-10:]))
     if not show:
         print(f"  OK: {len(keys) + RANDOM_KEYS} keys and {IDLE_S} seconds of waiting; at most {room.max_shapes} shapes "
               f"(Purple allows {L.MAX_SHAPES}).")

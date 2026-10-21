@@ -25,6 +25,7 @@ from purple_tui.canvas.rooms.rooms_screen import RoomsScreen
 from purple_tui.content import ContentManager
 from purple_tui.keyboard import ControlAction, NavigationAction
 from purple_tui.music_constants import PERCUSSION
+from purple_tui.roomkit import limits
 from purple_tui.roomkit import purple as purple_lib
 
 SNAKE = '''from purple import *
@@ -648,10 +649,9 @@ def test_on_the_iso_rooms_start_through_the_sealed_launcher(monkeypatch, tmp_pat
     script = open("build-scripts/00-build-golden-image.sh").read()
     rule = next(line for line in script.splitlines() if line.startswith("purple ALL=(root)"))
     assert "install -m 755 /purple-src/scripts/purple-room-run.sh \"$MOUNT_DIR/usr/local/bin/purple-room-run\"" in script
-    monkeypatch.setattr(family_room, "RUN_ROOM", tmp_path / "purple-room-run")
-    family_room.RUN_ROOM.touch()
-    cmd = family_room.command()
-    assert cmd == ["sudo", "-n", str(family_room.RUN_ROOM)]
+    monkeypatch.setattr(limits, "RUN_ROOM", tmp_path / "purple-room-run")
+    limits.RUN_ROOM.touch()
+    assert family_room.command() == ["sudo", "-n", str(limits.RUN_ROOM)]
     assert rule.split("NOPASSWD: ")[1] == '/usr/local/bin/purple-room-run ""'
     assert "-p User=purple-room" in open("scripts/purple-room-run.sh").read()
 

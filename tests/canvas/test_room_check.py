@@ -42,6 +42,15 @@ def test_a_broken_room_names_its_line(make_pack, capsys):
     assert "NEEDS FIXING: line 4: ValueError: there's no drum called 'snar'" in capsys.readouterr().out
 
 
+def test_on_the_iso_rooms_run_sealed_and_say_what_they_printed(make_pack, capsys, monkeypatch):
+    """Purple runs rooms through purple-room-run, so a room only the sandbox stops must fail here too."""
+    monkeypatch.setattr(check.L, "sealed", lambda: [sys.executable, "-I", "-S", str(ROOT / "purple_tui/roomkit/runner.py")])
+    pack = make_pack(dies='from purple import *\nimport os\nprint("going down")\nos.kill(os.getpid(), 9)\n')
+    assert check.main([str(pack)]) == 1
+    out = capsys.readouterr().out
+    assert "NEEDS FIXING: its process ended" in out and "going down" in out
+
+
 def test_a_room_file_is_tried_alone_with_its_pack(make_pack, capsys, tmp_path):
     pack = make_pack(good="from purple import *\n", oops='from purple import *\ndef on_key(key):\n    drum("snar")\n')
     assert check.main([str(pack / "content" / "rooms" / "oops.py")]) == 1

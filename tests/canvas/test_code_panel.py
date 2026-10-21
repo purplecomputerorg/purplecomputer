@@ -89,12 +89,43 @@ def test_typing_replaces_the_echo_but_editing_keeps_it():
         app, _ = await _room("art")
         panel = CodePanel(app, "art", "right hi")
         await panel.handle(NavigationAction(direction="left"))
-        await type_text_into(panel, "x")
-        assert panel.field.value == "right hxi"
+        await type_text_into(panel, "yo")
+        assert panel.field.value == "right yo"
         fresh = CodePanel(app, "art", "right hi")
         await type_text_into(fresh, "red")
         assert fresh.field.value == "red"
     run(go())
+
+
+def test_arrows_pick_a_word_to_retype_or_remove():
+    async def go():
+        app, _ = await _room("art")
+        panel = CodePanel(app, "art", "red repeat 4 forward 6 turn")
+        f = panel.field
+        for _ in range(9):
+            await panel.handle(NavigationAction(direction="left"))
+        assert f.selected == (0, 3)                     # stops at the first word
+        await type_text_into(panel, "blue")
+        assert f.value == "blue repeat 4 forward 6 turn" and f.selected is None
+        await panel.handle(NavigationAction(direction="right"))
+        await panel.handle(NavigationAction(direction="right"))
+        await panel.handle(NavigationAction(direction="right"))
+        assert f.value[slice(*f.selected)] == "forward"
+        await panel.handle(NavigationAction(direction="right"))
+        await type_text_into(panel, "10")
+        assert f.value == "blue repeat 4 forward 10 turn"
+        await panel.handle(NavigationAction(direction="right"))
+        await panel.handle(NavigationAction(direction="right"))
+        assert f.selected is None and f.cursor == len(f.value)
+        await panel.handle(NavigationAction(direction="left"))
+        await press_control(panel, "backspace")
+        assert f.value == "blue repeat 4 forward 10 "
+    run(go())
+
+
+async def press_control(panel, name):
+    from purple_tui.keyboard import ControlAction
+    await panel.handle(ControlAction(action=name, is_down=True))
 
 
 async def type_text_into(panel, text):

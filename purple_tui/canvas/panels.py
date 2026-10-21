@@ -395,10 +395,8 @@ class CodePanel:
         if isinstance(action, NavigationAction):
             if self.card is not None:
                 self._pick(action.direction)
-            elif action.direction == "left":
-                f.move(-1)
-            elif action.direction == "right":
-                f.move(1)
+            elif action.direction in ("left", "right"):
+                f.jump(1 if action.direction == "right" else -1)
             elif action.direction == "down" and not self._back and self.recipes:
                 self._choose(0)
             else:
@@ -429,7 +427,7 @@ class CodePanel:
                 self.app.run_code(self.room, [text])
                 if from_card:
                     f.set(text)     # a recipe stays in the line, to change a number and run again
-                    self.note = (text, "Change a number, then {Enter}")
+                    self.note = (text, f"{LEFT} {RIGHT} pick a word to change")
             elif action.action == "backspace":
                 f.backspace()
             elif action.action == "space":
@@ -462,7 +460,8 @@ class CodePanel:
     def arrow_hint(self) -> str:
         if self.card is not None:
             return f"Arrows pick  {LEFT} {RIGHT}   Back  {UP}"
-        return f"Your code  {UP}   Examples  {DOWN}"
+        words = f"Words  {LEFT} {RIGHT}   " if self.field.value else ""
+        return f"{words}Your code  {UP}   Examples  {DOWN}"
 
     def _choose(self, i: int):
         self.card = i
@@ -491,6 +490,8 @@ class CodePanel:
             return "{Enter} close"
         if self.card is not None:
             return "{Enter} run it"
+        if self.field.selected:
+            return "Type to change it, then {Enter}"
         if self.note[0] and self.field.value == self.note[0]:
             return self.note[1]
         return None

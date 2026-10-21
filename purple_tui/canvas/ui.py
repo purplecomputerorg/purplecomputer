@@ -102,6 +102,7 @@ class TextField:
     def __init__(self, autocomplete_fn=None, validator=None, context_autocomplete=False, marks=None):
         self.value = ""
         self.cursor = 0
+        self.selected = None   # (start, end) of the word the arrows picked; typing replaces it
         self._autocomplete_fn = autocomplete_fn
         self._validator = validator
         self._context = context_autocomplete
@@ -115,11 +116,14 @@ class TextField:
     # --- editing ---
     def set(self, value: str, cursor: int | None = None):
         self.value = value
+        self.selected = None
+        self._correction = None
         self.cursor = len(value) if cursor is None else max(0, min(cursor, len(value)))
         self._check_autocomplete()
 
     def insert(self, text: str):
-        self.set(self.value[:self.cursor] + text + self.value[self.cursor:], self.cursor + len(text))
+        a, b = self.selected or (self.cursor, self.cursor)
+        self.set(self.value[:a] + text + self.value[b:], a + len(text))
 
     def insert_operator(self, ch: str):
         """Math operators get spaces around them unless one is already there."""
@@ -130,11 +134,25 @@ class TextField:
             self.insert(ch)
 
     def backspace(self):
-        if self.cursor > 0:
+        if self.selected:
+            a, b = self.selected
+            self.set(self.value[:a] + self.value[b:].removeprefix(" "), a)
+        elif self.cursor > 0:
             self.set(self.value[:self.cursor - 1] + self.value[self.cursor:], self.cursor - 1)
 
     def move(self, delta: int):
+        self.selected = None
         self.cursor = max(0, min(self.cursor + delta, len(self.value)))
+
+    def jump(self, step: int):
+        """Arrows a word at a time: pick the word before or after; past the last one is the end again."""
+        at = self.selected[0] + (step > 0) if self.selected else self.cursor
+        spans = [m.span() for m in re.finditer(r"\S+", self.value) if (m.start() < at if step < 0 else m.start() >= at)]
+        if spans:
+            self.selected = spans[-1] if step < 0 else spans[0]
+            self.cursor = self.selected[1]
+        elif step > 0:
+            self.selected, self.cursor = None, len(self.value)
 
     def clear(self):
         self.set("")
@@ -154,13 +172,12 @@ class TextField:
         self.last_command = corrected
 
     def recall_text(self, keycap: bool = False) -> str:
-        """Dim hint under an empty field; a correction shows once. keycap
+        """Dim hint under an empty field; a correction shows until the next edit. keycap
         writes Enter as {Enter} for draw_key_hint."""
         if self.value or not self.last_command:
             return ""
         if self._correction:
             orig, corr = self._correction
-            self._correction = None
             return _truncate(f"{orig} → {corr}")
         return f"{'{Enter}' if keycap else 'Enter to'} try again: {_truncate(self.last_command)}"
 
@@ -169,7 +186,7 @@ class TextField:
         self.matches, self.match_index, self.exact_display = [], 0, ""
         if not self._autocomplete_fn or not self.value.strip():
             return
-        text = self.value.lower()
+        text = self.value[:self.cursor].lower()
         m = re.search(r'([a-z]+)$', text)
         last_word = m.group(1) if m else ""
         if len(last_word) < 2 or last_word in _COMMON_2CHAR:
@@ -189,14 +206,11 @@ class TextField:
     def accept_autocomplete(self) -> bool:
         if not self.matches:
             return False
-        selected = self.matches[self.match_index][0]
-        if self.value.endswith(" "):
-            value = self.value + selected + " "
-        else:
-            words = self.value.split()
-            words[-1] = selected
-            value = " ".join(words) + " "
-        self.set(value)
+        head, tail = self.value[:self.cursor], self.value[self.cursor:]
+        if not head.endswith(" "):
+            head = head[:len(head) - len(head.split()[-1])]
+        head += self.matches[self.match_index][0] + " "
+        self.set(head + tail.lstrip(), len(head))
         self.matches, self.exact_display = [], ""
         return True
 
@@ -253,9 +267,12 @@ class TextField:
         if self._validator:
             self._underline(g, shown, px, tx, y)
         if self._marks:
-            self._draw_marks(g, shown, start, px, tx, y)
-        draw_text_caret(g, tx + g.measure(before, px, "mono", tr=False)[0] if before else tx, y, px,
-                        shown[len(before):len(before) + 1])
+            self._draw_marks(g, shown, start, px, tx, y, self._marks(self.value))
+        if self.selected:
+            self._draw_marks(g, shown, start, px, tx, y, [self.selected])
+        else:
+            draw_text_caret(g, tx + g.measure(before, px, "mono", tr=False)[0] if before else tx, y, px,
+                            shown[len(before):len(before) + 1])
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
     def traced(self, ideas) -> str:
@@ -318,9 +335,9 @@ class TextField:
         start = max(0, self.cursor - fit + 1)
         return self.value[start:start + fit], start
 
-    def _draw_marks(self, g, shown, start, px, tx, y):
+    def _draw_marks(self, g, shown, start, px, tx, y, spans):
         lh = g.line_height(px, "mono")
-        for a, b in self._marks(self.value):
+        for a, b in spans:
             a, b = max(a - start, 0), min(b - start, len(shown))
             if a < b:
                 x0 = tx + g.measure(shown[:a], px, "mono", tr=False)[0]

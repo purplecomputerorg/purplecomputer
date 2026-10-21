@@ -238,8 +238,8 @@ part_prefix() {
     esac
 }
 
-# Copies an earlier Purple install's settings, Time Travel history and name into
-# $2 without writing to it. 0 = saved, 1 = no Purple there, 2 = Purple but unreadable.
+# Copies an earlier Purple install's settings, Time Travel history, packs and name
+# into $2 without writing to it. 0 = saved, 1 = no Purple there, 2 = Purple but unreadable.
 save_old_purple() {
     local part="$1" keep="$2" mnt="${3:-/run/purple-old-root}" rc=0
     [ "$(blkid -o value -s LABEL "$part" 2>/dev/null)" = PURPLE_ROOT ] || return 1
@@ -248,6 +248,11 @@ save_old_purple() {
     mount -o ro "$part" "$mnt" 2>/dev/null || return 2
     if [ -d "$mnt/home/purple/.config/purple" ]; then
         cp -a "$mnt/home/purple/.config/purple" "$keep/config" 2>/dev/null || rc=2
+    fi
+    # ~/.purple holds installed packs and a name changed in the parent menu; its TTS cache regenerates.
+    if [ -d "$mnt/home/purple/.purple" ]; then
+        tar -C "$mnt/home/purple" --exclude=.purple/cache -cf - .purple 2>/dev/null \
+            | tar -C "$keep" -xf - 2>/dev/null || rc=2
     fi
     if [ -f "$mnt/opt/purple/computer_name.txt" ]; then
         cp "$mnt/opt/purple/computer_name.txt" "$keep/" 2>/dev/null || rc=2
@@ -264,18 +269,19 @@ probe() {
     target=$(find_target) || exit 0
     save_old_purple "$(part_prefix "$target")2" "$KEEP_DIR" || rc=$?
     case $rc in
-        0) echo "[PURPLE-FOUND] $(cat "$KEEP_DIR/computer_name.txt" 2>/dev/null)" ;;
+        0) echo "[PURPLE-FOUND] $(cat "$KEEP_DIR/.purple/computer_name.txt" "$KEEP_DIR/computer_name.txt" 2>/dev/null | head -1)" ;;
         2) echo "[PURPLE-FOUND-UNREADABLE]" ;;
     esac
     exit 0
 }
 
-# Copies $1 into the installed purple user's ~/.config/purple. Only warns on
-# failure: under set -e nothing here may stop the install.
+# Copies $1 into the installed purple user's ~/$3 (default .config/purple). Only
+# warns on failure: under set -e nothing here may stop the install.
 carry_over() {
-    if mkdir -p /mnt/root/home/purple/.config/purple 2>/dev/null \
-        && cp -a "$1" /mnt/root/home/purple/.config/purple/ 2>/dev/null \
-        && chown -R 1000:1000 /mnt/root/home/purple/.config 2>/dev/null; then
+    local sub="${3:-.config/purple}" home=/mnt/root/home/purple
+    if mkdir -p "$home/$sub" 2>/dev/null \
+        && cp -a "$1" "$home/$sub/" 2>/dev/null \
+        && chown -R 1000:1000 "$home/${sub%%/*}" 2>/dev/null; then
         log "  $2 carried over"
     else
         warn "Could not copy $2"
@@ -814,12 +820,15 @@ main() {
             fi
 
             # A reinstall the parent chose to keep brings back the earlier
-            # install's settings and Time Travel history, plus the saves made
+            # install's settings, Time Travel history and packs, plus the saves made
             # on the Purple Key. Otherwise the live session comes over whole
             # (settings, so first boot doesn't chime again, history and saves).
             # PURPLE_LIVE_SETTINGS alone is what the Textual UI passes.
             if [ -n "$PURPLE_KEEP_DIR" ] && [ -d "$PURPLE_KEEP_DIR/config" ]; then
                 carry_over "$PURPLE_KEEP_DIR/config/." "Earlier install's settings and history"
+                if [ -d "$PURPLE_KEEP_DIR/.purple" ]; then
+                    carry_over "$PURPLE_KEEP_DIR/.purple/." "Earlier install's packs" .purple
+                fi
                 if [ -n "$PURPLE_LIVE_CONFIG" ] && [ -d "$PURPLE_LIVE_CONFIG/saves" ]; then
                     carry_over "$PURPLE_LIVE_CONFIG/saves" "Saved work from the Purple Key"
                 fi

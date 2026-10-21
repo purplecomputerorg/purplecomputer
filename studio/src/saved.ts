@@ -23,7 +23,7 @@ function store<T>(mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBReques
 // Rooms saved before rules: a form room keeps its form, and a blocks room keeps its Python.
 // A draft saved before a field existed gets that field empty.
 type OldRoom = RoomDraft & { template?: Made | null };
-const upgrade = (saved: Partial<Draft> | undefined) => {
+export const upgrade = (saved: Partial<Draft> | undefined) => {
   if (!saved) return undefined;
   const d = { ...emptyDraft(), ...saved };
   return { ...d, rooms: d.rooms.map(({ template, ...r }: OldRoom) => ({ ...r, made: madeOf(r.made ?? template) })) };

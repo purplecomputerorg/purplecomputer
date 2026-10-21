@@ -10,6 +10,11 @@ from the nearest snapshot line. A snapshot is written once the deltas since the
 last one outweigh it, which bounds replay cost without a big picture's copies
 filling the file.
 
+A timeline made with `fine_for_s` keeps every recorded step only that long: older
+steps thin to one per pause (or one every COARSE_EVERY_S through steady play), so
+the last few minutes step back like undo and the rest as before. That happens on
+load, when Time Travel opens (`coarsen`), and before compaction.
+
 Past MAX_FILE_BYTES the older half is thinned, not dropped: every other step
 goes, but how each play session ended and tagged steps (and the step before
 each) stay, so old days get coarser instead of vanishing. Only once there is
@@ -28,6 +33,8 @@ from pathlib import Path
 
 MAX_FILE_BYTES = 2_000_000
 SESSION_GAP_S = 20 * 60  # a pause this long ends a play session
+COARSE_PAUSE_S = 3       # a coarsened step is the last before a pause this long,
+COARSE_EVERY_S = 15      # or the first this long after the last kept one
 _GONE = object()
 
 
@@ -49,8 +56,9 @@ def timeline_dir() -> Path | None:
 class RoomTimeline:
     """Append-only step history for one room."""
 
-    def __init__(self, room: str):
+    def __init__(self, room: str, fine_for_s: float | None = None):
         self._room = room
+        self._fine_for_s = fine_for_s
         self._steps: list[dict] = []  # parsed {"s": ...} or {"d": ..., "r": ...} lines
         self._tip: dict | None = None  # state after the last step
         self._loaded = False
@@ -84,6 +92,8 @@ class RoomTimeline:
             self._count(step, len(line))
             self._steps.append(step)
         self._tip = self.state_at(len(self._steps) - 1) if self._steps else None
+        if self._fine_for_s is not None:
+            self.coarsen(before=float("inf"))   # a past run's steps are all old now
 
     def __len__(self) -> int:
         self.load()
@@ -165,7 +175,27 @@ class RoomTimeline:
         except OSError:
             pass
 
+    def coarsen(self, before: float | None = None) -> None:
+        """Thin steps taken before `before` (default: fine_for_s ago) to one per pause, keeping tagged steps and the newest."""
+        if self._fine_for_s is None or len(self) < 2:
+            return
+        cutoff = time.time() - self._fine_for_s if before is None else before
+        steps, times = self._steps, self.times()
+        keep, last = set(), None
+        for i, t in enumerate(times):
+            nxt = times[i + 1] if i + 1 < len(times) else None
+            if (t is None or t >= cutoff or nxt is None or nxt - t >= COARSE_PAUSE_S or "k" in steps[i]
+                    or "k" in steps[i + 1] or last is None or t - last >= COARSE_EVERY_S):
+                keep.add(i)
+                last = t
+        if len(keep) < len(steps):
+            self._rewrite(keep)
+
     def _compact(self) -> None:
+        if self._fine_for_s is not None:
+            self.coarsen()
+            if self._path().stat().st_size <= MAX_FILE_BYTES:
+                return
         steps, times = self._steps, self.times()
         half = len(steps) // 2
 

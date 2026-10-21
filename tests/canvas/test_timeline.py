@@ -134,6 +134,51 @@ class TestRoomTimeline:
         assert tl.tip() == {"a": 1}
         assert not list(tmp_path.rglob("*.jsonl"))
 
+    def test_recent_steps_stay_fine_and_older_ones_thin_to_one_per_pause(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+        clock = [NOW - 600]
+        monkeypatch.setattr(timeline_mod, "time", SimpleNamespace(time=lambda: clock[0]))
+        tl = RoomTimeline("art", fine_for_s=300)
+        for burst in range(3):                  # five quick steps, then a pause, three times over
+            for i in range(5):
+                tl.record({"n": burst * 5 + i})
+                clock[0] += 1
+            clock[0] += 10
+            if burst == 0:
+                tl.mark("saved")
+        clock[0] = NOW - 60
+        for i in range(15, 25):
+            tl.record({"n": i})
+            clock[0] += 1
+        clock[0] = NOW
+        tl.coarsen()
+        kept = [tl.state_at(i)["n"] for i in range(len(tl))]
+        assert kept == [0, 3, 4, 9, 14] + list(range(15, 25))     # a saved step and the one before it stay
+        assert tl.state_at(kept.index(4)) == {"n": 4} and tl.tags()[2] == ["saved"]
+        assert [RoomTimeline("art", fine_for_s=300).state_at(i)["n"] for i in range(5)] == [0, 3, 4, 9, 14]
+
+    def test_steady_play_keeps_a_coarse_step_every_so_often(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+        clock = [NOW - 3600]
+        monkeypatch.setattr(timeline_mod, "time", SimpleNamespace(time=lambda: clock[0]))
+        tl = RoomTimeline("art", fine_for_s=300)
+        for i in range(60):
+            tl.record({"n": i})
+            clock[0] += 1
+        clock[0] = NOW
+        tl.coarsen()
+        assert [tl.state_at(i)["n"] for i in range(len(tl))] == [0, 15, 30, 45, 59]
+
+    def test_a_past_runs_steps_thin_on_load(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+        tl = RoomTimeline("art", fine_for_s=300)
+        for i in range(10):
+            tl.record({"n": i})
+        assert len(tl) == 10
+        assert RoomTimeline("art", fine_for_s=300).tip() == {"n": 9}
+        assert len(RoomTimeline("art", fine_for_s=300)) < 10
+        assert len(RoomTimeline("art")) < 10, "the thinned file is what's on disk"
+
     def test_file_is_valid_ndjson(self, monkeypatch, tmp_path):
         monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
         tl = RoomTimeline("art")
@@ -349,6 +394,7 @@ def _two_sessions(monkeypatch, tmp_path, per=30):
         if i == per:
             clock[0] = NOW
         tl.record({f"c:{i},0": ["x", "#fff", None, 1]})
+        clock[0] += timeline_mod.COARSE_PAUSE_S     # far enough apart that every step outlasts thinning
     return tl
 
 

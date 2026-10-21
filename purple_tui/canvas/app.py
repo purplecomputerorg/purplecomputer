@@ -56,12 +56,13 @@ SIDE_MARGIN_VW = 6            # air beside the frame
 TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
 STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
 STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the TUI's room bar
-TIMELINE_DEBOUNCE_S = 3.0
+TIMELINE_DEBOUNCE_S = 0.5     # a Time Travel step once play pauses this long,
+TIMELINE_MAX_WAIT_S = 2.0     # or this often through steady play
+TIMELINE_FINE_FOR_S = 5 * 60  # steps stay that fine this long, then thin to one per pause
 LEGEND_KEY_VH = 1.3           # key size on the sticker keyboard in the bottom-left corner
 LEGEND_POP_VH = 1.67          # letter size on the last key pressed, which pops out to fit it
 LEGEND_POP_S = 2.0            # a popped key that isn't the loaded color drops back after this
 LEGEND_ROWS = ((list("1234567890-="), 0), (QWERTY_ROW, 0.5), (ASDF_ROW, 1), (ZXCV_ROW, 1.5))   # even half-key stagger
-TIMELINE_MAX_WAIT_S = 15.0
 JUMP_TAG = "jump"             # tags a step that replaced the room in one go (clear, open, a Time Travel landing)
 SCRUB_TICK_S = 1 / 30
 MAX_CODE_LINES = 200          # code lines kept with a room's state (Time Travel, saves)
@@ -154,7 +155,7 @@ class PurpleApp:
         self._idle_timer = self._audio_idle_timer = None
         self._demo_player = self._demo_task = None
         self._code_task = None
-        self._timelines = {r: RoomTimeline(r) for r in ROOM_NAMES}
+        self._timelines = {r: RoomTimeline(r, fine_for_s=TIMELINE_FINE_FOR_S) for r in ROOM_NAMES}
         self._code_lines = {r: [] for r in ROOM_NAMES}
         from .key_save import KeySave
         self.key_save = KeySave(self)
@@ -955,7 +956,7 @@ class PurpleApp:
         first, _ = self._timeline_pending.get(self.active_room, (now, now))
         self._timeline_pending[self.active_room] = (first, now)
         if self._timeline_timer is None:
-            self._timeline_timer = self.timers.every(1.0, self._timeline_tick)
+            self._timeline_timer = self.timers.every(TIMELINE_DEBOUNCE_S / 2, self._timeline_tick)
 
     def _timeline_tick(self):
         now = time.monotonic()
@@ -1059,6 +1060,7 @@ class PurpleApp:
         self._timeline_flush()
         self.timeline_capture_now(room)
         tl = self._timelines[room]
+        tl.coarsen()
         if len(tl) == 0:
             return
         from . import saves

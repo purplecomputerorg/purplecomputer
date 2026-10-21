@@ -66,7 +66,7 @@ def test_art_echo_writes_letters_then_opens_holding_them():
         app, art = await _room("art")
         await type_text(app, "hi")
         art.open_code_panel()
-        assert art.code_panel.field.value == "right hi"
+        assert art.code_panel.note[0] == "right hi"
         assert app.code_lines("art") == []          # only what runs is kept
     run(go())
 
@@ -80,7 +80,7 @@ def test_art_echo_writes_a_pen_trail_with_its_color():
             await press(app, "right")
         await press(app, "down")
         art.open_code_panel()
-        assert art.code_panel.field.value == "blue right 4 down 1"
+        assert art.code_panel.note[0] == "blue right 4 down 1"
     run(go())
 
 
@@ -95,6 +95,36 @@ def test_typing_replaces_the_echo_but_editing_keeps_it():
         await type_text_into(fresh, "red")
         assert fresh.field.value == "red"
     run(go())
+
+
+def test_the_echo_types_itself_in_selected_and_any_key_finishes_it():
+    async def go():
+        app, _ = await _room("art")
+        panel = CodePanel(app, "art", "right hi")
+        panel._type_in()
+        assert panel.field.value == "r" and panel.field.selected == (0, 1)
+        await press_control(panel, "tab")
+        assert panel.field.value == "right hi" and panel.field.selected == (0, 8) and panel._typer is None
+    run(go())
+
+
+def test_a_mashed_over_echo_comes_back_with_enter():
+    async def go():
+        app, _ = await _room("art")
+        panel = CodePanel(app, "art", "right hi")
+        await type_text_into(panel, "x")
+        await press_control(panel, "backspace")
+        await press_control(panel, "enter")
+        assert panel.field.value == "right hi"
+    run(go())
+
+
+def test_a_stale_echo_opens_code_empty(monkeypatch):
+    clock = iter([10.0, 10.0 + 31])
+    monkeypatch.setattr("purple_tui.canvas.panels.time.monotonic", lambda: next(clock))
+    e = Echo()
+    e.step("right")
+    assert e.take() == ""
 
 
 def test_arrows_pick_a_word_to_retype_or_remove():
@@ -139,7 +169,7 @@ def test_music_echo_writes_notes_and_instrument():
         app, music = await _room("music")
         await type_text(app, "qwer")
         music.open_code_panel()
-        assert music.code_panel.field.value == "qwer"
+        assert music.code_panel.note[0] == "qwer"
     run(go())
 
 
@@ -153,7 +183,7 @@ def test_blocks_echo_writes_typing_and_space():
         blocks._control("space")
         assert blocks.echo.fresh == "right ab"
         blocks.open_code_panel()
-        assert blocks.code_panel.field.value == "green up 2"
+        assert blocks.code_panel.note[0] == "green up 2"
     run(go())
 
 

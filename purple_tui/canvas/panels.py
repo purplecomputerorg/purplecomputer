@@ -154,6 +154,8 @@ MORE_COLORS = ['periwinkle', 'mint', 'gold', 'coral', 'sky', 'lime', 'turquoise'
                'bubblegum', 'lemon', 'tangerine', 'silver', 'orchid', 'lilac', 'ruby', 'emerald', 'aqua']
 SEPARATORS = ",.;|"           # they split a code line, so an echo leaves them out
 ECHO_MAX = 40
+ECHO_STALE_S = 30.0       # older than this, code opens empty instead of holding the echo
+TYPE_IN_S = 0.5           # how long the echoed line takes to type itself in
 _INSTRUMENT_NAMES = ['marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', 'piano']
 _INSTRUMENT_PREFIX = re.compile(r'.*\b(?:choose|select|use|play|instrument)\s+\S*$', re.IGNORECASE)
 _DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
@@ -279,10 +281,10 @@ class Echo:
             self.fresh = line
 
     def take(self) -> str:
-        """The newest stroke, once: what the code line opens holding."""
+        """The newest stroke, once: what the code line opens holding, unless it's stale."""
         self.flush()
         line, self.fresh = self.fresh, ""
-        return line
+        return line if time.monotonic() - self._at < ECHO_STALE_S else ""
 
     def reset(self):
         self.parts, self.fresh, self._color = [], "", None
@@ -349,7 +351,8 @@ class SpaceHold:
 class CodePanel:
     """The 'Code →' line with autocomplete and recall, over a row of recipe
     cards that ↓ steps into, with a Close button left of them. It opens holding
-    the code for the newest thing done by hand, if any."""
+    the code for the newest thing done by hand, if any, typing it in selected
+    so the first key a kid presses starts fresh."""
 
     kind = "code"
     CLOSE = -1   # self.card on the Close button
@@ -359,10 +362,10 @@ class CodePanel:
         self.room = room
         keywords = set(ROOM_KEYWORDS[room])
         self.field = TextField(keyword_autocomplete(room), validator=lambda w: w.lower() in keywords, context_autocomplete=True)
-        if prefill:
-            self.field.set(prefill)
-        self.note = (prefill, "Your code!  {Enter} again")
-        self._replace = bool(prefill)   # the first letter typed starts fresh, like selected text
+        self.field.remember(prefill)
+        self.note = (prefill, "You just did this!  {Enter} again")
+        self._typed = 0
+        self._typer = app.timers.every(TYPE_IN_S / max(1, len(prefill)), self._type_in) if prefill else None
         self.recipes = RECIPES[room]
         self.card = None   # index of the picked recipe card while ↓ is in the cards
         self._back = 0     # how far up the room's code lines ↑ has stepped
@@ -389,9 +392,9 @@ class CodePanel:
     async def handle(self, action):
         """Returns 'tab_fallthrough' when Tab had nothing to accept, 'close' on `exit`."""
         f = self.field
-        if self._replace and isinstance(action, CharacterAction):
-            f.clear()
-        self._replace = False
+        if self._typer:
+            self._typed = len(self.note[0]) - 1
+            self._type_in()
         if isinstance(action, NavigationAction):
             if self.card is not None:
                 self._pick(action.direction)
@@ -438,6 +441,15 @@ class CodePanel:
         if isinstance(action, CharacterAction) and not action.is_repeat:
             f.insert(action.char)
         return None
+
+    def _type_in(self):
+        self._typed += 1
+        self.field.set(self.note[0][:self._typed])
+        self.field.selected = (0, self._typed)
+        if self._typed >= len(self.note[0]):
+            self._typer.stop()
+            self._typer = None
+        self.app.invalidate()
 
     def _open_wheel(self, text: str) -> bool:
         *head, last = text.split()
@@ -490,10 +502,11 @@ class CodePanel:
             return "{Enter} close"
         if self.card is not None:
             return "{Enter} run it"
+        v = self.field.value
+        if v and self.note[0].startswith(v) and self.field.selected in (None, (0, len(v))):
+            return self.note[1]
         if self.field.selected:
             return "Type to change it, then {Enter}"
-        if self.note[0] and self.field.value == self.note[0]:
-            return self.note[1]
         return None
 
     def draw(self, g, rect):

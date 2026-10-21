@@ -146,6 +146,8 @@ class TextField:
 
     def jump(self, step: int):
         """Arrows a word at a time: pick the word before or after; past the last one is the end again."""
+        if self.selected == (0, len(self.value)):   # the whole line: step in from its far end
+            self.selected, self.cursor = None, 0 if step > 0 else len(self.value)
         at = self.selected[0] + (step > 0) if self.selected else self.cursor
         spans = [m.span() for m in re.finditer(r"\S+", self.value) if (m.start() < at if step < 0 else m.start() >= at)]
         if spans:

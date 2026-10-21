@@ -523,7 +523,8 @@ class ArtRoom(Room):
         if not ahead:
             return
         row = max(y for _, y in ahead)
-        self._fade = {"cells": {p for p in ahead if p[1] == row}, "row": row, "since": time.monotonic()}
+        self._fade = {"cells": {p for p in ahead if p[1] == row}, "row": row, "since": time.monotonic(),
+                      "right": x0 + 1 if row == y0 else COLS}
         if self._fade_timer is None:
             self._fade_timer = self.app.timers.every(1 / 30, self._step_fade)
 
@@ -783,6 +784,7 @@ class ArtRoom(Room):
             self._draw_header(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h))
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
         self._draw_letters(g, ox, oy, c)
+        self._draw_fade_wash(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
         held = chrome_h and self._paint_mode and self._last_paint_pos and color_recipe.held_key(self.app, self._last_key_char)
         if held:
@@ -853,6 +855,17 @@ class ArtRoom(Room):
                 elif not on_paper and self._faded((x, y)):
                     fg = hexcolor(mix(fg, self._ground(x, y), self._faded((x, y))))
                 g.draw_text(ch, px, ox + x * c + c // 2, oy + y * c + c // 2, "block", fg, anchor="center")
+
+    def _draw_fade_wash(self, g, ox, oy, c):
+        """A pale band sweeps right to left over the line being taken, so a line with one square still shows."""
+        if self._fade is None:
+            return
+        t = min(1.0, (time.monotonic() - self._fade["since"]) / LINE_FADE_S)
+        right = self._fade["right"] * c
+        band = pygame.Surface((max(1, round(right * t)), c))
+        band.fill(rgb(P.ACCENT))
+        band.set_alpha(round(60 + 80 * t))
+        g.surface.blit(band, (ox + right - band.get_width(), oy + self._fade["row"] * c))
 
     def _draw_cursor(self, g, ox, oy, c):
         x, y = ox + self._cursor_x * c, oy + self._cursor_y * c

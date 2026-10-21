@@ -1,6 +1,6 @@
-"""Art's Backspace: a tap erases one square, and backing off the start of a line lands on the last
-thing on the line above. Held, it takes squares for a second, then whole lines, each fading out
-first; letting go mid-fade brings the line back."""
+"""Art's Backspace: a tap erases the square under the brush, or right after typing or stamping, the
+one before it. Backing off the start of a line lands on the last thing on the line above. Held, it
+takes squares for a second, then whole lines, each fading out first; letting go mid-fade brings the line back."""
 
 import pytest
 
@@ -41,6 +41,27 @@ def test_a_tap_erases_the_whole_square():
         await press(app, "f")
         await press(app, "backspace")
         assert (0, 0) not in room._grid and not room._painted_positions
+    run(go())
+
+
+def test_a_tap_on_a_painted_square_erases_it_in_place():
+    async def go():
+        app, room = _art(rows=1)
+        room._cursor_x, room._cursor_y = COLS - 1, 0
+        await press(app, "backspace")
+        assert (COLS - 1, 0) not in room._grid and (COLS - 2, 0) in room._grid
+        assert room._cursor_x == COLS - 1
+    run(go())
+
+
+def test_after_typing_on_paint_a_tap_takes_the_letter_not_the_paint_ahead():
+    async def go():
+        app, room = _art(rows=1)
+        room._cursor_x, room._cursor_y = 3, 0
+        await press(app, "tab")
+        await press(app, "a")
+        await press(app, "backspace")
+        assert (3, 0) not in room._grid and (4, 0) in room._grid
     run(go())
 
 

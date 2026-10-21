@@ -493,22 +493,24 @@ class ArtRoom(Room):
         self._advance_after_stamp(direction)
         self.app.invalidate()
 
-    def _backspace(self):
-        """Back one cell, or up to the last thing on the line above, and erase it."""
-        if self._cursor_x > 0:
-            self._cursor_x -= 1
-        elif self._cursor_y > 0:
-            self._cursor_y -= 1
-            self._cursor_x = max((x for x, y in self._grid if y == self._cursor_y), default=0)
+    def _backspace(self, just_stamped: bool = False):
+        """Erase the square under the brush, like a spreadsheet cell. Right after typing or stamping,
+        or on an empty square, first back one cell, or up to the last thing on the line above."""
+        if just_stamped or (self._cursor_x, self._cursor_y) not in self._grid:
+            if self._cursor_x > 0:
+                self._cursor_x -= 1
+            elif self._cursor_y > 0:
+                self._cursor_y -= 1
+                self._cursor_x = max((x for x, y in self._grid if y == self._cursor_y), default=0)
         self._erase((self._cursor_x, self._cursor_y))
         self.app.invalidate()
 
-    def _hold_backspace(self, repeat: bool):
+    def _hold_backspace(self, repeat: bool, just_stamped: bool):
         """Squares one at a time, then after LINES_AFTER whole lines, the way Write takes letters then words."""
         now = time.monotonic()
         if not repeat or self._backspace_since is None:
             self._backspace_since = now
-            self._backspace()
+            self._backspace(just_stamped)
         elif now - self._backspace_since < LINES_AFTER:
             self._backspace()
         elif self._fade is None:
@@ -707,7 +709,7 @@ class ArtRoom(Room):
                     self._new_line()
                     self.app.invalidate()
             elif a == "backspace":
-                self._hold_backspace(action.is_repeat)
+                self._hold_backspace(action.is_repeat, prior_post_stamp_x is not None)
             return
         if isinstance(action, NavigationAction):
             self._navigate(action, prior_post_stamp_x)

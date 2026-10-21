@@ -42,7 +42,9 @@ export interface PackSpec {
   theme: Theme | null;
 }
 
-export const PACK_FORMAT: number = exported.pack_format;
+// studio/pack_formats.json: each format Purple reads, and what in a pack needs it.
+export interface PackFormat { format: number; date: string; needs: { files: string[]; calls: string[] } }
+export const PACK_FORMATS: PackFormat[] = exported.pack_formats;
 
 const enc = new TextEncoder();
 const text = (path: string, body: string): TarEntry => ({ path, data: enc.encode(body) });
@@ -60,13 +62,22 @@ export const roomTitle = (name: string) =>
 export const packId = (spec: Pick<PackSpec, "name">) => slug(spec.name) || "purple";
 export const packFilename = (spec: Pick<PackSpec, "name">) => `${packId(spec)}.purplepack`;
 
-export function manifest(spec: Pick<PackSpec, "name" | "id">) {
+// The oldest format with everything the pack uses, so a pack that needs nothing new opens on every Purple out there.
+export function formatOf(entries: TarEntry[], formats = PACK_FORMATS): number {
+  const dec = new TextDecoder();
+  const rooms = entries.filter((e) => /^content\/rooms\/[^/]+\.py$/.test(e.path) && e.path !== "content/rooms/purple.py").map((e) => dec.decode(e.data));
+  const uses = ({ files, calls }: PackFormat["needs"]) =>
+    files.some((re) => entries.some((e) => new RegExp(re).test(e.path))) || calls.some((c) => rooms.some((src) => new RegExp(`\\b${c}\\s*\\(`).test(src)));
+  return Math.max(1, ...formats.filter((f) => uses(f.needs)).map((f) => f.format));
+}
+
+export function manifest(spec: Pick<PackSpec, "name" | "id">, format = 1) {
   return {
     id: spec.id || packId(spec),
     name: spec.name.trim() || packId(spec),
     version: "1.0.0",
     type: "emoji",
-    format: PACK_FORMAT,
+    format,
     description: "Made with Purple Studio.",
   };
 }
@@ -99,7 +110,7 @@ async function renderNotes(inst: PackInstrument, onProgress?: (msg: string) => v
 }
 
 export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) => void): Promise<TarEntry[]> {
-  const entries: TarEntry[] = [json("manifest.json", manifest(spec)), ...emojiEntries(spec)];
+  const entries: TarEntry[] = emojiEntries(spec);
 
   for (const [key, clip] of Object.entries(spec.letters)) entries.push({ path: letterPath(key), data: encodeWav(clip) });
   for (const p of spec.phrases) entries.push({ path: phrasePath(p.text), data: encodeWav(p.clip) });
@@ -128,11 +139,15 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
 
   if (spec.theme) entries.push(json("content/theme.json", themeJson(spec.theme)));
   if (spec.studio) entries.push(json("studio.json", spec.studio));
-  return entries;
+  return [json("manifest.json", manifest(spec, formatOf(entries))), ...entries];
+}
+
+export async function packBlob(entries: TarEntry[]): Promise<Blob> {
+  return new Blob([(await gzip(tar(entries))) as BlobPart], { type: "application/gzip" });
 }
 
 export async function buildPack(spec: PackSpec, onProgress?: (msg: string) => void): Promise<Blob> {
   const entries = await buildEntries(spec, onProgress);
   onProgress?.("Packing");
-  return new Blob([(await gzip(tar(entries))) as BlobPart], { type: "application/gzip" });
+  return packBlob(entries);
 }

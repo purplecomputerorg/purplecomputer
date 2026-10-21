@@ -1,0 +1,25 @@
+{
+ "about": "Each pack format Purple reads, newest last. Written by scripts/pack_contract.py (just pack-contract); see studio/PACK_FORMAT.md.",
+ "formats": [
+  {
+   "format": 1,
+   "date": "2026-10-21",
+   "added": "Everything Purple 2.0 early access reads: words, voice, pictures, instruments, colors, and rooms.",
+   "needs": {
+    "files": [],
+    "calls": []
+   }
+  }
+ ],
+ "fingerprint": {
+  "studio/sdk/src/pack.ts": "33824324e6eb4626",
+  "studio/src/pack.ts": "c2a8e62042bdf0c7",
+  "purple_tui/content.py": "c39a6ec610f138fe",
+  "purple_tui/pack_manager.py": "83de218d6ef5b256",
+  "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
+  "purple_tui/canvas/rooms/family_room.py": "cd39ffbba6a1093b",
+  "purple_tui/roomkit/purple.py": "fb55c09bb0140294",
+  "purple_tui/roomkit/runner.py": "9e62d3413c858a5a",
+  "purple_tui/roomkit/limits.py": "6e93b3110a420317"
+ }
+}

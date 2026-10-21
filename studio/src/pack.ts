@@ -1,5 +1,5 @@
 // The app's draft, turned into the plain spec the SDK builds a pack from, and a pack turned back into a draft.
-import { buildPack as build, letterPath, packFilename as filename, phrasePath, pictureSourcePath, ROOM_FILE_NAME, ROOM_NAME, roomFilePath, type PackSpec, type RoomFileKind } from "@sdk/pack";
+import { buildEntries, formatOf, letterPath, packBlob, packFilename as filename, phrasePath, pictureSourcePath, ROOM_FILE_NAME, ROOM_NAME, roomFilePath, type PackSpec, type RoomFileKind } from "@sdk/pack";
 import { cellsToOps } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar, type TarEntry } from "@sdk/tar";
@@ -13,13 +13,17 @@ import { draft, emptyDraft, madeOf, type Draft, type Keepable, type RoomDraft, t
 export { manifest } from "@sdk/pack";
 
 // studio.json: what reopening needs beyond the files Purple reads. Clips are read back from the pack.
+// A pack can be months old: a new field gets its value in NO_SAVED, and a field that changes meaning bumps STUDIO_FORMAT.
+const STUDIO_FORMAT = 1;
 interface Saved extends Pick<PackSpec, "name" | "words" | "synonyms" | "ranked" | "instruments" | "rooms" | "theme"> {
+  format: number;
   letters: string[];
   phrases: string[];
   pictures: { name: string; title?: string; cells: string[][]; crop?: Crop; words?: Words; shelfId?: string }[];
   // Each room picture's shelf id by name, so reopening on this computer finds the same pictures.
   roomShelf?: Record<string, string>;
 }
+const NO_SAVED: Saved = { format: STUDIO_FORMAT, name: "", words: [], synonyms: [], ranked: [], instruments: [], rooms: [], theme: null, letters: [], phrases: [], pictures: [] };
 
 // The download holds what the family added; Studio's own Purple also plays what they're trying.
 export async function packSpec(d: Draft = draft, trying = false, onProgress?: (msg: string) => void): Promise<PackSpec> {
@@ -39,7 +43,7 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   const roomFiles = d.roomFiles.filter(ok);
   const theme = ok(d.colors) ? d.theme : null;
   const studio: Saved = {
-    name: d.name, words, synonyms, ranked: d.ranked, instruments, rooms, theme,
+    format: STUDIO_FORMAT, name: d.name, words, synonyms, ranked: d.ranked, instruments, rooms, theme,
     letters: Object.keys(letters), phrases: phrases.map((p) => p.text),
     pictures: added.map((p, i) => ({ name: p.name, title: p.title, cells: p.cells, words: p.words, crop: sources[i]?.crop, shelfId: p.shelfId })),
     roomShelf: Object.fromEntries(roomFiles.flatMap((f) => (f.shelfId ? [[f.name, f.shelfId]] : []))),
@@ -50,8 +54,11 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, roomFiles, roomVoice: voiced, theme, studio };
 }
 
-export async function buildPack(onProgress?: (msg: string) => void, d: Draft = draft, trying = false): Promise<Blob> {
-  return build(await packSpec(d, trying, onProgress), onProgress);
+// format: the pack format it needs (studio/pack_formats.json), which says how new a Purple it needs.
+export async function buildPack(onProgress?: (msg: string) => void, d: Draft = draft, trying = false): Promise<{ blob: Blob; format: number }> {
+  const entries = await buildEntries(await packSpec(d, trying, onProgress), onProgress);
+  onProgress?.("Packing");
+  return { blob: await packBlob(entries), format: formatOf(entries) };
 }
 
 export const packFilename = () => filename(draft);
@@ -107,7 +114,7 @@ export async function openPack(file: Blob): Promise<Draft> {
     if (!rooms.length) throw new Error("studio.json is missing and there are no rooms");
     return { ...emptyDraft(), id: m.id, name: m.name, rooms, roomFiles: roomFiles(files) };
   }
-  const s: Saved = readJson("studio.json");
+  const s: Saved = { ...NO_SAVED, ...readJson("studio.json") };
   return {
     ...emptyDraft(),
     id: m.id,

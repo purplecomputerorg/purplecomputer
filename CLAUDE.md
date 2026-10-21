@@ -123,7 +123,11 @@ Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). `PUR
 
 ## Studio (`studio/`)
 
-Studio keeps the draft and the family's pictures in the browser's IndexedDB (`studio/src/saved.ts`), so any load can be months old. A shape change must still load old saves: give new top-level `Draft` fields an `emptyDraft()` value, and new fields inside items an upgrade step in `saved.ts` or an optional type. Never assume a saved field exists.
+Studio is one website that changes on every deploy; families keep the Purple build they downloaded. Early access may break, but only on purpose: `studio/PACK_FORMAT.md`, Format versions.
+
+- **`test_pack_contract` fails:** pack code changed. Decide as its message says (`just pack-contract` or `just pack-contract bump ...`) and tell the user which and why. A bump means: tell the user to run `just compat-check` before `just studio-deploy --prod`, and say "format N" in the commit message.
+- **Old saves must load:** the browser draft (`saved.ts`) and a pack's `studio.json` can be months old. New top-level `Draft` fields need an `emptyDraft()` value, new `studio.json` fields a `NO_SAVED` value, new fields inside items an upgrade step or an optional type.
+- **Suggest `just compat-check`** whenever the user ships a build, deploys Studio after room or pack changes, or asks who can open what.
 
 ## Canvas UI (default)
 

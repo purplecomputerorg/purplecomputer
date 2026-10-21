@@ -55,7 +55,7 @@ describe("the family's pictures", () => {
 
   it("finds a room picture on the shelf again after the pack is downloaded and reopened", async () => {
     const d = { ...emptyDraft(), rooms: [room("memory", "pass")], roomFiles: [{ kind: "images" as const, name: "dog", data: png, kept: true, shelfId: "shelf-1" }] };
-    const back = await openPack(await buildPack(undefined, d));
+    const back = await openPack((await buildPack(undefined, d)).blob);
     expect(back.roomFiles.map((f) => [f.name, f.shelfId])).toEqual([["dog", "shelf-1"]]);
   });
 });

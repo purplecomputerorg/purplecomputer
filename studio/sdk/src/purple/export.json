@@ -1,6 +1,15 @@
 {
  "generated_by": "scripts/export_studio.py; do not edit",
- "pack_format": 1,
+ "pack_formats": [
+  {
+   "format": 1,
+   "date": "2026-10-21",
+   "needs": {
+    "files": [],
+    "calls": []
+   }
+  }
+ ],
  "screen": {
   "viewport": [
    48,

@@ -419,6 +419,9 @@ studio-bundle:
 
 # Purple Studio: build here and upload to its Vercel project (link once with `cd studio && vercel link`); --prod for studio.purplecomputer.org
 studio-deploy *args: studio-bundle
+    @case " {{args}} " in *" --prod "*) scripts/compat_check.sh; s=$?; \
+        if [ $s = 2 ]; then printf 'Some families have a Purple that cannot open everything Studio now makes. Deploy anyway? [y/N] '; read a; [ "$a" = y ]; \
+        elif [ $s != 0 ]; then echo "(Couldn't check which Purples families have; deploying anyway.)"; fi ;; esac
     cd studio && npm run build
     cd studio && rm -rf .vercel/output/static && cp -r dist .vercel/output/static
     cd studio && vercel deploy --prebuilt {{args}}
@@ -432,6 +435,14 @@ studio-test:
 # This checkout's room library and rooms on the Purple a release shipped, so Studio never breaks rooms on Keys already out there
 room-compat ref="release/2.x":
     scripts/room_compat.sh {{ref}}
+
+# Pack code changed: `just pack-contract` if packs work the same both ways, else `just pack-contract bump "what" --file RE --call NAME`
+pack-contract *args:
+    {{venv}}/bin/python scripts/pack_contract.py {{args}}
+
+# Which Purple builds people downloaded or were shipped, the pack format each reads, and today's rooms run on each (--quick skips the rooms)
+compat-check *args:
+    scripts/compat_check.sh {{args}}
 
 # Regenerate the facts Studio imports from Purple (constants and reference synth renders)
 studio-fixtures:

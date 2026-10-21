@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEntries, manifest, roomTitle, type PackSpec } from "../sdk/src/pack";
+import { buildEntries, formatOf, manifest, roomTitle, type PackSpec } from "../sdk/src/pack";
 import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
 import { gzip, tar } from "../sdk/src/tar";
@@ -41,7 +41,7 @@ describe("pack assembly", () => {
       letters: { a: { clip, kept: true }, b: { clip } },
       phrases: [{ text: "hi there", clip, kept: true }],
     };
-    const back = await openPack(await buildPack(undefined, d));
+    const back = await openPack((await buildPack(undefined, d)).blob);
     expect(back.id).toBe("pack-1a2b3c4d");
     expect(back.name).toBe("grandmas-pack");
     expect(back.words).toEqual([{ word: "biscuit", emoji: "🐶", kept: true }]);
@@ -84,6 +84,27 @@ describe("pack assembly", () => {
     expect(paths).toEqual(expect.arrayContaining(["content/rooms/cat.py", "content/images/mochi.png", "content/sounds/purr.wav"]));
   });
 
+  it("reopens a pack whose studio.json predates a field", async () => {
+    const back = await openPack(await packOf({
+      "manifest.json": JSON.stringify({ id: "pack-old", name: "Old", version: "1.0.0", type: "emoji" }),
+      "studio.json": JSON.stringify({ name: "Old", words: [{ word: "cat", emoji: "🐈" }], ranked: [], instruments: [], rooms: [], theme: null, letters: [], phrases: [], pictures: [] }),
+    }));
+    expect([back.words.map((w) => w.word), back.synonyms]).toEqual([["cat"], []]);
+  });
+
+  it("asks for the oldest pack format with everything the pack uses", () => {
+    const formats = [
+      { format: 1, date: "2026-10-21", needs: { files: [], calls: [] } },
+      { format: 2, date: "2026-11-01", needs: { files: ["^content/stickers/"], calls: [] } },
+      { format: 3, date: "2026-12-01", needs: { files: [], calls: ["wobble"] } },
+    ];
+    const file = (path: string, body = "") => ({ path, data: new TextEncoder().encode(body) });
+    expect(formatOf([file("content/emoji.json")], formats)).toBe(1);
+    expect(formatOf([file("content/stickers/a.png")], formats)).toBe(2);
+    expect(formatOf([file("content/rooms/r.py", "wobble (3)")], formats)).toBe(3);
+    expect(formatOf([file("content/rooms/purple.py", "def wobble(n): pass"), file("content/rooms/r.py", "wobbles = 1")], formats)).toBe(1);
+  });
+
   it("says why a file with nothing Studio can open can't be opened", async () => {
     const words = await packOf({ "manifest.json": JSON.stringify({ id: "w", name: "W", version: "1.0.0", type: "emoji" }), "content/emoji.json": "{}" });
     await expect(openPack(words)).rejects.toThrow(/studio.json is missing/);
@@ -92,7 +113,7 @@ describe("pack assembly", () => {
   it("keeps a room's pictures and sounds when a Studio pack is reopened", async () => {
     const png = new Uint8Array([1, 2, 3]);
     const d: Draft = { ...draftBase, rooms: [{ name: "pets", source: "", made: null, kept: true }], roomFiles: [{ kind: "images", name: "rex", data: png, kept: true }] };
-    const back = await openPack(await buildPack(undefined, d));
+    const back = await openPack((await buildPack(undefined, d)).blob);
     expect(back.roomFiles).toEqual([{ kind: "images", name: "rex", data: png, kept: true }]);
   });
 

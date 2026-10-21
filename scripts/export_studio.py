@@ -19,7 +19,6 @@ sys.path.insert(0, str(ROOT))
 from purple_tui import synth  # noqa: E402
 from purple_tui import palette as P  # noqa: E402
 from purple_tui.constants import ART_COLS, ART_ROWS, CANVAS_COLS, CANVAS_ROWS  # noqa: E402
-from purple_tui.content import PACK_FORMAT  # noqa: E402
 from purple_tui.music_constants import (  # noqa: E402
     DEFAULT_ROOT_INDEX, FRIENDLY_KEYS, GRID_KEYS, INSTRUMENTS, PERCUSSION, pitch_filename, pitch_for, reachable_pitches,
 )
@@ -33,6 +32,7 @@ from tools.photo_to_art import fit_to_canvas  # noqa: E402
 
 EXPORT_PATH = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
 GOLDEN_PATH = ROOT / "studio" / "tests" / "golden.json"
+PACK_FORMATS_PATH = ROOT / "studio" / "pack_formats.json"
 
 PALETTE_NAMES = ("BG", "SURFACE", "TILE", "FIELD", "HAIR", "LINE", "PRIMARY", "ON_PRIMARY", "ACCENT", "TEXT", "MUTED", "DIM", "CARET", "DANGER", "GOOD")
 FIT_SIZES = [(4032, 3024), (3024, 4032), (1000, 1000), (1920, 1080), (100, 2000), (2000, 100), (1, 1), (132, 50), (264, 50), (50, 25)]
@@ -64,7 +64,7 @@ def build_export() -> dict:
     }
     return {
         "generated_by": "scripts/export_studio.py; do not edit",
-        "pack_format": PACK_FORMAT,
+        "pack_formats": [{k: f[k] for k in ("format", "date", "needs")} for f in json.loads(PACK_FORMATS_PATH.read_text())["formats"]],
         "screen": {
             "viewport": [CANVAS_COLS, CANVAS_ROWS],
             "palette": {name.lower(): getattr(P, name) for name in PALETTE_NAMES},

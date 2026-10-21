@@ -1,3 +1,4 @@
+import { PACK_FORMATS } from "@sdk/pack";
 import { buildPack, packFilename } from "../pack";
 import type { Picture } from "../photo";
 import { addAll, changed, countOf, draft, pieces, titleOf, tryingPieces, type Count, type Instrument, type Keepable, type Phrase, type RoomDraft, type RoomFile, type SynonymEntry, type WordEntry } from "../state";
@@ -27,6 +28,14 @@ const FACES: Record<string, (item: Keepable) => Node> = {
   room_files: (i) => chip((i as RoomFile).kind === "images" ? "🖼️" : "🔊", (i as RoomFile).name),
   colors: () => chip(h("span", { class: "pack-colors" }, miniScreen(draft.theme!), ...["q", "a", "z"].map((k) => sticker(k))), "Screen and key colors"),
 };
+
+// Older Purples refuse a pack that uses something newer than they read, so the family hears it here first.
+function needsNewer(format: number): string {
+  const since = format > 1 && PACK_FORMATS.find((f) => f.format === format)?.date;
+  if (!since) return "";
+  const day = new Date(`${since}T12:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  return ` It uses something new, so it needs a Purple Computer downloaded on ${day} or later. If yours is older, download Purple again first.`;
+}
 
 const groups = (list: Count[]) => list.map((p) => h("div", { class: "pack-group" },
   h("a", { class: "pack-heading", href: `#${p.section}` }, countOf(p)),
@@ -59,11 +68,11 @@ export function downloadView(): View {
     if (button.disabled) return;
     button.disabled = true;
     try {
-      const blob = await buildPack((msg) => (status.textContent = `${msg}…`));
+      const { blob, format } = await buildPack((msg) => (status.textContent = `${msg}…`));
       const a = h("a", { href: URL.createObjectURL(blob), download: packFilename() });
       a.click();
       URL.revokeObjectURL(a.href);
-      status.textContent = `Downloaded ${packFilename()}.`;
+      status.textContent = `Downloaded ${packFilename()}.${needsNewer(format)}`;
     } catch (e) {
       status.textContent = `Something went wrong while packing. (Technical: ${e instanceof Error ? e.message : String(e)})`;
     }

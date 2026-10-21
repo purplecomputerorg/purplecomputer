@@ -19,7 +19,7 @@ Loader: `purple_tui/content.py` (`ContentManager`). Rules and installer: `purple
 
 - `id`, `name`, `version`, `type` are required. `id` is the directory name the pack installs under, so it must be a single plain path segment, and a pack with the same id replaces it. Studio makes one per Purple Pack (`pack-` and eight hex digits) and keeps it however the file is renamed, so a new download of the same pack replaces the old one and a different pack sits beside it. `version` must be `x.y.z`. `description` and `author` are optional.
 - `type` must be one of `emoji`, `sounds`, `stories`, `language`; only `emoji` and `language` dispatch to anything in the loader. Studio always declares `emoji`. The directories below are read from every user pack regardless of type.
-- `format` is the layout version, `1` today and the default when absent. `content.PACK_FORMAT` is the newest a build reads; a pack declaring a higher one is skipped whole rather than half-loaded, and the installer refuses it with a message that says so.
+- `format` is the oldest pack format with everything the pack uses (see Format versions), `1` when absent. `content.PACK_FORMAT` is the newest a build reads; a pack declaring a higher one is skipped whole rather than half-loaded, and the installer refuses it with a message that says so.
 - `studio.json`, beside the manifest in packs Studio builds, is how Studio reopens the pack: what was added, as Studio holds it (a picture as its photo's cells, its crop and the words written on it, and which of the family's pictures in Studio each picture came from), with clips read back from `content/`. Each picture's photo rides beside it in `studio/pictures/<name>.jpg`, at most 2048 pixels a side and without its EXIF, so a reopened picture can be cropped again. Purple never reads either.
 - An `entrypoint` key, or any `.py` file anywhere in the pack outside the rooms below, makes the installer refuse the pack. Packs are data.
 
@@ -125,6 +125,15 @@ A language pack (`packs/lang-es`, `packs/lang-zh`) declares `"type": "language"`
 - `blocked.txt`: words Purple never says aloud, base64 of one word per line (so no plaintext profanity sits in the repo). Every installed language's list applies whatever the settings, since a kid can type Spanish with Spanish off. Chinese entries match anywhere in the text; others match a whole word, with or without accents. A family pack can add words but never remove them.
 
 A second pack with the same `code` adds to the first, its entries winning, so a family can fix a few words without replacing the language. The setting is in the parent menu: Language (the interface) and Second Language (Play). Design: `guides/languages.md`.
+
+## Format versions
+
+Studio is one website that changes whenever it deploys; each family's Purple stays the build they downloaded. `studio/pack_formats.json` is the ledger between them: every format Purple reads, when it arrived, what it added, and markers (`needs.files`, path regexes; `needs.calls`, room functions) that spot a pack using it. Purple keeps reading every format in it, forever.
+
+- **A pack asks for as little as it can.** Studio stamps each pack with the newest format whose markers it hits, so a pack that uses nothing new opens on every Purple out there, and the download page tells the family when theirs needs a newer Purple.
+- **Changes are decisions.** `tests/test_pack_contract.py` fingerprints the code that writes and reads packs (`scripts/pack_contract.py`, `WATCHED`) and fails on any change until `just pack-contract` records it as safe both ways, or `just pack-contract bump "what it adds" --file RE --call NAME` adds a format, which also sets `PACK_FORMAT` and Studio's copy of the ledger.
+- **Who's behind.** `just compat-check` lists every build families downloaded or were shipped (landing's `/api/admin/purple-builds`), the formats each lacks, whether today's rooms run on it (`scripts/room_compat.sh`), and who is on it. `just studio-deploy --prod` runs it first and asks before deploying if anyone is behind.
+- **Studio's own saves.** The draft in the browser (`studio/src/saved.ts`) and `studio.json` in a pack load over empty defaults, so a field added later comes back empty; a change in what a field means bumps `STUDIO_FORMAT` in `studio/src/pack.ts`.
 
 ## Where packs live and how they get there
 

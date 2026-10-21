@@ -2,19 +2,24 @@
 // any sound the browser can play becomes the WAV Purple plays.
 import { ROOM_FILE_NAME, type RoomFileKind } from "@sdk/pack";
 import { audioContext, decodeToClip, encodeWav, playBuffer } from "../audio";
-import { dataUrl } from "../photo";
-import { roomFileOf, shelf, shelve, type Shelved } from "../shelf";
+import { PICTURE_KINDS, bitmapFromSrc, pictureFailure } from "../photo";
+import { roomFileOf, shelf, shelveFile, type Shelved } from "../shelf";
 import { changed, draft, freeName, type RoomFile } from "../state";
 import { filePicker, h } from "./dom";
 
 const MAX_SIDE = 1024;  // pack_manager.IMAGE_MAX_SIDE
+const MAX_BYTES = 1024 * 1024;  // pack_manager.IMAGE_MAX_BYTES
 
-async function png(file: Blob): Promise<Uint8Array> {
-  const bitmap = await createImageBitmap(file);
-  const k = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
-  const canvas = new OffscreenCanvas(Math.max(1, Math.round(bitmap.width * k)), Math.max(1, Math.round(bitmap.height * k)));
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
+// A photo as PNG can pass MAX_BYTES even at MAX_SIDE, and Purple refuses a pack holding one, so it shrinks until it fits.
+async function png(src: string): Promise<Uint8Array> {
+  const bitmap = await bitmapFromSrc(src);
+  const long = Math.max(bitmap.width, bitmap.height);
+  for (let side = Math.min(MAX_SIDE, long); ; side = Math.floor(side * 0.8)) {
+    const canvas = new OffscreenCanvas(Math.max(1, Math.round(bitmap.width * side / long)), Math.max(1, Math.round(bitmap.height * side / long)));
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const data = new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
+    if (data.length <= MAX_BYTES || side < 64) return data;
+  }
 }
 
 const wav = async (file: Blob) => encodeWav(await decodeToClip(file));
@@ -29,13 +34,12 @@ export function addRoomData(kind: RoomFileKind, text: string, data: Uint8Array, 
 
 // A picture from the shelf, for the pack's rooms: the copy they already have, or a new one.
 export async function roomFileFor(item: Shelved): Promise<RoomFile> {
-  return roomFileOf(item) ?? addRoomData("images", item.name, await png(await (await fetch(item.src)).blob()), item.id);
+  return roomFileOf(item) ?? addRoomData("images", item.name, await png(item.src), item.id);
 }
 
 // A new photo goes on the shelf too, so any pack can use it again.
 export async function addRoomFile(kind: RoomFileKind, file: File): Promise<RoomFile> {
-  const text = file.name.replace(/\.[^.]+$/, "");
-  return kind === "images" ? roomFileFor(shelve(await dataUrl(file), text)) : addRoomData(kind, text, await wav(file));
+  return kind === "images" ? roomFileFor(await shelveFile(file)) : addRoomData(kind, file.name.replace(/\.[^.]+$/, ""), await wav(file));
 }
 
 // The shelf's pictures this pack's rooms don't have yet.
@@ -101,18 +105,20 @@ export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & 
       : h("p", { class: "dim small" }, "A photo of your pet, a voice saying hello: add them here, and any room in this Purple Pack can use them."),
     shelfOnly().length ? h("div", {}, h("p", { class: "dim small" }, "From your pictures:"),
       h("div", { class: "photo-list" }, ...shelfOnly().map((s) => h("div", { class: "try-chip tray-item" },
-        h("button", { type: "button", title: `Add ${s.name} for your rooms`, onclick: () => roomFileFor(s).then(render, failed) }, shelfThumb(s)),
+        h("button", { type: "button", title: `Add ${s.name} for your rooms`, onclick: () => roomFileFor(s).then(render, failed("images")) }, shelfThumb(s)),
         h("span", { class: "dim" }, s.name))))) : null,
     h("p", { class: "row" }, filePicker("image/*", add("images"), "Add a picture"), filePicker("audio/*", add("sounds"), "Add a sound"), status),
+    h("p", { class: "dim small" }, `Pictures: ${PICTURE_KINDS}. Studio makes each one small enough for Purple.`),
   ));
-  const failed = (e: unknown) => (status.textContent = ` That file didn't open. (Technical: ${e instanceof Error ? e.message : String(e)})`);
+  const failed = (kind: RoomFileKind) => (e: unknown) => (status.textContent = kind === "images" ? ` ${pictureFailure(e)}`
+    : ` That sound didn't open. (Technical: ${e instanceof Error ? e.message : String(e)})`);
   const add = (kind: RoomFileKind) => async (file: File) => {
     try {
       await addRoomFile(kind, file);
       status.textContent = "";
       render();
     } catch (e) {
-      failed(e);
+      failed(kind)(e);
     }
   };
   const drop = (f: RoomFile) => {

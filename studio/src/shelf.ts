@@ -2,7 +2,7 @@
 // once Art or a room uses it. Best effort, like the draft (saved.ts): a downloaded pack, reopened, brings its pictures back.
 import { recallShelf, rememberShelf } from "./saved";
 import { changed, draft, freeName, isTheirs, titleOf, type Draft, type RoomFile } from "./state";
-import type { Picture } from "./photo";
+import { PICTURE_KINDS, PICTURE_MAX_MB, PictureProblem, bitmapFromSrc, dataUrl, type Picture } from "./photo";
 
 // src: the photo as a data URL, as the family added it. Saved in the browser, so a field added here must be optional.
 export interface Shelved { id: string; name: string; src: string }
@@ -30,6 +30,17 @@ export function shelve(src: string, text: string, id?: string): Shelved {
   shelf.push(item);
   saved();
   return item;
+}
+
+// A file the family picked, on the shelf, once it's a picture Studio can open.
+export async function shelveFile(file: File): Promise<Shelved> {
+  const mb = file.size / 1024 / 1024;
+  if (mb > PICTURE_MAX_MB) throw new PictureProblem(`${file.name} is ${Math.ceil(mb)} MB. Studio takes pictures up to ${PICTURE_MAX_MB} MB, so try a smaller copy.`);
+  const src = await dataUrl(file);
+  await bitmapFromSrc(src).catch(() => {
+    throw new PictureProblem(`${file.name} didn't open. Studio takes ${PICTURE_KINDS}; save an iPhone photo (HEIC) as JPG first.`);
+  });
+  return shelve(src, file.name.replace(/\.[^.]+$/, ""));
 }
 
 export function unshelve(item: Shelved) {

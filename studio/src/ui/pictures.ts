@@ -1,7 +1,7 @@
 import type { RoomSetup } from "../live/boot";
 import { canvasOrigin } from "@sdk/purple/art";
-import { CANVAS_SHAPE, EXAMPLES, clampCrop, cropTo, dataUrl, examplePicture, fillCrop, letterPx, onScreen, pictureFromSrc, wordLetters, wordsAt, type Crop, type Example, type Picture } from "../photo";
-import { artOf, removeFromPack, renameShelved, roomFileOf, shelf, shelve, unshelve, usedIn, type Shelved } from "../shelf";
+import { CANVAS_SHAPE, EXAMPLES, PICTURE_KINDS, clampCrop, cropTo, examplePicture, pictureFailure, fillCrop, letterPx, onScreen, pictureFromSrc, wordLetters, wordsAt, type Crop, type Example, type Picture } from "../photo";
+import { artOf, removeFromPack, renameShelved, roomFileOf, shelf, shelveFile, unshelve, usedIn, type Shelved } from "../shelf";
 import { changed, draft, freeName, isTheirs, titleOf, withSample } from "../state";
 import { go, h } from "./dom";
 import { liveScreen } from "./live";
@@ -28,14 +28,14 @@ async function useInArt(item: Shelved): Promise<Picture> {
 function dropZone(): HTMLElement {
   const status = h("div", { class: "status" });
   const add = async (file: File | undefined) => {
-    if (!file?.type.startsWith("image/")) return;
+    if (!file) return;
     status.textContent = `Painting ${file.name}…`;
     try {
-      const item = shelve(await dataUrl(file), file.name.replace(/\.[^.]+$/, ""));
+      const item = await shelveFile(file);
       await useInArt(item);
       goTo(item.name);
-    } catch {
-      status.textContent = `${file.name} could not be opened as a picture.`;
+    } catch (e) {
+      status.textContent = pictureFailure(e);
     }
   };
   const input = h("input", { type: "file", accept: "image/*", onchange: () => add(input.files?.[0]) });
@@ -48,7 +48,7 @@ function dropZone(): HTMLElement {
       ondrop: (e: DragEvent) => { e.preventDefault(); drop.classList.remove("over"); add(e.dataTransfer?.files[0]); },
     },
     h("div", {}, "Drop a picture here, or click to choose one."),
-    h("div", { class: "small" }, "A photo, a scan of a drawing, anything. It stays on your device."),
+    h("div", { class: "small" }, `A photo, a scan of a drawing, anything: ${PICTURE_KINDS}. It stays on your device.`),
     input,
   );
   return h("div", {}, drop, status);

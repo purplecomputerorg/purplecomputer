@@ -57,11 +57,23 @@ export const dataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => 
   r.readAsDataURL(blob);
 });
 
-export async function pictureFromSrc(src: string, name: string): Promise<Picture> {
+export const PICTURE_MAX_MB = 25;
+export const PICTURE_KINDS = `JPG, PNG, GIF, or WebP, up to ${PICTURE_MAX_MB} MB`;
+// A picture Studio won't take, said in words for the family.
+export class PictureProblem extends Error {}
+export const pictureFailure = (e: unknown) => (e instanceof PictureProblem ? e.message
+  : `That picture didn't open. Studio takes ${PICTURE_KINDS}. (Technical: ${e instanceof Error ? e.message : String(e)})`);
+
+// Through an <img>, not fetch(): the CSP's connect-src keeps data: URLs out of fetch.
+export async function bitmapFromSrc(src: string): Promise<ImageBitmap> {
   const img = new Image();
   img.src = src;
   await img.decode();
-  return pictureFromBitmap(await createImageBitmap(img), name, src);
+  return createImageBitmap(img);
+}
+
+export async function pictureFromSrc(src: string, name: string): Promise<Picture> {
+  return pictureFromBitmap(await bitmapFromSrc(src), name, src);
 }
 
 // Studio's examples, painted the same way as a family's pictures. One goes in the pack only if

@@ -2,6 +2,7 @@
 // emoji Purple's font can draw, by its name and keywords (emojibase), so "lol" finds 😂. A pasted
 // emoji works too.
 import { CORE_EMOJI, CORE_RANKED_WORDS, CORE_SYNONYMS } from "@sdk/purple/core";
+import { pictureFailure } from "../photo";
 import { filePicker, h } from "./dom";
 import { addRoomFile, roomFileFor, roomPicture, roomPictures, shelfOnly, shelfThumb } from "./roomfiles";
 
@@ -56,7 +57,7 @@ const label = (text: string) => h("p", { class: "pick-label" }, text);
 function picturesSection(pick: (name: string) => void, taken: string[]): HTMLElement[] {
   const note = h("p", { class: "dim small pick-note" });
   const picked = (made: Promise<{ name: string }>) => made.then((f) => pick(f.name))
-    .catch(() => (note.textContent = "That picture didn't open. Try a photo saved as JPG or PNG."));
+    .catch((e) => (note.textContent = pictureFailure(e)));
   const tile = (title: string, onclick: () => void, img: Node | null) => h("button", { type: "button", title, onclick }, img);
   return [label("Pictures"), h("div", { class: "picture-grid" },
     filePicker("image/*", (file) => picked(addRoomFile("images", file)), "Add photo", "add-photo"),

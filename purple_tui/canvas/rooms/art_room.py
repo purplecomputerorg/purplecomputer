@@ -534,15 +534,13 @@ class ArtRoom(Room):
         return ([[x, y, bg] for (x, y), (_, _, bg) in cells if (x, y) in self._painted_positions],
                 [[x, y, ch, fg] for (x, y), (ch, fg, _) in cells if ch not in ("", " ", BRUSH_CHAR)])
 
-    def _mix_into_last(self, held_key: str, char: str) -> bool:
-        """A chord: the cell the held key just painted takes this key's color
-        mixed in, and the brush becomes the mix. Holding on, each next key
-        mixes in too."""
-        pos = self._last_paint_pos
-        if pos is None or self._last_key_char != held_key or not self._select_brush(char):
+    def _chord_brush(self, held_key: str, char: str) -> bool:
+        """A key pressed while another color key is down: the brush becomes the
+        held brush mixed with this key's color. Holding on, each next key mixes in too."""
+        brush = brush_for_key(char)
+        if not brush or not self._select_brush(held_key, hold=True):
             return False
-        self._paint_at(pos)
-        self.set_brush_color(self._grid[pos][2], char)
+        self.set_brush_color(mix_colors_paint([self._last_key_color, brush[1]]), brush[0])
         return True
 
     def _select_brush(self, char: str, hold: bool = False) -> bool:
@@ -672,9 +670,8 @@ class ArtRoom(Room):
                 self.type_char(char)
                 self.echo.letter("write", char)
                 return
-            held = brush_for_key(action.char_held) if action.char_held else None
-            mixed = bool(held) and not action.shift_held and self._mix_into_last(held[0], char)
-            if not mixed and self._select_brush(char, hold=action.is_repeat) and not action.shift_held:
+            chord = bool(action.char_held) and not action.shift_held and self._chord_brush(action.char_held, char)
+            if (chord or self._select_brush(char, hold=action.is_repeat)) and not action.shift_held:
                 self._paint_at_cursor()
                 self._advance_after_stamp(direction)
                 if char.isalpha():

@@ -193,7 +193,7 @@ def test_draw_path_without_pen_callback_is_safe():
     _run(_test())
 
 
-def test_a_chord_mixes_into_the_cell_the_held_letter_painted():
+def test_a_chord_paints_the_next_cell_in_the_mix():
     from purple_tui.canvas.harness import press
     from purple_tui.color_mixing import mix_colors_paint
     from purple_tui.palette import get_key_color
@@ -203,13 +203,12 @@ def test_a_chord_mixes_into_the_cell_the_held_letter_painted():
         canvas._cursor_x = canvas._cursor_y = 5
         await press(app, "b")
         await press(app, "g", char_held="b")
-        await press(app, "r", char_held="g")
+        await press(app, "r", char_held="g")    # the keyboard reports the newest held letter
         two = mix_colors_paint([get_key_color("b"), get_key_color("g")])
         mixed = mix_colors_paint([two, get_key_color("r")])
-        assert canvas._grid[(5, 5)][2] == mixed and (6, 5) not in canvas._grid
-        assert canvas.brush_color == mixed and (canvas._cursor_x, canvas._cursor_y) == (6, 5)
+        assert [canvas._grid[(x, 5)][2] for x in (5, 6, 7)] == [get_key_color("b"), two, mixed]
+        assert canvas.brush_color == mixed and (canvas._cursor_x, canvas._cursor_y) == (8, 5)
     _run(_test())
-
 
 
 def test_holding_a_chord_keeps_painting_the_mix():
@@ -225,7 +224,7 @@ def test_holding_a_chord_keeps_painting_the_mix():
         await press(app, "g", is_repeat=True)
         await press(app, "right", char_held="g")
         mixed = mix_colors_paint([get_key_color("b"), get_key_color("g")])
-        assert all(canvas._grid[(x, 5)][2] == mixed for x in (5, 6, 7))
+        assert all(canvas._grid[(x, 5)][2] == mixed for x in (6, 7, 8))
     _run(_test())
 
 def test_brush_eases_down_and_up_then_rests():

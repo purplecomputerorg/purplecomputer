@@ -77,7 +77,6 @@ TOGGLE_DEBOUNCE = 0.3        # Delay before speaking toggle state (debounce rapi
 STICKY_SHIFT_GRACE = 8.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 HOLD_OR_TAP_THRESHOLD = 0.8  # Space/Enter hold threshold for code panel / loop mode (seconds)
-CHORD_HOLD_THRESHOLD = 0.25  # A letter held this long before the next one makes a color-mix chord; quicker overlaps are mashing (seconds)
 
 # Volume 1 to 10 (0 is Sound Off), about 5.4 dB apart under pactl's cubic
 # map from -49 dB (15%) to 0 dB (100%). Laptops differ by 30 dB or more, so

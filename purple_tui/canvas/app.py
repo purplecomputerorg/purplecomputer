@@ -169,7 +169,7 @@ class PurpleApp:
         self._last_evdev_time = time.monotonic()
         self._keyboard_state_machine = KeyboardStateMachine(edit_keys=True)
         self._keyboard_state_machine.on_sticky_shift_change(self._on_sticky_shift_change)
-        self._input_flood_guard = InputFloodGuard()
+        self._input_flood_guard = InputFloodGuard(repeats_only=True)
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
             detect_keyboard_mode()
         from ..secret import SecretKnock

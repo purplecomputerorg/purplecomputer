@@ -14,9 +14,8 @@ import time
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, SINK, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
-from purple_tui.constants import CHORD_HOLD_THRESHOLD
 from purple_tui.input import KeyCode, RawKeyEvent
-from purple_tui.keyboard import ControlAction, KeyboardStateMachine, NavigationAction
+from purple_tui.keyboard import CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction
 from purple_tui.palette import get_key_color
 
 
@@ -260,25 +259,15 @@ def test_laying_a_line_climbs_over_blocks_in_its_way():
     run(go())
 
 
-def test_chord_mixes_into_the_block_the_held_key_dropped():
-    async def go():
-        app, room = _blocks()
-        await press(app, "b")
-        await press(app, "g", char_held="b")
-        assert room._blocks == {(5, 5, 0): mix_colors_paint([get_key_color("b"), get_key_color("g")])}
-    run(go())
-
-
-def test_a_chord_keeps_mixing_while_letters_stay_held():
+def test_a_chord_builds_the_next_block_in_the_mix():
     async def go():
         app, room = _blocks()
         await press(app, "b")
         await press(app, "g", char_held="b")
         await press(app, "r", char_held="g")    # the keyboard reports the newest held letter
         two = mix_colors_paint([get_key_color("b"), get_key_color("g")])
-        assert room._blocks == {(5, 5, 0): mix_colors_paint([two, get_key_color("r")])}
+        assert sorted(room._blocks.values()) == sorted([get_key_color("b"), two, mix_colors_paint([two, get_key_color("r")])])
     run(go())
-
 
 
 def test_holding_a_chord_keeps_building_the_mix():
@@ -289,27 +278,26 @@ def test_holding_a_chord_keeps_building_the_mix():
         await press(app, "g", is_repeat=True)
         await press(app, "right", char_held="g")
         mixed = mix_colors_paint([get_key_color("b"), get_key_color("g")])
-        assert set(room._blocks.values()) == {mixed} and len(room._blocks) == 3
+        assert sorted(room._blocks.values()) == sorted([get_key_color("b")] + [mixed] * 3)
     run(go())
+
 
 def test_keyboard_reports_the_still_held_letter_and_shift():
     sm = KeyboardStateMachine()
-    down = lambda code, t=0.0: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=t))
+    down = lambda code: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=0.0))
     assert down(KeyCode.KEY_B)[0].char_held is None
-    assert down(KeyCode.KEY_Y, CHORD_HOLD_THRESHOLD)[0].char_held == "b"
+    assert down(KeyCode.KEY_Y)[0].char_held == "b"
     down(KeyCode.KEY_LEFTSHIFT)
     assert down(KeyCode.KEY_UP)[0].shift_held
     down(KeyCode.KEY_SPACE)
     assert down(KeyCode.KEY_ENTER)[0].space_held
 
 
-def test_a_quick_overlap_is_mashing_not_a_chord():
-    sm = KeyboardStateMachine()
-    down = lambda code, t: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=t))
-    down(KeyCode.KEY_B, 0.0)
-    assert down(KeyCode.KEY_Y, CHORD_HOLD_THRESHOLD / 2)[0].char_held is None
-    assert down(KeyCode.KEY_R, CHORD_HOLD_THRESHOLD)[0].char_held is None
-    assert down(KeyCode.KEY_UP, CHORD_HOLD_THRESHOLD)[0].char_held == "r"
+def test_a_fresh_press_gets_through_after_a_long_held_key():
+    guard = InputFloodGuard(repeats_only=True)
+    held = [guard.should_drop(CharacterAction(char="m", is_repeat=True), timestamp=i / 30) for i in range(60)]
+    assert any(held)
+    assert not guard.should_drop(CharacterAction(char="u"), timestamp=2.0)
 
 
 def test_holding_a_letter_or_space_while_arrowing_lays_a_line():

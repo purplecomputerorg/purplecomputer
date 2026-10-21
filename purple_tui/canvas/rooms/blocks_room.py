@@ -286,16 +286,13 @@ class BlocksRoom(Room):
     def skip(self):
         self._advance(self._cursor_y(), keep_height=True)
 
-    def _mix_into_last(self, held_key: str) -> bool:
-        """A chord: the block the held key just dropped takes the new color
-        mixed in. Holding on, each next key mixes in too."""
-        if not self._last or self._last[1] != held_key or self._last[0] not in self._blocks:
+    def _chord_color(self, held_key: str, char: str) -> bool:
+        """A key pressed while another color key is down: the brush becomes the
+        held brush mixed with this key's color. Holding on, each next key mixes in too."""
+        brush = brush_for_key(char)
+        if not brush or not self._set_color(held_key, hold=True):
             return False
-        pos = self._last[0]
-        self._color = self._blocks[pos] = mix_colors_paint([self._blocks[pos], self._color])
-        self._last = (pos, self._key)
-        self.app.set_legend(self._color, visible=True)
-        self._changed()
+        self.set_brush_color(mix_colors_paint([self._color, brush[1]]), brush[0])
         return True
 
     def _step_height(self, rise: int, wrap: bool = False):
@@ -406,10 +403,10 @@ class BlocksRoom(Room):
 
     def _character(self, action):
         char = UNSHIFT_MAP.get(action.char, action.char) if action.shift_held else action.char
-        if open_color_wheel(self, char) or not self._set_color(char, hold=action.is_repeat) or action.shift_held:
+        if open_color_wheel(self, char):
             return
-        held = brush_for_key(action.char_held) if action.char_held else None
-        if held and self._mix_into_last(held[0]):
+        chord = bool(action.char_held) and not action.shift_held and self._chord_color(action.char_held, char)
+        if not (chord or self._set_color(char, hold=action.is_repeat)) or action.shift_held:
             return
         if char.isalpha():
             self.echo.letter(WORDS[self._dir], char)

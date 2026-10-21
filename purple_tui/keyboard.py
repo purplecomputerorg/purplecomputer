@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL, CHORD_HOLD_THRESHOLD
+from .constants import SUPPORT_EMAIL
 
 
 # ============================================================================
@@ -230,9 +230,12 @@ class InputFloodGuard:
         self,
         rate: float = DEFAULT_RATE,
         burst: int = DEFAULT_BURST,
+        repeats_only: bool = False,
     ):
         self.rate = rate
         self.burst = burst
+        # A held key's repeats drain the bucket, so a fresh press right after one would be dropped.
+        self.repeats_only = repeats_only
         self._tokens: float = float(burst)
         self._last_time: float | None = None
 
@@ -253,6 +256,8 @@ class InputFloodGuard:
         # Import here to avoid circular import at module level
         # (these classes are defined later in this file)
         if not isinstance(action, (CharacterAction, NavigationAction)):
+            return False
+        if self.repeats_only and not action.is_repeat:
             return False
 
         if timestamp is None:
@@ -883,10 +888,7 @@ class KeyboardStateMachine:
         if char:
             # Apply shift/caps
             final_char = self._apply_shift(char)
-            held_since = self._pressed.get(self._held_char_keycode)
-            chord_with = self._held_char if (
-                not is_repeat and keycode != self._held_char_keycode and held_since is not None
-                and timestamp - held_since >= CHORD_HOLD_THRESHOLD) else None
+            chord_with = self._held_char if not is_repeat and keycode != self._held_char_keycode else None
             # Track held character (so NavigationAction can carry it)
             if not is_repeat:
                 self._held_char = final_char

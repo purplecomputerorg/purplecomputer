@@ -248,7 +248,8 @@ class TestUsbUpdater:
         waiting = tmp_path / "home" / ".purple" / "packs-waiting"
         first = update_from(stick, waiting)
         assert [(name, ok) for name, ok, _ in first] == [("a-pack.purplepack", True), ("b-pack.purplepack", True), ("bad.purplepack", False)]
-        assert sorted(d.name for d in waiting.iterdir()) == sorted(sha256(stick / f"{p}.purplepack") for p in ("a-pack", "b-pack"))
+        assert sorted(d.name for d in waiting.iterdir() if not d.name.startswith(".")) == sorted(sha256(stick / f"{p}.purplepack") for p in ("a-pack", "b-pack"))
+        assert [s["name"] for s in json.loads((waiting / ".skipped.json").read_text())] == ["The Tests' Purple"]
         assert [msg for _, _, msg in update_from(stick, waiting)][:2] == ["already waiting"] * 2
         assert not (tmp_path / "home" / ".purple" / "packs").exists()
 

@@ -12,6 +12,7 @@ the system python3, outside the app's venv.
 """
 
 import hashlib
+import json
 import os
 import pwd
 import shutil
@@ -21,12 +22,14 @@ import tempfile
 import time
 from pathlib import Path
 
+from .content import PACK_FORMAT
 from .pack_manager import check_pack, extract_pack, read_manifest
 
 APP_USER = "purple"
 LOG_PATH = Path("/var/log/purple/usb-update.log")
 WAITING = Path(".purple") / "packs-waiting"
 READING = ".reading"  # there while a drive's packs are being unpacked, so the app can say so
+SKIPPED = ".skipped.json"  # the packs the last drive brought that Purple couldn't take, and why, for the app to say
 
 
 def app_user_waiting_dir() -> Path:
@@ -59,9 +62,22 @@ def _first_copy(dest: Path, seen: set, msg: str) -> tuple[bool, str]:
     return True, msg
 
 
-def stage(pack: Path, waiting: Path, seen: set) -> tuple[bool, str]:
-    """Unpack and check one pack into waiting/<sha256>, unless a pack with its id is in seen.
-    Dot-named while it is being written, so the app never sees half a pack."""
+def _skipped(pack: Path, unpacked: Path, why: str) -> dict:
+    """A refused pack as the app tells it: its name, and the format it asks for when that's newer than this Purple reads."""
+    try:
+        m = json.loads((unpacked / "manifest.json").read_text())
+    except (OSError, ValueError):
+        m = None
+    m = m if isinstance(m, dict) else {}
+    fmt = m.get("format")
+    name = m.get("name")
+    return {"name": name if isinstance(name, str) and name.strip() else pack.stem, "why": why,
+            "format": fmt if isinstance(fmt, int) and fmt > PACK_FORMAT else None}
+
+
+def stage(pack: Path, waiting: Path, seen: set, skipped: list) -> tuple[bool, str]:
+    """Unpack and check one pack into waiting/<sha256>, unless a pack with its id is in seen; a
+    refused one joins skipped. Dot-named while it is being written, so the app never sees half a pack."""
     dest = waiting / sha256(pack)
     if dest.exists():
         return _first_copy(dest, seen, "already waiting")
@@ -69,10 +85,12 @@ def stage(pack: Path, waiting: Path, seen: set) -> tuple[bool, str]:
     try:
         refused = extract_pack(pack, tmp) or "; ".join(check_pack(tmp)[:5])
         if refused:
+            skipped.append(_skipped(pack, tmp, refused))
             return False, refused
         tmp.rename(dest)
         return _first_copy(dest, seen, "waiting to be added")
     except (tarfile.TarError, OSError) as e:
+        skipped.append(_skipped(pack, tmp, f"unreadable: {e}"))
         return False, f"unreadable: {e}"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -88,7 +106,12 @@ def update_from(mount: Path, waiting: Path | None = None) -> list[tuple[str, boo
         # Newest file first, so two downloads of one pack offer the newer and skip the other.
         packs = sorted(mount.glob("*.purplepack"), key=lambda p: (-p.stat().st_mtime, p.name))
         seen: set = set()
-        results = sorted((p.name, *stage(p, waiting, seen)) for p in packs)
+        skipped: list = []
+        results = sorted((p.name, *stage(p, waiting, seen, skipped)) for p in packs)
+        if skipped:
+            (waiting / SKIPPED).write_text(json.dumps(skipped))
+        else:
+            (waiting / SKIPPED).unlink(missing_ok=True)
     finally:
         reading.unlink(missing_ok=True)
     try:

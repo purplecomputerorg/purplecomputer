@@ -5,13 +5,16 @@ purple_tui/usb_updater.py unpacks each into WAITING_DIR/<sha256 of its file>. On
 installed packs don't outlast a restart. The rest wait for the app to offer them.
 """
 
+import json
 import os
 import shutil
 from pathlib import Path
 
+from .constants import SUPPORT_EMAIL
+from .content import PACK_FORMAT
 from .pack_manager import get_installer, read_manifest
 from .settings import get_packs_added, set_pack_added
-from .usb_updater import READING
+from .usb_updater import READING, SKIPPED
 
 WAITING_DIR = Path.home() / ".purple" / "packs-waiting"
 
@@ -78,3 +81,32 @@ def decline(waiting: list) -> None:
 
 def has_rooms(waiting: list) -> bool:
     return any(any((d / "content" / "rooms").glob("*.py")) for d, _ in waiting)
+
+
+def take_skipped() -> list[dict]:
+    """The packs the last drive brought that Purple couldn't take, once."""
+    path = WAITING_DIR / SKIPPED
+    try:
+        items = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return []
+    path.unlink(missing_ok=True)
+    return items if isinstance(items, list) else []
+
+
+def skipped_notes(skipped: list[dict]) -> list[tuple[str, str]]:
+    """(title, body) for each kind of skipped pack: too new for this Purple, or not readable."""
+    newer = [s for s in skipped if s.get("format")]
+    broken = [s for s in skipped if not s.get("format")]
+    notes = []
+    if newer:
+        asks = max(s["format"] for s in newer)
+        notes.append(("Needs newer Purple software", "\n".join(s["name"] for s in newer) + (
+            "\n\nThis Purple Pack was made for a newer Purple release. Put the newest Purple on your Purple Key,"
+            " start Purple from it, then plug in this USB drive again."
+            f"\n\n(Technical: pack format {asks}, this Purple reads {PACK_FORMAT})")))
+    if broken:
+        notes.append(("Couldn't add this Purple Pack", "\n".join(s["name"] for s in broken) + (
+            f"\n\nTry downloading it from Purple Studio again. Still stuck? Email {SUPPORT_EMAIL}."
+            f"\n\n(Technical: {broken[0]['why'][:160]})")))
+    return notes

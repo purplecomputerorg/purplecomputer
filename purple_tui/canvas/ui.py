@@ -571,6 +571,18 @@ class Confirm(Picker):
         self.escape_value = False
 
 
+class Notice(Picker):
+    """A message with one OK."""
+
+    hint = "Enter OK"
+
+    def __init__(self, app, title, body=""):
+        super().__init__(app, [(True, "OK")])
+        self.title = title
+        self.DESCRIPTION = body
+        self.escape_value = True
+
+
 class Toast:
     def __init__(self, text: str, timeout: float, picture=None):
         self.text = text

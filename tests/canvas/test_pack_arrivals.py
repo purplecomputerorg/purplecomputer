@@ -2,6 +2,8 @@
 parent PIN when one is set) puts it in use without a restart, Not now drops it, and one added
 before goes back in without asking."""
 
+import tarfile
+
 import pytest
 
 from purple_tui import content, pack_arrivals, settings
@@ -9,7 +11,7 @@ from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.room_picker import family_rooms
 from purple_tui.canvas.rooms.parent_menu import PinEntry
 from purple_tui.canvas.rooms.rooms_screen import RoomsScreen
-from purple_tui.canvas.ui import Confirm
+from purple_tui.canvas.ui import Confirm, Notice
 from purple_tui.usb_updater import sha256, update_from
 from scripts.purplepack import build_pack
 from tests.test_packs import make_pack
@@ -140,4 +142,39 @@ def test_a_drive_being_read_says_so_then_says_how_it_went(drive):
 
         await read(app, drive)
         assert app.top is None and app._toasts[-1].text.startswith("Already added")
+    run(go())
+
+
+def test_a_pack_too_new_for_this_purple_says_so_then_the_rest_are_offered(drive, tmp_path):
+    newer = make_pack(tmp_path / "newer", "from-the-future", fmt=content.PACK_FORMAT + 1)
+    with tarfile.open(tmp_path / "stick" / "future.purplepack", "w:gz") as tar:
+        for path in newer.iterdir():
+            tar.add(path, path.name)
+
+    async def go():
+        app = make_app()
+        drive()
+        app._check_pack_arrivals()
+        assert isinstance(app.top, Notice) and app.top.title == "Needs newer Purple software"
+        assert "newer Purple release" in app.top.DESCRIPTION and f"pack format {content.PACK_FORMAT + 1}" in app.top.DESCRIPTION
+        await press(app, "enter")
+        assert isinstance(app.top, Confirm) and "The Tests' Purple" in app.top.DESCRIPTION
+    run(go())
+
+
+def test_a_pack_that_cannot_be_read_says_so(drive, tmp_path):
+    (tmp_path / "stick" / "broken.purplepack").write_bytes(b"not a pack")
+
+    async def go():
+        app = make_app()
+        drive()
+        app._check_pack_arrivals()
+        assert isinstance(app.top, Notice) and app.top.title == "Couldn't add this Purple Pack"
+        assert app.top.DESCRIPTION.startswith("broken\n")
+        await press(app, "escape")
+        assert isinstance(app.top, Confirm)
+        await press(app, "down")
+        await press(app, "enter")
+        app._check_pack_arrivals()
+        assert app.top is None
     run(go())

@@ -731,11 +731,22 @@ class PurpleApp:
             self.refresh_packs()
         if was_reading:
             self.clear_notifications()
-        if offer:
+        if notes := pack_arrivals.skipped_notes(pack_arrivals.take_skipped()):
+            self._offering_packs = True
+            self._tell_skipped(notes, offer)
+        elif offer:
             self._offer_packs(offer)
         elif was_reading:
             self.notify("Already added. You can unplug the USB drive now." if known
                         else "Couldn't read that Purple Pack. Try downloading it from Purple Studio again.", timeout=4)
+
+    def _tell_skipped(self, notes, offer):
+        """Each kind of pack the drive brought that Purple couldn't take, then the ones it can."""
+        from .ui import Notice
+        if not notes:
+            self._offering_packs = False
+            return self._offer_packs(offer) if offer else None
+        self.push(Notice(self, *notes[0]), on_close=lambda _: self._tell_skipped(notes[1:], offer))
 
     def _offer_packs(self, waiting):
         from .. import pack_arrivals

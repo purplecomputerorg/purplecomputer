@@ -16,9 +16,6 @@ source "$SCRIPT_DIR/config.sh"
 WORK_DIR="${BUILD_DIR}/remaster"
 GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img.zst"
 
-# Ubuntu Server 24.04.1 LTS
-UBUNTU_ISO_URL="https://releases.ubuntu.com/24.04.1/ubuntu-24.04.1-live-server-amd64.iso"
-UBUNTU_ISO_NAME="ubuntu-24.04.1-live-server-amd64.iso"
 UBUNTU_ISO="${BUILD_DIR}/${UBUNTU_ISO_NAME}"
 
 GREEN='\033[0;32m'
@@ -556,7 +553,9 @@ main() {
         log_info "Using cached ISO: $UBUNTU_ISO"
     else
         log_info "Downloading Ubuntu Server ISO..."
-        wget -O "$UBUNTU_ISO" "$UBUNTU_ISO_URL"
+        wget -O "$UBUNTU_ISO.part" "$UBUNTU_ISO_URL"
+        echo "$UBUNTU_ISO_SHA256  $UBUNTU_ISO.part" | sha256sum -c --quiet
+        mv "$UBUNTU_ISO.part" "$UBUNTU_ISO"
     fi
     log_info "ISO size: $(du -h "$UBUNTU_ISO" | cut -f1)"
 

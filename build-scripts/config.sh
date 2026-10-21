@@ -9,8 +9,10 @@ TEST_DIR="$INSTALLER_BASE/test-results"
 
 # Ubuntu Server ISO (initramfs injection architecture). The golden image's
 # distro and arch live in 00-build-golden-image.sh (PURPLE_ARCH).
-UBUNTU_ISO_URL="https://releases.ubuntu.com/24.04.1/ubuntu-24.04.1-live-server-amd64.iso"
+# old-releases: Ubuntu moves a point release there once a newer one is out.
+UBUNTU_ISO_URL="https://old-releases.ubuntu.com/releases/24.04.1/ubuntu-24.04.1-live-server-amd64.iso"
 UBUNTU_ISO_NAME="ubuntu-24.04.1-live-server-amd64.iso"
+UBUNTU_ISO_SHA256="e240e4b801f7bb68c20d1356b60968ad0c33a41d00d828e74ceb3364a0317be9"
 
 
 # Where 'just build --ref <commit>' keeps an old commit's build state (its own

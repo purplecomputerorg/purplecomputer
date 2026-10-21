@@ -2,12 +2,11 @@
 the brush follows it, Space keeps the color, Esc puts the old one back, any
 other key keeps it and reaches the room, the wheel reopens on the last color
 kept in that room, a wheel color paints like a letter color, the Esc menu
-opens it too, and in ABC it colors the letters typed next. Also Art's eraser: holding Backspace makes arrows clear a trail."""
+opens it too, and in ABC it colors the letters typed next."""
 
 from purple_tui.canvas.color_wheel import ColorWheel, _cell, _spot, wheel_color
 from purple_tui.canvas.harness import make_app, press, run
 from purple_tui.canvas.ui import AUTO
-from purple_tui.keyboard import ControlAction
 from purple_tui import palette as P
 from purple_tui.palette import get_key_color
 
@@ -110,26 +109,6 @@ def test_backslash_does_nothing_in_littles():
         app._littles_mode = True
         await press(app, "\\")
         assert app.top is None
-    run(go())
-
-
-def test_held_backspace_erases_along_the_arrows():
-    async def go():
-        app, room = _room("art")
-        await press(app, "space")
-        for _ in range(5):
-            await press(app, "right")
-        await press(app, "space")
-        assert len(room._painted_positions) == 6
-        await app._dispatch_keyboard_action(ControlAction(action="backspace"))
-        assert room._erasing and room._cursor_x == 4
-        await press(app, "left")
-        await press(app, "left")
-        await app._dispatch_keyboard_action(ControlAction(action="backspace", is_down=False))
-        assert not room._erasing
-        assert sorted(x for x, _ in room._painted_positions) == [0, 1, 5]
-        await press(app, "left")
-        assert sorted(x for x, _ in room._painted_positions) == [0, 1, 5]
     run(go())
 
 

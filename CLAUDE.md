@@ -121,6 +121,10 @@ Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). `PUR
 
 ---
 
+## Studio (`studio/`)
+
+Studio keeps the draft and the family's pictures in the browser's IndexedDB (`studio/src/saved.ts`), so any load can be months old. A shape change must still load old saves: give new top-level `Draft` fields an `emptyDraft()` value, and new fields inside items an upgrade step in `saved.ts` or an optional type. Never assume a saved field exists.
+
 ## Canvas UI (default)
 
 The screen is a pygame window the app paints itself (`purple_tui/canvas/gfx.py`, `purple_tui/canvas/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere. Rooms subclass `canvas/rooms/base.py`; family rooms from packs run sandboxed: `guides/family-rooms.md`.

@@ -4,7 +4,7 @@ import { recallShelf, rememberShelf } from "./saved";
 import { changed, draft, freeName, isTheirs, titleOf, type Draft, type RoomFile } from "./state";
 import type { Picture } from "./photo";
 
-// src: the photo as a data URL, as the family added it.
+// src: the photo as a data URL, as the family added it. Saved in the browser, so a field added here must be optional.
 export interface Shelved { id: string; name: string; src: string }
 
 export const shelf: Shelved[] = [];

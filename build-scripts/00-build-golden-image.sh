@@ -39,7 +39,7 @@ fi
 T2_KERNEL_URL="https://github.com/t2linux/T2-Debian-and-Ubuntu-Kernel/releases/download/v6.18.45-1/linux-image-6.18.45-1-t2-noble_6.18.45-1_amd64.deb"
 T2_KERNEL_SHA256="f56b1d5811cd251fcafde74129377b8f8c6450817a31022a13bcd700b102e8ba"
 T2_AUDIO_URL="https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/noble/apple-t2-audio-config_0.5.2-noble_amd64.deb"
-T2_AUDIO_SHA256="faf4746429d8ccff669c4df2c9fbd937e19a8514e397b50916344f8fd26922e1"
+T2_AUDIO_SHA256="8a981f1b2c39504174c8b6d778bdcd40d3d2bec5c7f7157e18fa018421d5edb6"
 
 GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img"
 GOLDEN_COMPRESSED="${BUILD_DIR}/purple-os.img.zst"

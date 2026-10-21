@@ -5,6 +5,7 @@ holding Backspace makes arrows erase, Tab switches to writing letters, and
 hold Space opens the Logo-style code line."""
 
 import math
+import time
 
 import pygame
 
@@ -17,7 +18,7 @@ from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationA
 from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
-from ..panels import CodePanel, Echo, SpaceHold
+from ..panels import CodePanel, Echo, SpaceHold, scrub_rate
 from ..ui import (AUTO, MOVE_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
                   status_row_h, status_row_px, swatch_dot)
 from .base import Room
@@ -26,6 +27,8 @@ COLS, ROWS = ART_COLS, ART_ROWS
 BRUSH_CHAR = "█"
 ARROW_HOLD_REPEAT_THRESHOLD = 8
 HOLD_ACCEL_MULTIPLIER = 6
+UNDER_DEPTH = 8                     # stamps a cell remembers, for Backspace to take back one at a time
+ERASE_TOP = 4 * COLS                # a held Backspace speeds up to clearing four lines a second
 CANVAS_BG = "#221440"
 CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
 TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
@@ -207,6 +210,7 @@ class ArtRoom(Room):
         super().__init__(app)
         self._run_end = None            # (way, cursor) after a code run, to turn straight back from
         self._grid: dict = {}
+        self._under: dict = {}          # (x, y) -> [(cell, painted)] each stamp there covered
         self._painted_positions: set = set()
         self._last_paint_pos = None
         self._cursor_x = self._cursor_y = 0
@@ -228,7 +232,7 @@ class ArtRoom(Room):
         self._post_stamp_x = None
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
-        self._backspace_repeat_count = 0
+        self._erase_hold = None         # a held Backspace's pace, like Time Travel's scrub
         self._erasing = False         # Backspace held: arrows clear a trail
         self._tips = _Cache()
         self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
@@ -312,6 +316,7 @@ class ArtRoom(Room):
 
     def restore_timeline_state(self, state: dict):
         self._grid.clear()
+        self._under.clear()
         self._painted_positions.clear()
         self._last_paint_pos = self._mixed = None
         for key, val in state.items():
@@ -331,6 +336,7 @@ class ArtRoom(Room):
 
     def clear(self):
         self._grid.clear()
+        self._under.clear()
         self._repaint_all()
         self._painted_positions.clear()
         self._last_paint_pos = self._mixed = None
@@ -358,8 +364,17 @@ class ArtRoom(Room):
         self._touch(pos)
 
     def _del_cell(self, pos):
+        self._under.pop(pos, None)
         if self._grid.pop(pos, None) is not None:
             self._touch(pos)
+
+    def _stamp(self, pos, char, fg, bg):
+        """Set a cell so Backspace can take it back; a stamp that changes nothing isn't kept."""
+        if self._grid.get(pos) != (char, fg, bg):
+            stack = self._under.setdefault(pos, [])
+            stack.append((self._grid.get(pos), pos in self._painted_positions))
+            del stack[:-UNDER_DEPTH]
+        self._set_cell(pos, char, fg, bg)
 
     def _touch(self, pos):
         if self._dirty is not None:
@@ -376,12 +391,12 @@ class ArtRoom(Room):
         under = self._get_cell_bg(pos) if pos in self._painted_positions else None
         self._mixed = color_recipe.dab(under, self._mix, (self._last_key_char, self._last_key_color))
         color = self._mixed[1] if self._mixed else self._last_key_color
-        self._painted_positions.add(pos)
         self._last_paint_pos = pos
         if cell and cell[0] not in ("", " ", BRUSH_CHAR):
-            self._set_cell(pos, cell[0], auto_ink(color), color)
+            self._stamp(pos, cell[0], auto_ink(color), color)
         else:
-            self._set_cell(pos, BRUSH_CHAR, color, color)
+            self._stamp(pos, BRUSH_CHAR, color, color)
+        self._painted_positions.add(pos)
         self.app.invalidate()
 
     def _set_paint_mode(self, painting: bool):
@@ -484,17 +499,32 @@ class ArtRoom(Room):
         self._last_key_char = char
         self._last_key_color = get_key_color(char)
         bg = self._get_cell_bg(pos)
-        self._set_cell(pos, char, self._ink or (auto_ink(bg) if pos in self._painted_positions else P.TEXT), bg)
+        self._stamp(pos, char, self._ink or (auto_ink(bg) if pos in self._painted_positions else P.TEXT), bg)
         self._advance_after_stamp(direction)
         self.app.invalidate()
 
-    def _backspace(self):
+    def _backspace(self, wipe=False):
+        """Back one cell, or up to the last thing on the line above, and take back its top stamp."""
         if self._cursor_x > 0:
             self._cursor_x -= 1
         elif self._cursor_y > 0:
             self._cursor_y -= 1
-            self._cursor_x = COLS - 1
-        self._erase_at_cursor()
+            self._cursor_x = max((x for x, y in self._grid if y == self._cursor_y), default=0)
+        self._take_back(wipe)
+
+    def _hold_backspace(self):
+        """Held, Backspace wipes cells clean, slow at first and speeding up as Time Travel's arrows do."""
+        now = time.monotonic()
+        if self._erase_hold is None:
+            self._erase_hold = {"since": now, "last": now, "carry": 0.0}
+            self._take_back(wipe=True)
+        hold = self._erase_hold
+        hold["carry"] += scrub_rate(now - hold["since"], ERASE_TOP) * (now - hold["last"])
+        hold["last"] = now
+        steps = int(hold["carry"])
+        hold["carry"] -= steps
+        for _ in range(steps):
+            self._backspace(wipe=True)
 
     def _paint_stroke(self, direction: str):
         """One cell of an arrow trail, written down as code too."""
@@ -503,12 +533,23 @@ class ArtRoom(Room):
         self.echo.step(direction)
 
     def _erase_at_cursor(self, _direction=None):
+        self._take_back(wipe=True)
+
+    def _take_back(self, wipe=False):
+        """The cursor's cell goes back to what its last stamp covered, or empty with `wipe`."""
         pos = (self._cursor_x, self._cursor_y)
-        if pos in self._grid:
+        stack = self._under.get(pos)
+        cell, painted = stack.pop() if stack and not wipe else (None, False)
+        if cell:
+            self._set_cell(pos, *cell)
+        else:
             self._del_cell(pos)
+        if painted:
+            self._painted_positions.add(pos)
+        else:
             self._painted_positions.discard(pos)
-            if pos == self._last_paint_pos:
-                self._last_paint_pos = None
+        if pos == self._last_paint_pos:
+            self._last_paint_pos = None
         self.app.invalidate()
 
     def set_cursor_position(self, x: int, y: int):
@@ -635,7 +676,7 @@ class ArtRoom(Room):
         if isinstance(action, ControlAction):
             if not action.is_down:
                 if action.action == "backspace":
-                    self._backspace_repeat_count = 0
+                    self._erase_hold = None
                     self._erasing = False
                     self.app.invalidate()
                 return
@@ -656,15 +697,16 @@ class ArtRoom(Room):
                     self.app.invalidate()
             elif a == "backspace":
                 self._erasing = True
-                self._backspace_repeat_count = self._backspace_repeat_count + 1 if action.is_repeat else 0
-                for _ in range(HOLD_ACCEL_MULTIPLIER if self._backspace_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD else 1):
+                if action.is_repeat:
+                    self._hold_backspace()
+                else:
+                    self._erase_hold = None
                     self._backspace()
             return
         if isinstance(action, NavigationAction):
             self._navigate(action, prior_post_stamp_x)
             return
         if isinstance(action, CharacterAction):
-            self._backspace_repeat_count = 0
             char = action.char
             direction = action.arrow_held or "right"
             if self._paint_mode and action.shift_held and char in UNSHIFT_MAP:

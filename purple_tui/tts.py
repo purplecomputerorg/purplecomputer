@@ -70,6 +70,8 @@ _SYNTH_PARAMS = {
 # Pronunciation overrides: words Piper mispronounces -> phonetic respelling
 PRONUNCIATION_MAP = {
     "dinos": "dyenoze",
+    "trex": "tee rex",
+    "trexes": "tee wrecksiz",
 }
 
 # Single-character pronunciation map (letters and digits -> spoken form)

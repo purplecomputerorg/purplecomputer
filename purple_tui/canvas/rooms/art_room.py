@@ -857,15 +857,14 @@ class ArtRoom(Room):
                 g.draw_text(ch, px, ox + x * c + c // 2, oy + y * c + c // 2, "block", fg, anchor="center")
 
     def _draw_fade_wash(self, g, ox, oy, c):
-        """A pale band sweeps right to left over the line being taken, so a line with one square still shows."""
+        """A flash over the whole line being taken that fades with it, so a line with one square still shows."""
         if self._fade is None:
             return
         t = min(1.0, (time.monotonic() - self._fade["since"]) / LINE_FADE_S)
-        right = self._fade["right"] * c
-        band = pygame.Surface((max(1, round(right * t)), c))
-        band.fill(rgb(P.ACCENT))
-        band.set_alpha(round(60 + 80 * t))
-        g.surface.blit(band, (ox + right - band.get_width(), oy + self._fade["row"] * c))
+        band = pygame.Surface((self._fade["right"] * c, c))
+        band.fill(rgb(P.TEXT))
+        band.set_alpha(round(170 * (1 - t) ** 2))
+        g.surface.blit(band, (ox, oy + self._fade["row"] * c))
 
     def _draw_cursor(self, g, ox, oy, c):
         x, y = ox + self._cursor_x * c, oy + self._cursor_y * c

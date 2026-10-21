@@ -104,7 +104,9 @@ def update_from(mount: Path, waiting: Path | None = None) -> list[tuple[str, boo
     reading.touch()
     try:
         # Newest file first, so two downloads of one pack offer the newer and skip the other.
-        packs = sorted(mount.glob("*.purplepack"), key=lambda p: (-p.stat().st_mtime, p.name))
+        # Dot names skipped: a Mac leaves a ._<name> metadata file beside each pack it copies.
+        packs = sorted((p for p in mount.glob("*.purplepack") if not p.name.startswith(".")),
+                       key=lambda p: (-p.stat().st_mtime, p.name))
         seen: set = set()
         skipped: list = []
         results = sorted((p.name, *stage(p, waiting, seen, skipped)) for p in packs)

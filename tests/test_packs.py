@@ -268,6 +268,15 @@ class TestUsbUpdater:
             assert [d.name for d in waiting.iterdir()] == [sha256(stick / "a-pack.purplepack")]
 
 
+    def test_mac_metadata_files_are_not_packs(self, tmp_path):
+        stick = tmp_path / "stick"
+        stick.mkdir()
+        build_pack(make_pack(tmp_path, "a-pack"), stick / "a-pack.purplepack")
+        (stick / "._a-pack.purplepack").write_bytes(b"\x00\x05\x16\x07" + b"\x00" * 60)
+        waiting = tmp_path / "waiting"
+        assert [(name, ok) for name, ok, _ in update_from(stick, waiting)] == [("a-pack.purplepack", True)]
+        assert not (waiting / ".skipped.json").exists()
+
 class TestRender:
     def test_python_renders_the_missing_samples(self, tmp_path):
         d = make_pack(tmp_path)

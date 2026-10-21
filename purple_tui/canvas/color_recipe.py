@@ -12,6 +12,8 @@ from .ui import CODE_HINT, draw_key_hint
 
 HUE_ROWS = [[k for k in row if k.isalpha()] for row in (QWERTY_ROW, ASDF_ROW, ZXCV_ROW)]   # red, yellow, blue
 EXAMPLE_KEY = "f"
+MAX_TERMS = 3
+NO_MIX = ((), None)
 
 
 def partner(key: str) -> str:
@@ -79,8 +81,23 @@ def draw_color_cap(g, text: str, fill: str, cap: pygame.Rect, px: int, radius: i
     g.draw_text(text, px, cap.centerx, cap.centery, "mono-bold", P.ON_PRIMARY if P.luminance(fill) > 0.5 else "#FFFFFF", anchor="center")
 
 
-def hint_row(key: str) -> dict:
-    """draw_recipe's arguments for the hint row's example."""
+def chord(mix: tuple, brush: tuple, new: tuple) -> tuple:
+    """(keycaps, color) once `new` (key, color) mixes into `brush`: the keycaps go on
+    from `mix` while it is still the brush, and past three the mix so far folds into one blank swatch."""
+    terms, made = mix
+    if made != brush[1]:
+        terms = [brush]
+    elif len(terms) >= MAX_TERMS:
+        terms = [("", made)]
+    return [*terms, new], mix_colors_paint([brush[1], new[1]])
+
+
+def hint_row(key: str, mix: tuple, brush: str) -> dict:
+    """draw_recipe's arguments for the hint row: what was just mixed while it is still
+    the brush, else an example to try."""
+    terms, made = mix
+    if made == brush:
+        return dict(terms=terms, result=made, lead="You mixed", ink=P.DIM)
     terms, result = example(key)
     return dict(terms=terms, result=result, lead="Hold", ink=P.DIM)
 

@@ -92,6 +92,7 @@ class BlocksRoom(Room):
         self._hover = 0               # chosen cursor height; 0 = resting on the column
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
+        self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where a run up or down the column (or a code run) goes on from
         self._dir = "right"           # the way typing builds: a key of WRAP
@@ -292,7 +293,8 @@ class BlocksRoom(Room):
         brush = brush_for_key(char)
         if not brush or not self._set_color(held_key, hold=True):
             return False
-        self.set_brush_color(mix_colors_paint([self._color, brush[1]]), brush[0])
+        self._mix = color_recipe.chord(self._mix, (self._key, self._color), brush)
+        self.set_brush_color(self._mix[1], brush[0])
         return True
 
     def _step_height(self, rise: int, wrap: bool = False):
@@ -656,7 +658,7 @@ class BlocksRoom(Room):
         if foot_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             draw_key_hint(g, HINT, g.vh(1.9), foot.x, foot.centery)
-            color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key))
+            color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mix, self._color))
 
     def _draw_hold_badge(self, g, ox, oy, area):
         held = self._last and self.app._panel is None and color_recipe.held_key(self.app, self._last[1])

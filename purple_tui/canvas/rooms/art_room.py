@@ -213,6 +213,7 @@ class ArtRoom(Room):
         self._paint_mode = True
         self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""
+        self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
         self._ink = None              # ABC letters' color from the wheel; None: light, or black/white over paint
         self._wheel_spots = {}        # per mode
         self._pen_down = False
@@ -540,7 +541,8 @@ class ArtRoom(Room):
         brush = brush_for_key(char)
         if not brush or not self._select_brush(held_key, hold=True):
             return False
-        self.set_brush_color(mix_colors_paint([self._last_key_color, brush[1]]), brush[0])
+        self._mix = color_recipe.chord(self._mix, (self._last_key_char, self._last_key_color), brush)
+        self.set_brush_color(self._mix[1], brush[0])
         return True
 
     def _select_brush(self, char: str, hold: bool = False) -> bool:
@@ -741,7 +743,7 @@ class ArtRoom(Room):
             draw_key_hint(g, HINTS[key], g.vh(1.9), foot.x, foot.centery)
             if not self.app._littles_mode:
                 color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled,
-                                           self._paint_mode and color_recipe.hint_row(self._last_key_char))
+                                           self._paint_mode and color_recipe.hint_row(self._last_key_char, self._mix, self._last_key_color))
 
     def _hint_key(self) -> str:
         if self._erasing:

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from purple_tui import content
 from purple_tui import palette as P
 from purple_tui import settings
 from purple_tui.canvas import theme
@@ -23,6 +24,7 @@ ID = "the-tests-pack"
 def live(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
+    monkeypatch.setattr(content, "_content", None)
     spec = importlib.util.spec_from_file_location("studio_live", LIVE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

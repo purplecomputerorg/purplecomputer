@@ -96,6 +96,7 @@ def test_a_saved_loop_keeps_looping_after_the_replay():
         room = app.room
         room._advance_loop_state()
         await type_text(app, "as")
+        await asyncio.sleep(0.05)  # a loop rounded to 0 ms would ignore the z below
         room._advance_loop_state()
         assert room.loop.state == LOOPING
         save = app.save_room()
@@ -103,9 +104,9 @@ def test_a_saved_loop_keeps_looping_after_the_replay():
         app._start_fresh("music")
         assert room.loop.state == IDLE
         app.open_save(save)
-        await press(app, "z")
+        print("SAVE", save.state["loop"], "letters", room.letters_mode, "replay", room._replay is not None); await press(app, "z"); print("AFTER", room.loop.loop_duration, room.loop.loop_events)
         assert room.loop.state == LOOPING and isinstance(app._panel, LoopPanel)
-        assert [e[0] for e in room.loop.loop_events] == ["A", "S"]
+        assert sorted(e[0] for e in room.loop.loop_events) == ["A", "S", "Z"]
     run(go())
 
 

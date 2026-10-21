@@ -183,6 +183,25 @@ def test_errors_name_the_line(pack):
     run(go())
 
 
+def test_enter_shows_and_hides_why_a_room_stopped(pack, tmp_path):
+    pack("oops", 'from purple import *\ndef on_key(key):\n    drum("dog")\n')
+
+    async def go():
+        app = make_app()
+        room = _open(app, "oops")
+        await until(lambda: not room._busy)
+        await press(app, "a")
+        await until(lambda: room.fault is not None)
+        assert not room._why_shown
+        await press(app, "enter")
+        assert room._why_shown
+        app.screenshot(str(tmp_path / "why.png"))
+        await press(app, "enter")
+        assert not room._why_shown
+        room.close()
+    run(go())
+
+
 def test_the_packs_own_library_runs_and_unknown_shapes_and_fields_are_skipped(pack):
     pack("custom", "", lib=lib_sending({"scene": [["star", 1, 2], ["text", 120, 60, 20, "From the pack", "accent"]],
                                          "sparkles": True}))
@@ -437,7 +456,7 @@ def test_a_picture_the_pack_doesnt_have_is_skipped(pack):
 
 
 def test_a_room_plays_its_packs_own_sounds(pack, monkeypatch):
-    room_file = pack("meow", 'from purple import *\ndef on_key(key):\n    sound("meow")\n    sound("woof") if key == "w" else None\n')
+    room_file = pack("meow", 'from purple import *\ndef on_key(key):\n    drum("meow") if key == "d" else sound("meow")\n    sound("woof") if key == "w" else None\n')
     meow = room_file.path.parents[1] / "sounds" / "meow.wav"
     meow.parent.mkdir()
     meow.write_bytes(b"")
@@ -452,6 +471,9 @@ def test_a_room_plays_its_packs_own_sounds(pack, monkeypatch):
         await press(app, "a")
         await until(lambda: played)
         assert played == [meow]
+        await press(app, "d")
+        await until(lambda: len(played) == 2)
+        assert played == [meow, meow]
         await press(app, "w")
         await until(lambda: room.fault)
         assert room.fault == "ValueError: the pack has no sound called 'woof' (line 4)"

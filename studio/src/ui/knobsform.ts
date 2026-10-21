@@ -6,18 +6,20 @@ import { addRowButton, field, h, removeButton } from "./dom";
 import { emojiCell, isEmoji } from "./emojipicker";
 import { roomPictures } from "./roomfiles";
 import { isMap, legendFor, legendNames, mapPainter } from "./mappainter";
-import { select, textIn } from "./rulesform";
+import { drumIn, isDrum, select, textIn } from "./rulesform";
 
 type Dict = Extract<Lit, { t: "dict" }>;
 type Str = Extract<Lit, { t: "str" }>;
 // pages: the knob's own keys when its entries point at each other by name (a story's pages); links: the
 // dicts holding those names, shown as dropdowns. taken: the emoji in the list being edited, so none repeats.
-// pictures: the knob takes the pack's own pictures by name beside emoji, as its comment says.
-interface Ctx { onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>; relink: (from: string, to: string) => void; taken?: () => string[]; pictures?: boolean }
-type Edit = Pick<Ctx, "onEdit" | "taken" | "pictures">;
+// pictures: the knob takes the pack's own pictures by name beside emoji, as its comment says. drums: its
+// comment or labels say drums, so a drum's name, or one of the pack's sounds, is picked from a list.
+interface Ctx { onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>; relink: (from: string, to: string) => void; taken?: () => string[]; pictures?: boolean; drums?: boolean }
+type Edit = Pick<Ctx, "onEdit" | "taken" | "pictures" | "drums">;
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 const PICTURES = /\byour pictures\b/i;
+const DRUMS = /\bdrums?\b/i;
 const LONG = 40;
 const nested = (v: Lit) => v.t === "list" || v.t === "tuple" || v.t === "dict";
 const isFace = (s: string, pictures?: boolean) => isEmoji(s) || (!!pictures && roomPictures().some((f) => f.name === s));
@@ -33,7 +35,8 @@ let fresh: Lit | null = null;
 const dictsIn = (v: Lit): Dict[] =>
   v.t === "dict" ? [v, ...v.entries.flatMap(([, x]) => dictsIn(x))] : v.t === "list" || v.t === "tuple" ? v.items.flatMap(dictsIn) : [];
 
-function text(v: Str, { onEdit, taken, pictures }: Edit): HTMLElement {
+function text(v: Str, { onEdit, taken, pictures, drums }: Edit): HTMLElement {
+  if (drums && isDrum(v.v)) return drumIn(v.v, (s) => { v.v = s; onEdit(); });
   if (v.v.length > LONG) {
     const el = h("textarea", { class: "words-in", rows: 2, value: v.v });
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
@@ -198,7 +201,7 @@ export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
         card.replaceChildren(head(), painter);
         return card;
       }
-      const redraw = () => card.replaceChildren(head(), editor(k.value, { onEdit: edited, redraw, pictures: PICTURES.test(k.about), ...linksOf(k.value) }, [], k.labels));
+      const redraw = () => card.replaceChildren(head(), editor(k.value, { onEdit: edited, redraw, pictures: PICTURES.test(k.about), drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), ...linksOf(k.value) }, [], k.labels));
       redraw();
       return card;
     }));

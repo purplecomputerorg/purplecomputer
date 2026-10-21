@@ -103,9 +103,11 @@ def play(note, instrument="marimba"):
 
 
 def drum(name):
-    """kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, or gong."""
+    """kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, gong, or one of the pack's own sounds."""
+    if name in sounds:
+        return sound(name)
     if name not in DRUMS:
-        raise ValueError(f"there's no drum called {name!r}; try {', '.join(DRUMS)}")
+        raise ValueError(f"there's no drum called {name!r}; try {', '.join([*DRUMS, *sorted(sounds)])}")
     _s.sounds.append(["drum", name])
 
 

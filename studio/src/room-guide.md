@@ -35,7 +35,7 @@ Esc always belongs to Purple: it leaves the room, and your room never sees it.
 
 ### Settings a family can change
 
-ALL_CAPS names at the very top of the file, each set to plain words, numbers, colors, lists, or dicts, show up in Studio as a form, with a comment line above each saying what it is. Keep them to what's fun to change: the pictures, words, colors, sounds, and speed. Name everything else in lowercase, below them, so the form stays short. A `# Labels: page, picture, words` line above a setting names the parts of each entry. When a setting's comment says it takes "your pictures", its emoji picker offers the pack's own pictures too, written as their names: draw one with `picture(name)` when `name in images`.
+ALL_CAPS names at the very top of the file, each set to plain words, numbers, colors, lists, or dicts, show up in Studio as a form, with a comment line above each saying what it is. Keep them to what's fun to change: the pictures, words, colors, sounds, and speed. Name everything else in lowercase, below them, so the form stays short. A `# Labels: page, picture, words` line above a setting names the parts of each entry. When a setting's comment says it takes "your pictures", its emoji picker offers the pack's own pictures too, written as their names: draw one with `picture(name)` when `name in images`. When its comment or labels say drum, a drum's name in it is picked from a list of Purple's drums and the pack's own sounds, for `drum(name)`.
 
 ## What a room can call
 
@@ -48,7 +48,7 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `background("#2a1845")` | The room's color: # and six letters or numbers, or a theme color (below). |
 | `say(text)` | Purple says it out loud. Everything said in one key or timer is spoken in order; the next key's `say` cuts off anything still being said, unless it says the same words again, which then just carry on. Notes, drums, and sounds play at the same time as speech. A `say` with its words written right in it, like `say("Hello!")`, speaks in Purple's room voice; words built while the room runs, like `say(name)` or `say(f"{n} stars")`, speak in Purple's everyday voice. |
 | `play("C4", "marimba")` | A note from C2 to C6, sharps like `"F#4"`. Instruments: marimba, ukulele, accordion, glockenspiel, or one made in this pack. |
-| `drum("snare")` | kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, or gong. |
+| `drum("snare")` | kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, gong, or one of the pack's own sounds. |
 | `sound("meow")` | One of the pack's own sounds. |
 | `ask("Your name?")` | Waits for your kid to type an answer and press Enter, then gives back what they typed. Timers wait too. |
 | `grid.set(x, y, thing)` | Puts something in a square of the grid (below). `grid.set((x, y), thing)` works too. |

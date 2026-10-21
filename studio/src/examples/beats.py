@@ -3,7 +3,7 @@ from purple import *
 # A beat maker laid out like the Music room: each row of keys is a drum, and each key in it a beat. Press
 # a key to turn its beat on or off, and Space to start and stop the music.
 
-# The drums, top row of keys to bottom: the picture for each, the drum it plays, and its color.
+# The drums, top row of keys to bottom: the picture for each, the drum it plays (Purple's or one of your sounds), and its color.
 # Labels: picture, drum, color
 DRUMS = (("🐘", "kick", "#a0a0a0"), ("🐸", "snare", "#e44444"), ("🐝", "hi-hat", "#e2c63a"), ("👏", "clap", "#2e6ae1"))
 # Seconds from one beat to the next: smaller is faster.

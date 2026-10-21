@@ -39,6 +39,7 @@ BUILTIN_LIB = RUNNER.parent / "purple.py"
 MAX_PIXELS = 64             # an inline picture's rows, and characters per row
 PICTURE_CACHE = 512
 TEXT_MAX = 200
+FAULT_SHOWN = 400           # characters of a fault the card shows, so it fits the frame
 PAUSED_RECHECK_S = 0.5
 IDLE_PAUSE_S = 180
 READY_HINT_S = 0.3        # a room still silent this long shows it's coming, so a fast one never flashes it
@@ -223,6 +224,7 @@ class FamilyRoom(Overlay):
     def _reset(self):
         self.scene: list = []        # what's on screen, as checked shapes
         self.fault = None            # why the room was stopped
+        self._why_shown = False
         self._surface = self._thumb = self._pending = None
         self._last_flash = -math.inf
         self._busy, self._queue = True, []
@@ -541,8 +543,10 @@ class FamilyRoom(Overlay):
             return
         if isinstance(action, ControlAction) and not action.is_down:
             return self.released(action.action)
+        if self.fault:
+            return self._toggle_why(action)
         event = self._key_event(action)
-        if event is None or self.fault:
+        if event is None:
             return
         self._last_key = time.monotonic()
         if self._resting:
@@ -550,6 +554,11 @@ class FamilyRoom(Overlay):
             self.app.invalidate()
         if self._send(event):
             self._held.add(event["key"])
+
+    def _toggle_why(self, action):
+        if isinstance(action, ControlAction) and action.action == "enter":
+            self._why_shown = not self._why_shown
+            self.app.invalidate()
 
     def released(self, key: str):
         if key in self._held:
@@ -588,8 +597,13 @@ class FamilyRoom(Overlay):
         g.draw_text("This room needs fixing", int(px * 1.4), vp.centerx, vp.centery - px * 2, "mono-bold", P.TEXT, anchor="center")
         g.draw_text("A grown-up can fix it in Purple Studio.  Esc goes back.", px, vp.centerx, vp.centery,
                     "sans", P.MUTED, anchor="center")
-        g.draw_text(f"(Technical: {self.fault})", int(px * 0.7), vp.centerx, vp.centery + px * 1.8,
-                    "mono", P.DIM, anchor="center")
+        small, width = int(px * 0.7), int(vp.w * 0.8)
+        x, y = vp.centerx - width // 2, vp.centery + px * 1.4
+        if not self._why_shown:
+            g.draw_text("Enter shows what went wrong", small, vp.centerx, y, "sans", P.DIM, anchor="midtop")
+            return
+        why = f"(Technical: {self.fault[:FAULT_SHOWN]})".replace("[", "\\[")
+        y += g.draw_markup(why, small, x, y, "mono", P.DIM, max_width=width, align="center", tr=False) + small
         if Guest is ProcessGuest:  # Studio's preview has no Parent Menu terminal
-            g.draw_text("To see why: Parent Menu, Open Terminal, type check-room", int(px * 0.7), vp.centerx,
-                        vp.centery + px * 2.8, "sans", P.DIM, anchor="center")
+            g.draw_markup("To see more: Parent Menu, Open Terminal, type check-room", small, x, y, "sans", P.DIM,
+                          max_width=width, align="center")

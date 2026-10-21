@@ -1,10 +1,12 @@
 // The rules editor: each rule is a row, "When this happens" then the things to do, built with buttons
 // and dropdowns. Each edit changes the rules in place and calls onEdit; the room's Python is generated.
+import { roomTitle } from "@sdk/pack";
 import { INSTRUMENTS, parseNote } from "@sdk/purple/sounds";
 import { normalizeKey } from "../examples";
 import { ACTIONS, BACKGROUNDS, DRUMS, WHENS, type Action, type Rule, type Thing } from "../rules";
 import { draft } from "../state";
 import { h } from "./dom";
+import { hearRoomSound } from "./roomfiles";
 
 type Options = [value: string, label: string][];
 
@@ -27,6 +29,21 @@ const numIn = (value: number, min: number, max: number, onNum: (n: number) => vo
 };
 
 const roomFiles = (kind: "images" | "sounds"): Options => draft.roomFiles.filter((f) => f.kind === kind).map((f) => [f.name, f.name]);
+export const isDrum = (name: string) => DRUMS.includes(name) || roomFiles("sounds").some(([n]) => n === name);
+
+// Purple's drums, then the pack's own sounds, which drum() plays too.
+export function drumIn(value: string, onPick: (v: string) => void): HTMLSelectElement {
+  const opts = (names: string[], label: (n: string) => string) => names.map((n) => h("option", { value: n }, label(n)));
+  const mine = roomFiles("sounds").map(([n]) => n);
+  const el = h("select", { class: "inline", onchange: () => { el.classList.remove("bad"); hearRoomSound(el.value); onPick(el.value); } },
+    isDrum(value) ? null : h("option", { value }, `${value || "nothing"} (missing)`),
+    h("optgroup", { label: "Drums" }, ...opts(DRUMS, (n) => `🥁 ${n}`)),
+    mine.length ? h("optgroup", { label: "Your sounds" }, ...opts(mine, (n) => `🎤 ${roomTitle(n)}`)) : null);
+  el.value = value;
+  el.classList.toggle("bad", !isDrum(value));
+  return el;
+}
+
 const instruments = (): Options => [...INSTRUMENTS, ...draft.instruments.map((i) => i.name)].map((n) => [n, n]);
 
 export function rulesForm(rules: Rule[], onEdit: () => void): HTMLElement {
@@ -50,7 +67,7 @@ export function rulesForm(rules: Rule[], onEdit: () => void): HTMLElement {
         const note = textIn(a.note, (v) => { a.note = v; note.classList.toggle("bad", !parseNote(v)); onEdit(); }, { size: 4 });
         return [note, "on", select(instruments(), a.instrument, (v) => { a.instrument = v; onEdit(); })];
       }
-      case "drum": return [select(DRUMS.map((d) => [d, d]), a.name, (v) => { a.name = v; onEdit(); })];
+      case "drum": return [drumIn(a.name, (v) => { a.name = v; onEdit(); })];
       case "sound": return [roomFiles("sounds").length ? select([["", "pick one"], ...roomFiles("sounds")], a.name, (v) => { a.name = v; onEdit(); }) : h("span", { class: "dim small" }, "add one below first")];
       case "background": return [select(BACKGROUNDS.map(([label, c]) => [c, label]), a.color, (v) => { a.color = v; onEdit(); })];
       case "clear": return [];

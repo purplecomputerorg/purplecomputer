@@ -120,11 +120,11 @@ describe("family rooms in Studio's Python", () => {
     expect([texts(replies[3]), replies[3].sounds]).toEqual([["z"], [["note", "A4", "marimba"]]]);
   }, 60_000);
 
-  it("plays a parent's own picture and recording on a picture keyboard key", async () => {
-    const source = soundboardSource({ rows: [{ key: "m", emoji: "cat", word: "", note: "meow" }], other: { emoji: "", word: "", note: "" } });
-    const replies = await runRoom(source, [{ ev: "key", key: "m" }], {}, { images: { cat: [100, 100] }, sounds: ["meow"] });
+  it("plays a parent's own picture, voice in place of Purple's, and sound on a picture keyboard key", async () => {
+    const source = soundboardSource({ rows: [{ key: "m", emoji: "cat", word: "kitty", voice: "kitty", note: "meow" }], other: { emoji: "", word: "", note: "" } });
+    const replies = await runRoom(source, [{ ev: "key", key: "m" }], {}, { images: { cat: [100, 100] }, sounds: ["kitty", "meow"] });
     expect(shapes(replies[1]).filter((s) => s[0] === "image").map((s) => s[5])).toEqual(["cat"]);
-    expect(replies[1].sounds).toEqual([["clip", "meow"]]);
+    expect(replies[1].sounds).toEqual([["clip", "kitty"], ["clip", "meow"]]);
   }, 60_000);
 
   it("remembers what a room keeps, and hands it back next time", async () => {

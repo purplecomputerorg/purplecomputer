@@ -25,7 +25,8 @@ export function normalizeKey(v: string): string | null {
 export interface QuizChoice { emoji: string; word: string }
 export interface QuizRow { question: string; emoji: string; right: QuizChoice; others: QuizChoice[] }
 export interface QuizData { rows: QuizRow[] }
-export interface Sound { emoji: string; word: string; note: string }
+// voice: a recording of the word that Purple plays instead of saying it; drafts from before it lack one.
+export interface Sound { emoji: string; word: string; voice?: string; note: string }
 export interface SoundboardData { rows: (Sound & { key: string })[]; other: Sound }
 export type TemplateDraft = { kind: "quiz"; data: QuizData } | { kind: "soundboard"; data: SoundboardData };
 
@@ -123,14 +124,15 @@ ask_next()
 }
 
 export function soundboardSource({ rows, other }: SoundboardData): string {
-  const sound = (s: Sound) => `(${lit(s.emoji.trim())}, ${lit(s.word.trim())}, ${lit(s.note.trim())})`;
+  const sound = (s: Sound) => `(${lit(s.emoji.trim())}, ${lit(s.word.trim())}, ${lit(s.voice ?? "")}, ${lit(s.note.trim())})`;
   const keys = rows.map((r) => [normalizeKey(r.key), r] as const).filter(([k]) => k)
     .map(([k, r]) => `    ${lit(k!)}: ${sound(r)},`);
   return `from purple import *
 
 # Made with the picture keyboard form in Purple Studio. Each key shows its picture, says its word, and plays its sound.
 
-# Each key's picture (an emoji, or one of your pictures), word, and sound (a note like "C4", or one of your sounds).
+# Each key's picture (an emoji, or one of your pictures), word, your recording of the word (blank: Purple says it),
+# and sound (a note like "C4", or one of your sounds).
 KEYS = {
 ${keys.join("\n")}
 }
@@ -141,9 +143,11 @@ show("🎹")
 
 
 def on_key(key):
-    face, word, noise = KEYS.get(key, OTHER_KEYS)
+    face, word, voice, noise = KEYS.get(key, OTHER_KEYS)
     show(picture(face) if face in images else face or key)
-    if word:
+    if voice in sounds:
+        sound(voice)
+    elif word:
         say(word)
     if noise in sounds:
         sound(noise)
@@ -163,12 +167,12 @@ export const TEMPLATES = {
     source: soundboardSource,
     defaults: (): SoundboardData => ({
       rows: [
-        { key: "c", emoji: "🐄", word: "cow", note: "C4" },
-        { key: "d", emoji: "🐶", word: "dog", note: "D4" },
-        { key: "p", emoji: "🐖", word: "pig", note: "E4" },
-        { key: "s", emoji: "🐑", word: "sheep", note: "G4" },
+        { key: "c", emoji: "🐄", word: "cow", voice: "", note: "C4" },
+        { key: "d", emoji: "🐶", word: "dog", voice: "", note: "D4" },
+        { key: "p", emoji: "🐖", word: "pig", voice: "", note: "E4" },
+        { key: "s", emoji: "🐑", word: "sheep", voice: "", note: "G4" },
       ],
-      other: { emoji: "", word: "", note: "A4" },
+      other: { emoji: "", word: "", voice: "", note: "A4" },
     }),
   },
   quiz: {

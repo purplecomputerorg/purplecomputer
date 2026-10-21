@@ -29,8 +29,8 @@ const pictureIn = (o: { emoji: string }, c: Ctx, query: () => string, blank?: { 
 
 const NOTES = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5"];
 
-// A note, or one of the pack's sounds: picked from one short list, or recorded right here.
-function soundIn(o: Sound, c: Ctx, nameFor: () => string): HTMLElement {
+// A note, or one of the pack's sounds, from one short list.
+function soundIn(o: Sound, c: Ctx): HTMLElement {
   const notes = NOTES.includes(o.note) || !parseNote(o.note) ? NOTES : [o.note, ...NOTES];
   const opts = (names: string[], label: (n: string) => string) => names.map((n) => h("option", { value: n }, label(n)));
   const pick = h("select", { class: "inline", onchange: () => { o.note = pick.value; hearRoomSound(o.note); c.onEdit(); } },
@@ -38,12 +38,18 @@ function soundIn(o: Sound, c: Ctx, nameFor: () => string): HTMLElement {
     h("optgroup", { label: "Notes" }, ...opts(notes, (n) => `♪ ${n}`)),
     mine("sounds").length ? h("optgroup", { label: "Your sounds" }, ...opts(mine("sounds"), (n) => `🎤 ${roomTitle(n)}`)) : null);
   pick.value = o.note;
-  const record = recordButton((clip) => {
-    o.note = addRoomData("sounds", nameFor(), encodeWav(clip)).name;
-    c.rerender();
-    c.onEdit();
-  }, c.say, true);
-  return h("span", { class: "sound-in" }, pick, record);
+  return h("span", { class: "sound-in" }, pick);
+}
+
+// A key's word, for Purple to say, or recorded in the family's own voice, which then plays in Purple's place.
+function sayIn(o: Sound, c: Ctx, hint: string, nameFor: () => string): HTMLElement {
+  const voice = o.voice && mine("sounds").includes(o.voice) ? o.voice : "";
+  const record = recordButton((clip) => edits(c, () => { o.voice = addRoomData("sounds", nameFor(), encodeWav(clip)).name; })(), c.say, true);
+  const own = [
+    h("button", { class: "rec-mini", title: "Hear your recording", "aria-label": "Hear your recording", onclick: () => hearRoomSound(voice) }, "▶"),
+    h("button", { class: "x", title: "Use Purple's voice", "aria-label": "Use Purple's voice", onclick: edits(c, () => { o.voice = ""; }) }, "×"),
+  ];
+  return h("span", { class: "sound-in" }, wordIn(o, c, hint), ...(voice ? own : [record]));
 }
 
 const wordIn = (o: { word: string }, c: Ctx, placeholder: string) => textIn(o.word, (v) => { o.word = v; c.onEdit(); }, { placeholder });
@@ -58,14 +64,14 @@ const row = (...cells: (Node | null)[]) => h("div", { class: "sheet-row knob-ite
 function soundboardForm(data: SoundboardData, c: Ctx): Node[] {
   const KEY = { empty: "Key", clear: "Show the key itself" };
   const cells = (s: Sound & { emoji: string }, name: () => string, hint = "cow") =>
-    [pictureIn(s, c, () => s.word, KEY), wordIn(s, c, hint), soundIn(s, c, name)];
+    [pictureIn(s, c, () => s.word, KEY), sayIn(s, c, hint, name), soundIn(s, c)];
   return [
-    h("p", { class: "dim small" }, "A key is a letter, a number, or space, enter, up, down, left, right. A key with no picture shows itself. Others is every key not in the list."),
-    sheet("3.5em 52px minmax(4em, 1fr) auto 26px", ["Key", "Picture", "Purple says", "Sound"],
+    h("p", { class: "dim small" }, "A key is a letter, a number, or space, enter, up, down, left, right. A key with no picture shows itself. Purple says the word, or press the microphone to say it yourself. Others is every key not in the list."),
+    sheet("3.5em 52px minmax(8em, 1fr) auto 26px", ["Key", "Picture", "Says", "Sound"],
       ...data.rows.map((r, i) => row(
         checked(textIn(r.key, (v) => { r.key = v; c.onEdit(); }, { placeholder: "c", class: "inline key-in" }), (v) => !!normalizeKey(v)),
         ...cells(r, () => r.word || `key-${r.key}`), remove(data.rows, i, c))),
-      add("Add a key", () => data.rows.push({ key: "", emoji: "", word: "", note: "" }), c),
+      add("Add a key", () => data.rows.push({ key: "", emoji: "", word: "", voice: "", note: "" }), c),
       h("div", { class: "sheet-row sheet-other" }, h("span", { class: "tag" }, "Others"), ...cells(data.other, () => data.other.word || "other-keys", "nothing"))),
   ];
 }

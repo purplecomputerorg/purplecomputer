@@ -23,7 +23,6 @@ from functools import cache
 import pygame
 
 from ... import palette as P
-from ...color_mixing import mix_colors_paint
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ...palette import DEFAULT_BRUSH_COLOR
 from .. import color_recipe, paper
@@ -93,6 +92,7 @@ class BlocksRoom(Room):
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
+        self._mixed = None                # (keycaps, color) of the last block that mixed
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where a run up or down the column (or a code run) goes on from
         self._dir = "right"           # the way typing builds: a key of WRAP
@@ -175,7 +175,7 @@ class BlocksRoom(Room):
         self._x, self._z = min(max(x, 0), WIDTH - 1), min(max(z, 0), DEPTH - 1)
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._last = self._next = None
+        self._last = self._next = self._mixed = None
         self._dir = "right"
         self.echo.reset()
         self._changed()
@@ -223,7 +223,8 @@ class BlocksRoom(Room):
         y = self._cursor_y() if y is None else y
         pos = (self._x, self._z, y)
         old = self._blocks.get(pos)
-        self._blocks[pos] = mix_colors_paint([old, self._color]) if old else self._color
+        self._mixed = color_recipe.dab(old, self._mix, (self._key, self._color))
+        self._blocks[pos] = self._mixed[1] if self._mixed else self._color
         self._last = (pos, self._key)
         self._changed()
         return bool(old)
@@ -658,7 +659,7 @@ class BlocksRoom(Room):
         if foot_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             draw_key_hint(g, HINT, g.vh(1.9), foot.x, foot.centery)
-            color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mix, self._color))
+            color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
 
     def _draw_hold_badge(self, g, ox, oy, area):
         held = self._last and self.app._panel is None and color_recipe.held_key(self.app, self._last[1])

@@ -214,6 +214,7 @@ class ArtRoom(Room):
         self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
+        self._mixed = None                # (keycaps, color) of the last dab that mixed
         self._ink = None              # ABC letters' color from the wheel; None: light, or black/white over paint
         self._wheel_spots = {}        # per mode
         self._pen_down = False
@@ -312,7 +313,7 @@ class ArtRoom(Room):
     def restore_timeline_state(self, state: dict):
         self._grid.clear()
         self._painted_positions.clear()
-        self._last_paint_pos = None
+        self._last_paint_pos = self._mixed = None
         for key, val in state.items():
             if key.startswith("c:"):
                 x, y = (int(n) for n in key[2:].split(","))
@@ -332,7 +333,7 @@ class ArtRoom(Room):
         self._grid.clear()
         self._repaint_all()
         self._painted_positions.clear()
-        self._last_paint_pos = None
+        self._last_paint_pos = self._mixed = None
         self._cursor_x = self._cursor_y = 0
         self._paint_mode = True
         self._set_pen(False)
@@ -372,7 +373,9 @@ class ArtRoom(Room):
 
     def _paint_at(self, pos):
         cell = self._grid.get(pos)
-        color = mix_colors_paint([self._get_cell_bg(pos), self._last_key_color]) if pos in self._painted_positions else self._last_key_color
+        under = self._get_cell_bg(pos) if pos in self._painted_positions else None
+        self._mixed = color_recipe.dab(under, self._mix, (self._last_key_char, self._last_key_color))
+        color = self._mixed[1] if self._mixed else self._last_key_color
         self._painted_positions.add(pos)
         self._last_paint_pos = pos
         if cell and cell[0] not in ("", " ", BRUSH_CHAR):
@@ -743,7 +746,7 @@ class ArtRoom(Room):
             draw_key_hint(g, HINTS[key], g.vh(1.9), foot.x, foot.centery)
             if not self.app._littles_mode:
                 color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled,
-                                           self._paint_mode and color_recipe.hint_row(self._last_key_char, self._mix, self._last_key_color))
+                                           self._paint_mode and color_recipe.hint_row(self._last_key_char, self._mixed))
 
     def _hint_key(self) -> str:
         if self._erasing:

@@ -92,12 +92,21 @@ def chord(mix: tuple, brush: tuple, new: tuple) -> tuple:
     return [*terms, new], mix_colors_paint([brush[1], new[1]])
 
 
-def hint_row(key: str, mix: tuple, brush: str) -> dict:
-    """draw_recipe's arguments for the hint row: what was just mixed while it is still
-    the brush, else an example to try."""
-    terms, made = mix
-    if made == brush:
-        return dict(terms=terms, result=made, lead="You mixed", ink=P.DIM)
+def dab(under: str | None, mix: tuple, brush: tuple) -> tuple | None:
+    """(keycaps, color) a dab of `brush` (key, color) makes: its chord's keycaps while
+    `mix` is still the brush, after a blank swatch of any paint `under` it. None when nothing mixed."""
+    terms = list(mix[0]) if mix[1] == brush[1] else [brush]
+    if under is None:
+        return (terms, brush[1]) if len(terms) > 1 else None
+    if len(terms) >= MAX_TERMS:
+        terms = [("", brush[1])]
+    return [("", under), *terms], mix_colors_paint([under, brush[1]])
+
+
+def hint_row(key: str, mixed: tuple | None) -> dict:
+    """draw_recipe's arguments for the hint row: what the last dab mixed, else an example to try."""
+    if mixed:
+        return dict(terms=mixed[0], result=mixed[1], lead="You mixed", ink=P.DIM)
     terms, result = example(key)
     return dict(terms=terms, result=result, lead="Hold", ink=P.DIM)
 

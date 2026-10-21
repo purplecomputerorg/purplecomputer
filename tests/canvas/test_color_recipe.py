@@ -41,8 +41,13 @@ def test_held_letter_shows_only_after_the_hold_and_clears_on_release():
 
 
 def _hint(room):
-    key, brush = (room._last_key_char, room._last_key_color) if hasattr(room, "_last_key_char") else (room._key, room._color)
-    return hint_row(key, room._mix, brush)
+    return hint_row(getattr(room, "_last_key_char", getattr(room, "_key", "")), room._mixed)
+
+
+def _room(name):
+    app = make_app()
+    app.action_switch_room(name)
+    return app, app.rooms[name]
 
 
 @pytest.mark.parametrize("name", ["art", "blocks"])
@@ -50,9 +55,7 @@ def test_hint_row_shows_the_keys_just_mixed_until_a_plain_key(name):
     from purple_tui.canvas.harness import press
 
     async def go():
-        app = make_app()
-        app.action_switch_room(name)
-        room = app.rooms[name]
+        app, room = _room(name)
         assert _hint(room)["lead"] == "Hold"
         await press(app, "b")
         await press(app, "g", char_held="b")
@@ -64,4 +67,30 @@ def test_hint_row_shows_the_keys_just_mixed_until_a_plain_key(name):
         assert [k for k, _ in _hint(room)["terms"]] == ["", "y"]   # the first three fold into one swatch
         await press(app, "q")
         assert _hint(room)["lead"] == "Hold"
+    run(go())
+
+
+def test_painting_over_paint_shows_what_was_there_first():
+    from purple_tui.canvas.harness import press
+
+    async def go():
+        app, room = _room("art")
+        await press(app, "b")
+        room._cursor_x = 0
+        await press(app, "r")
+        blue, red = get_key_color("b"), get_key_color("r")
+        mixed = mix_colors_paint([blue, red])
+        assert _hint(room)["terms"] == [("", blue), ("r", red)] and _hint(room)["result"] == mixed == room._grid[(0, 0)][2]
+    run(go())
+
+
+def test_dropping_a_block_onto_one_shows_its_color_first():
+    from purple_tui.canvas.harness import press
+    from purple_tui.canvas.rooms.blocks_room import HEIGHT
+
+    async def go():
+        app, room = _room("blocks")
+        room._blocks.update({(room._x, room._z, y): "#ff0000" for y in range(HEIGHT)})
+        await press(app, "b")
+        assert [k for k, _ in _hint(room)["terms"]] == ["", "b"] and _hint(room)["terms"][0][1] == "#ff0000"
     run(go())

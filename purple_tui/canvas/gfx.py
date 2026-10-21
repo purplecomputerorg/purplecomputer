@@ -176,6 +176,15 @@ class _Cache(OrderedDict):
         return hit
 
 
+def _run_edge(pieces, i, step) -> bool:
+    """Whether a background piece ends its run of touching backgrounds on that side."""
+    j = i + step
+    if not 0 <= j < len(pieces) or not pieces[j][2]:
+        return True
+    a, b = sorted((pieces[i], pieces[j]), key=lambda p: p[1])
+    return a[1] + a[0].get_width() != b[1]
+
+
 class Gfx:
     """The screen. Owns the surface, the fonts, and the caches."""
 
@@ -380,8 +389,11 @@ class Gfx:
     def fill(self, color, rect=None):
         self.surface.fill(rgb(color), rect)
 
-    def rect(self, color, rect, width=0, radius=0):
-        pygame.draw.rect(self.surface, rgb(color), rect, width, border_radius=radius)
+    def rect(self, color, rect, width=0, radius=0, left=-1, right=-1):
+        """left/right override radius on that side's corners (-1 keeps it)."""
+        pygame.draw.rect(self.surface, rgb(color), rect, width, border_radius=radius,
+                         border_top_left_radius=left, border_bottom_left_radius=left,
+                         border_top_right_radius=right, border_bottom_right_radius=right)
 
     def draw_text(self, text, px, x, y, face="sans", color="#ffffff", anchor="topleft", bg=None, pad=0, track: float = 0,
                   tr: bool = True) -> pygame.Rect:
@@ -487,10 +499,11 @@ class Gfx:
                 off = (max_width - w) // 2
             elif align == "right" and max_width:
                 off = max_width - w
-            for s, px_x, bg in pieces:
+            for i, (s, px_x, bg) in enumerate(pieces):
                 r = pygame.Rect(x + off + px_x, y, s.get_width(), h)
                 if bg:
-                    self.rect(bg, r)
+                    self.rect(bg, r, left=h // 5 if _run_edge(pieces, i, -1) else 0,
+                              right=h // 5 if _run_edge(pieces, i, 1) else 0)
                 self.surface.blit(s, (r.x, y + (h - s.get_height()) // 2))
             y += h + line_gap
         return y - top

@@ -145,6 +145,14 @@ describe("pack assembly", () => {
     expect(skippedBy(await buildEntries({ ...base, words: [{ word: "octopus", emoji: "🐙" }] }))).toEqual([]);
   });
 
+  it("writes what a word means to meanings.json, trimmed, only for words that have one", async () => {
+    const entries = await buildEntries({ ...base, words: [{ word: "grandma", emoji: "👵", means: " Grandma lives in Ohio. " }, { word: "cat", emoji: "🐱", means: " " }] });
+    const meanings = entries.find((e) => e.path === "content/meanings.json")!;
+    expect(JSON.parse(new TextDecoder().decode(meanings.data))).toEqual({ grandma: "Grandma lives in Ohio." });
+    expect(skippedBy(entries).map((s) => s.added)).toEqual(["Meanings for words"]);
+    expect((await buildEntries({ ...base, words: [{ word: "cat", emoji: "🐱" }] })).some((e) => e.path === "content/meanings.json")).toBe(false);
+  });
+
   it("writes a picture's letters beside its paint, and leaves them out when there are none", async () => {
     const spec: PackSpec = { ...base, pictures: [
       { name: "t-rex", title: "T. rex", ops: [[0, 0, "#00ff00"]], letters: [[1, 0, "T", "#ffffff"]] },

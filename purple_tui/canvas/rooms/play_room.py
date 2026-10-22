@@ -13,7 +13,7 @@ from .. import paper
 from ..gfx import is_emoji, mix, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
-from ...play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
+from ...play_eval import SimpleEvaluator, _escape_markup, pair_speakables, parse_speech_trigger
 from ..ui import DOWN, MATH_OPERATORS, UP, HintRotator, TextField
 from .base import Room
 
@@ -41,6 +41,7 @@ SPEECH_ICONS = {"generating": "··", "playing": ICON_VOLUME_HIGH, "filtered": I
 ABACUS_MARK = "\x1e"
 ABACUS_RE = re.compile(r"\x1e(\d+) (.*?)\x1e")
 ABACUS_SLOTS = 12  # 9 beads plus the gap they slide across
+QUESTION = re.compile(r"(?:what|who)(?:'?s|\s+(?:is|are))?\s+(?:(?:a|an|the)\s+)?([a-z][a-z'-]*)\s*\?*", re.I)
 
 
 class PlayEvaluator(SimpleEvaluator):
@@ -182,6 +183,15 @@ def pinyin_candidates(value: str, cursor: int) -> tuple:
     return (m.start(), i18n.candidates(lang, m.group())) if m else (cursor, [])
 
 
+def asked_meaning(text: str) -> tuple | None:
+    """(picture, meaning) when the line asks what or who a word the family explained is."""
+    if not (m := QUESTION.fullmatch(text.strip())):
+        return None
+    content = get_content()
+    meaning = content.meaning(m.group(1))
+    return (content.exact_emoji(m.group(1)) or "", meaning) if meaning else None
+
+
 def scroll_thumb(track, viewport: int, total: int, hidden: int, min_h: int) -> pygame.Rect:
     """Where the thumb sits on the track: content is `total` tall, the window
     shows `viewport` of it ending `hidden` px above the bottom."""
@@ -300,8 +310,14 @@ class PlayRoom(Room):
             if force_speak and results:
                 self._speak_sequence(runner.pairs, entries)
             return
-        result = self.evaluator.evaluate(eval_text)
-        entry = self._display_result(result) if result else None
+        if asked := asked_meaning(eval_text):
+            picture, result = asked
+            if picture:
+                self._add("answer", picture)
+            entry = self._add("answer", _escape_markup(result))
+        else:
+            result = self.evaluator.evaluate(eval_text)
+            entry = self._display_result(result) if result else None
         echo, echo_spoken = echo_markup(eval_text)
         if echo:
             self._add("answer", echo)
@@ -316,7 +332,7 @@ class PlayRoom(Room):
         from ...tts import _dbg
         _dbg(f"submit raw={input_text!r} force_speak={force_speak} result_len={len(result or '')}")
         if force_speak:
-            self._speak(eval_text, result, entry, echo_spoken)
+            self._speak(result if asked else self.evaluator._make_speakable(eval_text, result), entry, echo_spoken)
         self.app.invalidate()
 
     # ---------------------------------------------------------------- speech
@@ -325,10 +341,9 @@ class PlayRoom(Room):
             entry.speech = state
             self.app.invalidate()
 
-    def _speak(self, input_text: str, result: str, entry, echo: str = ""):
+    def _speak(self, speakable: str, entry, echo: str = ""):
         """The answer in the interface language, then the second language's words for it."""
         from ...tts import _dbg, speak_many
-        speakable = self.evaluator._make_speakable(input_text, result)
         _dbg(f"speakable len={len(speakable)} head={speakable[:60]!r}")
         if not speakable:
             return

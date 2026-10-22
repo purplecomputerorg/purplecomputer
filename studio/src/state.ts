@@ -15,7 +15,8 @@ export const features = { rooms: true };
 // Everything starts as a try: Studio's Purple plays it, and it goes in the download once the family
 // adds it (kept). A sample is one of Studio's examples, tried and not yet changed or added.
 export interface Keepable { kept?: boolean; sample?: boolean }
-export interface WordEntry extends Keepable { word: string; emoji: string }
+// means: what Play says when they ask what or who the word is.
+export interface WordEntry extends Keepable { word: string; emoji: string; means?: string }
 export interface SynonymEntry extends Keepable { alias: string; word: string }
 export interface Phrase extends Keepable { text: string; clip: Clip }
 export interface Letter extends Keepable { clip: Clip }

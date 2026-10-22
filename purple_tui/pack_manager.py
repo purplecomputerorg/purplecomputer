@@ -197,7 +197,7 @@ def _check_room_assets(content: Path) -> list[str]:
 
 def _check_word_maps(content: Path) -> list[str]:
     problems = []
-    for name in ('emoji.json', 'synonyms.json'):
+    for name in ('emoji.json', 'synonyms.json', 'meanings.json'):
         path = content / name
         if not path.exists():
             continue

@@ -46,6 +46,14 @@ Everything below `content/` that is not listed here is ignored.
 
 Maps a word to one of the pack's own pictures, `content/images/<name>.png`, which Play shows wherever it would show the word's emoji, emoji-sized and keeping its shape. Inside Purple the word gets a character from Supplementary Private Use Area-B picked from the word, so it counts, repeats, and is spoken like an emoji, and a Time Travel step keeps it; once its pack is gone, Play draws 🖼️ there. Synonyms of the word show the picture too. The Textual UI skips this file, and so does a Purple from before it, which loads the rest of the pack and leaves the word as it was, so a pack using it stays format 1.
 
+### meanings.json
+
+```json
+{ "grandma": "Grandma Ruth lives in Ohio and grows tomatoes." }
+```
+
+What a word is, for Play: when the kid types "who is grandma", "what's a biscuit?" or "what grandma", Play shows the word's emoji or picture and this line, and says it when the line has a `!` or starts with say. Plurals find the singular's meaning. Purple keeps the first 200 characters. The Textual UI skips this file, and so does a Purple from before it, which answers the question as it always has, so a pack using it stays format 1.
+
 ### letters/<key>.wav
 
 One clip per Music grid key, any of them: `a.wav` through `z.wav` and `0.wav` through `9.wav`, lowercase, plus `semicolon.wav`, `comma.wav`, `period.wav` and `slash.wav` (the names in `canvas/sounds.CLIP_NAMES`). The clip can be anything, not just the key's name. 22050 Hz, mono, 16-bit PCM, the numbers Piper writes for the core clips. The Music room's Say Letters mode searches user packs first, then `letters-kid/` when Kid Voice is on, then the core `letters/`, per key, so a pack that records only some keys falls back for the others; the four punctuation keys have no core clip and stay plain notes unless a pack gives them one. The Textual UI reads only the letters and numbers.
@@ -162,7 +170,7 @@ Studio is one website that changes whenever it deploys; each family's Purple sta
 - manifest present and valid as above; `format` not newer than this build reads
 - no `.py` files except `rooms/<name>.py` and `rooms/purple.py`, no `.pyc`, `.pyo`, `.pyw`, and no extensionless or `.sh` file whose first line mentions python
 - no absolute paths, no `..` segments, no symlinks or hard links in the archive
-- `emoji.json` and `synonyms.json`, if present, are JSON objects mapping strings to non-empty strings
+- `emoji.json`, `synonyms.json` and `meanings.json`, if present, are JSON objects mapping strings to non-empty strings
 - `word-pictures.json`, if present, maps each word to the name of a PNG in `images/`
 - every file in `letters/` and `voice/` is a WAV at 22050 Hz, mono, 16-bit
 - every `instruments/<name>.json` names a known base, has only that base's parameters with numeric values, and has a `content/<name>/` directory whose WAVs are 44100 Hz, mono, 16-bit

@@ -219,6 +219,7 @@ class ContentManager:
         self.packs_dir = packs_dir or Path.home() / ".purple" / "packs"
         self.emojis: dict[str, str] = {}           # word -> emoji
         self.word_pictures: dict[str, Path] = {}   # word picture character -> its PNG
+        self.meanings: dict[str, str] = {}         # word -> what Play says it is
         self.colors: dict[str, str] = {}           # color name -> hex code
         self.sounds: dict[str, Path] = {}          # sound_id -> file path
         # content/ dirs of user packs, load order; later packs win lookups
@@ -445,6 +446,7 @@ class ContentManager:
             except (json.JSONDecodeError, OSError):
                 pass
         self._load_word_pictures(content_dir)
+        self._load_meanings(content_dir)
 
         # Load synonyms (alias -> primary word, resolved to emoji)
         synonyms_file = content_dir / "synonyms.json"
@@ -469,6 +471,17 @@ class ContentManager:
                 char = self.emojis[word] if is_word_picture(self.emojis.get(word, "")) else self._free_picture_char(word)
                 self.word_pictures[char] = path
                 self.emojis[word] = char
+
+    def _load_meanings(self, content_dir: Path) -> None:
+        """content/meanings.json: word -> what Play answers to "what is" or "who is" it."""
+        data = _read_json(content_dir / "meanings.json")
+        if isinstance(data, dict):
+            self.meanings.update({k.lower(): v.strip()[:MEANING_MAX] for k, v in data.items()
+                                  if isinstance(k, str) and isinstance(v, str) and v.strip()})
+
+    def meaning(self, word: str) -> Optional[str]:
+        word = word.lower().strip()
+        return self.meanings.get(word) or self.meanings.get(singularize(word) or "")
 
     def _free_picture_char(self, word: str) -> str:
         n = zlib.crc32(word.encode())
@@ -823,6 +836,7 @@ ROOM_NAME = re.compile(r"^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$")  # purple.py is 
 ROOM_LIB = "purple.py"
 
 
+MEANING_MAX = 200
 ASSET_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 

@@ -21,6 +21,17 @@
     ],
     "calls": []
    }
+  },
+  {
+   "date": "2026-10-22",
+   "added": "Meanings for words",
+   "older": "asking who or what a word is shows its picture without the answer",
+   "needs": {
+    "files": [
+     "^content/meanings\\.json$"
+    ],
+    "calls": []
+   }
   }
  ],
  "screen": {

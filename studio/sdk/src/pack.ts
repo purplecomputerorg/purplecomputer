@@ -29,7 +29,7 @@ export interface PackSpec {
   id?: string;
   // studio.json: how Purple Studio reopens the pack. Purple never reads it.
   studio?: unknown;
-  words: { word: string; emoji: string }[];
+  words: { word: string; emoji: string; means?: string }[];
   synonyms: { alias: string; word: string }[];
   ranked: string[];
   letters: Record<string, Clip>;
@@ -49,6 +49,7 @@ export const PACK_FORMATS: PackFormat[] = exported.pack_formats;
 export interface PackSkipped { date: string; added: string; older: string; needs: PackFormat["needs"] }
 export const PACK_SKIPPED: PackSkipped[] = exported.pack_skipped;
 export const WORD_PICTURES_PATH = "content/word-pictures.json";
+export const MEANINGS_PATH = "content/meanings.json";
 
 const enc = new TextEncoder();
 const text = (path: string, body: string): TarEntry => ({ path, data: enc.encode(body) });
@@ -105,6 +106,8 @@ export function emojiEntries(spec: PackSpec): TarEntry[] {
   const pictured = named.filter((w) => images.has(w.emoji));
   if (words.length) out.push(json("content/emoji.json", Object.fromEntries(words.map((w) => [w.word, w.emoji]))));
   if (pictured.length) out.push(json(WORD_PICTURES_PATH, Object.fromEntries(pictured.map((w) => [w.word, w.emoji]))));
+  const meant = spec.words.filter((w) => w.means?.trim());
+  if (meant.length) out.push(json(MEANINGS_PATH, Object.fromEntries(meant.map((w) => [w.word, w.means!.trim()]))));
   if (spec.synonyms.length) out.push(json("content/synonyms.json", Object.fromEntries(spec.synonyms.map((s) => [s.alias, s.word]))));
   if (spec.ranked.length) out.push(text("content/rankings.txt", spec.ranked.join("\n") + "\n"));
   return out;

@@ -505,6 +505,7 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .tile.bad .emoji-cell { border-color: #d77; }
 .emoji-cell.empty { font: 600 13px var(--sans); color: var(--purple); border-style: dashed; border-color: var(--border); }
 .word-row .was { white-space: nowrap; overflow: hidden; }
+.word-row .means { grid-column: 1 / -1; font-size: 13px; margin-bottom: 4px; }
 .remove { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; border-radius: 8px; height: 28px; }
 .remove:hover { background: var(--fill); color: var(--text); }
 .emoji-pop { position: absolute; z-index: 10; top: 48px; left: 0; width: 340px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 12px; }
@@ -590,7 +591,7 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .map-cell.letter { font: 700 13px var(--mono, monospace); color: var(--purple); }
 .map-grid > .map-cell:hover { outline: 2px solid var(--purple); outline-offset: -2px; }
 
-/* The Emoji page's tip that a word can show a photo. */
+/* The Words page's tip that a word can show a photo. */
 .word-pictures { display: flex; gap: 10px; align-items: center; margin: 4px 0 0; color: var(--dim); }
 .word-pictures img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
 .word-pictures.busy { cursor: progress; }

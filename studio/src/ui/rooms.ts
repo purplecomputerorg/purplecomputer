@@ -1,5 +1,4 @@
 import { ROOM_NAME, roomTitle } from "@sdk/pack";
-import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 import { BLANK_ROOM, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
 import { readKnobs, writeKnobs } from "../knobs";
 import type { RoomSetup } from "../live/boot";
@@ -8,6 +7,7 @@ import { changed, draft, freeName, withSample, type Made, type RoomDraft } from 
 import { go, h } from "./dom";
 import { knobsForm } from "./knobsform";
 import { liveScreen, type RoomProblem } from "./live";
+import { LIBRARY_NAMES } from "./guide";
 import { openPackButton } from "./packfile";
 import { roomFilesBox } from "./roomfiles";
 import { rulesForm } from "./rulesform";
@@ -24,7 +24,6 @@ const roomName = (text: string, except?: RoomDraft) =>
   freeName(text, (n) => n === "purple" || draft.rooms.some((r) => r !== except && (!r.sample || r.kept) && r.name === n), "my-room");
 
 // The names `from purple import *` brings in, and the ones Purple calls when the room defines them.
-export const LIBRARY_NAMES: string[] = JSON.parse(/__all__ = (\[[^\]]*\])/.exec(roomLibrary)![1].replace(/'/g, '"'));
 const CALLED = ["on_key", "on_key_up"];
 
 // A starter's own icon follows it, as garden-3 came from garden; Python with no starter is a pencil, like its card.
@@ -111,8 +110,7 @@ function pythonHelp(source: string): HTMLElement {
       ...(called.length ? [", then calls ", ...called.flatMap((n, i) => [i ? " and " : "", h("code", {}, `${n}(key)`)]), " for each key"] : []),
       ". Everything not from Purple is the room's own."),
     h("p", { class: "row small" }, h("span", { class: "dim" }, "From Purple:"),
-      ...LIBRARY_NAMES.filter(uses).map((n) => h("a", { class: "lib-name", href: `#guide/${n}` }, n)),
-      h("a", { class: "push", href: "#library" }, "See Purple's room library")));
+      ...LIBRARY_NAMES.filter(uses).map((n) => h("a", { class: "lib-name", href: `#guide/${n}` }, n))));
 }
 
 type Tab = "made" | "knobs" | "python";
@@ -221,7 +219,7 @@ function editor(room: RoomDraft): View {
       problems.element,
       out,
       tray,
-      h("p", { class: "dim small" }, "What a room can call is on the ", h("a", { href: "#guide" }, "Room guide"), "."),
+      h("p", { class: "dim small" }, "Everything a room can use is on the ", h("a", { href: "#guide" }, "Room guide"), ". Using an AI helper? Copy the guide from there and paste it in with what you'd like to make."),
     ),
     live: setup,
     caption: "Your room, running on the real Purple. Esc leaves it; it waits in the Esc menu, where it shows up on Purple once you turn it on in the Parent Menu.",

@@ -7,6 +7,7 @@ import { h } from "./dom";
 import { markdown } from "./markdown";
 import type { View } from "./view";
 
+export const LIBRARY_NAMES: string[] = JSON.parse(/__all__ = (\[[^\]]*\])/.exec(roomLibrary)![1].replace(/'/g, '"'));
 const starters = EXAMPLES.map((e) => `### ${e.label}\n\n${e.about}\n\n\`\`\`python\n${e.source.trimEnd()}\n\`\`\``);
 export const GUIDE = [guide.trimEnd(), "## The starter rooms", ...starters].join("\n\n") + "\n";
 
@@ -14,18 +15,6 @@ export const GUIDE = [guide.trimEnd(), "## The starter rooms", ...starters].join
 function rowFor(name: string): HTMLElement | null {
   const codes = [...document.querySelectorAll<HTMLElement>(".guide td code")];
   return codes.find((c) => new RegExp(`^${name}($|[(.\\[])`).test(c.textContent ?? ""))?.closest("tr") ?? null;
-}
-
-// Purple's room library, read-only: what `from purple import *` brings in.
-export function libraryView(): View {
-  return {
-    title: "Purple's room library",
-    back: ["#guide", "Room guide"],
-    editor: h("section", {},
-      h("p", {}, "Every room in a Purple Pack runs on this file, which Studio puts in the pack beside the rooms. ", h("code", {}, "from purple import *"),
-        " brings in the names in its ", h("code", {}, "__all__"), " list; the rest is how it talks to Purple. Rooms use it as it is and can't change it."),
-      h("pre", {}, h("code", {}, roomLibrary))),
-  };
 }
 
 export function guideView(item: string | null): View {
@@ -45,6 +34,11 @@ export function guideView(item: string | null): View {
       { class: "guide" },
       h("p", { class: "row" }, h("button", { class: "btn small", onclick: copy }, "Copy the guide"), status),
       ...markdown(GUIDE),
+      h("details", { class: "more-options" },
+        h("summary", {}, "Purple's own code, for the curious"),
+        h("p", {}, "Every room runs on this file, which Studio puts in the pack beside the rooms. ", h("code", {}, "from purple import *"),
+          " brings in the names in its ", h("code", {}, "__all__"), " list, all of them described above. It isn't part of the copied guide: rooms use it as it is and can't change it."),
+        h("pre", {}, h("code", {}, roomLibrary))),
     ),
     mounted: () => {
       const row = item && rowFor(item);

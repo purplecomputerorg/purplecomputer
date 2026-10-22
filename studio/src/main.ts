@@ -15,7 +15,7 @@ import { privacyView, staysHere } from "./ui/privacy";
 import { pythonView } from "./ui/python";
 import { EXAMPLES } from "./examples";
 import { addRoom } from "./pybridge";
-import { guideView, libraryView } from "./ui/guide";
+import { guideView } from "./ui/guide";
 import { typingKeys } from "./keys";
 import type { Room } from "./live/boot";
 import { Laptop } from "./ui/laptop";
@@ -51,7 +51,7 @@ const MORE = ([
   ["format", "What is in a Purple Pack", formatView],
   ["privacy", "Your privacy", privacyView],
 ] satisfies Page[]).filter(([id]) => features.rooms || id !== "guide");
-const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, library: libraryView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
+const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
 
 function welcomeView(): View {
   return {

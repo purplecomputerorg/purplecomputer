@@ -22,15 +22,16 @@ export function tryBar(item: Keepable, remove?: () => void): HTMLElement {
   return bar;
 }
 
-// rename says why a name can't be used, or renames the item and says nothing.
-export interface YourCard { href: string; title: string; face: Node; current?: boolean; rename?: (text: string) => string | null }
+// rename says why a name can't be used, or renames the item and says nothing. keep stands in for the Add button.
+export interface YourCard { href: string; title: string; face: Node; current?: boolean; rename?: (text: string) => string | null; keep?: HTMLElement | null }
 
 // What the family made on a list page, one card each with an Add to my Pack button and an × that throws it
 // away, plus a pencil when it can be renamed; "Choose several" throws away many at once. Examples only tried aren't theirs yet, so they aren't listed.
-export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (gone: T[]) => void): HTMLElement | null {
+// warn: anything more the confirm should say about throwing these away.
+export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (gone: T[]) => void, warn?: (gone: T[]) => string): HTMLElement | null {
   const theirs = items.filter(isTheirs);
   if (!theirs.length) return null;
-  const throwAway = (gone: T[], what: string) => confirm(`Throw away ${what}?`) && remove(gone);
+  const throwAway = (gone: T[], what: string) => confirm(`Throw away ${what}?${warn?.(gone) ?? ""}`) && remove(gone);
   const chosen = new Set<T>();
   const bin = h("button", { type: "button", class: "btn small", onclick: () => throwAway([...chosen], chosen.size > 1 ? `these ${chosen.size}` : "this one") });
   const counted = () => { bin.disabled = !chosen.size; bin.textContent = chosen.size ? `Throw away ${chosen.size}` : "Throw away"; };
@@ -53,7 +54,7 @@ export function yoursList<T extends Keepable>(items: T[], card: (item: T) => You
         boxes.push(box);
         return h("label", { class: "your-card" }, face, box);
       }
-      const el = h("div", { class: "your-card", "aria-current": c.current ? "page" : null }, face, keepButton(item),
+      const el = h("div", { class: "your-card", "aria-current": c.current ? "page" : null }, face, c.keep === undefined ? keepButton(item) : c.keep,
         c.rename ? h("button", { type: "button", class: "rename", title: `Rename ${c.title}`, "aria-label": `Rename ${c.title}`, onclick: () => renaming(el, face, c) }, "✏️") : null,
         h("button", { type: "button", class: "drop", title: `Throw away ${c.title}`, "aria-label": `Throw away ${c.title}`, onclick: () => throwAway([item], c.title) }, "×"));
       return el;

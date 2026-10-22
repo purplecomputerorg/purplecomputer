@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildPack, openPack } from "../src/pack";
-import { artOf, removeFromPack, roomFileOf, shelf, shelfName, shelve, shelveDraft, unshelve, usedIn } from "../src/shelf";
+import { artOf, removeFromPack, roomFileOf, shelf, shelfName, shelve, shelveDraft, forget, usedIn } from "../src/shelf";
 import { draft, emptyDraft, replaceDraft, type RoomFile } from "../src/state";
 import type { Picture } from "../src/photo";
 
@@ -49,8 +49,19 @@ describe("the family's pictures", () => {
     removeFromPack(dog);
     expect([artOf(dog), roomFileOf(dog), usedIn(dog)]).toEqual([undefined, undefined, []]);
     expect(shelf).toEqual([dog]);
-    unshelve(dog);
-    expect(shelf).toEqual([]);
+  });
+
+  it("forgets pictures off the shelf and out of the pack, so recalling the draft doesn't bring them back", () => {
+    const dog = shelve("data:image/png;base64,AAA", "Dog");
+    const cat = shelve("data:image/png;base64,BBB", "Cat");
+    const sun = shelve("data:image/png;base64,CCC", "Sun");
+    draft.pictures = [art("dog", dog.src, { shelfId: dog.id }), art("sun", sun.src, { shelfId: sun.id })];
+    draft.roomFiles = [{ kind: "images", name: "cat", data: png, kept: true, shelfId: cat.id }];
+    forget(dog, cat);
+    expect(shelf).toEqual([sun]);
+    expect([draft.pictures.map((p) => p.name), draft.roomFiles]).toEqual([["sun"], []]);
+    shelveDraft(draft);
+    expect(shelf).toEqual([sun]);
   });
 
   it("finds a room picture on the shelf again after the pack is downloaded and reopened", async () => {

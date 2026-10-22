@@ -1,13 +1,13 @@
 import type { RoomSetup } from "../live/boot";
 import { canvasOrigin } from "@sdk/purple/art";
 import { CANVAS_SHAPE, EXAMPLES, PICTURE_KINDS, clampCrop, cropTo, examplePicture, pictureFailure, fillCrop, letterPx, onScreen, pictureFromSrc, wordLetters, wordsAt, type Crop, type Example, type Picture } from "../photo";
-import { artOf, removeFromPack, renameShelved, roomFileOf, shelf, shelveFile, unshelve, usedIn, type Shelved } from "../shelf";
-import { changed, draft, freeName, isTheirs, titleOf, withSample } from "../state";
+import { artOf, forget, removeFromPack, renameShelved, roomFileOf, shelf, shelveFile, usedIn, type Shelved } from "../shelf";
+import { changed, draft, freeName, isTheirs, titleOf, withSample, type Keepable } from "../state";
 import { go, h } from "./dom";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
 import { renameRoomFile } from "./roomfiles";
-import { tryBar } from "./trybar";
+import { tryBar, yoursList } from "./trybar";
 import type { View } from "./view";
 
 const goTo = (name: string) => (location.hash = `#pictures/${encodeURIComponent(name)}`);
@@ -74,16 +74,25 @@ function drop(gone: Picture[], showing: boolean) {
   go(showing ? "#pictures" : location.hash);
 }
 
+// Said before a picture is thrown away: it comes out of the Purple Pack too.
+const alsoOut = (used: string[]) => used.length ? ` It comes out of this Purple Pack too (${used.join(", ")}).` : "";
+
 // The shelf, then any of ours the family made their own. A check marks the ones in this Purple Pack.
+interface YourPicture extends Keepable { name: string; title: string; src: string; used: string[]; shelved?: Shelved; pic?: Picture }
 function yourPictures(current: string | null): HTMLElement | null {
-  const cards = [
-    ...shelf.map((s) => ({ name: s.name, title: titleOf(artOf(s) ?? s), src: s.src, used: usedIn(s) })),
-    ...draft.pictures.filter((p) => isTheirs(p) && !p.shelfId).map((p) => ({ name: p.name, title: titleOf(p), src: p.sourceUrl, used: p.kept ? ["Art"] : [] })),
+  const cards: YourPicture[] = [
+    ...shelf.map((s) => ({ name: s.name, title: titleOf(artOf(s) ?? s), src: s.src, used: usedIn(s), shelved: s })),
+    ...draft.pictures.filter((p) => isTheirs(p) && !p.shelfId).map((p) => ({ name: p.name, title: titleOf(p), src: p.sourceUrl, used: p.kept ? ["Art"] : [], pic: p })),
   ];
-  if (!cards.length) return null;
-  return h("div", {}, h("h3", {}, "Your pictures"),
-    h("div", { class: "photo-list" }, ...cards.map((c) => thumb(c.used.length ? `✓ ${c.title}` : c.title, c.src, c.name === current,
-      { href: `#pictures/${encodeURIComponent(c.name)}`, title: c.used.length ? `In this Purple Pack: ${c.used.join(", ")}` : "Not in this Purple Pack" }))),
+  const throwAway = (gone: YourPicture[]) => {
+    forget(...gone.flatMap((c) => c.shelved ?? []));
+    drop(gone.flatMap((c) => c.pic ?? []), gone.some((c) => c.name === current));
+  };
+  const list = yoursList(cards, (c) => ({
+    href: `#pictures/${encodeURIComponent(c.name)}`, title: c.title, face: h("img", { src: c.src, alt: "" }), current: c.name === current,
+    keep: c.used.length ? h("span", { class: "keep on", title: `In this Purple Pack: ${c.used.join(", ")}` }, "✓ In my Pack") : null,
+  }), throwAway, (gone) => alsoOut([...new Set(gone.flatMap((c) => c.used))]));
+  return list && h("div", {}, list,
     h("p", { class: "dim small" }, "Pictures here stay on this computer, ready for any Purple Pack you make. Download your Purple Pack to keep them."));
 }
 
@@ -256,8 +265,8 @@ function usedCard(item: Shelved): HTMLElement {
     go(location.hash);
   };
   const remove = () => {
-    if (!confirm(`Delete ${title} from your pictures?${inPack ? " This Purple Pack keeps its copy." : ""}`)) return;
-    unshelve(item);
+    if (!confirm(`Delete ${title} from your pictures?${alsoOut(used)}`)) return;
+    forget(item);
     go("#pictures");
   };
   return card("Used in", null,

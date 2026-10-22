@@ -410,6 +410,7 @@ input.room-name.just-yours { animation: just-yours 1.8s ease-out; }
 .your-face img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; }
 .your-face .pick-icon, .your-face .pick-swatch { margin: 0; flex-shrink: 0; }
 .your-card .keep { justify-self: start; }
+.your-card span.keep { cursor: default; }
 .your-card .rename { position: absolute; bottom: 10px; right: 10px; border: none; background: none; cursor: pointer; font-size: 14px; opacity: 0.6; padding: 4px; }
 .your-card .rename:hover { opacity: 1; }
 .your-rename { font: inherit; font-weight: 700; width: 100%; padding: 2px 6px; }
@@ -590,3 +591,5 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .word-pictures img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
 .word-pictures.busy { cursor: progress; }
 .word-pictures.busy .linkbtn::after { content: ""; display: inline-block; width: 9px; height: 9px; margin-left: 6px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+dialog.card { max-width: 440px; margin: auto; color: var(--text); }
+dialog::backdrop { background: rgb(0 0 0 / 0.3); }

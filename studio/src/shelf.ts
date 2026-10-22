@@ -43,11 +43,6 @@ export async function shelveFile(file: File): Promise<Shelved> {
   return shelve(src, file.name.replace(/\.[^.]+$/, ""));
 }
 
-export function unshelve(item: Shelved) {
-  shelf.splice(shelf.indexOf(item), 1);
-  saved();
-}
-
 export function renameShelved(item: Shelved, text: string) {
   item.name = shelfName(text, item);
   saved();
@@ -66,10 +61,18 @@ export function usedIn(item: Shelved): string[] {
   return [...(art?.kept ? ["Art"] : []), ...words, ...rooms.map((r) => `the ${titleOf(r)} room`)];
 }
 
-export function removeFromPack(item: Shelved) {
-  draft.pictures = draft.pictures.filter((p) => p.shelfId !== item.id);
-  draft.roomFiles = draft.roomFiles.filter((f) => f.shelfId !== item.id);
+export function removeFromPack(...gone: Shelved[]) {
+  const ids = new Set(gone.map((s) => s.id));
+  draft.pictures = draft.pictures.filter((p) => !ids.has(p.shelfId ?? ""));
+  draft.roomFiles = draft.roomFiles.filter((f) => !ids.has(f.shelfId ?? ""));
   changed();
+}
+
+// Out of this pack too, since a picture the pack still has goes back on the shelf when the draft is recalled.
+export function forget(...gone: Shelved[]) {
+  removeFromPack(...gone);
+  shelf.splice(0, shelf.length, ...shelf.filter((s) => !gone.includes(s)));
+  saved();
 }
 
 const pngUrl = (data: Uint8Array) => `data:image/png;base64,${btoa(Array.from(data, (b) => String.fromCharCode(b)).join(""))}`;

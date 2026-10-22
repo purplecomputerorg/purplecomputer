@@ -17,9 +17,9 @@ function rowFor(name: string): HTMLElement | null {
   return codes.find((c) => new RegExp(`^${name}($|[(.\\[])`).test(c.textContent ?? ""))?.closest("tr") ?? null;
 }
 
-// The button that copies the whole guide, with a word after it on how it went.
+// The button that copies the whole guide, with a word under it on how it went.
 export function copyGuideRow(...lead: (string | Node)[]): HTMLElement {
-  const status = h("span", { class: "dim small" });
+  const status = h("span", { class: "status" });
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(GUIDE);
@@ -28,7 +28,7 @@ export function copyGuideRow(...lead: (string | Node)[]): HTMLElement {
       status.textContent = "Your browser did not allow copying. Select the text on the Room guide page instead.";
     }
   };
-  return h("p", { class: "row" }, ...lead, h("button", { class: "btn small", onclick: copy }, "Copy the Room guide"), status);
+  return h("div", { class: "row between copy-guide" }, ...lead, h("button", { class: "btn small secondary", onclick: copy }, "Copy the Room guide"), status);
 }
 
 export function guideView(item: string | null): View {

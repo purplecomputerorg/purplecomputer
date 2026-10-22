@@ -502,8 +502,10 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .swatch-pick input[type="color"] { width: 44px; height: 44px; border-radius: 12px; overflow: hidden; }
 
 /* Emoji */
-.word-rows { display: grid; grid-template-columns: minmax(0, 1fr) 64px 96px 28px; gap: 6px 10px; max-width: 560px; }
-.word-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
+.word-rows { display: grid; grid-template-columns: minmax(0, 1fr) 64px 96px 28px; gap: 10px; max-width: 580px; }
+.word-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; gap: 8px 10px; padding: 0 12px; border-radius: 16px; }
+.word-row:not(.head, .blank) { background: var(--panel); padding-block: 12px; }
+.word-row.head span:nth-child(2) { grid-column: 2 / -1; }
 .word-rows + .status:empty { min-height: 0; }
 .word-row.head span { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .emoji-wrap { position: relative; }
@@ -514,7 +516,10 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .knob-tiles > .bad { color: #b44; margin: 0; }
 .emoji-cell.empty { font: 600 13px var(--sans); color: var(--purple); border-style: dashed; border-color: var(--border); }
 .word-row .was { white-space: nowrap; overflow: hidden; }
-.word-row .means { grid-column: 1 / -1; font-size: 13px; margin-bottom: 4px; }
+.word-row .means { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.word-row .means .ask { font-size: 12.5px; color: var(--dim); line-height: 1.6; }
+.word-row .means kbd, .word-example kbd { font: 12px var(--mono); color: var(--purple); background: var(--card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+.word-row .means input { font-size: 14px; padding: 8px 12px; border-radius: 10px; }
 .remove { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; border-radius: 8px; height: 28px; }
 .remove:hover { background: var(--fill); color: var(--text); }
 .emoji-pop { position: absolute; z-index: 10; top: 48px; left: 0; width: 340px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 12px; }
@@ -608,11 +613,12 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .map-cell.letter { font: 700 13px var(--mono, monospace); color: var(--purple); }
 .map-grid > .map-cell:hover { outline: 2px solid var(--purple); outline-offset: -2px; }
 
-/* The Words page's tip that a word can show a photo. */
-.word-pictures { display: flex; gap: 10px; align-items: center; margin: 4px 0 0; color: var(--dim); }
-.word-pictures img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
-.word-pictures.busy { cursor: progress; }
-.word-pictures.busy .linkbtn::after { content: ""; display: inline-block; width: 9px; height: 9px; margin-left: 6px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+/* The Words page's read-only examples. */
+.word-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; max-width: 580px; margin: 4px 0 14px; }
+.word-example { display: grid; align-content: start; gap: 6px; padding: 12px; border-radius: 16px; border: 1.5px dashed var(--line); font-size: 13px; line-height: 1.4; }
+.word-example .head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.word-example .pic { display: grid; place-items: center; width: 32px; height: 32px; font-size: 24px; }
+.word-example .pic img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
 dialog.card { max-width: 440px; margin: auto; color: var(--text); }
 dialog::backdrop { background: rgb(0 0 0 / 0.3); }
 .spoken { display: flex; flex-direction: column; gap: 6px; width: 100%; }

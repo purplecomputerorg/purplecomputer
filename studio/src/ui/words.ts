@@ -3,9 +3,7 @@ import { changed, draft, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, emojiCell } from "./emojipicker";
-import { addOurPicture } from "./roomfiles";
 import box from "../assets/purple-box.jpg";
-import { pictureFailure } from "../photo";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -13,9 +11,22 @@ const WORD = /^[a-z][a-z'-]*$/;
 // purple_tui/content.py MEANING_MAX.
 const MEANING_MAX = 200;
 
+// Shown, never added: what a word can be, before the family has any.
+const EXAMPLES: { word: string; pic: string | Node; says: string; means: string }[] = [
+  { word: "trex", pic: "🦖", says: "what is trex", means: "A giant dinosaur who stomps, roars, and has teeny tiny arms" },
+  { word: "nana", pic: "👵", says: "who is nana", means: "Nana tells the best stories and gives the biggest hugs" },
+  { word: "box", pic: h("img", { src: box, alt: "" }), says: "box", means: `Your own photo, instead of Purple's ${CORE_EMOJI.box ?? "emoji"}` },
+];
+
+function examples(): HTMLElement {
+  return h("div", { class: "word-examples" }, ...EXAMPLES.map((x) => h("div", { class: "word-example" },
+    h("div", { class: "head" }, h("span", { class: "pic" }, x.pic), h("b", {}, x.word)),
+    h("div", {}, h("kbd", {}, x.says)), h("div", { class: "dim" }, x.means))));
+}
+
 // One table, a row per word and a blank row at the end: type a word, press Enter, pick its emoji,
 // and the next blank row is ready.
-function wordTable(rendered: () => void): HTMLElement & { refresh: () => void } {
+function wordTable(): HTMLElement {
   const rows = h("div", { class: "word-rows" });
   const status = h("div", { class: "status" });
 
@@ -27,7 +38,7 @@ function wordTable(rendered: () => void): HTMLElement & { refresh: () => void } 
 
   function row(entry: WordEntry | null): HTMLElement {
     const pending = { emoji: entry?.emoji ?? "" };
-    const word = h("input", { type: "text", value: entry?.word ?? "", placeholder: entry ? "" : "Type a word, like biscuit", "aria-label": "Word", autocomplete: "off", spellcheck: false });
+    const word = h("input", { type: "text", value: entry?.word ?? "", placeholder: entry ? "" : "Type a word", "aria-label": "Word", autocomplete: "off", spellcheck: false });
     const emoji = emojiCell(pending.emoji, () => clean(word.value), (e) => {
       pending.emoji = e;
       if (entry) { entry.emoji = e; changed(); showWas(); rows.querySelector<HTMLInputElement>(".blank input")?.focus(); }
@@ -74,8 +85,8 @@ function wordTable(rendered: () => void): HTMLElement & { refresh: () => void } 
   }
 
   function meaning(entry: WordEntry): HTMLElement {
-    const input = h("input", { type: "text", class: "means", value: entry.means ?? "", maxlength: MEANING_MAX, autocomplete: "off",
-      placeholder: `Who or what is ${entry.word}? Like: Grandma lives in Ohio and grows tomatoes`, "aria-label": `What ${entry.word} means` });
+    const input = h("input", { type: "text", value: entry.means ?? "", maxlength: MEANING_MAX, autocomplete: "off",
+      placeholder: "Optional" });
     input.addEventListener("change", () => {
       entry.means = input.value.trim() || undefined;
       changed();
@@ -85,7 +96,8 @@ function wordTable(rendered: () => void): HTMLElement & { refresh: () => void } 
       e.preventDefault();
       rows.querySelector<HTMLInputElement>(".blank input")?.focus();
     });
-    return input;
+    return h("label", { class: "means" }, h("span", { class: "ask" }, "Type ", h("kbd", {}, `what is ${entry.word}`), " or ",
+      h("kbd", {}, `who is ${entry.word}`), " in Play and Purple answers:"), input);
   }
 
   function render() {
@@ -96,51 +108,21 @@ function wordTable(rendered: () => void): HTMLElement & { refresh: () => void } 
       row(null),
     );
     rows.querySelector<HTMLInputElement>(".blank input")?.focus({ preventScroll: true });
-    rendered();
   }
   render();
-  return Object.assign(h("div", { class: "card" }, rows, status), { refresh: render });
-}
-
-const EXAMPLE_WORD = "box";
-
-// Words can show a photo too, with ours to try it.
-function picturesTip(added: () => void): HTMLElement & { refresh: () => void } {
-  const note = h("span", { class: "status" });
-  const busy = () => tip.classList.contains("busy");
-  const refresh = () => void (button.disabled = busy() || draft.words.some((w) => w.word === EXAMPLE_WORD));
-  const button = h("button", { type: "button", class: "linkbtn", onclick: async () => {
-    tip.classList.add("busy");
-    refresh();
-    note.textContent = "";
-    try {
-      const f = await addOurPicture("purple-box", box);
-      draft.words.push({ word: EXAMPLE_WORD, emoji: f.name, kept: true });
-      changed();
-      added();
-    } catch (e) {
-      note.textContent = ` ${pictureFailure(e)}`;
-    }
-    tip.classList.remove("busy");
-    refresh();
-  } }, "try ours");
-  const tip = h("p", { class: "word-pictures small" }, h("img", { src: box, alt: "" }),
-    h("span", {}, "A word can show your own photo instead of an emoji: click its emoji and choose Add photo, or ", button, ".", note));
-  refresh();
-  return Object.assign(tip, { refresh });
+  return h("div", { class: "card" }, rows, status);
 }
 
 export function wordsView(): View {
-  const pictures = picturesTip(() => table.refresh());
-  const table = wordTable(pictures.refresh);
+  const table = wordTable();
   return {
     title: "Words",
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "In Play, kids type a word and see its emoji. Add the words your family uses: a pet's name, a favorite food, a word only you say."),
-      h("p", {}, "Tell Purple what a word means, and when they type \"who is grandma\" or \"what is biscuit\", Purple shows the picture and the answer. Add ! to hear it said."),
-      pictures,
+      h("p", { class: "lead" }, "In Play, kids type a word and see its emoji. Add the words your family uses, a pet's name or a word only you say, and give each one an emoji or your own photo. Yours shows in place of Purple's."),
+      h("p", {}, "Give a word a meaning too. When your kid types \"what is trex\" or \"who is nana\" in Play, Purple shows its picture and your answer. Ending with ! reads the answer aloud."),
+      examples(),
       table,
       h("p", { class: "dim small" }, "Purple already knows hundreds of words, like cat and dog. Your words come first when Purple suggests what to type."),
     ),

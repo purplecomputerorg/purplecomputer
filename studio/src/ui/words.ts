@@ -5,6 +5,7 @@ import { h } from "./dom";
 import { closeEmojiPicker, emojiCell } from "./emojipicker";
 import { addRoomPicture } from "./roomfiles";
 import box from "../assets/purple-box.jpg";
+import { pictureFailure } from "../photo";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -12,7 +13,7 @@ const WORD = /^[a-z][a-z'-]*$/;
 
 // One table, a row per word and a blank row at the end: type a word, press Enter, pick its emoji,
 // and the next blank row is ready.
-function wordTable(): HTMLElement & { refresh: () => void } {
+function wordTable(rendered: () => void): HTMLElement & { refresh: () => void } {
   const rows = h("div", { class: "word-rows" });
   const status = h("div", { class: "status" });
 
@@ -78,6 +79,7 @@ function wordTable(): HTMLElement & { refresh: () => void } {
       row(null),
     );
     rows.querySelector<HTMLInputElement>(".blank input")?.focus({ preventScroll: true });
+    rendered();
   }
   render();
   return Object.assign(h("div", { class: "card" }, rows, status), { refresh: render });
@@ -86,21 +88,34 @@ function wordTable(): HTMLElement & { refresh: () => void } {
 const EXAMPLE_WORD = "box";
 
 // Words can show a photo too, with ours to try it.
-function picturesTip(added: () => void): HTMLElement {
-  const button = h("button", { type: "button", class: "linkbtn", disabled: draft.words.some((w) => w.word === EXAMPLE_WORD), onclick: async () => {
-    button.disabled = true;
-    const f = await addRoomPicture("purple-box", box);
-    draft.words.push({ word: EXAMPLE_WORD, emoji: f.name, kept: true });
-    changed();
-    added();
+function picturesTip(added: () => void): HTMLElement & { refresh: () => void } {
+  const note = h("span", { class: "status" });
+  const busy = () => tip.classList.contains("busy");
+  const refresh = () => void (button.disabled = busy() || draft.words.some((w) => w.word === EXAMPLE_WORD));
+  const button = h("button", { type: "button", class: "linkbtn", onclick: async () => {
+    tip.classList.add("busy");
+    refresh();
+    note.textContent = "";
+    try {
+      const f = await addRoomPicture("purple-box", box);
+      draft.words.push({ word: EXAMPLE_WORD, emoji: f.name, kept: true });
+      changed();
+      added();
+    } catch (e) {
+      note.textContent = ` ${pictureFailure(e)}`;
+    }
+    tip.classList.remove("busy");
+    refresh();
   } }, "try ours");
-  return h("p", { class: "word-pictures small" }, h("img", { src: box, alt: "" }),
-    h("span", {}, "A word can show your own photo instead of an emoji: click its emoji and choose Add photo, or ", button, "."));
+  const tip = h("p", { class: "word-pictures small" }, h("img", { src: box, alt: "" }),
+    h("span", {}, "A word can show your own photo instead of an emoji: click its emoji and choose Add photo, or ", button, ".", note));
+  refresh();
+  return Object.assign(tip, { refresh });
 }
 
 export function wordsView(): View {
-  const table = wordTable();
-  const pictures = picturesTip(table.refresh);
+  const pictures = picturesTip(() => table.refresh());
+  const table = wordTable(pictures.refresh);
   return {
     title: "Emoji",
     editor: h(

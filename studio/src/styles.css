@@ -585,3 +585,5 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 /* The Emoji page's tip that a word can show a photo. */
 .word-pictures { display: flex; gap: 10px; align-items: center; margin: 4px 0 0; color: var(--dim); }
 .word-pictures img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+.word-pictures.busy { cursor: progress; }
+.word-pictures.busy .linkbtn::after { content: ""; display: inline-block; width: 9px; height: 9px; margin-left: 6px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }

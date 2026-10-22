@@ -17,7 +17,7 @@ def pictures(tmp_path, monkeypatch):
     content = tmp_path / "packs" / "family" / "content"
     (content / "images").mkdir(parents=True)
     (content.parent / "manifest.json").write_text(json.dumps({"id": "family", "name": "F", "version": "1.0.0", "type": "emoji"}))
-    (content / "word-pictures.json").write_text(json.dumps({"biscuit": "biscuit", "ghost": "nope"}))
+    (content / "word-pictures.json").write_text(json.dumps({"biscuit": "biscuit", "box": "biscuit", "ghost": "nope"}))
     (content / "synonyms.json").write_text(json.dumps({"bisky": "biscuit"}))
     red = pygame.Surface((4, 2))
     red.fill((255, 0, 0))
@@ -39,6 +39,7 @@ def test_a_picture_word_is_a_character_play_treats_like_an_emoji(pictures):
     assert cm.get_emoji("bisky") == char and cm.get_emoji("ghost") == "👻"
     assert load().get_emoji("biscuit") == char
     assert SimpleEvaluator().evaluate("biscuit * 3") == SimpleEvaluator().evaluate("cat * 3").replace("🐱", char)
+    assert SimpleEvaluator().evaluate("3 boxes") == SimpleEvaluator().evaluate("3 cats").replace("🐱", cm.get_emoji("box"))
 
 
 def test_the_picture_is_drawn_at_emoji_size_and_a_missing_one_as_a_frame(pictures, monkeypatch):

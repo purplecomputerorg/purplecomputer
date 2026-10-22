@@ -169,12 +169,18 @@ def singularize(word: str) -> str | None:
 def pluralize(word: str) -> str:
     """Return the plural form of a known singular.
 
-    Falls back to appending 's' for words outside the precomputed vocabulary
-    (preserves the autocomplete-index behaviour of always producing some plural).
+    Falls back to the regular English endings for words outside the
+    precomputed vocabulary, like a pack's own ("box" -> "boxes").
     """
     singular_to_plural, _ = _plural_tables()
     lower = word.lower()
-    return singular_to_plural.get(lower, lower + "s")
+    if lower in singular_to_plural:
+        return singular_to_plural[lower]
+    if lower.endswith(("s", "x", "z", "ch", "sh")):
+        return lower + "es"
+    if len(lower) > 1 and lower[-1] == "y" and lower[-2] not in "aeiou":
+        return lower[:-1] + "ies"
+    return lower + "s"
 
 
 # Arithmetic word → symbol. Division words only read as operators between
@@ -493,7 +499,8 @@ class ContentManager:
             return emoji
         if (singular := singularize(word)) and (emoji := self.emojis.get(singular)):
             return emoji
-        return None
+        # A pack's own word, whose plural singularize() can't undo ("boxes").
+        return self.emojis.get(self._emoji_forms.get(word, ""))
 
     def _build_fuzzy_forms(self) -> None:
         """Precompute fuzzy candidate tables (form -> source key), once per load.

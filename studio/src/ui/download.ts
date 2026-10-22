@@ -38,7 +38,7 @@ function needsNewer(format: number): string {
 }
 
 // What an older Purple opens the pack without.
-export const skippedNote = (s: PackSkipped) => `${s.added} need ${downloadedOn(s.date)}. On an older one, ${s.older}.`;
+const skippedNote = (s: PackSkipped) => `${s.added} need ${downloadedOn(s.date)}. On an older one, ${s.older}.`;
 
 const groups = (list: Count[]) => list.map((p) => h("div", { class: "pack-group" },
   h("a", { class: "pack-heading", href: `#${p.section}` }, countOf(p)),

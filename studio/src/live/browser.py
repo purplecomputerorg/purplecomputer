@@ -55,13 +55,11 @@ def _patch_emoji():
     from js import purpleDrawEmoji
     from purple_tui.canvas import gfx
 
-    def emoji(self, text, px):
-        def make():
-            img = purpleDrawEmoji(text, max(1, round(px * 1.2)))
-            return pygame.image.frombuffer(bytes(img.data.to_py()), (img.width, img.height), "RGBA").convert_alpha()
-        return self._emoji.get_or((text, px), make)
+    def emoji_run(self, text, px):
+        img = purpleDrawEmoji(text, max(1, round(px * 1.2)))
+        return pygame.image.frombuffer(bytes(img.data.to_py()), (img.width, img.height), "RGBA").convert_alpha()
 
-    gfx.Gfx.emoji = emoji
+    gfx.Gfx._emoji_run = emoji_run
 
 
 _patch_emoji()

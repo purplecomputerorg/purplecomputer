@@ -4,9 +4,7 @@ import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, emojiCell } from "./emojipicker";
 import { addRoomPicture } from "./roomfiles";
-import { skippedNote } from "./download";
-import { skippedBy, WORD_PICTURES_PATH } from "@sdk/pack";
-import boxes from "../assets/purple-boxes.jpg";
+import box from "../assets/purple-box.jpg";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -87,29 +85,22 @@ function wordTable(): HTMLElement & { refresh: () => void } {
 
 const EXAMPLE_WORD = "box";
 
-// What a word can do beyond emoji: Play showing a photo, and our own photo to try it with.
-function picturesCard(added: () => void): HTMLElement {
-  const photo = () => h("img", { src: boxes, alt: "" });
-  const tried = () => draft.words.some((w) => w.word === EXAMPLE_WORD);
-  const button = h("button", { type: "button", class: "btn secondary", disabled: tried(), onclick: async () => {
+// Words can show a photo too, with ours to try it.
+function picturesTip(added: () => void): HTMLElement {
+  const button = h("button", { type: "button", class: "linkbtn", disabled: draft.words.some((w) => w.word === EXAMPLE_WORD), onclick: async () => {
     button.disabled = true;
-    const f = await addRoomPicture("purple-boxes", boxes);
+    const f = await addRoomPicture("purple-box", box);
     draft.words.push({ word: EXAMPLE_WORD, emoji: f.name, kept: true });
     changed();
     added();
-  } }, "Try it with our photo");
-  return h("div", { class: "card word-pictures" },
-    h("div", { class: "word-pictures-demo", "aria-hidden": "true" }, h("span", {}, "Type → 3 boxes"), h("span", {}, photo(), photo(), photo())),
-    h("div", {},
-      h("h2", {}, "Your own pictures, too"),
-      h("p", {}, "A word can show a photo where its emoji would go: your dog, Grandma, the boxes Purple came in. Click any word's emoji and choose Add photo."),
-      button,
-      ...skippedBy([{ path: WORD_PICTURES_PATH, data: new Uint8Array() }]).map((s) => h("p", { class: "dim small skipped-note" }, skippedNote(s)))));
+  } }, "try ours");
+  return h("p", { class: "word-pictures small" }, h("img", { src: box, alt: "" }),
+    h("span", {}, "A word can show your own photo instead of an emoji: click its emoji and choose Add photo, or ", button, "."));
 }
 
 export function wordsView(): View {
   const table = wordTable();
-  const pictures = picturesCard(table.refresh);
+  const pictures = picturesTip(table.refresh);
   return {
     title: "Emoji",
     editor: h(

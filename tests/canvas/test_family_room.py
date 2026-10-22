@@ -698,7 +698,8 @@ def test_on_the_iso_rooms_start_through_the_sealed_launcher(monkeypatch, tmp_pat
     limits.RUN_ROOM.touch()
     assert family_room.command() == ["sudo", "-n", str(limits.RUN_ROOM)]
     assert rule.split("NOPASSWD: ")[1] == '/usr/local/bin/purple-room-run ""'
-    assert "-p User=purple-room" in open("scripts/purple-room-run.sh").read()
+    launcher = open("scripts/purple-room-run.sh").read()
+    assert "-p User=purple-room" in launcher and "InaccessiblePaths=-/run" not in launcher
 
 
 def _children(pid: int) -> list:

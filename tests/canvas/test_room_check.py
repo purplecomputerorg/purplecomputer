@@ -51,6 +51,14 @@ def test_on_the_iso_rooms_run_sealed_and_say_what_they_printed(make_pack, capsys
     assert "NEEDS FIXING: its process ended" in out and "going down" in out
 
 
+@pytest.mark.parametrize("launcher, status", [("exit 226", "226"), ("cat <&0 >/dev/null & exec >&-; sleep 9", "None")])
+def test_a_seal_that_never_starts_the_room_says_its_exit_status(make_pack, capsys, monkeypatch, launcher, status):
+    """226 is systemd failing to seal; a start event bigger than a pipe makes the launcher go before it's read."""
+    monkeypatch.setattr(check.L, "sealed", lambda: ["sh", "-c", launcher])
+    assert check.main([str(make_pack(walk="from purple import *\n" + "#" * 60_000))]) == 1
+    assert f"NEEDS FIXING: its process ended, exit status {status}" in capsys.readouterr().out
+
+
 def test_a_room_file_is_tried_alone_with_its_pack(make_pack, capsys, tmp_path):
     pack = make_pack(good="from purple import *\n", oops='from purple import *\ndef on_key(key):\n    drum("snar")\n')
     assert check.main([str(pack / "content" / "rooms" / "oops.py")]) == 1

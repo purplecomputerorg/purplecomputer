@@ -64,15 +64,21 @@ class Room:
 
     def send(self, event: dict, timeout=None):
         timeout = timeout or L.STEP_TIMEOUT_S
-        self.proc.stdin.write(json.dumps({**event, "t": round(self.t, 3)}, ensure_ascii=False) + "\n")
-        self.proc.stdin.flush()
         try:
+            self.proc.stdin.write(json.dumps({**event, "t": round(self.t, 3)}, ensure_ascii=False) + "\n")
+            self.proc.stdin.flush()
             line = self.lines.get(timeout=timeout)
+        except BrokenPipeError:
+            line = None
         except queue.Empty:
             what = f"the {event['key']} key" if "key" in event else "its timer" if event["ev"] == "tick" else "starting"
             raise Stopped(f"it took more than {timeout:g} seconds to answer {what}") from None
         if line is None:
-            raise Stopped("its process ended")
+            try:
+                self.proc.wait(2)
+            except subprocess.TimeoutExpired:
+                pass
+            raise Stopped(f"its process ended, exit status {self.proc.returncode} (226 means systemd couldn't seal it)")
         if len(line) > L.MAX_REPLY_CHARS:
             raise Stopped("its reply was too long")
         self.take(json.loads(line))

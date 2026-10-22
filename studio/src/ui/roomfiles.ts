@@ -6,6 +6,7 @@ import { PICTURE_KINDS, bitmapFromSrc, dataUrl, pictureFailure } from "../photo"
 import { roomFileOf, shelf, shelve, shelveFile, type Shelved } from "../shelf";
 import { changed, draft, freeName, names, type Made, type RoomDraft, type RoomFile } from "../state";
 import { filePicker, h } from "./dom";
+import { recordButton } from "./record";
 
 const MAX_SIDE = 1024;  // pack_manager.IMAGE_MAX_SIDE
 const MAX_BYTES = 1024 * 1024;  // pack_manager.IMAGE_MAX_BYTES
@@ -113,10 +114,12 @@ export function hearRoomSound(name: string): boolean {
 }
 
 // The pack's pictures and sounds as a tray: clicking one gives a room its call (into the Python when
-// onPick takes it, else onto the clipboard), and each can be renamed or thrown away.
-export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & { refresh: () => void } {
+// onPick takes it, else onto the clipboard), and each can be renamed or thrown away. onChange: the files changed, so pickers redraw.
+export function roomFilesBox(onPick?: (call: string) => boolean, onChange = () => {}): HTMLElement & { refresh: () => void } {
   const box = h("div", {});
   const status = h("span", { class: "dim small" });
+  const say = (text: string) => void (status.textContent = text);
+  const changedHere = () => { render(); onChange(); };
   const pick = async (f: RoomFile) => {
     if (onPick?.(call(f))) return void (status.textContent = "");
     await navigator.clipboard?.writeText(call(f)).catch(() => {});
@@ -128,14 +131,15 @@ export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & 
       ? h("div", { class: "photo-list" }, ...draft.roomFiles.map((f) => h("div", { class: "try-chip tray-item" },
         h("button", { type: "button", title: `Use ${call(f)}`, onclick: () => pick(f) }, face(f)),
         f.kind === "sounds" ? h("button", { type: "button", class: "hear", title: `Hear ${f.name}`, "aria-label": `Hear ${f.name}`, onclick: () => hearRoomSound(f.name) }, "▶") : null,
-        h("button", { type: "button", class: "linkbtn small", title: "Rename", onclick: () => { const t = prompt("A new name", f.name); if (t) { renameRoomFile(f, t); render(); } } }, f.name),
+        h("button", { type: "button", class: "linkbtn small", title: "Rename", onclick: () => { const t = prompt("A new name", f.name); if (t) { renameRoomFile(f, t); changedHere(); } } }, f.name),
         h("button", { type: "button", class: "drop", title: `Throw away ${f.name}`, "aria-label": `Throw away ${f.name}`, onclick: () => drop(f) }, "×"))))
       : h("p", { class: "dim small" }, "A photo of your pet, a voice saying hello: add them here, and any room in this Purple Pack can use them."),
     shelfOnly().length ? h("div", {}, h("p", { class: "dim small" }, "From your pictures:"),
       h("div", { class: "photo-list" }, ...shelfOnly().map((s) => h("div", { class: "try-chip tray-item" },
-        h("button", { type: "button", title: `Add ${s.name} for your rooms`, onclick: () => roomFileFor(s).then(render, failed("images")) }, shelfThumb(s)),
+        h("button", { type: "button", title: `Add ${s.name} for your rooms`, onclick: () => roomFileFor(s).then(changedHere, failed("images")) }, shelfThumb(s)),
         h("span", { class: "dim" }, s.name))))) : null,
-    h("p", { class: "row" }, filePicker("image/*", add("images"), "Add a picture"), filePicker("audio/*", add("sounds"), "Add a sound"), status),
+    h("p", { class: "row" }, filePicker("image/*", add("images"), "Add a picture"), filePicker("audio/*", add("sounds"), "Add a sound"),
+      recordButton((clip) => { addRoomData("sounds", "recording", encodeWav(clip)); changedHere(); }, say), status),
     h("p", { class: "dim small" }, `Pictures: ${PICTURE_KINDS}. Studio makes each one small enough for Purple.`),
   ));
   const failed = (kind: RoomFileKind) => (e: unknown) => (status.textContent = kind === "images" ? ` ${pictureFailure(e)}`
@@ -143,8 +147,8 @@ export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & 
   const add = (kind: RoomFileKind) => async (file: File) => {
     try {
       await addRoomFile(kind, file);
-      status.textContent = "";
-      render();
+      say("");
+      changedHere();
     } catch (e) {
       failed(kind)(e);
     }
@@ -152,7 +156,7 @@ export function roomFilesBox(onPick?: (call: string) => boolean): HTMLElement & 
   const drop = (f: RoomFile) => {
     draft.roomFiles = draft.roomFiles.filter((x) => x !== f);
     changed();
-    render();
+    changedHere();
   };
   render();
   return Object.assign(box, { refresh: render });

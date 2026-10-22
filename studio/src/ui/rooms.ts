@@ -174,7 +174,7 @@ function editor(room: RoomDraft): View {
     location.hash = href(name);
   };
 
-  const tray = roomFilesBox((call) => insert(call));
+  const tray = roomFilesBox((call) => insert(call), () => showTab(tab));
   const made = room.made;
   const tabs: Tab[] = [...(made ? ["made" as const] : readKnobs(room.source).length ? ["knobs" as const] : []), "python"];
   const LABELS: Record<Tab, string> = { made: made?.kind === "rules" ? "Rules" : "Form", knobs: "Knobs", python: "Python" };

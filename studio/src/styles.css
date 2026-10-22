@@ -352,6 +352,7 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .knob-head p { margin: 2px 0 0; }
 /* Fields in a room's settings and forms are a size smaller than the rest of Studio's, so a row reads as one line */
 :is(.knobs, .form-card) :is(input[type="text"], select, textarea) { font-size: 14px; padding: 6px 10px; border-radius: 10px; }
+.knobs select { max-width: 14em; }
 :is(.knobs, .form-card) input[type="number"].num { width: 4.5em; padding: 6px 8px; font-size: 14px; }
 :is(.knobs, .form-card) .emoji-cell { width: 52px; height: 36px; font-size: 20px; border-radius: 10px; }
 :is(.knobs, .form-card) .emoji-cell.empty { font-size: 12px; }

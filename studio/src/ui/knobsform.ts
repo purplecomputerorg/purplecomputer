@@ -23,9 +23,9 @@ const LONG = 40;
 const nested = (v: Lit) => v.t === "list" || v.t === "tuple" || v.t === "dict";
 const isFace = (v: Lit) => v.t === "picture" || (v.t === "str" && isEmoji(v.v));
 const emojiOnly = (items: Lit[]) => items.every(isFace);
-// Short plain values fit on one line; long words (a map row, a sentence) get a line each. Emoji wrap however many.
-const inline = (items: Lit[]) => emojiOnly(items)
-  || (items.length <= 8 && items.every((x) => !nested(x) && !(x.t === "str" && x.v.length > 12)));
+// Short plain values fit on one line; long words (a map row, a sentence) get a line each, but a sound's name is a dropdown. Emoji wrap however many.
+const long = (x: Lit) => x.t === "str" && x.v.length > 12 && !isDrum(x.v);
+const inline = (items: Lit[]) => emojiOnly(items) || (items.length <= 8 && items.every((x) => !nested(x) && !long(x)));
 const keyText = (k: Lit) => (k.t === "str" ? k.v : k.t === "num" ? String(k.v) : "");
 const fit = (s: string) => Math.min(LONG, Math.max(2, [...s].length + 1));
 const labelled = (label: string | undefined, el: HTMLElement) => (label ? field(label, el) : el);

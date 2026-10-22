@@ -63,7 +63,7 @@ describe("family rooms in Studio's Python", () => {
   }, 60_000);
 
   it("plays memory alone with a parent's own picture beside an emoji, and no turn line", async () => {
-    const source = example("memory").replace(/^CARDS = .*$/m, 'CARDS = ["grandma", "🐶"]').replace(/^PLAYERS = .*$/m, 'PLAYERS = [("🔴", "Red")]');
+    const source = example("memory").replace(/^CARDS = .*$/m, 'CARDS = [picture("grandma"), "🐶"]').replace(/^PLAYERS = .*$/m, 'PLAYERS = [("🔴", "Red", "#e44444")]');
     const keys = ["q", "w", "e", "r"].map((key) => ({ ev: "key", key }));
     const replies = await runRoom(source, keys, {}, { images: { grandma: [300, 200] } });
     expect(texts(replies[0])).toEqual([..."QWER"]);

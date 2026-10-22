@@ -4,28 +4,27 @@ import { roomTitle } from "@sdk/pack";
 import type { Knob, Lit } from "../knobs";
 import { addRowButton, field, h, removeButton } from "./dom";
 import { emojiCell, isEmoji } from "./emojipicker";
-import { roomPictures } from "./roomfiles";
 import { isMap, legendFor, legendNames, mapPainter } from "./mappainter";
 import { drumIn, isDrum, select, textIn } from "./rulesform";
 
 type Dict = Extract<Lit, { t: "dict" }>;
 type Str = Extract<Lit, { t: "str" }>;
+// An emoji, or one of the pack's pictures: the same picker sets either.
+type Face = Extract<Lit, { t: "str" | "picture" }>;
 // pages: the knob's own keys when its entries point at each other by name (a story's pages); links: the
 // dicts holding those names, shown as dropdowns. taken: the emoji in the list being edited, so none repeats.
-// pictures: the knob takes the pack's own pictures by name beside emoji, as its comment says. drums: its
-// comment or labels say drums, so a drum's name, or one of the pack's sounds, is picked from a list.
-interface Ctx { onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>; relink: (from: string, to: string) => void; taken?: () => string[]; pictures?: boolean; drums?: boolean }
-type Edit = Pick<Ctx, "onEdit" | "taken" | "pictures" | "drums">;
+// drums: its comment or labels say drums, so a drum's name, or one of the pack's sounds, is picked from a list.
+interface Ctx { onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>; relink: (from: string, to: string) => void; taken?: () => string[]; drums?: boolean }
+type Edit = Pick<Ctx, "onEdit" | "taken" | "drums">;
 
 const COLOR = /^#[0-9a-f]{6}$/i;
-const PICTURES = /\byour pictures\b/i;
 const DRUMS = /\bdrums?\b/i;
 const LONG = 40;
 const nested = (v: Lit) => v.t === "list" || v.t === "tuple" || v.t === "dict";
-const isFace = (s: string, pictures?: boolean) => isEmoji(s) || (!!pictures && roomPictures().some((f) => f.name === s));
-const emojiOnly = (items: Lit[], pictures?: boolean) => items.every((x) => x.t === "str" && isFace(x.v, pictures));
+const isFace = (v: Lit) => v.t === "picture" || (v.t === "str" && isEmoji(v.v));
+const emojiOnly = (items: Lit[]) => items.every(isFace);
 // Short plain values fit on one line; long words (a map row, a sentence) get a line each. Emoji wrap however many.
-const inline = (items: Lit[], pictures?: boolean) => emojiOnly(items, pictures)
+const inline = (items: Lit[]) => emojiOnly(items)
   || (items.length <= 8 && items.every((x) => !nested(x) && !(x.t === "str" && x.v.length > 12)));
 const keyText = (k: Lit) => (k.t === "str" ? k.v : k.t === "num" ? String(k.v) : "");
 const fit = (s: string) => Math.min(LONG, Math.max(2, [...s].length + 1));
@@ -35,14 +34,20 @@ let fresh: Lit | null = null;
 const dictsIn = (v: Lit): Dict[] =>
   v.t === "dict" ? [v, ...v.entries.flatMap(([, x]) => dictsIn(x))] : v.t === "list" || v.t === "tuple" ? v.items.flatMap(dictsIn) : [];
 
-function text(v: Str, { onEdit, taken, pictures, drums }: Edit): HTMLElement {
+function faceIn(v: Face, { onEdit, taken }: Edit): HTMLElement {
+  return h("span", { class: "emoji-wrap" }, emojiCell(v.v, () => "", (e) => {
+    Object.assign(v, { t: isEmoji(e) ? "str" : "picture", v: e });
+    onEdit();
+  }, { taken, pictures: true }));
+}
+
+function text(v: Str, { onEdit, drums }: Edit): HTMLElement {
   if (drums && isDrum(v.v)) return drumIn(v.v, (s) => { v.v = s; onEdit(); });
   if (v.v.length > LONG) {
     const el = h("textarea", { class: "words-in", rows: 2, value: v.v });
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
     return el;
   }
-  if (isFace(v.v, pictures)) return h("span", { class: "emoji-wrap" }, emojiCell(v.v, () => "", (e) => { v.v = e; onEdit(); }, { taken, pictures }));
   return textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: fit(v.v), class: `inline${v.v.length > 12 ? " mono-in" : ""}` });
 }
 
@@ -53,6 +58,7 @@ function scalar(v: Lit, edit: Edit): HTMLElement {
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
     return el;
   }
+  if (isFace(v)) return faceIn(v as Face, edit);
   if (v.t === "str") return text(v, edit);
   if (v.t === "num") {
     const el = h("input", { type: "number", class: "inline num", value: String(v.v) });
@@ -109,13 +115,13 @@ function rows(items: HTMLElement[], add: HTMLElement | null, heads: string[] = [
 
 function list(items: Lit[], growable: boolean, ctx: Ctx, labels: string[]): HTMLElement {
   growable &&= items.length > 0;
-  const tiles = inline(items, ctx.pictures);
+  const tiles = inline(items);
   const add = () => (growable ? addSlot(ctx, () => { items.push(structuredClone(items.at(-1)!)); return items.at(-1)!; }, tiles) : null);
   const drop = (i: number) => (growable && items.length > 1 ? remove(ctx, () => items.splice(i, 1)) : null);
   // An emoji list redraws on every pick, so a repeat (an added copy left as it was) shows as one.
-  const taken = emojiOnly(items, ctx.pictures) ? () => items.map((x) => (x as Str).v) : undefined;
+  const taken = emojiOnly(items) ? () => items.map((x) => (x as Face).v) : undefined;
   const sub = taken ? { ...ctx, taken, onEdit: () => changed(ctx) } : ctx;
-  const repeat = (x: Lit) => !!taken && taken().filter((e) => e === (x as Str).v).length > 1;
+  const repeat = (x: Lit) => !!taken && taken().filter((e) => e === (x as Face).v).length > 1;
   // Rows of plain values, like a drum's picture, name, and color, name their columns once.
   const heads = items.every((x) => x.t === "tuple" && !x.items.some(nested)) ? labels : [];
   const item = (x: Lit) => editor(x, sub, [], nested(x) && !heads.length ? labels : []);
@@ -201,7 +207,7 @@ export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
         card.replaceChildren(head(), painter);
         return card;
       }
-      const redraw = () => card.replaceChildren(head(), editor(k.value, { onEdit: edited, redraw, pictures: PICTURES.test(k.about), drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), ...linksOf(k.value) }, [], k.labels));
+      const redraw = () => card.replaceChildren(head(), editor(k.value, { onEdit: edited, redraw, drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), ...linksOf(k.value) }, [], k.labels));
       redraw();
       return card;
     }));

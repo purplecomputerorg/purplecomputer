@@ -69,7 +69,7 @@ def step(dx, dy):
         return drum("woodblock")
     grid.erase(game.x, game.y)
     game.x, game.y = nx, ny
-    if grid.get(nx, ny) == "⭐":
+    if grid.get(nx, ny) == THINGS["*"]:
         game.found += 1
         play("C5")
     show_stars()

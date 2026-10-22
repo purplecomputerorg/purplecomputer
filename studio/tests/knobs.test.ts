@@ -76,6 +76,17 @@ describe("knobs", () => {
     });
   });
 
+  it("reads and writes the pack's pictures beside emoji, and a legend can hold them", () => {
+    const source = `THINGS = {"T": picture( "oak" ), "*": "⭐"}\nCARDS = ["🐶", picture('biscuit')]\nMAP = ["T*T", "...", "T.T"]\n`;
+    const knobs = readKnobs(source);
+    expect(knobs.map((k) => k.name)).toEqual(["THINGS", "CARDS", "MAP"]);
+    expect(knobs[1].value).toEqual({ t: "list", items: [{ t: "str", v: "🐶" }, { t: "picture", v: "biscuit" }] });
+    expect(writeKnobs(source, knobs)).toBe(source);
+    (knobs[1].value as { items: Lit[] }).items[0] = { t: "picture", v: "mochi" };
+    expect(writeKnobs(source, knobs)).toContain('CARDS = [picture("mochi"), picture("biscuit")]');
+    expect(legendFor(knobs[2].value as { items: Lit[] }, knobs.map((k) => k.value))).toBe(knobs[0].value);
+  });
+
   it("leaves out emoji already in the list, so an emoji setting never repeats one", () => {
     expect(searchEmoji("dog").map((r) => r.emoji)).toContain("🐶");
     expect(searchEmoji("dog", 32, ["🐶"]).map((r) => r.emoji)).not.toContain("🐶");

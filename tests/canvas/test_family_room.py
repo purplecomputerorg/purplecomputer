@@ -388,6 +388,25 @@ def test_pictures_draw_from_the_pack_or_from_pixels(pack):
     run(go())
 
 
+def test_a_picture_fits_where_an_emoji_would_keeping_its_shape(pack):
+    room_file = pack("fit", 'from purple import *\ngrid.set(0, 0, picture("tall"), size=2)\ngrid.set(4, 0, picture("tall", 1))\n'
+                            'status(picture("tall"))\n')
+    images = room_file.path.parents[1] / "images"
+    images.mkdir()
+    pygame.image.save(pygame.Surface((2, 4)), str(images / "tall.png"))
+
+    async def go():
+        app = make_app()
+        room = _open(app, "fit")
+        await until(lambda: room.scene)
+        fitted, sized = [s[1:5] for s in room.scene if s[0] == "image"]
+        assert fitted == (5.0, 0.0, 10.0, 20.0)
+        assert sized == (40.0, 0.0, 10.0, 20.0)
+        assert [s[4] for s in room.scene if s[0] == "text"] == ["tall"]
+        room.close()
+    run(go())
+
+
 def test_the_grid_has_a_floor_a_cursor_big_pictures_and_text_over_it(pack):
     pack("garden", 'from purple import *\ngrid.floor.set(0, 0, "#00aa00")\ngrid.set(0, 0, "🌻")\ngrid.cursor(0, 0)\n'
                    'grid.set(2, 2, pixels(["XX", "XX", "XX", "XX"], {"X": "#ff0000"}, 2))\n'

@@ -124,22 +124,28 @@ def held(key):
 
 
 class _Picture:
-    """w by h squares; h left out keeps the picture's shape."""
+    """w by h squares; h left out keeps the picture's shape. Both left out (w is None), it fits where an
+    emoji would go, keeping its shape."""
 
     def __init__(self, source, shape, w, h):
-        self.source = source
-        self.w = max(1, min(W, int(w)))
-        self.h = max(1, min(H, int(h))) if h is not None else max(1, min(H, round(self.w * shape[1] / shape[0])))
+        self.source, self.shape = source, shape
+        self.w = self.h = None
+        if w is not None or h is not None:
+            self.w = max(1, min(W, int(w or 1)))
+            self.h = max(1, min(H, int(h))) if h is not None else max(1, min(H, round(self.w * shape[1] / shape[0])))
+
+    def __str__(self):
+        return self.source if isinstance(self.source, str) else "picture"
 
 
-def picture(name, w=1, h=None):
-    """One of the pack's pictures, content/images/<name>.png, w squares wide."""
+def picture(name, w=None, h=None):
+    """One of the pack's pictures, content/images/<name>.png: where an emoji would go, or w squares wide."""
     if name not in images:
         raise ValueError(f"the pack has no picture called {name!r}")
     return _Picture(name, images[name], w, h)
 
 
-def pixels(rows, palette, w=1, h=None):
+def pixels(rows, palette, w=None, h=None):
     """A small picture made of characters: pixels([".X.", "XXX"], {"X": "#ffcc00"}).
     A character not in the palette is see-through."""
     rows = list(rows)
@@ -278,12 +284,22 @@ def _label(x, y, size, text, color="text", **how):
 
 def _span(thing, size) -> tuple:
     """How many squares across and down a thing in the grid covers."""
-    return (thing.w, thing.h) if isinstance(thing, _Picture) else (size, size)
+    return (thing.w, thing.h) if isinstance(thing, _Picture) and thing.w else (size, size)
+
+
+def _fit(thing, size) -> tuple:
+    """A picture's left and top inside its squares, and its width and height, all in squares."""
+    if thing.w:
+        return 0, 0, thing.w, thing.h
+    k = size / max(thing.shape)
+    w, h = thing.shape[0] * k, thing.shape[1] * k
+    return (size - w) / 2, (size - h) / 2, w, h
 
 
 def _thing(x, y, thing, size) -> list:
     if isinstance(thing, _Picture):
-        return ["image", x, y, CELL * thing.w, CELL * thing.h, thing.source]
+        dx, dy, w, h = _fit(thing, size)
+        return ["image", x + CELL * dx, y + CELL * dy, CELL * w, CELL * h, thing.source]
     side = CELL * size
     if _is_color(thing):
         return ["rect", x + 0.5, y + 0.5, side - 1, side - 1, thing, side / 8]
@@ -293,8 +309,9 @@ def _thing(x, y, thing, size) -> list:
 def _big(sw, sh, thing, box) -> list:
     if not isinstance(thing, _Picture):
         return _label(sw / 2, sh * 0.34, sh * 0.24, thing, width=sw * 0.9, height=sh * 0.46, **box)
-    k = min(sw * 0.8 / thing.w, sh * 0.46 / thing.h)
-    w, h = thing.w * k, thing.h * k
+    _, _, w, h = _fit(thing, 1)
+    k = min(sw * 0.8 / w, sh * 0.46 / h)
+    w, h = w * k, h * k
     return ["image", (sw - w) / 2, sh * 0.34 - h / 2, w, h, thing.source]
 
 

@@ -3,8 +3,10 @@
 // letter the map has just one of and the legend doesn't name (where the hero starts) moves instead of spreading.
 import type { Lit } from "../knobs";
 import { h } from "./dom";
+import { roomPicture } from "./roomfiles";
 
 type Str = Extract<Lit, { t: "str" }>;
+type Face = Extract<Lit, { t: "str" | "picture" }>;
 const COLOR = /^#[0-9a-f]{6}$/i;
 const lettersOf = (rows: Str[]) => rows.map((r) => [...r.v]);
 let down = false;
@@ -17,7 +19,7 @@ export const isMap = (v: Lit): boolean => {
 
 type Legend = Extract<Lit, { t: "dict" }>;
 const isLegend = (v: Lit): v is Legend =>
-  v.t === "dict" && v.entries.length > 0 && v.entries.every(([k, x]) => k.t === "str" && [...k.v].length === 1 && x.t === "str");
+  v.t === "dict" && v.entries.length > 0 && v.entries.every(([k, x]) => k.t === "str" && [...k.v].length === 1 && (x.t === "str" || x.t === "picture"));
 
 // The dict of one-letter keys that names the most letters on the map.
 export function legendFor(map: { items: Lit[] }, values: Lit[]): Legend | undefined {
@@ -26,18 +28,18 @@ export function legendFor(map: { items: Lit[] }, values: Lit[]): Legend | undefi
   return values.filter(isLegend).filter((d) => hits(d) > 0).sort((a, b) => hits(b) - hits(a))[0];
 }
 
-export const legendNames = (d: Legend | undefined) => new Map(d?.entries.map(([k, x]) => [(k as Str).v, (x as Str).v]));
+export const legendNames = (d: Legend | undefined) => new Map(d?.entries.map(([k, x]) => [(k as Str).v, x as Face]));
 
-function look(el: HTMLElement, letter: string, legend: Map<string, string>) {
+function look(el: HTMLElement, letter: string, legend: Map<string, Face>) {
   const shown = legend.get(letter);
-  const color = shown && COLOR.test(shown);
-  el.style.background = color ? shown : "";
-  el.textContent = color ? "" : shown ?? (letter === "." ? "" : letter);
+  const color = shown?.t === "str" && COLOR.test(shown.v);
+  el.style.background = color ? shown.v : "";
+  el.replaceChildren(color ? "" : shown ? (shown.t === "picture" && roomPicture(shown.v)) || shown.v : letter === "." ? "" : letter);
   el.classList.toggle("letter", !shown && letter !== ".");
 }
 
 // Returns the painter and its redraw, for when the legend changes.
-export function mapPainter(map: { items: Lit[] }, legend: () => Map<string, string>, onEdit: () => void): [HTMLElement, () => void] {
+export function mapPainter(map: { items: Lit[] }, legend: () => Map<string, Face>, onEdit: () => void): [HTMLElement, () => void] {
   const rows = map.items as Str[];
   let brush = ".";
   const el = h("div", { class: "map-painter" });

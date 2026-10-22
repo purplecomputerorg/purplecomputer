@@ -35,7 +35,7 @@ Esc always belongs to Purple: it leaves the room, and your room never sees it.
 
 ### Settings a family can change
 
-ALL_CAPS names at the very top of the file, each set to plain words, numbers, colors, lists, or dicts, show up in Studio as a form, with a comment line above each saying what it is. Keep them to what's fun to change: the pictures, words, colors, sounds, and speed. Name everything else in lowercase, below them, so the form stays short. A `# Labels: page, picture, words` line above a setting names the parts of each entry. When a setting's comment says it takes "your pictures", its emoji picker offers the pack's own pictures too, written as their names: draw one with `picture(name)` when `name in images`. When its comment or labels say drum, a drum's name in it is picked from a list of Purple's drums and the pack's own sounds, for `drum(name)`.
+ALL_CAPS names at the very top of the file, each set to plain words, numbers, colors, lists, or dicts, show up in Studio as a form, with a comment line above each saying what it is. Keep them to what's fun to change: the pictures, words, colors, sounds, and speed. Name everything else in lowercase, below them, so the form stays short. A `# Labels: page, picture, words` line above a setting names the parts of each entry. Every emoji in a setting can be one of the pack's own pictures instead: Studio's picker writes it as `picture("name")`, and anything that draws an emoji draws it the same way. When its comment or labels say drum, a drum's name in it is picked from a list of Purple's drums and the pack's own sounds, for `drum(name)`.
 
 ## What a room can call
 
@@ -56,7 +56,7 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `grid.random_empty()` | An `(x, y)` with nothing in it, or `None` when the grid is full. |
 | `grid.floor.set(x, y, thing)` | The floor under the grid: grass under a hero, soil under a plant. It has `get`, `erase`, and `clear` too. |
 | `grid.cursor(x, y)` | A ring around a square, to show what's picked. `grid.cursor()` takes it away. |
-| `picture("cat")` | One of the pack's pictures, for `grid.set` or `show`. |
+| `picture("cat")` | One of the pack's pictures, for `grid.set` or `show`, wherever an emoji could go. In text, or said, it's its name. |
 | `pixels(rows, colors)` | A small picture written as letters (below). |
 | `every(seconds, fn)`, `after(seconds, fn)` | Call `fn` over and over, or once, at least 0.1 seconds apart. Both give back a timer you can `.stop()`. |
 | `game_over(text)` | Stops the timers and shows the text. The next key starts the room over from the top, with fresh variables; `keep` stays. |
@@ -76,7 +76,7 @@ The screen is a **grid of 24 by 12 squares**. `(0, 0)` is the top left, and `gri
 
 Theme colors follow the family's theme, the way Purple's own rooms do: `surface` (the room's ground), `tile` (a key or card), `field`, `line`, `primary` (something picked or turned over), `accent`, `text`, `muted`, `dim`. Use them for a game's own pieces, like cards and beat squares, and `#` colors for things in its world, like grass and water.
 
-An emoji, letter, or color can cover more than one square: `grid.set(3, 4, "🐶", size=2)` is 2 by 2 squares, from (3, 4) right and down. A picture covers as many as you ask for: `picture("cat", 4)` is 4 squares wide and as tall as its shape needs, and `picture("cat", 4, 3)` is 4 by 3. A big thing belongs to its top-left square: `grid.get` and `grid.erase` use that square, and the others stay empty. It doesn't wrap around, so keep it on the screen.
+An emoji, letter, color, or picture can cover more than one square: `grid.set(3, 4, "🐶", size=2)` is 2 by 2 squares, from (3, 4) right and down, and a picture keeps its shape inside them, like an emoji. A picture can instead cover as many squares as you ask for: `picture("cat", 4)` is 4 squares wide and as tall as its shape needs, and `picture("cat", 4, 3)` is 4 by 3. A big thing belongs to its top-left square: `grid.get` and `grid.erase` use that square, and the others stay empty. It doesn't wrap around, so keep it on the screen.
 
 The floor sits under the grid, so a hero standing on grass is `grid.floor.set(x, y, "#4f9d4a")` and `grid.set(x, y, "🧒")`. Moving the hero only changes the grid; the grass stays.
 

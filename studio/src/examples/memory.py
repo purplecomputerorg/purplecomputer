@@ -30,19 +30,12 @@ up = []            # the one or two cards turned over this turn
 game = state(turn=0)
 
 
-def face_up(x, y, face):
-    if face not in images:
-        return grid.set(x, y, face, size=2)
-    w, h = images[face]
-    grid.set(x, y, picture(face, 2) if w >= h else picture(face, max(1, round(2 * w / h)), 2))
-
-
 def draw():
     for key, face in faces.items():
         x, y = spots[key]
         if key in shown or key in up:
             grid.floor.set(x, y, shown.get(key, TURNED), size=2)
-            face_up(x, y, face)
+            grid.set(x, y, face, size=2)
         else:
             grid.floor.erase(x, y)
             grid.set(x, y, key.upper(), size=2)

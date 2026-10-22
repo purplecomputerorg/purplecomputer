@@ -1,10 +1,11 @@
 // A room's knobs: the ALL_CAPS settings at the top of its Python, each written as a plain value (words,
-// numbers, lists, dicts). Studio shows them as a form and writes edits back in place, so the rest of the
+// numbers, lists, dicts, or one of the pack's pictures as picture("name")). Studio shows them as a form and writes edits back in place, so the rest of the
 // Python, hand edits included, is never touched. A "# Labels: page, picture, words" line above a knob names
 // the parts of each entry: its key first, then each part of its value.
 
 export type Lit =
   | { t: "str"; v: string }
+  | { t: "picture"; v: string }
   | { t: "num"; v: number }
   | { t: "bool"; v: boolean }
   | { t: "none" }
@@ -40,6 +41,7 @@ class Parser {
     if (c === "[") return { t: "list", items: this.items("]") };
     if (c === "(") return { t: "tuple", items: this.items(")") };
     if (c === "{") return this.dict();
+    if (this.s.startsWith("picture(", this.i)) return this.picture();
     const word = /^(True|False|None|-?\d+(\.\d+)?)\b/.exec(this.s.slice(this.i))?.[0];
     if (!word) throw new Error("not a plain value");
     this.i += word.length;
@@ -56,6 +58,16 @@ class Parser {
     }
     this.i++;
     return out;
+  }
+
+  private picture(): Lit {
+    this.i += "picture(".length;
+    this.skip();
+    const q = this.s[this.i];
+    if (q !== '"' && q !== "'") throw new Error("expected a picture's name");
+    const v = this.string(q);
+    if (!this.eat(")")) throw new Error("expected )");
+    return { t: "picture", v };
   }
 
   private items(close: string): Lit[] {
@@ -124,6 +136,7 @@ const INDENT = "    ";
 export function literal(v: Lit, multiline = false): string {
   switch (v.t) {
     case "str": return JSON.stringify(v.v);
+    case "picture": return `picture(${JSON.stringify(v.v)})`;
     case "num": return String(v.v);
     case "bool": return v.v ? "True" : "False";
     case "none": return "None";

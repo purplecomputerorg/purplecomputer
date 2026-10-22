@@ -70,11 +70,13 @@ describe("family rooms in Studio's Python", () => {
     expect(replies.slice(1).flatMap((r) => shapes(r).filter((s) => s[0] === "image").map((s) => s[5]))).toContain("grandma");
   }, 60_000);
 
-  it("runs the beat maker: a beat on each key, its drum's picture when on, Space to play", async () => {
+  it("runs the beat maker: a beat on each key, its drum's picture with the letter as a corner badge when on, Space to play", async () => {
     const replies = await runRoom(example("beats"), [{ ev: "key", key: "q" }, { ev: "key", key: "space" }]);
     expect(texts(replies[0]).slice(4, 6)).toEqual(["1", "2"]);
     expect(texts(replies[1])).toContain("🐸");
-    expect(texts(replies[1])).not.toContain("Q");
+    const text = (t: string) => shapes(replies[1]).find((s) => s[0] === "text" && s[4] === t)!;
+    expect(text("Q")[3]).toBeLessThan(text("E")[3] as number);
+    expect(text("Q")[6]).toMatchObject({ box: "surface" });
     expect(replies[2].wake).not.toBeNull();
   }, 60_000);
 

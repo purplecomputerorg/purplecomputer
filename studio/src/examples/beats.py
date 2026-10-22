@@ -17,9 +17,12 @@ game = state(at=-1, loop=None)
 
 def square(key):
     r, c, spot = spots[key]
+    corner = (spot[0] + 1, spot[1] + 1)
+    grid.erase(corner)
     if key in beats:
         grid.floor.set(spot, DRUMS[r][2], size=2)
         grid.set(spot, DRUMS[r][0], size=2)
+        grid.set(corner, key.upper())
         return
     grid.floor.erase(spot)
     if c == game.at:

@@ -296,14 +296,22 @@ def _fit(thing, size) -> tuple:
     return (size - w) / 2, (size - h) / 2, w, h
 
 
-def _thing(x, y, thing, size) -> list:
+def _thing(x, y, thing, size, corner=False) -> list:
     if isinstance(thing, _Picture):
         dx, dy, w, h = _fit(thing, size)
         return ["image", x + CELL * dx, y + CELL * dy, CELL * w, CELL * h, thing.source]
     side = CELL * size
     if _is_color(thing):
         return ["rect", x + 0.5, y + 0.5, side - 1, side - 1, thing, side / 8]
+    if corner:
+        return _label(x + side - 1, y + side - 1, side * 0.5, thing, anchor="bottomright", box="surface", pad=0.8, radius=1.5)
     return _label(x + side / 2, y + side / 2, side * 0.78, thing)
+
+
+def _covered(cells) -> set:
+    """The squares a bigger thing in the grid spreads over, past its own."""
+    spans = {at: _span(*item) for at, item in cells.items()}
+    return {(x + i, y + j) for (x, y), (w, h) in spans.items() for i in range(w) for j in range(h) if i or j}
 
 
 def _big(sw, sh, thing, box) -> list:
@@ -322,8 +330,11 @@ def _scene() -> list:
     box = {"box": "surface", "pad": 2, "radius": 2} if on_grid else {}
     if on_grid:
         ox, oy = (sw - W * CELL) / 2, (sh - H * CELL) / 2
-        for layer in (_s.floor, _s.cells):
-            shapes += [_thing(ox + x * CELL, oy + y * CELL, *item) for (x, y), item in layer.items()]
+        shapes += [_thing(ox + x * CELL, oy + y * CELL, *item) for (x, y), item in _s.floor.items()]
+        # A letter on part of a bigger thing, like a key's letter on its picture, goes on top as a small corner badge.
+        over = _covered(_s.cells)
+        shapes += [_thing(ox + x * CELL, oy + y * CELL, *item, corner=(x, y) in over)
+                   for (x, y), item in sorted(_s.cells.items(), key=lambda kv: kv[0] in over)]
         if _s.cursor:
             x, y = _s.cursor
             w, h = _span(*_s.cells.get(_s.cursor, (None, 1)))

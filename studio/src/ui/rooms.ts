@@ -77,7 +77,7 @@ function list(): View {
 }
 
 // The starters' order on the Rooms page: the liveliest first.
-const ORDER = ["explore", "memory", "beats", "story", "garden", "picture-quiz", "picture-keyboard", "snake"];
+const ORDER = ["story", "explore", "memory", "beats", "garden", "picture-quiz", "picture-keyboard", "snake"];
 
 const choice = (s: { icon: string; label: string; about: string }, go: () => void, cls = "pick") =>
   h("button", { class: cls, onclick: go }, h("span", { class: "pick-icon" }, s.icon),

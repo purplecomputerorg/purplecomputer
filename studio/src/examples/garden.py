@@ -1,7 +1,7 @@
 from purple import *
 
-# A garden that remembers itself, laid out like the Music room: each letter key is a patch of soil. Pick a
-# seed with a number key, then press a letter to plant it there, and again to water it. Each plant grows
+# A garden that remembers itself, laid out like the Music room: each key from Q to / is a patch of soil. Pick a
+# seed with a number key, then press a patch's key to plant it there, and again to water it. Each plant grows
 # a step every time it's watered.
 
 # The seeds: the number key that picks each one, its name, and how it looks as it grows.
@@ -16,10 +16,10 @@ SEEDS = {
 # The soil's two colors, laid like a checkerboard.
 SOIL = ("#7a5230", "#6f4a2b")
 
-rows = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
+rows = ("qwertyuiop", "asdfghjkl;", "zxcvbnm,./")
 spots = {key: (2 + x * 2, 4 + r * 2) for r, keys in enumerate(rows) for x, key in enumerate(keys)}
 game = state(seed="1")
-# keep remembers the garden for next time: letter key -> [seed, step].
+# keep remembers the garden for next time: patch key -> [seed, step].
 plants = keep.setdefault("plots", {})
 
 

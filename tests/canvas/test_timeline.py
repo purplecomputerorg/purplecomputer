@@ -207,9 +207,10 @@ NOW = datetime(2026, 10, 13, 15, 0).timestamp()
 
 
 class TestTimeTravelTrack:
-    def test_a_long_pause_starts_a_new_stretch(self):
+    def test_a_long_pause_ends_a_session_but_not_the_days_stretch(self):
         times = [NOW - 3600, NOW - 3590, NOW - 60, NOW - 50, NOW - 40]
-        assert panels.stretches(times, NOW) == [[0, 2, "Today"], [2, 5, "Today"]]
+        assert panels.sessions(times, NOW) == [[0, 2, "Today"], [2, 5, "Today"]]
+        assert panels.stretches(times, NOW) == [[0, 5, "Today"]]
 
     def test_a_new_day_starts_a_new_stretch(self):
         times = [NOW - 86400, NOW - 10]
@@ -219,10 +220,11 @@ class TestTimeTravelTrack:
         assert panels.stretches([None, None, NOW], NOW) == [[0, 2, "Earlier"], [2, 3, "Today"]]
 
     def test_oldest_stretches_merge_down_to_the_cap(self):
-        times = [NOW - i * panels.SESSION_GAP_S * 2 for i in range(20, 0, -1)]
+        times = [NOW - i * 86400 for i in range(6, -1, -1)] + [NOW - i * 86400 * 30 for i in range(3, 0, -1)]
+        times.sort()
         runs = panels.stretches(times, NOW)
         assert len(runs) == panels.MAX_STRETCHES
-        assert runs[0][0] == 0 and runs[-1] == [19, 20, "Today"]
+        assert runs[0][0] == 0 and runs[-1] == [9, 10, "Today"]
 
     def test_time_ago_words(self):
         assert panels.time_ago(NOW - 20, NOW) == "Just now"
@@ -234,7 +236,7 @@ class TestTimeTravelTrack:
         assert panels.time_ago(None, NOW) == "Earlier"
 
     def test_merged_old_stretches_say_earlier(self):
-        times = [NOW - i * panels.SESSION_GAP_S * 2 for i in range(20, 0, -1)]
+        times = sorted([NOW - i * 86400 for i in range(10)])
         assert panels.stretches(times, NOW)[0][2] == "Earlier"
 
     def test_landmarks_are_the_start_each_session_end_and_extras(self):

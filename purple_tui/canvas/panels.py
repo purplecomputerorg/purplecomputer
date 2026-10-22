@@ -683,8 +683,8 @@ class ReplayPanel:
 
 
 class TimeTravelBar:
-    """Every step on one track, split into stretches where the kid took a
-    break. A stretch is as wide as the log of its steps (today's twice that),
+    """Every step on one track, split into a stretch per day. A stretch
+    is as wide as the log of its steps (today's twice that),
     so months of old history never crowd out today; the words say how long
     ago it really was. A star marks each moment the kid saved. The track only
     shows where you are: the arrows travel (see PurpleApp._press_time_travel)."""
@@ -722,7 +722,7 @@ class TimeTravelBar:
 
     def _draw_track(self, g, track, index, times, saved, runs) -> list:
         """The arrows, stretches, stars and knob, drawn big and scaled down smooth.
-        Returns each day's (label, left, right, holds the knob) span."""
+        Returns each stretch's (label, left, right, holds the knob) span."""
         k = 3
         surf = pygame.Surface((track.w * k, track.h * k), pygame.SRCALPHA)
         cy, a, bar, knob = track.h * k // 2, g.vh(1) * k, g.vh(0.9) * k, g.vh(1.25) * k
@@ -745,11 +745,7 @@ class TimeTravelBar:
             past = span.w if index >= end - 1 else knob_x - span.x if index >= begin else 0
             if past:
                 pygame.draw.rect(surf, rgb(P.LINE), (span.x, span.y, max(bar, past), bar), border_radius=bar // 2)
-            here = begin <= index < end
-            if days and days[-1][0] == label:
-                days[-1] = (label, days[-1][1], span.right // k, days[-1][3] or here)
-            else:
-                days.append((label, span.x // k, span.right // k, here))
+            days.append((label, span.x // k, span.right // k, begin <= index < end))
             x += w * unit + gap
         for sx in stars:
             _star(surf, sx, cy, knob * 1.15, P.ACCENT, P.ON_PRIMARY, k * 2)
@@ -795,12 +791,12 @@ def time_ago(t, now) -> str:
     return _ago(int(secs // 60), "minute") if secs < 3600 else _ago(int(secs // 3600), "hour")
 
 
-def sessions(times, now) -> list:
-    """[begin, end, day label] runs of steps, split at long pauses and new days."""
+def sessions(times, now, gap=SESSION_GAP_S) -> list:
+    """[begin, end, day label] runs of steps, split at new days and pauses of `gap`."""
     runs = []
     for i, t in enumerate(times):
         label, prev = day_label(t, now), times[i - 1] if i else None
-        if runs and runs[-1][2] == label and (t is None or prev is None or t - prev < SESSION_GAP_S):
+        if runs and runs[-1][2] == label and (t is None or prev is None or t - prev < gap):
             runs[-1][1] = i + 1
         else:
             runs.append([i, i + 1, label])
@@ -808,8 +804,8 @@ def sessions(times, now) -> list:
 
 
 def stretches(times, now) -> list:
-    """The sessions the track draws: the oldest merged into one "Earlier" until there are at most MAX_STRETCHES."""
-    runs = sessions(times, now)
+    """The days the track draws: the oldest merged into one "Earlier" until there are at most MAX_STRETCHES."""
+    runs = sessions(times, now, gap=math.inf)
     while len(runs) > MAX_STRETCHES:
         oldest = runs.pop(0)
         runs[0][0], runs[0][2] = oldest[0], "Earlier"

@@ -1,11 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { addAll, clearSection, draft, emptyDraft, freeName, hasWork, madeOf, onChange, pieces, replaceDraft, tryingPieces, withSample, type WordEntry } from "../src/state";
+import { addAll, clearSection, draft, emptyDraft, freeName, hasWork, madeOf, onChange, phraseFor, pieces, putPhrase, replaceDraft, tryingPieces, withSample, type WordEntry } from "../src/state";
 
 describe("rooms saved before the picture quiz", () => {
   it("keeps a trivia room's Python but not its old form, and keeps every other form", () => {
     expect(madeOf({ kind: "trivia", data: { rows: [] } })).toBeNull();
     expect(madeOf(undefined)).toBeNull();
     expect(madeOf({ kind: "rules", rules: [] })).toEqual({ kind: "rules", rules: [] });
+  });
+});
+
+describe("recordings of what rooms say", () => {
+  it("finds a recording by the words as Purple looks them up, and keeps one a room recorded when it's recorded again", () => {
+    replaceDraft();
+    const clip = { samples: new Float32Array(1), rate: 22050 };
+    putPhrase("The owl says hello.", clip, true);
+    expect(phraseFor("the owl says hello.")?.text).toBe("The owl says hello.");
+    expect(phraseFor("The owl says hello!")).toBeUndefined();
+    putPhrase("THE OWL SAYS HELLO.", clip);
+    expect(draft.phrases.map((p) => [p.text, p.kept])).toEqual([["THE OWL SAYS HELLO.", true]]);
+    putPhrase("the owl says hello.", null);
+    expect(draft.phrases).toEqual([]);
   });
 });
 

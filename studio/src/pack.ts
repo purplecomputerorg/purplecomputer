@@ -50,7 +50,7 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   };
   const rendered = await Promise.all(instruments.map(async (i) => ({ ...i, notes: await instrumentNotes(i) })));
   // The preview opens the room being tried from this pack's files too, added or not.
-  const voiced = await roomVoice((trying ? draft.rooms : rooms).map((r) => r.source), !trying, onProgress);
+  const voiced = await roomVoice(trying ? draft.rooms : rooms, !trying, onProgress);
   return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, roomFiles, roomVoice: voiced, theme, studio };
 }
 

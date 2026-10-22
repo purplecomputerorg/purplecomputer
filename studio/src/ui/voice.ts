@@ -1,7 +1,7 @@
 import type { Clip } from "../audio";
 import { play } from "../audio";
 import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
-import { changed, draft } from "../state";
+import { changed, draft, putPhrase } from "../state";
 import { h, pageKeys } from "./dom";
 import { keyLabel, sticker } from "./stickers";
 import { addAllBar, keepButton, tryBar } from "./trybar";
@@ -98,9 +98,8 @@ function phrasesView(): View {
     const t = text.value.trim();
     if (!t) return void (status.textContent = "Type the phrase first, so Purple knows when to play it.");
     status.textContent = "";
-    draft.phrases = [...draft.phrases.filter((p) => p.text.toLowerCase() !== t.toLowerCase()), { text: t, clip }];
+    putPhrase(t, clip);
     text.value = "";
-    changed();
     render();
   };
   const record = recordControl(onClip);

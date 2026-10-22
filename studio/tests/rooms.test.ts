@@ -129,6 +129,13 @@ describe("family rooms in Studio's Python", () => {
     expect(replies[1].sounds).toEqual([["clip", "kitty"], ["clip", "meow"]]);
   }, 60_000);
 
+  it("opens a story on its cover, and a key starts it with Purple saying the page", async () => {
+    const replies = await runRoom(example("story"), [{ ev: "key", key: "a" }, { ev: "key", key: "1" }]);
+    expect([texts(replies[0]), replies[0].sounds]).toEqual([["📖", "Mia and the map", "Press any key to start"], [["say", "Mia and the map"]]]);
+    expect(replies[1].sounds).toEqual([["say", expect.stringMatching(/^Mia finds a map/)]]);
+    expect(replies[2].sounds).toEqual([["note", "G4", "marimba"], ["say", expect.stringMatching(/^In the forest/)]]);
+  }, 60_000);
+
   it("remembers what a room keeps, and hands it back next time", async () => {
     const replies = await runRoom("from purple import *\nkeep['visits'] = keep.get('visits', 0) + 1\nshow(keep['visits'])\n", [], { visits: 2 });
     expect([texts(replies[0]), replies[0].keep]).toEqual([["3"], { visits: 3 }]);

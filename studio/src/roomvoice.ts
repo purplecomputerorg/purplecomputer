@@ -1,17 +1,20 @@
-// The rooms' fixed lines (fixedSays) in the room voice, for the pack: each spoken once by
-// roomvoice.worker.ts, a few seconds a line, and kept in the Cache API. The preview takes the lines
-// already done and hears the rest in Purple's own voice until they are; a download waits for all.
+// The rooms' lines known before they run (roomSays) in the room voice, for the pack: each spoken once by
+// roomvoice.worker.ts, a few seconds a line, and kept in the Cache API. The preview starts a room once
+// its lines are done (roomReady), and a download waits for all.
 import { type PackRoomLine } from "@sdk/pack";
 import { voiceClipFilename } from "@sdk/purple/sounds";
-import { fixedSays } from "@sdk/says";
+import { asSaid, fits, fixedSays } from "@sdk/says";
 import { decodeWav } from "@sdk/wav";
 import { decodeToClip, encodeWav, normalize, tidy, type Clip } from "./audio";
+import { loudLines } from "./knobs";
 import type { Kokoro } from "./roomvoice.worker";
+import { draft, phraseFor, type RoomDraft } from "./state";
 
 const CACHE = "purple-room-voice-1";
 const base = () => document.baseURI;
 let settings: Promise<Pick<Kokoro, "model" | "voice" | "speed" | "rate"> | null> | null = null;
 let worker: Promise<Worker | null> | null = null;
+let loaded = false;
 let queue: Promise<unknown> = Promise.resolve();
 let next = 0;
 const waiting = new Map<number, (samples: Float32Array | null) => void>();
@@ -31,7 +34,7 @@ function start(): Promise<Worker | null> {
     const w = new Worker(new URL("./roomvoice.worker.ts", import.meta.url), { type: "module" });
     const fail = (why: unknown) => (console.warn("[studio] The room voice didn't load, rooms speak in Purple's own voice:", why), ready(null));
     w.onmessage = ({ data }) => {
-      if (data.ready) ready(w);
+      if (data.ready) { loaded = true; ready(w); }
       if (data.failed) fail(data.failed);
       if (data.error) console.warn("[studio] The room voice:", data.error);
       waiting.get(data.id)?.(data.samples ?? null);
@@ -86,17 +89,50 @@ function line(text: string): Promise<Clip | null> {
   return clip;
 }
 
-// The rooms' fixed lines with their clips: the ones done so far, or with `wait` every one there can be.
-export async function roomVoice(sources: string[], wait = false, onProgress?: (msg: string) => void): Promise<PackRoomLine[]> {
+// One line in the room voice, for a form's ▶; null when the voice can't load.
+export function roomLine(text: string): Promise<Clip | null> {
+  wanted.add(asSaid(text));
+  return line(asSaid(text));
+}
+
+type Said = Pick<RoomDraft, "source" | "made">;
+const recorded = (name = "") => draft.roomFiles.some((f) => f.kind === "sounds" && f.name === name);
+
+// What a room says that's known before it runs: say("...") lines, the words of knobs said out loud, and a
+// form's words. A line the family recorded is left out, since Purple looks in the room voice first.
+function roomSays({ source, made }: Said): string[] {
+  const said = made?.kind === "soundboard" ? [...made.data.rows, made.data.other].filter((s) => !recorded(s.voice)).map((s) => s.word)
+    : made?.kind === "quiz" ? made.data.rows.flatMap((q) => [q.question, ...[q.right, ...q.others].map((c) => c.word)])
+    : [...fixedSays(source), ...loudLines(source)];
+  return said.map((t) => asSaid(t.trim())).filter((t) => fits(t) && !phraseFor(t));
+}
+
+const unique = (texts: string[]) => [...new Map(texts.map((t) => [voiceClipFilename(t), t])).values()];
+
+async function ready(texts: string[], onProgress?: (msg: string) => void) {
+  for (const [i, text] of texts.entries()) {
+    if (!done.has(text)) onProgress?.(loaded ? `Preparing your rooms' lines, ${i + 1} of ${texts.length}` : "Getting Purple's voice ready");
+    await line(text);
+  }
+}
+
+// The rooms' lines with their clips: the ones done so far, or with `wait` every one there can be.
+export async function roomVoice(rooms: Said[], wait = false, onProgress?: (msg: string) => void): Promise<PackRoomLine[]> {
   if (typeof Worker === "undefined") return [];
-  const texts = [...new Map(sources.flatMap(fixedSays).map((t) => [voiceClipFilename(t), t])).values()];
+  const texts = unique(rooms.flatMap(roomSays));
   wanted = new Set(texts);
   texts.forEach(line);
-  if (wait) {
-    for (const [i, text] of texts.entries()) {
-      onProgress?.(`Recording your rooms' lines, ${i + 1} of ${texts.length}`);
-      await line(text);
-    }
-  }
+  if (wait) await ready(texts, onProgress);
   return texts.flatMap((text) => (done.has(text) ? [{ text, clip: done.get(text)! }] : []));
 }
+
+// Resolves once every line the room says is in the room voice, so the preview never says one in another voice first.
+export async function roomReady(room: Said, onProgress?: (msg: string) => void): Promise<void> {
+  if (typeof Worker === "undefined") return;
+  const texts = unique(roomSays(room));
+  texts.forEach((t) => wanted.add(t));
+  await ready(texts, onProgress);
+}
+
+// Studio starts the room voice as it opens, so it's ready by the time a room speaks.
+export const warmRoomVoice = () => void spec().then((s) => s && start());

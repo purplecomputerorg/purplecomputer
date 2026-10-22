@@ -1,10 +1,14 @@
 // A room's knobs as a form: words and emoji as text, colors as swatches, numbers, and lists and dicts as
 // rows that can grow and shrink. Each edit changes the knob in place and calls onEdit.
 import { roomTitle } from "@sdk/pack";
-import type { Knob, Lit } from "../knobs";
+import { play } from "../audio";
+import { isLoud, type Knob, type Lit } from "../knobs";
+import { roomLine } from "../roomvoice";
+import { phraseFor, putPhrase } from "../state";
 import { addRowButton, field, h, removeButton } from "./dom";
 import { emojiCell, isEmoji } from "./emojipicker";
 import { isMap, legendFor, legendNames, mapPainter } from "./mappainter";
+import { recordButton } from "./record";
 import { drumIn, isDrum, select, textIn } from "./rulesform";
 
 type Dict = Extract<Lit, { t: "dict" }>;
@@ -14,8 +18,12 @@ type Face = Extract<Lit, { t: "str" | "picture" }>;
 // pages: the knob's own keys when its entries point at each other by name (a story's pages); links: the
 // dicts holding those names, shown as dropdowns. taken: the emoji in the list being edited, so none repeats.
 // drums: its comment or labels say drums, so a drum's name, or one of the pack's sounds, is picked from a list.
-interface Ctx { onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>; relink: (from: string, to: string) => void; taken?: () => string[]; drums?: boolean }
-type Edit = Pick<Ctx, "onEdit" | "taken" | "drums">;
+// loud: its comment says out loud, so each of its words is read by Purple or recorded in the family's voice.
+interface Ctx {
+  onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>;
+  relink: (from: string, to: string) => void; taken?: () => string[]; drums?: boolean; loud?: boolean;
+}
+type Edit = Pick<Ctx, "onEdit" | "taken" | "drums" | "loud">;
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 const DRUMS = /\bdrums?\b/i;
@@ -41,14 +49,54 @@ function faceIn(v: Face, { onEdit, taken }: Edit): HTMLElement {
   }, { taken, pictures: true }));
 }
 
-function text(v: Str, { onEdit, drums }: Edit): HTMLElement {
+function text(v: Str, { onEdit, drums, loud }: Edit): HTMLElement {
   if (drums && isDrum(v.v)) return drumIn(v.v, (s) => { v.v = s; onEdit(); });
   if (v.v.length > LONG) {
     const el = h("textarea", { class: "words-in", rows: 2, value: v.v });
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
-    return el;
+    return loud ? spoken(el, v) : el;
   }
-  return textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: fit(v.v), class: `inline${v.v.length > 12 ? " mono-in" : ""}` });
+  const el = textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: fit(v.v), class: `inline${v.v.length > 12 ? " mono-in" : ""}` });
+  return loud ? spoken(el, v) : el;
+}
+
+// Words the room says out loud, read by Purple's room voice or recorded by the family, which Purple then plays instead.
+function spoken(el: HTMLInputElement | HTMLTextAreaElement, v: Str): HTMLElement {
+  const row = h("div", { class: "voice-row" });
+  const note = h("span", { class: "dim small" });
+  const say = (text: string) => void (note.textContent = text);
+  let mine = !!phraseFor(v.v);
+  let shown = "";
+  const hearPurple = async () => {
+    say("Getting Purple's voice ready…");
+    const c = await roomLine(v.v);
+    say(c ? "" : "Purple's voice didn't load. Try again in a moment.");
+    if (c) play(c);
+  };
+  const record = () => recordButton((clip) => (v.v.trim() ? (putPhrase(v.v, clip, true), draw()) : say("Type the words first, then record them.")), say, true);
+  const pick = (to: boolean) => () => {
+    if (!to && phraseFor(v.v) && !confirm("Throw away your recording of these words?")) return;
+    if (!to) putPhrase(v.v, null);
+    mine = to;
+    draw();
+  };
+  const draw = () => {
+    const recorded = phraseFor(v.v);
+    if (`${mine}${!!recorded}` === shown) return;
+    shown = `${mine}${!!recorded}`;
+    row.replaceChildren(
+      h("span", { class: "seg" },
+        h("button", { type: "button", "aria-pressed": String(!mine), onclick: pick(false) }, "🔊 Purple reads it"),
+        h("button", { type: "button", "aria-pressed": String(mine), onclick: pick(true) }, "🎤 Your voice")),
+      ...(!mine ? [h("button", { class: "rec-mini", title: "Hear Purple read it", "aria-label": "Hear Purple read it", onclick: hearPurple }, "▶")]
+        : recorded ? [h("button", { class: "rec-mini", title: "Hear your recording", "aria-label": "Hear your recording", onclick: () => play(recorded.clip) }, "▶"), record()]
+        : [record()]),
+      note);
+    say(!mine ? "" : recorded ? "Press the microphone to record it again." : "Press the microphone, read the words, and press it again.");
+  };
+  el.addEventListener("input", draw);
+  draw();
+  return h("div", { class: "spoken" }, el, row);
 }
 
 function scalar(v: Lit, edit: Edit): HTMLElement {
@@ -207,7 +255,7 @@ export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
         card.replaceChildren(head(), painter);
         return card;
       }
-      const redraw = () => card.replaceChildren(head(), editor(k.value, { onEdit: edited, redraw, drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), ...linksOf(k.value) }, [], k.labels));
+      const redraw = () => card.replaceChildren(head(), editor(k.value, { onEdit: edited, redraw, drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), loud: isLoud(k), ...linksOf(k.value) }, [], k.labels));
       redraw();
       return card;
     }));

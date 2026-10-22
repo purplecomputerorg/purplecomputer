@@ -95,6 +95,19 @@ class Parser {
   }
 }
 
+// A knob whose comment says out loud: Purple says its words, and the family can record them.
+export const isLoud = (k: Knob) => /\bout loud\b/i.test(k.about);
+
+// The words a room's out-loud knobs say: their text, not emoji, colors, or the names of the entries they point at.
+export function loudLines(source: string): string[] {
+  return readKnobs(source).filter(isLoud).flatMap(({ value }) => {
+    const names = new Set(value.t === "dict" ? value.entries.map(([k]) => (k.t === "str" ? k.v : "")) : []);
+    const words = (v: Lit): string[] => (v.t === "str" ? (/\p{L}/u.test(v.v) && !/^#[0-9a-f]{6}$/i.test(v.v) && !names.has(v.v) ? [v.v] : [])
+      : v.t === "list" || v.t === "tuple" ? v.items.flatMap(words) : v.t === "dict" ? v.entries.flatMap(([, x]) => words(x)) : []);
+    return words(value);
+  });
+}
+
 const SETTING = /^([A-Z][A-Z0-9_]*)[ \t]*=[ \t]*/;
 const LABELS = /^Labels:\s*/;
 const PASSING = /^\s*(#.*)?$|^(from|import) /;

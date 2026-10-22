@@ -6,7 +6,7 @@ import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { KEY_EVENT, announceKey } from "../keys";
 import { manifest, packChanges, packSpec, type Sent } from "../pack";
-import { onRoomVoice, roomVoiceVersion } from "../roomvoice";
+import { onRoomVoice, roomReady, roomVoiceVersion, warmRoomVoice } from "../roomvoice";
 import { draft } from "../state";
 import { h } from "./dom";
 
@@ -57,6 +57,8 @@ class LiveScreen {
   private setup: RoomSetup = { room: "art" };
   private timer = 0;
   private sent = "";
+  // Which show() is current: a room still waiting on its lines gives way to the next one.
+  private entering = 0;
   // What Purple has now, so the next pack sends only what changed.
   private last: Sent = { id: "", files: new Map() };
   private syncing = Promise.resolve();
@@ -84,7 +86,25 @@ class LiveScreen {
   show(setup: RoomSetup): void {
     this.setup = setup;
     this.moved({ room: setup.room, menu: false, at: null });
-    if (this.ready) this.post({ type: "setup", setup: this.withRooms() });
+    void this.enter();
+  }
+
+  // A family room waits for its lines in the room voice, and for Purple to have them, so it never says one in another voice first.
+  private async enter(): Promise<void> {
+    const turn = ++this.entering;
+    const room = draft.rooms.find((r) => r.name === this.setup.family?.name);
+    if (room) {
+      await roomReady(room, (text) => turn === this.entering && this.voiceLoading(text));
+      this.queueSync();
+      await this.syncing;
+      if (turn === this.entering) this.voiceLoading("");
+    }
+    if (turn === this.entering && this.ready) this.post({ type: "setup", setup: this.withRooms() });
+  }
+
+  private voiceLoading(text: string | null): void {
+    this.voiceNote.textContent = text;
+    this.voiceNote.hidden = !text;
   }
 
   // Any change to the draft: rebuild the pack once edits settle. Purple keeps taking keys unless
@@ -136,7 +156,9 @@ class LiveScreen {
     const pack = packChanges(id, entries, this.last);
     this.last = { id, files: new Map(entries.map((e) => [e.path, e.data])) };
     if (!pack.files.length && !pack.removed.length) return void (this.updating.hidden = true);
-    this.post({ type: "load", pack, setup: this.withRooms() });
+    // New lines in the room voice are found as they're said, so the room carries on instead of starting over.
+    const voiceOnly = [...pack.files.map(([path]) => path), ...pack.removed].every((path) => path.startsWith("content/room-voice/"));
+    this.post({ type: "load", pack, setup: voiceOnly ? null : this.withRooms() });
   }
 
   private onMessage(m: FromFrame): void {
@@ -148,11 +170,12 @@ class LiveScreen {
     if (m.type === "loaded" && !this.ready) {
       this.ready = true;
       this.element.classList.add("ready");
-      this.post({ type: "setup", setup: this.withRooms() });
+      warmRoomVoice();
+      void this.enter();
     }
     if (m.type === "focus") this.element.classList.toggle("focused", m.on);
     if (m.type === "focus" && m.on) this.element.classList.add("tried");
-    if (m.type === "voice") { this.voiceNote.textContent = m.text; this.voiceNote.hidden = !m.text; }
+    if (m.type === "voice") this.voiceLoading(m.text);
     if (m.type === "keydown") announceKey(m.key);
     if (m.type === "place") this.moved(m.place);
     if (m.type === "print") this.onPrint(m.text);

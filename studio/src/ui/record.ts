@@ -49,3 +49,12 @@ export function recordControl(onClip: (clip: Clip) => void): HTMLElement {
   const say = (text: string) => void (status.textContent = text);
   return h("div", { class: "stack" }, h("div", { class: "row" }, recordButton(onClip, say), filePicker("audio/*", (f) => finish(f, onClip, say))), status);
 }
+
+// Words in the family's own voice, played in Purple's place: a microphone, or once recorded, hear it or go back to Purple's voice.
+export function voiceButtons(recorded: boolean, on: { clip: (clip: Clip) => void; hear: () => void; clear: () => void }, say: (text: string) => void): HTMLElement[] {
+  if (!recorded) return [recordButton(on.clip, say, true)];
+  return [
+    h("button", { class: "rec-mini", title: "Hear your recording", "aria-label": "Hear your recording", onclick: on.hear }, "▶"),
+    h("button", { class: "x", title: "Use Purple's voice", "aria-label": "Use Purple's voice", onclick: on.clear }, "×"),
+  ];
+}

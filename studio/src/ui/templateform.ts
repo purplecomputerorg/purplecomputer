@@ -8,7 +8,7 @@ import { MAX_OTHERS, normalizeKey, type QuizChoice, type QuizData, type Sound, t
 import { draft } from "../state";
 import { addRowButton, h, removeButton } from "./dom";
 import { emojiCell } from "./emojipicker";
-import { recordButton } from "./record";
+import { voiceButtons } from "./record";
 import { addRoomData, dropUnusedSound, hearRoomSound } from "./roomfiles";
 import { textIn } from "./rulesform";
 
@@ -43,12 +43,11 @@ function noteIn(o: Sound, c: Ctx): HTMLElement {
 // A key's word, for Purple to say, or recorded in the family's own voice, which then plays in Purple's place.
 function sayIn(o: Sound, c: Ctx, hint: string, nameFor: () => string): HTMLElement {
   const voice = o.voice && mine("sounds").includes(o.voice) ? o.voice : "";
-  const record = recordButton((clip) => edits(c, () => { o.voice = addRoomData("sounds", nameFor(), encodeWav(clip)).name; })(), c.say, true);
-  const own = [
-    h("button", { class: "rec-mini", title: "Hear your recording", "aria-label": "Hear your recording", onclick: () => hearRoomSound(voice) }, "▶"),
-    h("button", { class: "x", title: "Use Purple's voice", "aria-label": "Use Purple's voice", onclick: edits(c, () => { o.voice = ""; dropUnusedSound(voice); }) }, "×"),
-  ];
-  return h("span", { class: "sound-in" }, wordIn(o, c, hint), ...(voice ? own : [record]));
+  return h("span", { class: "sound-in" }, wordIn(o, c, hint), ...voiceButtons(!!voice, {
+    clip: (clip) => edits(c, () => { o.voice = addRoomData("sounds", nameFor(), encodeWav(clip)).name; })(),
+    hear: () => hearRoomSound(voice),
+    clear: edits(c, () => { o.voice = ""; dropUnusedSound(voice); }),
+  }, c.say));
 }
 
 const wordIn = (o: { word: string }, c: Ctx, placeholder: string) => textIn(o.word, (v) => { o.word = v; c.onEdit(); }, { placeholder });

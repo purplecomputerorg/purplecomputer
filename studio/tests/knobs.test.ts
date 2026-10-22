@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EXAMPLES } from "../src/examples";
-import { type Lit, readKnobs, writeKnobs } from "../src/knobs";
+import { type Lit, loudLines, readKnobs, writeKnobs } from "../src/knobs";
 import { searchEmoji } from "../src/ui/emojipicker";
 import { isMap, legendFor } from "../src/ui/mappainter";
 
@@ -64,6 +64,14 @@ describe("knobs", () => {
     }
   });
 
+  it("finds the words a story says out loud, leaving out its pictures and page names", () => {
+    const lines = loudLines(EXAMPLES.find((e) => e.name === "story")!.source);
+    expect(lines[0]).toBe("Mia and the map");
+    expect(lines).toHaveLength(8);
+    expect(lines.filter((l) => /^(start|forest|sea|owl|tree|sand|boat)$|🏡/.test(l))).toEqual([]);
+    expect(loudLines(EXAMPLES.find((e) => e.name === "explore")!.source)).toEqual([]);
+  });
+
   it("offers only the fun settings of each starter room", () => {
     const names = Object.fromEntries(EXAMPLES.map((e) => [e.name, readKnobs(e.source).map((k) => k.name)]));
     expect(names).toEqual({
@@ -71,7 +79,7 @@ describe("knobs", () => {
       garden: ["SEEDS", "SOIL"],
       beats: ["DRUMS", "SPEED"],
       memory: ["CARDS", "PLAYERS", "TURNED"],
-      story: ["PAGES"],
+      story: ["TITLE", "PAGES"],
       snake: ["SNAKE", "LENGTH", "TRAIL"],
     });
   });

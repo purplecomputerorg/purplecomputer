@@ -24,8 +24,8 @@ function unquote(prefix: string, quoted: string): string | null {
 }
 
 // What Purple will look a line up as: cut to SAY_MAX characters, and only names a file system can hold.
-const asSaid = (text: string) => [...text].slice(0, SAY_MAX).join("");
-const fits = (text: string) => !!text.trim() && new TextEncoder().encode(voiceClipFilename(text)).length <= 255;
+export const asSaid = (text: string) => [...text].slice(0, SAY_MAX).join("");
+export const fits = (text: string) => !!text.trim() && new TextEncoder().encode(voiceClipFilename(text)).length <= 255;
 
 export function fixedSays(source: string): string[] {
   const lines = [...source.matchAll(SAY)].map(([, prefix, quoted]) => unquote(prefix, quoted)).filter((t): t is string => t !== null);

@@ -7,7 +7,7 @@ import { bootPurple, type LivePurple, type PackFiles, type Place, type RoomSetup
 import { onVoiceNote } from "./piper";
 
 export type ToFrame =
-  | { type: "load"; pack: PackFiles | null; setup: RoomSetup }
+  | { type: "load"; pack: PackFiles | null; setup: RoomSetup | null }
   | { type: "setup"; setup: RoomSetup }
   | { type: "key"; char: string }
   | { type: "focus" }
@@ -80,7 +80,7 @@ new ResizeObserver(copyFrame).observe(canvas);
 
 const placed = (place: Place) => post({ type: "place", place });
 const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
-  if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(() => live.setup(m.setup)).then(placed).then(() => post({ type: "loaded" }));
+  if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(async () => m.setup && placed(await live.setup(m.setup))).then(() => post({ type: "loaded" }));
   if (m.type === "setup") return live.setup(m.setup).then(placed);
   if (m.type === "key") return live.key(m.char).then(placed);
   canvas.focus();

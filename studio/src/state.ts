@@ -5,7 +5,9 @@ import type { Rule } from "./rules";
 import { roomTitle, slug } from "@sdk/pack";
 import type { RoomFileKind } from "@sdk/pack";
 import type { Theme } from "@sdk/purple/theme";
+import { voiceClipFilename } from "@sdk/purple/sounds";
 import type { BaseName, Params } from "@sdk/purple/synth";
+import { asSaid } from "@sdk/says";
 
 // Set false to hide the Rooms page, Room guide, and pack.room. Mutable so tests can flip it.
 export const features = { rooms: true };
@@ -80,6 +82,15 @@ export function freeName(text: string, taken: (name: string) => boolean, fallbac
   let name = base;
   for (let n = 2; taken(name); n++) name = `${base}-${n}`;
   return name;
+}
+// Purple finds a phrase's recording by its words as said, whatever their capitals, so these match the same one.
+const sameWords = (a: string, b: string) => voiceClipFilename(asSaid(a)) === voiceClipFilename(asSaid(b));
+export const phraseFor = (text: string) => (text.trim() ? draft.phrases.find((p) => sameWords(p.text, text)) : undefined);
+// The family's recording of these words, in place of the one before; null goes back to Purple's voice.
+export function putPhrase(text: string, clip: Clip | null, kept = false) {
+  kept ||= !!phraseFor(text)?.kept;
+  draft.phrases = [...draft.phrases.filter((p) => !sameWords(p.text, text)), ...(clip ? [{ text, clip, kept }] : [])];
+  changed();
 }
 // Whether Python names a file, in either quote: picture("dog"), CARDS = ['dog'].
 export const names = (source: string, name: string) => source.includes(`"${name}"`) || source.includes(`'${name}'`);

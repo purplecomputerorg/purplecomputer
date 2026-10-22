@@ -26,7 +26,7 @@ export function tryBar(item: Keepable, remove?: () => void): HTMLElement {
 export interface YourCard { href: string; title: string; face: Node; current?: boolean; rename?: (text: string) => string | null; keep?: HTMLElement | null }
 
 // What the family made on a list page, one card each with an Add to my Pack button and an × that throws it
-// away, plus a pencil when it can be renamed; "Choose several" throws away many at once. Examples only tried aren't theirs yet, so they aren't listed.
+// away, plus a pencil beside the name when it can be renamed; "Choose several" throws away many at once. Examples only tried aren't theirs yet, so they aren't listed.
 // warn: anything more the confirm should say about throwing these away.
 export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (gone: T[]) => void, warn?: (gone: T[]) => string): HTMLElement | null {
   const theirs = items.filter(isTheirs);
@@ -54,14 +54,15 @@ export function yoursList<T extends Keepable>(items: T[], card: (item: T) => You
         boxes.push(box);
         return h("label", { class: "your-card" }, face, box);
       }
-      const el = h("div", { class: "your-card", "aria-current": c.current ? "page" : null }, face, c.keep === undefined ? keepButton(item) : c.keep,
-        c.rename ? h("button", { type: "button", class: "rename", title: `Rename ${c.title}`, "aria-label": `Rename ${c.title}`, onclick: () => renaming(el, face, c) }, "✏️") : null,
+      const head = h("div", { class: "your-head" }, face,
+        c.rename ? h("button", { type: "button", class: "rename", title: `Rename ${c.title}`, "aria-label": `Rename ${c.title}`, onclick: () => renaming(el, head, c) }, "✏️") : null);
+      const el = h("div", { class: "your-card", "aria-current": c.current ? "page" : null }, head, c.keep === undefined ? keepButton(item) : c.keep,
         h("button", { type: "button", class: "drop", title: `Throw away ${c.title}`, "aria-label": `Throw away ${c.title}`, onclick: () => throwAway([item], c.title) }, "×"));
       return el;
     }));
   };
   // The name turns into a box in place: Enter or leaving it keeps the new name, Esc puts the old one back.
-  const renaming = (card: HTMLElement, face: HTMLElement, c: YourCard) => {
+  const renaming = (card: HTMLElement, head: HTMLElement, c: YourCard) => {
     const note = h("span", { class: "dim small" });
     const input = h("input", { type: "text", class: "your-rename", value: c.title, maxLength: 40, "aria-label": "New name" });
     let done = false;
@@ -74,7 +75,7 @@ export function yoursList<T extends Keepable>(items: T[], card: (item: T) => You
     };
     input.onkeydown = (e) => { if (e.key === "Enter") finish(true); else if (e.key === "Escape") finish(false); };
     input.onblur = () => finish(true);
-    face.replaceWith(h("div", { class: "your-face" }, input));
+    head.replaceWith(h("div", { class: "your-face" }, input));
     card.append(note);
     input.select();
   };

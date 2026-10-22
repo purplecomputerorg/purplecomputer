@@ -417,7 +417,9 @@ input.room-name.just-yours { animation: just-yours 1.8s ease-out; }
 .your-face .pick-icon, .your-face .pick-swatch { margin: 0; flex-shrink: 0; }
 .your-card .keep { justify-self: start; }
 .your-card span.keep { cursor: default; }
-.your-card .rename { position: absolute; bottom: 10px; right: 10px; border: none; background: none; cursor: pointer; font-size: 14px; opacity: 0.6; padding: 4px; }
+.your-head { display: flex; align-items: center; gap: 2px; padding-right: 22px; min-width: 0; }
+.your-head .your-face { padding-right: 0; }
+.your-card .rename { flex-shrink: 0; border: none; background: none; cursor: pointer; font-size: 14px; opacity: 0.6; padding: 4px; }
 .your-card .rename:hover { opacity: 1; }
 .your-rename { font: inherit; font-weight: 700; width: 100%; padding: 2px 6px; }
 label.your-card { cursor: pointer; }

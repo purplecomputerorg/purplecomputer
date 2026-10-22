@@ -34,7 +34,7 @@ WORLD = {
         "RRRRRRRRRRRRRRRRRRRRRRRR",
     ],
 }
-# What each letter in the world is: an emoji, or a color for the ground.
+# What each letter in the world is: an emoji, one of your photos, or a color for the ground.
 THINGS = {"T": "🌳", "R": "🪨", "~": "#3b82c4", ",": "#5c4b3b", "*": "⭐", "F": "🦊", "B": "🦇", "H": "🏠", "1": "🚪"}
 # The grass's two colors.
 GROUND = ("#4f9d4a", "#57a852")

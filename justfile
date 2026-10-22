@@ -300,7 +300,7 @@ link-iso *args:
     ./build-scripts/link-iso.sh {{args}}
 
 # Publish a main build (Purple 2.0) to purple2.purplecomputer.org; never touches the 1.x download.
-# just ship-2 [commit], default HEAD. Build it first with just build.
+# just ship-2 [commit], default HEAD (offers the newest main build when HEAD has none).
 ship-2 *args:
     ./build-scripts/upload-purple2.sh {{args}}
 

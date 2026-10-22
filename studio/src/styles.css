@@ -514,9 +514,9 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .picture-grid button { aspect-ratio: 1; padding: 0; border: 1.5px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; cursor: pointer; }
 .picture-grid button:hover, .picture-grid button:focus-visible { border-color: var(--purple); outline: none; }
 .picture-grid img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.picture-grid .add-photo { display: flex; flex-direction: column; align-items: center; justify-content: center; border-style: dashed; border-color: var(--border); background: #fff; color: var(--purple); font: 600 11px/1.2 var(--sans); }
-.picture-grid .add-photo::before { content: "+"; font-size: 22px; font-weight: 400; line-height: 1; }
-.picture-grid .add-photo:hover { background: var(--fill); }
+.picture-grid .add-photo { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 8px; border-style: dashed; border-color: var(--border); background: var(--fill); color: var(--purple); font: 600 10.5px/1.15 var(--sans); text-align: center; }
+.picture-grid .add-photo::before { content: "+"; font-size: 20px; font-weight: 400; line-height: 1; }
+.picture-grid .add-photo:hover { background: var(--fill-hover); }
 
 /* Voice */
 .tabs a.tab { text-decoration: none; }

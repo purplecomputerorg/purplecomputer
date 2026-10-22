@@ -462,6 +462,9 @@ h3 + .cards { margin-top: 0; }
 .pick:hover { border-color: var(--border); background: var(--fill); color: inherit; }
 .pick-icon { font-size: 28px; line-height: 1; margin-bottom: 8px; }
 .pick-swatch { width: 28px; height: 8px; border-radius: 4px; margin-bottom: 10px; }
+.swatch-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 12px; font-size: 13px; color: var(--dim); }
+.swatch-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch-legend .pick-swatch { width: 16px; margin: 0; }
 .pick b { font-family: var(--display); font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .pick span:last-child { font-size: 13px; color: var(--dim); }
 .name-field { max-width: 320px; }

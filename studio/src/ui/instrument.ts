@@ -51,6 +51,8 @@ function chooser(): View {
       h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, change how it sounds, and add it to your Purple Pack when you like it."),
       yoursList(draft.instruments, (i) => ({ href: `#instruments/${encodeURIComponent(i.name)}`, title: titleOf(i), face: h("span", { class: "pick-swatch", style: `background:${SWATCH[i.base]}` }) }), drop),
       h("h3", {}, "Try a sound"),
+      h("p", { class: "swatch-legend" }, "Made from:", ...[...new Set(SOUNDS.map((snd) => snd.base))].map((b) =>
+        h("span", {}, h("span", { class: "pick-swatch", style: `background:${SWATCH[b]}` }), BASES[b].label))),
       h("div", { class: "cards" }, ...SOUNDS.map((snd) =>
         h("button", { class: "pick", onclick: () => tryOut(snd.title, snd.base, snd.params) }, h("span", { class: "pick-swatch", style: `background:${SWATCH[snd.base]}` }), h("b", {}, snd.title), h("span", {}, snd.blurb)))),
       h("h3", {}, "Or a plain one from Purple"),

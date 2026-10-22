@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EXAMPLES } from "../src/examples";
 import { type Lit, loudLines, readKnobs, writeKnobs } from "../src/knobs";
 import { searchEmoji } from "../src/ui/emojipicker";
-import { isMap, legendFor } from "../src/ui/mappainter";
+import { isMap, isWorld, legendFor, lonelyNumbers } from "../src/ui/mappainter";
 
 const ROOM = `from purple import *
 
@@ -69,13 +69,14 @@ describe("knobs", () => {
     expect(lines[0]).toBe("Mia and the map");
     expect(lines).toHaveLength(8);
     expect(lines.filter((l) => /^(start|forest|sea|owl|tree|sand|boat)$|🏡/.test(l))).toEqual([]);
-    expect(loudLines(EXAMPLES.find((e) => e.name === "explore")!.source)).toEqual([]);
+    expect(loudLines(EXAMPLES.find((e) => e.name === "explore")!.source)).toEqual([
+      "Hello! Find all the stars and the house will open. Some are through the door.", "Squeak! The door goes back outside."]);
   });
 
   it("offers only the fun settings of each starter room", () => {
     const names = Object.fromEntries(EXAMPLES.map((e) => [e.name, readKnobs(e.source).map((k) => k.name)]));
     expect(names).toEqual({
-      explore: ["MAP", "THINGS", "GROUND", "HERO_COLORS", "TALK"],
+      explore: ["WORLD", "THINGS", "GROUND", "HERO_COLORS", "TALK"],
       garden: ["SEEDS", "SOIL"],
       beats: ["DRUMS", "SPEED"],
       memory: ["CARDS", "PLAYERS", "TURNED"],
@@ -92,7 +93,7 @@ describe("knobs", () => {
     expect(writeKnobs(source, knobs)).toBe(source);
     (knobs[1].value as { items: Lit[] }).items[0] = { t: "picture", v: "mochi" };
     expect(writeKnobs(source, knobs)).toContain('CARDS = [picture("mochi"), picture("biscuit")]');
-    expect(legendFor(knobs[2].value as { items: Lit[] }, knobs.map((k) => k.value))).toBe(knobs[0].value);
+    expect(legendFor(knobs[2].value, knobs.map((k) => k.value))).toBe(knobs[0].value);
   });
 
   it("leaves out emoji already in the list, so an emoji setting never repeats one", () => {
@@ -103,11 +104,25 @@ describe("knobs", () => {
   });
 
   it("paints a map of even rows, using a dict of one-letter keys as its legend", () => {
-    const knobs = readKnobs(EXAMPLES.find((e) => e.name === "explore")!.source);
+    const knobs = readKnobs('THINGS = {"T": "🌳"}\nMAP = ["TTT", "T.T", "TTT"]\n');
     expect(knobs.filter((k) => isMap(k.value)).map((k) => k.name)).toEqual(["MAP"]);
-    const map = knobs.find((k) => k.name === "MAP")!.value as { items: Lit[] };
-    expect(legendFor(map, knobs.map((k) => k.value))).toBe(knobs.find((k) => k.name === "THINGS")!.value);
+    expect(legendFor(knobs[1].value, knobs.map((k) => k.value))).toBe(knobs[0].value);
     const uneven = readKnobs('X = ["abc", "abcd", "abc"]\n')[0].value;
     expect(isMap(uneven)).toBe(false);
+  });
+
+  it("paints a world of named maps, each number joining two squares", () => {
+    const source = EXAMPLES.find((e) => e.name === "explore")!.source;
+    const knobs = readKnobs(source);
+    const world = knobs.find((k) => k.name === "WORLD")!;
+    expect(isWorld(world.value)).toBe(true);
+    expect(legendFor(world.value, knobs.map((k) => k.value))).toBe(knobs.find((k) => k.name === "THINGS")!.value);
+    expect(lonelyNumbers(world.value)).toEqual([]);
+    const cave = (world.value as Extract<Lit, { t: "dict" }>).entries[1][1] as { items: Extract<Lit, { t: "str" }>[] };
+    cave.items[1].v = cave.items[1].v.replace("1", ",");
+    expect(lonelyNumbers(world.value)).toEqual(["1"]);
+    const out = writeKnobs(source, knobs);
+    expect(out).toContain('    "cave": [\n        "RRRRRRRRRRRRRRRRRRRRRRRR",\n        "R,,,,,,,RR');
+    expect(readKnobs(out).find((k) => k.name === "WORLD")!.value).toEqual(world.value);
   });
 });

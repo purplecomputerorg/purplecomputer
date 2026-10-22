@@ -53,17 +53,29 @@ describe("family rooms in Studio's Python", () => {
     expect(replies.at(-1)).toMatchObject({ error: { text: expect.stringContaining(END) } });
   }, 60_000);
 
-  it("runs the memory example: a card on each letter key, turned over by pressing it", async () => {
-    const replies = await runRoom(example("memory"), [{ ev: "key", key: "q" }, { ev: "key", key: "m" }, { ev: "key", key: "w" }]);
-    expect(texts(replies[0])).toEqual([..."QWERTYUIOASDFGHJKL", "🔴 Red's turn"]);
+  it("walks the explore example from map to map through the doors with the same number", async () => {
+    const world = 'WORLD = {"a": ["TTTT", "TY1T", "TTTT"], "b": ["RRRR", "R1*R", "RRRR"]}';
+    const source = example("explore").replace(/^WORLD = \{[\s\S]*?^\}$/m, world);
+    const replies = await runRoom(source, [{ ev: "key", key: "right" }, { ev: "key", key: "right" }, { ev: "key", key: "up" }]);
+    expect(texts(replies[0])).toEqual(expect.arrayContaining(["🌳", "🚪", "⭐ 0 of 1"]));
+    expect(texts(replies[1])).toEqual(expect.arrayContaining(["🪨", "⭐", "⭐ 0 of 1"]));
+    expect(texts(replies[1])).not.toContain("🌳");
+    expect(texts(replies[2])).toContain("⭐ All the stars! The house is open.");
+    expect(texts(replies[2])).not.toContain("⭐");
+  }, 60_000);
+
+  it("runs the memory example: a card on each letter key, turned over by pressing it, and players taking turns", async () => {
+    const source = example("memory").replace(/^PLAYERS = .*$/m, "PLAYERS = 2");
+    const replies = await runRoom(source, [{ ev: "key", key: "q" }, { ev: "key", key: "m" }, { ev: "key", key: "w" }]);
+    expect(texts(replies[0])).toEqual([..."QWERTYUIOASDFGHJKL", "🔴's turn"]);
     const [q] = texts(replies[1]);
     expect(q).toMatch(/\p{Extended_Pictographic}/u);
     expect(replies[2]).not.toHaveProperty("scene");
     expect(texts(replies[3]).slice(0, 2)).not.toContain("W");
   }, 60_000);
 
-  it("plays memory alone with a parent's own picture beside an emoji, and no turn line", async () => {
-    const source = example("memory").replace(/^CARDS = .*$/m, 'CARDS = [picture("grandma"), "🐶"]').replace(/^PLAYERS = .*$/m, 'PLAYERS = [("🔴", "Red", "#e44444")]');
+  it("plays memory alone by default with a parent's own picture beside an emoji, and no turn line", async () => {
+    const source = example("memory").replace(/^CARDS = .*$/m, 'CARDS = [picture("grandma"), "🐶"]');
     const keys = ["q", "w", "e", "r"].map((key) => ({ ev: "key", key }));
     const replies = await runRoom(source, keys, {}, { images: { grandma: [300, 200] } });
     expect(texts(replies[0])).toEqual([..."QWER"]);

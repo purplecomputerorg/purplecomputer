@@ -21,6 +21,7 @@ W, H = 24, 12
 CELL = 10
 LINES_KEPT = 5
 KEEP_MAX_BYTES = 4096
+OVER_PAUSE_S = 1.0  # so the key that ended the game, or the tap right after it, doesn't start the next one
 _HEX = _re.compile(r"^#[0-9a-fA-F]{6}$")
 _NOTE = _re.compile(r"^[A-Ga-g]#?\d$")
 DRUMS = ("kick", "snare", "hi-hat", "clap", "cowbell", "woodblock", "triangle", "tambourine", "bongo", "gong")
@@ -57,6 +58,8 @@ class _Screen:
         self.sounds = []
         self.asking = None   # [prompt, typed so far] while ask() waits
         self.over = None     # game_over text
+        self.over_at = 0.0
+        self.stale = set()   # keys already down at game_over; they don't start the room over
 
 
 _s = _Screen()
@@ -175,9 +178,9 @@ class state:
 
 
 def game_over(text="Press a key to play again"):
-    """Stop the timers and show text; the next key starts the room over."""
+    """Stop the timers and show text; a new key press, after a moment, starts the room over."""
     _s.timers.clear()
-    _s.over = _text(text)
+    _s.over, _s.over_at, _s.stale = _text(text), _now[0], set(_held)
 
 
 def _pos(args):
@@ -399,6 +402,7 @@ def _exchange() -> dict:
         _held.add(ev.get("key"))
     elif ev.get("ev") == "keyup":
         _held.discard(ev.get("key"))
+        _s.stale.discard(ev.get("key"))
     return ev
 
 
@@ -441,7 +445,8 @@ def run(start: dict):
         while True:
             ev = _exchange()
             if ev.get("ev") == "key" and _s.over is not None:
-                _begin(start["source"], room)
+                if ev.get("key") not in _s.stale and _now[0] >= _s.over_at + OVER_PAUSE_S:
+                    _begin(start["source"], room)
             elif ev.get("ev") == "key" and callable(room.get("on_key")):
                 room["on_key"](ev.get("key"))
             elif ev.get("ev") == "keyup" and callable(room.get("on_key_up")):

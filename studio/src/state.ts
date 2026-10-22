@@ -87,6 +87,9 @@ export function freeName(text: string, taken: (name: string) => boolean, fallbac
 // Purple finds a phrase's recording by its words as said, whatever their capitals, so these match the same one.
 const sameWords = (a: string, b: string) => voiceClipFilename(asSaid(a)) === voiceClipFilename(asSaid(b));
 export const phraseFor = (text: string) => (text.trim() ? draft.phrases.find((p) => sameWords(p.text, text)) : undefined);
+// "No sound" for some words is a recording of silence: Purple plays a family's recording in place of its own voice.
+export const QUIET: Clip = { samples: new Float32Array(2205), rate: 22050 };
+export const isQuiet = (clip: Clip) => clip.samples.every((s) => s === 0);
 // The family's recording of these words, in place of the one before; null goes back to Purple's voice.
 export function putPhrase(text: string, clip: Clip | null, kept = false) {
   kept ||= !!phraseFor(text)?.kept;

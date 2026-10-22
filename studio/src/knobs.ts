@@ -146,7 +146,12 @@ export function readKnobs(source: string): Knob[] {
 
 const INDENT = "    ";
 
-export function literal(v: Lit, multiline = false): string {
+// A list of long words (a map's rows) inside a multiline knob gets a line each too.
+const tall = (v: Lit) => v.t === "list" && v.items.length > 1 && v.items.every((x) => x.t === "str") && literal(v).length > 80;
+
+export function literal(v: Lit, multiline = false, pad = ""): string {
+  const inner = (x: Lit) => literal(x, multiline && tall(x), pad + INDENT);
+  const block = (open: string, parts: string[], close: string) => `${open}\n${parts.map((p) => `${pad}${INDENT}${p},\n`).join("")}${pad}${close}`;
   switch (v.t) {
     case "str": return JSON.stringify(v.v);
     case "picture": return `picture(${JSON.stringify(v.v)})`;
@@ -154,13 +159,13 @@ export function literal(v: Lit, multiline = false): string {
     case "bool": return v.v ? "True" : "False";
     case "none": return "None";
     case "dict": {
-      const parts = v.entries.map(([k, x]) => `${literal(k)}: ${literal(x)}`);
-      return multiline && parts.length ? `{\n${parts.map((p) => `${INDENT}${p},\n`).join("")}}` : `{${parts.join(", ")}}`;
+      const parts = v.entries.map(([k, x]) => `${literal(k)}: ${inner(x)}`);
+      return multiline && parts.length ? block("{", parts, "}") : `{${parts.join(", ")}}`;
     }
     default: {
       const [open, close] = v.t === "list" ? ["[", "]"] : ["(", ")"];
-      const parts = v.items.map((x) => literal(x));
-      if (multiline && parts.length) return `${open}\n${parts.map((p) => `${INDENT}${p},\n`).join("")}${close}`;
+      const parts = v.items.map(inner);
+      if (multiline && parts.length) return block(open, parts, close);
       return `${open}${parts.join(", ")}${v.t === "tuple" && parts.length === 1 ? "," : ""}${close}`;
     }
   }

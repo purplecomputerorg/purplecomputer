@@ -4,10 +4,10 @@ import { roomTitle } from "@sdk/pack";
 import { play } from "../audio";
 import { isLoud, type Knob, type Lit } from "../knobs";
 import { roomLine } from "../roomvoice";
-import { phraseFor, putPhrase } from "../state";
+import { isQuiet, phraseFor, putPhrase, QUIET } from "../state";
 import { addRowButton, field, h, removeButton } from "./dom";
-import { emojiCell, isEmoji } from "./emojipicker";
-import { isMap, legendFor, legendNames, mapPainter } from "./mappainter";
+import { emojiCell, isEmoji, searchEmoji } from "./emojipicker";
+import { isMap, isWorld, legendFor, legendNames, lettersIn, mapPainter } from "./mappainter";
 import { recordButton } from "./record";
 import { drumIn, isDrum, select, textIn } from "./rulesform";
 
@@ -22,12 +22,33 @@ type Face = Extract<Lit, { t: "str" | "picture" }>;
 interface Ctx {
   onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>;
   relink: (from: string, to: string) => void; taken?: () => string[]; drums?: boolean; loud?: boolean;
+  // range: the lowest and highest a number may be, from its comment ("1 to 6"); without one, any number.
+  range?: [number, number];
+  // A map's legend, and the map it names the letters of; keyedBy: the legend a dict's keys are letters of (who says what).
+  legend?: { dict: Dict; map: Lit }; keyedBy?: { dict: Dict; legend: Dict };
 }
-type Edit = Pick<Ctx, "onEdit" | "taken" | "drums" | "loud">;
+type Edit = Pick<Ctx, "onEdit" | "taken" | "drums" | "loud" | "range">;
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 const DRUMS = /\bdrums?\b/i;
+const RANGE = /\b(\d+(?:\.\d+)?) to (\d+(?:\.\d+)?)\b/;
 const LONG = 40;
+// Letters a legend's new thing can take, plainest first.
+const FREE_LETTERS = "ABCDEFGIJKLMNOPQSUVWXZabcdefghijklmnopqrstuvwxyz@%&+=?";
+const unusedEmoji = (taken: string[]): Lit | undefined => searchEmoji("", 1, taken).map(({ emoji }): Lit => ({ t: "str", v: emoji }))[0];
+const COLORS = ["#e44444", "#2e6ae1", "#2e9e4f", "#e0a020", "#9b4dca", "#e0457b", "#1fa5a5", "#8a5a2b"];
+const faceText = (x: Lit) => (x.t === "str" || x.t === "picture" ? x.v : "");
+
+// A new row for a list: a copy of the last, but with an emoji and a color none of the others have, so no two match.
+function nextRow(items: Lit[]): Lit {
+  const x = structuredClone(items.at(-1)!);
+  if (x.t !== "tuple") return x;
+  const column = (j: number) => items.map((r) => (r.t === "tuple" ? faceText(r.items[j]).toLowerCase() : ""));
+  x.items = x.items.map((y, j) => y.t !== "str" ? y
+    : COLOR.test(y.v) ? { t: "str", v: COLORS.find((c) => !column(j).includes(c)) ?? y.v }
+    : isEmoji(y.v) ? unusedEmoji(column(j)) ?? y : y);
+  return x;
+}
 const nested = (v: Lit) => v.t === "list" || v.t === "tuple" || v.t === "dict";
 const isFace = (v: Lit) => v.t === "picture" || (v.t === "str" && isEmoji(v.v));
 const emojiOnly = (items: Lit[]) => items.every(isFace);
@@ -56,7 +77,7 @@ function text(v: Str, { onEdit, drums, loud }: Edit): HTMLElement {
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
     return loud ? spoken(el, v) : el;
   }
-  const el = textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: fit(v.v), class: `inline${v.v.length > 12 ? " mono-in" : ""}` });
+  const el = textIn(v.v, (s) => { v.v = s; onEdit(); }, { size: fit(v.v), class: `inline${v.v.length > 12 && !/\s/.test(v.v) ? " mono-in" : ""}` });
   return loud ? spoken(el, v) : el;
 }
 
@@ -65,7 +86,10 @@ function spoken(el: HTMLInputElement | HTMLTextAreaElement, v: Str): HTMLElement
   const row = h("div", { class: "voice-row" });
   const note = h("span", { class: "dim small" });
   const say = (text: string) => void (note.textContent = text);
-  let mine = !!phraseFor(v.v);
+  type Voice = "purple" | "mine" | "quiet";
+  const now = (): Voice | undefined => { const p = phraseFor(v.v); return p && (isQuiet(p.clip) ? "quiet" : "mine"); };
+  let voice: Voice = now() ?? "purple";
+  let said = v.v;
   let shown = "";
   const hearPurple = async () => {
     say("Getting Purple's voice ready…");
@@ -74,27 +98,32 @@ function spoken(el: HTMLInputElement | HTMLTextAreaElement, v: Str): HTMLElement
     if (c) play(c);
   };
   const record = () => recordButton((clip) => (v.v.trim() ? (putPhrase(v.v, clip, true), draw()) : say("Type the words first, then record them.")), say, true);
-  const pick = (to: boolean) => () => {
-    if (!to && phraseFor(v.v) && !confirm("Throw away your recording of these words?")) return;
-    if (!to) putPhrase(v.v, null);
-    mine = to;
+  const pick = (to: Voice) => () => {
+    if (now() === "mine" && to !== "mine" && !confirm("Throw away your recording of these words?")) return;
+    if (to !== "mine" || now() === "quiet") putPhrase(v.v, to === "quiet" ? QUIET : null, true);
+    voice = to;
     draw();
   };
+  const option = (to: Voice, label: string) => h("button", { type: "button", "aria-pressed": String(voice === to), onclick: pick(to) }, label);
   const draw = () => {
-    const recorded = phraseFor(v.v);
-    if (`${mine}${!!recorded}` === shown) return;
-    shown = `${mine}${!!recorded}`;
+    const recorded = voice === "mine" ? phraseFor(v.v) : undefined;
+    if (`${voice}${!!recorded}` === shown) return;
+    shown = `${voice}${!!recorded}`;
     row.replaceChildren(
-      h("span", { class: "seg" },
-        h("button", { type: "button", "aria-pressed": String(!mine), onclick: pick(false) }, "🔊 Purple reads it"),
-        h("button", { type: "button", "aria-pressed": String(mine), onclick: pick(true) }, "🎤 Your voice")),
-      ...(!mine ? [h("button", { class: "rec-mini", title: "Hear Purple read it", "aria-label": "Hear Purple read it", onclick: hearPurple }, "▶")]
+      h("span", { class: "seg" }, option("purple", "🔊 Purple reads it"), option("mine", "🎤 Your voice"), option("quiet", "🔇 No sound")),
+      ...(voice === "purple" ? [h("button", { class: "rec-mini", title: "Hear Purple read it", "aria-label": "Hear Purple read it", onclick: hearPurple }, "▶")]
         : recorded ? [h("button", { class: "rec-mini", title: "Hear your recording", "aria-label": "Hear your recording", onclick: () => play(recorded.clip) }, "▶"), record()]
-        : [record()]),
+        : voice === "mine" ? [record()] : []),
       note);
-    say(!mine ? "" : recorded ? "Press the microphone to record it again." : "Press the microphone, read the words, and press it again.");
+    say(voice === "quiet" ? "The words show on the screen, and nothing is said." : voice === "purple" ? ""
+      : recorded ? "Press the microphone to record it again." : "Press the microphone, read the words, and press it again.");
   };
-  el.addEventListener("input", draw);
+  // No sound follows the words as they're edited; a recording is of the words it was made for, so it doesn't.
+  el.addEventListener("input", () => {
+    if (voice === "quiet") { putPhrase(said, null); putPhrase(v.v, QUIET, true); }
+    said = v.v;
+    draw();
+  });
   draw();
   return h("div", { class: "spoken" }, el, row);
 }
@@ -109,8 +138,12 @@ function scalar(v: Lit, edit: Edit): HTMLElement {
   if (isFace(v)) return faceIn(v as Face, edit);
   if (v.t === "str") return text(v, edit);
   if (v.t === "num") {
-    const el = h("input", { type: "number", class: "inline num", value: String(v.v) });
-    el.addEventListener("input", () => { if (Number.isFinite(el.valueAsNumber)) { v.v = el.valueAsNumber; onEdit(); } });
+    const [min, max] = edit.range ?? [-Infinity, Infinity];
+    const whole = Number.isInteger(v.v) && (!edit.range || Number.isInteger(min));
+    const el = h("input", { type: "number", class: "inline num", value: String(v.v), step: whole ? 1 : "any", ...(edit.range && { min, max }) });
+    const fit = () => Math.min(max, Math.max(min, whole ? Math.round(el.valueAsNumber) : el.valueAsNumber));
+    el.addEventListener("input", () => { if (Number.isFinite(el.valueAsNumber)) { v.v = fit(); onEdit(); } });
+    el.addEventListener("change", () => { el.value = String(v.v); });
     return el;
   }
   if (v.t === "bool") {
@@ -164,18 +197,23 @@ function rows(items: HTMLElement[], add: HTMLElement | null, heads: string[] = [
 function list(items: Lit[], growable: boolean, ctx: Ctx, labels: string[]): HTMLElement {
   growable &&= items.length > 0;
   const tiles = inline(items);
-  const add = () => (growable ? addSlot(ctx, () => { items.push(structuredClone(items.at(-1)!)); return items.at(-1)!; }, tiles) : null);
-  const drop = (i: number) => (growable && items.length > 1 ? remove(ctx, () => items.splice(i, 1)) : null);
-  // An emoji list redraws on every pick, so a repeat (an added copy left as it was) shows as one.
+  // An emoji list never repeats one: it redraws on every pick, so a repeat shows and says so.
   const taken = emojiOnly(items) ? () => items.map((x) => (x as Face).v) : undefined;
+  // A new emoji is one the list doesn't have yet, so closing the picker without a pick leaves no repeat.
+  const add = () => (growable ? addSlot(ctx, () => { items.push((taken && unusedEmoji(taken())) || nextRow(items)); return items.at(-1)!; }, tiles) : null);
+  const drop = (i: number) => (growable && items.length > 1 ? remove(ctx, () => items.splice(i, 1)) : null);
   const sub = taken ? { ...ctx, taken, onEdit: () => changed(ctx) } : ctx;
   const repeat = (x: Lit) => !!taken && taken().filter((e) => e === (x as Face).v).length > 1;
   // Rows of plain values, like a drum's picture, name, and color, name their columns once.
   const heads = items.every((x) => x.t === "tuple" && !x.items.some(nested)) ? labels : [];
   const item = (x: Lit) => editor(x, sub, [], nested(x) && !heads.length ? labels : []);
   if (tiles) {
-    return h("span", { class: "knob-inline" },
+    const twice = [...new Set(items.filter(repeat).map((x) => (x.t === "picture" ? `The picture "${(x as Face).v}"` : (x as Face).v)))];
+    const tilesEl = h("span", { class: "knob-inline" },
       ...items.map((x, i) => h("span", { class: `knob-item tile${repeat(x) ? " bad" : ""}` }, labelled(labels[i], item(x)), drop(i))), add());
+    // Wrapped only when there's something to say, so rows that line up their tiles keep doing so.
+    return twice.length ? h("span", { class: "knob-tiles" }, tilesEl,
+      ...twice.map((e) => h("p", { class: "bad small" }, `${e} is in here twice, and each one needs to be different. Click one of them to pick something else.`))) : tilesEl;
   }
   return rows(items.map((x, i) => row(item(x), drop(i))), add(), heads);
 }
@@ -210,10 +248,38 @@ function link(v: Str, ctx: Ctx): HTMLElement {
   return el;
 }
 
+// A legend's things that aren't colors, as [letter, how it looks] for a dropdown.
+const thingsOf = (legend: Dict): [string, string][] => legend.entries
+  .filter(([, x]) => !(x.t === "str" && COLOR.test(x.v)))
+  .map(([k, x]): [string, string] => [keyText(k), x.t === "picture" ? `${x.v} (picture)` : keyText(x)]);
+
+// A legend's new thing: a letter the map and legend don't use yet, and an emoji it doesn't have, ready to pick over.
+function addThing(d: Dict, map: Lit): Lit {
+  const taken = new Set([...lettersIn(map), ...d.entries.map(([k]) => keyText(k))]);
+  const letter = [...FREE_LETTERS].find((l) => !taken.has(l))!;
+  const face = unusedEmoji(d.entries.map(([, x]) => (x.t === "str" || x.t === "picture" ? x.v : "")))!;
+  d.entries.push([{ t: "str", v: letter }, face]);
+  return face;
+}
+
 function dict(d: Dict, ctx: Ctx, peers: Lit[], labels: string[]): HTMLElement {
   const values = d.entries.map(([, x]) => x);
   const template = d.entries.at(-1) ?? peers.flatMap((p) => (p.t === "dict" ? p.entries : [])).at(0);
-  const add = () => { const [k, x] = structuredClone(template!); const key = nextKey(d, k, labels[0]); d.entries.push([key, x]); return key; };
+  const legend = ctx.legend?.dict === d ? ctx.legend : undefined;
+  const things = ctx.keyedBy?.dict === d ? thingsOf(ctx.keyedBy.legend) : undefined;
+  const add = () => {
+    if (legend) return addThing(d, legend.map);
+    const free = things?.find(([l]) => !d.entries.some(([k]) => keyText(k) === l));
+    if (free) {
+      const x = structuredClone(template![1]);
+      d.entries.push([{ t: "str", v: free[0] }, x]);
+      return x;
+    }
+    const [k, x] = structuredClone(template!);
+    const key = nextKey(d, k, labels[0]);
+    d.entries.push([key, x]);
+    return key;
+  };
   const drop = (i: number) => () => d.entries.splice(i, 1);
   const key = (k: Lit) => labelled(labels[0], focusIfFresh(k, keyIn(d, k, ctx)));
   const value = (x: Lit) => (ctx.links.has(d) && x.t === "str" ? link(x, ctx) : editor(x, ctx, values));
@@ -223,8 +289,12 @@ function dict(d: Dict, ctx: Ctx, peers: Lit[], labels: string[]): HTMLElement {
   const entries = d.entries.some(([, y]) => nested(y));
   const entry = ([k, x]: [Lit, Lit], i: number) => entries
     ? h("div", { class: "knob-entry knob-item" }, remove(ctx, drop(i)), h("div", { class: "entry-fields" }, key(k), ...fields(x)))
-    : row(focusIfFresh(k, keyIn(d, k, ctx)), h("span", { class: "dim" }, "→"), value(x), remove(ctx, drop(i)));
-  return rows(d.entries.map(entry), template ? addSlot(ctx, add) : null, entries ? [] : [labels[0], "", labels[1]]);
+    : row(legend ? h("span", { class: "legend-key", title: "How the Python writes this on the map" }, keyText(k))
+      : things ? select(things, keyText(k), (l) => { (k as Str).v = l; changed(ctx); })
+      : focusIfFresh(k, keyIn(d, k, ctx)),
+      h("span", { class: "dim" }, "→"), value(x), remove(ctx, drop(i)));
+  const full = things && things.every(([l]) => d.entries.some(([k]) => keyText(k) === l));
+  return rows(d.entries.map(entry), template && !full ? addSlot(ctx, add) : null, entries ? [] : [labels[0], "", labels[1]]);
 }
 
 function linksOf(v: Lit): Pick<Ctx, "pages" | "links" | "relink"> {
@@ -241,21 +311,32 @@ function linksOf(v: Lit): Pick<Ctx, "pages" | "links" | "relink"> {
 export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
   // Maps paint with the legend's emoji and colors, so they redraw whenever another knob changes.
   const maps: (() => void)[] = [];
+  const values = knobs.map((o) => o.value);
+  const legends = new Map(values.filter((v) => isMap(v) || isWorld(v)).map((map) => [legendFor(map, values), map] as const));
+  // A dict keyed by a legend's letters, like who in the world says what.
+  const keyedBy = (v: Lit) => [...legends.keys()].find((l): l is Dict => !!l && v !== l && v.t === "dict" && v.entries.length > 0
+    && v.entries.every(([k]) => l.entries.some(([o]) => keyText(o) === keyText(k))));
   const edited = () => { onEdit(); maps.forEach((m) => m()); };
   return h("div", { class: "card knobs" },
     ...knobs.map((k) => {
       const one = !nested(k.value) && !(k.value.t === "str" && k.value.v.length > LONG);
       const card = h("section", { class: `knob${one ? " one-line" : ""}` });
       const head = () => h("div", { class: "knob-head" }, h("h2", {}, roomTitle(k.name.toLowerCase().replace(/_/g, "-"))), k.about && h("p", { class: "dim small" }, k.about));
-      if (isMap(k.value)) {
-        const map = k.value as { items: Lit[] };
-        const legend = legendFor(map, knobs.map((o) => o.value));
-        const [painter, redraw] = mapPainter(map, () => legendNames(legend), onEdit);
+      if (isMap(k.value) || isWorld(k.value)) {
+        const legend = legendFor(k.value, values);
+        const [painter, redraw] = mapPainter(k.value, () => legendNames(legend), onEdit);
         maps.push(redraw);
         card.replaceChildren(head(), painter);
         return card;
       }
-      const redraw = () => card.replaceChildren(head(), editor(k.value, { onEdit: edited, redraw, drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), loud: isLoud(k), ...linksOf(k.value) }, [], k.labels));
+      const map = k.value.t === "dict" ? legends.get(k.value) : undefined;
+      const legend = map && { dict: k.value as Dict, map };
+      const by = keyedBy(k.value);
+      const range = RANGE.exec(k.about)?.slice(1).map(Number) as [number, number] | undefined;
+      const ctx = { onEdit: edited, redraw: () => redraw(), drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), loud: isLoud(k), legend, range,
+        keyedBy: by && { dict: k.value as Dict, legend: by }, ...linksOf(k.value) };
+      const redraw = () => card.replaceChildren(head(), editor(k.value, ctx, [], k.labels),
+        legend ? h("p", { class: "dim small" }, "The letter beside each thing is how the Python writes it on the map. You only need it if you open the Python.") : "");
       redraw();
       return card;
     }));

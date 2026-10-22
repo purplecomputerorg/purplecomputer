@@ -195,7 +195,7 @@ export interface Example { name: string; icon: string; label: string; about: str
 
 // Starters: each one a kind of room families asked for, short enough to read and change.
 export const EXAMPLES: Example[] = [
-  { name: "explore", icon: "🗺️", label: "A world to walk around", about: "Walk with the arrows and find the stars to open the door. Draw the map yourself.", source: explore },
+  { name: "explore", icon: "🗺️", label: "A world to walk around", about: "Walk with the arrows and find the stars to open the house. Draw the maps yourself, and join them with numbered doors.", source: explore },
   { name: "story", icon: "📖", label: "A story with choices", about: "Each page is read in Purple's voice or your own recorded voice, and number keys pick what happens next.", source: story },
   { name: "memory", icon: "🃏", label: "Memory", about: "Turn over cards to find the pairs, alone or taking turns.", source: memory },
   { name: "garden", icon: "🌻", label: "A garden", about: "Plant seeds on the letter keys and water them to grow. It remembers the garden.", source: garden },

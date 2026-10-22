@@ -379,6 +379,8 @@ input.mono-in { font-family: var(--mono); font-size: 13px; }
 .knob-inline > .knob-item { display: inline-flex; align-items: center; gap: 4px; }
 /* Entries hold wrapping words, so they take the card's width instead of sizing the grid to their text */
 .knob-rows:has(> .knob-entry) { grid-template-columns: minmax(0, 1fr); }
+/* A row of words (who says what) gives the words the room that's left, so they wrap inside the card */
+.knob-rows:has(> .form-row > :is(textarea, .spoken)) { grid-template-columns: max-content max-content minmax(0, 1fr) max-content; }
 .x { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--dim); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 .x:hover { background: var(--fill); color: var(--purple-dark); }
 .tile { position: relative; }
@@ -506,6 +508,8 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .emoji-cell { width: 64px; height: 42px; font-size: 24px; border-radius: 12px; border: 1.5px solid var(--line); background: #fff; cursor: pointer; padding: 0; }
 .emoji-cell:hover, .emoji-cell:focus-visible { border-color: var(--border); background: var(--fill); outline: none; }
 .tile.bad .emoji-cell { border-color: #d77; }
+.knob-tiles { display: grid; gap: 6px; }
+.knob-tiles > .bad { color: #b44; margin: 0; }
 .emoji-cell.empty { font: 600 13px var(--sans); color: var(--purple); border-style: dashed; border-color: var(--border); }
 .word-row .was { white-space: nowrap; overflow: hidden; }
 .word-row .means { grid-column: 1 / -1; font-size: 13px; margin-bottom: 4px; }
@@ -591,6 +595,14 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .map-brush > .map-cell { width: 28px; border-radius: 6px; border: 1px solid var(--line); }
 .map-grid { display: grid; grid-template-columns: repeat(var(--cols), 1fr); max-width: 720px; border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; touch-action: none; user-select: none; cursor: crosshair; }
 .map-cell { aspect-ratio: 1; display: grid; place-items: center; font-size: clamp(10px, 2vw, 20px); line-height: 1; background: #eef4e8; }
+.map-one { display: grid; gap: 6px; }
+.map-head { display: flex; align-items: center; gap: 6px; }
+.map-name { font-weight: 600; }
+.map-painter > .bad:empty { display: none; }
+.map-painter > .bad { color: #b44; margin: 0; }
+.map-cell { position: relative; }
+.map-num { position: absolute; right: 1px; bottom: 0; font: 700 9px var(--sans); color: #fff; background: rgba(0, 0, 0, 0.55); border-radius: 3px; padding: 0 2px; line-height: 1.3; }
+.legend-key { font: 12px var(--mono, monospace); color: var(--dim); text-align: center; }
 .map-cell.letter { font: 700 13px var(--mono, monospace); color: var(--purple); }
 .map-grid > .map-cell:hover { outline: 2px solid var(--purple); outline-offset: -2px; }
 

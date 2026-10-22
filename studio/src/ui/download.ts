@@ -1,7 +1,7 @@
 import { PACK_FORMATS, type PackSkipped } from "@sdk/pack";
 import { buildPack, packFilename } from "../pack";
 import type { Picture } from "../photo";
-import { addAll, changed, countOf, draft, pieces, titleOf, tryingPieces, type Count, type Instrument, type Keepable, type Phrase, type RoomDraft, type RoomFile, type SynonymEntry, type WordEntry } from "../state";
+import { addAll, changed, countOf, draft, isQuiet, pieces, titleOf, tryingPieces, type Count, type Instrument, type Keepable, type Phrase, type RoomDraft, type RoomFile, type SynonymEntry, type WordEntry } from "../state";
 import { miniScreen } from "./colors";
 import { field, h } from "./dom";
 import { SWATCH } from "./instrument";
@@ -19,7 +19,7 @@ const chip = (face: Node | string, text: string) =>
 const FACES: Record<string, (item: Keepable) => Node> = {
   pictures: (i) => chip(h("img", { src: (i as Picture).sourceUrl, alt: "" }), titleOf(i as Picture)),
   letter_recordings: (i) => chip(sticker(Object.keys(draft.letters).find((k) => draft.letters[k] === i) ?? "?"), "🎤"),
-  phrases: (i) => chip("🎤", `“${(i as Phrase).text}”`),
+  phrases: (i) => chip(isQuiet((i as Phrase).clip) ? "🔇" : "🎤", `“${(i as Phrase).text}”`),
   words: (i) => chip((i as WordEntry).emoji, (i as WordEntry).word),
   autocomplete_picks: (i) => chip("⭐", (i as Keepable & { word: string }).word),
   synonyms: (i) => chip("↪", `${(i as SynonymEntry).alias} means ${(i as SynonymEntry).word}`),

@@ -1,7 +1,7 @@
 import type { Clip } from "../audio";
 import { play } from "../audio";
 import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
-import { changed, draft, putPhrase } from "../state";
+import { changed, draft, isQuiet, putPhrase } from "../state";
 import { h, pageKeys } from "./dom";
 import { keyLabel, sticker } from "./stickers";
 import { addAllBar, keepButton, tryBar } from "./trybar";
@@ -18,7 +18,8 @@ const tabs = (which: "letters" | "phrases") => h("div", { class: "tabs", role: "
   h("a", { class: "tab", href: "#voice", "aria-selected": String(which === "letters") }, "Letters and numbers"),
   h("a", { class: "tab", href: "#voice/phrases", "aria-selected": String(which === "phrases") }, "Phrases"));
 
-const hear = (clip: Clip) => h("button", { class: "btn secondary small", onclick: () => play(clip) }, "▶ Hear it");
+const hear = (clip: Clip) => (isQuiet(clip) ? h("span", { class: "dim small" }, "🔇 No sound")
+  : h("button", { class: "btn secondary small", onclick: () => play(clip) }, "▶ Hear it"));
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? " is" : "s are"}`;
 
 function lettersView(): View {

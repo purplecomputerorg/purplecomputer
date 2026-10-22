@@ -6,7 +6,7 @@ from purple import *
 # The drums, top row of keys to bottom: the picture for each, the drum it plays (Purple's or one of your sounds), and its color.
 # Labels: picture, drum, color
 DRUMS = (("🐘", "kick", "#a0a0a0"), ("🐸", "snare", "#e44444"), ("🐝", "hi-hat", "#e2c63a"), ("👏", "clap", "#2e6ae1"))
-# Seconds from one beat to the next: smaller is faster.
+# Seconds from one beat to the next, 0.1 to 1: smaller is faster.
 SPEED = 0.2
 
 keys = ("12345678", "qwertyui", "asdfghjk", "zxcvbnm,")

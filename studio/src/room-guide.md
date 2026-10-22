@@ -59,7 +59,7 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `picture("cat")` | One of the pack's pictures, for `grid.set` or `show`, wherever an emoji could go. In text, or said, it's its name. |
 | `pixels(rows, colors)` | A small picture written as letters (below). |
 | `every(seconds, fn)`, `after(seconds, fn)` | Call `fn` over and over, or once, at least 0.1 seconds apart. Both give back a timer you can `.stop()`. |
-| `game_over(text)` | Stops the timers and shows the text. The next key starts the room over from the top, with fresh variables; `keep` stays. |
+| `game_over(text)` | Stops the timers and shows the text. A new key press, a moment later, starts the room over from the top, with fresh variables; `keep` stays. |
 | `state(score=0)` | A place for what changes as the room plays: `game = state(score=0)` at the top, then `game.score += 1` in any function, with no `global` needed. |
 | `keep` | A dict Purple remembers for next time: `keep["best"] = 12`. Words, numbers, lists, and dicts, up to 4 KB. Purple saves it when your kid leaves the room. |
 | `images`, `sounds` | The pack's picture names (each with its size in pixels) and sound names. |
@@ -85,6 +85,8 @@ The floor sits under the grid, so a hero standing on grass is `grid.floor.set(x,
 Purple draws everything after each key and timer, so there's no drawing to do yourself: change the grid or the text, and it shows.
 
 A world bigger than the screen: keep the whole map in a list of strings, and after each move `grid.clear()` and set the 24 by 12 part around the hero. Redrawing every square is fine; Purple only shows what changed.
+
+More than one place, like a cave or an upstairs: keep the maps in a dict by name, and when the hero steps onto a square, redraw from the map they land on. The world starter joins maps with numbered doors: a door 1 on two maps is a way between them.
 
 ### Pixel pictures
 

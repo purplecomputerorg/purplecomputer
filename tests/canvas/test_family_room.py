@@ -302,7 +302,7 @@ def test_a_room_remembers_what_it_keeps(pack):
     run(go())
 
 
-def test_game_over_waits_for_a_key_then_starts_fresh(pack):
+def test_game_over_waits_a_moment_for_a_key_then_starts_fresh(pack):
     pack("once", 'from purple import *\nshow("go")\ndef on_key(key):\n    game_over("Again?")\n')
 
     async def go():
@@ -312,6 +312,10 @@ def test_game_over_waits_for_a_key_then_starts_fresh(pack):
         await press(app, "a")
         await until(lambda: "Again?" in texts(room))
         await press(app, "b")
+        await until(lambda: not room._busy)
+        assert "Again?" in texts(room)
+        await asyncio.sleep(1.0)
+        await press(app, "c")
         await until(lambda: texts(room) == ["go"])
         room.close()
     run(go())

@@ -5,7 +5,7 @@ from purple import *
 
 # The snake's color.
 SNAKE = "#5ec46a"
-# How many squares long the snake is.
+# How many squares long the snake is, 2 to 20.
 LENGTH = 4
 # The flowers it leaves behind, one after another.
 TRAIL = ["🌼", "🌸", "🌷"]

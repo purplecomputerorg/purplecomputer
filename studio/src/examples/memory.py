@@ -7,12 +7,14 @@ from purple import *
 
 # The pictures on the cards, up to 13: emoji, or your pictures, or both. Each one makes a pair, shuffled every game.
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
-# The players, taking turns in this order: each one's mark, name, and the color of the pairs they find.
-# Labels: mark, name, color
-PLAYERS = [("🔴", "Red", "#e44444"), ("🔵", "Blue", "#2e6ae1")]
+# How many players, 1 to 6: one plays alone, more take turns, each finding pairs in their own color.
+PLAYERS = 1
 # The color under a card turned over but not matched yet.
 TURNED = "#7a5ac8"
 
+# Each player's mark, and the color under the pairs they find.
+players = [("🔴", "#e44444"), ("🔵", "#2e6ae1"), ("🟢", "#2e9e4f"), ("🟡", "#e0a020"), ("🟣", "#9b4dca"), ("🟠", "#ec7a1c")]
+players = players[:max(1, min(int(PLAYERS), len(players)))]
 rows = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
 cards = CARDS[:13] * 2
 random.shuffle(cards)
@@ -23,7 +25,9 @@ left = len(cards)
 for i, keys in enumerate(reversed(rows[:used])):
     per_row.insert(0, min(len(keys), left // (used - i)))
     left -= per_row[0]
-spots = {key: (2 + x * 2, 4 + r * 2) for r, (keys, n) in enumerate(zip(rows, per_row)) for x, key in enumerate(keys[:n])}
+# Each card is 2 squares wide, so the widest row sets the left edge that centers them on the grid's 24 squares.
+left = 12 - max(per_row)
+spots = {key: (left + x * 2, 4 + r * 2) for r, (keys, n) in enumerate(zip(rows, per_row)) for x, key in enumerate(keys[:n])}
 faces = dict(zip(spots, cards))
 shown = {}        # cards matched for good, and the color of who found them
 up = []            # the one or two cards turned over this turn
@@ -39,13 +43,12 @@ def draw():
         else:
             grid.floor.erase(x, y)
             grid.set(x, y, key.upper(), size=2)
-    mark, name, _ = PLAYERS[game.turn]
-    status(f"{mark} {name}'s turn" if len(PLAYERS) > 1 else "")
+    status(f"{players[game.turn][0]}'s turn" if len(players) > 1 else "")
 
 
 def turn_back():
     up.clear()
-    game.turn = (game.turn + 1) % len(PLAYERS)
+    game.turn = (game.turn + 1) % len(players)
     draw()
 
 
@@ -54,7 +57,7 @@ def on_key(key):
         up.append(key)
         play("E5")
         if len(up) == 2 and faces[up[0]] == faces[up[1]]:
-            shown.update(dict.fromkeys(up, PLAYERS[game.turn][2]))
+            shown.update(dict.fromkeys(up, players[game.turn][1]))
             up.clear()
             play("G5")
         elif len(up) == 2:

@@ -2,9 +2,9 @@
 // any sound the browser can play becomes the WAV Purple plays.
 import { ROOM_FILE_NAME, type RoomFileKind } from "@sdk/pack";
 import { audioContext, decodeToClip, encodeWav, playBuffer } from "../audio";
-import { PICTURE_KINDS, bitmapFromSrc, pictureFailure } from "../photo";
-import { roomFileOf, shelf, shelveFile, type Shelved } from "../shelf";
-import { changed, draft, freeName, type RoomFile } from "../state";
+import { PICTURE_KINDS, bitmapFromSrc, dataUrl, pictureFailure } from "../photo";
+import { roomFileOf, shelf, shelve, shelveFile, type Shelved } from "../shelf";
+import { changed, draft, freeName, names, type Made, type RoomDraft, type RoomFile } from "../state";
 import { filePicker, h } from "./dom";
 
 const MAX_SIDE = 1024;  // pack_manager.IMAGE_MAX_SIDE
@@ -24,7 +24,12 @@ async function png(src: string): Promise<Uint8Array> {
 
 const wav = async (file: Blob) => encodeWav(await decodeToClip(file));
 
+const sameData = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+// The very same picture or sound again is the one the pack already has.
 export function addRoomData(kind: RoomFileKind, text: string, data: Uint8Array, shelfId?: string): RoomFile {
+  const same = draft.roomFiles.find((f) => f.kind === kind && sameData(f.data, data));
+  if (same) return Object.assign(same, { shelfId: same.shelfId ?? shelfId });
   const name = freeName(text, (n) => draft.roomFiles.some((f) => f.kind === kind && f.name === n), kind === "images" ? "picture" : "sound");
   const added: RoomFile = { kind, name, data, kept: true, shelfId };
   draft.roomFiles.push(added);
@@ -33,11 +38,16 @@ export function addRoomData(kind: RoomFileKind, text: string, data: Uint8Array, 
 }
 
 // Any picture, as one of the pack's own.
-export const addRoomPicture = async (text: string, src: string, shelfId?: string) => addRoomData("images", text, await png(src), shelfId);
+const addRoomPicture = async (text: string, src: string, shelfId?: string) => addRoomData("images", text, await png(src), shelfId);
 
 // A picture from the shelf, for the pack's rooms: the copy they already have, or a new one.
 export async function roomFileFor(item: Shelved): Promise<RoomFile> {
   return roomFileOf(item) ?? addRoomPicture(item.name, item.src, item.id);
+}
+
+// One of Studio's photos, on the family's shelf like their own, so it's one picture wherever it's used.
+export async function addOurPicture(text: string, src: string): Promise<RoomFile> {
+  return roomFileFor(shelve(await dataUrl(await (await fetch(src)).blob()), text));
 }
 
 // A new photo goes on the shelf too, so any pack can use it again.
@@ -64,6 +74,20 @@ export function renameRoomFile(f: RoomFile, text: string) {
     }
   }
   f.name = name;
+  changed();
+}
+
+// The sounds a form's room plays, read from the form: its Python catches up a moment later, and quotes a word that shares a recording's name.
+function soundsIn(made: Made): string[] {
+  if (made.kind === "rules") return made.rules.flatMap((r) => r.actions).flatMap((a) => (a.kind === "sound" ? [a.name] : []));
+  return made.kind === "soundboard" ? [...made.data.rows, made.data.other].flatMap((s) => [s.voice ?? "", s.note]) : [];
+}
+const roomNames = (r: RoomDraft, name: string) => (r.made ? soundsIn(r.made).includes(name) : names(r.source, name));
+
+// A recording no room uses any more, gone, so a key recorded again doesn't leave its last take behind.
+export function dropUnusedSound(name: string) {
+  if (draft.rooms.some((r) => roomNames(r, name))) return;
+  draft.roomFiles = draft.roomFiles.filter((f) => f.kind !== "sounds" || f.name !== name);
   changed();
 }
 

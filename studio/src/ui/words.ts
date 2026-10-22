@@ -3,7 +3,7 @@ import { changed, draft, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, emojiCell } from "./emojipicker";
-import { addRoomPicture } from "./roomfiles";
+import { addOurPicture } from "./roomfiles";
 import box from "../assets/purple-box.jpg";
 import { pictureFailure } from "../photo";
 import type { View } from "./view";
@@ -97,7 +97,7 @@ function picturesTip(added: () => void): HTMLElement & { refresh: () => void } {
     refresh();
     note.textContent = "";
     try {
-      const f = await addRoomPicture("purple-box", box);
+      const f = await addOurPicture("purple-box", box);
       draft.words.push({ word: EXAMPLE_WORD, emoji: f.name, kept: true });
       changed();
       added();

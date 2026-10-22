@@ -9,7 +9,7 @@ import { draft } from "../state";
 import { addRowButton, h, removeButton } from "./dom";
 import { emojiCell } from "./emojipicker";
 import { recordButton } from "./record";
-import { addRoomData, hearRoomSound } from "./roomfiles";
+import { addRoomData, dropUnusedSound, hearRoomSound } from "./roomfiles";
 import { textIn } from "./rulesform";
 
 const mine = (kind: RoomFileKind) => draft.roomFiles.filter((f) => f.kind === kind).map((f) => f.name);
@@ -46,7 +46,7 @@ function sayIn(o: Sound, c: Ctx, hint: string, nameFor: () => string): HTMLEleme
   const record = recordButton((clip) => edits(c, () => { o.voice = addRoomData("sounds", nameFor(), encodeWav(clip)).name; })(), c.say, true);
   const own = [
     h("button", { class: "rec-mini", title: "Hear your recording", "aria-label": "Hear your recording", onclick: () => hearRoomSound(voice) }, "▶"),
-    h("button", { class: "x", title: "Use Purple's voice", "aria-label": "Use Purple's voice", onclick: edits(c, () => { o.voice = ""; }) }, "×"),
+    h("button", { class: "x", title: "Use Purple's voice", "aria-label": "Use Purple's voice", onclick: edits(c, () => { o.voice = ""; dropUnusedSound(voice); }) }, "×"),
   ];
   return h("span", { class: "sound-in" }, wordIn(o, c, hint), ...(voice ? own : [record]));
 }

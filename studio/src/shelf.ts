@@ -1,7 +1,7 @@
 // The family's pictures on this computer, apart from any one Purple Pack: a picture goes in the pack only
 // once Art or a room uses it. Best effort, like the draft (saved.ts): a downloaded pack, reopened, brings its pictures back.
 import { recallShelf, rememberShelf } from "./saved";
-import { changed, draft, freeName, isTheirs, titleOf, type Draft, type RoomFile } from "./state";
+import { changed, draft, freeName, isTheirs, names, titleOf, type Draft, type RoomFile } from "./state";
 import { PICTURE_KINDS, PICTURE_MAX_MB, PictureProblem, bitmapFromSrc, dataUrl, type Picture } from "./photo";
 
 // src: the photo as a data URL, as the family added it. Saved in the browser, so a field added here must be optional.
@@ -61,7 +61,7 @@ export const roomFileOf = (item: Shelved): RoomFile | undefined => draft.roomFil
 export function usedIn(item: Shelved): string[] {
   const art = artOf(item);
   const file = roomFileOf(item);
-  const rooms = file ? draft.rooms.filter((r) => r.source.includes(`"${file.name}"`) || r.source.includes(`'${file.name}'`)) : [];
+  const rooms = file ? draft.rooms.filter((r) => names(r.source, file.name)) : [];
   const words = file && draft.words.some((w) => w.emoji === file.name) ? ["Play"] : [];
   return [...(art?.kept ? ["Art"] : []), ...words, ...rooms.map((r) => `the ${titleOf(r)} room`)];
 }

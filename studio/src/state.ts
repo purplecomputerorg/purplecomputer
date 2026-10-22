@@ -81,6 +81,8 @@ export function freeName(text: string, taken: (name: string) => boolean, fallbac
   for (let n = 2; taken(name); n++) name = `${base}-${n}`;
   return name;
 }
+// Whether Python names a file, in either quote: picture("dog"), CARDS = ['dog'].
+export const names = (source: string, name: string) => source.includes(`"${name}"`) || source.includes(`'${name}'`);
 export const titleOf = (p: { name: string; title?: string }) => p.title || roomTitle(p.name);
 
 // Trying one of Studio's examples replaces the last one tried, unless the family changed or added it.

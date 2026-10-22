@@ -37,12 +37,12 @@
  ],
  "fingerprint": {
   "studio/sdk/src/pack.ts": "3b2c065a151c50ab",
-  "studio/src/pack.ts": "6d043f4837733760",
+  "studio/src/pack.ts": "99fd9ec32e00f8f2",
   "purple_tui/content.py": "e056eba93e8ad490",
   "purple_tui/pack_manager.py": "a8c25ce9e5d548ed",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
   "purple_tui/canvas/rooms/family_room.py": "8b918aa000737370",
-  "purple_tui/roomkit/purple.py": "d02d57e2aed69499",
+  "purple_tui/roomkit/purple.py": "b3f73827807272fd",
   "purple_tui/roomkit/runner.py": "9e62d3413c858a5a",
   "purple_tui/roomkit/limits.py": "07347f3ac2df15ea"
  }

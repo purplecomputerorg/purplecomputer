@@ -7,7 +7,7 @@ import { changed, draft, freeName, withSample, type Made, type RoomDraft } from 
 import { go, h } from "./dom";
 import { knobsForm } from "./knobsform";
 import { liveScreen, type RoomProblem } from "./live";
-import { LIBRARY_NAMES } from "./guide";
+import { copyGuideRow, LIBRARY_NAMES } from "./guide";
 import { openPackButton } from "./packfile";
 import { roomFilesBox } from "./roomfiles";
 import { rulesForm } from "./rulesform";
@@ -213,13 +213,13 @@ function editor(room: RoomDraft): View {
       {},
       h("div", { class: "editor-head" }, nameIn, h("button", { class: "linkbtn dim small", onclick: () => nameIn.select() }, "✏️ Rename"), nameNote),
       tryBar(room, () => confirm(`Throw away ${roomTitle(room.name)}?`) && drop([room])),
+      copyGuideRow(h("span", { class: "small" }, "Using an AI helper? The ", h("a", { href: "#guide" }, "Room guide"), " is everything it needs:")),
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, ...tabButtons),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),
       pane,
       problems.element,
       out,
       tray,
-      h("p", { class: "dim small" }, "Everything a room can use is on the ", h("a", { href: "#guide" }, "Room guide"), ". Using an AI helper? Copy the guide from there and paste it in with what you'd like to make."),
     ),
     live: setup,
     caption: "Your room, running on the real Purple. Esc leaves it; it waits in the Esc menu, where it shows up on Purple once you turn it on in the Parent Menu.",

@@ -17,22 +17,27 @@ function rowFor(name: string): HTMLElement | null {
   return codes.find((c) => new RegExp(`^${name}($|[(.\\[])`).test(c.textContent ?? ""))?.closest("tr") ?? null;
 }
 
-export function guideView(item: string | null): View {
+// The button that copies the whole guide, with a word after it on how it went.
+export function copyGuideRow(...lead: (string | Node)[]): HTMLElement {
   const status = h("span", { class: "dim small" });
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(GUIDE);
       status.textContent = "Copied. Paste it to an AI helper along with what you'd like to make.";
     } catch {
-      status.textContent = "Your browser did not allow copying. Select the page text instead.";
+      status.textContent = "Your browser did not allow copying. Select the text on the Room guide page instead.";
     }
   };
+  return h("p", { class: "row" }, ...lead, h("button", { class: "btn small", onclick: copy }, "Copy the Room guide"), status);
+}
+
+export function guideView(item: string | null): View {
   return {
     title: "Room guide",
     editor: h(
       "section",
       { class: "guide" },
-      h("p", { class: "row" }, h("button", { class: "btn small", onclick: copy }, "Copy the guide"), status),
+      copyGuideRow(),
       ...markdown(GUIDE),
       h("details", { class: "more-options" },
         h("summary", {}, "Purple's own code, for the curious"),

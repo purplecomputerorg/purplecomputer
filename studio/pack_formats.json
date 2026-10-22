@@ -9,13 +9,24 @@
     "files": [],
     "calls": []
    }
+  },
+  {
+   "format": 2,
+   "date": "2026-10-21",
+   "added": "Play words that show a picture from the pack",
+   "needs": {
+    "files": [
+     "^content/word-pictures\\.json$"
+    ],
+    "calls": []
+   }
   }
  ],
  "fingerprint": {
-  "studio/sdk/src/pack.ts": "33824324e6eb4626",
+  "studio/sdk/src/pack.ts": "f522f2221381622f",
   "studio/src/pack.ts": "c2a8e62042bdf0c7",
-  "purple_tui/content.py": "c39a6ec610f138fe",
-  "purple_tui/pack_manager.py": "83de218d6ef5b256",
+  "purple_tui/content.py": "f998e9c83961e066",
+  "purple_tui/pack_manager.py": "bbe8ff1c985d4eb1",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
   "purple_tui/canvas/rooms/family_room.py": "8b918aa000737370",
   "purple_tui/roomkit/purple.py": "62032e6f1b223820",

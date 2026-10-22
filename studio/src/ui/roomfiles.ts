@@ -32,9 +32,12 @@ export function addRoomData(kind: RoomFileKind, text: string, data: Uint8Array, 
   return added;
 }
 
+// Any picture, as one of the pack's own.
+export const addRoomPicture = async (text: string, src: string, shelfId?: string) => addRoomData("images", text, await png(src), shelfId);
+
 // A picture from the shelf, for the pack's rooms: the copy they already have, or a new one.
 export async function roomFileFor(item: Shelved): Promise<RoomFile> {
-  return roomFileOf(item) ?? addRoomData("images", item.name, await png(item.src), item.id);
+  return roomFileOf(item) ?? addRoomPicture(item.name, item.src, item.id);
 }
 
 // A new photo goes on the shelf too, so any pack can use it again.
@@ -46,11 +49,12 @@ export async function addRoomFile(kind: RoomFileKind, file: File): Promise<RoomF
 export const shelfOnly = () => shelf.filter((s) => !roomFileOf(s));
 export const shelfThumb = (s: Shelved) => h("img", { src: s.src, alt: s.name });
 
-// A new name everywhere the pack's rooms use the old one: their Python and their rules.
+// A new name everywhere the pack uses the old one: Play's words, and its rooms' Python and rules.
 export function renameRoomFile(f: RoomFile, text: string) {
   const name = freeName(text, (n) => draft.roomFiles.some((x) => x !== f && x.kind === f.kind && x.name === n), f.name);
   if (name === f.name || !ROOM_FILE_NAME.test(name)) return;
   const [before, after] = [call(f), call({ ...f, name })];
+  if (f.kind === "images") for (const w of draft.words) if (w.emoji === f.name) w.emoji = name;
   for (const r of draft.rooms) {
     r.source = r.source.replaceAll(before.slice(0, -1), after.slice(0, -1));
     if (r.made?.kind !== "rules") continue;

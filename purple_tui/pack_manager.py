@@ -206,7 +206,14 @@ def _check_word_maps(content: Path) -> list[str]:
             problems.append(f"content/{name}: must be a JSON object")
         elif not all(isinstance(k, str) and isinstance(v, str) and k and v for k, v in data.items()):
             problems.append(f"content/{name}: every entry must map a word to a non-empty string")
+    pictures = _json_object(content / 'word-pictures.json') if (content / 'word-pictures.json').exists() else {}
+    if pictures is None or not all(isinstance(k, str) and k and _has_image(content, v) for k, v in pictures.items()):
+        problems.append("content/word-pictures.json: every entry must map a word to one of content/images")
     return problems
+
+
+def _has_image(content: Path, name) -> bool:
+    return isinstance(name, str) and bool(ASSET_NAME.match(name)) and (content / 'images' / f'{name}.png').is_file()
 
 
 def _check_clips(clips_dir: Path) -> list[str]:

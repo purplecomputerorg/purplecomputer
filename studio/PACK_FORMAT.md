@@ -38,6 +38,14 @@ Everything below `content/` that is not listed here is ignored.
 
 `emoji.json` is a flat map of word to glyph, merged over the built-in map: a word Purple already has gets your glyph, a new word joins the list. `synonyms.json` maps an alias to a primary word, which must resolve to an emoji (built-in or from this pack) or the alias is dropped. `rankings.txt` is one word per line, position being autocomplete priority; built-in packs are read first and first occurrence wins, so a user pack can only rank words the core pack has not ranked.
 
+### word-pictures.json (format 2)
+
+```json
+{ "biscuit": "biscuit" }
+```
+
+Maps a word to one of the pack's own pictures, `content/images/<name>.png`, which Play shows wherever it would show the word's emoji, emoji-sized and keeping its shape. Inside Purple the word gets a character from Supplementary Private Use Area-B picked from the word, so it counts, repeats, and is spoken like an emoji, and a Time Travel step keeps it; once its pack is gone, Play draws 🖼️ there. Synonyms of the word show the picture too. The Textual UI skips this file.
+
 ### letters/<key>.wav
 
 One clip per Music grid key, any of them: `a.wav` through `z.wav` and `0.wav` through `9.wav`, lowercase, plus `semicolon.wav`, `comma.wav`, `period.wav` and `slash.wav` (the names in `canvas/sounds.CLIP_NAMES`). The clip can be anything, not just the key's name. 22050 Hz, mono, 16-bit PCM, the numbers Piper writes for the core clips. The Music room's Say Letters mode searches user packs first, then `letters-kid/` when Kid Voice is on, then the core `letters/`, per key, so a pack that records only some keys falls back for the others; the four punctuation keys have no core clip and stay plain notes unless a pack gives them one. The Textual UI reads only the letters and numbers.
@@ -154,6 +162,7 @@ Studio is one website that changes whenever it deploys; each family's Purple sta
 - no `.py` files except `rooms/<name>.py` and `rooms/purple.py`, no `.pyc`, `.pyo`, `.pyw`, and no extensionless or `.sh` file whose first line mentions python
 - no absolute paths, no `..` segments, no symlinks or hard links in the archive
 - `emoji.json` and `synonyms.json`, if present, are JSON objects mapping strings to non-empty strings
+- `word-pictures.json`, if present, maps each word to the name of a PNG in `images/`
 - every file in `letters/` and `voice/` is a WAV at 22050 Hz, mono, 16-bit
 - every `instruments/<name>.json` names a known base, has only that base's parameters with numeric values, and has a `content/<name>/` directory whose WAVs are 44100 Hz, mono, 16-bit
 - every `pictures/<name>.json` has an `ops` list of `[x, y, "#rrggbb"]` on the canvas

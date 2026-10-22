@@ -3,6 +3,8 @@ import { changed, draft, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, emojiCell } from "./emojipicker";
+import { addRoomPicture } from "./roomfiles";
+import boxes from "../assets/purple-boxes.jpg";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -10,7 +12,7 @@ const WORD = /^[a-z][a-z'-]*$/;
 
 // One table, a row per word and a blank row at the end: type a word, press Enter, pick its emoji,
 // and the next blank row is ready.
-function wordTable(): HTMLElement {
+function wordTable(): HTMLElement & { refresh: () => void } {
   const rows = h("div", { class: "word-rows" });
   const status = h("div", { class: "status" });
 
@@ -28,7 +30,7 @@ function wordTable(): HTMLElement {
       if (entry) { entry.emoji = e; changed(); showWas(); rows.querySelector<HTMLInputElement>(".blank input")?.focus(); }
       else if (word.value.trim()) commit();
       else word.focus();
-    });
+    }, { pictures: true });
     const pick = () => emoji.click();
     const was = h("span", { class: "dim small was" });
     const showWas = () => {
@@ -71,24 +73,47 @@ function wordTable(): HTMLElement {
   function render() {
     closeEmojiPicker();
     rows.replaceChildren(
-      h("div", { class: "word-row head" }, h("span", {}, "Word"), h("span", {}, "Emoji")),
+      h("div", { class: "word-row head" }, h("span", {}, "Word"), h("span", {}, "Emoji or picture")),
       ...draft.words.map(row),
       row(null),
     );
     rows.querySelector<HTMLInputElement>(".blank input")?.focus({ preventScroll: true });
   }
   render();
-  return h("div", { class: "card" }, rows, status);
+  return Object.assign(h("div", { class: "card" }, rows, status), { refresh: render });
+}
+
+const EXAMPLE_WORD = "box";
+
+// What a word can do beyond emoji: Play showing a photo, and our own photo to try it with.
+function picturesCard(added: () => void): HTMLElement {
+  const photo = () => h("img", { src: boxes, alt: "" });
+  const tried = () => draft.words.some((w) => w.word === EXAMPLE_WORD);
+  const button = h("button", { type: "button", class: "btn secondary", disabled: tried(), onclick: async () => {
+    button.disabled = true;
+    const f = await addRoomPicture("purple-boxes", boxes);
+    draft.words.push({ word: EXAMPLE_WORD, emoji: f.name, kept: true });
+    changed();
+    added();
+  } }, "Try it with our photo");
+  return h("div", { class: "card word-pictures" },
+    h("div", { class: "word-pictures-demo", "aria-hidden": "true" }, h("span", {}, "Type → 3 boxes"), h("span", {}, photo(), photo(), photo())),
+    h("div", {},
+      h("h2", {}, "Your own pictures, too"),
+      h("p", {}, "A word can show a photo where its emoji would go: your dog, Grandma, the boxes Purple came in. Click any word's emoji and choose Add photo."),
+      button));
 }
 
 export function wordsView(): View {
   const table = wordTable();
+  const pictures = picturesCard(table.refresh);
   return {
     title: "Emoji",
     editor: h(
       "section",
       {},
       h("p", { class: "lead" }, "In Play, kids type a word and see its emoji. Add the words your family uses: a pet's name, a favorite food, a word only you say."),
+      pictures,
       table,
       h("p", { class: "dim small" }, "Purple already knows hundreds of words, like cat and dog. Your words come first when Purple suggests what to type."),
     ),

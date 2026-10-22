@@ -82,9 +82,15 @@ export function manifest(spec: Pick<PackSpec, "name" | "id">, format = 1) {
   };
 }
 
+// A word's emoji can instead name one of the pack's pictures (content/word-pictures.json); one the pack no longer has is left out.
 export function emojiEntries(spec: PackSpec): TarEntry[] {
   const out: TarEntry[] = [];
-  if (spec.words.length) out.push(json("content/emoji.json", Object.fromEntries(spec.words.map((w) => [w.word, w.emoji]))));
+  const images = new Set((spec.roomFiles ?? []).filter((f) => f.kind === "images").map((f) => f.name));
+  const named = spec.words.filter((w) => ROOM_FILE_NAME.test(w.emoji));
+  const words = spec.words.filter((w) => !named.includes(w));
+  const pictured = named.filter((w) => images.has(w.emoji));
+  if (words.length) out.push(json("content/emoji.json", Object.fromEntries(words.map((w) => [w.word, w.emoji]))));
+  if (pictured.length) out.push(json("content/word-pictures.json", Object.fromEntries(pictured.map((w) => [w.word, w.emoji]))));
   if (spec.synonyms.length) out.push(json("content/synonyms.json", Object.fromEntries(spec.synonyms.map((s) => [s.alias, s.word]))));
   if (spec.ranked.length) out.push(text("content/rankings.txt", spec.ranked.join("\n") + "\n"));
   return out;

@@ -11,17 +11,30 @@ Purplepacks are content-only (JSON + assets) - NO executable Python code.
 
 import hashlib
 import json
+import os
 import re
+import zlib
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import Optional
 
 
+# Play shows a word mapped to one of a pack's pictures as a character from Supplementary Private Use Area-B
+# (A holds the icon font's glyphs), picked from the word so it stays the same across boots (Time Travel keeps
+# old steps). The canvas draws it.
+WORD_PICTURE_FIRST = 0x100000
+WORD_PICTURE_SPAN = 0xFFFE
+
+
+def is_word_picture(char: str) -> bool:
+    return len(char) == 1 and 0 <= ord(char) - WORD_PICTURE_FIRST < WORD_PICTURE_SPAN
+
+
 # Newest manifest "format" this loader reads. A pack declaring a higher one is
 # skipped whole rather than half-loaded. Format 1 is described in
 # studio/PACK_FORMAT.md.
-PACK_FORMAT = 1
+PACK_FORMAT = 2
 
 
 @dataclass
@@ -199,6 +212,7 @@ class ContentManager:
     def __init__(self, packs_dir: Optional[Path] = None):
         self.packs_dir = packs_dir or Path.home() / ".purple" / "packs"
         self.emojis: dict[str, str] = {}           # word -> emoji
+        self.word_pictures: dict[str, Path] = {}   # word picture character -> its PNG
         self.colors: dict[str, str] = {}           # color name -> hex code
         self.sounds: dict[str, Path] = {}          # sound_id -> file path
         # content/ dirs of user packs, load order; later packs win lookups
@@ -424,6 +438,7 @@ class ContentManager:
                     self.emojis.update(data)
             except (json.JSONDecodeError, OSError):
                 pass
+        self._load_word_pictures(content_dir)
 
         # Load synonyms (alias -> primary word, resolved to emoji)
         synonyms_file = content_dir / "synonyms.json"
@@ -436,6 +451,24 @@ class ContentManager:
                             self.emojis[alias] = self.emojis[target]
             except (json.JSONDecodeError, OSError):
                 pass
+
+    def _load_word_pictures(self, content_dir: Path) -> None:
+        """content/word-pictures.json: word -> one of the pack's content/images. The Textual UI can't draw them."""
+        data = _read_json(content_dir / "word-pictures.json")
+        if not isinstance(data, dict) or os.environ.get("PURPLE_UX") == "tui":
+            return
+        for word, name in data.items():
+            path = content_dir / "images" / f"{name}.png"
+            if isinstance(name, str) and ASSET_NAME.match(name) and path.is_file():
+                char = self.emojis[word] if is_word_picture(self.emojis.get(word, "")) else self._free_picture_char(word)
+                self.word_pictures[char] = path
+                self.emojis[word] = char
+
+    def _free_picture_char(self, word: str) -> str:
+        n = zlib.crc32(word.encode())
+        while chr(WORD_PICTURE_FIRST + n % WORD_PICTURE_SPAN) in self.word_pictures:
+            n += 1
+        return chr(WORD_PICTURE_FIRST + n % WORD_PICTURE_SPAN)
 
     def _load_sounds_pack(self, content_dir: Path, pack_dir: Path) -> None:
         """Load sound file references from pack"""

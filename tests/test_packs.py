@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from purple_tui import content as content_mod  # noqa: E402
 from purple_tui import tts  # noqa: E402
-from purple_tui.content import ContentManager  # noqa: E402
+from purple_tui.content import PACK_FORMAT, ContentManager  # noqa: E402
 from purple_tui.music_constants import INSTRUMENTS, instruments, pitch_filename, reachable_pitches  # noqa: E402
 from purple_tui.pack_manager import PackInstaller, check_pack  # noqa: E402
 from purple_tui.usb_updater import sha256, update_from  # noqa: E402
@@ -155,7 +155,7 @@ class TestLoader:
         assert [i.id for i in cm.instruments] == ["kitchen"]
 
     def test_newer_format_is_skipped_whole(self, tmp_path):
-        make_pack(tmp_path, fmt=2)
+        make_pack(tmp_path, fmt=PACK_FORMAT + 1)
         cm = ContentManager(packs_dir=tmp_path)
         cm.load_all()
         assert cm.exact_emoji("zorb") is None
@@ -192,6 +192,7 @@ class TestCheckPack:
         (lambda d: write_wav(d / "content" / "room-voice" / "hi.wav", rate=24000), "room-voice/hi.wav: expected 22050 Hz"),
         (lambda d: (d / "content" / "kitchen.py").write_text("print(1)"), "may not contain code"),
         (lambda d: (d / "content" / "emoji.json").write_text('{"cat": 3}'), "emoji.json: every entry"),
+        (lambda d: (d / "content" / "word-pictures.json").write_text('{"cat": "nope"}'), "word-pictures.json: every entry"),
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "marimba", "params": {"reverb": 1}})), "no parameter 'reverb'"),
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "piano"})), "base must be one of"),
         (lambda d: (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [[999, 0, "#ffffff"]]})), "off the 56 by 24 Art grid"),

@@ -133,6 +133,16 @@ describe("pack assembly", () => {
     expect((await buildEntries(spec)).map((e) => e.path)).toEqual(["manifest.json", "content/emoji.json", "content/rankings.txt"]);
   });
 
+  it("writes a word whose emoji is one of the pack's pictures to word-pictures.json, and drops one the pack lost", async () => {
+    const spec: PackSpec = { ...base, roomFiles: [{ kind: "images", name: "biscuit", data: new Uint8Array([1]) }],
+      words: [{ word: "octopus", emoji: "🐙" }, { word: "biscuit", emoji: "biscuit" }, { word: "gone", emoji: "gone" }] };
+    const entries = await buildEntries(spec);
+    const json = (path: string) => JSON.parse(new TextDecoder().decode(entries.find((e) => e.path === path)!.data));
+    expect(json("content/emoji.json")).toEqual({ octopus: "🐙" });
+    expect(json("content/word-pictures.json")).toEqual({ biscuit: "biscuit" });
+    expect(json("manifest.json").format).toBe(2);
+  });
+
   it("writes a picture's letters beside its paint, and leaves them out when there are none", async () => {
     const spec: PackSpec = { ...base, pictures: [
       { name: "t-rex", title: "T. rex", ops: [[0, 0, "#00ff00"]], letters: [[1, 0, "T", "#ffffff"]] },

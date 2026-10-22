@@ -62,7 +62,8 @@ export function usedIn(item: Shelved): string[] {
   const art = artOf(item);
   const file = roomFileOf(item);
   const rooms = file ? draft.rooms.filter((r) => r.source.includes(`"${file.name}"`) || r.source.includes(`'${file.name}'`)) : [];
-  return [...(art?.kept ? ["Art"] : []), ...rooms.map((r) => `the ${titleOf(r)} room`)];
+  const words = file && draft.words.some((w) => w.emoji === file.name) ? ["Play"] : [];
+  return [...(art?.kept ? ["Art"] : []), ...words, ...rooms.map((r) => `the ${titleOf(r)} room`)];
 }
 
 export function removeFromPack(item: Shelved) {

@@ -27,6 +27,7 @@ os.environ.setdefault("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
 import pygame  # noqa: E402
 
 from .. import i18n, palette as P
+from ..content import get_content, is_word_picture
 from ..palette import NAMED_COLORS, rgb
 
 FONT_DIR = Path(__file__).parent / "fonts"
@@ -61,9 +62,12 @@ _EMOJI_RE = re.compile(
     "(?:[\U0001F1E6-\U0001F1FF]{2}"
     "|(?:[©®‼⁉™ℹ↔-↙↩↪⌨⏏⏭-⏯⏱⏲⏸-⏺Ⓜ▪▫▶◀◻◼☀-➿⤴⤵⬅-⬇〰〽㊗㊙]\ufe0f"
     "|[⌚⌛⏩-⏬⏰⏳◽◾☔☕♈-♓♿⚓⚡⚪⚫⚽⚾⛄⛅⛎⛔⛪⛲⛳⛵⛺⛽✅✊✋✨❌❎❓-❕❗➕-➗➰➿⬛⬜⭐⭕"
-    "\U0001F000-\U0001FAFF])[️⃣\U0001F3FB-\U0001F3FF]*"
+    "\U0001F000-\U0001FAFF\U00100000-\U0010FFFD])[️⃣\U0001F3FB-\U0001F3FF]*"
     "(?:‍[☀-➿\U0001F000-\U0001FAFF][️\U0001F3FB-\U0001F3FF]*)*)+"
 )
+# A word picture's share of its emoji square: the room a Noto emoji leaves around itself, so pictures in a row don't touch.
+WORD_PICTURE_FILL = 0.88
+_WORD_PICTURE_RE = re.compile("([\U00100000-\U0010FFFD])")
 _TAG_RE = re.compile(r"\\\[|\[(/?)([^\[\]]*)\]")
 # Wrap points: runs of space, and between any two Chinese characters.
 _BREAK_RE = re.compile(r"(\s+|[\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef])")
@@ -154,6 +158,17 @@ def split_runs(text: str) -> list:
     if pos < len(text):
         runs.append((text[pos:], False))
     return runs
+
+
+def _row(pieces: list, gap: int = 0) -> pygame.Surface:
+    """Surfaces side by side, centered on one line."""
+    h = max(p.get_height() for p in pieces)
+    out = pygame.Surface((sum(p.get_width() for p in pieces) + gap * (len(pieces) - 1), h), pygame.SRCALPHA)
+    x = 0
+    for p in pieces:
+        out.blit(p, (x, (h - p.get_height()) // 2))
+        x += p.get_width() + gap
+    return out
 
 
 def is_emoji(text: str) -> bool:
@@ -280,17 +295,39 @@ class Gfx:
 
     def emoji(self, text: str, px: int) -> pygame.Surface:
         """Emoji run rendered at the bitmap strike and scaled so it sits with
-        text of size px. Falls back to the sans face when no emoji font exists."""
-        if self._emoji_font is None:
-            return self.text(text, px, "sans", "#ffffff", _raw=True)
+        text of size px, a pack's word pictures among them. Falls back to the
+        sans face when no emoji font exists."""
+        pictures = get_content().word_pictures
+        found = tuple(pictures.get(c) for c in text if is_word_picture(c))
 
         def make():
-            native = self._emoji_font.render(text, True, (255, 255, 255))
-            target_h = max(1, round(px * 1.2))
-            scale = target_h / native.get_height()
-            size = (max(1, round(native.get_width() * scale)), target_h)
-            return pygame.transform.smoothscale(native, size)
-        return self._emoji.get_or((text, px), make)
+            parts = [p for p in _WORD_PICTURE_RE.split(text) if p]
+            return _row([self._word_picture(p, px) if is_word_picture(p) else self._emoji_run(p, px) for p in parts])
+        return self._emoji.get_or((text, px, found), make)
+
+    def _emoji_run(self, text: str, px: int) -> pygame.Surface:
+        if self._emoji_font is None:
+            return self.text(text, px, "sans", "#ffffff", _raw=True)
+        native = self._emoji_font.render(text, True, (255, 255, 255))
+        target_h = max(1, round(px * 1.2))
+        scale = target_h / native.get_height()
+        return pygame.transform.smoothscale(native, (max(1, round(native.get_width() * scale)), target_h))
+
+    def _word_picture(self, char: str, px: int) -> pygame.Surface:
+        """A pack's picture fitted in an emoji's square; a frame emoji once its pack is gone."""
+        side = max(1, round(px * 1.2))
+        try:
+            loaded = pygame.image.load(str(get_content().word_pictures[char]))
+        except (KeyError, pygame.error, OSError):
+            return self._emoji_run("🖼️", px)
+        # smoothscale takes only 24 and 32 bit surfaces; a PNG can be paletted.
+        native = pygame.Surface(loaded.get_size(), pygame.SRCALPHA)
+        native.blit(loaded, (0, 0))
+        k = side * WORD_PICTURE_FILL / max(native.get_size())
+        img = pygame.transform.smoothscale(native, (max(1, round(native.get_width() * k)), max(1, round(native.get_height() * k))))
+        out = pygame.Surface((side, side), pygame.SRCALPHA)
+        out.blit(img, img.get_rect(center=(side // 2, side // 2)))
+        return out
 
     def image(self, name: str, height: int) -> pygame.Surface:
         """A picture from images/, scaled to height (cached)."""
@@ -330,14 +367,7 @@ class Gfx:
                     continue
                 f = self.font(rf, px)
                 pieces.extend(f.render(u, True, rgb(color)) for u in (t if track else [t]))
-            gap = round(px * track)
-            h = max(p.get_height() for p in pieces)
-            out = pygame.Surface((sum(p.get_width() for p in pieces) + gap * (len(pieces) - 1), h), pygame.SRCALPHA)
-            x = 0
-            for p in pieces:
-                out.blit(p, (x, (h - p.get_height()) // 2))
-                x += p.get_width() + gap
-            return out
+            return _row(pieces, round(px * track))
         return self._text.get_or(key, make)
 
     def _covers(self, face: str, text: str) -> bool:

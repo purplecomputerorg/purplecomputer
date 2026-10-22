@@ -140,7 +140,7 @@ describe("pack assembly", () => {
     const json = (path: string) => JSON.parse(new TextDecoder().decode(entries.find((e) => e.path === path)!.data));
     expect(json("content/emoji.json")).toEqual({ octopus: "🐙" });
     expect(json("content/word-pictures.json")).toEqual({ biscuit: "biscuit" });
-    expect(json("manifest.json").format).toBe(2);
+    expect(json("manifest.json").format).toBe(1);
   });
 
   it("writes a picture's letters beside its paint, and leaves them out when there are none", async () => {

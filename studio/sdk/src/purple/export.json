@@ -8,16 +8,6 @@
     "files": [],
     "calls": []
    }
-  },
-  {
-   "format": 2,
-   "date": "2026-10-21",
-   "needs": {
-    "files": [
-     "^content/word-pictures\\.json$"
-    ],
-    "calls": []
-   }
   }
  ],
  "screen": {

@@ -34,7 +34,7 @@ def is_word_picture(char: str) -> bool:
 # Newest manifest "format" this loader reads. A pack declaring a higher one is
 # skipped whole rather than half-loaded. Format 1 is described in
 # studio/PACK_FORMAT.md.
-PACK_FORMAT = 2
+PACK_FORMAT = 1
 
 
 @dataclass

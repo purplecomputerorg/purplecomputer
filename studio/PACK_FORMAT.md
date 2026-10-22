@@ -38,13 +38,13 @@ Everything below `content/` that is not listed here is ignored.
 
 `emoji.json` is a flat map of word to glyph, merged over the built-in map: a word Purple already has gets your glyph, a new word joins the list. `synonyms.json` maps an alias to a primary word, which must resolve to an emoji (built-in or from this pack) or the alias is dropped. `rankings.txt` is one word per line, position being autocomplete priority; built-in packs are read first and first occurrence wins, so a user pack can only rank words the core pack has not ranked.
 
-### word-pictures.json (format 2)
+### word-pictures.json
 
 ```json
 { "biscuit": "biscuit" }
 ```
 
-Maps a word to one of the pack's own pictures, `content/images/<name>.png`, which Play shows wherever it would show the word's emoji, emoji-sized and keeping its shape. Inside Purple the word gets a character from Supplementary Private Use Area-B picked from the word, so it counts, repeats, and is spoken like an emoji, and a Time Travel step keeps it; once its pack is gone, Play draws 🖼️ there. Synonyms of the word show the picture too. The Textual UI skips this file.
+Maps a word to one of the pack's own pictures, `content/images/<name>.png`, which Play shows wherever it would show the word's emoji, emoji-sized and keeping its shape. Inside Purple the word gets a character from Supplementary Private Use Area-B picked from the word, so it counts, repeats, and is spoken like an emoji, and a Time Travel step keeps it; once its pack is gone, Play draws 🖼️ there. Synonyms of the word show the picture too. The Textual UI skips this file, and so does a Purple from before it, which loads the rest of the pack and leaves the word as it was, so a pack using it stays format 1.
 
 ### letters/<key>.wav
 

@@ -1,5 +1,5 @@
 {
- "about": "Each pack format Purple reads, newest last. Written by scripts/pack_contract.py (just pack-contract); see studio/PACK_FORMAT.md.",
+ "about": "Each pack format Purple reads, newest last. Written by scripts/pack_contract.py (just pack-contract); see studio/PACK_FORMAT.md. skipped: what an older Purple leaves out while opening the rest of the pack, and the day Purple downloads began reading it.",
  "formats": [
   {
    "format": 1,
@@ -11,9 +11,22 @@
    }
   }
  ],
+ "skipped": [
+  {
+   "date": "2026-10-22",
+   "added": "Pictures for words",
+   "older": "those words show as plain text",
+   "needs": {
+    "files": [
+     "^content/word-pictures\\.json$"
+    ],
+    "calls": []
+   }
+  }
+ ],
  "fingerprint": {
-  "studio/sdk/src/pack.ts": "f522f2221381622f",
-  "studio/src/pack.ts": "c2a8e62042bdf0c7",
+  "studio/sdk/src/pack.ts": "9d3ee07b712e7315",
+  "studio/src/pack.ts": "6d043f4837733760",
   "purple_tui/content.py": "e4b111d3de539be7",
   "purple_tui/pack_manager.py": "bbe8ff1c985d4eb1",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",

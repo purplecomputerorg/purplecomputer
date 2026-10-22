@@ -62,9 +62,11 @@ def build_export() -> dict:
         f"{row},{col}": "{}{}".format(*pitch_for(row, col, FRIENDLY_KEYS[DEFAULT_ROOT_INDEX], 0))
         for row in range(3) for col in range(10)
     }
+    ledger = json.loads(PACK_FORMATS_PATH.read_text())
     return {
         "generated_by": "scripts/export_studio.py; do not edit",
-        "pack_formats": [{k: f[k] for k in ("format", "date", "needs")} for f in json.loads(PACK_FORMATS_PATH.read_text())["formats"]],
+        "pack_formats": [{k: f[k] for k in ("format", "date", "needs")} for f in ledger["formats"]],
+        "pack_skipped": ledger.get("skipped", []),
         "screen": {
             "viewport": [CANVAS_COLS, CANVAS_ROWS],
             "palette": {name.lower(): getattr(P, name) for name in PALETTE_NAMES},

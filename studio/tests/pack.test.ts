@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEntries, formatOf, manifest, roomTitle, type PackSpec } from "../sdk/src/pack";
+import { buildEntries, formatOf, manifest, roomTitle, skippedBy, type PackSpec } from "../sdk/src/pack";
 import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
 import { gzip, tar } from "../sdk/src/tar";
@@ -141,6 +141,8 @@ describe("pack assembly", () => {
     expect(json("content/emoji.json")).toEqual({ octopus: "🐙" });
     expect(json("content/word-pictures.json")).toEqual({ biscuit: "biscuit" });
     expect(json("manifest.json").format).toBe(1);
+    expect(skippedBy(entries).map((s) => s.added)).toEqual(["Pictures for words"]);
+    expect(skippedBy(await buildEntries({ ...base, words: [{ word: "octopus", emoji: "🐙" }] }))).toEqual([]);
   });
 
   it("writes a picture's letters beside its paint, and leaves them out when there are none", async () => {

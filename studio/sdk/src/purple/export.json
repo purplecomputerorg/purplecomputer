@@ -10,6 +10,19 @@
    }
   }
  ],
+ "pack_skipped": [
+  {
+   "date": "2026-10-22",
+   "added": "Pictures for words",
+   "older": "those words show as plain text",
+   "needs": {
+    "files": [
+     "^content/word-pictures\\.json$"
+    ],
+    "calls": []
+   }
+  }
+ ],
  "screen": {
   "viewport": [
    48,

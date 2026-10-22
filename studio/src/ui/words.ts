@@ -4,6 +4,8 @@ import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, emojiCell } from "./emojipicker";
 import { addRoomPicture } from "./roomfiles";
+import { skippedNote } from "./download";
+import { skippedBy, WORD_PICTURES_PATH } from "@sdk/pack";
 import boxes from "../assets/purple-boxes.jpg";
 import type { View } from "./view";
 
@@ -101,7 +103,8 @@ function picturesCard(added: () => void): HTMLElement {
     h("div", {},
       h("h2", {}, "Your own pictures, too"),
       h("p", {}, "A word can show a photo where its emoji would go: your dog, Grandma, the boxes Purple came in. Click any word's emoji and choose Add photo."),
-      button));
+      button,
+      ...skippedBy([{ path: WORD_PICTURES_PATH, data: new Uint8Array() }]).map((s) => h("p", { class: "dim small skipped-note" }, skippedNote(s)))));
 }
 
 export function wordsView(): View {

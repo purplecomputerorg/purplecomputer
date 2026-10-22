@@ -1,5 +1,5 @@
 // The app's draft, turned into the plain spec the SDK builds a pack from, and a pack turned back into a draft.
-import { buildEntries, formatOf, letterPath, packBlob, packFilename as filename, phrasePath, pictureSourcePath, ROOM_FILE_NAME, ROOM_NAME, roomFilePath, type PackSpec, type RoomFileKind } from "@sdk/pack";
+import { buildEntries, formatOf, letterPath, skippedBy, packBlob, packFilename as filename, phrasePath, pictureSourcePath, ROOM_FILE_NAME, ROOM_NAME, roomFilePath, type PackSkipped, type PackSpec, type RoomFileKind } from "@sdk/pack";
 import { cellsToOps } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar, type TarEntry } from "@sdk/tar";
@@ -54,11 +54,11 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, roomFiles, roomVoice: voiced, theme, studio };
 }
 
-// format: the pack format it needs (studio/pack_formats.json), which says how new a Purple it needs.
-export async function buildPack(onProgress?: (msg: string) => void, d: Draft = draft, trying = false): Promise<{ blob: Blob; format: number }> {
+// format: the pack format it needs (studio/pack_formats.json), which says how new a Purple it needs; skipped: what older ones leave out.
+export async function buildPack(onProgress?: (msg: string) => void, d: Draft = draft, trying = false): Promise<{ blob: Blob; format: number; skipped: PackSkipped[] }> {
   const entries = await buildEntries(await packSpec(d, trying, onProgress), onProgress);
   onProgress?.("Packing");
-  return { blob: await packBlob(entries), format: formatOf(entries) };
+  return { blob: await packBlob(entries), format: formatOf(entries), skipped: skippedBy(entries) };
 }
 
 export const packFilename = () => filename(draft);

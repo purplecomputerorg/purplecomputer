@@ -45,6 +45,10 @@ export interface PackSpec {
 // studio/pack_formats.json: each format Purple reads, and what in a pack needs it.
 export interface PackFormat { format: number; date: string; needs: { files: string[]; calls: string[] } }
 export const PACK_FORMATS: PackFormat[] = exported.pack_formats;
+// What an older Purple leaves out while opening the rest of the pack: added, from Purples downloaded on date; older, what happens before.
+export interface PackSkipped { date: string; added: string; older: string; needs: PackFormat["needs"] }
+export const PACK_SKIPPED: PackSkipped[] = exported.pack_skipped;
+export const WORD_PICTURES_PATH = "content/word-pictures.json";
 
 const enc = new TextEncoder();
 const text = (path: string, body: string): TarEntry => ({ path, data: enc.encode(body) });
@@ -62,13 +66,23 @@ export const roomTitle = (name: string) =>
 export const packId = (spec: Pick<PackSpec, "name">) => slug(spec.name) || "purple";
 export const packFilename = (spec: Pick<PackSpec, "name">) => `${packId(spec)}.purplepack`;
 
-// The oldest format with everything the pack uses, so a pack that needs nothing new opens on every Purple out there.
-export function formatOf(entries: TarEntry[], formats = PACK_FORMATS): number {
+// Whether a pack's files hit a format's markers.
+function usesOf(entries: TarEntry[]): (needs: PackFormat["needs"]) => boolean {
   const dec = new TextDecoder();
   const rooms = entries.filter((e) => /^content\/rooms\/[^/]+\.py$/.test(e.path) && e.path !== "content/rooms/purple.py").map((e) => dec.decode(e.data));
-  const uses = ({ files, calls }: PackFormat["needs"]) =>
+  return ({ files, calls }) =>
     files.some((re) => entries.some((e) => new RegExp(re).test(e.path))) || calls.some((c) => rooms.some((src) => new RegExp(`\\b${c}\\s*\\(`).test(src)));
+}
+
+// The oldest format with everything the pack uses, so a pack that needs nothing new opens on every Purple out there.
+export function formatOf(entries: TarEntry[], formats = PACK_FORMATS): number {
+  const uses = usesOf(entries);
   return Math.max(1, ...formats.filter((f) => uses(f.needs)).map((f) => f.format));
+}
+
+export function skippedBy(entries: TarEntry[], skipped = PACK_SKIPPED): PackSkipped[] {
+  const uses = usesOf(entries);
+  return skipped.filter((s) => uses(s.needs));
 }
 
 export function manifest(spec: Pick<PackSpec, "name" | "id">, format = 1) {
@@ -90,7 +104,7 @@ export function emojiEntries(spec: PackSpec): TarEntry[] {
   const words = spec.words.filter((w) => !named.includes(w));
   const pictured = named.filter((w) => images.has(w.emoji));
   if (words.length) out.push(json("content/emoji.json", Object.fromEntries(words.map((w) => [w.word, w.emoji]))));
-  if (pictured.length) out.push(json("content/word-pictures.json", Object.fromEntries(pictured.map((w) => [w.word, w.emoji]))));
+  if (pictured.length) out.push(json(WORD_PICTURES_PATH, Object.fromEntries(pictured.map((w) => [w.word, w.emoji]))));
   if (spec.synonyms.length) out.push(json("content/synonyms.json", Object.fromEntries(spec.synonyms.map((s) => [s.alias, s.word]))));
   if (spec.ranked.length) out.push(text("content/rankings.txt", spec.ranked.join("\n") + "\n"));
   return out;

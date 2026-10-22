@@ -585,6 +585,7 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 /* The Emoji page's word pictures: a bit of Play, then the words. */
 .word-pictures { display: flex; gap: 22px; align-items: center; background: var(--fill); border-color: var(--border); }
 .word-pictures p { margin-bottom: 14px; }
+.word-pictures .skipped-note { margin: 12px 0 0; }
 .word-pictures-demo { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; border-radius: 14px; background: var(--tui-bg); color: #c9b8e6; font-family: var(--mono); font-size: 13px; }
 .word-pictures-demo img { width: 40px; height: 40px; margin-right: 6px; object-fit: contain; vertical-align: middle; }
 @media (max-width: 600px) { .word-pictures { flex-direction: column; align-items: stretch; } }

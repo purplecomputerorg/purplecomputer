@@ -308,7 +308,7 @@ pre { background: #2a1845; color: #e8daf0; padding: 14px 18px; border-radius: 14
 pre code { background: none; color: inherit; padding: 0; }
 
 /* Rooms: the name, rules, knobs, the Python's header, and the pictures and sounds tray */
-input.room-name { font: 600 22px var(--display); letter-spacing: -0.02em; border-color: transparent; background: none; padding: 4px 8px; margin-left: -8px; width: auto; min-width: 12ch; }
+input.room-name { font: 600 22px var(--display); letter-spacing: -0.02em; border-color: transparent; border-bottom: 1.5px dashed var(--line); background: none; padding: 4px 8px; margin-left: -8px; width: auto; min-width: 12ch; }
 input.room-name:hover { border-color: var(--line); background: #fff; }
 input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 10px; }
 .rules { display: grid; gap: 12px; justify-items: start; }
@@ -410,6 +410,9 @@ input.room-name.just-yours { animation: just-yours 1.8s ease-out; }
 .your-face img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; }
 .your-face .pick-icon, .your-face .pick-swatch { margin: 0; flex-shrink: 0; }
 .your-card .keep { justify-self: start; }
+.your-card .rename { position: absolute; bottom: 10px; right: 10px; border: none; background: none; cursor: pointer; font-size: 14px; opacity: 0.6; padding: 4px; }
+.your-card .rename:hover { opacity: 1; }
+.your-rename { font: inherit; font-weight: 700; width: 100%; padding: 2px 6px; }
 label.your-card { cursor: pointer; }
 .your-card .choose { position: absolute; top: 10px; right: 10px; margin: 0; accent-color: var(--magenta); width: 18px; height: 18px; }
 .your-card:has(.choose:checked) { border-color: var(--magenta); }

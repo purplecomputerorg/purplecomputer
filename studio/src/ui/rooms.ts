@@ -31,6 +31,16 @@ const CALLED = ["on_key", "on_key_up"];
 const iconOf = (room: RoomDraft) =>
   room.made ? ICONS[room.made.kind] : (EXAMPLES.find((e) => e.name === room.name.replace(/-\d+$/, ""))?.icon ?? "✏️");
 
+// Says why the name can't be used, or renames the room and says nothing.
+function rename(room: RoomDraft, text: string): string | null {
+  const name = roomName(text, room);
+  if (!ROOM_NAME.test(name)) return "Use letters, numbers, and spaces.";
+  room.name = name;
+  room.sample = false;
+  changed();
+  return null;
+}
+
 function drop(gone: RoomDraft[]) {
   draft.rooms = draft.rooms.filter((r) => !gone.includes(r));
   changed();
@@ -53,7 +63,7 @@ function list(): View {
       "section",
       {},
       h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Your kid finds it next to Purple's rooms."),
-      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, iconOf(r)) }), drop),
+      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, iconOf(r)), rename: (t) => rename(r, t) }), drop),
       h("h3", {}, "Start from one of these"),
       h("div", { class: "cards" },
         ...[
@@ -126,12 +136,9 @@ function editor(room: RoomDraft): View {
   const nameIn = h("input", { type: "text", class: "room-name", value: roomTitle(room.name), "aria-label": "Room name", maxLength: 40 });
   const nameNote = h("span", { class: "dim small" });
   nameIn.onchange = () => {
-    const name = roomName(nameIn.value, room);
-    if (!ROOM_NAME.test(name)) return void (nameNote.textContent = "Use letters, numbers, and spaces.");
-    room.name = name;
-    room.sample = false;
-    changed();
-    location.replace(href(name));
+    const why = rename(room, nameIn.value);
+    if (why) nameNote.textContent = why;
+    else location.replace(href(room.name));
   };
 
   // Every change goes through here: the first one makes a try the family's. Focus stays put, so the
@@ -206,7 +213,7 @@ function editor(room: RoomDraft): View {
     editor: h(
       "section",
       {},
-      h("div", { class: "editor-head" }, nameIn, nameNote),
+      h("div", { class: "editor-head" }, nameIn, h("button", { class: "linkbtn dim small", onclick: () => nameIn.select() }, "✏️ Rename"), nameNote),
       tryBar(room, () => confirm(`Throw away ${roomTitle(room.name)}?`) && drop([room])),
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, ...tabButtons),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),

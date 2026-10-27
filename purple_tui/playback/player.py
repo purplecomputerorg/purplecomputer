@@ -17,6 +17,7 @@ from .script import (
     PlaybackAction,
     TypeText,
     PressKey,
+    ToggleCode,
     SwitchRoom,
     SwitchTarget,
     Pause,
@@ -88,6 +89,7 @@ class PlaybackPlayer:
         set_instrument: Callable[[str], None] | None = None,
         get_cursor_position: Callable[[], tuple[float, float] | None] | None = None,
         zoom_events_file: str | Path | None = None,
+        code_via_menu: bool = False,
     ):
         """Initialize the playback player.
 
@@ -115,6 +117,8 @@ class PlaybackPlayer:
             zoom_events_file: Optional path to write zoom events JSON for
                 post-processing. If provided, zoom events are logged with
                 timestamps relative to start.
+            code_via_menu: ToggleCode presses Esc then Space (the canvas
+                UI's Code card) instead of holding Space.
         """
         self._dispatch = dispatch_action
         self._speed = speed_multiplier
@@ -128,6 +132,7 @@ class PlaybackPlayer:
         self._set_instrument = set_instrument
         self._get_cursor_position = get_cursor_position
         self._zoom_events_file = Path(zoom_events_file) if zoom_events_file else None
+        self._code_via_menu = code_via_menu
         self._running = False
         self._cancelled = False
         self._rng = random.Random(int(os.environ.get("PURPLE_DEMO_SEED", "42")))
@@ -197,6 +202,9 @@ class PlaybackPlayer:
 
         elif isinstance(action, PressKey):
             await self._press_key(action)
+
+        elif isinstance(action, ToggleCode):
+            await self._toggle_code(action)
 
         elif isinstance(action, SwitchRoom):
             await self._switch_room(action)
@@ -287,6 +295,13 @@ class PlaybackPlayer:
 
         self._emit_cursor_at()
 
+        await self._sleep(action.pause_after)
+
+    async def _toggle_code(self, action: ToggleCode) -> None:
+        keys = ([PressKey("escape", hold_duration=0.1, pause_after=0.7), PressKey("space", hold_duration=0.1, pause_after=0)]
+                if self._code_via_menu else [PressKey("space", hold_duration=1.0, pause_after=0)])
+        for key in keys:
+            await self._press_key(key)
         await self._sleep(action.pause_after)
 
     async def _switch_room(self, action: SwitchRoom) -> None:

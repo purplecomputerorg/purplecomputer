@@ -349,6 +349,20 @@ def test_blocks_esc_then_space_opens_code_and_tab_still_turns():
     run(go())
 
 
+@pytest.mark.parametrize("name", ["art", "music"])
+def test_demo_scripts_toggle_code_through_the_esc_menu(name):
+    from purple_tui.playback import PlaybackPlayer, ToggleCode
+
+    async def go():
+        app, room = await _room(name)
+        player = PlaybackPlayer(dispatch_action=app._dispatch_keyboard_action, speed_multiplier=50, code_via_menu=True)
+        await player.play([ToggleCode()])
+        assert room.code_panel is not None and not app._overlays
+        await player.play([ToggleCode()])
+        assert room.code_panel is None and not app._overlays
+    run(go())
+
+
 def test_color_name_keeps_grays_gray():
     assert [color_name(c) for c in ("#F5F5F5", "#808080", "#1A1A1A")] == ["white", "gray", "black"]
 

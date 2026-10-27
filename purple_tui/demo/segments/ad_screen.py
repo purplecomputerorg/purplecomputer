@@ -7,7 +7,7 @@ moment (color, big count, speech, code, music), zoomed for phone screens.
 """
 
 from ..script import (
-    SwitchRoom, TypeText, PressKey, Pause, ClearArt,
+    SwitchRoom, TypeText, PressKey, ToggleCode, Pause, ClearArt,
     PlayKeys, Comment, ZoomIn, ZoomOut,
 )
 
@@ -38,8 +38,8 @@ _CODE = [
     SwitchRoom("art", pause_after=0.3),
     ClearArt(),
 
-    Comment("Hold Space to open the code panel (same gesture as the kid uses)"),
-    PressKey("space", hold_duration=1.0, pause_after=0.7),
+    Comment("Open the code panel (same gesture as the kid uses)"),
+    ToggleCode(pause_after=0.7),
     ZoomIn(region="art-center", zoom=1.6, duration=0.3),
 
     TypeText("green", delay_per_char=0.08, final_pause=0.2),
@@ -47,7 +47,7 @@ _CODE = [
     TypeText("repeat 4 forward 8, spin", delay_per_char=0.06, final_pause=0.2),
     PressKey("enter", pause_after=2.6),
 
-    PressKey("space", hold_duration=1.0, pause_after=0.5),
+    ToggleCode(pause_after=0.5),
     ZoomOut(duration=0.3),
     ClearArt(),
 ]

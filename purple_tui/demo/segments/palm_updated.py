@@ -7,7 +7,7 @@ no-op at the edge), then offsetting.
 """
 
 from ..script import (
-    SwitchRoom, SetSpeed, Comment, PressKey, TypeText, MoveSequence,
+    SwitchRoom, SetSpeed, Comment, PressKey, ToggleCode, TypeText, MoveSequence,
     ClearArt, Pause, ZoomIn, ZoomOut,
 )
 from .palm_art import build_palm, centered_margins
@@ -56,8 +56,8 @@ _CODE_BEAT = [
     SetSpeed(1.0),
     ClearArt(),
 
-    Comment("Hold Space to open the code panel (REPL captures all keys while open)"),
-    PressKey("space", hold_duration=1.0, pause_after=0.7),
+    Comment("Open the code panel (REPL captures all keys while open)"),
+    ToggleCode(pause_after=0.7),
 
     Comment("Pick a color, then draw a square (spin = a quarter turn)"),
     TypeText("blue", delay_per_char=0.08, final_pause=0.2),
@@ -65,8 +65,8 @@ _CODE_BEAT = [
     TypeText("repeat 4 forward 8, spin", delay_per_char=0.06, final_pause=0.2),
     PressKey("enter", pause_after=2.4),
 
-    Comment("Hold Space to close the code panel"),
-    PressKey("space", hold_duration=1.0, pause_after=0.5),
+    Comment("Close the code panel"),
+    ToggleCode(pause_after=0.5),
     ClearArt(),  # also resets the canvas to paint mode
 ]
 

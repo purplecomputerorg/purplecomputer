@@ -1556,6 +1556,7 @@ class PurpleApp:
             get_selected_menu_label=self._selected_menu_label,
             get_cursor_position=self._get_cursor_position,
             zoom_events_file=os.environ.get("PURPLE_ZOOM_EVENTS"),
+            code_via_menu=True,
         )
         exit_after = os.environ.get("PURPLE_DEMO_AUTOSTART")
 

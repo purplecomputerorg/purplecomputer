@@ -7,7 +7,7 @@ the whole thing stays short.
 """
 
 from ..script import (
-    SwitchRoom, TypeText, PressKey, Pause, ClearArt, MoveSequence,
+    SwitchRoom, TypeText, PressKey, ToggleCode, Pause, ClearArt, MoveSequence,
     PlayKeys, Comment, ZoomIn, ZoomOut,
 )
 
@@ -72,15 +72,15 @@ _ART = [
 
     Comment("=== ART: draw with code below the rows ==="),
     MoveSequence(directions=['down'] * 2, delay_per_step=0.04),
-    PressKey("space", hold_duration=1.0, pause_after=0.5),
+    ToggleCode(pause_after=0.5),
 
     TypeText("blue repeat 4 forward 10 turn", delay_per_char=0.04, final_pause=0.15),
     PressKey("enter", pause_after=1.2),
     TypeText("red right 20", delay_per_char=0.04, final_pause=0.15),
     PressKey("enter", pause_after=1.8),
 
-    Comment("Hold Space to close the code panel before leaving Art"),
-    PressKey("space", hold_duration=1.0, pause_after=0.4),
+    Comment("Close the code panel before leaving Art"),
+    ToggleCode(pause_after=0.4),
 ]
 
 _MUSIC = [

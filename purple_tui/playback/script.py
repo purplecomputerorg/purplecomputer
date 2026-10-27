@@ -68,6 +68,13 @@ class PressKey(PlaybackAction):
 
 
 @dataclass
+class ToggleCode(PlaybackAction):
+    """Open or close the code panel with the gesture this UI uses: holding
+    Space in the Textual UI, Esc then Space in the canvas UI."""
+    pause_after: float = 0.5
+
+
+@dataclass
 class SwitchRoom(PlaybackAction):
     """Switch to a different room.
 
@@ -313,6 +320,8 @@ def segment_duration(actions: list[PlaybackAction]) -> float:
             total += len(action.text) * action.delay_per_char + action.final_pause
         elif isinstance(action, PressKey):
             total += action.hold_duration + action.pause_after
+        elif isinstance(action, ToggleCode):
+            total += 1.0 + action.pause_after
         elif isinstance(action, PlayKeys):
             total += len(action.sequence) * action.seconds_between + action.pause_after
         elif isinstance(action, DrawPath):

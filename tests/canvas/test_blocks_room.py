@@ -410,9 +410,10 @@ def test_big_builds_still_turn():
 
 def test_shift_picks_a_color_without_dropping():
     async def go():
-        app, room = _blocks()
-        await press(app, "Q", shift_held=True)
-        assert not room._blocks and room._color == get_key_color("q")
+        for kw in ({"shift_held": True}, {}):  # held, or a tap of Shift before (sticky): press sends Q as shifted
+            app, room = _blocks()
+            await press(app, "Q", **kw)
+            assert not room._blocks and room._color == get_key_color("q")
     run(go())
 
 

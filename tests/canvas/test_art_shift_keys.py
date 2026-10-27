@@ -4,9 +4,11 @@
 2. Write mode keeps the shifted glyph: Shift+/ types '?', Shift+3 types '#'.
 """
 
+import time
+
 from purple_tui.canvas.harness import make_app, run
 from purple_tui.keyboard import CharacterAction
-from purple_tui.palette import GRAYSCALE
+from purple_tui.palette import GRAYSCALE, get_key_color
 
 
 def _canvas(paint_mode: bool):
@@ -33,6 +35,16 @@ def test_paint_mode_shift_number_row_selects_grayscale_without_stamping():
     run(_test())
 
 
+def test_paint_mode_sticky_shift_letter_selects_without_stamping():
+    """A tap of Shift then a letter arrives shifted with Shift no longer held."""
+    async def _test():
+        canvas = _canvas(paint_mode=True)
+        await canvas.handle(CharacterAction(char='G', shifted=True))
+        assert canvas._last_key_color == get_key_color('g')
+        assert (canvas._cursor_x, canvas._cursor_y) == (0, 0) and not canvas._painted_positions
+    run(_test())
+
+
 def test_paint_mode_unshifted_number_stamps_and_advances():
     async def _test():
         canvas = _canvas(paint_mode=True)
@@ -52,4 +64,15 @@ def test_write_mode_keeps_shifted_glyph():
             cell = canvas._grid.get(pos)
             assert cell is not None, f"No cell typed for {shifted_char!r}"
             assert cell[0] == shifted_char, f"Write mode must keep shifted glyph {shifted_char!r}, got {cell[0]!r}"
+    run(_test())
+
+
+def test_paint_mode_hint_while_sticky_shift_waits():
+    async def _test():
+        canvas = _canvas(paint_mode=True)
+        keys = canvas.app._keyboard_state_machine
+        keys._sticky_shift_active, keys._sticky_shift_time = True, time.time()
+        assert canvas._hint_key() == "pick"
+        keys._sticky_shift_time -= keys.STICKY_SHIFT_GRACE + 1
+        assert canvas._hint_key() == "paint", "an expired tap of Shift no longer picks, so the hint goes back"
     run(_test())

@@ -19,7 +19,7 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo
-from ..ui import (AUTO, MOVE_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
+from ..ui import (AUTO, MOVE_HINT, PICK_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
                   status_row_h, status_row_px, swatch_dot)
 from .base import Room
 
@@ -43,6 +43,7 @@ HINTS = {
     "pen": "Brush down! Arrows paint. {Space} lifts it.",
     "paint": "Type to paint! {Space} puts the brush down.",
     "write": "Type to write! Arrow keys move. {Enter} for a new line.",
+    "pick": PICK_HINT,
 }
 
 
@@ -697,7 +698,7 @@ class ArtRoom(Room):
         if isinstance(action, CharacterAction):
             char = action.char
             direction = action.arrow_held or "right"
-            if self._paint_mode and action.shift_held and char in UNSHIFT_MAP:
+            if self._paint_mode and action.with_shift and char in UNSHIFT_MAP:
                 char = UNSHIFT_MAP[char]
             if open_color_wheel(self, char):
                 return
@@ -705,8 +706,8 @@ class ArtRoom(Room):
                 self.type_char(char)
                 self.echo.letter("write", char)
                 return
-            chord = bool(action.char_held) and not action.shift_held and self._chord_brush(action.char_held, char)
-            if (chord or self._select_brush(char, hold=action.is_repeat)) and not action.shift_held:
+            chord = bool(action.char_held) and not action.with_shift and self._chord_brush(action.char_held, char)
+            if (chord or self._select_brush(char, hold=action.is_repeat)) and not action.with_shift:
                 self._paint_at_cursor()
                 self._advance_after_stamp(direction)
                 if char.isalpha():
@@ -779,6 +780,8 @@ class ArtRoom(Room):
                                            self._paint_mode and color_recipe.hint_row(self._last_key_char, self._mixed))
 
     def _hint_key(self) -> str:
+        if self._paint_mode and self.app._keyboard_state_machine.sticky_shift:
+            return "pick"
         if self._paint_mode:
             return "pen" if self._pen_down else "paint"
         return "write"

@@ -1731,7 +1731,7 @@ class PurpleApp:
             from .panels import ICON_STAR
             g.draw_text(f"{ICON_STAR} Saved", round(px * 0.85), r.right + px, y, "mono", P.MUTED, anchor="midleft")
         right = self._battery_text()
-        if self._keyboard_state_machine._sticky_shift_active:
+        if self._keyboard_state_machine.sticky_shift:
             right = "⇧  " + right
         if right:
             g.draw_text(right, px, frame.right, y, "mono", P.MUTED, anchor="midright")

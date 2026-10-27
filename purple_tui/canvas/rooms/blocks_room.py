@@ -29,7 +29,7 @@ from .. import color_recipe, paper
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo
-from ..ui import MOVE_HINT, draw_key_hint, draw_mode_switch, hint_row_h
+from ..ui import MOVE_HINT, PICK_HINT, draw_key_hint, draw_mode_switch, hint_row_h
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
@@ -402,11 +402,11 @@ class BlocksRoom(Room):
             self.app.invalidate()
 
     def _character(self, action):
-        char = UNSHIFT_MAP.get(action.char, action.char) if action.shift_held else action.char
+        char = UNSHIFT_MAP.get(action.char, action.char) if action.with_shift else action.char
         if open_color_wheel(self, char):
             return
-        chord = bool(action.char_held) and not action.shift_held and self._chord_color(action.char_held, char)
-        if not (chord or self._set_color(char, hold=action.is_repeat)) or action.shift_held:
+        chord = bool(action.char_held) and not action.with_shift and self._chord_color(action.char_held, char)
+        if not (chord or self._set_color(char, hold=action.is_repeat)) or action.with_shift:
             return
         if char.isalpha():
             self.echo.letter(WORDS[self._dir], char)
@@ -655,7 +655,7 @@ class BlocksRoom(Room):
                          1 if self._back else 0, self._color, wheel=wheel_chip(self))
         if foot_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
-            draw_key_hint(g, HINT, g.vh(1.9), foot.x, foot.centery)
+            draw_key_hint(g, PICK_HINT if self.app._keyboard_state_machine.sticky_shift else HINT, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
 
     def _draw_hold_badge(self, g, ox, oy, area):

@@ -640,6 +640,11 @@ class CharacterAction(KeyAction):
     cmd_held: bool = False  # Was Cmd (Meta) held? (editing shortcuts)
     char_held: str | None = None  # Another character key still held when this one went down (chords)
 
+    @property
+    def with_shift(self) -> bool:
+        """Shift was down for this key, or a tap of Shift (sticky) made it a capital."""
+        return self.shift_held or self.shifted
+
 
 @dataclass
 class NavigationAction(KeyAction):
@@ -1063,6 +1068,11 @@ class KeyboardStateMachine:
     def shift_held(self) -> bool:
         """Check if shift is currently held."""
         return self._shift_held
+
+    @property
+    def sticky_shift(self) -> bool:
+        """A tap of Shift is waiting to shift the next character."""
+        return self._sticky_shift_active and time.time() - self._sticky_shift_time <= self.STICKY_SHIFT_GRACE
 
     @property
     def held_arrow_direction(self) -> str | None:

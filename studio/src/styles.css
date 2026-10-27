@@ -480,7 +480,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .home-card:nth-child(6n) { --tape-w: 58px; --tape-r: 1deg; --tape-x: 12px; }
 .home-card b .purple-emoji { width: 26px; height: 26px; }
 .home-card .bezel { margin-bottom: 8px; padding: 5px; border-radius: 10px; background: linear-gradient(#34333b, #1f1e24); }
-.home-card b { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-size: 16px; }
+.home-card b { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--display); font-size: 16px; }
 .home-card > span:last-child { font-size: 13px; color: var(--dim); }
 .mini { aspect-ratio: 16 / 10; border-radius: 4px; background: var(--tui-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; overflow: hidden; font: 10px/1.3 var(--mono); color: #d8cbef; text-align: center; }
 .mini i { font-style: normal; color: #c39cf0; }
@@ -520,6 +520,14 @@ img.pick-icon { width: 30px; height: 30px; }
 .swatch-legend .pick-swatch { width: 16px; margin: 0; }
 .pick b { font-family: var(--display); font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .pick span:last-child { font-size: 13px; color: var(--dim); }
+.home-card b .voice-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; padding: 2px 8px 2px 6px; border-radius: 999px; background: var(--fill); color: var(--purple); font: 600 11px var(--sans); white-space: nowrap; }
+.voice-badge .mic svg { width: 12px; height: 12px; display: block; }
+.voice-strip { display: flex; align-items: center; gap: 16px; margin: 20px 0 0; padding: 16px 20px; border-radius: 18px; background: var(--fill); border: 1.5px solid var(--border); }
+.voice-strip > .mic { flex-shrink: 0; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 999px; background: var(--purple); color: #fff; }
+.voice-strip > .mic svg { width: 24px; height: 24px; }
+.voice-strip b { display: block; font-family: var(--display); font-size: 17px; margin-bottom: 2px; }
+.voice-strip span { font-size: 14px; color: var(--dim); }
+.voice-strip + .home-cards { margin-top: 12px; }
 .name-field { max-width: 320px; }
 
 /* Colors */
@@ -591,7 +599,7 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .picture-grid .add-photo::before { content: "+"; font-size: 20px; font-weight: 400; line-height: 1; }
 .picture-grid .add-photo:hover { background: var(--fill-hover); }
 
-/* Voice */
+/* Talking Keys and phrases */
 .tabs a.tab { text-decoration: none; }
 /* The keys sit on a dark deck like the pretend laptop's, so the stickers read the same */
 .voice-card { padding: 0; overflow: hidden; container-type: inline-size; }
@@ -610,7 +618,9 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .voice-now .linkbtn { font-size: 13px; }
 .btn.record { font-size: 16px; padding: 12px 26px; }
 .phrase-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
-.phrase-new { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.phrase-new { display: grid; gap: 14px; }
+.type-it { display: flex; gap: 8px; }
+.type-it input { flex: 1; min-width: 0; }
 ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 
 /* The live Purple, covered by a quiet message until it's running and while it restarts */

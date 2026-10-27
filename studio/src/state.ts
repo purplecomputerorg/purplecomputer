@@ -18,8 +18,9 @@ export interface Keepable { kept?: boolean; sample?: boolean }
 // means: what Play says when they ask what or who the word is.
 export interface WordEntry extends Keepable { word: string; emoji: string; means?: string }
 export interface SynonymEntry extends Keepable { alias: string; word: string }
-export interface Phrase extends Keepable { text: string; clip: Clip }
-export interface Letter extends Keepable { clip: Clip }
+// said: the words Purple reads, when the family typed them instead of recording.
+export interface Phrase extends Keepable { text: string; clip: Clip; said?: string }
+export interface Letter extends Keepable { clip: Clip; said?: string }
 // title: the name as the family typed it, which Purple shows as is; name is its file name in the pack.
 export interface Instrument extends Keepable { name: string; title?: string; base: BaseName; params: Params }
 // What a room's Python is generated from, kept so it reopens: rules or a form. Null when the Python is the room's own.
@@ -91,9 +92,9 @@ export const phraseFor = (text: string) => (text.trim() ? draft.phrases.find((p)
 export const QUIET: Clip = { samples: new Float32Array(2205), rate: 22050 };
 export const isQuiet = (clip: Clip) => clip.samples.every((s) => s === 0);
 // The family's recording of these words, in place of the one before; null goes back to Purple's voice.
-export function putPhrase(text: string, clip: Clip | null, kept = false) {
+export function putPhrase(text: string, clip: Clip | null, kept = false, said?: string) {
   kept ||= !!phraseFor(text)?.kept;
-  draft.phrases = [...draft.phrases.filter((p) => !sameWords(p.text, text)), ...(clip ? [{ text, clip, kept }] : [])];
+  draft.phrases = [...draft.phrases.filter((p) => !sameWords(p.text, text)), ...(clip ? [{ text, clip, kept, said }] : [])];
   changed();
 }
 // Whether Python names a file, in either quote: picture("dog"), CARDS = ['dog'].
@@ -111,8 +112,8 @@ export interface Piece { id: string; section: string; label: string; one: string
 export function allPieces(): Piece[] {
   return [
     { id: "pictures", section: "pictures", label: "pictures", one: "picture", items: draft.pictures },
-    { id: "letter_recordings", section: "voice", label: "keys in your voice", one: "key in your voice", items: Object.values(draft.letters) },
-    { id: "phrases", section: "voice", label: "phrases in your voice", one: "phrase in your voice", items: draft.phrases },
+    { id: "letter_recordings", section: "keys", label: "talking keys", one: "talking key", items: Object.values(draft.letters) },
+    { id: "phrases", section: "words", label: "phrases in your voice", one: "phrase in your voice", items: draft.phrases },
     { id: "words", section: "words", label: "words", one: "word", items: draft.words },
     { id: "autocomplete_picks", section: "words", label: "words suggested first", one: "word suggested first", items: draft.ranked.map((word) => ({ kept: true, word })) },
     { id: "synonyms", section: "words", label: "nicknames", one: "nickname", items: draft.synonyms },
@@ -125,7 +126,7 @@ export function allPieces(): Piece[] {
 
 // The parts of the draft each Studio section makes, so one section can be cleared on its own.
 const SECTION_FIELDS: Record<string, (keyof Draft)[]> = {
-  pictures: ["pictures"], voice: ["letters", "phrases"], words: ["words", "synonyms", "ranked"], instruments: ["instruments"], rooms: ["rooms", "roomFiles"], colors: ["theme", "colors"],
+  pictures: ["pictures"], keys: ["letters"], words: ["words", "synonyms", "ranked", "phrases"], instruments: ["instruments"], rooms: ["rooms", "roomFiles"], colors: ["theme", "colors"],
 };
 export const hasWork = (section?: string) => allPieces().some((p) => (!section || p.section === section) && p.items.length);
 export function clearSection(section: string) {

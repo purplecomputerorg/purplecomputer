@@ -95,6 +95,8 @@ export function keepButton(item: Keepable, onChange?: () => void): HTMLElement {
   return button;
 }
 
+export const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? " is" : "s are"}`;
+
 // Under a list: how many are still tries, and one button to add them all.
 export function addAllBar(items: Keepable[], what: (n: number) => string, onChange: () => void): HTMLElement | null {
   const trying = items.filter((i) => !i.kept);

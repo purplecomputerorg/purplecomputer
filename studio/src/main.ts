@@ -23,15 +23,11 @@ import type { Room } from "./live/boot";
 import { Laptop } from "./ui/laptop";
 import { liveScreen } from "./ui/live";
 import { roomsView } from "./ui/rooms";
-import { voiceView } from "./ui/voice";
+import { keysView } from "./ui/keys";
 import { wordsView } from "./ui/words";
 import type { View } from "./ui/view";
 
-interface Section {
-  id: string;
-  label: string;
-  icon: string;
-  blurb: HomeSection["blurb"];
+interface Section extends HomeSection {
   // What "Clear all" names on this section's pages; colors has its own undo instead.
   clears?: string;
   view: (item: string | null) => View;
@@ -39,12 +35,15 @@ interface Section {
 
 const SECTIONS: Section[] = [
   { id: "pictures", clears: "pictures", label: "Pictures", icon: "🖼️", blurb: "The dog, ready to paint on", view: picturesView },
-  { id: "voice", clears: "recordings", label: "Voice", icon: "🎙️", blurb: "Grandma, every time they press G", view: voiceView },
-  { id: "words", clears: "words", label: "Words", icon: "🐶", blurb: "The dog's name, with a picture", view: wordsView },
+  { id: "words", clears: "words and phrases", label: "Words", icon: "🐶", blurb: "The dog's name, with a picture", voice: true, view: wordsView },
+  { id: "keys", clears: "talking keys", label: "Talking Keys", icon: "🔤", blurb: "Grandma, every time they press G", voice: true, view: keysView },
   { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "A kazoo, a harp, or…", view: instrumentsView },
   { id: "colors", label: "Colors", icon: "🎨", blurb: () => ["Purple, but green, or ", rainbow("any color")], view: colorsView },
-  { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "A world for them to walk around", view: roomsView },
+  { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "A world for them to walk around", voice: true, view: roomsView },
 ].filter((s) => features.rooms || s.id !== "rooms");
+// Old links to pages that moved.
+const MOVED: Record<string, string> = { voice: "keys", "voice/phrases": "words/phrases" };
+
 type Page = [id: string, label: string, view: (item: string | null) => View];
 const MORE = ([
   ["install", "Putting it on Purple", installView],
@@ -138,6 +137,8 @@ function renderStage() {
 }
 
 function route() {
+  const moved = MOVED[location.hash.slice(1)];
+  if (moved) return location.replace(`#${moved}`);
   current?.cleanup?.();
   const [sec, item] = parseHash();
   const section = SECTIONS.find((s) => s.id === sec);

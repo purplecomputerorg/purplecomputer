@@ -1,10 +1,17 @@
 import { CORE_EMOJI } from "@sdk/purple/core";
-import { changed, draft, type WordEntry } from "../state";
+import type { Clip } from "../audio";
+import { changed, draft, putPhrase, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
 import { h } from "./dom";
 import { closeEmojiPicker, emojiCell } from "./emojipicker";
+import { hear, soundControl, voiceStays } from "./record";
+import { addAllBar, keepButton, plural } from "./trybar";
 import box from "../assets/purple-box.jpg";
 import type { View } from "./view";
+
+const tabs = (which: "words" | "phrases") => h("div", { class: "tabs", role: "tablist" },
+  h("a", { class: "tab", href: "#words", "aria-selected": String(which === "words") }, "Words and emoji"),
+  h("a", { class: "tab", href: "#words/phrases", "aria-selected": String(which === "phrases") }, "What Purple says"));
 
 const clean = (s: string) => s.trim().toLowerCase();
 const WORD = /^[a-z][a-z'-]*$/;
@@ -113,13 +120,58 @@ function wordTable(): HTMLElement {
   return h("div", { class: "card" }, rows, status);
 }
 
-export function wordsView(): View {
+function phrasesView(): View {
+  const list = h("div", { class: "stack" });
+  const text = h("input", { type: "text", placeholder: "Good night, Maya", "aria-label": "Phrase" });
+  const status = h("div", { class: "status" });
+
+  function render() {
+    list.replaceChildren(...draft.phrases.map((p, i) => h("div", { class: "phrase-row" },
+      h("span", {}, h("strong", {}, p.text), p.said ? h("span", { class: "dim small" }, ` says "${p.said}"`) : null),
+      h("div", { class: "row" }, hear(p.clip), keepButton(p, render),
+        h("button", { class: "remove", title: "Remove", "aria-label": `Remove ${p.text}`, onclick: () => { draft.phrases.splice(i, 1); changed(); render(); } }, "✕")))),
+      addAllBar(draft.phrases, (n) => plural(n, "phrase"), render) ?? "");
+  }
+  const onClip = (clip: Clip, said?: string) => {
+    const t = text.value.trim();
+    if (!t) return void (status.textContent = "Type the phrase first, so Purple knows when to play it.");
+    status.textContent = "";
+    putPhrase(t, clip, false, said);
+    text.value = "";
+    render();
+  };
+  const sound = soundControl(onClip, "Or type other words for Purple to say");
+  text.addEventListener("keydown", (e) => e.key === "Enter" && text.value.trim() && sound.querySelector("button")?.click());
+  render();
+
+  return {
+    title: "Words",
+    editor: h(
+      "section",
+      {},
+      tabs("phrases"),
+      h("p", { class: "lead" }, "Purple reads things out loud in Play when a kid types ", h("span", { class: "mono" }, "say"), " first, like ", h("span", { class: "mono" }, "say good night"), ". Record a phrase and they hear you instead, or type other words for Purple to say back."),
+      list,
+      h("div", { class: "card" }, h("div", { class: "phrase-new" },
+        h("label", { class: "field" }, h("span", {}, "When your kid types say and"), text), sound), status),
+      h("p", { class: "dim small" }, "Capitals and spacing don't matter. Anything you haven't given a sound, Purple says in its own voice."),
+      voiceStays(),
+    ),
+    live: { room: "play" },
+    previewTitle: "What your kid hears",
+    caption: "Purple's Play room. Type say and your phrase, then press Enter.",
+  };
+}
+
+export function wordsView(item: string | null): View {
+  if (item === "phrases") return phrasesView();
   const table = wordTable();
   return {
     title: "Words",
     editor: h(
       "section",
       {},
+      tabs("words"),
       h("p", { class: "lead" }, "In Play, kids type a word and see its emoji. Add the words your family uses, a pet's name or a word only you say, and give each one an emoji or your own photo. Yours shows in place of Purple's."),
       h("p", {}, "Give a word a meaning too. When your kid types \"what is trex\" or \"who is nana\" in Play, Purple shows its picture and your answer. Ending with ! reads the answer aloud."),
       examples(),

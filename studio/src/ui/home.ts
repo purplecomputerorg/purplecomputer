@@ -7,10 +7,12 @@ import { h } from "./dom";
 import { clearEverythingButton, openPackButton } from "./packfile";
 import { staysHere } from "./privacy";
 import { purpleEmoji } from "./icons";
+import { MIC } from "./record";
 import { sticker } from "./stickers";
 import type { View } from "./view";
 
-export interface HomeSection { id: string; label: string; icon: string; blurb: string | (() => (string | Node)[]) }
+// voice: takes the family's recorded voice, so its card says so.
+export interface HomeSection { id: string; label: string; icon: string; blurb: string | (() => (string | Node)[]); voice?: boolean }
 
 const RAINBOW = ["#5c2d91", "#c0392b", "#2f5bb5", "#a86f00", "#9b59d0", "#2e7d32"];
 export const rainbow = (text: string) => h("span", {}, ...[...text].map((c, i) => h("span", { style: `color:${RAINBOW[i % RAINBOW.length]}` }, c)));
@@ -59,7 +61,7 @@ const TILES: Record<string, string> = { T: "🌳", "*": "⭐", f: "🦊", "@": "
 
 const SCREENS: Record<string, () => Node[]> = {
   pictures: () => [dogCells()],
-  voice: () => [h("span", { class: "bubble" }, "“Hi sweetie, it's Grandma!”"), sticker("g")],
+  keys: () => [h("span", { class: "bubble" }, "“Hi sweetie, it's Grandma!”"), sticker("g")],
   words: () => [h("span", { class: "prompt" }, h("i", {}, "Type →"), h("span", { class: "field" }, "biscuit", h("span", { class: "caret" }))), h("span", { class: "big" }, "🐶"), h("i", {}, "Biscuit is our dog!")],
   instruments: () => [svg("0 0 160 30", WAVE, "wave"), h("span", {}, "bzzz bzz bzzzz")],
   colors: () => [h("span", {}, "My Purple Computer"), h("b", {})],
@@ -67,10 +69,16 @@ const SCREENS: Record<string, () => Node[]> = {
     h("span", { class: c === "~" ? "water" : (x + y) % 2 ? "grass dark" : "grass" }, TILES[c] ?? ""))))],
 };
 
+const micIcon = () => { const el = h("span", { class: "mic", "aria-hidden": "true" }); el.innerHTML = MIC; return el; };
+const voiceStrip = () => h("div", { class: "voice-strip" }, micIcon(), h("div", {},
+  h("b", {}, "Purple can talk in your voice"),
+  h("span", {}, "Record \"D is for Dad\" on a key, \"good night\" for Play, or a character's lines in your own room. No microphone? Type the words and Purple says them.")));
+
 const card = (s: HomeSection) =>
   h("a", { class: "home-card", href: `#${s.id}` },
     h("div", { class: "bezel" }, h("div", { class: `mini ${s.id}` }, ...SCREENS[s.id]())),
-    h("b", {}, purpleEmoji(s.icon), s.label),
+    h("b", {}, purpleEmoji(s.icon), s.label,
+      s.voice ? h("span", { class: "voice-badge", title: "Takes your recorded voice" }, micIcon(), "Your voice") : null),
     h("span", {}, ...(typeof s.blurb === "string" ? [s.blurb] : s.blurb())));
 
 // What's in the family's Purple Pack, and what they've only tried, as the download page counts them.
@@ -98,6 +106,7 @@ export function homeView(sections: HomeSection[]): View {
     editor: h("section", { class: "home" },
       h("h1", {}, "Put your family ", h("span", { class: "stroke" }, "into Purple.")),
       h("p", { class: "lead" }, "Add a few things that are yours: the dog, your voice, the words you use at home. Here are a few ideas. Click one to make your own."),
+      voiceStrip(),
       h("div", { class: "home-cards" }, ...sections.map(card)),
       packLine,
     ),

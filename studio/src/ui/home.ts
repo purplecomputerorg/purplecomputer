@@ -70,9 +70,6 @@ const SCREENS: Record<string, () => Node[]> = {
 };
 
 const micIcon = () => { const el = h("span", { class: "mic", "aria-hidden": "true" }); el.innerHTML = MIC; return el; };
-const voiceStrip = () => h("div", { class: "voice-strip" }, micIcon(), h("div", {},
-  h("b", {}, "Purple can talk in your voice"),
-  h("span", {}, "Record \"D is for Dad\" on a key, \"good night\" for Play, or a character's lines in your own room. No microphone? Type the words and Purple says them.")));
 
 const card = (s: HomeSection) =>
   h("a", { class: "home-card", href: `#${s.id}` },
@@ -106,7 +103,6 @@ export function homeView(sections: HomeSection[]): View {
     editor: h("section", { class: "home" },
       h("h1", {}, "Put your family ", h("span", { class: "stroke" }, "into Purple.")),
       h("p", { class: "lead" }, "Add a few things that are yours: the dog, your voice, the words you use at home. Here are a few ideas. Click one to make your own."),
-      voiceStrip(),
       h("div", { class: "home-cards" }, ...sections.map(card)),
       packLine,
     ),

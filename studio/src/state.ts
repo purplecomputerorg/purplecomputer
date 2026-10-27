@@ -112,8 +112,8 @@ export interface Piece { id: string; section: string; label: string; one: string
 export function allPieces(): Piece[] {
   return [
     { id: "pictures", section: "pictures", label: "pictures", one: "picture", items: draft.pictures },
-    { id: "letter_recordings", section: "keys", label: "talking keys", one: "talking key", items: Object.values(draft.letters) },
-    { id: "phrases", section: "words", label: "phrases in your voice", one: "phrase in your voice", items: draft.phrases },
+    { id: "letter_recordings", section: "keys", label: "letters in your voice", one: "letter in your voice", items: Object.values(draft.letters) },
+    { id: "phrases", section: "words", label: "words in your voice", one: "word in your voice", items: draft.phrases },
     { id: "words", section: "words", label: "words", one: "word", items: draft.words },
     { id: "autocomplete_picks", section: "words", label: "words suggested first", one: "word suggested first", items: draft.ranked.map((word) => ({ kept: true, word })) },
     { id: "synonyms", section: "words", label: "nicknames", one: "nickname", items: draft.synonyms },

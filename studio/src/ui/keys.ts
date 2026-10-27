@@ -5,7 +5,7 @@ import { h, pageKeys } from "./dom";
 import { keyLabel, sticker } from "./stickers";
 import { addAllBar, plural, tryBar } from "./trybar";
 import { liveScreen } from "./live";
-import { hear, soundControl, voiceStays } from "./record";
+import { soundPicker, voiceStays } from "./record";
 import type { View } from "./view";
 
 // The keys a sound can go on, laid out like the keyboard.
@@ -18,7 +18,7 @@ export function keysView(): View {
   const now = h("div", { class: "voice-key" });
   const prompt = h("p", { class: "voice-prompt" });
   const pending = h("div");
-  const actions = h("div");
+  const picker = h("div");
 
   const select = (k: string) => {
     current = k;
@@ -33,15 +33,14 @@ export function keysView(): View {
     now.replaceChildren(sticker(current));
     const letter = draft.letters[current];
     const name = h("b", {}, keyLabel(current));
-    prompt.replaceChildren(!letter ? h("span", {}, "What should ", name, " say?")
-      : letter.said ? h("span", {}, name, ` says "${letter.said}". Give it something else to change it.`)
-      : h("span", {}, name, " has your sound. Record again to change it."));
-    actions.replaceChildren(letter ? h("div", { class: "stack" }, hear(letter.clip), tryBar(letter, () => { delete draft.letters[current]; changed(); render(); })) : "");
-    pending.replaceChildren(addAllBar(Object.values(draft.letters), (n) => plural(n, "talking key"), render) ?? "");
+    prompt.replaceChildren("What should ", name, " say?");
+    const clear = () => { delete draft.letters[current]; changed(); render(); };
+    picker.replaceChildren(soundPicker({ clip: letter?.clip, said: letter?.said, placeholder: "Hi sweetie, it's Grandma!", onClip, onClear: clear }),
+      letter ? tryBar(letter, clear) : "");
+    pending.replaceChildren(addAllBar(Object.values(draft.letters), (n) => plural(n, "letter"), render) ?? "");
   }
   const onClip = (clip: Clip, said?: string) => {
     draft.letters[current] = { clip, said, kept: draft.letters[current]?.kept };
-    current = nextToGive() ?? current;
     changed();
     render();
   };
@@ -54,14 +53,14 @@ export function keysView(): View {
   render();
 
   return {
-    title: "Talking Keys",
+    title: "Letters",
     editor: h(
       "section",
       {},
       h("p", { class: "lead" }, "In the Music room's Say Letters, each key plays what you give it. Record its name in your voice, \"D is for Dad,\" a sneeze, a song, or type words for Purple to say."),
       h("div", { class: "card voice-card" },
         keys,
-        h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, soundControl(onClip), actions))),
+        h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, picker))),
       pending,
       h("p", { class: "dim small" }, "Letters and numbers you skip say their own names in Purple's voice; the other keys stay quiet until you give them something. Type a key on your keyboard to jump to it."),
       voiceStays(),

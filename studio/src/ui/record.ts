@@ -49,29 +49,53 @@ export function recordButton(onClip: (clip: Clip) => void, say: (text: string) =
   return button;
 }
 
-// Words typed for Purple's room voice to read, kept as a clip like any recording.
-function typeIt(onClip: OnClip, say: (text: string) => void, placeholder: string): HTMLElement {
-  const words = h("input", { type: "text", placeholder, "aria-label": "Words for Purple to say", autocomplete: "off" });
-  const read = async () => {
-    const text = words.value.trim();
-    if (!text) return say("Type the words first, then press Purple says it.");
-    say("Getting Purple's voice ready…");
-    const clip = await roomLine(text);
-    if (!clip) return say("Purple's voice didn't load. Try again in a moment.");
-    say("");
-    words.value = "";
-    onClip(clip, text);
-  };
-  words.addEventListener("keydown", (e) => e.key === "Enter" && void read());
-  return h("div", { class: "type-it" }, words, h("button", { type: "button", class: "btn secondary", onclick: read }, "🔊 Purple says it"));
+// Purple's room voice reading words, kept as a clip like any recording.
+async function purpleSays(text: string, say: (text: string) => void): Promise<Clip | null> {
+  say("Getting Purple's voice ready…");
+  const clip = await roomLine(text);
+  say(clip ? "" : "Purple's voice didn't load. Try again in a moment.");
+  return clip;
 }
 
-// One shared control for a sound: record it, choose a file, or type words for Purple to say.
-export function soundControl(onClip: OnClip, placeholder = "Or type words for Purple to say"): HTMLElement {
+export interface SoundPick {
+  clip?: Clip;
+  said?: string;
+  // What Purple says with the field left empty; without it, the field needs words.
+  fallback?: string;
+  placeholder: string;
+  small?: boolean;
+  onClip: OnClip;
+  onClear?: () => void;
+}
+
+// One control for a sound: Purple's voice reading typed words, or the family's own recording. A new sound plays right away.
+export function soundPicker(o: SoundPick): HTMLElement {
+  const box = h("div", { class: "sound-picker" });
   const status = h("div", { class: "status" });
   const say = (text: string) => void (status.textContent = text);
-  return h("div", { class: "stack" }, h("div", { class: "row" }, recordButton(onClip, say), filePicker("audio/*", (f) => finish(f, onClip, say))),
-    typeIt(onClip, say, placeholder), status);
+  let mine = !!o.clip && !o.said;
+  const got: OnClip = (clip, said) => { play(clip); o.onClip(clip, said); };
+  const words = h("input", { type: "text", value: o.said ?? "", placeholder: o.placeholder, "aria-label": "Words for Purple to say", autocomplete: "off" });
+  const read = async () => {
+    const text = words.value.trim();
+    if (text && text === o.said && o.clip) return play(o.clip);
+    if (!text && !o.fallback) return say("Type the words first, then press Say it.");
+    const clip = await purpleSays(text || o.fallback!, say);
+    if (!clip) return;
+    if (text) return got(clip, text);
+    play(clip);
+    if (o.said) o.onClear?.();
+  };
+  words.addEventListener("keydown", (e) => e.key === "Enter" && void read());
+  const option = (to: boolean, label: string) => h("button", { type: "button", "aria-pressed": String(mine === to), onclick: () => { mine = to; say(""); draw(); } }, label);
+  const draw = () => box.replaceChildren(
+    h("span", { class: "seg" }, option(false, "🔊 Purple's voice"), option(true, "🎤 Your voice")),
+    mine ? h("div", { class: "row" }, recordButton((c) => got(c), say, o.small), filePicker("audio/*", (f) => finish(f, (c) => got(c), say)),
+      ...(o.clip && !o.said ? [hear(o.clip), o.onClear && h("button", { type: "button", class: "x", title: "Remove your recording", "aria-label": "Remove your recording", onclick: o.onClear }, "×")] : []))
+      : h("div", { class: "type-it" }, words, h("button", { type: "button", class: "btn secondary", onclick: read }, "▶ Say it")),
+    status);
+  draw();
+  return box;
 }
 
 export const hear = (clip: Clip) => (isQuiet(clip) ? h("span", { class: "dim small" }, "🔇 No sound")

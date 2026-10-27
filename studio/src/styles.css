@@ -522,12 +522,6 @@ img.pick-icon { width: 30px; height: 30px; }
 .pick span:last-child { font-size: 13px; color: var(--dim); }
 .home-card b .voice-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; padding: 2px 8px 2px 6px; border-radius: 999px; background: var(--fill); color: var(--purple); font: 600 11px var(--sans); white-space: nowrap; }
 .voice-badge .mic svg { width: 12px; height: 12px; display: block; }
-.voice-strip { display: flex; align-items: center; gap: 16px; margin: 20px 0 0; padding: 16px 20px; border-radius: 18px; background: var(--fill); border: 1.5px solid var(--border); }
-.voice-strip > .mic { flex-shrink: 0; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 999px; background: var(--purple); color: #fff; }
-.voice-strip > .mic svg { width: 24px; height: 24px; }
-.voice-strip b { display: block; font-family: var(--display); font-size: 17px; margin-bottom: 2px; }
-.voice-strip span { font-size: 14px; color: var(--dim); }
-.voice-strip + .home-cards { margin-top: 12px; }
 .name-field { max-width: 320px; }
 
 /* Colors */
@@ -574,9 +568,9 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .knob-tiles > .linkbtn { justify-self: start; }
 .emoji-cell.empty { font: 600 13px var(--sans); color: var(--purple); border-style: dashed; border-color: var(--border); }
 .word-row .was { white-space: nowrap; overflow: hidden; }
-.word-row .means { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
-.word-row .means .ask { font-size: 12.5px; color: var(--dim); line-height: 1.6; }
-.word-row .means kbd, .word-example kbd { font: 12px var(--mono); color: var(--purple); background: var(--card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+.word-row :is(.means, .says) { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.word-row :is(.means, .says) .ask { font-size: 12.5px; color: var(--dim); line-height: 1.6; }
+.word-row :is(.means, .says) kbd, .word-example kbd, .word-examples + p kbd { font: 12px var(--mono); color: var(--purple); background: var(--card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
 .word-row .means input { font-size: 14px; padding: 8px 12px; border-radius: 10px; }
 .remove { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; border-radius: 8px; height: 28px; }
 .remove:hover { background: var(--fill); color: var(--text); }
@@ -599,8 +593,7 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .picture-grid .add-photo::before { content: "+"; font-size: 20px; font-weight: 400; line-height: 1; }
 .picture-grid .add-photo:hover { background: var(--fill-hover); }
 
-/* Talking Keys and phrases */
-.tabs a.tab { text-decoration: none; }
+/* Letters */
 /* The keys sit on a dark deck like the pretend laptop's, so the stickers read the same */
 .voice-card { padding: 0; overflow: hidden; container-type: inline-size; }
 /* Sized from the card, not the window: ten keys of 2.25em plus 109px of gaps and padding always fit */
@@ -617,9 +610,12 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .voice-prompt b { color: var(--purple); }
 .voice-now .linkbtn { font-size: 13px; }
 .btn.record { font-size: 16px; padding: 12px 26px; }
-.phrase-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
-.phrase-new { display: grid; gap: 14px; }
-.type-it { display: flex; gap: 8px; }
+.type-it { display: flex; gap: 8px; width: 100%; max-width: 480px; }
+.voice-now > .stack { flex: 1; min-width: 0; }
+.sound-picker { display: grid; gap: 10px; justify-items: start; }
+.sound-picker .type-it { justify-self: stretch; }
+.sound-picker .status:empty { display: none; }
+.word-example .btn { justify-self: start; }
 .type-it input { flex: 1; min-width: 0; }
 ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 
@@ -674,10 +670,11 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .map-grid > .map-cell:hover { outline: 2px solid var(--purple); outline-offset: -2px; }
 
 /* The Words page's read-only examples. */
-.word-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; max-width: 580px; margin: 4px 0 14px; }
+.word-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; max-width: 580px; margin: 4px 0 14px; }
 .word-example { display: grid; align-content: start; gap: 6px; padding: 12px; border-radius: 16px; border: 1.5px dashed var(--line); font-size: 13px; line-height: 1.4; }
 .word-example .head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .word-example .pic { display: grid; place-items: center; width: 32px; height: 32px; font-size: 24px; }
+.word-example .tag { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--purple); white-space: nowrap; }
 .word-example .pic img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
 dialog.card { max-width: 440px; margin: auto; color: var(--text); }
 dialog::backdrop { background: rgb(0 0 0 / 0.3); }

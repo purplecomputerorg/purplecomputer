@@ -34,7 +34,7 @@ describe("clearing", () => {
     expect(draft.id).toBe(id);
   });
 
-  it("clears phrases with words, and talking keys on their own", () => {
+  it("clears phrases with words, and letters on their own", () => {
     const clip = { samples: new Float32Array(1), rate: 22050 };
     replaceDraft({ ...emptyDraft(), letters: { d: { clip, said: "D is for Dad" } }, phrases: [{ text: "good night", clip }] });
     clearSection("words");

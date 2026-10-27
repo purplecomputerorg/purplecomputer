@@ -1,8 +1,8 @@
 """Art room: a grid of square cells. Every letter paints its sticker color,
 Backslash opens the color wheel (for the brush, or in ABC for the letters),
-Space puts the brush down so arrows draw,
-holding Backspace takes squares, then whole lines, Tab switches to writing letters, and
-hold Space opens the Logo-style code line."""
+Space puts the brush down so arrows draw (or only while held),
+holding Backspace takes squares, then whole lines, and Tab switches to writing letters.
+The Logo-style code line opens from the Esc menu."""
 
 import math
 import time
@@ -18,7 +18,7 @@ from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationA
 from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
-from ..panels import CodePanel, Echo, SpaceHold
+from ..panels import CodePanel, Echo
 from ..ui import (AUTO, MOVE_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
                   status_row_h, status_row_px, swatch_dot)
 from .base import Room
@@ -228,7 +228,6 @@ class ArtRoom(Room):
         self._fade = None               # {"cells", "row", "since"}: the line a held Backspace is taking
         self._fade_timer = None
         self._tips = _Cache()
-        self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
         self.echo = Echo()
         self.code_panel = None
         self._cell = 10
@@ -291,9 +290,6 @@ class ArtRoom(Room):
 
     def arrow_hint(self) -> str:
         return MOVE_HINT
-
-    def hold_progress(self):
-        return self.space.status(self.code_panel is not None)
 
     def cursor_fraction(self, vp):
         return ((self._origin[0] + self._cursor_x * self._cell - vp.x) / vp.w,
@@ -624,18 +620,6 @@ class ArtRoom(Room):
             self.set_code_mode(False)
             self.app.set_panel(None)
 
-    def _space_hold_fired(self):
-        if self.code_panel is None:
-            self.open_code_panel()
-        else:
-            self.close_code_panel()
-
-    def _space_tap(self):
-        if self.code_panel is not None:
-            self.code_panel.field.insert(" ")
-        else:
-            self._space(arrow_held=None)
-
     async def run_code(self, lines: list):
         try:
             runner = _RoomBrushRunner(self)
@@ -674,18 +658,13 @@ class ArtRoom(Room):
         if isinstance(action, ControlAction) and action.action == "space":
             if not action.is_repeat:
                 self._space_press(action.is_down)
-            if self.space.route(action):
-                return
         if self.code_panel is not None:
-            self.space.other_key()
             result = await self.code_panel.handle(action)
             if result == "tab_fallthrough":
                 self._toggle_paint_mode()
             elif result == "close":
                 self.close_code_panel()
             return
-        dragging = self._paint_mode and isinstance(action, NavigationAction) and action.space_held
-        self.space.other_key(flush=not dragging)
         prior_post_stamp_x = self._post_stamp_x
         self._post_stamp_x = None
         if isinstance(action, ControlAction):

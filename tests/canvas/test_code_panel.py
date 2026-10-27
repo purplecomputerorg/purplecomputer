@@ -6,7 +6,7 @@ import asyncio
 import pytest
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.constants import ICON_LOOP, ICON_ROBOT
+from purple_tui.constants import ICON_LOOP
 from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name
 from purple_tui.keyboard import NavigationAction
 from purple_tui.palette import get_key_color
@@ -338,10 +338,11 @@ def test_blocks_code_back_and_front_go_in_depth():
     run(go())
 
 
-def test_blocks_hold_space_opens_code_and_tab_still_turns():
+def test_blocks_esc_then_space_opens_code_and_tab_still_turns():
     async def go():
         app, blocks = await _room("blocks")
-        await press(app, "space", hold=1.0)
+        await press(app, "escape")
+        await press(app, "space")
         assert blocks.code_panel is not None and app._panel is blocks.code_panel
         await press(app, "tab")
         assert blocks._back
@@ -365,21 +366,12 @@ def test_code_opens_a_word_guide_beside_the_room(name):
     run(go())
 
 
-def test_holding_space_says_what_a_full_hold_does():
-    from purple_tui.keyboard import ControlAction
-
+@pytest.mark.parametrize("name", ["art", "music", "blocks"])
+def test_holding_space_never_opens_code(name):
     async def go():
-        app, art = await _room("art")
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
-        await asyncio.sleep(0.3)
-        assert art.hold_progress()[1] == f"{ICON_ROBOT} Write code"
-        await asyncio.sleep(0.7)
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
-        assert art.code_panel is not None
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
-        await asyncio.sleep(0.3)
-        assert art.hold_progress()[1] == f"{ICON_ROBOT} Close code"
-        app._draw()
+        app, room = await _room(name)
+        await press(app, "space", hold=1.2)
+        assert room.code_panel is None and room.hold_progress() is None and app._hold_nudge is None
     run(go())
 
 
@@ -387,15 +379,15 @@ def test_letting_go_of_a_shown_hold_leaves_a_hint_a_tap_does_not():
     from purple_tui.keyboard import ControlAction
 
     async def go():
-        app, art = await _room("art")
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
+        app, music = await _room("music")
+        app._music_looping_enabled = True
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
         assert app._hold_nudge is None
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
         await asyncio.sleep(0.5)
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
-        assert art.code_panel is None
-        assert app._hold_nudge == "Hold Space longer to write code"
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
+        assert app._hold_nudge == "Hold Enter longer to record a loop"
         app._draw()
     run(go())
 

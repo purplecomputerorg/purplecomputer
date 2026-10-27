@@ -1,7 +1,7 @@
 """Space latches the pen: a tap puts it down and paints, a second tap lifts
-it, and leaving paint mode or restoring history lifts it. Also covers the
-Space routing (tap vs hold vs code panel disabled) and demo playback's pen
-handling, including cancellation."""
+it, and leaving paint mode or restoring history lifts it. Holding Space while
+moving paints until release. Also covers demo playback's pen handling,
+including cancellation."""
 
 import asyncio
 
@@ -92,25 +92,21 @@ def test_timeline_restore_lifts_pen():
     _run(_test())
 
 
-def test_hold_opens_code_panel_and_lifts_pen():
+def test_opening_code_lifts_pen():
     async def _test():
         app, canvas = _art()
         await _tap(canvas)
         assert canvas._pen_down
-        await canvas.handle(_space())
-        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
-        await canvas.handle(_space(is_down=False))
+        canvas.open_code_panel()
         assert canvas.code_panel is not None
         assert not canvas._pen_down
     _run(_test())
 
 
-def test_code_panel_disabled_space_is_immediate():
-    """With Code Space off there is no tap-or-hold ambiguity: Space reaches the
-    canvas at once, so a tap latches and hold-space-then-arrows paints until release."""
+def test_space_is_immediate():
+    """Space reaches the canvas at once, so a tap latches and hold-space-then-arrows paints until release."""
     async def _test():
         app, canvas = _art()
-        app._code_panel_enabled = False
         canvas._cursor_x = canvas._cursor_y = 5
         await canvas.handle(_space())
         assert canvas._pen_down

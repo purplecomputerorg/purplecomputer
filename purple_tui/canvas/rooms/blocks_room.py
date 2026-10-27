@@ -12,8 +12,8 @@ blocks; only the code line keeps the height it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
-opens the color wheel, Tab flips to the back side, and holding Space opens
-the code line."""
+opens the color wheel, Tab flips to the back side, and the code line opens
+from the Esc menu."""
 
 import asyncio
 import math
@@ -28,7 +28,7 @@ from ...palette import DEFAULT_BRUSH_COLOR
 from .. import color_recipe, paper
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
-from ..panels import CodePanel, Echo, SpaceHold
+from ..panels import CodePanel, Echo
 from ..ui import MOVE_HINT, draw_key_hint, draw_mode_switch, hint_row_h
 from .base import Room
 from . import art_room
@@ -105,9 +105,9 @@ class BlocksRoom(Room):
         self._front = self._scene_row = None
         self._composed = self._layer = None
         self._sprites: dict = {}
-        self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
         self.echo = Echo()
         self.code_panel = None
+        self._space_pending = False
 
     # ---------------------------------------------------------------- lifecycle
     def on_enter(self):
@@ -126,19 +126,6 @@ class BlocksRoom(Room):
             self.code_panel = None
             self.app.set_panel(None)
 
-    def _space_hold_fired(self):
-        if self.code_panel is None:
-            self.open_code_panel()
-        else:
-            self.close_code_panel()
-
-    def _space_tap(self):
-        if self.code_panel is not None:
-            self.code_panel.field.insert(" ")
-        else:
-            self._control("space")
-        self.app.invalidate()
-
     async def run_code(self, lines: list):
         try:
             runner = BlocksCodeRunner(self)
@@ -153,9 +140,6 @@ class BlocksRoom(Room):
 
     def arrow_hint(self) -> str:
         return MOVE_HINT
-
-    def hold_progress(self):
-        return self.space.status(self.code_panel is not None)
 
     def cursor_fraction(self, vp):
         x, y = self._corner(*self._view(self._x, self._z), 0)
@@ -382,12 +366,12 @@ class BlocksRoom(Room):
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
-        if isinstance(action, ControlAction) and action.action == "space" and self.space.route(action):
-            return
+        if self.code_panel is None and isinstance(action, ControlAction) and action.action == "space":
+            return self._space(action)
         stacking = isinstance(action, ControlAction) and action.action == "enter" and action.space_held
         if stacking and self.code_panel is None:
             self._dir = RISE    # Space + Enter lays a column, as Space + arrows lay a line
-        self.space.other_key()
+        self._lay_pending()
         if self.code_panel is not None:
             result = await self.code_panel.handle(action)
             if result == "tab_fallthrough":
@@ -403,6 +387,19 @@ class BlocksRoom(Room):
         elif isinstance(action, CharacterAction):
             self._character(action)
         self.app.invalidate()
+
+    def _space(self, action):
+        """Space's block waits for release or the next key, so Space + Enter knows to go up first."""
+        if action.is_down and not action.is_repeat:
+            self._space_pending = True
+        elif not action.is_down:
+            self._lay_pending()
+
+    def _lay_pending(self):
+        if self._space_pending:
+            self._space_pending = False
+            self._control("space")
+            self.app.invalidate()
 
     def _character(self, action):
         char = UNSHIFT_MAP.get(action.char, action.char) if action.shift_held else action.char

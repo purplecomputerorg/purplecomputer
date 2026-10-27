@@ -416,7 +416,7 @@ def test_loop_panel_keeps_grid_size():
     run(_test())
 
 
-def test_space_hold_while_looping_stops_loop_and_opens_code():
+def test_opening_code_while_looping_stops_the_loop():
     from purple_tui.canvas.harness import make_app, run
     from purple_tui.canvas.panels import CodePanel
 
@@ -429,7 +429,7 @@ def test_space_hold_while_looping_stops_loop_and_opens_code():
         music.loop.record_event('A', MODE_MUSIC)
         music._advance_loop_state()
         assert music.loop.state == LOOPING
-        music._space_hold_fired()
+        music.open_code_panel()
         assert music.loop.state == IDLE
         assert isinstance(app._panel, CodePanel)
     run(_test())

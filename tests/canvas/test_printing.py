@@ -49,25 +49,25 @@ def _write(**state):
         json.dump(state, f)
 
 
-def test_print_card_always_says_what_the_printer_is_doing():
+def test_print_is_a_tool_only_once_the_printer_is_ready():
     async def go():
         app = make_app()
         app.action_switch_room("art")
         await type_text(app, "q")
-        for state, label, enabled in [(None, "No Printer", False),
-                                      ({"ready": False, "model": "a printer", "via": printing.SETTING_UP}, "Starting Up", False),
-                                      ({"ready": False, "model": "Canon TS3520", "via": "no driver for this model"}, "Can't Print", False),
-                                      (READY, "Print", True)]:
+        for state, ready in [(None, False),
+                             ({"ready": False, "model": "a printer", "via": printing.SETTING_UP}, False),
+                             ({"ready": False, "model": "Canon TS3520", "via": "no driver for this model"}, False),
+                             (READY, True)]:
             if state:
                 _write(**state)
             menu = await _menu(app)
-            _, shown, key, disabled = menu._print_card()
-            assert (shown, bool(key), not disabled) == (label, enabled, enabled)
+            assert ("print" in menu.tools) == ready
+            app._draw()
             menu.close(None)
     run(go())
 
 
-def test_a_print_card_that_cant_print_says_why_when_pressed():
+def test_p_says_why_it_cant_print():
     async def go():
         app = make_app()
         app.action_switch_room("art")

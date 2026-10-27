@@ -1,6 +1,5 @@
 """Panels that borrow the bottom of the viewport: the code line, the loop
-station, and the Time Travel bar. Plus the Space hold-or-tap policy the
-Music, Art and Blocks rooms share, and the echo that writes code for what a
+station, and the Time Travel bar. Plus the echo that writes code for what a
 kid does by hand.
 """
 
@@ -15,16 +14,16 @@ from functools import cache
 import pygame
 
 from .. import palette as P
-from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_LOOP, ICON_MUSIC, ICON_ROBOT, ICON_TIME_TRAVEL
+from ..constants import ICON_LOOP, ICON_MUSIC, ICON_TIME_TRAVEL
 from ..content import get_content
-from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
+from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..loop_station import LOOPING, RECORDING
 from ..music_constants import GRID_KEYS
 from ..palette import get_key_color
 from ..timeline import SESSION_GAP_S
 from . import color_wheel
 from .gfx import rgb
-from .ui import AUTO, DOWN, LEFT, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, hold_status, keycap_size
+from .ui import AUTO, CODE_KEYS, DOWN, LEFT, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, key_hint_width, keycap_size
 
 ROOM_KEYWORDS = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
@@ -290,64 +289,6 @@ class Echo:
         self.parts, self.fresh, self._color = [], "", None
 
 
-class SpaceHold:
-    """Space in Music, Art and Blocks: a tap does the room thing, a hold (0.8s) toggles
-    the code panel. A pending tap is flushed before any other key so fast
-    typing like 'left 10' keeps its space."""
-
-    def __init__(self, app, on_tap, on_hold):
-        self.app = app
-        self.on_tap, self.on_hold = on_tap, on_hold
-        self.hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
-        self._down_at = None
-
-    def route(self, action: ControlAction) -> bool:
-        """True when consumed here; False when the room should treat Space normally."""
-        if not self.app._code_panel_enabled:
-            return False
-        if action.is_down and not action.is_repeat:
-            if action.arrow_held:
-                return False
-            self._down_at = time.monotonic()
-            self.hold.on_down(self.app.timers.after, self._fire)
-            self._ring = self.app.timers.every(1 / 30, self.app.invalidate)
-            return True
-        if action.is_down:
-            return self.hold.is_pending or self.hold.fired
-        self._stop_ring()
-        if self.hold.on_up():
-            self.on_tap()
-        return True
-
-    def other_key(self, flush: bool = True):
-        """flush False drops the pending tap: Space was held as a modifier."""
-        if self.hold.on_other_key():
-            self._stop_ring()
-            if flush:
-                self.on_tap()
-
-    def _fire(self):
-        self._stop_ring()
-        self.on_hold()
-
-    def _stop_ring(self):
-        self._down_at = None
-        if getattr(self, "_ring", None):
-            self._ring.stop()
-            self._ring = None
-        self.app.invalidate()
-
-    def status(self, panel_open: bool):
-        """ui.hold_status while Space is held, else None."""
-        p = self.progress()
-        return None if p is None else hold_status(p, "Space", ICON_ROBOT, f"{'close' if panel_open else 'write'} code")
-
-    def progress(self):
-        if self._down_at is None or not self.hold.is_pending:
-            return None
-        return min(1.0, (time.monotonic() - self._down_at) / HOLD_OR_TAP_THRESHOLD)
-
-
 class CodePanel:
     """The 'Code →' line with autocomplete and recall, over a row of recipe
     cards that ↓ steps into, with a Close button left of them. It opens holding
@@ -522,15 +463,15 @@ class CodePanel:
         self._draw_close_hint(g, pygame.Rect(x, y, box.x - x - g.em(0.4), cards_h))
 
     def _draw_close_hint(self, g, rect):
-        """Under the label, beside the cards: a Close button the arrows reach, with Space's hold under it."""
+        """Under the label, beside the cards: a Close button the arrows reach, with the Esc menu's keys under it."""
         picked = self.card == self.CLOSE
         g.rect(P.FIELD, rect, radius=g.em(0.4))
         g.rect(P.ACCENT if picked else P.LINE, rect, width=3 if picked else 1, radius=g.em(0.4))
         px, key_px = g.em(0.78), g.em(0.6)
-        key_px = min(key_px, key_px * (rect.w - g.em(1.1)) // keycap_size(g, "hold Space", key_px)[0])
+        key_px = min(key_px, key_px * (rect.w - g.em(1.1)) // key_hint_width(g, CODE_KEYS, key_px))
         ink = P.TEXT if picked else P.MUTED
         g.draw_text("Close", px, rect.centerx, rect.centery - g.em(0.5), "mono-bold", ink, anchor="center")
-        draw_key_hint(g, "{hold Space}", key_px, rect.centerx, rect.centery + g.em(0.55), color=P.MUTED, anchor="center")
+        draw_key_hint(g, CODE_KEYS, key_px, rect.centerx, rect.centery + g.em(0.55), color=P.MUTED, anchor="center")
 
     def _draw_cards(self, g, area):
         n = len(self.recipes)

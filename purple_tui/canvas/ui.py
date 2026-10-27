@@ -758,7 +758,7 @@ def key_hint_width(g: Gfx, text: str, px: int) -> int:
 
 
 def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft") -> pygame.Rect:
-    """A dim hint line where {Key} draws as a solid keycap: '{hold Space} write code'."""
+    """A dim hint line where {Key} draws as a solid keycap: '{hold Enter} loop'."""
     color = color or P.DIM
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
     setattr(box, anchor, (x, y))
@@ -770,7 +770,8 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor
     return box
 
 
-CODE_HINT = f"{ICON_ROBOT} {{hold Space}} write code"
+CODE_KEYS = "{Esc} {Space}"   # the Esc menu, then its Code card
+CODE_HINT = f"{ICON_ROBOT} {CODE_KEYS} write code"
 
 
 def _pill(g: Gfx, px: int, content_w: int, right: int, cy: int, on: bool) -> tuple:

@@ -1,6 +1,6 @@
 """Music room: a 10x4 grid that mirrors the keyboard. Letters play notes,
 digits play percussion, Tab says letters, arrows change key, Enter cycles the
-instrument, hold Enter records a loop, hold Space opens the code line."""
+instrument, hold Enter records a loop, and the code line opens from the Esc menu."""
 
 import asyncio
 import time
@@ -21,7 +21,7 @@ from ...music_constants import (
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..music_replay import Recording
-from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel, SpaceHold
+from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
 from ..ui import (CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch,
                   draw_status_row, hint_row_h, hold_status, status_row_h)
@@ -63,7 +63,6 @@ class MusicRoom(Room):
         self._saved_loop = None
         self._last_letter_key = None
         self._last_letter_press_t = float("-inf")
-        self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
         self._enter_down_at = None
@@ -428,16 +427,7 @@ class MusicRoom(Room):
             self.code_panel = None
             self.app.set_panel(None)
 
-    def _space_hold_fired(self):
-        if self.code_panel is None:
-            self.open_code_panel()
-        else:
-            self.close_code_panel()
-
     def _space_tap(self):
-        if self.code_panel is not None:
-            self.code_panel.field.insert(" ")
-            return
         if self.app._littles_mode:
             return
         if self.loop.state == RECORDING:
@@ -496,10 +486,7 @@ class MusicRoom(Room):
             if isinstance(action, ControlAction) and action.action == "escape":
                 self.app._escape_consumed_by_mode = True
                 return
-        if isinstance(action, ControlAction) and action.action == "space" and self.space.route(action):
-            return
         if self.code_panel is not None:
-            self.space.other_key()
             result = await self.code_panel.handle(action)
             if result == "tab_fallthrough":
                 self._toggle_letters()
@@ -515,7 +502,6 @@ class MusicRoom(Room):
                 self._handle_enter(action)
                 return
             if action.is_down:
-                self.space.other_key()
                 self._flush_enter()
                 if action.action == "escape" and self.loop.state != IDLE:
                     self._stop_loop()
@@ -530,7 +516,6 @@ class MusicRoom(Room):
         if isinstance(action, NavigationAction):
             if action.is_repeat or self.app._littles_mode or not self.app._music_key_switching_enabled:
                 return
-            self.space.other_key()
             self._flush_enter()
             if action.direction in ("left", "right"):
                 step = 1 if action.direction == "right" else -1
@@ -539,7 +524,6 @@ class MusicRoom(Room):
         if isinstance(action, CharacterAction):
             if action.is_repeat or not action.char:
                 return
-            self.space.other_key()
             char = action.char
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
             if lookup not in ALL_KEYS:
@@ -558,7 +542,6 @@ class MusicRoom(Room):
                 self._enter_down_at = None
             return
         if action.is_down and not action.is_repeat:
-            self.space.other_key()
             self._enter_down_at = time.monotonic()
             self.enter_hold.on_down(self.app.timers.after, self._enter_hold_fired)
             self._enter_ring = self.app.timers.every(1 / 30, self.app.invalidate)
@@ -597,7 +580,7 @@ class MusicRoom(Room):
             doing = "record a loop" if self.loop.state == IDLE else "stop the loop"
             return hold_status(min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD),
                                "Enter", ICON_LOOP, doing)
-        return self.space.status(self.code_panel is not None)
+        return None
 
     def footer_h(self, g) -> int:
         return g.em(FOOTER_EM)

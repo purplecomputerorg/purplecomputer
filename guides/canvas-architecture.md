@@ -44,7 +44,7 @@ Design rules, in priority order:
    (Press Start 2P, one glyph per square).
 6. Hints sit near the thing they describe and fade after a room has been used.
 7. The Parent Menu hold (Esc) draws no progress on purpose: kids get no
-   affordance for it. Space and Enter holds show a segmented bar over the
+   affordance for it. The Enter hold shows a segmented bar over the
    hint strip.
 
 ## Layers
@@ -53,7 +53,7 @@ Design rules, in priority order:
 purple_tui/canvas/gfx.py       Gfx: the surface, fonts, text and emoji caches, markup layout
 purple_tui/canvas/ui.py        Timers, TextField, Overlay/Dialog/Picker, Toast, draw_ring
 purple_tui/canvas/app.py       PurpleApp: asyncio loop, readers, dispatch, overlays, frame
-purple_tui/canvas/panels.py    CodePanel, LoopPanel, TimeTravelBar, SpaceHold
+purple_tui/canvas/panels.py    CodePanel, LoopPanel, TimeTravelBar
 purple_tui/canvas/rooms/     Room (base.py) and ROOM_CLASSES, the five rooms, FamilyRoom, parent flows, system screens
 purple_tui/canvas/sounds.py    SoundBank: instrument, percussion, and letter sounds, pack ones first
 purple_tui/play_eval.py The Play evaluator (engine; emits markup strings)
@@ -117,11 +117,12 @@ Unchanged: evdev events go through `KeyboardStateMachine` into
 is no evdev (`PURPLE_NO_EVDEV=1`, macOS), `sdl_input.pump` turns the window's
 key events into the same `RawKeyEvent`s.
 
-Hold gestures for Space (code panel) and Enter (loop station) show a bar
-(`ui.draw_hold_bar`), and one let go early leaves a
-"Hold Space longer to ..." hint up for a moment; the Esc hold for the Parent Menu shows nothing.
-`panels.SpaceHold` holds the tap versus hold policy Music, Art and Blocks
-share (rooms with `has_code_panel`). Their code panel opens holding `panels.Echo`'s
+The Enter hold (loop station) shows a bar (`ui.draw_hold_bar`), and one let go
+early leaves a "Hold Enter longer to ..." hint up for a moment; the Esc hold for
+the Parent Menu shows nothing. Space never holds for anything: holding it in Art
+and Blocks keeps painting or building while the arrows move. Code opens from the
+Esc menu's Code card (Esc, then Space) in Music, Art and Blocks (rooms with
+`has_code_panel`). Their code panel opens holding `panels.Echo`'s
 code for the newest stroke drawn or played by hand, and ↓ steps into
 `panels.RECIPES`, finished programs drawn as small pictures. A panel with
 `side_width` also gets a column beside the room: the code panel puts

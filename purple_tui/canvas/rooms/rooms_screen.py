@@ -5,7 +5,7 @@ import pygame
 
 from ... import palette as P
 from ...keyboard import ControlAction, NavigationAction
-from ..room_picker import (MAX_FAMILY_ROOMS, ROOM_CARD, short_title, draw_card, draw_section, nearest, row_centers,
+from ..room_picker import (MAX_FAMILY_ROOMS, ROOM_CARD, cards, short_title, draw_card, draw_section, nearest, row_centers,
                            row_width)
 from ..ui import CANCELLED, DOWN, LEFT, RIGHT, UP, Dialog
 from .family_room import ICON_FAMILY
@@ -62,7 +62,7 @@ class RoomsScreen(Dialog):
         super().__init__(app)
         self.packs = packs or set()
         self.rows, self.labels = self._rows()
-        self.inner_w = max(MIN_W, row_width(max(map(len, self.rows)), ROOM_CARD))
+        self.inner_w = max(MIN_W, row_width(*cards(max(map(len, self.rows)), ROOM_CARD)))
         self.row, self.col = 1, 0
         if packs:
             self.row = next((i for i, row in enumerate(self.rows) if row[0][0] == "family" and row[0][1].pack in packs), 1)
@@ -109,7 +109,7 @@ class RoomsScreen(Dialog):
                 self.close(True)
 
     def _centers(self, row) -> list:
-        return row_centers(len(self.rows[row]), ROOM_CARD, self.inner_w)
+        return row_centers(*cards(len(self.rows[row]), ROOM_CARD), self.inner_w)
 
     def _move(self, d):
         if d in ("left", "right"):

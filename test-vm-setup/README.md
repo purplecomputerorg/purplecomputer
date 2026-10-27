@@ -90,7 +90,7 @@ just setup
 just run
 ```
 
-After that, type `run` (installed by `setup.sh`) to pull the latest code and start `just run-dev`. It runs `test-vm-setup/dev.sh` from `~/purplecomputer`; pass a path to use another checkout, e.g. `run /mnt/share`.
+After that, type `run` (installed by `setup.sh`) to pull the latest code, reinstall Example Rooms (Studio's starter rooms, turned on in the Esc menu) from it, and start `just run-dev`. It runs `test-vm-setup/dev.sh` from `~/purplecomputer`; pass a path to use another checkout, e.g. `run /mnt/share`.
 
 ## What setup.sh Does
 

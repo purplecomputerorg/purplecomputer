@@ -6,6 +6,8 @@
 # Usage: scripts/vm.sh <command> [args]
 #   start [ref] [--release] [--debug|--backup] [--cd] [--legacy] [--empty] [--fresh]
 #   insert [ref] [--release] [--debug|--backup] [--cd]
+#   rooms      plug in a second USB drive holding Example Rooms
+#              (scripts/example_rooms.py, built fresh)
 #   eject | stop | key <keys...> | shot
 #
 #   ref        a built commit on any branch (default: the newest build);
@@ -68,6 +70,19 @@ insert() {
     fi
 }
 
+rooms() {
+    need_running
+    local img="$VM_DIR/rooms.img"
+    rm -f "$img"
+    "$PROJECT_DIR/.venv/bin/python" "$SCRIPT_DIR/example_rooms.py" --out "$VM_DIR/examples.purplepack"
+    mkfs.fat -C -n ROOMS "$img" 8192 >/dev/null
+    mcopy -i "$img" "$VM_DIR/examples.purplepack" ::/
+    mon "device_del roomstick" >/dev/null; mon "drive_del roomdrive" >/dev/null
+    mon "drive_add 0 if=none,id=roomdrive,format=raw,file=$img" >/dev/null
+    mon "device_add usb-storage,id=roomstick,drive=roomdrive,bus=xhci.0,removable=on" >/dev/null
+    log_info "Plugged in Example Rooms. Choose Add, then turn rooms on in Parent Menu, Family Rooms."
+}
+
 start() {
     running && { log_error "VM is already running; 'just vm-stop' first."; exit 1; }
     mkdir -p "$VM_DIR"
@@ -122,8 +137,9 @@ parse_args "$@"
 case "$cmd" in
     start) start ;;
     insert) need_running; insert ;;
+    rooms) rooms ;;
     eject) need_running; mon "eject -f cd0" >/dev/null; mon "device_del usbstick" >/dev/null ;;
     stop) running && mon quit; kill "$(cat "$VM_DIR/viewer.pid" 2>/dev/null)" 2>/dev/null || true; rm -f "$MON" "$VM_DIR/viewer.pid" ;;
     shot) shot ;;
-    *) sed -n '5,16p' "$0"; exit 1 ;;
+    *) sed -n '5,18p' "$0"; exit 1 ;;
 esac

@@ -408,6 +408,10 @@ pystdin:
 check-room *args:
     @cd "{{invocation_directory()}}" && PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 -m purple_tui.roomkit.check {{args}}
 
+# Studio's starter rooms as a pack, built fresh: installed here and turned on, or --out FILE for the .purplepack
+example-rooms *args:
+    @PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 scripts/example_rooms.py {{args}}
+
 # Purple Studio (parent-facing web app, studio/): dev server
 studio: studio-bundle
     cd studio && npm install --no-audit --no-fund
@@ -457,6 +461,10 @@ vm *args:
 # Swap the USB stick (or with --cd, the disc) in the running VM: just vm-insert [commit|--release] [--debug|--backup] [--cd]
 vm-insert *args:
     @./scripts/vm.sh insert {{args}}
+
+# Plug a USB drive with Example Rooms (just example-rooms) into the running VM
+vm-rooms:
+    @./scripts/vm.sh rooms
 
 # Pull out the USB stick and disc
 vm-eject:

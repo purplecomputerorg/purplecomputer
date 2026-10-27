@@ -1,5 +1,6 @@
-/* Purple's own Art letters, so words on a picture look here as they will there. */
+/* Purple's own Art letters and code font, so they look here as they will there. */
 @font-face { font-family: PurpleArt; src: url("../../purple_tui/canvas/fonts/MartianMonoArt-Bold.ttf"); }
+@font-face { font-family: PurpleMono; src: url("../../purple_tui/canvas/fonts/IBMPlexMono-Regular.ttf"); }
 :root {
   --purple: #5c2d91;
   --purple-dark: #4a2473;
@@ -19,7 +20,7 @@
   --display: "Inter", system-ui, sans-serif;
   --hero: "Sora", "Inter", system-ui, sans-serif;
   --serif: "Spectral", "Lora", Georgia, serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono: PurpleMono, monospace;
   --shadow: 0 10px 30px rgba(92, 45, 145, 0.08), 0 2px 6px rgba(53, 42, 74, 0.06);
 }
 

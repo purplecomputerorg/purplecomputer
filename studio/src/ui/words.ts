@@ -7,6 +7,7 @@ import { h } from "./dom";
 import { closeEmojiPicker, emojiCell } from "./emojipicker";
 import { soundPicker, voiceStays } from "./record";
 import box from "../assets/purple-box.jpg";
+import daddy from "../assets/daddy.mp3";
 import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
@@ -15,11 +16,11 @@ const WORD = /^[a-z][a-z'-]*$/;
 const MEANING_MAX = 200;
 
 // Shown, never added: one card for each thing a word can do, before the family has any.
-// hears: what Purple says for it, played in Purple's voice even where the family would record their own.
-const EXAMPLES: { word: string; pic: string | Node; tag: string; types: string; then: string; hears?: string }[] = [
+// hears: what Purple says for it, played in Purple's voice unless voice is a real recording of it.
+const EXAMPLES: { word: string; pic: string | Node; tag: string; types: string; then: string; hears?: string; voice?: string }[] = [
   { word: "box", pic: h("img", { src: box, alt: "" }), tag: "📷 Your photo", types: "box", then: `Shows your photo, instead of Purple's ${CORE_EMOJI.box ?? "emoji"}` },
   { word: "trex", pic: "🦖", tag: "💬 A meaning", types: "what is trex!", then: "A giant dinosaur who stomps, roars, and has teeny tiny arms", hears: "A giant dinosaur who stomps, roars, and has teeny tiny arms" },
-  { word: "nana", pic: "👵", tag: "🎤 Your voice", types: "nana!", then: "Plays your recording: “Hi sweetie, it's Nana!”", hears: "Hi sweetie, it's Nana!" },
+  { word: "daddy", pic: "👨", tag: "🎤 Your voice", types: "daddy!", then: "Plays your recording: “Hey, it's daddy! I love you guys!”", hears: "Hey, it's daddy! I love you guys!", voice: daddy },
   { word: "biscuit", pic: "🐶", tag: "🔊 Purple's voice", types: "say biscuit", then: "Purple says the words you typed: “Biscuit is our silly dog”", hears: "Biscuit is our silly dog" },
 ];
 
@@ -27,11 +28,12 @@ function examples(): HTMLElement {
   return h("div", { class: "word-examples" }, ...EXAMPLES.map((x) => h("div", { class: "word-example" },
     h("div", { class: "head" }, h("span", { class: "pic" }, x.pic), h("b", {}, x.word), h("span", { class: "tag" }, x.tag)),
     h("div", {}, "Your kid types ", h("kbd", {}, x.types)), h("div", { class: "dim" }, x.then),
-    x.hears ? hearExample(x.hears) : null)));
+    x.hears ? hearExample(x.hears, x.voice) : null)));
 }
 
-function hearExample(text: string): HTMLElement {
+function hearExample(text: string, voice?: string): HTMLElement {
   const button = h("button", { type: "button", class: "btn secondary small", onclick: async () => {
+    if (voice) return void new Audio(voice).play();
     button.disabled = true;
     const clip = await roomLine(text);
     button.disabled = false;

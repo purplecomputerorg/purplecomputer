@@ -466,14 +466,17 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 
 /* Pick cards: the welcome page, the ways to start a room, and sounds to try */
 /* Home: paper cards taped to the page, each holding a small Purple screen */
-.home .stroke { white-space: nowrap; padding-bottom: 0.08em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 24' preserveAspectRatio='none'%3E%3Cpath d='M4 16 C 60 6, 140 4, 296 10' stroke='%239b59d0' stroke-width='9' stroke-linecap='round' fill='none' opacity='0.5'/%3E%3C/svg%3E") 0 100% / 100% 0.36em no-repeat; }
+.home { container-type: inline-size; }
+/* Sized to the column so the headline never wraps: it is about 13em wide */
+.home h1 { font-size: min(38px, 7.2cqi); white-space: nowrap; }
+.home .stroke { padding-bottom: 0.08em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 24' preserveAspectRatio='none'%3E%3Cpath d='M4 16 C 60 6, 140 4, 296 10' stroke='%239b59d0' stroke-width='9' stroke-linecap='round' fill='none' opacity='0.5'/%3E%3C/svg%3E") 0 100% / 100% 0.36em no-repeat; }
 .home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 16px; margin: 30px 0 36px; }
 .home-card { --tilt: -1deg; position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 14px; background: var(--card); border-radius: 6px; box-shadow: 0 2px 0 #ece5f3, 0 10px 22px rgba(92, 45, 145, 0.09); color: inherit; text-decoration: none; transform: rotate(var(--tilt)); transition: transform 0.15s, box-shadow 0.15s; }
 .home-card:nth-child(3n + 2) { --tilt: 1deg; }
 .home-card:nth-child(3n) { --tilt: -0.5deg; }
 .home-card:hover { color: inherit; transform: none; box-shadow: 0 2px 0 #ece5f3, 0 16px 30px rgba(92, 45, 145, 0.16); }
 /* Each card's tape a little different, as if torn and stuck by hand */
-.home-card::before { content: ""; position: absolute; top: -9px; left: calc(50% + var(--tape-x, 0px)); width: var(--tape-w, 70px); height: 20px; translate: -50% 0; background: rgba(196, 174, 224, 0.55); transform: rotate(var(--tape-r, -3deg)); }
+.home-card::before { content: ""; position: absolute; top: -6px; left: calc(50% + var(--tape-x, 0px)); width: var(--tape-w, 70px); height: 13px; translate: -50% 0; background: rgba(196, 174, 224, 0.55); transform: rotate(var(--tape-r, -3deg)); }
 .home-card:nth-child(6n + 2) { --tape-w: 62px; --tape-r: 2deg; --tape-x: 8px; }
 .home-card:nth-child(6n + 3) { --tape-w: 76px; --tape-r: -1.5deg; --tape-x: -10px; }
 .home-card:nth-child(6n + 4) { --tape-w: 66px; --tape-r: 4deg; --tape-x: 4px; }

@@ -26,6 +26,8 @@ interface Ctx {
   range?: [number, number];
   // A map's legend, and the map it names the letters of; keyedBy: the legend a dict's keys are letters of (who says what).
   legend?: { dict: Dict; map: Lit }; keyedBy?: { dict: Dict; legend: Dict };
+  // The knob's own list, which can be cleared to start over; lists nested in rows can't.
+  top?: Lit[];
 }
 type Edit = Pick<Ctx, "onEdit" | "taken" | "drums" | "loud" | "range">;
 
@@ -211,8 +213,12 @@ function list(items: Lit[], growable: boolean, ctx: Ctx, labels: string[]): HTML
     const twice = [...new Set(items.filter(repeat).map((x) => (x.t === "picture" ? `The picture "${(x as Face).v}"` : (x as Face).v)))];
     const tilesEl = h("span", { class: "knob-inline" },
       ...items.map((x, i) => h("span", { class: `knob-item tile${repeat(x) ? " bad" : ""}` }, labelled(labels[i], item(x)), drop(i))), add());
-    // Wrapped only when there's something to say, so rows that line up their tiles keep doing so.
-    return twice.length ? h("span", { class: "knob-tiles" }, tilesEl,
+    // Down to one, with the picker open on it, to fill the list with the family's own.
+    const clear = taken && growable && items === ctx.top && items.length > 1
+      ? h("button", { type: "button", class: "linkbtn dim small", onclick: () => { items.splice(0, items.length, unusedEmoji([])!); fresh = items[0]; changed(ctx); } }, "Clear and pick your own")
+      : null;
+    // Wrapped only when there's something to add, so rows that line up their tiles keep doing so.
+    return twice.length || clear ? h("span", { class: "knob-tiles" }, tilesEl, clear,
       ...twice.map((e) => h("p", { class: "bad small" }, `${e} is in here twice, and each one needs to be different. Click one of them to pick something else.`))) : tilesEl;
   }
   return rows(items.map((x, i) => row(item(x), drop(i))), add(), heads);
@@ -334,7 +340,7 @@ export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
       const by = keyedBy(k.value);
       const range = RANGE.exec(k.about)?.slice(1).map(Number) as [number, number] | undefined;
       const ctx = { onEdit: edited, redraw: () => redraw(), drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), loud: isLoud(k), legend, range,
-        keyedBy: by && { dict: k.value as Dict, legend: by }, ...linksOf(k.value) };
+        keyedBy: by && { dict: k.value as Dict, legend: by }, top: k.value.t === "list" ? k.value.items : undefined, ...linksOf(k.value) };
       const redraw = () => card.replaceChildren(head(), editor(k.value, ctx, [], k.labels),
         legend ? h("p", { class: "dim small" }, "The letter beside each thing is how the Python writes it on the map. You only need it if you open the Python.") : "");
       redraw();

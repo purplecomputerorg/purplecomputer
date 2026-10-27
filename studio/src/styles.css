@@ -68,6 +68,14 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .topbar .btn.download { display: flex; gap: 8px; align-items: center; text-decoration: none; flex-shrink: 0; }
 .topbar .btn.download .n { background: #fff; color: var(--purple); font-weight: 700; border-radius: 999px; padding: 0 8px; font-size: 12px; }
 .topbar .btn.download.here { background: var(--purple-dark); }
+/* Too narrow for every tab with its icon: drop the extras before any tab gets cut off */
+@media (max-width: 1400px) {
+  .tabs-nav .icon, .tabs-nav .n { display: none; }
+  .privacy-link { padding: 7px 6px; }
+  .privacy-link span { display: none; }
+  .more-menu summary { font-size: 0; padding: 7px 6px; }
+  .more-menu summary::after { content: "⋯"; font-size: 18px; }
+}
 
 .body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); min-height: calc(100vh - 60px); }
 .main { padding: 28px 32px 64px; min-width: 0; }
@@ -87,12 +95,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .topbar { height: auto; flex-wrap: wrap; gap: 4px 10px; padding: 10px 12px 6px; }
   .brand { flex: 1; }
   .tabs-nav { order: 3; flex: 0 0 calc(100% + 24px); margin: 0 -12px; padding: 0 12px; mask-image: linear-gradient(to right, #000 85%, transparent); }
-  .tabs-nav .icon, .tabs-nav .n { display: none; }
   .tabs-nav a { padding: 6px 12px; font-size: 14px; }
-  .privacy-link { padding: 7px 6px; }
-  .privacy-link span { display: none; }
-  .more-menu summary { font-size: 0; padding: 7px 6px; }
-  .more-menu summary::after { content: "⋯"; font-size: 18px; }
   .topbar .btn.download { padding: 8px 14px; }
   .word-rows { grid-template-columns: minmax(0, 1fr) 56px 28px; }
   .word-row .was { display: none; }
@@ -544,8 +547,9 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 /* Voice */
 .tabs a.tab { text-decoration: none; }
 /* The keys sit on a dark deck like the pretend laptop's, so the stickers read the same */
-.voice-card { padding: 0; overflow: hidden; }
-.keyboard { display: grid; grid-template-columns: repeat(10, auto); justify-content: center; gap: 5px; padding: 18px 12px; background: linear-gradient(#45444d, #2a2930); font-size: min(15px, 2.6vw); }
+.voice-card { padding: 0; overflow: hidden; container-type: inline-size; }
+/* Sized from the card, not the window: ten keys of 2.25em plus 109px of gaps and padding always fit */
+.keyboard { display: grid; grid-template-columns: repeat(10, auto); justify-content: center; gap: 5px; padding: 18px 12px; background: linear-gradient(#45444d, #2a2930); font-size: min(15px, calc(4.4cqi - 5px)); }
 .vkey { position: relative; background: none; border: 0; padding: 2px; border-radius: 0.8em; cursor: pointer; font-size: inherit; transition: transform 0.1s; }
 .vkey:hover { transform: translateY(-1px); }
 .vkey.current { box-shadow: 0 0 0 3px #fff; }

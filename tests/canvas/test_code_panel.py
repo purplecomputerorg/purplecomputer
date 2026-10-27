@@ -389,6 +389,20 @@ def test_holding_space_never_opens_code(name):
     run(go())
 
 
+def test_holding_space_in_code_types_one_space():
+    from purple_tui.keyboard import ControlAction
+
+    async def go():
+        app, art = await _room("art")
+        art.open_code_panel()
+        await type_text(app, "red")
+        for is_repeat in (False, True, True):
+            await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True, is_repeat=is_repeat))
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
+        assert art.code_panel.field.value == "red "
+    run(go())
+
+
 def test_letting_go_of_a_shown_hold_leaves_a_hint_a_tap_does_not():
     from purple_tui.keyboard import ControlAction
 

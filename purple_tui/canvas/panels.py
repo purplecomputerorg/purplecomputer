@@ -374,7 +374,7 @@ class CodePanel:
                     self.note = (text, f"{LEFT} {RIGHT} pick a word to change")
             elif action.action == "backspace":
                 f.backspace()
-            elif action.action == "space":
+            elif action.action == "space" and not action.is_repeat:
                 f.insert(" ")
             elif action.action == "escape" and not action.is_repeat:
                 f.clear()

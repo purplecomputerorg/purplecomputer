@@ -1,5 +1,6 @@
 import { Recorder, decodeToClip, normalize, play, tidy, type Clip } from "../audio";
 import { roomLine } from "../roomvoice";
+import { speakable } from "../speakable";
 import { isQuiet } from "../state";
 import { filePicker, h } from "./dom";
 import { staysHere } from "./privacy";
@@ -52,6 +53,7 @@ export function recordButton(onClip: (clip: Clip) => void, say: (text: string) =
 // Purple's room voice reading words, kept as a clip like any recording.
 async function purpleSays(text: string, say: (text: string) => void): Promise<Clip | null> {
   say("Getting Purple's voice ready…");
+  if (!(await speakable(text))) return (say("Purple doesn't say some words. Try different ones."), null);
   const clip = await roomLine(text);
   say(clip ? "" : "Purple's voice didn't load. Try again in a moment.");
   return clip;

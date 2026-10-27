@@ -74,6 +74,8 @@ export interface LivePurple {
   key(char: string): Promise<Place>;
   // Where Purple is now, after keys it got straight from the browser.
   place(): Promise<Place>;
+  // The words as Purple would say them: its speech filter drops words it never says ("" when nothing's left).
+  filter(text: string): Promise<string>;
 }
 
 export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) => void): Promise<LivePurple> {
@@ -124,6 +126,7 @@ sys.path.insert(0, "${ROOT}")
     setup: (room) => place(`setup(**${arg(room)})`),
     key: (char) => place(`await key(${arg(char)})`),
     place: () => place("place()"),
+    filter: async (text) => String(await call(`__import__("purple_tui.speech_filter", fromlist=["_"]).filter_speech(${arg(text)})`)),
   };
   await live.load(null);
   return live;

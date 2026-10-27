@@ -8,6 +8,7 @@ import { decodeWav } from "@sdk/wav";
 import { decodeToClip, encodeWav, normalize, tidy, type Clip } from "./audio";
 import { loudLines } from "./knobs";
 import type { Kokoro } from "./roomvoice.worker";
+import { speakable } from "./speakable";
 import { draft, phraseFor, type RoomDraft } from "./state";
 
 const CACHE = "purple-room-voice-1";
@@ -60,7 +61,7 @@ function speak(text: string): Promise<Float32Array | null> {
 
 async function render(text: string): Promise<Clip | null> {
   const s = await spec();
-  if (!s) return null;
+  if (!s || !(text = await speakable(text))) return null;
   const cache = await caches.open(CACHE);
   const key = new URL(`room-voice/${encodeURIComponent(`${s.model}|${s.voice}|${s.speed}`)}/${encodeURIComponent(text)}`, base()).href;
   const hit = await cache.match(key);

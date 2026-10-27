@@ -66,6 +66,8 @@ class LiveScreen {
   private syncing = Promise.resolve();
   // Messages wait for the frame's page to be listening; until then the iframe holds about:blank.
   private hello!: () => void;
+  private filtering = new Map<number, (text: string) => void>();
+  private nextFilter = 0;
   private listening = new Promise<void>((resolve) => (this.hello = resolve));
 
   constructor() {
@@ -77,6 +79,20 @@ class LiveScreen {
     addEventListener(KEY_EVENT, () => (this.note.hidden = true));
     onRoomVoice(() => this.queueSync());
     this.queueSync();
+  }
+
+  // Words as Purple would say them, run through Purple's own speech filter. Nothing passes if Purple can't run.
+  filter(text: string): Promise<string> {
+    const id = ++this.nextFilter;
+    return new Promise((resolve) => {
+      this.filtering.set(id, resolve);
+      this.post({ type: "filter", id, text });
+    });
+  }
+
+  private filtered(id: number, text: string): void {
+    this.filtering.get(id)?.(text);
+    this.filtering.delete(id);
   }
 
   // A handwritten note on the screen saying what to do, until the next key.
@@ -169,7 +185,9 @@ class LiveScreen {
 
   private onMessage(m: FromFrame): void {
     if (m.type === "hello") this.hello();
-    if (m.type === "failed") this.last.id = "";  // the next pack goes whole, since this one may not have landed
+    if (m.type === "failed") this.last.id = "";
+    if (m.type === "failed") [...this.filtering.keys()].forEach((id) => this.filtered(id, ""));
+    if (m.type === "filtered") this.filtered(m.id, m.text);  // the next pack goes whole, since this one may not have landed
     if (m.type === "failed") { this.status.textContent = "Purple Computer couldn't start in this browser"; this.element.classList.add("failed"); console.warn("Purple failed:", m.text); }
     if (m.type === "restarting") this.busy(true);
     if (m.type === "loaded") { this.busy(false); this.updating.hidden = true; }

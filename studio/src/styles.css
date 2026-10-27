@@ -488,6 +488,10 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .mini .bubble { padding: 6px 10px; border-radius: 10px; background: var(--fill); color: var(--text); }
 .mini .sticker { font-size: 9px; }
 .mini .big { font-size: 20px; line-height: 1; }
+.mini .prompt { display: flex; align-items: center; gap: 5px; }
+.mini .prompt i { font-weight: 700; }
+.mini .field { display: flex; align-items: center; padding: 1px 5px; border: 1px solid #7a5aa6; border-radius: 4px; background: #362a54; }
+.mini .caret { width: 0.55em; height: 1.05em; margin-left: 1px; background: #d7e79c; }
 .mini .wave { width: 80%; color: #c39cf0; }
 .mini.colors { background: #10261a; color: #a8e0b5; }
 .mini.colors b { width: 80%; height: 45%; border: 1px solid #4f9a63; border-radius: 5px; background: #163322; }
@@ -559,11 +563,11 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .tile.bad .emoji-cell { border-color: #d77; }
 .knob-tiles { display: grid; gap: 6px; }
 .knob-tiles > .bad { color: #b44; margin: 0; }
+.knob-tiles > .linkbtn { justify-self: start; }
 .emoji-cell.empty { font: 600 13px var(--sans); color: var(--purple); border-style: dashed; border-color: var(--border); }
 .word-row .was { white-space: nowrap; overflow: hidden; }
 .word-row .means { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
 .word-row .means .ask { font-size: 12.5px; color: var(--dim); line-height: 1.6; }
-.knob-tiles > .linkbtn { justify-self: start; }
 .word-row .means kbd, .word-example kbd { font: 12px var(--mono); color: var(--purple); background: var(--card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
 .word-row .means input { font-size: 14px; padding: 8px 12px; border-radius: 10px; }
 .remove { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; border-radius: 8px; height: 28px; }

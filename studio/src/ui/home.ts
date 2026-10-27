@@ -1,6 +1,6 @@
 // The home page: a card per section, each showing on a small Purple screen an idea for what to make
 // there. Purple only ever appears inside a screen; the paper around it is Studio.
-import { CELL_ASPECT } from "@sdk/purple/art";
+import { CELL_ASPECT, KEY_COLORS } from "@sdk/purple/art";
 import { EXAMPLES, examplePicture } from "../photo";
 import { countOf, hasWork, onChange, pieces, tryingPieces, type Count } from "../state";
 import { h } from "./dom";
@@ -24,7 +24,18 @@ const svg = (viewBox: string, inner: string, cls: string) => {
   return el;
 };
 
-// The dog from Pictures, in Purple's own cells.
+// Glasses a kid painted on the dog with Art's red and blue keys, ringing its eyes.
+const GLASSES = [
+  "",
+  "...........rrr......bbb",
+  "........rrr...r....b...bbb",
+  "..........r...rrrbbb...b",
+  "..........r...r....b...b",
+  "...........rrr......bbb",
+];
+const INK: Record<string, string> = { r: KEY_COLORS.y, b: KEY_COLORS.b };
+
+// The dog from Pictures, in Purple's own cells, after a kid has painted on it.
 function dogCells(): HTMLCanvasElement {
   const canvas = h("canvas");
   void examplePicture(EXAMPLES[0]).then(({ cells }) => {
@@ -32,7 +43,7 @@ function dogCells(): HTMLCanvasElement {
     Object.assign(canvas, { width: cols, height: rows });
     canvas.style.aspectRatio = String(cols / (rows * CELL_ASPECT));
     const ctx = canvas.getContext("2d")!;
-    cells.forEach((row, y) => row.forEach((color, x) => { ctx.fillStyle = color; ctx.fillRect(x, y, 1, 1); }));
+    cells.forEach((row, y) => row.forEach((color, x) => { ctx.fillStyle = INK[GLASSES[y]?.[x]] ?? color; ctx.fillRect(x, y, 1, 1); }));
   });
   return canvas;
 }
@@ -49,7 +60,7 @@ const TILES: Record<string, string> = { T: "🌳", "*": "⭐", f: "🦊", "@": "
 const SCREENS: Record<string, () => Node[]> = {
   pictures: () => [dogCells()],
   voice: () => [h("span", { class: "bubble" }, "“Hi sweetie, it's Grandma!”"), sticker("g")],
-  words: () => [h("span", {}, h("i", {}, "> "), "biscuit"), h("span", { class: "big" }, "🐶"), h("i", {}, "Biscuit is our dog!")],
+  words: () => [h("span", { class: "prompt" }, h("i", {}, "Type →"), h("span", { class: "field" }, "biscuit", h("span", { class: "caret" }))), h("span", { class: "big" }, "🐶"), h("i", {}, "Biscuit is our dog!")],
   instruments: () => [svg("0 0 160 30", WAVE, "wave"), h("span", {}, "bzzz bzz bzzzz")],
   colors: () => [h("span", {}, "My Purple Computer"), h("b", {})],
   rooms: () => [h("div", { class: "map" }, ...WORLD.flatMap((row, y) => [...row].map((c, x) =>

@@ -685,6 +685,8 @@ class PurpleApp:
         if not result:
             return
         if "room" in result:
+            if here := self.family_room:
+                here.close()
             self.action_switch_room(result["room"])
         elif "family" in result:
             self.open_family_room(result["family"])
@@ -707,13 +709,23 @@ class PurpleApp:
             from .color_wheel import open_on
             open_on(self.room)
 
+    @property
+    def family_room(self):
+        """The family room the kid is in: an overlay, so the room under it waits as it was."""
+        from .rooms.family_room import FamilyRoom
+        return next((o for o in self._overlays if isinstance(o, FamilyRoom)), None)
+
     def open_family_room(self, name: str):
         from ..content import get_content
         from .rooms.family_room import FamilyRoom
+        here = self.family_room
         room = next((r for r in get_content().rooms if r.name == name), None)
-        if room is not None:
-            self._silence_music()
-            self.push(FamilyRoom(self, room))
+        if room is None or (here and here.room.name == name):
+            return
+        if here:
+            here.close()
+        self._silence_music()
+        self.push(FamilyRoom(self, room))
 
     def _check_pack_arrivals(self):
         from .. import pack_arrivals
@@ -1791,8 +1803,9 @@ class PurpleApp:
         px, parts = self._status_layout(frame, left, right, tabs)
         g.draw_text(left, px, frame.x, y, "mono", P.DIM, anchor="midleft")
         esc_pill = draw_keycap(g, f"Esc {ICON_MENU}", px, parts["esc"].x, y)
+        here = self.family_room or self.active_room
         for rid, label, r in parts["tabs"]:
-            draw_label(g, label, px, r.centerx, y, P.MUTED, anchor="center", on=rid == self.active_room)
+            draw_label(g, label, px, r.centerx, y, P.MUTED, anchor="center", on=rid == here)
         h = g.markup_size(right, px, "mono")[1]
         g.draw_markup(right, px, parts["right"].x, y - h // 2, "mono", P.DIM)
         return esc_pill
@@ -1803,6 +1816,8 @@ class PurpleApp:
         pill and room tabs fit the frame side by side."""
         g = self.g
         names = [(rid, f"{self.rooms[rid].icon} {self.rooms[rid].label}") for rid in self.kid_rooms] if tabs else []
+        if tabs and (family := self.family_room):
+            names.append((family, family.tab))
         reserve = self._legend_width() if self._legend_visible and not self._code_panel_active else 0
 
         def widths(px):

@@ -136,13 +136,17 @@ class RoomPicker(Overlay):
     def __init__(self, app):
         super().__init__(app)
         self.options = [app.rooms[r] for r in app.kid_rooms]
-        self.row = ROWS
-        self.col = app.kid_rooms.index(app.active_room)
-        code = app.room.has_code_panel and (app._code_panel_active or app._code_panel_enabled)
-        self.tools = (["code"] if code else []) + (["colors"] if color_wheel.can_open(app.room) else []) \
-            + ["time_travel", "save", "open"] + (["print"] if self._printable() else []) + ["clear"]
         self.family = family_rooms()
-        self.rows = [VOLUME, ROWS] + ([FAMILY] if self.family else []) + [HERE]
+        here = app.family_room
+        names = [r.name for r in self.family]
+        if here and here.room.name in names:
+            self.row, self.col = FAMILY, names.index(here.room.name)
+        else:
+            self.row, self.col = ROWS, app.kid_rooms.index(app.active_room)
+        code = app.room.has_code_panel and (app._code_panel_active or app._code_panel_enabled)
+        self.tools = [] if here else (["code"] if code else []) + (["colors"] if color_wheel.can_open(app.room) else []) \
+            + ["time_travel", "save", "open"] + (["print"] if self._printable() else []) + ["clear"]
+        self.rows = [VOLUME, ROWS] + ([FAMILY] if self.family else []) + ([HERE] if self.tools else [])
         self.inner_w = max(row_width(*self._widths(r)) for r in (ROWS, FAMILY))
         self.inner_w = max(self.inner_w, row_width([CODE_W] + [TOOL_CARD[0]] * (MAX_TOOLS - 1), TOOL_CARD[1]))
 
@@ -258,8 +262,9 @@ class RoomPicker(Overlay):
         section_h = g.line_height(em(0.95), "mono-bold")
         arrows_h = arrow_keys_size(g, em(0.9))[1]
         family_h = em(1.2) + em(PILL_H) if self.family else 0
-        box = pygame.Rect(0, 0, em(self.inner_w) + 2 * pad, pad + head_h + em(1.5) + em(CARD_H) + family_h + em(1.6)
-                          + section_h + em(1.0) + em(TOOL_H) + em(1.6) + arrows_h + pad)
+        tools_h = em(1.6) + section_h + em(1.0) + em(TOOL_H) if self.tools else 0
+        box = pygame.Rect(0, 0, em(self.inner_w) + 2 * pad, pad + head_h + em(1.5) + em(CARD_H) + family_h
+                          + tools_h + em(1.6) + arrows_h + pad)
         box.center = (g.w // 2, g.h // 2)
         g.rect(P.SURFACE, box, radius=em(1.0))
         g.rect(P.LINE, box, width=1, radius=em(1.0))
@@ -280,11 +285,12 @@ class RoomPicker(Overlay):
                 draw_pill(g, r, [(ICON_FAMILY, em(1.1), "nerd", None), (short_title(room.title), em(0.95), "mono-bold", None),
                                  (FAMILY_KEYS[col], em(0.85), "mono", P.DIM)], on)
             y += em(PILL_H)
-        y += em(1.6)
-        here = self.app.rooms[self.app.active_room]
-        draw_section(g, here.icon, f"In {here.label}", box.x + pad, box.right - pad, y + section_h // 2)
-        y += section_h + em(1.0)
-        self._card_row(g, HERE, [self._tool(t) for t in self.tools], box.x + pad, y, TOOL_H)
+        if self.tools:
+            y += em(1.6)
+            here = self.app.rooms[self.app.active_room]
+            draw_section(g, here.icon, f"In {here.label}", box.x + pad, box.right - pad, y + section_h // 2)
+            y += section_h + em(1.0)
+            self._card_row(g, HERE, [self._tool(t) for t in self.tools], box.x + pad, y, TOOL_H)
         self._draw_footer(g, box.centerx, box.bottom - pad - arrows_h // 4)
 
     def _card_row(self, g, row, cells, x0, y, h):

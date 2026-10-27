@@ -1,8 +1,8 @@
 """Family rooms: a pack's rooms/<name>.py runs in its own process, answers each
 event with one reply, and Purple draws the scene it sends; a stuck, broken, or
 greedy room gets the "needs fixing" card instead of taking Purple down; no
-scene can flash more than three times a second; Esc always leaves; the Esc
-menu lists only the rooms a parent turned on."""
+scene can flash more than three times a second; Esc opens the room picker, as
+in any room; the Esc menu lists only the rooms a parent turned on."""
 
 import asyncio
 import json
@@ -17,7 +17,7 @@ import pytest
 from purple_tui import content as content_mod
 from purple_tui import settings
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.room_picker import FAMILY, RoomPicker
+from purple_tui.canvas.room_picker import FAMILY, HERE, RoomPicker
 from purple_tui.canvas import theme
 from purple_tui.canvas.rooms import family_room
 from purple_tui.canvas.rooms.family_room import FamilyRoom
@@ -117,8 +117,37 @@ def test_snake_moves_on_its_timer_and_turns_with_arrows(pack):
         await press(app, "down")
         await until(lambda: next(iter(cells(room)))[1] >= 7)
         assert room.fault is None
-        await press(app, "escape")
+        room.close()
         assert app.top is None and room._guest is None
+    run(go())
+
+
+def test_esc_picks_a_room_like_any_room(pack):
+    for name in ("snake", "worm"):
+        r = pack(name, SNAKE)
+        settings.set_room_on(r.key, r.digest)
+
+    async def go():
+        app = make_app()
+        app.action_switch_room("art")
+        room = _open(app, "worm")
+        app._draw()
+        assert room.tab in [t for _, t, _ in app._status_layout(app._frame_rect(app._viewport_rect()), "", "")[1]["tabs"]]
+        await press(app, "escape")
+        picker = app.top
+        assert isinstance(picker, RoomPicker) and (picker.row, picker.col) == (FAMILY, 1) and HERE not in picker.rows
+        app._draw()
+        await press(app, "escape")
+        assert app.top is room
+        await press(app, "escape")
+        await press(app, "7")
+        assert app.top is room and room._guest is not None
+        await press(app, "escape")
+        await press(app, "6")
+        assert app.top.room.name == "snake" and room._guest is None
+        await press(app, "escape")
+        await press(app, "2")
+        assert app.top is None and app.active_room == app.kid_rooms[1]
     run(go())
 
 
@@ -134,7 +163,9 @@ def test_esc_that_closes_the_parent_menu_leaves_the_room_open(pack):
         await press(app, "escape")
         assert app.top is room
         await press(app, "escape")
-        assert app.top is None
+        assert isinstance(app.top, RoomPicker)
+        app.top.close()
+        room.close()
     run(go())
 
 
@@ -165,7 +196,9 @@ def test_a_room_that_never_answers_gets_the_fixing_card(pack, monkeypatch):
         assert "too long" in room.fault and room._guest is None
         app._draw()
         await press(app, "escape")
-        assert app.top is None
+        assert isinstance(app.top, RoomPicker)
+        app.top.close()
+        room.close()
     run(go())
 
 

@@ -100,7 +100,6 @@ def test_the_familys_rooms_wait_in_the_esc_menu(live, tmp_path, monkeypatch):
         live.setup("play", family=family)
         assert type(app.top).__name__ == "FamilyRoom" and app.top.room.path.read_text() == family["source"]
         await live.key("escape")
-        await live.key("escape")
         assert [r.name for r in app.top.family] == ["farm", "zoo", "sea"]
         assert not live.install(ID, [text("content/emoji.json", {"zorb": "🦑"})], fresh=False)
     run(go())

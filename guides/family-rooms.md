@@ -51,7 +51,7 @@ The worry is a room that hangs, breaks the laptop, gets around the parent's sett
 - **A time limit per event.** If a reply doesn't come within a few seconds, Purple ends the room and shows a calm "this room needs fixing" card. So does an `error`, a reply over 256 KB or with more than 1000 shapes, anything that isn't a reply, or a reply nobody asked for.
 - **No flashing.** After drawing a scene, Purple shrinks it to 16 by 8 tiles; a scene that changes the brightness of a quarter of them shows at most three times a second, and in between the newest scene waits. Small changes are never held back. This is on the drawn result, so no combination of shapes gets around it.
 - **Purple draws and plays.** Text goes through `Gfx`, so ALL CAPS and the emoji fallbacks apply; sound goes through Purple's volume and speech through its speech filter. Ticks stop while a menu covers the room, after three minutes without a key, and while the screen sleeps.
-- **Esc always leaves.** The room never sees it.
+- **Esc always opens the room picker,** as in any room. The room never sees it.
 - **Packs are checked on install.** `pack_manager.py` refuses paths that leave the pack, links, and code anywhere but `rooms/<name>.py` and `rooms/purple.py`. Those are source text that only ever run as above. A room draws and plays only its own pack's `images/` and `sounds/`, which Purple reads; the room never sees a file.
 
 ## Performance

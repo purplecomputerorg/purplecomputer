@@ -4,7 +4,7 @@ at a time (start, key, tick) and the room answers each with one reply: the
 whole scene as shapes, sounds, when to tick next, and what to remember. All
 the room ideas (text, the grid, ask, timers) live in the guest library,
 roomkit/purple.py, which the pack carries, so this side never needs to grow.
-It opens over the current room, so Esc lands the kid back where they were.
+It opens over the built-in room, which waits as it was; Esc opens the room picker, as in any room.
 Protocol and safety: guides/family-rooms.md."""
 
 import json
@@ -230,6 +230,11 @@ class FamilyRoom(Overlay):
         self._busy, self._queue = True, []
         self._held: set = set()      # keys the room was told went down and not yet up
         self._t0, self._paused, self._paused_at = time.monotonic(), 0.0, None
+
+    @property
+    def tab(self) -> str:
+        from ..room_picker import short_title
+        return f"{ICON_FAMILY} {short_title(self.room.title)}"
 
     # ---------------------------------------------------------------- process
     def on_open(self):
@@ -539,7 +544,7 @@ class FamilyRoom(Overlay):
     async def handle(self, action):
         if isinstance(action, ControlAction) and action.action == "escape":
             if not action.is_down and self.app._escape_pressed_on is self:
-                self.close()  # on release, so a hold still reaches the parent menu; not a press that closed one
+                self.app._show_room_picker()  # on release, so a hold still reaches the parent menu; not a press that closed one
             return
         if isinstance(action, ControlAction) and not action.is_down:
             return self.released(action.action)
@@ -590,12 +595,12 @@ class FamilyRoom(Overlay):
             px = int(vp.h * 0.05)
             g.draw_text("Resting. Press a key to keep going", px, vp.centerx, vp.bottom - px * 2.2, "mono", P.MUTED,
                         anchor="midtop", bg=P.SURFACE, pad=px // 3)
-        app._draw_status(frame, right="Esc leaves", tabs=False)
+        app._draw_status(frame, right="")
 
     def _draw_fault(self, g, vp):
         px = int(vp.h * 0.06)
         g.draw_text("This room needs fixing", int(px * 1.4), vp.centerx, vp.centery - px * 2, "mono-bold", P.TEXT, anchor="center")
-        g.draw_text("A grown-up can fix it in Purple Studio.  Esc goes back.", px, vp.centerx, vp.centery,
+        g.draw_text("A grown-up can fix it in Purple Studio.  Esc picks a room.", px, vp.centerx, vp.centery,
                     "sans", P.MUTED, anchor="center")
         small, width = int(px * 0.7), int(vp.w * 0.8)
         x, y = vp.centerx - width // 2, vp.centery + px * 1.4

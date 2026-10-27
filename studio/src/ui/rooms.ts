@@ -1,3 +1,4 @@
+import { purpleEmoji } from "./icons";
 import { ROOM_NAME, roomTitle } from "@sdk/pack";
 import { BLANK_ROOM, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
 import { readKnobs, writeKnobs } from "../knobs";
@@ -62,14 +63,14 @@ function list(): View {
       "section",
       {},
       h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Your kid finds it next to Purple's rooms."),
-      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: h("span", { class: "pick-icon" }, iconOf(r)), rename: (t) => rename(r, t) }), drop),
-      h("h3", {}, "Start from one of these"),
+      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: purpleEmoji(iconOf(r), "pick-icon"), rename: (t) => rename(r, t) }), drop),
+      choice({ icon: "✏️", label: "Write your own in Python", about: "A blank room to write yourself, or with an AI helper." }, () => tryRoom("my-room", null), "pick featured write-own"),
+      h("h3", {}, "Or start from one of these"),
       h("div", { class: "cards" },
         ...[
           ...(Object.keys(TEMPLATES) as TemplateDraft["kind"][]).map((kind) => ({ ...TEMPLATES[kind], go: () => tryRoom(TEMPLATES[kind].name, template(kind)) })),
           ...EXAMPLES.map((e) => ({ ...e, go: () => tryRoom(e.name, null, e.source) })),
-        ].sort((a, b) => ORDER.indexOf(a.name) - ORDER.indexOf(b.name)).map((s) => choice(s, s.go)),
-        choice({ icon: "✏️", label: "Write it in Python", about: "A blank room to write yourself, or with an AI helper." }, () => tryRoom("my-room", null), "pick featured")),
+        ].sort((a, b) => ORDER.indexOf(a.name) - ORDER.indexOf(b.name)).map((s) => choice(s, s.go))),
       h("p", { class: "dim" }, "Made a Purple Pack already? ", openPackButton("Open it here"), " to try its rooms and change them."),
       roomFilesBox(),
     ),
@@ -80,7 +81,7 @@ function list(): View {
 const ORDER = ["story", "explore", "memory", "beats", "garden", "picture-quiz", "picture-keyboard", "snake"];
 
 const choice = (s: { icon: string; label: string; about: string }, go: () => void, cls = "pick") =>
-  h("button", { class: cls, onclick: go }, h("span", { class: "pick-icon" }, s.icon),
+  h("button", { class: cls, onclick: go }, purpleEmoji(s.icon, "pick-icon"),
     h("b", {}, s.label), h("span", {}, s.about));
 
 function problemBox(): { element: HTMLElement; show(p: RoomProblem | null): void } {

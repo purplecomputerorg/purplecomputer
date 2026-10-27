@@ -53,7 +53,9 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .tabs-nav a { display: flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; text-decoration: none; color: var(--text); font-size: 14px; font-weight: 500; white-space: nowrap; }
 .tabs-nav a:hover { background: var(--fill-hover); }
 .tabs-nav a[aria-current="page"] { background: var(--fill); color: var(--purple); }
-.tabs-nav .icon { font-size: 15px; }
+.tabs-nav .icon { width: 20px; height: 20px; }
+/* A white edge like the purple sticker sheet's, so each icon reads as a sticker */
+.purple-emoji { filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff) drop-shadow(0 1px 2px rgba(53, 42, 74, 0.25)); }
 .tabs-nav .n { font-size: 11px; font-weight: 700; color: #fff; background: var(--purple); border-radius: 999px; padding: 0 6px; }
 .privacy-link { flex-shrink: 0; font-size: 14px; color: var(--dim); text-decoration: none; padding: 7px 10px; border-radius: 999px; }
 .privacy-link:hover, .privacy-link[aria-current="page"] { background: var(--fill); color: var(--purple); }
@@ -462,13 +464,52 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .playable-hint strong { font-size: 20px; }
 
 /* Pick cards: the welcome page, the ways to start a room, and sounds to try */
+/* Home: paper cards taped to the page, each holding a small Purple screen */
+.home .stroke { white-space: nowrap; padding-bottom: 0.08em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 24' preserveAspectRatio='none'%3E%3Cpath d='M4 16 C 60 6, 140 4, 296 10' stroke='%239b59d0' stroke-width='9' stroke-linecap='round' fill='none' opacity='0.5'/%3E%3C/svg%3E") 0 100% / 100% 0.36em no-repeat; }
+.home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 16px; margin: 30px 0 36px; }
+.home-card { --tilt: -1deg; position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 14px; background: var(--card); border-radius: 6px; box-shadow: 0 2px 0 #ece5f3, 0 10px 22px rgba(92, 45, 145, 0.09); color: inherit; text-decoration: none; transform: rotate(var(--tilt)); transition: transform 0.15s, box-shadow 0.15s; }
+.home-card:nth-child(3n + 2) { --tilt: 1deg; }
+.home-card:nth-child(3n) { --tilt: -0.5deg; }
+.home-card:hover { color: inherit; transform: none; box-shadow: 0 2px 0 #ece5f3, 0 16px 30px rgba(92, 45, 145, 0.16); }
+/* Each card's tape a little different, as if torn and stuck by hand */
+.home-card::before { content: ""; position: absolute; top: -9px; left: calc(50% + var(--tape-x, 0px)); width: var(--tape-w, 70px); height: 20px; translate: -50% 0; background: rgba(196, 174, 224, 0.55); transform: rotate(var(--tape-r, -3deg)); }
+.home-card:nth-child(6n + 2) { --tape-w: 62px; --tape-r: 2deg; --tape-x: 8px; }
+.home-card:nth-child(6n + 3) { --tape-w: 76px; --tape-r: -1.5deg; --tape-x: -10px; }
+.home-card:nth-child(6n + 4) { --tape-w: 66px; --tape-r: 4deg; --tape-x: 4px; }
+.home-card:nth-child(6n + 5) { --tape-w: 72px; --tape-r: -4.5deg; --tape-x: -6px; }
+.home-card:nth-child(6n) { --tape-w: 58px; --tape-r: 1deg; --tape-x: 12px; }
+.home-card b .purple-emoji { width: 26px; height: 26px; }
+.home-card .bezel { margin-bottom: 8px; padding: 5px; border-radius: 10px; background: linear-gradient(#34333b, #1f1e24); }
+.home-card b { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-size: 16px; }
+.home-card > span:last-child { font-size: 13px; color: var(--dim); }
+.mini { aspect-ratio: 16 / 10; border-radius: 4px; background: var(--tui-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; overflow: hidden; font: 10px/1.3 var(--mono); color: #d8cbef; text-align: center; }
+.mini i { font-style: normal; color: #c39cf0; }
+.mini.pictures canvas { height: 100%; width: auto; max-width: 100%; image-rendering: pixelated; }
+.mini .bubble { padding: 6px 10px; border-radius: 10px; background: var(--fill); color: var(--text); }
+.mini .sticker { font-size: 9px; }
+.mini .big { font-size: 20px; line-height: 1; }
+.mini .wave { width: 80%; color: #c39cf0; }
+.mini.colors { background: #10261a; color: #a8e0b5; }
+.mini.colors b { width: 80%; height: 45%; border: 1px solid #4f9a63; border-radius: 5px; background: #163322; }
+.mini.rooms { padding: 5px; }
+.mini .map { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); width: 100%; border-radius: 3px; overflow: hidden; font-size: 8px; line-height: 1; }
+.mini .map span { aspect-ratio: 1; display: grid; place-items: center; background: #63b85f; }
+.mini .map .dark { background: #55a851; }
+.mini .map .water { background: #3f7fd0; }
+.pack-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 18px; margin-bottom: 18px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.pack-line p { flex: 1 1 260px; margin: 0; }
+.at-home .stage .caption { font: 700 22px/1.2 Caveat, cursive; color: var(--purple); transform: rotate(-1.5deg); }
+
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }
 h3 + .cards { margin-top: 0; }
 .pick { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: inherit; text-decoration: none; background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 16px 18px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pick.featured { border-color: var(--border); background: var(--fill); }
+.write-own { width: 100%; margin: 20px 0 8px; display: grid; grid-template-columns: auto 1fr; column-gap: 14px; align-items: center; }
+.write-own .pick-icon { grid-row: span 2; margin: 0; }
 .to-python { margin: 0 0 4px; color: var(--dim); }
 .pick:hover { border-color: var(--border); background: var(--fill); color: inherit; }
 .pick-icon { font-size: 28px; line-height: 1; margin-bottom: 8px; }
+img.pick-icon { width: 30px; height: 30px; }
 .pick-swatch { width: 28px; height: 8px; border-radius: 4px; margin-bottom: 10px; }
 .swatch-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 12px; font-size: 13px; color: var(--dim); }
 .swatch-legend > span { display: inline-flex; align-items: center; gap: 6px; }

@@ -1,0 +1,94 @@
+// The home page: a card per section, each showing on a small Purple screen an idea for what to make
+// there. Purple only ever appears inside a screen; the paper around it is Studio.
+import { CELL_ASPECT } from "@sdk/purple/art";
+import { EXAMPLES, examplePicture } from "../photo";
+import { countOf, hasWork, onChange, pieces, tryingPieces, type Count } from "../state";
+import { h } from "./dom";
+import { clearEverythingButton, openPackButton } from "./packfile";
+import { staysHere } from "./privacy";
+import { purpleEmoji } from "./icons";
+import { sticker } from "./stickers";
+import type { View } from "./view";
+
+export interface HomeSection { id: string; label: string; icon: string; blurb: string | (() => (string | Node)[]) }
+
+const RAINBOW = ["#5c2d91", "#c0392b", "#2f5bb5", "#a86f00", "#9b59d0", "#2e7d32"];
+export const rainbow = (text: string) => h("span", {}, ...[...text].map((c, i) => h("span", { style: `color:${RAINBOW[i % RAINBOW.length]}` }, c)));
+
+const svg = (viewBox: string, inner: string, cls: string) => {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  el.setAttribute("viewBox", viewBox);
+  el.setAttribute("class", cls);
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = inner;
+  return el;
+};
+
+// The dog from Pictures, in Purple's own cells.
+function dogCells(): HTMLCanvasElement {
+  const canvas = h("canvas");
+  void examplePicture(EXAMPLES[0]).then(({ cells }) => {
+    const [rows, cols] = [cells.length, cells[0].length];
+    Object.assign(canvas, { width: cols, height: rows });
+    canvas.style.aspectRatio = String(cols / (rows * CELL_ASPECT));
+    const ctx = canvas.getContext("2d")!;
+    cells.forEach((row, y) => row.forEach((color, x) => { ctx.fillStyle = color; ctx.fillRect(x, y, 1, 1); }));
+  });
+  return canvas;
+}
+
+const WAVE = '<path d="M0 15 Q 10 2 20 15 T 40 15 T 60 15 Q 70 26 80 15 T 100 15 Q 110 6 120 15 T 140 15 T 160 15" fill="none" stroke="currentColor" stroke-width="2.5"/>';
+
+// A corner of the Explore starter room's world.
+const WORLD = ["TTTTTTTTTTTT", "T.*..T..~~.T", "T....T.~~~*T", "T.f.....~~.T", "T....@.....T", "T.d...h..*.T", "TTTTTTTTTTTT"];
+const TILES: Record<string, string> = { T: "🌳", "*": "⭐", f: "🦊", "@": "🧒", h: "🏠", d: "🚪" };
+
+const SCREENS: Record<string, () => Node[]> = {
+  pictures: () => [dogCells()],
+  voice: () => [h("span", { class: "bubble" }, "“Hi sweetie, it's Grandma!”"), sticker("g")],
+  words: () => [h("span", {}, h("i", {}, "> "), "biscuit"), h("span", { class: "big" }, "🐶"), h("i", {}, "Biscuit is our dog!")],
+  instruments: () => [svg("0 0 160 30", WAVE, "wave"), h("span", {}, "bzzz bzz bzzzz")],
+  colors: () => [h("span", {}, "My Purple Computer"), h("b", {})],
+  rooms: () => [h("div", { class: "map" }, ...WORLD.flatMap((row, y) => [...row].map((c, x) =>
+    h("span", { class: c === "~" ? "water" : (x + y) % 2 ? "grass dark" : "grass" }, TILES[c] ?? ""))))],
+};
+
+const card = (s: HomeSection) =>
+  h("a", { class: "home-card", href: `#${s.id}` },
+    h("div", { class: "bezel" }, h("div", { class: `mini ${s.id}` }, ...SCREENS[s.id]())),
+    h("b", {}, purpleEmoji(s.icon), s.label),
+    h("span", {}, ...(typeof s.blurb === "string" ? [s.blurb] : s.blurb())));
+
+// What's in the family's Purple Pack, and what they've only tried, as the download page counts them.
+const packLine = h("div");
+const listed = (list: Count[]) => list.map(countOf).join(", ");
+function renderPack() {
+  const [list, trying] = [pieces(), tryingPieces()];
+  packLine.replaceChildren(...[
+    h("div", { class: "pack-line" },
+      h("p", {}, h("b", {}, "In your Purple Pack: "), list.length ? listed(list) : "nothing yet.",
+        trying.length ? h("span", { class: "dim" }, ` Tried, not added yet: ${listed(trying)}.`) : null),
+      list.length || trying.length ? h("a", { class: "btn small", href: "#pack" }, "Download") : null),
+    h("p", { class: "dim" }, "When you're done, download your Purple Pack and put it on Purple with a USB drive."),
+    h("p", { class: "dim" }, "Made one before? ", openPackButton("Open a Purple Pack"), " to keep going."),
+    hasWork() ? h("p", { class: "dim" }, "Want a fresh start? ", clearEverythingButton(), ".") : null,
+    staysHere("Everything happens in your web browser. Nothing you add is uploaded, and nothing is tracked."),
+  ].filter((c) => c !== null));
+}
+onChange(renderPack);
+
+export function homeView(sections: HomeSection[]): View {
+  renderPack();
+  return {
+    title: "",
+    editor: h("section", { class: "home" },
+      h("h1", {}, "Put your family ", h("span", { class: "stroke" }, "into Purple.")),
+      h("p", { class: "lead" }, "Add a few things that are yours: the dog, your voice, the words you use at home. Here are a few ideas. Click one to make your own."),
+      h("div", { class: "home-cards" }, ...sections.map(card)),
+      packLine,
+    ),
+    live: { room: "art" },
+    previewTitle: "This is Purple",
+    caption: "Everything around this screen is Studio, just for you. Type a letter to paint.",
+  };
+}

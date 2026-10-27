@@ -4,7 +4,7 @@ import logo from "../../assets/logo.svg";
 import { features, hasWork, onChange, pieces, replaceDraft } from "./state";
 import { recall, remember } from "./saved";
 import { loadShelf, shelveDraft } from "./shelf";
-import { clearEverythingButton, clearSectionButton, openPackButton } from "./ui/packfile";
+import { clearEverythingButton, clearSectionButton } from "./ui/packfile";
 import { clear, h } from "./ui/dom";
 import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
@@ -16,6 +16,8 @@ import { pythonView } from "./ui/python";
 import { EXAMPLES } from "./examples";
 import { addRoom } from "./pybridge";
 import { guideView } from "./ui/guide";
+import { homeView, rainbow, type HomeSection } from "./ui/home";
+import { purpleEmoji } from "./ui/icons";
 import { typingKeys } from "./keys";
 import type { Room } from "./live/boot";
 import { Laptop } from "./ui/laptop";
@@ -29,19 +31,19 @@ interface Section {
   id: string;
   label: string;
   icon: string;
-  blurb: string;
+  blurb: HomeSection["blurb"];
   // What "Clear all" names on this section's pages; colors has its own undo instead.
   clears?: string;
   view: (item: string | null) => View;
 }
 
 const SECTIONS: Section[] = [
-  { id: "pictures", clears: "pictures", label: "Pictures", icon: "🖼️", blurb: "A photo or picture for for them to open and paint on top of", view: picturesView },
-  { id: "voice", clears: "recordings", label: "Voice", icon: "🎙️", blurb: "Make any key say any sound or recorded voice", view: voiceView },
-  { id: "words", clears: "words", label: "Words", icon: "🐶", blurb: "Pick an emoji for any word, and say what it means", view: wordsView },
-  { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "Custom instruments for them to play", view: instrumentsView },
-  { id: "colors", label: "Colors", icon: "🎨", blurb: "Make Purple green, or change the colors the letters type", view: colorsView },
-  { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "A little game, story, or quiz", view: roomsView },
+  { id: "pictures", clears: "pictures", label: "Pictures", icon: "🖼️", blurb: "The dog, ready to paint on", view: picturesView },
+  { id: "voice", clears: "recordings", label: "Voice", icon: "🎙️", blurb: "Grandma, every time they press G", view: voiceView },
+  { id: "words", clears: "words", label: "Words", icon: "🐶", blurb: "The dog's name, with a picture", view: wordsView },
+  { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "A kazoo, a harp, or…", view: instrumentsView },
+  { id: "colors", label: "Colors", icon: "🎨", blurb: () => ["Purple, but green, or ", rainbow("any color")], view: colorsView },
+  { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "A world for them to walk around", view: roomsView },
 ].filter((s) => features.rooms || s.id !== "rooms");
 type Page = [id: string, label: string, view: (item: string | null) => View];
 const MORE = ([
@@ -52,28 +54,6 @@ const MORE = ([
   ["privacy", "Your privacy", privacyView],
 ] satisfies Page[]).filter(([id]) => features.rooms || id !== "guide");
 const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
-
-function welcomeView(): View {
-  return {
-    title: "",
-    editor: h(
-      "section",
-      {},
-      h("h1", {}, "Make Purple your own"),
-      h("p", { class: "lead" }, "For Purple Computer customers: Purple Studio lets you customize it for your family. Make changes here and transfer them to your Purple Computer with a USB drive."),
-      h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
-      h("div", { class: "cards" }, ...SECTIONS.map((s) =>
-        h("a", { class: "pick", href: `#${s.id}` }, h("span", { class: "pick-icon" }, s.icon), h("b", {}, s.label), h("span", {}, s.blurb)))),
-      h("p", { class: "dim" }, "When you're done, download your Purple Pack and put it on Purple with a USB drive."),
-      h("p", { class: "dim" }, "Made one before? ", openPackButton("Open your Purple Pack"), " to keep going."),
-      hasWork() ? h("p", { class: "dim" }, "Want a fresh start? ", clearEverythingButton(), ".") : null,
-      staysHere("Everything happens in your web browser. Nothing you add is uploaded, and nothing is tracked."),
-    ),
-    live: { room: "art" },
-    previewTitle: "This is Purple",
-    caption: "The real Purple, running in your browser. Type any letter to paint, and the arrows move.",
-  };
-}
 
 const app = document.getElementById("app")!;
 const top = h("header", { class: "topbar" });
@@ -135,7 +115,7 @@ function renderTop() {
   top.replaceChildren(
     h("a", { class: "brand", href: "#" }, h("img", { src: logo, alt: "" }), h("b", {}, "Purple ", h("span", {}, "Studio"))),
     h("nav", { class: "tabs-nav" }, ...SECTIONS.map((s) => h("a", { href: `#${s.id}`, "aria-current": sec === s.id ? "page" : null },
-      h("span", { class: "icon" }, s.icon), h("span", { class: "label" }, s.label), added(s.id) ? h("span", { class: "n" }, String(added(s.id))) : null))),
+      purpleEmoji(s.icon, "icon"), h("span", { class: "label" }, s.label), added(s.id) ? h("span", { class: "n" }, String(added(s.id))) : null))),
     h("a", { class: "privacy-link", href: "#privacy", "aria-current": sec === "privacy" ? "page" : null }, "🔒", h("span", {}, " Privacy")),
     h("details", { class: "more-menu" }, h("summary", {}, "More"),
       h("div", { onclick: (e: Event) => (e.target as HTMLElement).closest("details")?.removeAttribute("open") },
@@ -147,6 +127,7 @@ function renderTop() {
 function renderStage() {
   const v = current;
   body.classList.toggle("no-stage", !v?.live);
+  body.classList.toggle("at-home", !parseHash()[0]);
   live.element.hidden = !v?.live;
   stageTitle.textContent = v?.previewTitle ?? "What your kid sees";
   stageCaption.textContent = v?.caption ?? "";
@@ -160,7 +141,7 @@ function route() {
   current?.cleanup?.();
   const [sec, item] = parseHash();
   const section = SECTIONS.find((s) => s.id === sec);
-  const view = section ? section.view(item) : PAGES[sec] ? PAGES[sec](item) : welcomeView();
+  const view = section ? section.view(item) : PAGES[sec] ? PAGES[sec](item) : homeView(SECTIONS);
   current = view;
   clear(main);
   if (view.back) main.append(h("a", { class: "back", href: view.back[0] }, `← ${view.back[1]}`));

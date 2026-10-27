@@ -566,11 +566,10 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .screen-wrap.live { background: #1d1234; }
 .live-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
 .live-status { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; background: #1d1234; color: #e8daf0; font-family: var(--display); font-size: 17px; letter-spacing: -0.01em; text-align: center; transition: opacity 0.3s; }
-.live.ready .live-status { background: rgba(29, 18, 52, 0.88); backdrop-filter: blur(6px); }
 .live-status i { width: 34px; height: 34px; border-radius: 99px; border: 3px solid rgba(232, 218, 240, 0.18); border-top-color: #e8daf0; animation: spin 1s linear infinite; }
 .live.failed .live-status i { display: none; }
 .live:not(.ready) .zoom-toggle { display: none; }
-.live.ready:not(.busy) .live-status { opacity: 0; pointer-events: none; }
+.live.ready:not(.busy):not(.entering) .live-status { opacity: 0; pointer-events: none; }
 .live .playable-hint { border: 0; font: inherit; cursor: pointer; opacity: 0; pointer-events: none; }
 .playable-hint em { display: none; font-style: normal; font-weight: 600; font-size: 12px; }
 .tried .playable-hint { inset: auto auto 10px 50%; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); white-space: nowrap; }

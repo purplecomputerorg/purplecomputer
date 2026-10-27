@@ -85,10 +85,8 @@ function renderPhoneBar() {
 live.onMove = renderPhoneBar;
 const stageTitle = h("h3");
 const stageCaption = h("p", { class: "caption" });
-// Purple's voice runs espeak-ng, which is GPL: its source goes wherever the voice does.
-const voiceCredit = h("p", { class: "dim small" }, h("a", { href: "voice/espeak-ng/README.md", target: "_blank" }, "Voice license and source"));
 const stageStays = staysHere("This Purple runs in your browser. What you type into it stays on your device.");
-const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays, voiceCredit));
+const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays));
 const body = h("div", { class: "body" }, main, stage);
 app.append(top, body);
 
@@ -118,7 +116,9 @@ function renderTop() {
     h("a", { class: "privacy-link", href: "#privacy", "aria-current": sec === "privacy" ? "page" : null }, "🔒", h("span", {}, " Privacy")),
     h("details", { class: "more-menu" }, h("summary", {}, "More"),
       h("div", { onclick: (e: Event) => (e.target as HTMLElement).closest("details")?.removeAttribute("open") },
-        ...MORE.map(([id, label]) => h("a", { href: `#${id}`, "aria-current": sec === id ? "page" : null }, label)), clearEverythingButton("clear-all"))),
+        ...MORE.map(([id, label]) => h("a", { href: `#${id}`, "aria-current": sec === id ? "page" : null }, label)),
+        // Purple's voice runs espeak-ng, which is GPL: its source offer stays one click away on every page.
+        h("a", { href: "voice/espeak-ng/README.md", target: "_blank" }, "Open source licenses"), clearEverythingButton("clear-all"))),
     h("a", { class: `btn download${sec === "pack" ? " here" : ""}`, href: "#pack", onclick: (e: Event) => { if (current?.download) { e.preventDefault(); current.download(); } } }, "Download", n ? h("span", { class: "n" }, String(n)) : null),
   );
 }
@@ -130,7 +130,6 @@ function renderStage() {
   live.element.hidden = !v?.live;
   stageTitle.textContent = v?.previewTitle ?? "What your kid sees";
   stageCaption.textContent = v?.caption ?? "";
-  voiceCredit.hidden = !v?.live;
   if (v?.live) live.show(v.live);
   renderPhoneBar();
   tapTarget = v?.live ? (key) => live.key(key) : null;

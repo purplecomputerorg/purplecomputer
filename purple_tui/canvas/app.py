@@ -40,7 +40,7 @@ from ..timeline import RoomTimeline
 from ..audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
 from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
-                 draw_keycap, draw_label, draw_level)
+                 draw_key, draw_keycap, draw_label, draw_level)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
 PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
@@ -1730,11 +1730,11 @@ class PurpleApp:
         if saved:
             from .panels import ICON_STAR
             g.draw_text(f"{ICON_STAR} Saved", round(px * 0.85), r.right + px, y, "mono", P.MUTED, anchor="midleft")
-        right = self._battery_text()
-        if self._keyboard_state_machine.sticky_shift:
-            right = "⇧  " + right
+        right, x = self._battery_text(), frame.right
         if right:
-            g.draw_text(right, px, frame.right, y, "mono", P.MUTED, anchor="midright")
+            x = g.draw_text(right, px, x, y, "mono", P.MUTED, anchor="midright").x - px
+        if self._keyboard_state_machine.sticky_shift:
+            draw_key(g, "⇧ Shift", round(px * 0.85), x, y, anchor="midright", fill=P.PRIMARY, ink=P.ON_PRIMARY)
 
     def _legend_metrics(self) -> tuple:
         """(key size, key pitch, outline pad) of the sticker keyboard."""

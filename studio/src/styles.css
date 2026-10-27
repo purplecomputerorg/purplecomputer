@@ -86,6 +86,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .stage-inner { width: 100%; max-width: min(900px, calc((100vh - 250px) / 0.82)); }
 .stage h3 { margin: 0 0 12px; }
 .stage .caption { font-size: 13px; color: var(--dim); margin: 14px 0 0; text-align: center; }
+.stage .caption:empty { display: none; }
 .body.no-stage { grid-template-columns: minmax(0, 1fr); }
 .body.no-stage .stage { display: none; }
 .body.no-stage .main { max-width: 920px; width: 100%; margin: 0 auto; }
@@ -502,7 +503,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .mini .map .water { background: #3f7fd0; }
 .pack-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 18px; margin-bottom: 18px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
 .pack-line p { flex: 1 1 260px; margin: 0; }
-.at-home .stage .caption { font: 700 22px/1.2 Caveat, cursive; color: var(--purple); transform: rotate(-1.5deg); }
+.at-home .stage h3 { font: 700 30px/1.2 Caveat, cursive; text-transform: none; letter-spacing: 0; color: var(--purple); transform: rotate(2deg); transform-origin: left; margin: 24px 0 16px 8px; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }
 h3 + .cards { margin-top: 0; }

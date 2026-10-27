@@ -107,7 +107,6 @@ export function homeView(sections: HomeSection[]): View {
       packLine,
     ),
     live: { room: "art" },
-    previewTitle: "This is Purple",
-    caption: "Everything around this screen is Studio, just for you. Type a letter to paint.",
+    previewTitle: "This is Purple Computer",
   };
 }

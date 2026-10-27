@@ -4,17 +4,15 @@ from purple import *
 
 # Memory for one player or a few taking turns, laid out like the Music room: each card is a letter key.
 # Press a card's letter to turn it over. Find a pair and you go again.
+# Before the first card, press 1 to 6 for that many players, each finding pairs in their own color.
 
 # The pictures on the cards, up to 13: emoji, or your pictures, or both. Each one makes a pair, shuffled every game.
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
-# How many players, 1 to 6: one plays alone, more take turns, each finding pairs in their own color.
-PLAYERS = 1
 # The color under a card turned over but not matched yet.
 TURNED = "#7a5ac8"
 
 # Each player's mark, and the color under the pairs they find.
 players = [("🔴", "#e44444"), ("🔵", "#2e6ae1"), ("🟢", "#2e9e4f"), ("🟡", "#e0a020"), ("🟣", "#9b4dca"), ("🟠", "#ec7a1c")]
-players = players[:max(1, min(int(PLAYERS), len(players)))]
 rows = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
 cards = CARDS[:13] * 2
 random.shuffle(cards)
@@ -31,7 +29,7 @@ spots = {key: (left + x * 2, 4 + r * 2) for r, (keys, n) in enumerate(zip(rows, 
 faces = dict(zip(spots, cards))
 shown = {}        # cards matched for good, and the color of who found them
 up = []            # the one or two cards turned over this turn
-game = state(turn=0)
+game = state(turn=0, started=False, players=keep.get("players", 1))
 
 
 def draw():
@@ -43,18 +41,25 @@ def draw():
         else:
             grid.floor.erase(x, y)
             grid.set(x, y, key.upper(), size=2)
-    status(f"{players[game.turn][0]}'s turn" if len(players) > 1 else "")
+    if not game.started:
+        status(" ".join(mark for mark, _ in players[:game.players]) + "  Press 1 to 6 for players")
+    else:
+        status(f"{players[game.turn][0]}'s turn" if game.players > 1 else "")
 
 
 def turn_back():
     up.clear()
-    game.turn = (game.turn + 1) % len(players)
+    game.turn = (game.turn + 1) % game.players
     draw()
 
 
 def on_key(key):
+    if key.isdigit() and 0 < int(key) <= len(players) and not game.started:
+        game.players = keep["players"] = int(key)
+        play("G4")
     if key in faces and len(up) < 2 and key not in shown and key not in up:
         up.append(key)
+        game.started = True
         play("E5")
         if len(up) == 2 and faces[up[0]] == faces[up[1]]:
             shown.update(dict.fromkeys(up, players[game.turn][1]))

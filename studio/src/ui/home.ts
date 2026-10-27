@@ -37,7 +37,10 @@ function dogCells(): HTMLCanvasElement {
   return canvas;
 }
 
-const WAVE = '<path d="M0 15 Q 10 2 20 15 T 40 15 T 60 15 Q 70 26 80 15 T 100 15 Q 110 6 120 15 T 140 15 T 160 15" fill="none" stroke="currentColor" stroke-width="2.5"/>';
+// A recording of "bzzz bzz bzzzz": three buzzes, each swelling and fading, with quiet between.
+const BUZZES = [[4, 46], [62, 90], [106, 156]];
+const loudness = (x: number) => Math.max(0, ...BUZZES.map(([a, b]) => Math.sin((Math.PI * (x - a)) / (b - a)) * (x > a && x < b ? 1 : 0)));
+const WAVE = `<path d="M${Array.from({ length: 321 }, (_, i) => `${i / 2} ${(15 - 13 * loudness(i / 2) * Math.sin(i * 1.3)).toFixed(1)}`).join(" L")}" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>`;
 
 // A corner of the Explore starter room's world.
 const WORLD = ["TTTTTTTTTTTT", "T.*..T..~~.T", "T....T.~~~*T", "T.f.....~~.T", "T....@.....T", "T.d...h..*.T", "TTTTTTTTTTTT"];

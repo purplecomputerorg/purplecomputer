@@ -1,6 +1,7 @@
 """Play room: type a word, a sum, a color, and it comes to life. History
 scrolls up; the line you're typing shows a rotating set of ideas to try."""
 
+import functools
 import re
 
 import pygame
@@ -10,7 +11,7 @@ from ... import palette as P
 from ...constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ...content import get_content
 from .. import paper
-from ..gfx import is_emoji, mix, strip_markup
+from ..gfx import is_emoji, mix, rgb, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...palette import get_key_color
 from ...play_eval import SimpleEvaluator, _escape_markup, pair_speakables, parse_speech_trigger
@@ -74,13 +75,18 @@ def abacus_rows(n: int) -> list:
     """(place name, digit, color) per rod, the biggest place on top."""
     digits = str(n)
     places = range(len(digits) - 1, -1, -1)
-    return [(SimpleEvaluator.PLACE_NAMES[10 ** p], int(d), SimpleEvaluator.ABACUS_COLORS[p])
+    return [(f"{10 ** p:,}s", int(d), SimpleEvaluator.ABACUS_COLORS[p])
             for p, d in zip(places, digits)]
 
 
 def abacus_size(g, n: int) -> tuple:
     slot, bar = g.em(1.45), g.em(0.1)
-    return slot, bar, len(str(n)) * slot + 2 * bar
+    return slot, bar, len(str(n)) * slot + 2 * bar + (len(str(n)) - 1) // 3 * abacus_group_gap(g)
+
+
+def abacus_group_gap(g) -> int:
+    """Space between each three places, where a written number puts its comma."""
+    return g.em(0.5)
 
 
 def draw_abacus(g, n: int, bead: str, x: int, y: int, frame, ground):
@@ -88,32 +94,49 @@ def draw_abacus(g, n: int, bead: str, x: int, y: int, frame, ground):
     the place names before each rod and its digit after it."""
     rows = abacus_rows(n)
     slot, bar, h = abacus_size(g, n)
-    px, step = g.em(1.3), g.em(1.35)
-    label_w = max(g.measure(name, px, "mono-bold")[0] for name, _, _ in rows)
+    px, label_px, step = g.em(1.3), g.em(1.0), g.em(1.35)
+    label_w = max(g.measure(name, label_px, "mono-bold")[0] for name, _, _ in rows)
     box = pygame.Rect(x + label_w + g.em(0.9), y, ABACUS_SLOTS * step, h)
     rod_h, bead_h = max(2, g.em(0.12)), g.em(0.85)
+    top = len(rows) - 1
     for i, (name, digit, color) in enumerate(rows):
-        cy = y + bar + i * slot + slot // 2
-        g.draw_text(name, px, box.x - g.em(0.9), cy, "mono-bold", color, anchor="midright")
+        groups_above = top // 3 - (top - i) // 3
+        cy = y + bar + i * slot + slot // 2 + groups_above * abacus_group_gap(g)
+        g.draw_text(name, label_px, box.x - g.em(0.9), cy, "mono-bold", mix(color, ground, 0.3), anchor="midright")
         g.rect(mix(frame, ground, 0.35), (box.x, cy - rod_h // 2, box.w, rod_h))
         for k in range(9):
             at = k if k < digit else k + ABACUS_SLOTS - 9
             cell = pygame.Rect(box.x + at * step, cy - slot // 2, step, slot)
-            draw_bead(g, bead if k < digit else None, color, cell, bead_h, mix(frame, ground, 0.78))
+            draw_bead(g, bead if k < digit else None, color, cell, bead_h, ground, mix(frame, ground, 0.45))
         g.draw_text(str(digit), px, box.right + g.em(0.9), cy, "mono-bold", color, anchor="midleft")
 
 
-def draw_bead(g, bead, color, cell, h, idle):
-    """bead None is one not yet counted; a color block becomes a bead of its color."""
+def draw_bead(g, bead, color, cell, h, ground, edge):
+    """bead None is one not yet counted, a small hollow ring so it never reads
+    as a count; a color block becomes a bead of its color."""
     hexes = re.findall(r"\[on (#[0-9a-fA-F]{6})\]", bead or "")
     if bead and bead != "●" and strip_markup(bead).strip():
         w, bh = g.markup_size(bead, g.em(0.95), "mono-bold")
         g.draw_markup(bead, g.em(0.95), cell.centerx - w // 2, cell.centery - bh // 2, "mono-bold")
         return
+    if bead is None:
+        ring = bead_ring(rgb(ground), rgb(edge), h * 3 // 5, max(1, g.em(0.11)))
+        g.surface.blit(ring, ring.get_rect(center=cell.center))
+        return
     pill = pygame.Rect(0, 0, cell.w - g.em(0.4), h)
     pill.center = cell.center
-    fill = idle if bead is None else hexes[0] if hexes else color
-    g.rect(fill, pill, radius=h // 2)
+    g.rect(hexes[0] if hexes else color, pill, radius=h // 2)
+
+
+@functools.lru_cache(maxsize=4)
+def bead_ring(fill: tuple, edge: tuple, d: int, width: int) -> pygame.Surface:
+    """Drawn 4x and smoothed down so the small ring keeps a clean edge."""
+    s = 4
+    big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)
+    c = (d * s / 2, d * s / 2)
+    pygame.draw.circle(big, edge, c, c[0])
+    pygame.draw.circle(big, fill, c, c[0] - width * s)
+    return pygame.transform.smoothscale(big, (d, d))
 
 
 def speech_marks(text: str) -> list:

@@ -11,7 +11,7 @@ def test_big_counts_become_an_abacus_part_and_small_ones_stay_text():
 
 def test_rods_run_from_the_biggest_place_down():
     assert [(name, d) for name, d, _ in abacus_rows(1203)] == [
-        ("thousands", 1), ("hundreds", 2), ("tens", 0), ("ones", 3)]
+        ("1,000s", 1), ("100s", 2), ("10s", 0), ("1s", 3)]
 
 
 def test_abacus_answer_draws_and_paper_prints_it():

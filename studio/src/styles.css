@@ -428,6 +428,9 @@ input.mono-in { font-family: var(--mono); font-size: 13px; }
 .knob-rows:has(> .knob-entry) { grid-template-columns: minmax(0, 1fr); }
 /* A row of words (who says what) gives the words the room that's left, so they wrap inside the card */
 .knob-rows:has(> .form-row > :is(textarea, .spoken)) { grid-template-columns: max-content max-content minmax(0, 1fr) max-content; }
+/* A legend's rows are short, so they flow side by side across the card */
+.knob-rows:has(> .form-row > .legend-key) { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); column-gap: 16px; }
+.knob-rows:has(> .form-row > .legend-key) > .form-row { display: flex; }
 .x { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--dim); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 .x:hover { background: var(--fill); color: var(--purple-dark); }
 .tile { position: relative; }

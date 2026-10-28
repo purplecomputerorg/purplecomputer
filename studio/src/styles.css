@@ -84,7 +84,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 
 .body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); min-height: calc(100vh - 60px); }
 .main { padding: 28px 32px 64px; min-width: 0; }
-.stage { position: sticky; top: 60px; height: calc(100vh - 60px); display: flex; align-items: center; justify-content: center; padding: 20px 32px; background: radial-gradient(ellipse at 50% 40%, #f1ecf8, #faf8f5 70%); border-left: 1px solid var(--line); }
+.stage { position: sticky; top: 60px; height: calc(100vh - 60px); display: flex; align-items: flex-start; justify-content: center; padding: 20px 32px; overflow-y: auto; background: radial-gradient(ellipse at 50% 40%, #f1ecf8, #faf8f5 70%); border-left: 1px solid var(--line); }
 .stage-inner { width: 100%; max-width: min(900px, calc((100vh - 250px) / 0.82)); }
 .stage .caption { font-size: 13px; color: var(--dim); margin: 14px 0 0; text-align: center; }
 .stage .caption:empty { display: none; }
@@ -200,7 +200,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 /* A phone turned sideways: just the screen, as tall as the phone, with the rooms and keys beside it */
 @media (max-height: 500px) and (pointer: coarse) and (orientation: landscape) {
   .topbar { position: static; }
-  .stage { padding: 10px 12px; }
+  .stage { padding: 10px 12px; align-items: center; }
   .stage-inner { max-width: none; display: flex; align-items: center; justify-content: center; gap: 14px; }
   .stage h3, .stage .caption, .laptop-base, .sticker-callout { display: none; }
   .laptop { width: min(100%, calc((100svh - 60px - 20px) / 0.585)); flex-shrink: 1; }

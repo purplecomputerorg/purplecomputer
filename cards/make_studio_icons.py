@@ -14,7 +14,7 @@ CARDS = Path(__file__).parent
 OUT = CARDS.parent / "studio/src/icons"
 
 # Studio's sections, then its starter rooms.
-EMOJI = "🖼️ 🎙️ 🐶 🎹 🎨 🧩 🗺️ 📖 🃏 🌻 🥁 🐍 ✏️ 🧱 ❓".split()
+EMOJI = "🖼️ 🎙️ 🗨️ 🎹 🎨 🧩 🗺️ 📖 🃏 🌻 🥁 🐍 ✏️ 🧱 ❓".split()
 
 SHORT_HEX = re.compile(r"#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])\b")
 

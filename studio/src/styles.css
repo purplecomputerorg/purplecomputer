@@ -470,7 +470,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .home { container-type: inline-size; }
 /* Sized to the column so the headline never wraps: it is about 13em wide */
 .home h1 { font-size: min(38px, 7.2cqi); white-space: nowrap; }
-.home .stroke { padding-bottom: 0.08em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 24' preserveAspectRatio='none'%3E%3Cpath d='M4 16 C 60 6, 140 4, 296 10' stroke='%239b59d0' stroke-width='9' stroke-linecap='round' fill='none' opacity='0.5'/%3E%3C/svg%3E") 0 100% / 100% 0.36em no-repeat; }
+.home .stroke { padding-bottom: 0.2em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 24' preserveAspectRatio='none'%3E%3Cpath d='M4 16 C 60 6, 140 4, 296 10' stroke='%239b59d0' stroke-width='9' stroke-linecap='round' fill='none' opacity='0.5'/%3E%3C/svg%3E") 0 100% / 100% 0.36em no-repeat; }
 .home .serif { font-size: 22px; line-height: 1.35; margin: 16px 0 20px; max-width: 30em; text-wrap: balance; }
 .home-note { max-width: 40em; padding: 2px 0 2px 12px; border-left: 3px solid var(--border); color: var(--dim); font-size: 13.5px; line-height: 1.55; text-wrap: pretty; }
 .home-note b { color: var(--text); font-weight: 600; }

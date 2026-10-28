@@ -1657,9 +1657,9 @@ class PurpleApp:
     def _battery_text(self) -> str:
         from ..power_manager import get_power_manager
         pm = get_power_manager()
-        if not pm.battery_available:
-            return ""
-        status = pm.get_battery_status()
+        status = pm.get_battery_status() if pm.battery_available else None
+        if not status and os.environ.get("PURPLE_TEST_BATTERY") == "1":
+            status = (100, False)
         if not status:
             return ""
         pct, charging = status

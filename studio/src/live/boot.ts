@@ -97,7 +97,7 @@ export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) 
   log("Starting Purple…");
   await py.runPythonAsync(`
 import os, sys
-os.environ.update(PURPLE_NO_EVDEV="1", PURPLE_DEV_MODE="1", PYGAME_HIDE_SUPPORT_PROMPT="1",
+os.environ.update(PURPLE_NO_EVDEV="1", PURPLE_DEV_MODE="1", PURPLE_TEST_BATTERY="1", PYGAME_HIDE_SUPPORT_PROMPT="1",
                   PURPLE_EMOJI_FONT="${ROOT}/fonts/NotoColorEmoji.ttf")
 sys.path.insert(0, "${ROOT}")
 `);

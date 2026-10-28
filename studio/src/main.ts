@@ -83,7 +83,7 @@ function renderPhoneBar() {
   laptop.paint(page ? [...keys, "escape"] : keys);
 }
 live.onMove = renderPhoneBar;
-const stageTitle = h("h3");
+const stageTitle = h("h3", {}, "This little computer is a real Purple Computer for you to try");
 const stageCaption = h("p", { class: "caption" });
 const stageStays = staysHere("This Purple runs in your browser. What you type into it stays on your device.");
 const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays));
@@ -128,7 +128,6 @@ function renderStage() {
   body.classList.toggle("no-stage", !v?.live);
   body.classList.toggle("at-home", !parseHash()[0]);
   live.element.hidden = !v?.live;
-  stageTitle.textContent = v?.previewTitle ?? "What your kid sees";
   stageCaption.textContent = v?.caption ?? "";
   if (v?.live) live.show(v.live);
   renderPhoneBar();

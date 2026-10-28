@@ -86,7 +86,6 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .main { padding: 28px 32px 64px; min-width: 0; }
 .stage { position: sticky; top: 60px; height: calc(100vh - 60px); display: flex; align-items: center; justify-content: center; padding: 20px 32px; background: radial-gradient(ellipse at 50% 40%, #f1ecf8, #faf8f5 70%); border-left: 1px solid var(--line); }
 .stage-inner { width: 100%; max-width: min(900px, calc((100vh - 250px) / 0.82)); }
-.stage h3 { margin: 0 0 12px; }
 .stage .caption { font-size: 13px; color: var(--dim); margin: 14px 0 0; text-align: center; }
 .stage .caption:empty { display: none; }
 .body.no-stage { grid-template-columns: minmax(0, 1fr); }
@@ -524,7 +523,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .pack-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 18px; margin-bottom: 18px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
 .pack-line div { flex: 1 1 260px; }
 .pack-line p { margin: 0; }
-.at-home .stage h3 { font: 500 clamp(22px, 5.5vw, 30px)/1.15 Caveat, cursive; text-wrap: balance; text-transform: none; letter-spacing: 0; text-align: center; color: var(--purple); margin: min(24px, 3vw) 0 min(16px, 3vw); }
+.stage h3 { font: 500 clamp(22px, 5.5vw, 30px)/1.15 Caveat, cursive; text-wrap: balance; text-transform: none; letter-spacing: 0; text-align: center; color: var(--purple); margin: min(24px, 3vw) 0 min(16px, 3vw); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }
 h3 + .cards { margin-top: 0; }

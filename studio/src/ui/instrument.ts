@@ -60,7 +60,6 @@ function chooser(): View {
         h("button", { class: "btn secondary small", onclick: () => tryOut(`My ${BASES[b].label.toLowerCase()}`, b, {}) }, BASES[b].label))),
     ),
     live: { room: "music" },
-    previewTitle: "What your kid hears",
     caption: "Purple's Music room. Letter keys play notes, number keys play drums.",
   };
 }
@@ -122,7 +121,6 @@ function editor(inst: Instrument): View {
       h("div", { class: "card" }, h("p", { class: "dim small", style: "margin-top:0" }, "Type on your keyboard to play it. Moving a slider plays the last note again."), sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to a plain ${base.label}`))),
     ),
     live: { room: "music", instrument: inst.name },
-    previewTitle: "What your kid hears",
     caption: `Purple's Music room playing ${titleOf(inst)}. Moving a slider plays it in Purple Studio; Purple has the new sound a moment later.`,
     cleanup: () => { unlisten(); clearTimeout(replayTimer); },
   };

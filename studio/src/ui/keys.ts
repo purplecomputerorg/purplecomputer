@@ -66,7 +66,6 @@ export function keysView(): View {
     ),
     live: { room: "music", letters: true },
     keys: () => { const mine = Object.keys(draft.letters).slice(0, 5); return mine.length ? mine : [..."abcde"]; },
-    previewTitle: "What your kid hears",
     caption: "Purple's Music room in Say Letters. Keys you gave a sound play it.",
     cleanup: unlisten,
   };

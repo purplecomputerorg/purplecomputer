@@ -4,22 +4,15 @@ import { roomTitle } from "@sdk/pack";
 import { parseNote } from "@sdk/purple/sounds";
 import { encodeWav } from "../audio";
 import type { RoomFileKind } from "@sdk/pack";
-import { MAX_OTHERS, normalizeKey, type QuizChoice, type QuizData, type Sound, type SoundboardData, type TemplateDraft } from "../examples";
+import { MAX_OTHERS, type QuizChoice, type QuizData, type Sound, type SoundboardData, type TemplateDraft } from "../examples";
 import { draft } from "../state";
 import { addRowButton, h, removeButton } from "./dom";
 import { emojiCell } from "./emojipicker";
 import { voiceButtons } from "./record";
 import { addRoomData, dropUnusedSound, hearRoomSound } from "./roomfiles";
-import { textIn } from "./rulesform";
+import { pressKeyIn, textIn } from "./rulesform";
 
 const mine = (kind: RoomFileKind) => draft.roomFiles.filter((f) => f.kind === kind).map((f) => f.name);
-const checked = (el: HTMLInputElement, check: (v: string) => boolean) => {
-  const mark = () => el.classList.toggle("bad", !check(el.value));
-  el.addEventListener("input", mark);
-  mark();
-  return el;
-};
-
 interface Ctx { onEdit: () => void; say: (text: string) => void; rerender: () => void }
 
 // An emoji, or one of the family's pictures, from the same picker as the Knobs. blank: what an empty one
@@ -64,10 +57,10 @@ function soundboardForm(data: SoundboardData, c: Ctx): Node[] {
   const cells = (s: Sound & { emoji: string }, name: () => string, hint = "cow") =>
     [pictureIn(s, c, () => s.word, KEY), sayIn(s, c, hint, name), noteIn(s, c)];
   return [
-    h("p", { class: "dim small" }, "A key is a letter, a number, or space, enter, up, down, left, right. A key with no picture shows itself. Purple says the word, or press the microphone to say it yourself, and a note can play with it. Others is every key not in the list."),
+    h("p", { class: "dim small" }, "To pick a key, click its box and press the key: a letter, a number, Space, Enter, or an arrow. A key with no picture shows itself. Purple says the word, or press the microphone to say it yourself, and a note can play with it. Others is every key not in the list."),
     sheet("3.5em 52px minmax(8em, 1fr) auto 26px", ["Key", "Picture", "Says", "Note"],
       ...data.rows.map((r, i) => row(
-        checked(textIn(r.key, (v) => { r.key = v; c.onEdit(); }, { placeholder: "c", class: "inline key-in" }), (v) => !!normalizeKey(v)),
+        pressKeyIn(r.key, (k) => { r.key = k; c.onEdit(); }),
         ...cells(r, () => r.word || `key-${r.key}`), remove(data.rows, i, c))),
       add("Add a key", () => data.rows.push({ key: "", emoji: "", word: "", voice: "", note: "" }), c),
       h("div", { class: "sheet-row sheet-other" }, h("span", { class: "tag" }, "Others"), ...cells(data.other, () => data.other.word || "other-keys", "nothing"))),

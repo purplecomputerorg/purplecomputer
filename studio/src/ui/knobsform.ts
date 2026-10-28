@@ -9,7 +9,7 @@ import { addRowButton, field, h, removeButton } from "./dom";
 import { emojiCell, isEmoji, searchEmoji } from "./emojipicker";
 import { isMap, isWorld, legendFor, legendNames, lettersIn, mapPainter } from "./mappainter";
 import { recordButton } from "./record";
-import { drumIn, isDrum, select, textIn } from "./rulesform";
+import { drumIn, isDrum, pressKeyIn, select, textIn } from "./rulesform";
 
 type Dict = Extract<Lit, { t: "dict" }>;
 type Str = Extract<Lit, { t: "str" }>;
@@ -59,7 +59,9 @@ const long = (x: Lit) => x.t === "str" && x.v.length > 12 && !isDrum(x.v);
 const inline = (items: Lit[]) => emojiOnly(items) || (items.length <= 8 && items.every((x) => !nested(x) && !long(x)));
 const keyText = (k: Lit) => (k.t === "str" ? k.v : k.t === "num" ? String(k.v) : "");
 const fit = (s: string) => Math.min(LONG, Math.max(2, [...s].length + 1));
-const labelled = (label: string | undefined, el: HTMLElement) => (label ? field(label, el) : el);
+// Labels come from the room's `# Labels:` comment as written; the form shows them capitalized, like its other headings.
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const labelled = (label: string | undefined, el: HTMLElement) => (label ? field(sentence(label), el) : el);
 // The item just added: it gets focus once drawn, so the family can type over the copy.
 let fresh: Lit | null = null;
 const dictsIn = (v: Lit): Dict[] =>
@@ -190,7 +192,7 @@ const row = (...cells: (HTMLElement | null)[]) => h("div", { class: "form-row kn
 const width = (r: Element) => [...r.children].reduce((n, c) => n + (c.classList.contains("knob-inline") ? c.children.length : 1), 0);
 // heads: the columns' names, shown once above the rows instead of beside every field.
 function rows(items: HTMLElement[], add: HTMLElement | null, heads: string[] = []): HTMLElement {
-  const head = heads.some(Boolean) ? h("div", { class: "form-row col-heads" }, ...heads.map((t) => h("span", {}, t))) : null;
+  const head = heads.some(Boolean) ? h("div", { class: "form-row col-heads" }, ...heads.map((t) => h("span", {}, sentence(t ?? "")))) : null;
   const el = h("div", { class: "knob-rows" }, head, ...items, add);
   el.style.setProperty("--cols", String(Math.max(1, ...items.filter((r) => r.classList.contains("form-row")).map(width))));
   return el;
@@ -224,24 +226,31 @@ function list(items: Lit[], growable: boolean, ctx: Ctx, labels: string[]): HTML
   return rows(items.map((x, i) => row(item(x), drop(i))), add(), heads);
 }
 
-// A new entry's key: the next free number when keys are numbers, else the first label and a number.
+// A dict whose first label names a key, like "key" or "number key", is keyed by keys the kid presses.
+const KEYED = /\bkey\b/i;
+
+// A new entry's key: the next free number when keys are numbers, the next free letter when they're keys
+// the kid presses, else the first label and a number.
 function nextKey(d: Dict, like: Lit, noun = "new"): Lit {
   const taken = new Set(d.entries.map(([k]) => keyText(k)));
   const numbered = /^\d+$/.test(keyText(like));
+  const free = KEYED.test(noun) && !numbered && [..."abcdefghijklmnopqrstuvwxyz"].find((c) => !taken.has(c));
+  if (free) return { t: "str", v: free };
   for (let n = 1; ; n++) {
     const s = numbered ? String(n) : `${noun.replace(/\W+/g, "_")}${n}`;
     if (!taken.has(s)) return like.t === "num" ? { t: "num", v: n } : { t: "str", v: s };
   }
 }
 
-function keyIn(d: Dict, k: Lit, ctx: Ctx): HTMLElement {
+function keyIn(d: Dict, k: Lit, ctx: Ctx, pressed: boolean): HTMLElement {
   if (k.t !== "str") return scalar(k, { onEdit: ctx.onEdit });
   let was = k.v;
-  const el = textIn(k.v, (s) => {
+  const edit = (s: string) => {
     k.v = s;
     el.classList.toggle("bad", d.entries.filter(([o]) => keyText(o) === s).length > 1);
     ctx.onEdit();
-  }, { size: fit(k.v), class: "inline key-in" });
+  };
+  const el = pressed ? pressKeyIn(k.v, edit) : textIn(k.v, edit, { size: fit(k.v), class: "inline key-in" });
   if (ctx.pages.length && !ctx.links.has(d)) el.addEventListener("change", () => { ctx.relink(was, k.v); was = k.v; changed(ctx); });
   return el;
 }
@@ -287,7 +296,8 @@ function dict(d: Dict, ctx: Ctx, peers: Lit[], labels: string[]): HTMLElement {
     return key;
   };
   const drop = (i: number) => () => d.entries.splice(i, 1);
-  const key = (k: Lit) => labelled(labels[0], focusIfFresh(k, keyIn(d, k, ctx)));
+  const pressed = KEYED.test(labels[0] ?? "");
+  const key = (k: Lit) => labelled(labels[0], focusIfFresh(k, keyIn(d, k, ctx, pressed)));
   const value = (x: Lit) => (ctx.links.has(d) && x.t === "str" ? link(x, ctx) : editor(x, ctx, values));
   const fields = (x: Lit) => x.t === "tuple"
     ? x.items.map((y, j) => labelled(labels[j + 1], editor(y, ctx, values.map((p) => (p.t === "tuple" ? p.items[j] : p)).filter(Boolean))))
@@ -297,10 +307,10 @@ function dict(d: Dict, ctx: Ctx, peers: Lit[], labels: string[]): HTMLElement {
     ? h("div", { class: "knob-entry knob-item" }, remove(ctx, drop(i)), h("div", { class: "entry-fields" }, key(k), ...fields(x)))
     : row(legend ? h("span", { class: "legend-key", title: "How the Python writes this on the map" }, keyText(k))
       : things ? select(things, keyText(k), (l) => { (k as Str).v = l; changed(ctx); })
-      : focusIfFresh(k, keyIn(d, k, ctx)),
+      : focusIfFresh(k, keyIn(d, k, ctx, pressed)),
       h("span", { class: "dim" }, "→"), value(x), remove(ctx, drop(i)));
   const full = things && things.every(([l]) => d.entries.some(([k]) => keyText(k) === l));
-  return rows(d.entries.map(entry), template && !full ? addSlot(ctx, add) : null, entries ? [] : [labels[0], "", labels[1]]);
+  return rows(d.entries.map(entry), template && !full ? addSlot(ctx, add) : null, entries ? [] : [labels[0], "", ...labels.slice(1)]);
 }
 
 function linksOf(v: Lit): Pick<Ctx, "pages" | "links" | "relink"> {

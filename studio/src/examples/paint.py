@@ -14,6 +14,7 @@ PAINTS = {
     "k": ("#1a1a1a", "black"),
 }
 # Names for the colors the pot makes, said out loud: Purple says whichever one the pot is closest to.
+# Labels: name, color
 COLOR_NAMES = {
     "orange": "#ff7019",
     "green": "#50ac64",

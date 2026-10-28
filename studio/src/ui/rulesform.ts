@@ -7,6 +7,7 @@ import { ACTIONS, BACKGROUNDS, DRUMS, WHENS, type Action, type Rule, type Thing 
 import { draft } from "../state";
 import { h } from "./dom";
 import { hearRoomSound } from "./roomfiles";
+import { keyLabel } from "./stickers";
 
 type Options = [value: string, label: string][];
 
@@ -19,6 +20,23 @@ export function select(options: Options, value: string, onPick: (v: string) => v
 export function textIn(value: string, onText: (v: string) => void, attrs: Record<string, unknown> = {}): HTMLInputElement {
   const el = h("input", { type: "text", class: "inline", value, ...attrs });
   el.addEventListener("input", () => onText(el.value));
+  return el;
+}
+
+const PRESSED: Record<string, string> = { " ": "space", Enter: "enter", Backspace: "backspace", ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+const CAPS: Record<string, string> = { space: "Space", enter: "Enter", backspace: "Backspace", up: "↑", down: "↓", left: "←", right: "→" };
+const keyCap = (key: string) => CAPS[key] ?? keyLabel(key);
+
+// A key the family presses rather than types, shown as its keycap, so it's always one key and case never matters.
+// Typed characters come through input too, for phone keyboards that don't name their keys.
+export function pressKeyIn(value: string, onKey: (key: string) => void): HTMLInputElement {
+  const el = h("input", { type: "text", class: "inline key-in", size: 5, autocapitalize: "off", title: "Press a key: a letter, a number, Space, Enter, or an arrow" });
+  const show = (key: string) => { el.value = keyCap(key); el.classList.toggle("bad", !key); };
+  const press = (key: string) => { value = key; show(key); onKey(key); };
+  el.addEventListener("keydown", (e) => { if (PRESSED[e.key]) { e.preventDefault(); press(PRESSED[e.key]); } });
+  el.addEventListener("input", () => { const k = normalizeKey([...el.value].at(-1) ?? ""); if (k) press(k); else show(value); });
+  el.addEventListener("focus", () => el.select());
+  show(value);
   return el;
 }
 
@@ -86,7 +104,7 @@ export function rulesForm(rules: Rule[], onEdit: () => void): HTMLElement {
   const whenRow = (rule: Rule, i: number) => {
     const w = rule.when;
     const extra = w.kind === "key"
-      ? textIn(w.key, (v) => { const k = normalizeKey(v); if (k) { w.key = k; onEdit(); } }, { size: 6, title: "A letter, a number, or space, enter, up, down, left, right" })
+      ? pressKeyIn(w.key, (k) => { w.key = k; onEdit(); })
       : w.kind === "every" ? h("span", {}, numIn(w.seconds, 0.1, 60, (n) => { w.seconds = n; onEdit(); }), " seconds") : null;
     return h("div", { class: "rule-when" }, h("b", {}, "When"),
       select(Object.entries(WHENS).map(([k, v]) => [k, v.label]), w.kind, (k) => { rule.when = WHENS[k as Rule["when"]["kind"]].fresh(); restructure(); }),

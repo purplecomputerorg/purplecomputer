@@ -98,11 +98,11 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .stage { order: -1; position: static; height: auto; border-left: none; border-bottom: 1px solid var(--line); padding: 16px; }
   .stage-inner { max-width: 640px; margin: 0 auto; }
   .main { padding: 20px 18px 48px; }
-  /* The sections get their own row, by name, scrolling sideways when they don't fit */
+  /* The sections get their own row, by name, wrapping so every one stays in sight */
   .topbar { height: auto; flex-wrap: wrap; gap: 4px 10px; padding: 10px 12px 6px; }
   .brand { flex: 1; }
-  .tabs-nav { order: 3; flex: 0 0 calc(100% + 24px); margin: 0 -12px; padding: 0 12px; mask-image: linear-gradient(to right, #000 85%, transparent); }
-  .tabs-nav a { padding: 6px 12px; font-size: 14px; }
+  .tabs-nav { order: 3; flex: 0 0 100%; flex-wrap: wrap; justify-content: center; gap: 2px 4px; }
+  .tabs-nav a { padding: 6px 10px; font-size: 14px; }
   .topbar .btn.download { padding: 8px 14px; }
   .word-field { grid-template-columns: 1fr; gap: 4px; }
   .word-field .label { padding-top: 0; }

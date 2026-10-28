@@ -57,11 +57,18 @@ export function colorsView(): View {
   // Stays on Pick each row after a click, even before any row's color changes.
   let picking = false;
   const matchPurple = () => { picking = false; edit((n) => { n.hues = { ...DEFAULT_THEME.hues }; delete n.rainbow; }); };
+  // Rebuilding drops the browser's scroll anchor, so the section clicked in is held in place by hand.
+  const SECTIONS = [".presets", ".paint", ".more-options"];
+  let anchor: string | undefined;
+  body.addEventListener("pointerdown", (e) => { anchor = SECTIONS.find((s) => (e.target as Element).closest(s)); });
+  const anchorTop = () => (anchor ? body.querySelector(anchor)?.getBoundingClientRect().top : undefined);
   function render() {
     const t = theme();
     const purpleKeys = !t.rainbow && same(t.hues, DEFAULT_THEME.hues);
     const mode = t.rainbow ? "rainbow" : picking || !purpleKeys ? "pick" : "purple";
     const custom = !SCREENS.some(([, base]) => base === t.base);
+    const top = anchorTop();
+    const open = body.querySelector("details")?.open;
     clear(body);
     body.append(h("div", {},
       !draft.theme ? null : draft.colors.kept
@@ -100,12 +107,14 @@ export function colorsView(): View {
         h("span", { class: "sticker-row tiny" }, ...["1", "q", "a", "z"].map((k) => sticker(k, PURPLE_STICKERS))),
         h("button", { class: "linkbtn small", onclick: matchPurple }, "Match them again")),
 
-      h("details", { class: "more-options" }, h("summary", {}, "Fine-tune text and screen colors"),
+      h("details", { class: "more-options", open }, h("summary", {}, "Fine-tune text and screen colors"),
         h("p", { class: "dim small" }, "Purple works these out from your screen color, so they stay easy to read. Change any one here."),
         h("h4", {}, "Text"), h("div", { class: "wells" }, ...TEXT_ROLES.map(well)),
         h("h4", {}, "Screen"), h("div", { class: "wells" }, ...SCREEN_ROLES.map(well))),
       draft.theme ? h("p", {}, h("button", { class: "linkbtn dim", onclick: () => { draft.colors = {}; set(structuredClone(DEFAULT_THEME)); } }, "Undo all my color changes")) : null,
     ));
+    const now = anchorTop();
+    if (top !== undefined && now !== undefined) window.scrollBy(0, now - top);
   }
   render();
 

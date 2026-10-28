@@ -125,7 +125,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
    the keyboard's back edge, and the near edge comes out wider, as it does on a real laptop seen
    from in front. The tilt shrinks how tall the keyboard looks but not the space it takes, so the
    bottom margin gives that back. */
-.laptop { position: relative; --reach: 13cqw; }
+.laptop { position: relative; --reach: calc(12.5cqw + 6px); }
 .laptop-lid, .laptop-base { margin-left: 5.5%; margin-right: 5.5%; }
 .laptop-base { perspective: 300cqw; perspective-origin: 50% 0; margin-bottom: -10cqw; }
 .laptop-deck { transform: rotateX(52deg); transform-origin: 50% 0; padding: 3% 4% 4.5%; border-radius: 4px 4px 22px 22px; background: linear-gradient(#45444d, #2a2930); box-shadow: inset 0 2px 0 #55545e, 0 14px 0 #1c1b20; }
@@ -138,9 +138,10 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .laptop-key .sticker { font-size: 2.15cqw; }
 @keyframes keydown { 0%, 40% { transform: translateY(0.45cqw); box-shadow: 0 0 0 #060608; filter: brightness(1.5); } }
 /* The arrow's tail starts at the note's first line and reaches up over the keyboard's front edge,
-   so the tip lands on the bottom row of stickers. */
-.sticker-callout { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 0.15em; margin: 10px 0 4px 33%; font: 600 clamp(15px, 2.6cqw, 24px)/1.1 Caveat, cursive; color: var(--purple); transform: rotate(-2deg); pointer-events: none; }
-.sticker-callout svg { flex-shrink: 0; width: calc(var(--reach) / 2); height: var(--reach); margin-top: calc(0.75em - var(--reach)); }
+   so the tip lands just under the bottom row of stickers. */
+.sticker-callout { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 0.15em; margin: 10px 0 4px 27%; font: 600 clamp(15px, 2.6cqw, 24px)/1.1 Caveat, cursive; color: var(--purple); transform: rotate(-1deg); pointer-events: none; }
+.sticker-callout span span { display: inline-block; }
+.sticker-callout svg { flex-shrink: 0; width: calc(var(--reach) / 2); height: var(--reach); margin-top: calc(0.6em - var(--reach) * 0.93); }
 /* Typing from a phone: a tap anywhere on the laptop focuses the hidden box, which brings up the
    phone's keyboard. 16px keeps iOS from zooming in on it. */
 .laptop-typing { position: absolute; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; font-size: 16px; pointer-events: none; }

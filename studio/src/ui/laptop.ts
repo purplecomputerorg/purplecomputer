@@ -23,9 +23,18 @@ const NAMED: Record<string, string> = { Enter: "enter", Backspace: "backspace", 
 
 // A hand-drawn arrow from the note up into the sticker keys.
 const ARROW = Object.assign(document.createElementNS("http://www.w3.org/2000/svg", "svg"), {
-  innerHTML: '<path d="M26 58 C 8 52, 4 30, 12 4 M5 11 L12 3 L18 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  innerHTML: '<path d="M28 56 C 14 56, 6 44, 6 6 M1 13 L6 5 L12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
 });
 ARROW.setAttribute("viewBox", "0 0 30 60");
+
+// Each word rides a shallow arc, the way a handwritten line bows across a page.
+const arched = (text: string) => {
+  const words = text.split(" ");
+  return h("span", {}, ...words.flatMap((w, i) => {
+    const t = (2 * i) / (words.length - 1) - 1;
+    return [h("span", { style: `transform: translateY(${(0.1 * t * t - 0.1).toFixed(2)}em) rotate(${(1.5 * t).toFixed(1)}deg)` }, w), " "];
+  }));
+};
 
 export class Laptop {
   readonly element: HTMLElement;
@@ -45,7 +54,7 @@ export class Laptop {
     this.element = h("div", { class: "laptop" },
       h("div", { class: "laptop-lid" }, h("i", { class: "laptop-camera" }), this.screen),
       h("div", { class: "laptop-base" }, h("div", { class: "laptop-deck" }, this.keyboard)),
-      h("p", { class: "sticker-callout" }, ARROW, "These stickers come in the box. They go on your keys."),
+      h("p", { class: "sticker-callout" }, ARROW, arched("These stickers come in the box. They go on your keyboard.")),
       this.typing,
       h("button", { type: "button", class: "laptop-touch", "aria-label": "Type with your keyboard", onclick: () => this.typing.focus({ preventScroll: true }) }));
     this.typing.setAttribute("autocorrect", "off");

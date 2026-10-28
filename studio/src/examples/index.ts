@@ -6,6 +6,7 @@ import beats from "./beats.py?raw";
 import explore from "./explore.py?raw";
 import garden from "./garden.py?raw";
 import memory from "./memory.py?raw";
+import paint from "./paint.py?raw";
 import snake from "./snake.py?raw";
 import story from "./story.py?raw";
 
@@ -199,6 +200,7 @@ export const EXAMPLES: Example[] = [
   { name: "story", icon: "📖", label: "A story with choices", about: "Each page shows an emoji or your own photo, read in Purple's voice or yours. Number keys pick what happens next.", source: story },
   { name: "memory", icon: "🃏", label: "Memory", about: "Turn over cards to find the pairs, alone or taking turns. The cards can be your own photos.", source: memory },
   { name: "garden", icon: "🌻", label: "A garden", about: "Plant seeds on the letter keys and water them to grow. It remembers the garden.", source: garden },
+  { name: "paint", icon: "🎨", label: "A paint pot", about: "Drop in paints with their letter keys and see what they mix into, like real paint. Purple says each color, with names you can change.", source: paint },
   { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off with the keys, then Space plays them round and round.", source: beats },
   { name: "snake", icon: "🐍", label: "A wandering snake", about: "Arrows move a snake that leaves flowers. The smallest room to read.", source: snake },
 ];

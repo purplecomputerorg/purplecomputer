@@ -623,6 +623,12 @@ def test_the_library_knows_the_theme_colors():
     assert list(purple_lib.ROLES) == theme.ROLES
 
 
+def test_the_library_mixes_like_purples_paint():
+    assert purple_lib.mix("#ffd400", "#1e5bd6") == "#50AC64"
+    with pytest.raises(ValueError, match="mix needs colors"):
+        purple_lib.mix("tile", "#1e5bd6")
+
+
 def test_theme_colors_paint_the_grid_and_the_background(pack):
     pack("themed", 'from purple import *\nbackground("surface")\ngame = state(at=1)\ngame.at += 1\n'
                    'grid.set(game.at, 0, "tile")\ngrid.set(0, 0, "Q")\n')

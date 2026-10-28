@@ -94,7 +94,7 @@ const WHOLE_ROOM = [
 ];
 
 // The starters' order on the Rooms page: the liveliest first.
-const ORDER = ["story", "explore", "memory", "beats", "garden", "picture-quiz", "picture-keyboard", "snake"];
+const ORDER = ["story", "explore", "memory", "beats", "garden", "paint", "picture-quiz", "picture-keyboard", "snake"];
 
 const choice = (s: { icon: string; label: string; about: string }, go: () => void, cls = "pick") =>
   h("button", { class: cls, onclick: go }, purpleEmoji(s.icon, "pick-icon"),

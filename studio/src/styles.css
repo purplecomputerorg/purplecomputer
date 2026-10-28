@@ -55,6 +55,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .tabs-nav a:hover { background: var(--fill-hover); }
 .tabs-nav a[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .tabs-nav .icon { width: 20px; height: 20px; }
+.tabs-nav .sticker { font-size: 9px; }
 /* A white edge like the purple sticker sheet's, so each icon reads as a sticker */
 .purple-emoji { filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff) drop-shadow(0 1px 2px rgba(53, 42, 74, 0.25)); }
 .tabs-nav .n { font-size: 11px; font-weight: 700; color: #fff; background: var(--purple); border-radius: 999px; padding: 0 6px; }
@@ -492,6 +493,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .home-card:nth-child(6n + 5) { --tape-w: 72px; --tape-r: -4.5deg; --tape-x: -6px; }
 .home-card:nth-child(6n) { --tape-w: 58px; --tape-r: 1deg; --tape-x: 12px; }
 .home-card b .purple-emoji { width: 26px; height: 26px; }
+.home-card b .sticker { font-size: 11.5px; }
 .home-card .bezel { margin-bottom: 8px; padding: 5px; border-radius: 10px; background: linear-gradient(#34333b, #1f1e24); }
 .home-card b { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--display); font-size: 16px; }
 .home-card > span:last-child { font-size: 13px; color: var(--dim); }

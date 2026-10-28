@@ -36,7 +36,7 @@ interface Section extends HomeSection {
 const SECTIONS: Section[] = [
   { id: "pictures", clears: "pictures", label: "Pictures", icon: "🖼️", blurb: "The dog, ready to paint on", view: picturesView },
   { id: "words", clears: "words", label: "Words", icon: "🐶", blurb: "The dog's name, with a picture", voice: true, view: wordsView },
-  { id: "keys", clears: "letters", label: "Letters", icon: "🔤", blurb: "Grandma, every time they press G", voice: true, view: keysView },
+  { id: "keys", clears: "letters", label: "Letters", icon: "z", blurb: "Grandma, every time they press G", voice: true, view: keysView },
   { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "A kazoo, a harp, or…", view: instrumentsView },
   { id: "colors", label: "Colors", icon: "🎨", blurb: () => ["Purple, but green, or ", rainbow("any color")], view: colorsView },
   { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "A world for them to walk around", voice: true, view: roomsView },

@@ -85,8 +85,9 @@ function renderPack() {
   const [list, trying] = [pieces(), tryingPieces()];
   packLine.replaceChildren(...[
     h("div", { class: "pack-line" },
-      h("p", {}, h("b", {}, "In your Purple Pack: "), list.length ? listed(list) : "nothing yet.",
-        trying.length ? h("span", { class: "dim" }, ` Tried, not added yet: ${listed(trying)}.`) : null),
+      h("div", {},
+        h("p", {}, h("b", {}, "In your Purple Pack: "), list.length ? `${listed(list)}.` : "nothing yet."),
+        trying.length ? h("p", { class: "dim" }, h("b", {}, "Not added yet: "), `${listed(trying)}.`) : null),
       list.length || trying.length ? h("a", { class: "btn small", href: "#pack" }, "Download") : null),
     h("p", { class: "dim" }, "When you're done, download your Purple Pack and put it on Purple with a USB drive."),
     h("p", { class: "dim" }, "Made one before? ", openPackButton("Open a Purple Pack"), " to keep going."),

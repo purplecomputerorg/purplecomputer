@@ -60,8 +60,8 @@ export function downloadView(): View {
     const n = left.reduce((sum, p) => sum + p.count, 0);
     leftOut.textContent = n ? `This leaves out the ${n === 1 ? "change" : `${n} changes`} you haven't added.` : "";
     trying.replaceChildren(...(n ? [h("div", { class: "card unadded" },
-      h("h3", {}, n === 1 ? "You have a change you haven't added" : `You have ${n} changes you haven't added`),
-      h("p", {}, "You tried these but didn't press Add, so they won't be in your Purple Pack."),
+      h("h3", {}, n === 1 ? "1 change not added yet" : `${n} changes not added yet`),
+      h("p", {}, "These won't be in your Purple Pack until you add them."),
       ...groups(left),
       h("button", { class: "btn", onclick: () => { addAll(); changed(); render(); } }, n === 1 ? "Add it to my Purple Pack" : "Add them all to my Purple Pack"))] : []));
   }

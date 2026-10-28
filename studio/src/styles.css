@@ -522,7 +522,8 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .mini .map .dark { background: #55a851; }
 .mini .map .water { background: #3f7fd0; }
 .pack-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 18px; margin-bottom: 18px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
-.pack-line p { flex: 1 1 260px; margin: 0; }
+.pack-line div { flex: 1 1 260px; }
+.pack-line p { margin: 0; }
 .at-home .stage h3 { font: 500 clamp(22px, 5.5vw, 30px)/1.15 Caveat, cursive; text-wrap: balance; text-transform: none; letter-spacing: 0; text-align: center; color: var(--purple); margin: min(24px, 3vw) 0 min(16px, 3vw); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }
@@ -657,9 +658,9 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .live-status i { animation: none; } }
 
-.pack-group { padding: 12px 0; border-bottom: 1px solid var(--line); }
-.pack-group:last-child { border-bottom: 0; }
-.pack-heading { display: block; font-weight: 700; color: var(--text); text-decoration: none; margin-bottom: 8px; }
+.pack-group { display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 6px 16px; padding: 6px 0; }
+@media (max-width: 700px) { .pack-group { grid-template-columns: 1fr; } }
+.pack-heading { font-weight: 700; color: var(--text); text-decoration: none; }
 .pack-heading:hover { color: var(--purple); }
 .pack-items { display: flex; flex-wrap: wrap; gap: 8px; }
 .pack-item { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 4px 10px 4px 4px; border-radius: 10px; background: var(--fill); font-size: 14px; }
@@ -669,7 +670,9 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .pack-item .mini-screen { width: 64px; padding: 8px 7px; }
 .pack-icon { font-size: 20px; line-height: 1; padding-left: 6px; }
 .unadded { border: 2px solid var(--danger); background: #fdf3f4; }
-.unadded h3 { margin-top: 0; color: var(--danger); }
+.unadded h3 { margin: 0 0 4px; color: var(--danger); }
+.unadded > p { margin: 0 0 10px; }
+.unadded > .btn { margin-top: 12px; }
 .unadded .pack-item { background: var(--card); }
 .pack-colors { display: inline-flex; align-items: center; gap: 4px; }
 .map-painter { display: grid; gap: 12px; }

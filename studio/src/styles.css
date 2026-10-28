@@ -634,17 +634,22 @@ img.pick-icon { width: 30px; height: 30px; }
 /* Staggered like a real keyboard: each row starts a little further in */
 .paint { container-type: inline-size; display: grid; gap: 12px; justify-items: start; }
 .sticker-board { display: grid; gap: 4px; margin: 0; padding: 14px 18px; font-size: min(13px, calc((100cqw - 90px) / 27)); }
-.sticker-board .sticker-row { flex-wrap: nowrap; gap: 4px; }
+.sticker-board .sticker-row { flex-wrap: nowrap; gap: 4px; font-size: inherit; }
 .sticker-board .sticker-row:nth-child(2) { padding-left: 0.9em; }
 .sticker-board .sticker-row:nth-child(3) { padding-left: 1.8em; }
 .rainbow-order { display: flex; flex-wrap: wrap; gap: 10px; }
-.row-picks { display: grid; gap: 10px; justify-self: stretch; }
-.row-pick { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px 12px; }
-/* Twelve hues in one row, or two even rows of six when there's no room, never eleven and a straggler */
-.hues { display: grid; grid-template-columns: repeat(12, 28px); justify-content: space-between; gap: 8px 6px; }
-@container (max-width: 520px) { .row-pick { grid-template-columns: 1fr; } .hues { grid-template-columns: repeat(6, 28px); justify-content: start; } }
-.hue { width: 28px; height: 28px; border-radius: 999px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
-.hue[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--purple); transform: scale(1.12); }
+.row-picks { display: grid; gap: 6px; justify-self: start; }
+.row-pick { display: grid; grid-template-columns: 96px auto; align-items: center; gap: 4px 10px; font-size: 14px; }
+.hues { display: grid; grid-template-columns: repeat(12, 20px); gap: 6px 4px; }
+.hue { width: 20px; height: 20px; border-radius: 999px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
+.hue[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--purple); transform: scale(1.15); }
+/* Narrow: the hues widen to sit under the sticker board's twelve top-row keys (its padding plus border is 19px) */
+@container (max-width: 400px) {
+  .row-picks { gap: 14px; justify-self: stretch; padding: 0 19px; }
+  .row-pick { grid-template-columns: 1fr; gap: 6px; }
+  .hues { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .hue { width: 100%; height: auto; aspect-ratio: 1; }
+}
 details.more-options { margin: 18px 0; }
 details.more-options summary { cursor: pointer; color: var(--purple); font-weight: 600; margin-bottom: 12px; }
 details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px; }

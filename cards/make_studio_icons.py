@@ -14,7 +14,10 @@ CARDS = Path(__file__).parent
 OUT = CARDS.parent / "studio/src/icons"
 
 # Studio's sections, then its starter rooms.
-EMOJI = "🖼️ 🎙️ 🗨️ 🎹 🎨 🧩 🗺️ 📖 🃏 🌻 🥁 🐍 ✏️ 🧱 ❓".split()
+EMOJI = "🖼️ 🎙️ 🗨️ 🎹 🎨 🧩 🗺️ 📖 🃏 🌻 🥁 🐍 💡 🧱 ❓".split()
+
+# Shades picked by hand where the light-to-dark ramp washes an emoji out: the bulb's glass is pale yellow.
+SHADES = {"💡": {"#FFD983": "#9b59d0", "#FFCC4D": "#ebe2fd", "#99AAB5": "#3b1a5c", "#CCD6DD": "#9b59d0"}}
 
 SHORT_HEX = re.compile(r"#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])\b")
 
@@ -30,6 +33,8 @@ def main():
     for emoji in EMOJI:
         svg = (CARDS / f"twemoji-{code(emoji)}.svg").read_text()
         svg = SHORT_HEX.sub(lambda m: "#" + "".join(c * 2 for c in m.groups()), svg)
+        for old, new in SHADES.get(emoji, {}).items():
+            svg = svg.replace(old, new)
         (OUT / f"{code(emoji)}.svg").write_text(recolor(svg))
     print(f"wrote {len(EMOJI)} icons to {OUT}")
 

@@ -27,9 +27,10 @@ const roomName = (text: string, except?: RoomDraft) =>
 // The names `from purple import *` brings in, and the ones Purple calls when the room defines them.
 const CALLED = ["on_key", "on_key_up"];
 
-// A starter's own icon follows it, as garden-3 came from garden; Python with no starter is a pencil, like its card.
+// A starter's own icon follows it, as garden-3 came from garden; Python with no starter is a lightbulb, like its card.
+const IDEA = "💡";
 const iconOf = (room: RoomDraft) =>
-  room.made ? ICONS[room.made.kind] : (EXAMPLES.find((e) => e.name === room.name.replace(/-\d+$/, ""))?.icon ?? "✏️");
+  room.made ? ICONS[room.made.kind] : (EXAMPLES.find((e) => e.name === room.name.replace(/-\d+$/, ""))?.icon ?? IDEA);
 
 // Says why the name can't be used, or renames the room and says nothing.
 function rename(room: RoomDraft, text: string): string | null {
@@ -64,7 +65,13 @@ function list(): View {
       {},
       h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Your kid finds it next to Purple's rooms."),
       yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: purpleEmoji(iconOf(r), "pick-icon"), rename: (t) => rename(r, t) }), drop),
-      choice({ icon: "✏️", label: "Write your own in Python", about: "A blank room to write yourself, or with an AI helper." }, () => tryRoom("my-room", null), "pick featured write-own"),
+      h("button", { class: "pick featured write-own", onclick: () => tryRoom("my-room", null) }, purpleEmoji(IDEA, "pick-icon"),
+        h("div", {},
+          h("b", {}, "Make any room you can imagine"),
+          h("p", {}, "Any game or toy. Purple comes with the pieces every room needs, so a whole room can be a few lines of Python, written by you or with an AI helper."),
+          h("ul", {}, ...["Key presses and timers", "Emoji, pictures, text", "Notes, drums, sounds", "Talking out loud", "Remembering for next time"].map((t) => h("li", {}, t))),
+          h("span", { class: "btn small" }, "Start a blank room")),
+        h("figure", {}, h("figcaption", {}, "A whole room: every key puts a dog on the screen"), h("pre", {}, ...WHOLE_ROOM))),
       h("h3", {}, "Or start from one of these"),
       h("div", { class: "cards" },
         ...[
@@ -76,6 +83,15 @@ function list(): View {
     ),
   };
 }
+
+const call = (name: string) => h("span", { class: "call" }, name);
+const WHOLE_ROOM = [
+  "from purple import *\n\n",
+  "def on_key(key):\n",
+  "    ", call("grid.set"), "(", call("grid.random_empty"), "(), \"🐶\")\n",
+  "    ", call("drum"), "(\"bongo\")\n",
+  "    ", call("say"), "(key)",
+];
 
 // The starters' order on the Rooms page: the liveliest first.
 const ORDER = ["story", "explore", "memory", "beats", "garden", "picture-quiz", "picture-keyboard", "snake"];

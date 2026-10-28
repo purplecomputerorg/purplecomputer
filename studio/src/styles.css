@@ -529,8 +529,28 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 h3 + .cards { margin-top: 0; }
 .pick { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: inherit; text-decoration: none; background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 16px 18px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pick.featured { border-color: var(--border); background: var(--fill); }
-.write-own { width: 100%; margin: 20px 0 8px; display: grid; grid-template-columns: auto 1fr; column-gap: 14px; align-items: center; }
-.write-own .pick-icon { grid-row: span 2; margin: 0; }
+.write-own { width: 100%; margin: 20px 0 8px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px 16px; align-items: center; padding: 16px 20px; }
+.write-own .pick-icon { margin: 0; align-self: start; }
+.write-own div { max-width: 60ch; }
+.write-own b { font-size: 17px; margin-bottom: 4px; }
+.write-own p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--text); }
+.write-own ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 12px; padding: 0; list-style: none; }
+.write-own li { padding: 2px 9px; border-radius: 999px; background: #fff; border: 1px solid var(--border); color: var(--purple); font-size: 12px; font-weight: 600; }
+.pick.write-own span.btn { display: inline-block; margin-top: 12px; color: #fff; font-size: 14px; }
+.pick.write-own ul + span.btn { margin-top: 0; }
+.write-own:hover .btn { background: var(--purple-dark); }
+.write-own figure { margin: 0; }
+.write-own figcaption { font-size: 11px; font-weight: 600; color: var(--purple); margin: 0 0 4px 2px; }
+.write-own pre { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--tui-bg); color: #e8defa; font: 12.5px/1.55 var(--mono); }
+.write-own .call { color: #c39cf0; font-weight: 700; }
+@media (max-width: 900px) { .write-own figure { display: none; } }
+@media (max-width: 600px) {
+  .write-own { grid-template-columns: 1fr; padding: 14px 16px; }
+  .write-own .pick-icon { display: none; }
+  .write-own ul { gap: 4px; margin: 8px 0 10px; }
+  .write-own li { padding: 1px 7px; font-size: 11px; }
+  .write-own li:last-child { display: none; }
+}
 .to-python { margin: 0 0 4px; color: var(--dim); }
 .pick:hover { border-color: var(--border); background: var(--fill); color: inherit; }
 .pick-icon { font-size: 28px; line-height: 1; margin-bottom: 8px; }

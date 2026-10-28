@@ -80,9 +80,9 @@ export function colorsView(): View {
           "Any color")),
 
       h("h3", {}, "Paint colors and stickers"),
-      h("p", { class: "dim small" }, "Every key paints the same color as its sticker."),
+      h("p", { class: "dim small" }, "Choose the color each key paints."),
       h("div", { class: "paint" },
-      seg(["Purple's rows", mode === "purple", matchPurple],
+      seg(["Purple's default", mode === "purple", matchPurple],
         ["Rainbow", mode === "rainbow", () => edit((n) => (n.rainbow ??= { violetFirst: false, darkTop: false }))],
         ["Pick each row", mode === "pick", () => { picking = true; edit((n) => delete n.rainbow); }]),
       h("div", { class: "card sticker-board" }, ...ROWS.map(([, , keys]) => h("div", { class: "sticker-row" }, ...keys.map((k) => sticker(k))))),
@@ -100,7 +100,7 @@ export function colorsView(): View {
         h("span", { class: "sticker-row tiny" }, ...["1", "q", "a", "z"].map((k) => sticker(k, PURPLE_STICKERS))),
         h("button", { class: "linkbtn small", onclick: matchPurple }, "Match them again")),
 
-      h("details", { class: "more-options" }, h("summary", {}, "Change one color at a time"),
+      h("details", { class: "more-options" }, h("summary", {}, "Fine-tune text and screen colors"),
         h("p", { class: "dim small" }, "Purple works these out from your screen color, so they stay easy to read. Change any one here."),
         h("h4", {}, "Text"), h("div", { class: "wells" }, ...TEXT_ROLES.map(well)),
         h("h4", {}, "Screen"), h("div", { class: "wells" }, ...SCREEN_ROLES.map(well))),
@@ -113,6 +113,6 @@ export function colorsView(): View {
     title: "Colors",
     editor: h("section", {}, h("p", { class: "lead" }, "Pick a color for Purple's screen. The words on it change to stay easy to read."), body),
     live: { room: "art" },
-    caption: "Type on the keyboard to paint: every key paints its sticker's color.",
+    caption: "Type on the keyboard to paint.",
   };
 }

@@ -45,7 +45,7 @@ export function licensesView(): View {
         h("h3", {}, "Purple's source"),
         h("p", {}, "All of Purple's code, Studio included, is public on GitHub."),
         h("p", { class: "row" }, out(REPO, "Purple on GitHub", "btn"), out(`${REPO}/tree/main/studio`, "How Studio works")),
-        h("p", { class: "dim" }, "Purple itself is source available under its own ", out(`${REPO}/blob/main/LICENSE`, "license"), ": personal use and modification are allowed, redistribution and commercial use are not."),
+        h("p", { class: "dim" }, "Purple itself is under the ", out(`${REPO}/blob/main/LICENSE`, "Purple Computer Source-Available License 1.1"), ": personal use and modification are allowed, redistribution and commercial use are not."),
       ),
       h("h3", {}, "Inside Purple"),
       h("ul", { class: "credits" }, ...purple().map(credit)),

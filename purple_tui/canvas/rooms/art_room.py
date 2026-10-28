@@ -223,6 +223,7 @@ class ArtRoom(Room):
         self._heading = "right"
         self._use_heading_cursor = False
         self._post_stamp_x = None
+        self._wrap_at = None            # a right-edge cell just stamped: the next stamp starts the next line
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
         self._backspace_since = None    # when a held Backspace went down
@@ -317,6 +318,7 @@ class ArtRoom(Room):
                     self._painted_positions.add((x, y))
         self._repaint_all()
         self._cursor_x, self._cursor_y = state.get("cursor", [0, 0])
+        self._wrap_at = None
         self._paint_mode = bool(state.get("paint", True))
         self._set_pen(False)
         self._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
@@ -438,10 +440,11 @@ class ArtRoom(Room):
         return bool(spot)
 
     def _advance_after_stamp(self, direction: str):
-        """On past a typed or stamped cell, wrapping like lines of text."""
+        """On past a typed or stamped cell. At the right edge the brush stays in view
+        until the next stamp, which wraps like lines of text."""
         self._post_stamp_x = self._cursor_x
         if direction == "right" and self._cursor_x >= COLS - 1:
-            self._new_line()
+            self._wrap_at = (self._cursor_x, self._cursor_y)
         else:
             self._move_in_direction(direction, wrap=True)
 
@@ -468,7 +471,12 @@ class ArtRoom(Room):
         self._use_heading_cursor = True
         self.refresh()
 
+    def _to_stamp_spot(self):
+        if self._wrap_at == (self._cursor_x, self._cursor_y):
+            self._new_line()
+
     def paint_char(self, char: str, direction: str = "right"):
+        self._to_stamp_spot()
         self._last_key_char = char.lower()
         self._last_key_color = get_key_color(char)
         self._paint_at_cursor()
@@ -482,6 +490,7 @@ class ArtRoom(Room):
         self._cursor_y = (self._cursor_y + 1) % ROWS
 
     def type_char(self, char: str, direction: str = "right"):
+        self._to_stamp_spot()
         pos = (self._cursor_x, self._cursor_y)
         self._last_key_char = char
         self._last_key_color = get_key_color(char)
@@ -493,7 +502,8 @@ class ArtRoom(Room):
     def _backspace(self, just_stamped: bool = False):
         """Erase the square under the brush, like a spreadsheet cell. Right after typing or stamping,
         or on an empty square, first back one cell, or up to the last thing on the line above."""
-        if just_stamped or (self._cursor_x, self._cursor_y) not in self._grid:
+        waiting, self._wrap_at = self._wrap_at == (self._cursor_x, self._cursor_y), None
+        if (just_stamped and not waiting) or (self._cursor_x, self._cursor_y) not in self._grid:
             if self._cursor_x > 0:
                 self._cursor_x -= 1
             elif self._cursor_y > 0:
@@ -708,6 +718,7 @@ class ArtRoom(Room):
                 return
             chord = bool(action.char_held) and not action.with_shift and self._chord_brush(action.char_held, char)
             if (chord or self._select_brush(char, hold=action.is_repeat)) and not action.with_shift:
+                self._to_stamp_spot()
                 self._paint_at_cursor()
                 self._advance_after_stamp(direction)
                 if char.isalpha():

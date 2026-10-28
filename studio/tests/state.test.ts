@@ -9,6 +9,18 @@ describe("rooms saved before the picture quiz", () => {
   });
 });
 
+describe("pack names", () => {
+  it("gives a new pack a name of words, and swaps the old dated name for one while keeping the pack's id", () => {
+    replaceDraft();
+    expect(draft.name).toMatch(/^purple-[a-z]+-[a-z]+$/);
+    replaceDraft({ ...emptyDraft(), id: "pack-old", name: "purple-2026-10-17" });
+    expect(draft.name).toMatch(/^purple-[a-z]+-[a-z]+$/);
+    expect(draft.id).toBe("pack-old");
+    replaceDraft({ ...emptyDraft(), name: "Grandma's rooms" });
+    expect(draft.name).toBe("Grandma's rooms");
+  });
+});
+
 describe("recordings of what rooms say", () => {
   it("finds a recording by the words as Purple looks them up, and keeps one a room recorded when it's recorded again", () => {
     replaceDraft();

@@ -52,9 +52,16 @@ export interface Draft {
   colors: Keepable;
 }
 
+const ADJECTIVES = ["sunny", "happy", "bouncy", "cozy", "fuzzy", "giggly", "jolly", "lucky", "merry", "silly", "sparkly", "sleepy", "speedy", "starry", "sweet", "tiny", "wiggly", "zippy", "brave", "bright"];
+const ANIMALS = ["otter", "panda", "koala", "puppy", "kitten", "bunny", "duck", "fox", "owl", "penguin", "turtle", "whale", "zebra", "llama", "frog", "bear", "seal", "moose", "goat", "hippo"];
+const pick = (list: string[]) => list[Math.floor(Math.random() * list.length)];
+export const packWords = () => `purple-${pick(ADJECTIVES)}-${pick(ANIMALS)}`;
+// Names Studio used to give, which looked out of date after the next day's edits.
+const DATED = /^purple-\d{4}-\d{2}-\d{2}$/;
+
 export const emptyDraft = (): Draft => ({
   id: `pack-${crypto.randomUUID().slice(0, 8)}`,
-  name: `purple-${new Date().toISOString().slice(0, 10)}`,
+  name: packWords(),
   pictures: [],
   letters: {},
   phrases: [],
@@ -72,7 +79,7 @@ export const draft: Draft = emptyDraft();
 
 // Pages hold this one object, so another Purple Pack (reopened, recalled, or a fresh start) goes into it in place.
 export function replaceDraft(d: Draft = emptyDraft()) {
-  Object.assign(draft, d);
+  Object.assign(draft, d, DATED.test(d.name) && { name: packWords() });
   changed();
 }
 

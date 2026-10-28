@@ -345,6 +345,15 @@ tr.warn td { color: var(--dim); }
 .copy-guide .status:empty { display: none; }
 hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 ul.privacy { list-style: none; padding: 0; } ul.privacy li { margin-bottom: 12px; }
+.code-card { background: var(--fill); border-color: var(--border); }
+.code-card h3 { margin-top: 0; }
+ul.credits { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+ul.credits li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+ul.credits p { margin: 4px 0 0; font-size: 14px; }
+.credit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.credit-head a { font-weight: 600; color: var(--purple); }
+.license { flex-shrink: 0; font-size: 11px; font-weight: 600; color: var(--purple-dark); background: var(--fill); border-radius: 999px; padding: 2px 8px; }
+.credit-source { color: var(--dim); }
 .voice-loading, .live-updating { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 3; padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); color: #fff; font: 600 12px var(--sans); white-space: nowrap; pointer-events: none; }
 .voice-loading[hidden] { display: none; }
 .live-updating { top: 8px; right: 8px; bottom: auto; left: auto; transform: none; }

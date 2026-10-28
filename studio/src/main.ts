@@ -11,6 +11,7 @@ import { downloadView } from "./ui/download";
 import { formatView, installView } from "./ui/install";
 import { instrumentsView } from "./ui/instrument";
 import { picturesView } from "./ui/pictures";
+import { licensesView } from "./ui/licenses";
 import { privacyView, staysHere } from "./ui/privacy";
 import { pythonView } from "./ui/python";
 import { EXAMPLES } from "./examples";
@@ -51,6 +52,7 @@ const MORE = ([
   ["python", "Python console", pythonView],
   ["format", "What is in a Purple Pack", formatView],
   ["privacy", "Your privacy", privacyView],
+  ["licenses", "Open source licenses", licensesView],
 ] satisfies Page[]).filter(([id]) => features.rooms || id !== "guide");
 const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
 
@@ -167,8 +169,7 @@ function renderTop() {
     h("details", { class: "more-menu" }, h("summary", {}, "More"),
       h("div", { onclick: (e: Event) => (e.target as HTMLElement).closest("details")?.removeAttribute("open") },
         ...MORE.map(([id, label]) => h("a", { href: `#${id}`, "aria-current": sec === id ? "page" : null }, label)),
-        // Purple's voice runs espeak-ng, which is GPL: its source offer stays one click away on every page.
-        h("a", { href: "voice/espeak-ng/README.md", target: "_blank" }, "Open source licenses"), clearEverythingButton("clear-all"))),
+        clearEverythingButton("clear-all"))),
     h("a", { class: `btn download${sec === "pack" ? " here" : ""}`, href: "#pack", onclick: (e: Event) => { if (current?.download) { e.preventDefault(); current.download(); } } }, "Download", n ? h("span", { class: "n" }, String(n)) : null),
   );
 }

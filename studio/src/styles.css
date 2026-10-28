@@ -50,15 +50,15 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .brand img { width: 38px; height: 38px; margin: 0 -8px 0 -10px; transform: translateY(-2px); }
 .brand b { font-family: var(--display); font-weight: 600; font-size: 15px; }
 .brand span { color: var(--dim); }
-.tabs-nav { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.tabs-nav a { display: flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; text-decoration: none; color: var(--text); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.tabs-nav { display: flex; gap: 10px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.tabs-nav a { display: flex; position: relative; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 999px; text-decoration: none; color: var(--text); font-size: 14px; font-weight: 500; white-space: nowrap; }
 .tabs-nav a:hover { background: var(--fill-hover); }
 .tabs-nav a[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .tabs-nav .icon { width: 20px; height: 20px; }
 .tabs-nav .sticker { font-size: 9px; }
 /* A white edge like the purple sticker sheet's, so each icon reads as a sticker */
 .purple-emoji { filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff) drop-shadow(0 1px 2px rgba(53, 42, 74, 0.25)); }
-.tabs-nav .n { font-size: 11px; font-weight: 700; color: #fff; background: var(--purple); border-radius: 999px; padding: 0 6px; }
+.tabs-nav .n { position: absolute; left: 26px; top: 0; box-shadow: 0 0 0 2px var(--bg); font-size: 10px; line-height: 15px; min-width: 15px; text-align: center; box-sizing: border-box; font-weight: 700; color: #fff; background: var(--purple); border-radius: 999px; padding: 0 4px; }
 .privacy-link { flex-shrink: 0; font-size: 14px; color: var(--dim); text-decoration: none; padding: 7px 10px; border-radius: 999px; }
 .privacy-link:hover, .privacy-link[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .more-menu { position: relative; flex-shrink: 0; }

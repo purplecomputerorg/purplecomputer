@@ -87,7 +87,20 @@ const stageTitle = h("h3", {}, "This little computer is a real Purple Computer f
 const stageCaption = h("p", { class: "caption" });
 const stageStays = staysHere("This Purple runs in your browser. What you type into it stays on your device.");
 const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays));
-const body = h("div", { class: "body" }, main, stage);
+// Which side the live Purple sits on is a per-browser choice, kept until it's swapped back.
+const SWAPPED = "studio-swapped";
+const saved = (() => { try { return localStorage.getItem(SWAPPED) === "1"; } catch { return false; } })();
+// Stacked on a phone, the page scrolls so the divider stays where it was under the finger.
+const flip = () => {
+  const was = split.getBoundingClientRect().top;
+  const on = body.classList.toggle("swapped");
+  window.scrollBy(0, split.getBoundingClientRect().top - was);
+  try { localStorage.setItem(SWAPPED, on ? "1" : "0"); } catch { /* private window: it lasts this visit */ }
+};
+// The two sides slide past each other where the browser can; elsewhere they just trade places.
+const swap = () => document.startViewTransition?.(flip) ?? flip();
+const split = h("div", { class: "split" }, h("button", { type: "button", class: "swap", title: "Swap sides", "aria-label": "Swap sides", onclick: swap }, "⇄"));
+const body = h("div", { class: `body${saved ? " swapped" : ""}` }, main, split, stage);
 app.append(top, body);
 
 let current: View | null = null;

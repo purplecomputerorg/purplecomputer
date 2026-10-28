@@ -103,8 +103,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .tabs-nav { order: 3; flex: 0 0 calc(100% + 24px); margin: 0 -12px; padding: 0 12px; mask-image: linear-gradient(to right, #000 85%, transparent); }
   .tabs-nav a { padding: 6px 12px; font-size: 14px; }
   .topbar .btn.download { padding: 8px 14px; }
-  .word-rows { grid-template-columns: minmax(0, 1fr) 56px 28px; }
-  .word-row .was { display: none; }
+  .word-field { grid-template-columns: 1fr; gap: 4px; }
+  .word-field .label { padding-top: 0; }
 }
 
 .back { display: inline-block; margin-bottom: 6px; font-size: 14px; color: var(--dim); text-decoration: none; }
@@ -575,12 +575,24 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .swatch-pick input[type="color"] { width: 44px; height: 44px; border-radius: 12px; overflow: hidden; }
 
 /* Emoji */
-.word-rows { display: grid; grid-template-columns: minmax(0, 1fr) 64px 96px 28px; gap: 10px; max-width: 580px; }
-.word-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; gap: 8px 10px; padding: 0 12px; border-radius: 16px; }
-.word-row:not(.head, .blank) { background: var(--panel); padding-block: 12px; }
-.word-row.head span:nth-child(2) { grid-column: 2 / -1; }
+/* Words: each row reads as Purple shows it, the word then its emoji; the open one shows labeled fields under it. */
+.word-rows { display: grid; gap: 6px; max-width: 580px; }
+.word-row { border-radius: 14px; background: var(--panel); }
+.word-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 28px 28px; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; cursor: pointer; border-radius: 14px; }
+.word-row:not(.open) .word-head:hover { background: var(--fill); }
+.word-head .word { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.word-head .shows { font-size: 22px; line-height: 1; }
+.word-head .shows img { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; vertical-align: middle; }
+.word-head .marks { font-size: 14px; letter-spacing: 2px; }
+.word-head .chevron { font-size: 11px; }
+.word-fields { display: grid; gap: 14px; margin: 0 16px; padding: 14px 0 16px; border-top: 1px solid var(--line); }
+.word-field { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; align-items: start; }
+.word-field .label { padding-top: 10px; font-size: 13px; font-weight: 600; color: var(--dim); }
+.word-field input { font-size: 14px; padding: 8px 12px; border-radius: 10px; }
+.word-field .types { margin-top: 6px; font-size: 12px; color: var(--dim); }
+.word-new { display: flex; gap: 10px; margin-top: 6px; }
+.word-new input { flex: 1; min-width: 0; }
 .word-rows + .status:empty { min-height: 0; }
-.word-row.head span { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .emoji-wrap { position: relative; }
 .emoji-cell { width: 64px; height: 42px; font-size: 24px; border-radius: 12px; border: 1.5px solid var(--line); background: #fff; cursor: pointer; padding: 0; }
 .emoji-cell:hover, .emoji-cell:focus-visible { border-color: var(--border); background: var(--fill); outline: none; }
@@ -589,13 +601,10 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .knob-tiles > .bad { color: #b44; margin: 0; }
 .knob-tiles > .linkbtn { justify-self: start; }
 .emoji-cell.empty { font: 600 13px var(--sans); color: var(--purple); border-style: dashed; border-color: var(--border); }
-.word-row .was { white-space: nowrap; overflow: hidden; }
-.word-row :is(.means, .says) { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
-.word-row :is(.means, .says) .ask { font-size: 12.5px; color: var(--dim); line-height: 1.6; }
-.word-row :is(.means, .says) kbd, .word-example kbd, .word-examples + p kbd { font: 12px var(--mono); color: var(--purple); background: var(--card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
-.word-row .means input { font-size: 14px; padding: 8px 12px; border-radius: 10px; }
+.word-field kbd, .word-example kbd, .word-examples + p kbd { font: 12px var(--mono); color: var(--purple); background: var(--card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
 .remove { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; border-radius: 8px; height: 28px; }
 .remove:hover { background: var(--fill); color: var(--text); }
+.emoji-pop-title { margin: 0 2px 8px; font-weight: 600; color: var(--purple); }
 .emoji-pop { position: absolute; z-index: 10; top: 48px; left: 0; width: 340px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 12px; }
 .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; margin-top: 10px; max-height: 220px; overflow-y: auto; }
 .emoji-grid button { font-size: 22px; height: 38px; border: none; background: none; border-radius: 8px; cursor: pointer; padding: 0; }
@@ -637,7 +646,6 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .sound-picker { display: grid; gap: 10px; justify-items: start; }
 .sound-picker .type-it { justify-self: stretch; }
 .sound-picker .status:empty { display: none; }
-.word-example .btn { justify-self: start; }
 .type-it input { flex: 1; min-width: 0; }
 ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 
@@ -693,9 +701,10 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 
 /* The Words page's read-only examples. */
 .word-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; max-width: 580px; margin: 4px 0 14px; }
-.word-example { display: grid; align-content: start; gap: 6px; padding: 12px; border-radius: 16px; border: 1.5px dashed var(--line); font-size: 13px; line-height: 1.4; }
+.word-example { display: grid; align-content: start; gap: 6px; padding: 12px 14px; border-radius: 16px; background: var(--panel); font-size: 13px; line-height: 1.4; }
 .word-example .head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .word-example .pic { display: grid; place-items: center; width: 32px; height: 32px; font-size: 24px; }
+.word-example .rec-mini { width: 30px; height: 30px; font-size: 11px; }
 .word-example .tag { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--purple); white-space: nowrap; }
 .word-example .pic img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
 dialog.card { max-width: 440px; margin: auto; color: var(--text); }

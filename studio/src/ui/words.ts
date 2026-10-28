@@ -3,8 +3,9 @@ import { play } from "../audio";
 import { roomLine } from "../roomvoice";
 import { changed, draft, phraseFor, putPhrase, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
-import { h } from "./dom";
-import { closeEmojiPicker, emojiCell } from "./emojipicker";
+import { h, removeButton } from "./dom";
+import { closeEmojiPicker, emojiCell, openEmojiPicker } from "./emojipicker";
+import { roomPicture } from "./roomfiles";
 import { soundPicker, voiceStays } from "./record";
 import box from "../assets/purple-box.jpg";
 import daddy from "../assets/daddy.mp3";
@@ -26,85 +27,112 @@ const EXAMPLES: { word: string; pic: string | Node; tag: string; types: string; 
 
 function examples(): HTMLElement {
   return h("div", { class: "word-examples" }, ...EXAMPLES.map((x) => h("div", { class: "word-example" },
-    h("div", { class: "head" }, h("span", { class: "pic" }, x.pic), h("b", {}, x.word), h("span", { class: "tag" }, x.tag)),
-    h("div", {}, "Your kid types ", h("kbd", {}, x.types)), h("div", { class: "dim" }, x.then),
-    x.hears ? hearExample(x.hears, x.voice) : null)));
+    h("div", { class: "head" }, h("span", { class: "pic" }, x.pic), h("b", {}, x.word), h("span", { class: "tag" }, x.tag),
+      x.hears ? hearExample(x.hears, x.voice) : null),
+    h("div", {}, "Your kid types ", h("kbd", {}, x.types)), h("div", { class: "dim" }, x.then))));
 }
 
 function hearExample(text: string, voice?: string): HTMLElement {
-  const button = h("button", { type: "button", class: "btn secondary small", onclick: async () => {
+  const button = h("button", { type: "button", class: "rec-mini", title: "Hear it", "aria-label": "Hear it", onclick: async () => {
     if (voice) return void new Audio(voice).play();
     button.disabled = true;
     const clip = await roomLine(text);
     button.disabled = false;
     if (clip) play(clip);
-  } }, "▶ Hear it");
+  } }, "▶");
   return button;
 }
 
-// One table, a row per word and a blank row at the end: type a word, press Enter, pick its emoji,
-// and the next blank row is ready.
+// A row per word, each reading as Purple shows it: the word, then its emoji or picture. One at a time is
+// open to its labeled fields, starting with the newest. Adding a word asks what it shows when Purple has no emoji for it.
 function wordTable(): HTMLElement {
   const rows = h("div", { class: "word-rows" });
   const status = h("div", { class: "status" });
+  let open: WordEntry | null = null;
 
   const checkWord = (word: string, self: WordEntry | null): string | null => {
     if (!WORD.test(word)) return "A word is letters only, no spaces. Kids type one word at a time.";
     if (draft.words.some((w) => w !== self && w.word === word)) return `"${word}" is already in the list.`;
     return null;
   };
+  const focusNew = () => rows.querySelector<HTMLInputElement>(".word-new input")?.focus({ preventScroll: true });
+  const showsTitle = (word: string) => `What should “${word}” show?`;
+  const face = (emoji: string) => roomPicture(emoji) ?? emoji;
 
-  function row(entry: WordEntry | null): HTMLElement {
-    const pending = { emoji: entry?.emoji ?? "" };
-    const word = h("input", { type: "text", value: entry?.word ?? "", placeholder: entry ? "" : "Type a word", "aria-label": "Word", autocomplete: "off", spellcheck: false });
-    const emoji = emojiCell(pending.emoji, () => clean(word.value), (e) => {
-      pending.emoji = e;
-      if (entry) { entry.emoji = e; changed(); showWas(); rows.querySelector<HTMLInputElement>(".blank input")?.focus(); }
-      else if (word.value.trim()) commit();
-      else word.focus();
-    }, { pictures: true });
-    const pick = () => emoji.click();
-    const was = h("span", { class: "dim small was" });
-    const showWas = () => {
-      const core = CORE_EMOJI[clean(word.value)];
-      was.textContent = core && core !== pending.emoji ? `instead of ${core}` : "";
+  function newWord(): HTMLElement {
+    const input = h("input", { type: "text", placeholder: "Type a new word", "aria-label": "New word", autocomplete: "off", spellcheck: false });
+    const add = () => {
+      const word = clean(input.value);
+      status.textContent = checkWord(word, null) ?? "";
+      if (status.textContent) return;
+      const create = (emoji: string) => {
+        draft.words.push(open = { word, emoji, kept: true });
+        status.textContent = "";
+        changed();
+        render();
+        focusNew();
+      };
+      if (CORE_EMOJI[word]) return create(CORE_EMOJI[word]);
+      status.textContent = `Pick what “${word}” shows to add it.`;
+      openEmojiPicker(input, word, create, { pictures: true, title: showsTitle(word) });
     };
-
-    const commit = (): boolean => {
-      const w = clean(word.value);
-      const err = checkWord(w, entry);
-      status.textContent = err ?? "";
-      if (err) return false;
-      if (entry) rename(entry, w);
-      else draft.words.push({ word: w, emoji: pending.emoji, kept: true });
-      changed();
-      render();
-      return true;
-    };
-    word.addEventListener("input", showWas);
-    word.addEventListener("keydown", (e) => {
+    input.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      if (entry) return void (commit() && rows.querySelector<HTMLInputElement>(".blank input")?.focus());
-      if (checkWord(clean(word.value), null)) return void commit();
-      // The picker opens searching for the word, so "dog", Enter, Enter is a whole row.
-      if (pending.emoji) return void commit();
-      pick();
+      add();
     });
-    if (entry) word.addEventListener("change", () => commit() || (word.value = entry.word));
-    showWas();
-
-    const remove = entry ? h("button", { type: "button", class: "remove", title: "Remove", "aria-label": `Remove ${entry.word}`, onclick: () => {
-      draft.words.splice(draft.words.indexOf(entry), 1);
-      putPhrase(entry.word, null);
-      render();
-    } }, "✕") : h("span");
-    return h("div", { class: `word-row${entry ? "" : " blank"}` }, word, h("div", { class: "emoji-wrap" }, emoji), was, remove, ...(entry ? [meaning(entry), voice(entry)] : []));
+    return h("div", { class: "word-new emoji-wrap" }, input, h("button", { type: "button", class: "btn small", onclick: add }, "Add word"));
   }
 
+  function row(entry: WordEntry): HTMLElement {
+    const isOpen = entry === open;
+    const toggle = () => { open = isOpen ? null : entry; render(); };
+    const phrase = phraseFor(entry.word);
+    const marks = [entry.means ? "💬" : "", phrase ? (phrase.said ? "🔊" : "🎤") : ""].join(" ");
+    const head = h("div", { class: "word-head", onclick: (e: Event) => (e.target as Element).closest("button") || toggle() },
+      h("b", { class: "word" }, entry.word), h("span", { class: "shows" }, face(entry.emoji)), h("span", { class: "marks", title: "Has a meaning or a sound" }, marks),
+      h("button", { type: "button", class: "x chevron", "aria-expanded": String(isOpen), "aria-label": isOpen ? "Close" : `Open ${entry.word}`, onclick: toggle }, isOpen ? "▲" : "▼"),
+      removeButton(() => {
+        draft.words.splice(draft.words.indexOf(entry), 1);
+        putPhrase(entry.word, null);
+        render();
+      }));
+    return h("div", { class: `word-row${isOpen ? " open" : ""}` }, head,
+      isOpen ? h("div", { class: "word-fields" }, wordField(entry), showsField(entry), meaning(entry), voice(entry)) : null);
+  }
+
+  function wordField(entry: WordEntry): HTMLElement {
+    const input = h("input", { type: "text", value: entry.word, "aria-label": "Word", autocomplete: "off", spellcheck: false });
+    const commit = () => {
+      const word = clean(input.value);
+      if (word === entry.word) return;
+      status.textContent = checkWord(word, entry) ?? "";
+      if (status.textContent) return void (input.value = entry.word);
+      rename(entry, word);
+      changed();
+      render();
+    };
+    input.addEventListener("change", commit);
+    input.addEventListener("keydown", (e) => e.key === "Enter" && input.blur());
+    return field("Word", input);
+  }
+
+  function showsField(entry: WordEntry): HTMLElement {
+    const core = CORE_EMOJI[entry.word];
+    const pick = emojiCell(entry.emoji, () => entry.word, (e) => {
+      entry.emoji = e;
+      changed();
+      render();
+    }, { pictures: true, title: showsTitle(entry.word) });
+    const note = !core ? "Click it to change it." : core === entry.emoji ? "Purple's own. Click it to change it." : `Instead of Purple's ${core}.`;
+    return field("Shows", h("div", { class: "row emoji-wrap" }, pick, h("span", { class: "dim small" }, note)));
+  }
+
+  const field = (label: string, control: Node, ...types: string[]) => h("div", { class: "word-field" }, h("span", { class: "label" }, label),
+    h("div", {}, control, types.length ? h("div", { class: "types" }, "Your kid types ", ...types.flatMap((t, i) => [i ? " or " : "", h("kbd", {}, t)])) : null));
+
   function meaning(entry: WordEntry): HTMLElement {
-    const input = h("input", { type: "text", value: entry.means ?? "", maxlength: MEANING_MAX, autocomplete: "off",
-      placeholder: "Optional" });
+    const input = h("input", { type: "text", value: entry.means ?? "", maxlength: MEANING_MAX, autocomplete: "off", placeholder: "What Purple answers (optional)", "aria-label": "Meaning" });
     input.addEventListener("change", () => {
       entry.means = input.value.trim() || undefined;
       changed();
@@ -112,10 +140,9 @@ function wordTable(): HTMLElement {
     input.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      rows.querySelector<HTMLInputElement>(".blank input")?.focus();
+      focusNew();
     });
-    return h("label", { class: "means" }, h("span", { class: "ask" }, "Type ", h("kbd", {}, `what is ${entry.word}`), " or ",
-      h("kbd", {}, `who is ${entry.word}`), " in Play and Purple answers:"), input);
+    return field("Meaning", input, `what is ${entry.word}`, `who is ${entry.word}`);
   }
 
   // A word's recording is the phrase of the word itself: Purple plays it whenever it says the word.
@@ -127,20 +154,14 @@ function wordTable(): HTMLElement {
 
   function voice(entry: WordEntry): HTMLElement {
     const p = phraseFor(entry.word);
-    return h("div", { class: "says" }, h("span", { class: "ask" }, "Type ", h("kbd", {}, `${entry.word}!`), " in Play and Purple says:"),
-      soundPicker({ clip: p?.clip, said: p?.said, fallback: entry.word, placeholder: entry.word, small: true,
-        onClip: (clip, said) => { putPhrase(entry.word, clip, true, said); render(); },
-        onClear: () => { putPhrase(entry.word, null); render(); } }));
+    return field("Sound", soundPicker({ clip: p?.clip, said: p?.said, fallback: entry.word, placeholder: `Purple says “${entry.word}”`, small: true,
+      onClip: (clip, said) => { putPhrase(entry.word, clip, true, said); render(); },
+      onClear: () => { putPhrase(entry.word, null); render(); } }), `${entry.word}!`);
   }
 
   function render() {
     closeEmojiPicker();
-    rows.replaceChildren(
-      h("div", { class: "word-row head" }, h("span", {}, "Word"), h("span", {}, "Emoji or picture")),
-      ...draft.words.map(row),
-      row(null),
-    );
-    rows.querySelector<HTMLInputElement>(".blank input")?.focus({ preventScroll: true });
+    rows.replaceChildren(...draft.words.map(row), newWord());
   }
   render();
   return h("div", { class: "card" }, rows, status);
@@ -155,6 +176,7 @@ export function wordsView(): View {
       {},
       h("p", { class: "lead" }, "In Play, kids type a word and see its emoji. Add the words your family uses, like a pet's name, and give each one an emoji or your own photo."),
       h("p", {}, "Each word can also have a meaning, and a sound in your voice or Purple's."),
+      h("h3", {}, "What can a word do?"),
       examples(),
       h("p", { class: "dim small" }, "Purple talks when your kid ends with ", h("kbd", {}, "!"), " or starts with ", h("kbd", {}, "say"), ": ", h("kbd", {}, "nana!"), " and ", h("kbd", {}, "say nana"), " both work. Plain ", h("kbd", {}, "nana"), " just shows the picture."),
       table,
@@ -164,6 +186,6 @@ export function wordsView(): View {
     live: { room: "play" },
     keys: () => typingKeys(draft.words[0]?.word || "cat"),
     caption: "Purple's Play room, with your words in it. Type one and press Enter.",
-    mounted: () => table.querySelector<HTMLInputElement>(".blank input")?.focus(),
+    mounted: () => table.querySelector<HTMLInputElement>(".word-new input")?.focus({ preventScroll: true }),
   };
 }

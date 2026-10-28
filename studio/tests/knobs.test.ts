@@ -79,7 +79,7 @@ describe("knobs", () => {
       explore: ["WORLD", "THINGS", "GROUND", "HERO_COLORS", "TALK"],
       garden: ["SEEDS", "SOIL"],
       beats: ["DRUMS", "SPEED"],
-      memory: ["CARDS", "PLAYERS", "TURNED"],
+      memory: ["CARDS", "TURNED"],
       story: ["TITLE", "PAGES"],
       snake: ["SNAKE", "LENGTH", "TRAIL"],
     });

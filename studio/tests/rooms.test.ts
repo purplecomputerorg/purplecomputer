@@ -65,20 +65,23 @@ describe("family rooms in Studio's Python", () => {
   }, 60_000);
 
   it("runs the memory example: a card on each letter key, turned over by pressing it, and players taking turns", async () => {
-    const source = example("memory").replace(/^PLAYERS = .*$/m, "PLAYERS = 2");
-    const replies = await runRoom(source, [{ ev: "key", key: "q" }, { ev: "key", key: "m" }, { ev: "key", key: "w" }]);
-    expect(texts(replies[0])).toEqual([..."QWERTYUIOASDFGHJKL", "🔴's turn"]);
-    const [q] = texts(replies[1]);
+    const keys = ["2", "q", "m", "w"].map((key) => ({ ev: "key", key }));
+    const replies = await runRoom(example("memory"), keys);
+    expect(texts(replies[0])).toEqual([..."QWERTYUIOASDFGHJKL", "🔴  Press 1 to 6 for players"]);
+    expect(texts(replies[1])).toContain("🔴 🔵  Press 1 to 6 for players");
+    const [q] = texts(replies[2]);
     expect(q).toMatch(/\p{Extended_Pictographic}/u);
-    expect(replies[2]).not.toHaveProperty("scene");
-    expect(texts(replies[3]).slice(0, 2)).not.toContain("W");
+    expect(texts(replies[2])).toContain("🔴's turn");
+    expect(replies[3]).not.toHaveProperty("scene");
+    expect(texts(replies[4]).slice(0, 2)).not.toContain("W");
   }, 60_000);
 
   it("plays memory alone by default with a parent's own picture beside an emoji, and no turn line", async () => {
     const source = example("memory").replace(/^CARDS = .*$/m, 'CARDS = [picture("grandma"), "🐶"]');
     const keys = ["q", "w", "e", "r"].map((key) => ({ ev: "key", key }));
     const replies = await runRoom(source, keys, {}, { images: { grandma: [300, 200] } });
-    expect(texts(replies[0])).toEqual([..."QWER"]);
+    expect(texts(replies[0])).toEqual([..."QWER", "🔴  Press 1 to 6 for players"]);
+    expect(texts(replies[1]).filter((t) => t.includes("turn"))).toEqual([]);
     expect(replies.slice(1).flatMap((r) => shapes(r).filter((s) => s[0] === "image").map((s) => s[5]))).toContain("grandma");
   }, 60_000);
 

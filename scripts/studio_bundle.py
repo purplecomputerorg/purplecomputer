@@ -32,10 +32,11 @@ LOCK = ROOT / "studio" / "node_modules" / "pyodide" / "pyodide-lock.json"
 EXPORT = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
 VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium"
 # The room voice (studio/src/roomvoice.ts): Kokoro, Apache-2.0. int8 is the faster build under WebAssembly.
+# Below speed 1.0 a short line gains a leading "a" ("a blue").
 KOKORO_FILES = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
 KOKORO_CONFIG = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/config.json"
 KOKORO_LICENSE = "https://www.apache.org/licenses/LICENSE-2.0.txt"
-KOKORO = {"model": "kokoro-v1.0.int8.onnx", "voice": "af_heart", "speed": 0.85, "rate": 24000}
+KOKORO = {"model": "kokoro-v1.0.int8.onnx", "voice": "af_heart", "speed": 1.0, "rate": 24000}
 # What the room checker imports: the pack rules and the room library, all standard library.
 CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/pack_manager.py", "purple_tui/synth.py",
            "purple_tui/constants.py", "purple_tui/roomkit/purple.py", "purple_tui/roomkit/runner.py",

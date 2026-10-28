@@ -106,25 +106,36 @@ const flip = () => {
 // The two sides slide past each other where the browser can; elsewhere they just trade places.
 const swap = () => document.startViewTransition?.(flip) ?? flip();
 const side = window.matchMedia("(min-width: 961px)");
+// The line drags at once; the swap button drags once moved a few pixels, and a press that never moved is a click that swaps.
+const NUDGE = 4;
+let dragged = false;
 function drag(e: PointerEvent) {
-  if (e.target !== split || !side.matches) return;
+  if (!side.matches || e.button !== 0) return;
   e.preventDefault();
-  split.setPointerCapture(e.pointerId);
-  body.classList.add("dragging");
-  split.onpointermove = (m) => {
+  // Captured by what was pressed, so a press on the button still ends in a click on it.
+  const grip = e.target as HTMLElement;
+  grip.setPointerCapture(e.pointerId);
+  let moving = grip === split;
+  body.classList.toggle("dragging", moving);
+  grip.onpointermove = (m) => {
+    if (!moving && Math.abs(m.clientX - e.clientX) < NUDGE) return;
+    moving = true;
+    body.classList.add("dragging");
     const { left, width } = body.getBoundingClientRect();
     const x = m.clientX - left;
     const [live, rest] = body.classList.contains("swapped") ? [x, width - x] : [width - x, x];
     widen(live / Math.max(rest, 1));
   };
-  split.onpointerup = split.onpointercancel = () => {
-    split.onpointermove = split.onpointerup = split.onpointercancel = null;
+  const end = () => {
+    grip.onpointermove = grip.onpointerup = grip.onpointercancel = null;
     body.classList.remove("dragging");
-    keep(WIDTH, String(liveWidth));
+    if (moving) keep(WIDTH, String(liveWidth));
   };
+  grip.onpointercancel = end;
+  grip.onpointerup = () => { dragged = moving && grip !== split; end(); };
 }
 const split = h("div", { class: "split", onpointerdown: drag, ondblclick: (e: Event) => { if (e.target === split) { widen(USUAL); keep(WIDTH, String(USUAL)); } } },
-  h("button", { type: "button", class: "swap", title: "Swap sides", "aria-label": "Swap sides", onclick: swap }, "⇄"));
+  h("button", { type: "button", class: "swap", title: "Swap sides", "aria-label": "Swap sides", onclick: () => { if (!dragged) swap(); dragged = false; } }));
 const body = h("div", { class: `body${pref(SWAPPED) === "1" ? " swapped" : ""}` }, main, split, stage);
 widen(Number(pref(WIDTH)) || USUAL);
 app.append(top, body);

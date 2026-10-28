@@ -91,9 +91,14 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 /* A wider grip than the 1px line; the live Purple's frame mustn't catch the pointer mid-drag */
 .split::before { content: ""; position: absolute; inset: 0 -4px; cursor: col-resize; }
 .split:hover, .body.dragging .split { background: var(--purple); }
-.body.dragging { cursor: col-resize; user-select: none; }
+.body.dragging, .body.dragging .swap { cursor: col-resize; user-select: none; }
+/* Drawn, not a font's arrow, so it sits dead center in the circle */
+.swap { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 9h14m-3-3 3 3-3 3M19 15H5m3-3-3 3 3 3'/%3E%3C/svg%3E"); }
+.swap::before { content: ""; width: 16px; height: 16px; background: currentColor; mask: var(--icon) center / contain no-repeat; }
+.body.dragging .swap { rotate: var(--turn); border-color: var(--purple); }
+.body.dragging .swap { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3'/%3E%3C/svg%3E"); }
 .body.dragging iframe { pointer-events: none; }
-.swap { --turn: 0deg; position: sticky; top: 50vh; width: 34px; height: 34px; translate: -50%; rotate: var(--turn); border: 1.5px solid var(--line); border-radius: 50%; background: #fff; color: var(--purple); font-size: 18px; line-height: 1; cursor: pointer; box-shadow: var(--shadow); touch-action: manipulation; transition: rotate 0.25s; }
+.swap { --turn: 0deg; position: sticky; top: 50vh; width: 34px; height: 34px; translate: -50%; rotate: var(--turn); border: 1.5px solid var(--line); border-radius: 50%; background: #fff; color: var(--purple); display: grid; place-items: center; padding: 0; cursor: pointer; box-shadow: var(--shadow); touch-action: manipulation; transition: rotate 0.25s; }
 @media (hover: hover) { .swap:hover { border-color: var(--purple); rotate: calc(var(--turn) + 180deg); } }
 /* Swapping slides the sides past each other; each keeps its true size, clipped, instead of stretching to the new width */
 .main { view-transition-name: studio-main; }

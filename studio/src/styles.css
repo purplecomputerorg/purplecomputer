@@ -84,10 +84,15 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .more-menu summary::after { content: "⋯"; font-size: 18px; }
 }
 
-.body { --first: 1; --last: 3; display: grid; grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1.3fr); min-height: calc(100vh - 60px); }
-.body.swapped { --first: 3; --last: 1; grid-template-columns: minmax(0, 1.3fr) 1px minmax(0, 1fr); }
+.body { --first: 1; --last: 3; --live: 1.3fr; display: grid; grid-template-columns: minmax(0, 1fr) 1px minmax(0, var(--live)); min-height: calc(100vh - 60px); }
+.body.swapped { --first: 3; --last: 1; grid-template-columns: minmax(0, var(--live)) 1px minmax(0, 1fr); }
 .main { order: var(--first); padding: 28px 32px 64px; min-width: 0; }
 .split { order: 2; position: relative; z-index: 4; background: var(--line); }
+/* A wider grip than the 1px line; the live Purple's frame mustn't catch the pointer mid-drag */
+.split::before { content: ""; position: absolute; inset: 0 -4px; cursor: col-resize; }
+.split:hover, .body.dragging .split { background: var(--purple); }
+.body.dragging { cursor: col-resize; user-select: none; }
+.body.dragging iframe { pointer-events: none; }
 .swap { --turn: 0deg; position: sticky; top: 50vh; width: 34px; height: 34px; translate: -50%; rotate: var(--turn); border: 1.5px solid var(--line); border-radius: 50%; background: #fff; color: var(--purple); font-size: 18px; line-height: 1; cursor: pointer; box-shadow: var(--shadow); touch-action: manipulation; transition: rotate 0.25s; }
 @media (hover: hover) { .swap:hover { border-color: var(--purple); rotate: calc(var(--turn) + 180deg); } }
 /* Swapping slides the sides past each other; each keeps its true size, clipped, instead of stretching to the new width */
@@ -112,6 +117,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .stage { order: var(--first); position: static; height: auto; padding: 16px; }
   .main { order: var(--last); }
   .split { height: 1px; }
+  .split::before { content: none; }
+  .split:hover { background: var(--line); }
   .swap { --turn: 90deg; position: absolute; top: 0; left: 50%; translate: -50% -50%; }
   .stage-inner { max-width: 640px; margin: 0 auto; }
   .main { padding: 20px 18px 48px; }

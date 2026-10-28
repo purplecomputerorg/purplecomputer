@@ -87,20 +87,46 @@ const stageTitle = h("h3", {}, "This little computer is a real Purple Computer f
 const stageCaption = h("p", { class: "caption" });
 const stageStays = staysHere("This Purple runs in your browser. What you type into it stays on your device.");
 const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays));
-// Which side the live Purple sits on is a per-browser choice, kept until it's swapped back.
+// Which side the live Purple sits on, and how wide, are per-browser choices kept until changed back.
+const pref = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
+const keep = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* private window: it lasts this visit */ } };
 const SWAPPED = "studio-swapped";
-const saved = (() => { try { return localStorage.getItem(SWAPPED) === "1"; } catch { return false; } })();
+const WIDTH = "studio-live-width";
+// The live Purple's width over the editor's: dragging moves the line only somewhat either way of the usual 1.3.
+const [NARROWEST, USUAL, WIDEST] = [0.8, 1.3, 2.1];
+let liveWidth = USUAL;
+const widen = (r: number) => { liveWidth = Math.min(WIDEST, Math.max(NARROWEST, r)); body.style.setProperty("--live", `${liveWidth}fr`); };
 // Stacked on a phone, the page scrolls so the divider stays where it was under the finger.
 const flip = () => {
   const was = split.getBoundingClientRect().top;
   const on = body.classList.toggle("swapped");
   window.scrollBy(0, split.getBoundingClientRect().top - was);
-  try { localStorage.setItem(SWAPPED, on ? "1" : "0"); } catch { /* private window: it lasts this visit */ }
+  keep(SWAPPED, on ? "1" : "0");
 };
 // The two sides slide past each other where the browser can; elsewhere they just trade places.
 const swap = () => document.startViewTransition?.(flip) ?? flip();
-const split = h("div", { class: "split" }, h("button", { type: "button", class: "swap", title: "Swap sides", "aria-label": "Swap sides", onclick: swap }, "⇄"));
-const body = h("div", { class: `body${saved ? " swapped" : ""}` }, main, split, stage);
+const side = window.matchMedia("(min-width: 961px)");
+function drag(e: PointerEvent) {
+  if (e.target !== split || !side.matches) return;
+  e.preventDefault();
+  split.setPointerCapture(e.pointerId);
+  body.classList.add("dragging");
+  split.onpointermove = (m) => {
+    const { left, width } = body.getBoundingClientRect();
+    const x = m.clientX - left;
+    const [live, rest] = body.classList.contains("swapped") ? [x, width - x] : [width - x, x];
+    widen(live / Math.max(rest, 1));
+  };
+  split.onpointerup = split.onpointercancel = () => {
+    split.onpointermove = split.onpointerup = split.onpointercancel = null;
+    body.classList.remove("dragging");
+    keep(WIDTH, String(liveWidth));
+  };
+}
+const split = h("div", { class: "split", onpointerdown: drag, ondblclick: (e: Event) => { if (e.target === split) { widen(USUAL); keep(WIDTH, String(USUAL)); } } },
+  h("button", { type: "button", class: "swap", title: "Swap sides", "aria-label": "Swap sides", onclick: swap }, "⇄"));
+const body = h("div", { class: `body${pref(SWAPPED) === "1" ? " swapped" : ""}` }, main, split, stage);
+widen(Number(pref(WIDTH)) || USUAL);
 app.append(top, body);
 
 let current: View | null = null;

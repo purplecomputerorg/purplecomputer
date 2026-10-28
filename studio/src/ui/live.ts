@@ -114,10 +114,9 @@ class LiveScreen {
     const turn = ++this.entering;
     const room = draft.rooms.find((r) => r.name === this.setup.family?.name);
     if (room) {
-      await roomReady(room, (text) => turn === this.entering && this.voiceLoading(text));
+      await roomReady(room, (text) => turn === this.entering && (this.status.textContent = text));
       this.queueSync();
       await this.syncing;
-      if (turn === this.entering) this.voiceLoading("");
     }
     if (turn !== this.entering || !this.ready) return;
     this.asked = turn;

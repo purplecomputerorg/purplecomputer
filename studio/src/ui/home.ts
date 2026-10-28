@@ -59,9 +59,11 @@ const WAVE = `<path d="M${Array.from({ length: 321 }, (_, i) => `${i / 2} ${(15 
 const WORLD = ["TTTTTTTTTTTT", "T.*..T..~~.T", "T....T.~~~*T", "T.f.....~~.T", "T....@.....T", "T.d...h..*.T", "TTTTTTTTTTTT"];
 const TILES: Record<string, string> = { T: "🌳", "*": "⭐", f: "🦊", "@": "🧒", h: "🏠", d: "🚪" };
 
+const SPEAKER = '<path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+
 const SCREENS: Record<string, () => Node[]> = {
   pictures: () => [dogCells()],
-  keys: () => [h("span", { class: "bubble" }, "“Hi sweetie, it's Grandma!”"), sticker("g")],
+  keys: () => [h("span", { class: "bubble" }, svg("0 0 24 24", SPEAKER, "speaker"), "“Hi sweetie, it's Grandma!”"), sticker("g")],
   words: () => [h("span", { class: "prompt" }, h("i", {}, "Type →"), h("span", { class: "field" }, "biscuit", h("span", { class: "caret" }))), h("span", { class: "big" }, "🐶"), h("i", {}, "Biscuit is our dog!")],
   instruments: () => [svg("0 0 160 30", WAVE, "wave"), h("span", {}, "bzzz bzz bzzzz")],
   colors: () => [h("span", {}, "My Purple Computer"), h("b", {})],

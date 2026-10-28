@@ -1,6 +1,7 @@
 /* Purple's own Art letters and code font, so they look here as they will there. */
 @font-face { font-family: PurpleArt; src: url("../../purple_tui/canvas/fonts/MartianMonoArt-Bold.ttf"); }
 @font-face { font-family: PurpleMono; src: url("../../purple_tui/canvas/fonts/IBMPlexMono-Regular.ttf"); }
+@font-face { font-family: PurpleMono; font-weight: 700; src: url("../../purple_tui/canvas/fonts/IBMPlexMono-Bold.ttf"); }
 :root {
   --purple: #5c2d91;
   --purple-dark: #4a2473;
@@ -470,13 +471,20 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 /* Sized to the column so the headline never wraps: it is about 13em wide */
 .home h1 { font-size: min(38px, 7.2cqi); white-space: nowrap; }
 .home .stroke { padding-bottom: 0.08em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 24' preserveAspectRatio='none'%3E%3Cpath d='M4 16 C 60 6, 140 4, 296 10' stroke='%239b59d0' stroke-width='9' stroke-linecap='round' fill='none' opacity='0.5'/%3E%3C/svg%3E") 0 100% / 100% 0.36em no-repeat; }
+.home .serif { font-size: 22px; line-height: 1.35; margin: 16px 0 20px; max-width: 30em; text-wrap: balance; }
+.home-note { max-width: 40em; padding: 2px 0 2px 12px; border-left: 3px solid var(--border); color: var(--dim); font-size: 13.5px; line-height: 1.55; text-wrap: pretty; }
+.home-note b { color: var(--text); font-weight: 600; }
 .home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 16px; margin: 30px 0 36px; }
 .home-card { --tilt: -1deg; position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 14px; background: var(--card); border-radius: 6px; box-shadow: 0 2px 0 #ece5f3, 0 10px 22px rgba(92, 45, 145, 0.09); color: inherit; text-decoration: none; transform: rotate(var(--tilt)); transition: transform 0.15s, box-shadow 0.15s; }
 .home-card:nth-child(3n + 2) { --tilt: 1deg; }
 .home-card:nth-child(3n) { --tilt: -0.5deg; }
 .home-card:hover { color: inherit; transform: none; box-shadow: 0 2px 0 #ece5f3, 0 16px 30px rgba(92, 45, 145, 0.16); }
 /* Each card's tape a little different, as if torn and stuck by hand */
-.home-card::before { content: ""; position: absolute; top: -6px; left: calc(50% + var(--tape-x, 0px)); width: var(--tape-w, 70px); height: 13px; translate: -50% 0; background: rgba(196, 174, 224, 0.55); transform: rotate(var(--tape-r, -3deg)); }
+.home-card::before { content: ""; position: absolute; top: -7px; left: calc(50% + var(--tape-x, 0px)); width: var(--tape-w, 70px); height: 15px; translate: -50% 0; transform: rotate(var(--tape-r, -3deg));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 40%, rgba(120, 80, 170, 0.08)), rgba(201, 180, 228, 0.62);
+  mix-blend-mode: multiply;
+  /* Torn ends */
+  clip-path: polygon(2% 0, 98% 0, 100% 14%, 97% 30%, 100% 46%, 96% 62%, 99% 80%, 97% 100%, 3% 100%, 0 84%, 3% 66%, 0 50%, 4% 34%, 1% 18%); }
 .home-card:nth-child(6n + 2) { --tape-w: 62px; --tape-r: 2deg; --tape-x: 8px; }
 .home-card:nth-child(6n + 3) { --tape-w: 76px; --tape-r: -1.5deg; --tape-x: -10px; }
 .home-card:nth-child(6n + 4) { --tape-w: 66px; --tape-r: 4deg; --tape-x: 4px; }
@@ -506,7 +514,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .mini .map .water { background: #3f7fd0; }
 .pack-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 18px; margin-bottom: 18px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
 .pack-line p { flex: 1 1 260px; margin: 0; }
-.at-home .stage h3 { font: 700 30px/1.2 Caveat, cursive; text-transform: none; letter-spacing: 0; color: var(--purple); transform: rotate(2deg); transform-origin: left; margin: 24px 0 16px 8px; }
+.at-home .stage h3 { font: 500 clamp(22px, 5.5vw, 30px)/1.15 Caveat, cursive; text-wrap: balance; text-transform: none; letter-spacing: 0; text-align: center; color: var(--purple); margin: min(24px, 3vw) 0 min(16px, 3vw); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }
 h3 + .cards { margin-top: 0; }
@@ -624,9 +632,9 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 
 /* The live Purple, covered by a quiet message until it's running and while it restarts */
-.screen-wrap.live { background: #1d1234; }
+.screen-wrap.live { background: #1d1234; font-family: var(--mono); }
 .live-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
-.live-status { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; background: #1d1234; color: #e8daf0; font-family: var(--display); font-size: 17px; letter-spacing: -0.01em; text-align: center; transition: opacity 0.3s; }
+.live-status { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; background: #1d1234; color: #e8daf0; font-size: 15px; text-align: center; transition: opacity 0.3s; }
 .live-status i { width: 34px; height: 34px; border-radius: 99px; border: 3px solid rgba(232, 218, 240, 0.18); border-top-color: #e8daf0; animation: spin 1s linear infinite; }
 .live.failed .live-status i { display: none; }
 .live:not(.ready) .zoom-toggle { display: none; }

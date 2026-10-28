@@ -101,12 +101,13 @@ export function homeView(sections: HomeSection[]): View {
   return {
     title: "",
     editor: h("section", { class: "home" },
-      h("h1", {}, "Put your family ", h("span", { class: "stroke" }, "into Purple.")),
-      h("p", { class: "lead" }, "Add a few things that are yours: the dog, your voice, the words you use at home. Here are a few ideas. Click one to make your own."),
+      h("h1", {}, "Make Purple ", h("span", { class: "stroke" }, "your own.")),
+      h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
+      h("p", { class: "home-note" }, h("b", {}, "For Purple Computer customers: "), "Purple Studio lets you customize it for your family. Make changes here and transfer them to your Purple Computer with a USB drive."),
       h("div", { class: "home-cards" }, ...sections.map(card)),
       packLine,
     ),
     live: { room: "art" },
-    previewTitle: "This is Purple Computer",
+    previewTitle: "This little computer is a real Purple Computer for you to try",
   };
 }

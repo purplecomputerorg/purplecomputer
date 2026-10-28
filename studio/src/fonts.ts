@@ -3,6 +3,7 @@ import "@fontsource/figtree/400.css";
 import "@fontsource/figtree/500.css";
 import "@fontsource/figtree/600.css";
 import "@fontsource/figtree/700.css";
+import "@fontsource/caveat/500.css";
 import "@fontsource/caveat/600.css";
 import "@fontsource/caveat/700.css";
 import "@fontsource/nunito/800.css";

@@ -1749,7 +1749,7 @@ class PurpleApp:
         right, x = self._battery_text(), frame.right
         if right:
             x = g.draw_text(right, px, x, y, "mono", P.MUTED, anchor="midright").x - px
-        if self._keyboard_state_machine.sticky_shift:
+        if self._keyboard_state_machine.shift_active:
             draw_key(g, "⇧ Shift", round(px * 0.85), x, y, anchor="midright", fill=P.PRIMARY, ink=P.ON_PRIMARY)
 
     def _legend_metrics(self) -> tuple:

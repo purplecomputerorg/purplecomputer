@@ -655,7 +655,7 @@ class BlocksRoom(Room):
                          1 if self._back else 0, self._color, wheel=wheel_chip(self))
         if foot_h:
             foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
-            draw_key_hint(g, PICK_HINT if self.app._keyboard_state_machine.sticky_shift else HINT, g.vh(1.9), foot.x, foot.centery)
+            draw_key_hint(g, PICK_HINT if self.app._keyboard_state_machine.shift_active else HINT, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
 
     def _draw_hold_badge(self, g, ox, oy, area):

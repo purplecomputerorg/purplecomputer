@@ -1075,6 +1075,11 @@ class KeyboardStateMachine:
         return self._sticky_shift_active and time.time() - self._sticky_shift_time <= self.STICKY_SHIFT_GRACE
 
     @property
+    def shift_active(self) -> bool:
+        """Shift is held, or a tap of it is waiting for the next character."""
+        return self._shift_held or self.sticky_shift
+
+    @property
     def held_arrow_direction(self) -> str | None:
         """Get the currently held arrow direction, if any."""
         arrow_keys = [

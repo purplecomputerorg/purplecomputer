@@ -76,3 +76,14 @@ def test_paint_mode_hint_while_sticky_shift_waits():
         keys._sticky_shift_time -= keys.STICKY_SHIFT_GRACE + 1
         assert canvas._hint_key() == "paint", "an expired tap of Shift no longer picks, so the hint goes back"
     run(_test())
+
+
+def test_paint_mode_hint_while_shift_held():
+    async def _test():
+        canvas = _canvas(paint_mode=True)
+        keys = canvas.app._keyboard_state_machine
+        keys._shift_held = True
+        assert canvas._hint_key() == "pick"
+        keys._shift_held = False
+        assert canvas._hint_key() == "paint"
+    run(_test())

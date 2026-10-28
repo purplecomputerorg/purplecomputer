@@ -791,7 +791,7 @@ class ArtRoom(Room):
                                            self._paint_mode and color_recipe.hint_row(self._last_key_char, self._mixed))
 
     def _hint_key(self) -> str:
-        if self._paint_mode and self.app._keyboard_state_machine.sticky_shift:
+        if self._paint_mode and self.app._keyboard_state_machine.shift_active:
             return "pick"
         if self._paint_mode:
             return "pen" if self._pen_down else "paint"

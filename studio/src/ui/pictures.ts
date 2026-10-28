@@ -4,6 +4,7 @@ import { CANVAS_SHAPE, EXAMPLES, PICTURE_KINDS, clampCrop, cropTo, examplePictur
 import { artOf, forget, removeFromPack, renameShelved, roomFileOf, shelf, shelveFile, usedIn, type Shelved } from "../shelf";
 import { changed, draft, freeName, isTheirs, titleOf, withSample, type Keepable } from "../state";
 import { go, h } from "./dom";
+import { purpleEmoji } from "./icons";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
 import { renameRoomFile } from "./roomfiles";
@@ -47,8 +48,10 @@ function dropZone(): HTMLElement {
       ondragleave: () => drop.classList.remove("over"),
       ondrop: (e: DragEvent) => { e.preventDefault(); drop.classList.remove("over"); add(e.dataTransfer?.files[0]); },
     },
-    h("div", {}, "Drop a picture here, or click to choose one."),
-    h("div", { class: "small" }, `A photo, a scan of a drawing, anything: ${PICTURE_KINDS}. It stays on your device.`),
+    purpleEmoji("🖼️", "drop-icon"),
+    h("div", { class: "drop-title" }, "Drop a photo or drawing here"),
+    h("span", { class: "btn secondary small" }, "Choose a picture"),
+    h("div", { class: "drop-hint" }, PICTURE_KINDS),
     input,
   );
   return h("div", {}, drop, status);

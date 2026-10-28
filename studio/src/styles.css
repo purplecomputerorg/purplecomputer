@@ -277,6 +277,10 @@ input[type="range"] { accent-color: var(--purple); width: 100%; margin: 0; }
 }
 .drop.over, .drop:hover { background: var(--fill); border-color: var(--magenta); }
 .drop input { display: none; }
+.drop .drop-icon { width: 40px; height: 40px; font-size: 34px; display: block; margin: 0 auto 8px; }
+.drop .drop-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+.drop:hover .btn.secondary { background: #fff; border-color: var(--purple); }
+.drop .drop-hint { font-size: 12px; margin-top: 10px; }
 .photo-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
 .photo-list a { display: flex; flex-direction: column; gap: 4px; width: 84px; text-decoration: none; color: var(--text); font-size: 12px; text-align: center; line-height: 1.2; }
 .photo-list img { width: 84px; height: 84px; object-fit: cover; border-radius: 12px; border: 3px solid #fff; box-shadow: var(--shadow); }

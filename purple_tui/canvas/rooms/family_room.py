@@ -617,7 +617,7 @@ class FamilyRoom(Overlay):
             px = int(vp.h * 0.05)
             g.draw_text("Resting. Press a key to keep going", px, vp.centerx, vp.bottom - px * 2.2, "mono", P.MUTED,
                         anchor="midtop", bg=P.SURFACE, pad=px // 3)
-        app._draw_status(frame, right="")
+        app._draw_footer(frame)
 
     def _draw_fault(self, g, vp):
         px = int(vp.h * 0.06)

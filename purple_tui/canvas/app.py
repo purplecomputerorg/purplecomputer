@@ -1721,12 +1721,16 @@ class PurpleApp:
             draw_hold_bar(g, strip, *bar)
         self._draw_save_flash(frame)
         g.surface.set_clip(None)
-        esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
-        if self._legend_visible and not self._code_panel_active:   # keys type code there, not colors
-            self._draw_legend(frame, esc_pill.bottom if esc_pill else g.h - g.vh(2))
+        self._draw_footer(frame)
         for o in self._overlays:
             o.draw(g)
         self._draw_toasts()
+
+    def _draw_footer(self, frame):
+        """The status strip and, beside it, the sticker keyboard: the same under every room."""
+        esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
+        if self._legend_visible and not self._code_panel_active:   # keys type code there, not colors
+            self._draw_legend(frame, esc_pill.bottom if esc_pill else self.g.h - self.g.vh(2))
 
     def _draw_title(self, frame, title=None):
         """The strip above the frame: computer name, screen title, battery.
@@ -1787,14 +1791,18 @@ class PurpleApp:
     def _draw_status(self, frame, left=None, right=None, tabs=True):
         """The strip under the viewport: keyboard note, the Esc pill and room
         names (active one in inverse video), arrow hint. The Parent Menu
-        reuses it with its own corners and no room tabs."""
+        reuses it with its own corners and no room tabs. A family room's name
+        takes the arrow hint's corner, lit."""
         g = self.g
         y = g.h - g.vh(STATUS_TEXT_VH)
         if self._littles_mode:
             g.draw_text("Littles Mode · Hold Esc to exit", g.em(0.92), frame.centerx, y, "mono", P.MUTED, anchor="center")
             return
         left = left if left is not None else "Keyboard only, on purpose"
-        if right is None:
+        family = self.family_room if tabs else None
+        if family:
+            right = ""
+        elif right is None:
             right = (getattr(self._panel, "arrow_hint", None) or self.room.arrow_hint)()
             if self._effective_volume() == 0:
                 right = f"{ICON_VOLUME_OFF}  " + right
@@ -1806,8 +1814,11 @@ class PurpleApp:
         here = self.family_room or self.active_room
         for rid, label, r in parts["tabs"]:
             draw_label(g, label, px, r.centerx, y, P.MUTED, anchor="center", on=rid == here)
-        h = g.markup_size(right, px, "mono")[1]
-        g.draw_markup(right, px, parts["right"].x, y - h // 2, "mono", P.DIM)
+        if family:
+            draw_label(g, family.tab, px, frame.right, y, anchor="midright", on=True)
+        else:
+            h = g.markup_size(right, px, "mono")[1]
+            g.draw_markup(right, px, parts["right"].x, y - h // 2, "mono", P.DIM)
         return esc_pill
 
     def _status_layout(self, frame, left: str, right: str, tabs: bool = True):
@@ -1816,15 +1827,15 @@ class PurpleApp:
         pill and room tabs fit the frame side by side."""
         g = self.g
         names = [(rid, f"{self.rooms[rid].icon} {self.rooms[rid].label}") for rid in self.kid_rooms] if tabs else []
-        if tabs and (family := self.family_room):
-            names.append((family, family.tab))
+        family = self.family_room if tabs else None
         reserve = self._legend_width() if self._legend_visible and not self._code_panel_active else 0
 
         def widths(px):
             pad, gap = round(px * 1.4), round(px * 0.55)
             mid = [g.measure(f"Esc {ICON_MENU}", px, "mono")[0] + pad] + \
                   [g.measure(t, px, "mono-bold")[0] + pad for _, t in names]
-            return gap, mid, max(reserve, g.measure(left, px, "mono")[0]), g.markup_size(right, px, "mono")[0]
+            rw = g.measure(family.tab, px, "mono-bold")[0] + pad if family else g.markup_size(right, px, "mono")[0]
+            return gap, mid, max(reserve, g.measure(left, px, "mono")[0]), rw
 
         def need(px):
             gap, mid, lw, rw = widths(px)

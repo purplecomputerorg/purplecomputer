@@ -136,7 +136,8 @@ def test_esc_picks_a_room_like_any_room(pack):
         app.action_switch_room("art")
         room = _open(app, "worm")
         app._draw()
-        assert room.tab in [t for _, t, _ in app._status_layout(app._frame_rect(app._viewport_rect()), "", "")[1]["tabs"]]
+        _, parts = app._status_layout(app._frame_rect(app._viewport_rect()), "", "")
+        assert room.tab not in [t for _, t, _ in parts["tabs"]] and parts["right"].w > 0
         await press(app, "escape")
         picker = app.top
         assert isinstance(picker, RoomPicker) and (picker.row, picker.col) == (FAMILY, 1) and HERE not in picker.rows

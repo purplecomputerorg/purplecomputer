@@ -704,7 +704,8 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .word-example { display: grid; align-content: start; gap: 6px; padding: 12px 14px; border-radius: 16px; background: var(--panel); font-size: 13px; line-height: 1.4; }
 .word-example .head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .word-example .pic { display: grid; place-items: center; width: 32px; height: 32px; font-size: 24px; }
-.word-example .rec-mini { width: 30px; height: 30px; font-size: 11px; }
+.word-example .types { display: flex; align-items: center; gap: 6px; min-height: 30px; }
+.word-example .rec-mini { flex: none; margin-left: auto; width: 30px; height: 30px; font-size: 11px; }
 .word-example .tag { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--purple); white-space: nowrap; }
 .word-example .pic img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
 dialog.card { max-width: 440px; margin: auto; color: var(--text); }

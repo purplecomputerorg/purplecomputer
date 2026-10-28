@@ -27,9 +27,9 @@ const EXAMPLES: { word: string; pic: string | Node; tag: string; types: string; 
 
 function examples(): HTMLElement {
   return h("div", { class: "word-examples" }, ...EXAMPLES.map((x) => h("div", { class: "word-example" },
-    h("div", { class: "head" }, h("span", { class: "pic" }, x.pic), h("b", {}, x.word), h("span", { class: "tag" }, x.tag),
-      x.hears ? hearExample(x.hears, x.voice) : null),
-    h("div", {}, "Your kid types ", h("kbd", {}, x.types)), h("div", { class: "dim" }, x.then))));
+    h("div", { class: "head" }, h("span", { class: "pic" }, x.pic), h("b", {}, x.word), h("span", { class: "tag" }, x.tag)),
+    h("div", { class: "types" }, "Your kid types ", h("kbd", {}, x.types), x.hears ? hearExample(x.hears, x.voice) : null),
+    h("div", { class: "dim" }, x.then))));
 }
 
 function hearExample(text: string, voice?: string): HTMLElement {

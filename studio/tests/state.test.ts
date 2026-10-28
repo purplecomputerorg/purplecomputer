@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addAll, clearSection, draft, emptyDraft, freeName, hasWork, madeOf, onChange, phraseFor, pieces, putPhrase, replaceDraft, tryingPieces, withSample, type WordEntry } from "../src/state";
+import { clearSection, draft, emptyDraft, freeName, hasWork, keep, madeOf, mine, onChange, phraseFor, notInPieces, pieces, putPhrase, replaceDraft, withSample, type WordEntry } from "../src/state";
 
 describe("rooms saved before the picture quiz", () => {
   it("keeps a trivia room's Python but not its old form, and keeps every other form", () => {
@@ -65,13 +65,22 @@ describe("the draft", () => {
     expect(withSample(tried, { word: "owl", emoji: "🦉" }).map((w) => w.word)).toEqual(["biscuit", "dino", "owl"]);
   });
 
-  it("counts what's added apart from what's being tried, and adds it all at once", () => {
-    replaceDraft({ ...draft, words: [{ word: "biscuit", emoji: "🐶", kept: true }, { word: "zorbo", emoji: "🐙", sample: true }], ranked: ["biscuit"] });
+  it("counts what's added apart from what isn't: examples tried and what was taken out", () => {
+    const zorbo: WordEntry = { word: "zorbo", emoji: "🐙", sample: true };
+    const owl: WordEntry = { word: "owl", emoji: "🦉", kept: false };
+    replaceDraft({ ...draft, words: [{ word: "biscuit", emoji: "🐶", kept: true }, zorbo, owl], ranked: ["biscuit"] });
     expect(pieces().map((p) => [p.id, p.count])).toEqual([["words", 1], ["autocomplete_picks", 1]]);
-    expect(tryingPieces().map((p) => [p.id, p.count])).toEqual([["words", 1]]);
-    addAll();
-    expect(tryingPieces()).toEqual([]);
-    expect(draft.words.every((w) => w.kept && !w.sample)).toBe(true);
+    expect(notInPieces().map((p) => p.items)).toEqual([[zorbo, owl]]);
+    keep(owl, true);
+    expect(notInPieces().map((p) => p.items)).toEqual([[zorbo]]);
+  });
+
+  it("puts an example in the Purple Pack once it's changed, and leaves the family's own as they chose", () => {
+    const tried: WordEntry = { word: "cat", emoji: "🐈", sample: true };
+    const out: WordEntry = { word: "owl", emoji: "🦉", kept: false };
+    mine(tried);
+    mine(out);
+    expect([tried, out].map((w) => [w.sample, w.kept])).toEqual([[false, true], [undefined, false]]);
   });
 
   it("starts another Purple Pack in the same draft object, telling every page", () => {

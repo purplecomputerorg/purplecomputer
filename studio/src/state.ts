@@ -12,8 +12,8 @@ import { asSaid } from "@sdk/says";
 // Set false to hide the Rooms page, Room guide, and pack.room. Mutable so tests can flip it.
 export const features = { rooms: true };
 
-// Everything starts as a try: Studio's Purple plays it, and it goes in the download once the family
-// adds it (kept). A sample is one of Studio's examples, tried and not yet changed or added.
+// A sample is one of Studio's examples, being tried: Studio's Purple plays it, the download leaves it out.
+// Anything the family makes or changes is theirs and goes in their Purple Pack (kept) until they take it out.
 export interface Keepable { kept?: boolean; sample?: boolean }
 // means: what Play says when they ask what or who the word is.
 export interface WordEntry extends Keepable { word: string; emoji: string; means?: string }
@@ -105,6 +105,14 @@ export const titleOf = (p: { name: string; title?: string }) => p.title || roomT
 export const withSample = <T extends Keepable>(list: T[], item: T): T[] => [...list.filter(isTheirs), { ...item, sample: true }];
 // Changed or added: an example only tried isn't the family's yet, so their lists leave it out.
 export const isTheirs = (x: Keepable) => !x.sample || !!x.kept;
+// Changing one of Studio's examples makes it the family's, so it goes in their Purple Pack. Their own stay as they are.
+export function mine(x: Keepable) {
+  if (x.sample) Object.assign(x, { sample: false, kept: true });
+}
+export function keep(x: Keepable, kept: boolean) {
+  Object.assign(x, { sample: false, kept });
+  changed();
+}
 
 export interface Piece { id: string; section: string; label: string; one: string; items: Keepable[] }
 
@@ -136,17 +144,22 @@ export function clearSection(section: string) {
 }
 
 export type Count = Piece & { count: number };
-const counted = (kept: boolean): Count[] => allPieces()
-  .map((p) => ({ ...p, items: p.items.filter((i) => !!i.kept === kept) }))
+const counted = (which: (i: Keepable) => boolean): Count[] => allPieces()
+  .map((p) => ({ ...p, items: p.items.filter(which) }))
   .map((p) => ({ ...p, count: p.items.length }))
   .filter((p) => p.count > 0);
 export const countOf = (p: Count) => `${p.count} ${p.count === 1 ? p.one : p.label}`;
-// What the family has added (the download), and what they're still trying.
-export const pieces = () => counted(true);
-export const tryingPieces = () => counted(false);
-export const addAll = () => allPieces().forEach((p) => p.items.forEach((i) => { i.kept = true; i.sample = false; }));
+// What the family has added (the download), and what's left out: examples tried as they are, and what they took out.
+export const pieces = () => counted((i) => !!i.kept);
+export const notInPieces = () => counted((i) => !i.kept);
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
 export const onChange = (fn: Listener) => listeners.add(fn);
 export const changed = () => listeners.forEach((fn) => fn());
+// On each change while el is on the page, starting once it's there; after it leaves, never again.
+export function whileShown(el: HTMLElement, fn: Listener) {
+  let seen = false;
+  const each = () => (el.isConnected ? (seen = true, fn()) : seen && listeners.delete(each));
+  listeners.add(each);
+}

@@ -411,7 +411,7 @@ textarea.words-in { field-sizing: content; width: 100%; min-width: 0; resize: ve
 .entry-fields > :has(textarea) { flex-basis: 100%; }
 .add-slot { min-width: 52px; min-height: 36px; align-self: stretch; border: 1.5px dashed var(--border); border-radius: 12px; background: none; color: var(--purple); font: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
 .add-slot:hover { background: var(--fill); border-style: solid; }
-input.room-name.just-yours { animation: just-yours 1.8s ease-out; }
+input.room-name.just-yours, .trybar.just-added { animation: just-yours 1.8s ease-out; }
 @keyframes just-yours { 0%, 40% { background: var(--fill); border-color: var(--border); } }
 .py-help { font-size: 14px; margin: 0 0 10px; }
 .py-help p { margin: 0 0 6px; }
@@ -623,8 +623,8 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .vkey { position: relative; background: none; border: 0; padding: 2px; border-radius: 0.8em; cursor: pointer; font-size: inherit; transition: transform 0.1s; }
 .vkey:hover { transform: translateY(-1px); }
 .vkey.current { box-shadow: 0 0 0 3px #fff; }
-.vkey.tried::after, .vkey.kept::after { content: ""; position: absolute; right: -3px; top: -3px; width: 14px; height: 14px; border-radius: 99px; border: 1.5px solid #2a2930; box-sizing: border-box; font: 700 9px/11px var(--sans); text-align: center; color: #fff; }
-.vkey.tried::after { background: var(--fill); }
+.vkey.left-out::after, .vkey.kept::after { content: ""; position: absolute; right: -3px; top: -3px; width: 14px; height: 14px; border-radius: 99px; border: 1.5px solid #2a2930; box-sizing: border-box; font: 700 9px/11px var(--sans); text-align: center; color: #fff; }
+.vkey.left-out::after { background: var(--fill); }
 .vkey.kept::after { content: "✓"; background: #4f9b62; }
 .voice-now { display: flex; align-items: center; gap: 24px; padding: 22px 24px; }
 .voice-key { font-size: 34px; flex-shrink: 0; }
@@ -669,11 +669,8 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .pack-item .pick-swatch { margin: 0 0 0 6px; }
 .pack-item .mini-screen { width: 64px; padding: 8px 7px; }
 .pack-icon { font-size: 20px; line-height: 1; padding-left: 6px; }
-.unadded { border: 2px solid var(--danger); background: #fdf3f4; }
-.unadded h3 { margin: 0 0 4px; color: var(--danger); }
-.unadded > p { margin: 0 0 10px; }
-.unadded > .btn { margin-top: 12px; }
-.unadded .pack-item { background: var(--card); }
+.not-in h3 { margin: 0 0 4px; }
+.pack-add { display: inline-flex; align-items: center; gap: 6px; }
 .pack-colors { display: inline-flex; align-items: center; gap: 4px; }
 .map-painter { display: grid; gap: 12px; }
 .map-brushes { display: flex; flex-wrap: wrap; gap: 8px; }

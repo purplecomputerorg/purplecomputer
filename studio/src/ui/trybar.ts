@@ -1,24 +1,24 @@
-// The one way every page shows whether something is in the family's Purple Pack yet. Everything starts as
-// a try that Studio's Purple plays; adding it puts it in the download.
-import { changed, isTheirs, type Keepable } from "../state";
+// The one way every page shows whether something is in the family's Purple Pack. Studio's examples start
+// out of it; anything the family makes or changes goes in, until they take it out.
+import { isTheirs, keep, whileShown, type Keepable } from "../state";
 import { h } from "./dom";
 
-const keep = (item: Keepable, kept: boolean) => {
-  item.kept = kept;
-  item.sample = false;
-  changed();
-};
-
-// For the thing a page is about: "Trying it" with Add, or "In your Purple Pack" with Take it out.
-// remove: "Never mind", which drops a try altogether.
-export function tryBar(item: Keepable, remove?: () => void): HTMLElement {
+// For the thing a page is about: in the Purple Pack, or not with one way in. It follows the item as the
+// page changes it, and lights up when a change puts it in.
+export function tryBar(item: Keepable): HTMLElement {
   const bar = h("div", { class: "trybar" });
-  const render = () => bar.replaceChildren(...[...(item.kept
-    ? [h("span", { class: "added" }, "✓ In your Purple Pack. Changes you make here go in it too."), h("button", { class: "linkbtn dim small", onclick: () => { keep(item, false); render(); } }, "Take it out")]
-    : [h("span", { class: "trying" }, "Just trying it. It isn't in your Purple Pack yet."),
-      h("button", { class: "btn small", onclick: () => { keep(item, true); render(); } }, "Add to my Purple Pack"),
-      remove ? h("button", { class: "linkbtn dim small", onclick: remove }, "Never mind") : null])].filter((e) => e !== null));
+  let shown: boolean | undefined;
+  const render = () => {
+    const kept = !!item.kept;
+    if (kept === shown) return;
+    bar.classList.toggle("just-added", kept && shown === false);
+    shown = kept;
+    bar.replaceChildren(...(kept
+      ? [h("span", { class: "added" }, "✓ In your Purple Pack. Changes you make here go in it too."), h("button", { class: "linkbtn dim small", onclick: () => keep(item, false) }, "Take it out")]
+      : [h("span", { class: "trying" }, "Not in your Purple Pack."), h("button", { class: "btn small", onclick: () => keep(item, true) }, "Add to my Purple Pack")]));
+  };
   render();
+  whileShown(bar, render);
   return bar;
 }
 
@@ -93,15 +93,4 @@ export function keepButton(item: Keepable, onChange?: () => void): HTMLElement {
   };
   paint();
   return button;
-}
-
-export const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? " is" : "s are"}`;
-
-// Under a list: how many are still tries, and one button to add them all.
-export function addAllBar(items: Keepable[], what: (n: number) => string, onChange: () => void): HTMLElement | null {
-  const trying = items.filter((i) => !i.kept);
-  if (!trying.length) return null;
-  return h("div", { class: "trybar" },
-    h("span", { class: "trying" }, `${what(trying.length)} just being tried, not in your Purple Pack yet.`),
-    h("button", { class: "btn small", onclick: () => { trying.forEach((i) => keep(i, true)); onChange(); } }, trying.length > 1 ? "Add them all" : "Add it"));
 }

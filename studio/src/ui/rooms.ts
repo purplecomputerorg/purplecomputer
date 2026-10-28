@@ -4,7 +4,7 @@ import { BLANK_ROOM, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } f
 import { readKnobs, writeKnobs } from "../knobs";
 import type { RoomSetup } from "../live/boot";
 import { rulesSource } from "../rules";
-import { changed, draft, freeName, withSample, type Made, type RoomDraft } from "../state";
+import { changed, draft, freeName, mine, withSample, type Made, type RoomDraft } from "../state";
 import { go, h } from "./dom";
 import { knobsForm } from "./knobsform";
 import { liveScreen, type RoomProblem } from "./live";
@@ -36,7 +36,7 @@ function rename(room: RoomDraft, text: string): string | null {
   const name = roomName(text, room);
   if (!ROOM_NAME.test(name)) return "Use letters, numbers, and spaces.";
   room.name = name;
-  room.sample = false;
+  mine(room);
   changed();
   return null;
 }
@@ -47,7 +47,7 @@ function drop(gone: RoomDraft[]) {
   go("#rooms");
 }
 
-// Opening a way to start only tries it: it becomes the family's room when they change something.
+// Opening a way to start only tries it: it becomes the family's room, in their Purple Pack, when they change something.
 function tryRoom(base: string, made: Made | null, source = made ? sourceOf(made) : BLANK_ROOM) {
   const name = roomName(base);
   draft.rooms = withSample(draft.rooms, { name, source, made });
@@ -115,6 +115,7 @@ function pythonHelp(source: string): HTMLElement {
 }
 
 type Tab = "made" | "knobs" | "python";
+const IN_PLACE = " The copy goes in your Purple Pack in place of this one.";
 
 function editor(room: RoomDraft): View {
   const problems = problemBox();
@@ -145,7 +146,7 @@ function editor(room: RoomDraft): View {
   const edited = (source: string, ms: number) => {
     room.source = source;
     if (room.sample) {
-      room.sample = false;
+      mine(room);
       nameNote.textContent = "It's yours now. Click its name to change it.";
       nameIn.classList.add("just-yours");
     }
@@ -168,9 +169,11 @@ function editor(room: RoomDraft): View {
     code.dispatchEvent(new Event("input"));
     return true;
   };
+  // The copy takes the form room's place in the Purple Pack, so the Esc menu doesn't show the same room twice.
   const pythonCopy = () => {
     const name = roomName(`${room.name}-python`);
-    draft.rooms = [...draft.rooms, { name, source: room.source, made: null }];
+    room.kept = false;
+    draft.rooms = [...draft.rooms.filter((r) => r !== room || !r.sample), { name, source: room.source, made: null, kept: true }];
     changed();
     location.hash = href(name);
   };
@@ -185,7 +188,7 @@ function editor(room: RoomDraft): View {
   // Forms and knobs cover only part of a room; the way to the rest stays in view above them.
   const toPython = (text: string) => h("p", { class: "to-python small" }, text,
     made ? h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy") : h("button", { class: "linkbtn", onclick: () => showTab("python") }, "Open the Python"),
-    made ? " to write the rest yourself." : " to change anything else.");
+    made ? ` to write the rest yourself.${IN_PLACE}` : " to change anything else.");
   const showTab = (which: Tab) => {
     tab = which;
     tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(tabs[i] === which)));
@@ -201,7 +204,7 @@ function editor(room: RoomDraft): View {
     } else {
       code.value = room.source;
       pane.replaceChildren(pythonHelp(room.source),
-        made ? h("p", { class: "note" }, `Made from ${LABELS.made.toLowerCase()}, so its Python changes when they do. `, h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy"), " to write it yourself.") : "",
+        made ? h("p", { class: "note" }, `Made from ${LABELS.made.toLowerCase()}, so its Python changes when they do. `, h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy"), ` to write it yourself.${IN_PLACE}`) : "",
         code);
     }
   };
@@ -213,7 +216,7 @@ function editor(room: RoomDraft): View {
       "section",
       {},
       h("div", { class: "editor-head" }, nameIn, h("button", { class: "linkbtn dim small", onclick: () => nameIn.select() }, "✏️ Rename"), nameNote),
-      tryBar(room, () => confirm(`Throw away ${roomTitle(room.name)}?`) && drop([room])),
+      tryBar(room),
       copyGuideRow(h("span", { class: "small" }, "Using an AI helper? The ", h("a", { href: "#guide" }, "Room guide"), " is everything it needs:")),
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, ...tabButtons),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),

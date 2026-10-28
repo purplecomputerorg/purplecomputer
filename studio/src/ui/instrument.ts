@@ -1,7 +1,7 @@
 import { INSTRUMENTS } from "@sdk/purple/sounds";
 import { BASES, BASE_NAMES, defaults, type BaseName, type Params } from "@sdk/purple/synth";
 import { playGridKey } from "../sounds";
-import { changed, draft, freeName, isTheirs, titleOf, withSample, type Instrument } from "../state";
+import { changed, draft, freeName, isTheirs, mine, titleOf, withSample, type Instrument } from "../state";
 import { tryBar, yoursList } from "./trybar";
 import { field, go, h, pageKeys } from "./dom";
 import { liveScreen } from "./live";
@@ -48,7 +48,7 @@ function chooser(): View {
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, change how it sounds, and add it to your Purple Pack when you like it."),
+      h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, then change how it sounds."),
       yoursList(draft.instruments, (i) => ({ href: `#instruments/${encodeURIComponent(i.name)}`, title: titleOf(i), face: h("span", { class: "pick-swatch", style: `background:${SWATCH[i.base]}` }) }), drop),
       h("h3", {}, "Try a sound"),
       h("p", { class: "swatch-legend" }, "Made from:", ...[...new Set(SOUNDS.map((snd) => snd.base))].map((b) =>
@@ -73,7 +73,7 @@ function editor(inst: Instrument): View {
   const nameIn = h("input", { type: "text", value: titleOf(inst), maxLength: 24 });
   nameIn.onchange = () => {
     inst.title = nameIn.value.trim() || titleOf(inst);
-    inst.sample = false;
+    mine(inst);
     inst.name = freeName(inst.title, (n) => taken(n, inst));
     changed();
     location.hash = `#instruments/${encodeURIComponent(inst.name)}`;
@@ -90,7 +90,7 @@ function editor(inst: Instrument): View {
       range.oninput = () => {
         const s = Number(range.value);
         inst.params[spec.key] = spec.scale?.fromSlider(s) ?? s;
-        inst.sample = false;
+        mine(inst);
         val.textContent = fmt(s, spec.unit);
         changed();
         clearTimeout(replayTimer);
@@ -117,7 +117,7 @@ function editor(inst: Instrument): View {
     editor: h(
       "section",
       {},
-      tryBar(inst, () => drop([inst])),
+      tryBar(inst),
       h("div", { class: "card" }, field("Name", nameIn), h("p", { class: "dim small" }, `Made from Purple's ${base.label}.`)),
       h("div", { class: "card" }, h("p", { class: "dim small", style: "margin-top:0" }, "Type on your keyboard to play it. Moving a slider plays the last note again."), sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to a plain ${base.label}`))),
     ),

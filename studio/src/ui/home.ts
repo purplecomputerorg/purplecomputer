@@ -2,7 +2,7 @@
 // there. Purple only ever appears inside a screen; the paper around it is Studio.
 import { CELL_ASPECT, KEY_COLORS } from "@sdk/purple/art";
 import { EXAMPLES, examplePicture } from "../photo";
-import { countOf, hasWork, onChange, pieces, tryingPieces, type Count } from "../state";
+import { countOf, hasWork, notInPieces, onChange, pieces, type Count } from "../state";
 import { h } from "./dom";
 import { clearEverythingButton, openPackButton } from "./packfile";
 import { staysHere } from "./privacy";
@@ -78,16 +78,16 @@ const card = (s: HomeSection) =>
       s.voice ? h("span", { class: "voice-badge", title: "Takes your recorded voice" }, micIcon(), "Your voice") : null),
     h("span", {}, ...(typeof s.blurb === "string" ? [s.blurb] : s.blurb())));
 
-// What's in the family's Purple Pack, and what they've only tried, as the download page counts them.
+// What's in the family's Purple Pack, and what isn't, as the download page counts them.
 const packLine = h("div");
 const listed = (list: Count[]) => list.map(countOf).join(", ");
 function renderPack() {
-  const [list, trying] = [pieces(), tryingPieces()];
+  const [list, trying] = [pieces(), notInPieces()];
   packLine.replaceChildren(...[
     h("div", { class: "pack-line" },
       h("div", {},
         h("p", {}, h("b", {}, "In your Purple Pack: "), list.length ? `${listed(list)}.` : "nothing yet."),
-        trying.length ? h("p", { class: "dim" }, h("b", {}, "Not added yet: "), `${listed(trying)}.`) : null),
+        trying.length ? h("p", { class: "dim" }, h("b", {}, "Not in your Purple Pack: "), `${listed(trying)}.`) : null),
       list.length || trying.length ? h("a", { class: "btn small", href: "#pack" }, "Download") : null),
     h("p", { class: "dim" }, "When you're done, download your Purple Pack and put it on Purple with a USB drive."),
     h("p", { class: "dim" }, "Made one before? ", openPackButton("Open a Purple Pack"), " to keep going."),

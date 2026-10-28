@@ -29,9 +29,11 @@ export function miniScreen(theme: Theme): HTMLElement {
 export function colorsView(): View {
   const body = h("div");
   const theme = () => draft.theme ?? DEFAULT_THEME;
-  // Keeps the draft null while it matches Purple's own colors, so an untouched pack has no theme.
+  // Keeps the draft null while it matches Purple's own colors, so an untouched pack has no theme. Colors
+  // set are in the Purple Pack: Studio's Purple shows them everywhere, so a pack without them would surprise.
   const set = (next: Theme, rerender = true) => {
     draft.theme = same(next, DEFAULT_THEME) ? null : next;
+    if (draft.theme) draft.colors.kept = true;
     changed();
     if (rerender) render();
   };
@@ -55,7 +57,9 @@ export function colorsView(): View {
     const custom = !SCREENS.some(([, base]) => base === t.base);
     clear(body);
     body.append(h("div", {},
-      draft.theme ? tryBar(draft.colors) : null,
+      !draft.theme ? null : draft.colors.kept
+        ? h("div", { class: "trybar" }, h("span", { class: "added" }, "✓ In your Purple Pack."))
+        : tryBar(draft.colors),
       h("h3", {}, "Screen"),
       h("div", { class: "presets" },
         ...SCREENS.map(([name, base]) => h("button", { class: "preset", "aria-pressed": String(t.base === base), onclick: () => edit((n) => { n.base = base; n.colors = {}; }) },

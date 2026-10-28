@@ -1,7 +1,7 @@
 import { PACK_FORMATS, type PackSkipped } from "@sdk/pack";
 import { buildPack, packFilename } from "../pack";
 import type { Picture } from "../photo";
-import { addAll, changed, countOf, draft, isQuiet, pieces, titleOf, tryingPieces, type Count, type Instrument, type Keepable, type Phrase, type RoomDraft, type RoomFile, type SynonymEntry, type WordEntry } from "../state";
+import { changed, countOf, draft, isQuiet, keep, notInPieces, pieces, titleOf, type Count, type Instrument, type Keepable, type Phrase, type RoomDraft, type RoomFile, type SynonymEntry, type WordEntry } from "../state";
 import { miniScreen } from "./colors";
 import { field, h } from "./dom";
 import { SWATCH } from "./instrument";
@@ -40,30 +40,27 @@ function needsNewer(format: number): string {
 // What an older Purple opens the pack without.
 const skippedNote = (s: PackSkipped) => `${s.added} need ${downloadedOn(s.date)}. On an older one, ${s.older}.`;
 
-const groups = (list: Count[]) => list.map((p) => h("div", { class: "pack-group" },
+// add: an Add button on each one.
+const groups = (list: Count[], add?: (item: Keepable) => void) => list.map((p) => h("div", { class: "pack-group" },
   h("a", { class: "pack-heading", href: `#${p.section}` }, countOf(p)),
-  h("div", { class: "pack-items" }, ...p.items.map(FACES[p.id]))));
+  h("div", { class: "pack-items" }, ...p.items.map((i) => add
+    ? h("span", { class: "pack-add" }, FACES[p.id](i), h("button", { class: "btn secondary small", onclick: () => add(i) }, "Add"))
+    : FACES[p.id](i)))));
 
 export function downloadView(): View {
   const nameIn = h("input", { type: "text", value: draft.name, oninput: () => { draft.name = nameIn.value; changed(); } });
   const summary = h("div");
-  const trying = h("div");
-  const leftOut = h("span", { class: "dim small" });
+  const others = h("div");
   const status = h("div", { class: "status" });
   const button = h("button", { class: "btn logo" }, "Download my Purple Pack");
 
   function render() {
     const list = pieces();
-    summary.replaceChildren(...(list.length ? groups(list) : [h("p", { class: "dim" }, "Nothing added yet. Try something, then press Add to my Purple Pack.")]));
+    summary.replaceChildren(...(list.length ? groups(list) : [h("p", { class: "dim" }, "Nothing in it yet.")]));
     button.disabled = !list.length;
-    const left = tryingPieces();
-    const n = left.reduce((sum, p) => sum + p.count, 0);
-    leftOut.textContent = n ? `This leaves out the ${n === 1 ? "change" : `${n} changes`} you haven't added.` : "";
-    trying.replaceChildren(...(n ? [h("div", { class: "card unadded" },
-      h("h3", {}, n === 1 ? "1 change not added yet" : `${n} changes not added yet`),
-      h("p", {}, "These won't be in your Purple Pack until you add them."),
-      ...groups(left),
-      h("button", { class: "btn", onclick: () => { addAll(); changed(); render(); } }, n === 1 ? "Add it to my Purple Pack" : "Add them all to my Purple Pack"))] : []));
+    const add = (i: Keepable) => { keep(i, true); render(); };
+    const out = notInPieces();
+    others.replaceChildren(...(out.length ? [h("div", { class: "card not-in" }, h("h3", {}, "Not in your Purple Pack"), ...groups(out, add))] : []));
   }
   render();
 
@@ -91,10 +88,10 @@ export function downloadView(): View {
       {},
       h("p", { class: "lead" }, "Everything you added goes into your Purple Pack."),
       staysHere("Your Purple Pack is made in your browser and saved to your downloads. No copy goes anywhere else."),
-      trying,
       h("div", { class: "card" }, h("h3", { style: "margin-top:0" }, "In your Purple Pack"), summary),
+      others,
       field("File name", h("div", { class: "row", style: "flex-wrap:nowrap" }, nameIn, h("span", { class: "mono dim" }, ".purplepack"))),
-      h("div", { class: "row", style: "margin-top:22px" }, button, leftOut),
+      h("div", { class: "row", style: "margin-top:22px" }, button),
       status,
       h("h3", {}, "Then put it on Purple"),
       putItOnPurple(),

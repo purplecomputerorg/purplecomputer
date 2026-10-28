@@ -7,7 +7,7 @@ import type { FromFrame, ToFrame, View } from "../live/frame";
 import { KEY_EVENT, announceKey } from "../keys";
 import { manifest, packChanges, packSpec, type Sent } from "../pack";
 import { onRoomVoice, roomReady, roomVoiceVersion, warmRoomVoice } from "../roomvoice";
-import { draft } from "../state";
+import { draft, type RoomDraft } from "../state";
 import { h } from "./dom";
 
 // Covers Purple while it isn't getting keys. Once someone has played with it (the screen marked
@@ -64,6 +64,8 @@ class LiveScreen {
   // What Purple has now, so the next pack sends only what changed.
   private last: Sent = { id: "", files: new Map() };
   private syncing = Promise.resolve();
+  // The rooms in the last pack sent, as they were then.
+  private packed: RoomDraft[] = [];
   // Messages wait for the frame's page to be listening; until then the iframe holds about:blank.
   private hello!: () => void;
   private filtering = new Map<number, (text: string) => void>();
@@ -103,6 +105,7 @@ class LiveScreen {
 
   show(setup: RoomSetup): void {
     this.setup = setup;
+    this.queueSync();
     this.moved({ room: setup.room, menu: false, at: null });
     if (this.ready) this.status.textContent = "Opening the room";
     this.element.classList.add("entering");
@@ -166,8 +169,12 @@ class LiveScreen {
   }
 
   private async sync(): Promise<void> {
-    // Open lists only the added pictures.
-    const live = { ...draft, rooms: draft.rooms.filter((r) => r.kept), pictures: draft.pictures.filter((p) => p.kept) };
+    // Open lists only the added pictures. The room open in its editor stays in the pack as it was, since
+    // a pack with changed rooms starts Purple again; the editor plays its own copy over it.
+    const open = this.setup.family?.name;
+    const rooms = [...draft.rooms.filter((r) => r.kept && r.name !== open), ...this.packed.filter((r) => r.name === open)];
+    this.packed = rooms.map((r) => ({ ...r }));
+    const live = { ...draft, rooms, pictures: draft.pictures.filter((p) => p.kept) };
     const key = JSON.stringify([live, roomVoiceVersion()], (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
     if (key === this.sent) return void (this.updating.hidden = true);
     this.sent = key;

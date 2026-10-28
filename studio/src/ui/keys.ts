@@ -1,9 +1,9 @@
 import type { Clip } from "../audio";
 import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
-import { changed, draft } from "../state";
+import { changed, draft, whileShown } from "../state";
 import { h, pageKeys } from "./dom";
 import { keyLabel, sticker } from "./stickers";
-import { addAllBar, plural, tryBar } from "./trybar";
+import { tryBar } from "./trybar";
 import { liveScreen } from "./live";
 import { soundPicker, voiceStays } from "./record";
 import type { View } from "./view";
@@ -17,30 +17,30 @@ export function keysView(): View {
   const keys = h("div", { class: "keyboard" });
   const now = h("div", { class: "voice-key" });
   const prompt = h("p", { class: "voice-prompt" });
-  const pending = h("div");
   const picker = h("div");
 
   const select = (k: string) => {
     current = k;
     render();
   };
+  // A straight grid, like Purple's Music room: a check on a key in the Purple Pack, a dot on one left out.
+  const paintKeys = () => keys.replaceChildren(...KEY_ROWS.flat().map((k) => h("button", {
+    class: ["vkey", draft.letters[k] && (draft.letters[k].kept ? "kept" : "left-out"), k === current && "current"].filter(Boolean).join(" "),
+    "aria-label": k, onclick: () => select(k),
+  }, sticker(k))));
+  whileShown(keys, paintKeys);
   function render() {
-    // A straight grid, like Purple's Music room: a dot on a key tried, a check on a key added.
-    keys.replaceChildren(...KEY_ROWS.flat().map((k) => h("button", {
-      class: ["vkey", draft.letters[k] && (draft.letters[k].kept ? "kept" : "tried"), k === current && "current"].filter(Boolean).join(" "),
-      "aria-label": k, onclick: () => select(k),
-    }, sticker(k))));
+    paintKeys();
     now.replaceChildren(sticker(current));
     const letter = draft.letters[current];
     const name = h("b", {}, keyLabel(current));
     prompt.replaceChildren("What should ", name, " say?");
     const clear = () => { delete draft.letters[current]; changed(); render(); };
     picker.replaceChildren(soundPicker({ clip: letter?.clip, said: letter?.said, placeholder: "Hi sweetie, it's Grandma!", onClip, onClear: clear }),
-      letter ? tryBar(letter, clear) : "");
-    pending.replaceChildren(addAllBar(Object.values(draft.letters), (n) => plural(n, "letter"), render) ?? "");
+      letter ? tryBar(letter) : "");
   }
   const onClip = (clip: Clip, said?: string) => {
-    draft.letters[current] = { clip, said, kept: draft.letters[current]?.kept };
+    draft.letters[current] = { clip, said, kept: draft.letters[current]?.kept ?? true };
     changed();
     render();
   };
@@ -61,7 +61,6 @@ export function keysView(): View {
       h("div", { class: "card voice-card" },
         keys,
         h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, picker))),
-      pending,
       h("p", { class: "dim small" }, "Letters and numbers you skip say their own names in Purple's voice; the other keys stay quiet until you give them something. Type a key on your keyboard to jump to it."),
       voiceStays(),
     ),

@@ -2,13 +2,13 @@ import type { RoomSetup } from "../live/boot";
 import { canvasOrigin } from "@sdk/purple/art";
 import { CANVAS_SHAPE, EXAMPLES, PICTURE_KINDS, clampCrop, cropTo, examplePicture, pictureFailure, fillCrop, letterPx, onScreen, pictureFromSrc, wordLetters, wordsAt, type Crop, type Example, type Picture } from "../photo";
 import { artOf, forget, removeFromPack, renameShelved, roomFileOf, shelf, shelveFile, usedIn, type Shelved } from "../shelf";
-import { changed, draft, freeName, isTheirs, titleOf, withSample, type Keepable } from "../state";
+import { changed, draft, freeName, isTheirs, mine, titleOf, withSample, type Keepable } from "../state";
 import { go, h } from "./dom";
 import { purpleEmoji } from "./icons";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
 import { renameRoomFile } from "./roomfiles";
-import { tryBar, yoursList } from "./trybar";
+import { keepButton, tryBar, yoursList } from "./trybar";
 import type { View } from "./view";
 
 const goTo = (name: string) => (location.hash = `#pictures/${encodeURIComponent(name)}`);
@@ -16,11 +16,11 @@ const goTo = (name: string) => (location.hash = `#pictures/${encodeURIComponent(
 const pictureName = (text: string, except?: Picture, shelfId = except?.shelfId) => freeName(text, (n) =>
   draft.pictures.some((p) => p !== except && p.name === n) || shelf.some((s) => s.id !== shelfId && s.name === n), "picture");
 
-// Art's copy of a picture on the shelf, painted the first time it's wanted. It starts as a try.
+// Art's copy of a picture on the shelf, painted the first time it's wanted. It's theirs, so it's in the Purple Pack.
 async function useInArt(item: Shelved): Promise<Picture> {
   const found = artOf(item);
   if (found) return found;
-  const pic = { ...(await pictureFromSrc(item.src, pictureName(item.name, undefined, item.id))), shelfId: item.id };
+  const pic = { ...(await pictureFromSrc(item.src, pictureName(item.name, undefined, item.id))), shelfId: item.id, kept: true };
   draft.pictures = [...draft.pictures, pic];
   changed();
   return pic;
@@ -93,7 +93,7 @@ function yourPictures(current: string | null): HTMLElement | null {
   };
   const list = yoursList(cards, (c) => ({
     href: `#pictures/${encodeURIComponent(c.name)}`, title: c.title, face: h("img", { src: c.src, alt: "" }), current: c.name === current,
-    keep: c.used.length ? h("span", { class: "keep on", title: `In this Purple Pack: ${c.used.join(", ")}` }, "✓ In my Pack") : null,
+    keep: c.pic ? keepButton(c.pic) : c.used.length ? h("span", { class: "keep on", title: `In this Purple Pack: ${c.used.join(", ")}` }, "✓ In my Pack") : null,
   }), throwAway, (gone) => alsoOut([...new Set(gone.flatMap((c) => c.used))]));
   return list && h("div", {}, list,
     h("p", { class: "dim small" }, "Pictures here stay on this computer, ready for any Purple Pack you make. Download your Purple Pack to keep them."));
@@ -119,7 +119,7 @@ const showPicture = (pic: Picture) => liveScreen().show({ room: "art", picture: 
 
 // A picture edit: it's the family's now, and Purple's screen shows it.
 function edited(pic: Picture) {
-  pic.sample = false;
+  mine(pic);
   changed();
   showPicture(pic);
 }
@@ -246,7 +246,7 @@ function rename(item: Shelved | undefined, pic: Picture | undefined, text: strin
   if (pic) {
     pic.title = text;
     pic.name = pictureName(text, pic);
-    pic.sample = false;
+    mine(pic);
   }
   if (item) {
     renameShelved(item, text);
@@ -261,7 +261,7 @@ function rename(item: Shelved | undefined, pic: Picture | undefined, text: strin
 function usedCard(item: Shelved): HTMLElement {
   const used = usedIn(item);
   const title = titleOf(artOf(item) ?? item);
-  const inPack = !!artOf(item) || !!roomFileOf(item);
+  const inPack = !!artOf(item)?.kept || !!roomFileOf(item);
   const takeOut = () => {
     if (!confirm(`Take ${title} out of this Purple Pack?${used.length ? ` It's used in ${used.join(", ")}.` : ""} It stays in your pictures.`)) return;
     removeFromPack(item);
@@ -273,7 +273,7 @@ function usedCard(item: Shelved): HTMLElement {
     go("#pictures");
   };
   return card("Used in", null,
-    h("p", {}, used.length ? `This Purple Pack: ${used.join(", ")}.` : "Nothing in this Purple Pack yet."),
+    h("p", {}, used.length ? `✓ In this Purple Pack: ${used.join(", ")}.` : inPack ? "✓ In this Purple Pack, ready for your rooms." : "Not in this Purple Pack."),
     h("p", { class: "row" },
       inPack ? h("button", { type: "button", class: "linkbtn dim small", onclick: takeOut }, "Take it out of this Purple Pack") : null,
       h("button", { type: "button", class: "linkbtn dim small", onclick: remove }, "Delete from your pictures")));
@@ -290,7 +290,8 @@ function pictureView(item: Shelved | undefined, pic: Picture | undefined): HTMLE
   const name = h("input", { type: "text", class: "name-field", value: titleOf(pic ?? item!), maxLength: 24, "aria-label": "Picture name" });
   name.onchange = () => rename(item, pic, name.value.trim() || titleOf(pic ?? item!));
   return h("section", {},
-    pic ? tryBar(pic, () => drop([pic], !item)) : null,
+    // A shelf picture in the pack says so under Used in, with its own way out.
+    pic && !(item && pic.kept) ? tryBar(pic) : null,
     card("Name", null, name, pic ? h("p", { class: "dim small" }, "Find it in Art under Open (Esc, then O).") : null),
     pic ? cropper(pic, ex) : notInArt(item!),
     item ? usedCard(item) : null,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PALETTE, DEFAULT_THEME, contrast, derivePalette, themeJson, themePalette, toHsl } from "../sdk/src/purple/theme";
+import { DEFAULT_PALETTE, DEFAULT_THEME, contrast, derivePalette, rowColors, themeJson, themePalette, toHsl } from "../sdk/src/purple/theme";
 
 const BASES = ["#0d2233", "#10241a", "#2a1420", "#000000", "#4a4a4a", "#ff0000", "#efe9f7", "#ffffff", "#ffe066"];
 const distance = (a: string, b: string) => Math.max(...[1, 3, 5].map((i) => Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16))));
@@ -30,5 +30,16 @@ describe("one color, a whole palette", () => {
     expect(json.canvas).toMatch(/^#[0-9a-f]{6}$/);
     expect("canvas" in json.colors).toBe(false);
     expect(Object.keys(json.keys)).toContain("q");
+  });
+
+  it("runs every row of a rainbow red to violet, a step darker each row, either way round", () => {
+    const keys = rowColors({ ...DEFAULT_THEME, rainbow: { violetFirst: false, darkTop: false } });
+    const [hq, , lq] = toHsl(keys.q), [hp] = toHsl(keys["]"]), [ha, , la] = toHsl(keys.a), [hz, , lz] = toHsl(keys.z);
+    expect([hq, ha, hz].every((h) => h < 5)).toBe(true);
+    expect(hp).toBeGreaterThan(270);
+    expect(lq > la && la > lz).toBe(true);
+    const flipped = rowColors({ ...DEFAULT_THEME, rainbow: { violetFirst: true, darkTop: true } });
+    expect(flipped.q).toBe(keys["/"]);
+    expect(flipped.z).toBe(keys["]"]);
   });
 });

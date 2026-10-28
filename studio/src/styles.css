@@ -558,12 +558,18 @@ img.pick-icon { width: 30px; height: 30px; }
 .mini-screen.wheel input { opacity: 0; position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
 .wells { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 18px; }
 .sticker-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--text); }
-.row-pick { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px 14px; padding: 14px 18px; margin: 10px 0; container-type: inline-size; }
-/* The row's stickers stay on one line, shrinking to fit */
-.row-pick .sticker-row { justify-self: end; flex-wrap: nowrap; font-size: min(11px, calc((100cqw - 36px) / 27)); }
-/* Twelve hues in one row, or two even rows of six when the card is narrow, never eleven and a straggler */
-.hues { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, 28px); justify-content: space-between; gap: 8px 6px; }
-@container (max-width: 420px) { .hues { grid-template-columns: repeat(6, 28px); } .row-pick .sticker-row { grid-column: 1 / -1; justify-self: start; } }
+/* Staggered like a real keyboard: each row starts a little further in */
+.paint { container-type: inline-size; display: grid; gap: 12px; justify-items: start; }
+.sticker-board { display: grid; gap: 4px; margin: 0; padding: 14px 18px; font-size: min(13px, calc((100cqw - 90px) / 27)); }
+.sticker-board .sticker-row { flex-wrap: nowrap; gap: 4px; }
+.sticker-board .sticker-row:nth-child(2) { padding-left: 0.9em; }
+.sticker-board .sticker-row:nth-child(3) { padding-left: 1.8em; }
+.rainbow-order { display: flex; flex-wrap: wrap; gap: 10px; }
+.row-picks { display: grid; gap: 10px; justify-self: stretch; }
+.row-pick { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px 12px; }
+/* Twelve hues in one row, or two even rows of six when there's no room, never eleven and a straggler */
+.hues { display: grid; grid-template-columns: repeat(12, 28px); justify-content: space-between; gap: 8px 6px; }
+@container (max-width: 520px) { .row-pick { grid-template-columns: 1fr; } .hues { grid-template-columns: repeat(6, 28px); justify-content: start; } }
 .hue { width: 28px; height: 28px; border-radius: 999px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
 .hue[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--purple); transform: scale(1.12); }
 details.more-options { margin: 18px 0; }

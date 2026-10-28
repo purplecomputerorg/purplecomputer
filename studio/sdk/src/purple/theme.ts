@@ -3,15 +3,17 @@
 // it. A light base flips the palette, dark words on a light screen. Purple applies whatever ends
 // up in theme.json (purple_tui/canvas/theme.py); the deriving happens only here.
 import exported from "./export.json";
-import { ASDF_ROW, CANVAS_BG, QWERTY_ROW, ROW_HUES, ZXCV_ROW, generateRowGradient } from "./art";
+import { ASDF_ROW, CANVAS_BG, QWERTY_ROW, ROW_HUES, ZXCV_ROW, generateRowGradient, hslToHex } from "./art";
 
 // The roles Purple's screen is drawn with (purple_tui/palette.py), plus the Art canvas.
 export const ROLES = ["bg", "surface", "canvas", "tile", "field", "hair", "line", "primary", "on_primary", "accent", "text", "muted", "dim"] as const;
 export type Role = (typeof ROLES)[number];
 export type Palette = Record<Role, string>;
 export type Hues = { qwerty: number; asdf: number; zxcv: number };
-// base: the one color; colors: any roles set by hand; hues: one per letter row.
-export interface Theme { base: string; colors: Partial<Palette>; hues: Hues }
+// Every row runs red to violet, each row a step lighter or darker than the last.
+export type Rainbow = { violetFirst: boolean; darkTop: boolean };
+// base: the one color; colors: any roles set by hand; hues: one per letter row, unless rainbow.
+export interface Theme { base: string; colors: Partial<Palette>; hues: Hues; rainbow?: Rainbow }
 
 const P = exported.screen.palette as Record<string, string>;
 export const DEFAULT_PALETTE: Palette = Object.fromEntries(ROLES.map((r) => [r, r === "canvas" ? CANVAS_BG : P[r]])) as Palette;
@@ -84,12 +86,23 @@ export function themePalette(t: Theme): Palette {
   return { ...derived, ...t.colors };
 }
 
-export function rowColors(hues: Hues): Record<string, string> {
+const VIOLET = 285;
+const RAINBOW_LIGHTNESS = [0.72, 0.56, 0.4];
+
+function rainbowColors({ violetFirst, darkTop }: Rainbow): Record<string, string> {
+  return Object.fromEntries([QWERTY_ROW, ASDF_ROW, ZXCV_ROW].flatMap((keys, row) => keys.map((key, i) => {
+    const t = i / (keys.length - 1);
+    return [key, hslToHex((violetFirst ? 1 - t : t) * VIOLET, 0.75, RAINBOW_LIGHTNESS[darkTop ? 2 - row : row])];
+  })));
+}
+
+export function rowColors({ hues, rainbow }: Theme): Record<string, string> {
+  if (rainbow) return rainbowColors(rainbow);
   return { ...generateRowGradient(hues.qwerty, QWERTY_ROW), ...generateRowGradient(hues.asdf, ASDF_ROW), ...generateRowGradient(hues.zxcv, ZXCV_ROW) };
 }
 
 // content/theme.json, as purple_tui/canvas/theme.py reads it.
 export function themeJson(t: Theme) {
   const { canvas, ...colors } = themePalette(t);
-  return { colors, canvas, keys: rowColors(t.hues) };
+  return { colors, canvas, keys: rowColors(t) };
 }

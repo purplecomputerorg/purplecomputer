@@ -18,6 +18,8 @@ const SCREEN_ROLES: [Role, string][] = [
   ["hair", "Thin borders"], ["line", "Outlines"], ["primary", "Highlight"], ["on_primary", "Text on highlight"],
 ];
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const seg = (...options: [label: string, on: boolean, pick: () => void][]) => h("div", { class: "seg", role: "group" },
+  ...options.map(([label, on, pick]) => h("button", { "aria-pressed": String(on), onclick: pick }, label)));
 
 // A small picture of a screen in a palette: the ground, the panel with a canvas, a line of text.
 export function miniScreen(theme: Theme): HTMLElement {
@@ -52,8 +54,13 @@ export function colorsView(): View {
     }),
     h("span", {}, label, role in theme().colors ? h("button", { class: "linkbtn dim small", onclick: (e: Event) => { e.preventDefault(); edit((t) => delete t.colors[role]); } }, "undo") : null));
 
+  // Stays on Pick each row after a click, even before any row's color changes.
+  let picking = false;
+  const matchPurple = () => { picking = false; edit((n) => { n.hues = { ...DEFAULT_THEME.hues }; delete n.rainbow; }); };
   function render() {
     const t = theme();
+    const purpleKeys = !t.rainbow && same(t.hues, DEFAULT_THEME.hues);
+    const mode = t.rainbow ? "rainbow" : picking || !purpleKeys ? "pick" : "purple";
     const custom = !SCREENS.some(([, base]) => base === t.base);
     clear(body);
     body.append(h("div", {},
@@ -73,17 +80,25 @@ export function colorsView(): View {
           "Any color")),
 
       h("h3", {}, "Paint colors and stickers"),
-      h("p", { class: "dim small" }, "Each letter row paints its own color, the same color as its sticker."),
-      ...ROWS.map(([key, label, keys]) => h("div", { class: "card row-pick" },
-        h("strong", {}, label), h("div", { class: "sticker-row" }, ...keys.map((k) => sticker(k))),
+      h("p", { class: "dim small" }, "Every key paints the same color as its sticker."),
+      h("div", { class: "paint" },
+      seg(["Purple's rows", mode === "purple", matchPurple],
+        ["Rainbow", mode === "rainbow", () => edit((n) => (n.rainbow ??= { violetFirst: false, darkTop: false }))],
+        ["Pick each row", mode === "pick", () => { picking = true; edit((n) => delete n.rainbow); }]),
+      h("div", { class: "card sticker-board" }, ...ROWS.map(([, , keys]) => h("div", { class: "sticker-row" }, ...keys.map((k) => sticker(k))))),
+      t.rainbow ? h("div", { class: "rainbow-order" },
+        seg(["Red first", !t.rainbow.violetFirst, () => edit((n) => (n.rainbow!.violetFirst = false))], ["Violet first", t.rainbow.violetFirst, () => edit((n) => (n.rainbow!.violetFirst = true))]),
+        seg(["Light on top", !t.rainbow.darkTop, () => edit((n) => (n.rainbow!.darkTop = false))], ["Dark on top", t.rainbow.darkTop, () => edit((n) => (n.rainbow!.darkTop = true))])) : null,
+      mode === "pick" ? h("div", { class: "row-picks" }, ...ROWS.map(([key, label]) => h("div", { class: "row-pick" },
+        h("strong", {}, label),
         h("div", { class: "hues" }, ...HUES.map((hue) => h("button", {
           class: "hue", title: `${hue}°`, "aria-pressed": String(hue === t.hues[key]), style: `background:${hslToHex(hue, 0.75, 0.55)}`,
           onclick: () => edit((n) => (n.hues[key] = hue)),
-        }))))),
-      same(t.hues, DEFAULT_THEME.hues) ? null : h("div", { class: "note sticker-note" },
+        })))))) : null),
+      purpleKeys ? null : h("div", { class: "note sticker-note" },
         h("span", {}, "The stickers on your real keyboard stay Purple's colors:"),
         h("span", { class: "sticker-row tiny" }, ...["1", "q", "a", "z"].map((k) => sticker(k, PURPLE_STICKERS))),
-        h("button", { class: "linkbtn small", onclick: () => edit((n) => (n.hues = { ...DEFAULT_THEME.hues })) }, "Match them again")),
+        h("button", { class: "linkbtn small", onclick: matchPurple }, "Match them again")),
 
       h("details", { class: "more-options" }, h("summary", {}, "Change one color at a time"),
         h("p", { class: "dim small" }, "Purple works these out from your screen color, so they stay easy to read. Change any one here."),

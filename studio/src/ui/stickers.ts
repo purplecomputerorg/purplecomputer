@@ -13,7 +13,7 @@ export const PURPLE_STICKERS = KEY_COLORS;
 export const keyLabel = (key: string) => LABEL[key] ?? key.toUpperCase();
 
 export function stickerColors(): Record<string, string> {
-  return draft.theme ? { ...KEY_COLORS, ...rowColors(draft.theme.hues) } : KEY_COLORS;
+  return draft.theme ? { ...KEY_COLORS, ...rowColors(draft.theme) } : KEY_COLORS;
 }
 
 export const ink = (bg: string) => (contrast(bg, "#ffffff") >= contrast(bg, "#000000") ? "#ffffff" : "#000000");

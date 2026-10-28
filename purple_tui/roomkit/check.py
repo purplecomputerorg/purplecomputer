@@ -132,7 +132,7 @@ def _picture_name(source) -> str:
 
 
 def screen(scene: list) -> str:
-    """The scene as text: the 24 by 12 grid, a character or emoji a square, each picture as a letter
+    """The scene as text: the 26 by 12 grid, a character or emoji a square, each picture as a letter
     (named under the grid), then the words over it."""
     grid = [["  "] * builtin_lib.W for _ in range(builtin_lib.H)]
     words, letters, used = [], {}, False

@@ -17,7 +17,7 @@ import traceback as _traceback
 __all__ = ["grid", "keep", "images", "sounds", "show", "write", "status", "clear", "background", "say", "play", "drum", "sound",
            "picture", "pixels", "held", "ask", "every", "after", "game_over", "state"]
 
-W, H = 24, 12
+W, H = 26, 12
 CELL = 8.75
 TOP = 11       # the strip above the grid, where status() goes
 LINES_KEPT = 5

@@ -41,8 +41,8 @@
   "purple_tui/content.py": "e056eba93e8ad490",
   "purple_tui/pack_manager.py": "a8c25ce9e5d548ed",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
-  "purple_tui/canvas/rooms/family_room.py": "273ba83283e09fea",
-  "purple_tui/roomkit/purple.py": "e26a8b1f9e78c867",
+  "purple_tui/canvas/rooms/family_room.py": "5206391b9c11aff4",
+  "purple_tui/roomkit/purple.py": "51ab44d1f6194cac",
   "purple_tui/roomkit/runner.py": "9e62d3413c858a5a",
   "purple_tui/roomkit/limits.py": "07347f3ac2df15ea"
  }

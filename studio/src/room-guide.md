@@ -68,7 +68,7 @@ A mistake, like `drum("snar")` or a picture the pack doesn't have, stops the roo
 
 ## The screen
 
-The screen is a **grid of 24 by 12 squares**. `(0, 0)` is the top left, and `grid.w` and `grid.h` are 24 and 12. Going off one edge comes back on the other, so `x = 24` is `x = 0`. A square holds one of:
+The screen is a **grid of 26 by 12 squares**. `(0, 0)` is the top left, and `grid.w` and `grid.h` are 26 and 12. Going off one edge comes back on the other, so `x = 26` is `x = 0`. A square holds one of:
 
 - an emoji or a letter: `grid.set(3, 4, "🌻")`
 - a color: `grid.set(3, 4, "#2f9e44")`, or a theme color by name: `grid.set(3, 4, "tile")`
@@ -84,7 +84,7 @@ The floor sits under the grid, so a hero standing on grass is `grid.floor.set(x,
 
 Purple draws everything after each key and timer, so there's no drawing to do yourself: change the grid or the text, and it shows.
 
-A world bigger than the screen: keep the whole map in a list of strings, and after each move `grid.clear()` and set the 24 by 12 part around the hero. Redrawing every square is fine; Purple only shows what changed.
+A world bigger than the screen: keep the whole map in a list of strings, and after each move `grid.clear()` and set the 26 by 12 part around the hero. Redrawing every square is fine; Purple only shows what changed.
 
 More than one place, like a cave or an upstairs: keep the maps in a dict by name, and when the hero steps onto a square, redraw from the map they land on. The world starter joins maps with numbered doors: a door 1 on two maps is a way between them.
 

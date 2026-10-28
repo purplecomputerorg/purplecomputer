@@ -122,7 +122,7 @@ describe("knobs", () => {
     cave.items[1].v = cave.items[1].v.replace("1", ",");
     expect(lonelyNumbers(world.value)).toEqual(["1"]);
     const out = writeKnobs(source, knobs);
-    expect(out).toContain('    "cave": [\n        "RRRRRRRRRRRRRRRRRRRRRRRR",\n        "R,,,,,,,RR');
+    expect(out).toContain('    "cave": [\n        "RRRRRRRRRRRRRRRRRRRRRRRRRR",\n        "R,,,,,,,RR');
     expect(readKnobs(out).find((k) => k.name === "WORLD")!.value).toEqual(world.value);
   });
 });

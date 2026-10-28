@@ -23,8 +23,8 @@ left = len(cards)
 for i, keys in enumerate(reversed(rows[:used])):
     per_row.insert(0, min(len(keys), left // (used - i)))
     left -= per_row[0]
-# Each card is 2 squares wide, so the widest row sets the left edge that centers them on the grid's 24 squares.
-left = 12 - max(per_row)
+# Each card is 2 squares wide, so the widest row sets the left edge that centers them on the grid's 26 squares.
+left = 13 - max(per_row)
 spots = {key: (left + x * 2, 4 + r * 2) for r, (keys, n) in enumerate(zip(rows, per_row)) for x, key in enumerate(keys[:n])}
 faces = dict(zip(spots, cards))
 shown = {}        # cards matched for good, and the color of who found them

@@ -17,7 +17,7 @@ SEEDS = {
 SOIL = ("#7a5230", "#6f4a2b")
 
 rows = ("qwertyuiop", "asdfghjkl;", "zxcvbnm,./")
-spots = {key: (2 + x * 2, 4 + r * 2) for r, keys in enumerate(rows) for x, key in enumerate(keys)}
+spots = {key: (3 + x * 2, 3 + r * 2) for r, keys in enumerate(rows) for x, key in enumerate(keys)}
 game = state(seed="1")
 # keep remembers the garden for next time: patch key -> [seed, step].
 plants = keep.setdefault("plots", {})

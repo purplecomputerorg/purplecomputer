@@ -10,7 +10,7 @@ LENGTH = 4
 # The flowers it leaves behind, one after another.
 TRAIL = ["🌼", "🌸", "🌷"]
 
-snake = [(12 - i, 6) for i in range(LENGTH)]
+snake = [(13 - i, 6) for i in range(LENGTH)]
 game = state(heading=(1, 0), steps=0)
 turns = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 

@@ -2,36 +2,36 @@ from purple import *
 
 # A world to walk around. Find all the stars and the house opens. Some stars are through the door, in the cave.
 
-# The world's maps, one letter a square, 24 across and 12 down: Y is where the hero starts. A number is a door, and
+# The world's maps, one letter a square, 26 across and 12 down: Y is where the hero starts. A number is a door, and
 # it leads to the other door with the same number: put a 1 on two maps and the hero can walk between them.
 WORLD = {
     "outside": [
-        "TTTTTTTTTTTTTTTTTTTTTTTT",
-        "T.........T............T",
-        "T..*......T.....~~~....T",
-        "T.........T....~~~~~.*.T",
-        "T....F.........~~~~~...T",
-        "T..........Y....~~~....T",
-        "TTTTT..TTTTT...........T",
-        "T..........T.......TTTTT",
-        "T...1......T...........T",
-        "T..........H.....*.....T",
-        "T..........T...........T",
-        "TTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "T.........T..............T",
+        "T..*......T.....~~~......T",
+        "T.........T....~~~~~.*...T",
+        "T....F.........~~~~~.....T",
+        "T..........Y....~~~......T",
+        "TTTTT..TTTTT.............T",
+        "T..........T.......TTTTTTT",
+        "T...1......T.............T",
+        "T..........H.....*.......T",
+        "T..........T.............T",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTT",
     ],
     "cave": [
-        "RRRRRRRRRRRRRRRRRRRRRRRR",
-        "R1,,,,,,RR,,,,,,,,,,,*,R",
-        "R,,,,,,,RR,,,,RRRR,,,,,R",
-        "R,,,,,,,,,,,,,RRRR,,,,,R",
-        "RRRR,,,,,,,,,,,,,,,,RRRR",
-        "R,,,,,,,RRRRR,,,,,,,,,,R",
-        "R,,B,,,,R,,,,,,,,,,,,,,R",
-        "R,,,,,,,R,,,~~~~,,,,,,,R",
-        "R,,*,,,,,,,,~~~~,,,,,,,R",
-        "RRRRRR,,,,,,,,,,,,RRRRRR",
-        "R,,,,,,,,,,,,,,,,,,,,,,R",
-        "RRRRRRRRRRRRRRRRRRRRRRRR",
+        "RRRRRRRRRRRRRRRRRRRRRRRRRR",
+        "R1,,,,,,RR,,,,,,,,,,,*,,,R",
+        "R,,,,,,,RR,,,,RRRR,,,,,,,R",
+        "R,,,,,,,,,,,,,RRRR,,,,,,,R",
+        "RRRR,,,,,,,,,,,,,,,,RRRRRR",
+        "R,,,,,,,RRRRR,,,,,,,,,,,,R",
+        "R,,B,,,,R,,,,,,,,,,,,,,,,R",
+        "R,,,,,,,R,,,~~~~,,,,,,,,,R",
+        "R,,*,,,,,,,,~~~~,,,,,,,,,R",
+        "RRRRRR,,,,,,,,,,,,RRRRRRRR",
+        "R,,,,,,,,,,,,,,,,,,,,,,,,R",
+        "RRRRRRRRRRRRRRRRRRRRRRRRRR",
     ],
 }
 # What each letter in the world is: an emoji, one of your photos, or a color for the ground.

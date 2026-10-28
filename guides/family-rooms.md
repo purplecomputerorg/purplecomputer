@@ -56,7 +56,7 @@ The worry is a room that hangs, breaks the laptop, gets around the parent's sett
 
 ## Performance
 
-Each scene is drawn once into a picture when it arrives, and every frame after just copies it, so a full grid costs the same as an empty one. Pictures are decoded and scaled once per size, so a screen of 300 sprites redrawn 30 times a second costs about 1.5 ms a frame on a current laptop. A full 24 by 12 grid is about 14 KB of JSON and a fraction of a millisecond to decode on a current laptop. The library sends `scene` only when it changed, so a room waiting for a key sends almost nothing, and ticks wait for the reply, so a slow room slows only itself.
+Each scene is drawn once into a picture when it arrives, and every frame after just copies it, so a full grid costs the same as an empty one. Pictures are decoded and scaled once per size, so a screen of 300 sprites redrawn 30 times a second costs about 1.5 ms a frame on a current laptop. A full 26 by 12 grid is about 14 KB of JSON and a fraction of a millisecond to decode on a current laptop. The library sends `scene` only when it changed, so a room waiting for a key sends almost nothing, and ticks wait for the reply, so a slow room slows only itself.
 
 ## Studio
 

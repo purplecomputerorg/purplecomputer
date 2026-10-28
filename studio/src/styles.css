@@ -109,10 +109,15 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 ::view-transition-old(studio-main), ::view-transition-new(studio-main), ::view-transition-old(studio-stage), ::view-transition-new(studio-stage) { height: 100%; object-fit: none; object-position: top left; }
 ::view-transition-old(studio-stage), ::view-transition-new(studio-stage) { object-position: top center; }
 @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; } }
-.stage { position: sticky; top: 60px; height: calc(100vh - 60px); display: flex; align-items: flex-start; justify-content: center; padding: 20px 32px; overflow-y: auto; background: radial-gradient(ellipse at 50% 40%, #f1ecf8, #faf8f5 70%); order: var(--last); }
-.stage-inner { width: 100%; max-width: 900px; }
+.stage { position: sticky; top: 60px; height: calc(100vh - 60px); display: flex; align-items: flex-start; justify-content: center; padding: 20px 32px; overflow-y: auto; background: radial-gradient(ellipse at 50% 40%, #f1ecf8, #faf8f5 70%); order: var(--last); container: stage / inline-size; --reserve: 230px; }
+.stage-inner { width: 100%; }
 /* Only the laptop shrinks to fit a short window, so the headline keeps the column's width; below the floor the stage scrolls */
-.stage .laptop { max-width: max(340px, calc((100vh - 230px) / 0.82)); margin: 0 auto; }
+.stage .laptop { max-width: max(340px, calc((100vh - var(--reserve)) / 0.82)); margin: 0 auto; }
+/* Once the window's height is what holds the laptop back, the headline gives up its rows so a wider stage still means a bigger laptop */
+@container stage (width > calc((100vh - 230px) / 0.82)) {
+  .stage-inner { --reserve: 160px; }
+  .stage h3 { height: 0; margin-block: 0; opacity: 0; }
+}
 .stage .caption { font-size: 13px; color: var(--dim); margin: 14px 0 0; text-align: center; }
 .stage .caption:empty { display: none; }
 .body.no-stage { grid-template-columns: minmax(0, 1fr); }
@@ -127,6 +132,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .split::before { content: none; }
   .split:hover { background: var(--line); }
   .swap { --turn: 90deg; position: absolute; top: 0; left: 50%; translate: -50% -50%; }
+  .stage { container-type: normal; }
   .stage-inner { max-width: 640px; margin: 0 auto; }
   .stage .laptop { max-width: none; }
   .main { padding: 20px 18px 48px; }
@@ -569,7 +575,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .pack-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 18px; margin-bottom: 18px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
 .pack-line div { flex: 1 1 260px; }
 .pack-line p { margin: 0; }
-.stage h3 { font: 500 clamp(22px, min(5.5vw, 4.5vh), 30px)/1.15 Caveat, cursive; text-wrap: balance; text-transform: none; letter-spacing: 0; text-align: center; color: var(--purple); margin: min(24px, 3vw, 3vh) 0 min(16px, 3vw, 2vh); }
+.stage h3 { font: 500 clamp(22px, min(5.5vw, 4.5vh), 30px)/1.15 Caveat, cursive; text-wrap: balance; text-transform: none; letter-spacing: 0; text-align: center; color: var(--purple); margin: min(24px, 3vw, 3vh) 0 min(16px, 3vw, 2vh); overflow: hidden; interpolate-size: allow-keywords; transition: height 0.3s, margin 0.3s, opacity 0.2s; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }
 h3 + .cards { margin-top: 0; }

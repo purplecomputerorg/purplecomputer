@@ -18,11 +18,13 @@ __all__ = ["grid", "keep", "images", "sounds", "show", "write", "status", "clear
            "picture", "pixels", "held", "ask", "every", "after", "game_over", "state"]
 
 W, H = 24, 12
-CELL = 10
+CELL = 8.75
+TOP = 11       # the strip above the grid, where status() goes
 LINES_KEPT = 5
 KEEP_MAX_BYTES = 4096
 OVER_PAUSE_S = 1.0  # so the key that ended the game, or the tap right after it, doesn't start the next one
 _HEX = _re.compile(r"^#[0-9a-fA-F]{6}$")
+_KEY_NAMES = _re.compile(r"(?<!\{)\b(Space|Enter|Tab|Backspace)\b(?!\})")
 _NOTE = _re.compile(r"^[A-Ga-g]#?\d$")
 DRUMS = ("kick", "snare", "hi-hat", "clap", "cowbell", "woodblock", "triangle", "tambourine", "bongo", "gong")
 # The theme's colors by name: Purple paints them in the family's theme.
@@ -64,6 +66,7 @@ class _Screen:
 
 _s = _Screen()
 _size = [240, 120]
+_api = [0]
 _now = [0.0]
 
 
@@ -285,6 +288,13 @@ def _label(x, y, size, text, color="text", **how):
     return shape + [how] if how else shape
 
 
+def _keyed(text) -> tuple:
+    """Text and how, with key names drawn as keycaps where Purple can (api 3)."""
+    if _api[0] < 3 or not _KEY_NAMES.search(text):
+        return text, {}
+    return _KEY_NAMES.sub(r"{\1}", text), {"keys": True}
+
+
 def _span(thing, size) -> tuple:
     """How many squares across and down a thing in the grid covers."""
     return (thing.w, thing.h) if isinstance(thing, _Picture) and thing.w else (size, size)
@@ -308,7 +318,7 @@ def _thing(x, y, thing, size, corner=False) -> list:
         return ["rect", x + 0.5, y + 0.5, side - 1, side - 1, thing, side / 8]
     if corner:
         return _label(x + side - 1, y + side - 1, side * 0.5, thing, anchor="bottomright", box="surface", pad=0.8, radius=1.5)
-    return _label(x + side / 2, y + side / 2, side * 0.78, thing)
+    return _label(x + side / 2, y + side / 2, side * 0.6, thing)
 
 
 def _covered(cells) -> set:
@@ -332,7 +342,7 @@ def _scene() -> list:
     on_grid = bool(_s.cells or _s.floor or _s.cursor)
     box = {"box": "surface", "pad": 2, "radius": 2} if on_grid else {}
     if on_grid:
-        ox, oy = (sw - W * CELL) / 2, (sh - H * CELL) / 2
+        ox, oy = (sw - W * CELL) / 2, TOP
         shapes += [_thing(ox + x * CELL, oy + y * CELL, *item) for (x, y), item in _s.floor.items()]
         # A letter on part of a bigger thing, like a key's letter on its picture, goes on top as a small corner badge.
         over = _covered(_s.cells)
@@ -354,15 +364,17 @@ def _scene() -> list:
         else:
             shapes.append(_label(sw / 2, sh * 0.6, px * 1.1, text, anchor="top", width=sw * 0.9))
     if _s.status:
-        shapes.append(_label(sw / 2, 1, px * 0.95, _s.status, anchor="top", width=sw * 0.9, height=CELL - 2,
-                             **(box and {**box, "pad": 1, "radius": 1.5})))
+        text, keys = _keyed(_s.status)
+        shapes.append(_label(sw / 2, TOP / 2, px * 0.95, text, "muted", width=sw * 0.9, height=TOP - 3,
+                             **keys, **(box and {**box, "pad": 1, "radius": 1.5})))
     if _s.asking:
         prompt, typed = _s.asking
         if prompt:
             shapes.append(_label(px, bottom - px * 1.6, px, prompt, "muted", anchor="bottomleft", **box))
         shapes.append(_label(px, bottom, px, f"Answer → {typed}_", "accent", anchor="bottomleft", **box))
     elif _s.over is not None:
-        shapes.append(_label(sw / 2, bottom, px, _s.over, "accent", anchor="bottom", **box))
+        text, keys = _keyed(_s.over)
+        shapes.append(_label(sw / 2, bottom, px, text, "accent", anchor="bottom", **keys, **box))
     return shapes
 
 
@@ -435,6 +447,7 @@ def _error(exc) -> dict:
 def run(start: dict):
     """Run a room: its top level for the start event, then one event at a time."""
     _size[:] = start.get("size") or _size
+    _api[0] = start.get("api") or 0
     keep.update(start.get("keep") or {})
     images.update({n: tuple(size) for n, size in (start.get("images") or {}).items()})
     sounds.update(start.get("sounds") or ())

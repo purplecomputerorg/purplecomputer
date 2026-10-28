@@ -750,11 +750,11 @@ def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=
     return key
 
 
-_KEY_RE = re.compile(r"\{([^}]+)\}")
+KEY_RE = re.compile(r"\{([^}]+)\}")
 
 
 def key_hint_width(g: Gfx, text: str, px: int) -> int:
-    parts = _KEY_RE.split(i18n.translate(text))
+    parts = KEY_RE.split(i18n.translate(text))
     return sum(keycap_size(g, t, px)[0] if i % 2 else g.measure(t, px, "mono", tr=False)[0] for i, t in enumerate(parts) if t)
 
 
@@ -764,7 +764,7 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
     setattr(box, anchor, (x, y))
     x = box.x
-    for i, t in enumerate(_KEY_RE.split(i18n.translate(text))):
+    for i, t in enumerate(KEY_RE.split(i18n.translate(text))):
         if t:
             x = (draw_key(g, t, px, x, box.centery, fill=color) if i % 2 else
                  g.draw_text(t, px, x, box.centery, "mono", color, anchor="midleft", tr=False)).right

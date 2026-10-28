@@ -29,10 +29,10 @@ from ...roomkit.limits import (KEEP_MAX_BYTES, MAX_REPLY_CHARS, MAX_SHAPES, MAX_
                                START_TIMEOUT_S, STEP_TIMEOUT_S, sealed)
 from ..sounds import SoundBank
 from ..theme import ROLES
-from ..ui import KID_MATH_KEYS, Overlay
+from ..ui import KEY_RE, KID_MATH_KEYS, Overlay, auto_ink, draw_key, keycap_size
 
 ICON_FAMILY = "\U000F0827"  # nf-md-home_heart
-API = 2
+API = 3                     # 3: a text's how.keys draws {Key} as a keycap
 SIZE = (240, 120)           # the room's surface; the viewport is 2:1 on every machine
 RUNNER = Path(__file__).parents[2] / "roomkit" / "runner.py"
 BUILTIN_LIB = RUNNER.parent / "purple.py"
@@ -163,12 +163,12 @@ def _size_or_0(v) -> float:
 
 
 def _text_shape(a) -> tuple:
-    """("text", x, y, size, text, color, anchor, width, height, box, pad, radius): see guides/family-rooms.md."""
+    """("text", x, y, size, text, color, anchor, width, height, box, pad, radius, keys): see guides/family-rooms.md."""
     how = a[5] if len(a) > 5 and isinstance(a[5], dict) else {}
     return ("text", *map(float, a[:3]), str(a[3])[:TEXT_MAX], (_color(a[4]) if len(a) > 4 else None) or "text",
             how.get("anchor") if how.get("anchor") in ANCHORS else "center",
             *(_size_or_0(how.get(k)) for k in ("width", "height")), _color(how.get("box")),
-            *(_size_or_0(how.get(k)) for k in ("pad", "radius")))
+            *(_size_or_0(how.get(k)) for k in ("pad", "radius")), how.get("keys") is True)
 
 
 def _shape(s, images=()) -> tuple | None:
@@ -420,11 +420,14 @@ class FamilyRoom(Overlay):
             self._text(surface, k, x * k, y * k, *rest)
         return surface
 
-    def _text(self, surface, k, x, y, px, text, color, anchor, width, height, box, pad, radius):
+    def _text(self, surface, k, x, y, px, text, color, anchor, width, height, box, pad, radius, keys):
         side = ANCHORS[anchor]
         sw = surface.get_width()
         fits = sw - x if "left" in side else x if "right" in side else 2 * min(x, sw - x)
-        lines = self._fit(text, max(6, round(px * k)), _paint(color), width * k, height * k, fits)
+        keys = keys and bool(KEY_RE.search(text))
+        if keys:    # a line with keycaps doesn't wrap; it shrinks into its width
+            fits, width = min(fits, width * k or fits), 0
+        lines = self._fit(text, max(6, round(px * k)), _paint(color), width * k, height * k, fits, keys)
         block = pygame.Rect(0, 0, max(w for w, _, _ in lines), sum(h for _, h, _ in lines))
         setattr(block, side, (round(x), round(y)))
         if box:
@@ -436,19 +439,38 @@ class FamilyRoom(Overlay):
                 surface.blit(img, (left + at, top + (h - img.get_height()) // 2))
             top += h
 
-    def _lines(self, text, px, color, width) -> list:
+    def _lines(self, text, px, color, width, keys) -> list:
         """Gfx.layout's lines; a grid square's one short line skips layout, which costs three times as much."""
         g = self.app.g
+        if keys:
+            return self._keyed(text, px, color)
         if width or "\n" in text:
-            return g.layout(text.replace("[", "\\["), px, "sans", color, max_width=width or None)
-        img = g.text(text, px, "sans", color)
+            return g.layout(text.replace("[", "\\["), px, "mono", color, max_width=width or None)
+        img = g.text(text, px, "mono", color)
         return [(img.get_width(), img.get_height(), [(img, 0, None)])]
 
-    def _fit(self, text, px, color, width, height, fits) -> list:
+    def _keyed(self, text, px, color) -> list:
+        """One line where {Key} is a keycap, as in Purple's own hints."""
+        g, pieces, x = self.app.g, [], 0
+        for i, part in enumerate(KEY_RE.split(text)):
+            if part:
+                img = self._keycap(part, px, color) if i % 2 else g.text(part, px, "mono", color)
+                pieces.append((img, x, None))
+                x += img.get_width()
+        return [(x, max(img.get_height() for img, _, _ in pieces), pieces)]
+
+    def _keycap(self, name, px, color) -> pygame.Surface:
+        g = self.app.g
+        cap = pygame.Surface(keycap_size(g, name, px), pygame.SRCALPHA)
+        with g.drawing_on(cap):
+            draw_key(g, name, px, 0, cap.get_height() // 2, fill=color, ink=auto_ink(color))
+        return cap
+
+    def _fit(self, text, px, color, width, height, fits, keys) -> list:
         """Lines at the biggest size up to px that fit: wrapped at width when there is one, else one
         line no wider than fits, and no taller than height when there is one."""
         while True:
-            lines = self._lines(text, px, color, width)
+            lines = self._lines(text, px, color, width, keys)
             w, h = max(w for w, _, _ in lines), sum(h for _, h, _ in lines)
             scale = min(1 if width or w <= fits or fits <= 0 else fits / w, h and height / h if height and h > height else 1)
             if scale >= 1 or px <= 6:

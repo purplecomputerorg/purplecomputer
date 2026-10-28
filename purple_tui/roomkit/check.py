@@ -10,6 +10,7 @@ In Purple's repo: just check-room"""
 import argparse
 import inspect
 import json
+import math
 import queue
 import random
 import subprocess
@@ -24,7 +25,7 @@ from purple_tui.roomkit import limits as L
 from purple_tui.roomkit import purple as builtin_lib
 
 SIZE = (240, 120)
-CELL = 10
+CELL, LEFT, TOP = builtin_lib.CELL, (SIZE[0] - builtin_lib.W * builtin_lib.CELL) / 2, builtin_lib.TOP
 KEYS = ["up", "down", "left", "right", "space", "enter", "backspace", *"abcdefghijklmnopqrstuvwxyz0123456789"]
 TRY_KEYS = ("right right right down down space enter left up space a b c 1 2 3 y e s enter "
             "down down down down down down down down down down down down down right right right right right right right "
@@ -58,7 +59,7 @@ class Room:
         self.printer.start()
 
     def start(self, path: Path, lib: str, sounds: list):
-        self.send({"ev": "start", "t": 0, "api": 2, "size": list(SIZE), "keep": {}, "lib": lib,
+        self.send({"ev": "start", "t": 0, "api": 3, "size": list(SIZE), "keep": {}, "lib": lib,
                    "source": path.read_text(encoding="utf-8"), "images": {n: list(s) for n, s in self.images.items()},
                    "sounds": sounds}, L.START_TIMEOUT_S)
 
@@ -133,12 +134,14 @@ def _picture_name(source) -> str:
 def screen(scene: list) -> str:
     """The scene as text: the 24 by 12 grid, a character or emoji a square, each picture as a letter
     (named under the grid), then the words over it."""
-    grid = [["  "] * (SIZE[0] // CELL) for _ in range(SIZE[1] // CELL)]
+    grid = [["  "] * builtin_lib.W for _ in range(builtin_lib.H)]
     words, letters, used = [], {}, False
     for shape in scene[1:]:
         kind, x, y = shape[:3]
-        col, row = int(x // CELL), int(y // CELL)
-        on_grid = not (x % CELL or y % CELL) and 0 <= row < len(grid) and 0 <= col < len(grid[0])
+        gx, gy = (x - LEFT) / CELL, (y - TOP) / CELL
+        col, row = math.floor(gx), math.floor(gy)
+        inside = 0 <= row < len(grid) and 0 <= col < len(grid[0])
+        on_grid = inside and abs(gx - col) + abs(gy - row) < 0.01
         if kind == "rect" and len(shape) > 7 and shape[7]:
             words.append(f"(a ring around square {col}, {row})")
         elif kind == "image" and not on_grid:
@@ -150,9 +153,9 @@ def screen(scene: list) -> str:
                 for c in range(col, min(len(grid[0]), col + round(shape[3] / CELL))):
                     grid[r][c] = mark
             used = True
-        elif kind == "rect" and 0 <= row < len(grid) and 0 <= col < len(grid[0]):
+        elif kind == "rect" and inside:
             grid[row][col], used = "▪ ", True
-        elif kind == "text" and len(shape) == 6 and x % CELL == CELL / 2 and 0 <= row < len(grid) and 0 <= col < len(grid[0]):
+        elif kind == "text" and len(shape) == 6 and inside and abs(gx - col - 0.5) < 0.02:
             grid[row][col], used = shape[4] if len(shape[4]) > 1 or not shape[4].isascii() else shape[4] + " ", True
         elif kind == "text":
             words.append(shape[4])

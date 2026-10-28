@@ -96,6 +96,10 @@ def _open(app, name):
     return room
 
 
+C = purple_lib.CELL
+LEFT, TOP = (family_room.SIZE[0] - purple_lib.W * C) / 2, purple_lib.TOP
+
+
 def texts(room) -> list:
     return [line for s in room.scene if s[0] == "text" for line in s[4].split("\n")]
 
@@ -243,7 +247,7 @@ def test_the_packs_own_library_runs_and_unknown_shapes_and_fields_are_skipped(pa
         app = make_app()
         room = _open(app, "custom")
         await until(lambda: room.scene)
-        assert room.scene == [("text", 120.0, 60.0, 20.0, "From the pack", "accent", "center", 0.0, 0.0, None, 0.0, 0.0)] and room.fault is None
+        assert room.scene == [("text", 120.0, 60.0, 20.0, "From the pack", "accent", "center", 0.0, 0.0, None, 0.0, 0.0, False)] and room.fault is None
         app._draw()
         room.close()
     run(go())
@@ -419,8 +423,8 @@ def test_pictures_draw_from_the_pack_or_from_pixels(pack):
         assert [s[5] for s in pictures] == ["hero", ("pixels", ("XX", "XX"), (("X", "#00ff00"),))]
         app._draw()
         k = room._surface.get_width() / family_room.SIZE[0]
-        assert room._surface.get_at((int(5 * k), int(5 * k)))[:3] == (255, 0, 0)
-        assert room._surface.get_at((int(15 * k), int(5 * k)))[:3] == (0, 255, 0)
+        assert room._surface.get_at((int((LEFT + C / 2) * k), int((TOP + C / 2) * k)))[:3] == (255, 0, 0)
+        assert room._surface.get_at((int((LEFT + 1.5 * C) * k), int((TOP + C / 2) * k)))[:3] == (0, 255, 0)
         room.close()
     run(go())
 
@@ -437,8 +441,8 @@ def test_a_picture_fits_where_an_emoji_would_keeping_its_shape(pack):
         room = _open(app, "fit")
         await until(lambda: room.scene)
         fitted, sized = [s[1:5] for s in room.scene if s[0] == "image"]
-        assert fitted == (5.0, 0.0, 10.0, 20.0)
-        assert sized == (40.0, 0.0, 10.0, 20.0)
+        assert fitted == (LEFT + C / 2, TOP, C, 2 * C)
+        assert sized == (LEFT + 4 * C, TOP, C, 2 * C)
         assert [s[4] for s in room.scene if s[0] == "text"] == ["tall"]
         room.close()
     run(go())
@@ -457,11 +461,11 @@ def test_the_grid_has_a_floor_a_cursor_big_pictures_and_text_over_it(pack):
         assert kinds == ["rect", "rect", "text", "image", "rect", "text", "text", "text"]
         floor, flower, picture, ring = room.scene[1], room.scene[2], room.scene[3], room.scene[4]
         assert floor[5] == "#00aa00" and flower[4] == "🌻"
-        assert picture[1:5] == (20.0, 20.0, 20.0, 40.0)
-        assert ring[5:] == ("accent", 10 / 6, 1.0)
+        assert picture[1:5] == (LEFT + 2 * C, TOP + 2 * C, 2 * C, 4 * C)
+        assert ring[5:] == ("accent", C / 6, 1.0)
         big, lines, status = room.scene[5:]
         assert (big[4], lines[4], status[4]) == ("Hi", "Plant a seed", "Score 3")
-        assert status[6] == "top" and status[9] == "surface"
+        assert status[2] == TOP / 2 and status[9] == "surface"
         app._draw()
         room.close()
     run(go())
@@ -488,15 +492,39 @@ def test_long_text_wraps_and_shrinks_into_its_box(pack):
         app = make_app()
         room = _open(app, "custom")
         await until(lambda: room.scene)
-        assert room.scene[1][6:] == ("center", 0.0, 0.0, None, 0.0, 0.0)
+        assert room.scene[1][6:] == ("center", 0.0, 0.0, None, 0.0, 0.0, False)
         app._draw()
         k = room._surface.get_width() / family_room.SIZE[0]
         red = [y for y in range(room._surface.get_height()) if room._surface.get_at((int(120 * k), y))[:3] == (255, 0, 0)]
         assert red and (red[-1] - red[0]) / k <= 44
-        lines = room._fit("[bold]as typed", 40, "#ffffff", 0, 0, 1000)
+        lines = room._fit("[bold]as typed", 40, "#ffffff", 0, 0, 1000, False)
         assert len(lines) == 1 and len(lines[0][2]) == 1
         room.close()
     run(go())
+
+
+def test_key_names_in_the_status_line_draw_as_keycaps(pack, monkeypatch):
+    pack("keys", 'from purple import *\nstatus("Space plays")\n')
+
+    async def go():
+        app = make_app()
+        room = _open(app, "keys")
+        await until(lambda: room.scene)
+        status = room.scene[-1]
+        assert status[4] == "{Space} plays" and status[-1] is True
+        app._draw()
+        (_, _, pieces), = room._fit(status[4], 20, "#ffffff", 0, 0, 1000, True)
+        assert len(pieces) == 2
+        room.close()
+    run(go())
+    monkeypatch.setattr(family_room, "API", 2)   # an older Purple shows the words as typed
+
+    async def old():
+        room = _open(make_app(), "keys")
+        await until(lambda: room.scene)
+        assert room.scene[-1][4] == "Space plays"
+        room.close()
+    run(old())
 
 
 def test_a_picture_the_pack_doesnt_have_is_skipped(pack):
@@ -603,7 +631,7 @@ def test_theme_colors_paint_the_grid_and_the_background(pack):
         room = _open(app, "themed")
         await until(lambda: room.scene)
         assert room.scene[0][5] == "surface"
-        assert room.scene[1][:3] == ("rect", 20.5, 0.5) and room.scene[1][5] == "tile"
+        assert room.scene[1][:3] == ("rect", LEFT + 2 * C + 0.5, TOP + 0.5) and room.scene[1][5] == "tile"
         assert room.scene[2][4] == "Q"
         room.close()
     run(go())

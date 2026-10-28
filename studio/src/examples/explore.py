@@ -35,9 +35,9 @@ WORLD = {
     ],
 }
 # What each letter in the world is: an emoji, one of your photos, or a color for the ground.
-THINGS = {"T": "🌳", "R": "🪨", "~": "#3b82c4", ",": "#5c4b3b", "*": "⭐", "F": "🦊", "B": "🦇", "H": "🏠", "1": "🚪"}
+THINGS = {"T": "🌳", "R": "🪨", "~": "#4677b0", ",": "#5c4b3b", "*": "⭐", "F": "🦊", "B": "🦇", "H": "🏠", "1": "🚪"}
 # The grass's two colors.
-GROUND = ("#4f9d4a", "#57a852")
+GROUND = ("#4a8a50", "#4f9154")
 # The hero's colors: H hair, S skin, K eyes and shoes, B shirt.
 HERO_COLORS = {"H": "#6b3e1e", "S": "#f2c49b", "K": "#222222", "B": "#e0457b"}
 # What someone in the world says out loud when the hero bumps into them.

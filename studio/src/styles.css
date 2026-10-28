@@ -533,8 +533,8 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 /* The bot rides the left line, its round body (y 110 of 200) on the text center; drawn 34px because assets/logo.svg has wide margins */
 .home-note::before { content: ""; position: absolute; left: -18px; top: calc(50% - 18.7px); width: 34px; height: 34px; background: url("../../assets/logo.svg") center / contain no-repeat; }
 .home-note b { color: var(--text); font-weight: 600; }
-.home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 16px; margin: 30px 0 36px; }
-.home-card { --tilt: -1deg; position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 14px; background: var(--card); border-radius: 6px; box-shadow: 0 2px 0 #ece5f3, 0 10px 22px rgba(92, 45, 145, 0.09); color: inherit; text-decoration: none; transform: rotate(var(--tilt)); transition: transform 0.15s, box-shadow 0.15s; }
+.home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 26px 16px; margin: 30px 0 36px; }
+.home-card { --tilt: -1deg; position: relative; container-type: inline-size; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 14px; background: var(--card); border-radius: 6px; box-shadow: 0 2px 0 #ece5f3, 0 10px 22px rgba(92, 45, 145, 0.09); color: inherit; text-decoration: none; transform: rotate(var(--tilt)); transition: transform 0.15s, box-shadow 0.15s; }
 .home-card:nth-child(3n + 2) { --tilt: 1deg; }
 .home-card:nth-child(3n) { --tilt: -0.5deg; }
 .home-card:hover { color: inherit; transform: none; box-shadow: 0 2px 0 #ece5f3, 0 16px 30px rgba(92, 45, 145, 0.16); }
@@ -549,27 +549,29 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .home-card:nth-child(6n + 4) { --tape-w: 66px; --tape-r: 4deg; --tape-x: 4px; }
 .home-card:nth-child(6n + 5) { --tape-w: 72px; --tape-r: -4.5deg; --tape-x: -6px; }
 .home-card:nth-child(6n) { --tape-w: 58px; --tape-r: 1deg; --tape-x: 12px; }
-.home-card b .purple-emoji { width: 26px; height: 26px; }
-.home-card b .sticker { font-size: 11.5px; }
-.home-card .bezel { margin-bottom: 8px; padding: 5px; border-radius: 10px; background: linear-gradient(#34333b, #1f1e24); }
-.home-card b { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--display); font-size: 16px; }
+.home-card b .purple-emoji { width: 1.6em; height: 1.6em; }
+.home-card b .sticker { font-size: 0.72em; }
+.home-card .bezel { margin-bottom: 8px; padding: 5px; border-radius: 10px; background: linear-gradient(#34333b, #1f1e24); container-type: inline-size; }
+/* Shrinks with a narrow card so "Instruments" stays beside its icon */
+.home-card b { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em; font-family: var(--display); font-size: clamp(12px, 11.5cqi, 16px); }
 .home-card > span:last-child { font-size: 13px; color: var(--dim); }
-.mini { aspect-ratio: 16 / 10; border-radius: 4px; background: var(--tui-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; overflow: hidden; font: 10px/1.3 var(--mono); color: #d8cbef; text-align: center; }
+/* Sized in em off the card's width, so each screen scales as one picture instead of rewrapping */
+.mini { aspect-ratio: 16 / 10; border-radius: 4px; background: var(--tui-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.6em; padding: 0.8em; overflow: hidden; font: 5.4cqi/1.3 var(--mono); color: #d8cbef; text-align: center; }
 .mini i { font-style: normal; color: #c39cf0; }
 .mini.pictures canvas { height: 100%; width: auto; max-width: 100%; image-rendering: pixelated; }
-.mini .bubble { display: flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 10px; background: var(--fill); color: var(--text); }
-.mini .speaker { width: 13px; height: 13px; flex: none; color: var(--purple); }
-.mini .sticker { font-size: 9px; }
-.mini .big { font-size: 20px; line-height: 1; }
-.mini .prompt { display: flex; align-items: center; gap: 5px; }
+.mini .bubble { display: flex; align-items: center; gap: 0.5em; padding: 0.6em 1em; border-radius: 1em; background: var(--fill); color: var(--text); }
+.mini .speaker { width: 1.3em; height: 1.3em; flex: none; color: var(--purple); }
+.mini .sticker { font-size: 1.5em; }
+.mini .big { font-size: 2em; line-height: 1; }
+.mini .prompt { display: flex; align-items: center; gap: 0.5em; }
 .mini .prompt i { font-weight: 700; }
-.mini .field { display: flex; align-items: center; padding: 1px 5px; border: 1px solid #7a5aa6; border-radius: 4px; background: #362a54; }
+.mini .field { display: flex; align-items: center; padding: 0.1em 0.5em; border: 1px solid #7a5aa6; border-radius: 0.4em; background: #362a54; }
 .mini .caret { width: 0.55em; height: 1.05em; margin-left: 1px; background: #d7e79c; }
 .mini .wave { width: 80%; color: #c39cf0; }
 .mini.colors { background: #10261a; color: #a8e0b5; }
-.mini.colors b { width: 80%; height: 45%; border: 1px solid #4f9a63; border-radius: 5px; background: #163322; }
-.mini.rooms { padding: 5px; }
-.mini .map { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); width: 100%; border-radius: 3px; overflow: hidden; font-size: 8px; line-height: 1; }
+.mini.colors b { width: 80%; height: 45%; border: 1px solid #4f9a63; border-radius: 0.5em; background: #163322; }
+.mini.rooms { padding: 0.5em; }
+.mini .map { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); width: 100%; border-radius: 3px; overflow: hidden; font-size: 0.8em; line-height: 1; }
 .mini .map span { aspect-ratio: 1; display: grid; place-items: center; background: #63b85f; }
 .mini .map .dark { background: #55a851; }
 .mini .map .water { background: #3f7fd0; }

@@ -86,7 +86,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .more-menu summary { font-size: 0; padding: 7px 6px; }
   .more-menu summary::after { content: "⋯"; font-size: 18px; }
 }
-@media (max-width: 1080px) {
+@media (min-width: 961px) and (max-width: 1080px) {
   .tabs-nav .icon, .tabs-nav .n { display: none; }
 }
 
@@ -142,15 +142,18 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .stage-inner { max-width: 640px; margin: 0 auto; }
   .stage .laptop { max-width: none; }
   .main { padding: 20px 18px 48px; }
-  /* The sections get their own row, by name, wrapping so every one stays in sight */
+  /* The sections get their own rows, three across with their icons, so every one stays in sight */
   .topbar { height: auto; flex-wrap: wrap; gap: 4px 10px; padding: 10px 12px 6px; }
   .brand { flex: 1; }
-  .tabs-nav { order: 3; flex: 0 0 100%; flex-wrap: wrap; justify-content: center; gap: 2px 4px; }
-  .tabs-nav a { padding: 6px 10px; font-size: 14px; }
+  .tabs-nav { order: 3; flex: 0 0 100%; max-width: 420px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 4px; }
+  .tabs-nav a { --pad: 10px; padding: 6px var(--pad); font-size: 14px; }
+  /* On the icon's corner, clear of the name */
+  .tabs-nav .n { top: 2px; left: calc(var(--pad) + 11px); min-width: 13px; padding: 0 3px; font-size: 9px; line-height: 13px; }
   .topbar .btn.download { padding: 8px 14px; }
   .word-field { grid-template-columns: 1fr; gap: 4px; }
   .word-field .label { padding-top: 0; }
 }
+@media (max-width: 380px) { .tabs-nav a { --pad: 6px; font-size: 13px; } }
 
 .back { display: inline-block; margin-bottom: 6px; font-size: 14px; color: var(--dim); text-decoration: none; }
 .back:hover { color: var(--purple); }
@@ -828,6 +831,13 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .screen-wrap.live { background: #1d1234; font-family: var(--mono); }
 .live-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
 .live-status { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; background: #1d1234; color: #e8daf0; font-size: 15px; text-align: center; transition: opacity 0.3s; }
+/* Narrow: the key sits beside its question, and the voice choice and typing get the card's full width below */
+@media (max-width: 560px) {
+  .voice-now { display: grid; grid-template-columns: auto 1fr; gap: 14px 16px; padding: 18px 16px; }
+  .voice-now > .stack { display: contents; }
+  .voice-now > .stack > :last-child { grid-column: 1 / -1; }
+  .voice-key { font-size: 26px; }
+}
 .live-status i { width: 34px; height: 34px; border-radius: 99px; border: 3px solid rgba(232, 218, 240, 0.18); border-top-color: #e8daf0; animation: spin 1s linear infinite; }
 .live.failed .live-status i { display: none; }
 .live:not(.ready) .zoom-toggle { display: none; }

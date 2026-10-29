@@ -706,6 +706,25 @@ def test_a_changed_room_waits_to_be_turned_on_again(pack):
     run(go())
 
 
+@pytest.mark.parametrize("about, icon", [({"icon": "🦕"}, "🦕"), ({"icon": "🗺️"}, "🗺️"), ({"icon": "rex"}, family_room.ICON_FAMILY),
+                                         ({"icon": "🦕" * 9}, family_room.ICON_FAMILY), (None, family_room.ICON_FAMILY)])
+def test_a_room_shows_its_own_emoji_or_the_family_glyph(pack, tmp_path, about, icon):
+    if about is not None:
+        (tmp_path / "packs" / "family" / "content" / "rooms" / "dinos.json").write_text(json.dumps(about))
+    dinos = pack("dinos", SNAKE)
+    assert family_room.room_icon(dinos) == icon
+    settings.set_room_on(dinos.key, dinos.digest)
+
+    async def go():
+        app = make_app()
+        await press(app, "escape")
+        app._draw()
+        await press(app, "6")
+        assert app.top.tab.startswith(icon)
+        app.top.close()
+    run(go())
+
+
 def _family_states(screen) -> list:
     return [screen._state(item, settings.get_rooms_on()) for row in screen.rows for item in row if item[0] == "family"]
 

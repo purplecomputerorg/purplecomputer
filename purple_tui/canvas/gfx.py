@@ -65,6 +65,7 @@ _EMOJI_RE = re.compile(
     "\U0001F000-\U0001FAFF\U00100000-\U0010FFFD])[️⃣\U0001F3FB-\U0001F3FF]*"
     "(?:‍[☀-➿\U0001F000-\U0001FAFF][️\U0001F3FB-\U0001F3FF]*)*)+"
 )
+_ONE_EMOJI_RE = re.compile(_EMOJI_RE.pattern.removesuffix("+"))
 # A word picture's share of its emoji square: the room a Noto emoji leaves around itself, so pictures in a row don't touch.
 WORD_PICTURE_FILL = 0.88
 _WORD_PICTURE_RE = re.compile("([\U00100000-\U0010FFFD])")
@@ -173,6 +174,10 @@ def _row(pieces: list, gap: int = 0) -> pygame.Surface:
 
 def is_emoji(text: str) -> bool:
     return bool(text) and all(e for _, e in split_runs(text))
+
+
+def is_one_emoji(text: str) -> bool:
+    return bool(_ONE_EMOJI_RE.fullmatch(text))
 
 
 class _Cache(OrderedDict):

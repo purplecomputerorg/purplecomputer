@@ -8,6 +8,7 @@ import type { PackFiles } from "./live/boot";
 import { instrumentNotes } from "./notes";
 import { roomVoice } from "./roomvoice";
 import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop, type Words } from "./photo";
+import { roomIcon } from "./examples";
 import { draft, emptyDraft, madeOf, type Draft, type Keepable, type RoomDraft, type RoomFile } from "./state";
 
 export { manifest } from "@sdk/pack";
@@ -39,7 +40,7 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   const phrases = d.phrases.filter(ok);
   const synonyms = d.synonyms.filter(ok);
   const instruments = d.instruments.filter(ok);
-  const rooms = d.rooms.filter(ok).map((r) => ({ name: r.name, source: r.source, made: r.made }));
+  const rooms = d.rooms.filter(ok).map((r) => ({ name: r.name, source: r.source, made: r.made, icon: roomIcon(r) }));
   const roomFiles = d.roomFiles.filter(ok);
   const theme = ok(d.colors) ? d.theme : null;
   const studio: Saved = {
@@ -92,8 +93,8 @@ function handMadeRooms(files: Map<string, Uint8Array>): RoomDraft[] {
   return [...files].flatMap(([path, data]) => {
     const name = /^content\/rooms\/([^/]+)\.py$/.exec(path)?.[1];
     if (!name || !ROOM_NAME.test(name)) return [];
-    const made = files.get(`content/rooms/${name}.studio.json`);
-    return [kept({ name, source: text(data), made: made ? madeOf(JSON.parse(text(made))) : null })];
+    const [made, about] = [`${name}.studio.json`, `${name}.json`].map((f) => files.get(`content/rooms/${f}`));
+    return [kept({ name, source: text(data), made: made ? madeOf(JSON.parse(text(made))) : null, icon: about && JSON.parse(text(about)).icon })];
   });
 }
 
@@ -123,7 +124,7 @@ export async function openPack(file: Blob): Promise<Draft> {
     synonyms: s.synonyms.map(kept),
     ranked: s.ranked,
     instruments: s.instruments.map(kept),
-    rooms: s.rooms.map((r) => kept({ name: r.name, source: r.source, made: madeOf(r.made) })),
+    rooms: s.rooms.map((r) => kept({ name: r.name, source: r.source, made: madeOf(r.made), icon: r.icon })),
     roomFiles: roomFiles(files).map((f) => ({ ...f, shelfId: f.kind === "images" ? s.roomShelf?.[f.name] : undefined })),
     theme: s.theme,
     colors: s.theme ? { kept: true } : {},

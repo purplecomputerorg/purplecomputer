@@ -180,7 +180,7 @@ my-pack/
 
 `id` is a plain name (letters, digits, dashes); a pack with the same `id` replaces the old one. `version` is like `1.0.0`. Keep `"type": "emoji"`.
 
-Room files are `content/rooms/<name>.py`: lowercase letters, digits, and dashes, never `purple`. Purple shows the name with capitals, so `space-rescue` is "Space Rescue". Each is UTF-8 text, at most 64 KB. Purple refuses a pack with any other code in it, so leave out `__pycache__` folders.
+Room files are `content/rooms/<name>.py`: lowercase letters, digits, and dashes, never `purple`. Purple shows the name with capitals, so `space-rescue` is "Space Rescue". To give a room its own emoji in the room picker, put `{"icon": "🚀"}` in `content/rooms/<name>.json` beside it. Each `.py` is UTF-8 text, at most 64 KB. Purple refuses a pack with any other code in it, so leave out `__pycache__` folders.
 
 A `.purplepack` is the folder's contents as a gzipped tar, with `manifest.json` and `content/` at the top:
 

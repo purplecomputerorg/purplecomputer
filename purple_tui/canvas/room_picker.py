@@ -11,7 +11,7 @@ from ..constants import ICON_BROOM, ICON_ROBOT, ICON_TIME_TRAVEL, ICON_VOLUME_HI
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from . import color_wheel, key_save
 from .paper import can_print
-from .rooms.family_room import ICON_FAMILY
+from .rooms.family_room import room_icon
 from .library import ICON_OPEN, ICON_SAVE
 from .ui import DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_scrim
 
@@ -282,7 +282,7 @@ class RoomPicker(Overlay):
                 r = pygame.Rect(0, y, em(FAMILY_PILL[0]), em(PILL_H))
                 r.centerx = box.x + pad + em(center)
                 on = (self.row, self.col) == (FAMILY, col)
-                draw_pill(g, r, [(ICON_FAMILY, em(1.1), "nerd", None), (short_title(room.title), em(0.95), "mono-bold", None),
+                draw_pill(g, r, [(room_icon(room), em(1.1), "nerd", None), (short_title(room.title), em(0.95), "mono-bold", None),
                                  (FAMILY_KEYS[col], em(0.85), "mono", P.DIM)], on)
             y += em(PILL_H)
         if self.tools:

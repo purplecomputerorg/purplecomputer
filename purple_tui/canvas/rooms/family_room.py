@@ -27,6 +27,7 @@ from ...music_constants import instruments, pitch_filename
 from ...timeline import state_dir
 from ...roomkit.limits import (KEEP_MAX_BYTES, MAX_REPLY_CHARS, MAX_SHAPES, MAX_SOUNDS, MAX_WAKE_S, MIN_WAKE_S,
                                START_TIMEOUT_S, STEP_TIMEOUT_S, sealed)
+from ..gfx import is_one_emoji
 from ..sounds import SoundBank
 from ..theme import ROLES
 from ..ui import KEY_RE, KID_MATH_KEYS, Overlay, auto_ink, draw_key, keycap_size
@@ -56,6 +57,11 @@ ANCHORS = {"center": "center", "left": "midleft", "right": "midright", "top": "m
 _NOTE = re.compile(r"^([A-Ga-g])(#?)(\d)$")
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 _ram_keeps: dict = {}
+
+
+def room_icon(room) -> str:
+    """The room's own emoji, or the family glyph when it has none."""
+    return room.icon if is_one_emoji(room.icon) else ICON_FAMILY
 
 
 def command() -> list:
@@ -234,7 +240,7 @@ class FamilyRoom(Overlay):
     @property
     def tab(self) -> str:
         from ..room_picker import short_title
-        return f"{ICON_FAMILY} {short_title(self.room.title)}"
+        return f"{room_icon(self.room)} {short_title(self.room.title)}"
 
     # ---------------------------------------------------------------- process
     def on_open(self):
@@ -602,7 +608,7 @@ class FamilyRoom(Overlay):
         g.fill(P.BG)
         vp = app._viewport_rect()
         frame = app._frame_rect(vp)
-        app._draw_title(frame, f"{ICON_FAMILY} {self.room.title}")
+        app._draw_title(frame, f"{room_icon(self.room)} {self.room.title}")
         g.rect(P.SURFACE, frame, radius=g.em(0.6))
         g.rect(P.LINE, frame, width=1, radius=g.em(0.6))
         if self.fault:

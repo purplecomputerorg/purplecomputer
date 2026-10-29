@@ -104,11 +104,11 @@ def _try(family):
         link = TRYING.parent / kind
         link.unlink(missing_ok=True)
         link.symlink_to(PACKS / family["pack"] / "content" / kind)
-    sources = dict(family.get("rooms") or ())
-    sources[family["name"]] = family["source"]
-    tried = [content.Room(name, TRYING / f"{name}.py") for name in sources]
+    sources = {name: (source, icon) for name, source, icon in family.get("rooms") or ()}
+    sources[family["name"]] = (family["source"], family["icon"])
+    tried = [content.Room(name, TRYING / f"{name}.py", icon) for name, (_, icon) in sources.items()]
     for room in tried:
-        room.path.write_text(sources[room.name])
+        room.path.write_text(sources[room.name][0])
         set_room_on(room.key, room.digest)
     loaded = content.get_content()
     loaded.rooms = [r for r in loaded.rooms if r.name not in sources and TRYING not in r.path.parents] + tried

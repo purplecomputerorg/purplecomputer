@@ -51,6 +51,7 @@ class Room:
     """A family room: content/rooms/<name>.py, run as a guest (guides/family-rooms.md)."""
     name: str
     path: Path
+    icon: str = ""  # content/rooms/<name>.json's "icon", an emoji
 
     @property
     def title(self) -> str:
@@ -408,7 +409,7 @@ class ContentManager:
 
     def _load_rooms(self, content_dir: Path) -> None:
         for path in room_files(content_dir):
-            self.rooms = [r for r in self.rooms if r.name != path.stem] + [Room(path.stem, path)]
+            self.rooms = [r for r in self.rooms if r.name != path.stem] + [Room(path.stem, path, room_icon(path))]
 
     def _load_instruments(self, content_dir: Path) -> None:
         for spec in sorted((content_dir / "instruments").glob("*.json")):
@@ -834,6 +835,7 @@ class ContentManager:
 
 ROOM_NAME = re.compile(r"^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$")  # purple.py is the pack's room library
 ROOM_LIB = "purple.py"
+ROOM_ICON_MAX = 16  # characters: room for the longest emoji sequences
 
 
 MEANING_MAX = 200
@@ -858,8 +860,14 @@ def png_size(path: Path) -> tuple[int, int] | None:
 
 
 def room_files(content_dir: Path) -> list[Path]:
-    """content/rooms/<name>.py; Studio's <name>.studio.json beside them is for Studio only."""
+    """content/rooms/<name>.py; <name>.json beside one holds its icon, and Studio's <name>.studio.json is for Studio only."""
     return sorted(p for p in (content_dir / "rooms").glob("*.py") if ROOM_NAME.match(p.stem))
+
+
+def room_icon(path: Path) -> str:
+    data = _read_json(path.with_suffix(".json"))
+    icon = data.get("icon") if isinstance(data, dict) else None
+    return icon if isinstance(icon, str) and len(icon) <= ROOM_ICON_MAX else ""
 
 
 def _pack_dirs(packs_dir: Path, newest_last: bool = False) -> list[Path]:

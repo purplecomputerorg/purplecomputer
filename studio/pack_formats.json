@@ -36,12 +36,12 @@
   }
  ],
  "fingerprint": {
-  "studio/sdk/src/pack.ts": "3b2c065a151c50ab",
-  "studio/src/pack.ts": "99fd9ec32e00f8f2",
-  "purple_tui/content.py": "e056eba93e8ad490",
+  "studio/sdk/src/pack.ts": "ba6905cc77a3b4c1",
+  "studio/src/pack.ts": "b2a4993f4d041e29",
+  "purple_tui/content.py": "bbbfb850e0bfd978",
   "purple_tui/pack_manager.py": "a8c25ce9e5d548ed",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
-  "purple_tui/canvas/rooms/family_room.py": "5206391b9c11aff4",
+  "purple_tui/canvas/rooms/family_room.py": "7b29343630c98692",
   "purple_tui/roomkit/purple.py": "b9186525b79d9b5f",
   "purple_tui/roomkit/runner.py": "9e62d3413c858a5a",
   "purple_tui/roomkit/limits.py": "07347f3ac2df15ea"

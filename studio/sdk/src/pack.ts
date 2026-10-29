@@ -14,8 +14,8 @@ import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 export interface PackPicture { name: string; title?: string; ops: PaintOp[]; letters?: LetterOp[]; png?: Uint8Array; source?: Uint8Array }
 // notes: its WAVs already rendered, in SAMPLE_PITCHES order (Studio renders them off the page).
 export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params; notes?: Uint8Array[] }
-// content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); the Studio rules or form it was made from ride beside it.
-export interface PackRoom { name: string; source: string; made?: unknown }
+// content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); its emoji and the Studio rules or form it was made from ride beside it.
+export interface PackRoom { name: string; source: string; made?: unknown; icon?: string }
 // content/images/<name>.png and content/sounds/<name>.wav: what rooms draw with picture() and play with sound().
 export type RoomFileKind = "images" | "sounds";
 export interface PackRoomFile { kind: RoomFileKind; name: string; data: Uint8Array }
@@ -155,6 +155,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   for (const room of spec.rooms) {
     if (!ROOM_NAME.test(room.name)) throw new Error(`A room name must be lowercase letters, digits, and dashes, and not purple: ${room.name}`);
     entries.push(text(`content/rooms/${room.name}.py`, room.source.endsWith("\n") ? room.source : room.source + "\n"));
+    if (room.icon) entries.push(json(`content/rooms/${room.name}.json`, { icon: room.icon }));
     if (room.made) entries.push(json(`content/rooms/${room.name}.studio.json`, room.made));
   }
   for (const f of spec.roomFiles ?? []) entries.push({ path: roomFilePath(f), data: f.data });

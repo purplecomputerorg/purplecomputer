@@ -8,6 +8,7 @@ import garden from "./garden.py?raw";
 import memory from "./memory.py?raw";
 import snake from "./snake.py?raw";
 import story from "./story.py?raw";
+import type { Made, RoomDraft } from "../state";
 
 const SPECIAL_KEYS: string[] = PURPLE.room.keys;
 const lit = (s: string) => JSON.stringify(s);
@@ -202,6 +203,14 @@ export const EXAMPLES: Example[] = [
   { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off with the keys, then Space plays them round and round.", source: beats },
   { name: "snake", icon: "🐍", label: "A wandering snake", about: "Press a key and a snake crawls to it, lighting it up with a note.", source: snake },
 ];
+
+// Rules aren't offered any more, but a room made from them still opens in them.
+const MADE_ICONS: Record<Made["kind"], string> = { rules: "🧱", quiz: TEMPLATES.quiz.icon, soundboard: TEMPLATES.soundboard.icon };
+export const IDEA = "💡";
+// The room's emoji, in Studio and in Purple's room picker: the family's pick, else its starter's (garden-3 came
+// from garden), else the lightbulb that Python with no starter shows.
+export const roomIcon = (room: RoomDraft) =>
+  room.icon || (room.made ? MADE_ICONS[room.made.kind] : (EXAMPLES.find((e) => e.name === room.name.replace(/-\d+$/, ""))?.icon ?? IDEA));
 
 // A blank room's first Python, one of a few tiny ones to pick from while it's still untouched.
 export const BLANK_ROOMS = [

@@ -59,7 +59,7 @@ export interface Place { room: Room; menu: boolean; at: [number, number] | null 
 // picture: painted on the Art canvas as Art's Open paints a pack picture.
 // family: a family room opened over the room, as the Esc menu opens one, with its pack's pictures and
 // sounds; rooms: the family's others not in the pack, listed in the Esc menu beside it.
-export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: ArtPicture; family?: { name: string; source: string; pack: string; rooms?: [name: string, source: string][] } }
+export interface RoomSetup { room: Room; letters?: boolean; instrument?: string; picture?: ArtPicture; family?: { name: string; source: string; icon: string; pack: string; rooms?: [name: string, source: string, icon: string][] } }
 
 // A pack's files since the last one Purple got (all of them when fresh), as install() in live.py takes them.
 export interface PackFiles { id: string; fresh: boolean; files: [path: string, data: Uint8Array][]; removed: string[] }

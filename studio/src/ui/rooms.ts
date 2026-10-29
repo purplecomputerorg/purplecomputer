@@ -1,11 +1,12 @@
 import { purpleEmoji } from "./icons";
 import { ROOM_NAME, roomTitle } from "@sdk/pack";
-import { BLANK_ROOMS, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
+import { BLANK_ROOMS, EXAMPLES, IDEA, roomIcon, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
 import { readKnobs, writeKnobs } from "../knobs";
 import type { RoomSetup } from "../live/boot";
 import { rulesSource } from "../rules";
 import { changed, draft, freeName, mine, withSample, type Made, type RoomDraft } from "../state";
 import { ask, go, h } from "./dom";
+import { emojiCell } from "./emojipicker";
 import { knobsForm } from "./knobsform";
 import { liveScreen, type RoomProblem } from "./live";
 import { codeHints } from "./codehints";
@@ -17,8 +18,6 @@ import { tryBar, yoursList } from "./trybar";
 import { templateForm } from "./templateform";
 import type { View } from "./view";
 
-// Rules aren't offered any more, but a room made from them still opens in them.
-export const ICONS: Record<Made["kind"], string> = { rules: "🧱", quiz: TEMPLATES.quiz.icon, soundboard: TEMPLATES.soundboard.icon };
 const sourceOf = (made: Made) => (made.kind === "rules" ? rulesSource(made.rules) : templateSource(made));
 const href = (name: string) => `#rooms/${encodeURIComponent(name)}`;
 // A room name nothing else uses; a try being replaced doesn't count.
@@ -27,11 +26,6 @@ const roomName = (text: string, except?: RoomDraft) =>
 
 // The names `from purple import *` brings in, and the ones Purple calls when the room defines them.
 const CALLED = ["on_key", "on_key_up"];
-
-// A starter's own icon follows it, as garden-3 came from garden; Python with no starter is a lightbulb, like its card.
-const IDEA = "💡";
-const iconOf = (room: RoomDraft) =>
-  room.made ? ICONS[room.made.kind] : (EXAMPLES.find((e) => e.name === room.name.replace(/-\d+$/, ""))?.icon ?? IDEA);
 
 // Says why the name can't be used, or renames the room and says nothing.
 function rename(room: RoomDraft, text: string): string | null {
@@ -65,7 +59,7 @@ function list(): View {
       "section",
       {},
       h("p", { class: "lead" }, "A room of your own: a little game, a story, a quiz. Your kid finds it next to Purple's rooms."),
-      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: purpleEmoji(iconOf(r), "pick-icon"), rename: (t) => rename(r, t) }), drop),
+      yoursList(draft.rooms, (r) => ({ href: href(r.name), title: roomTitle(r.name), face: purpleEmoji(roomIcon(r), "pick-icon"), rename: (t) => rename(r, t) }), drop),
       h("button", { class: "pick featured write-own", onclick: () => tryRoom("my-room", null) }, purpleEmoji(IDEA, "pick-icon"),
         h("div", {},
           h("b", {}, "Make any room you can imagine"),
@@ -158,7 +152,7 @@ function editor(room: RoomDraft): View {
   const out = h("pre", { class: "console" });
   const live = liveScreen();
   // The room opens over Play on the real Purple, as the Esc menu opens it on a laptop.
-  const family = () => ({ name: room.name, source: room.source, pack: draft.id });
+  const family = () => ({ name: room.name, source: room.source, icon: roomIcon(room), pack: draft.id });
   const setup: RoomSetup = { room: "play", family: family() };
   // The Python Purple is playing now.
   let playing = room.source;
@@ -191,16 +185,24 @@ function editor(room: RoomDraft): View {
 
   // Every change goes through here: the first one makes a try the family's. Focus stays put, so the
   // page doesn't jump away from what they just changed.
-  const edited = (source: string, ms: number, typed = false) => {
-    room.source = source;
+  const own = () => {
     if (room.sample) {
       mine(room);
       nameNote.textContent = "It's yours now. Click its name to change it.";
       nameIn.classList.add("just-yours");
     }
     changed();
+  };
+  const edited = (source: string, ms: number, typed = false) => {
+    room.source = source;
+    own();
     later(ms, typed);
   };
+  const iconCell = h("span", { class: "emoji-wrap" }, emojiCell(roomIcon(room), () => "", (e) => {
+    room.icon = e;
+    own();
+    restart();
+  }, { title: "The room's emoji in Purple's room picker" }));
 
   const code = h("textarea", { class: "code", rows: 24, spellcheck: false, readOnly: !!room.made });
   const hints = codeHints(code);
@@ -277,7 +279,7 @@ function editor(room: RoomDraft): View {
     editor: h(
       "section",
       {},
-      h("div", { class: "editor-head" }, nameIn, h("button", { class: "linkbtn dim small", onclick: () => nameIn.select() }, "✏️ Rename"), nameNote),
+      h("div", { class: "editor-head" }, iconCell, nameIn, h("button", { class: "linkbtn dim small", onclick: () => nameIn.select() }, "✏️ Rename"), nameNote),
       tryBar(room),
       copyGuideRow(h("span", { class: "small" }, "Using an AI helper? The ", h("a", { href: "#guide" }, "Room guide"), " is everything it needs:")),
       h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, ...tabButtons),

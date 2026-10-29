@@ -1,4 +1,5 @@
 import { PACK_FORMATS, type PackSkipped } from "@sdk/pack";
+import { roomIcon } from "../examples";
 import { buildPack, packFilename } from "../pack";
 import type { Picture } from "../photo";
 import { changed, countOf, draft, isQuiet, keep, notInPieces, pieces, titleOf, type Count, type Instrument, type Keepable, type Phrase, type RoomDraft, type RoomFile, type SynonymEntry, type WordEntry } from "../state";
@@ -8,7 +9,6 @@ import { SWATCH } from "./instrument";
 import { putItOnPurple } from "./install";
 import { clearEverythingButton, openPackButton } from "./packfile";
 import { staysHere } from "./privacy";
-import { ICONS } from "./rooms";
 import { sticker } from "./stickers";
 import type { View } from "./view";
 
@@ -24,7 +24,7 @@ const FACES: Record<string, (item: Keepable) => Node> = {
   autocomplete_picks: (i) => chip("⭐", (i as Keepable & { word: string }).word),
   synonyms: (i) => chip("↪", `${(i as SynonymEntry).alias} means ${(i as SynonymEntry).word}`),
   instruments: (i) => chip(h("span", { class: "pick-swatch", style: `background:${SWATCH[(i as Instrument).base]}` }), titleOf(i as Instrument)),
-  rooms: (i) => { const r = i as RoomDraft; return chip(r.made ? ICONS[r.made.kind] : "🐍", titleOf(r)); },
+  rooms: (i) => { const r = i as RoomDraft; return chip(roomIcon(r), titleOf(r)); },
   room_files: (i) => chip((i as RoomFile).kind === "images" ? "🖼️" : "🔊", (i as RoomFile).name),
   colors: () => chip(h("span", { class: "pack-colors" }, miniScreen(draft.theme!), ...["q", "a", "z"].map((k) => sticker(k))), "Screen and key colors"),
 };

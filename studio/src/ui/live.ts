@@ -4,6 +4,7 @@
 import { buildEntries } from "@sdk/pack";
 import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
+import { roomIcon } from "../examples";
 import { KEY_EVENT, announceKey } from "../keys";
 import { manifest, packChanges, packSpec, type Sent } from "../pack";
 import { onRoomVoice, roomReady, roomVoiceVersion, warmRoomVoice } from "../roomvoice";
@@ -195,7 +196,7 @@ class LiveScreen {
   // them all; the pack has only the added ones, so trying rooms doesn't start Purple again.
   private withRooms(): RoomSetup {
     const { family } = this.setup;
-    return family ? { ...this.setup, family: { ...family, rooms: draft.rooms.filter((r) => !r.kept).map((r) => [r.name, r.source]) } } : this.setup;
+    return family ? { ...this.setup, family: { ...family, rooms: draft.rooms.filter((r) => !r.kept).map((r) => [r.name, r.source, roomIcon(r)]) } } : this.setup;
   }
 
   private async sync(): Promise<void> {

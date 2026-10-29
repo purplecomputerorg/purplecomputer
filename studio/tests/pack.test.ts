@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildEntries, formatOf, manifest, roomTitle, skippedBy, type PackSpec } from "../sdk/src/pack";
 import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
-import { gzip, tar } from "../sdk/src/tar";
+import { gunzip, gzip, tar, untar } from "../sdk/src/tar";
 import { buildPack, openPack, packChanges, packSpec } from "../src/pack";
 import { scaleCrop } from "../src/photo";
 import type { Draft } from "../src/state";
@@ -115,6 +115,15 @@ describe("pack assembly", () => {
     const d: Draft = { ...draftBase, rooms: [{ name: "pets", source: "", made: null, kept: true }], roomFiles: [{ kind: "images", name: "rex", data: png, kept: true }] };
     const back = await openPack((await buildPack(undefined, d)).blob);
     expect(back.roomFiles).toEqual([{ kind: "images", name: "rex", data: png, kept: true }]);
+  });
+
+  it("writes each room's emoji for Purple, the family's pick or its starter's, and reopens with it", async () => {
+    const d: Draft = { ...draftBase, rooms: [{ name: "dinos", source: "", made: null, kept: true, icon: "🦕" }, { name: "garden-2", source: "", made: null, kept: true }] };
+    const { blob } = await buildPack(undefined, d);
+    const files = new Map(untar(await gunzip(new Uint8Array(await blob.arrayBuffer()))).map((e) => [e.path, new TextDecoder().decode(e.data)]));
+    expect(JSON.parse(files.get("content/rooms/dinos.json")!)).toEqual({ icon: "🦕" });
+    expect(JSON.parse(files.get("content/rooms/garden-2.json")!)).toEqual({ icon: "🌻" });
+    expect((await openPack(blob)).rooms.map((r) => r.icon)).toEqual(["🦕", "🌻"]);
   });
 
   it("renders an instrument into one file per reachable pitch plus its numbers", async () => {

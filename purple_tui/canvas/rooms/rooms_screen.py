@@ -8,7 +8,7 @@ from ...keyboard import ControlAction, NavigationAction
 from ..room_picker import (MAX_FAMILY_ROOMS, ROOM_CARD, cards, short_title, draw_card, draw_section, nearest, row_centers,
                            row_width)
 from ..ui import CANCELLED, DOWN, LEFT, RIGHT, UP, Dialog
-from .family_room import ICON_FAMILY
+from .family_room import ICON_FAMILY, room_icon
 
 ICON_CHECKED = "\U000F0132"  # nf-md-checkbox_marked
 ICON_HOME = "\U000F02DC"     # nf-md-home
@@ -186,7 +186,7 @@ class RoomsScreen(Dialog):
             r.centerx = rect.x + em(center)
             state = self._state(item, on)
             kind, x = item
-            icon, name = (self.app.rooms[x].icon, self.app.rooms[x].label) if kind == "core" else (ICON_FAMILY, short_title(x.title))
+            icon, name = (self.app.rooms[x].icon, self.app.rooms[x].label) if kind == "core" else (room_icon(x), short_title(x.title))
             draw_card(g, r, icon, name, [NOTES[state]], (self.row, self.col) == (i, col),
                       dim=state != "on", lit=state == "on", badge=ICON_CHECKED if state == "on" else "")
 

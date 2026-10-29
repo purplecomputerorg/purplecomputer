@@ -5,8 +5,7 @@ import runnerSource from "../../purple_tui/roomkit/runner.py?raw";
 import guest from "../src/rooms/guest.py?raw";
 import { BLANK_ROOMS, EXAMPLES, TEMPLATES, quizSource, soundboardSource } from "../src/examples";
 import { blankRules, rulesSource, type Rule } from "../src/rules";
-import { applyKnobs, BLOCK_STARTERS, blocksSource, build, WHOLE_ROOM_BLOCKS } from "../src/blocks";
-import { readKnobs } from "../src/knobs";
+import { BLOCK_STARTERS, blocksSource, build, WHOLE_ROOM_BLOCKS } from "../src/blocks";
 
 type Msg = Record<string, unknown>;
 type Shape = [string, ...unknown[]];
@@ -242,21 +241,5 @@ describe("family rooms in Studio's Python", () => {
 
   it("pictures the Rooms page's whole room in blocks as the same Python shown beside it", () => {
     expect(blocksSource(WHOLE_ROOM_BLOCKS())).toBe('from purple import *\n\n\ndef on_key(key):\n    grid.set(grid.random_empty(), "🐶")\n    drum("bongo")\n    say(key)\n');
-  });
-
-  it("writes a knob's new value back into its setting block", () => {
-    const { b, on, thing, num, square, workspace, settingOf } = build;
-    const room = workspace([], settingOf("FRUIT", "What falls.", thing("🍎")), settingOf("BASKET", "What catches it.", thing("🧺")),
-      settingOf("SPEED", "Seconds a square.", num(0.5)), on("purple_on_start", {}, {}, b("purple_put", { SIZE: "1" }, { THING: thing("🍎"), SQUARE: square(1, 1) })));
-    const knobs = readKnobs(blocksSource(room));
-    expect(knobs.map((k) => k.name)).toEqual(["FRUIT", "BASKET", "SPEED"]);
-    knobs[0].value = { t: "str", v: "🍌" };
-    knobs[1].value = { t: "picture", v: "grandma" };
-    knobs[2].value = { t: "num", v: 0.3 };
-    applyKnobs(room, knobs);
-    const source = blocksSource(room);
-    expect(source).toContain('FRUIT = "🍌"\n');
-    expect(source).toContain('BASKET = picture("grandma")\n');
-    expect(source).toContain("SPEED = 0.3\n");
   });
 });

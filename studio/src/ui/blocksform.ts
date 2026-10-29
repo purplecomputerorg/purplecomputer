@@ -7,7 +7,7 @@ import { isEmoji, openEmojiPicker } from "./emojipicker";
 import { sticker } from "./stickers";
 import { WIDER } from "./view";
 
-export { applyKnobs, BLOCK_STARTERS, blocksSource, WHOLE_ROOM_BLOCKS } from "../blocks";
+export { BLOCK_STARTERS, blocksSource, WHOLE_ROOM_BLOCKS } from "../blocks";
 
 const KEY_ROWS = ["1234567890", "qwertyuiop", "asdfghjkl;", "zxcvbnm,./"];
 const MORE_KEYS: [string, string][] = [["space", "Space"], ["enter", "Enter"], ["up", "↑"], ["down", "↓"], ["left", "←"], ["right", "→"]];
@@ -47,12 +47,6 @@ function setUpPickers() {
     own.onchange = choose(field, own.value);
     dropDown(field, h("div", { class: "color-pick" },
       ...COLORS.map(([name, c]) => h("button", { type: "button", title: name, style: `background:${colorLooks(c)}`, onclick: choose(field, c) })), own));
-  };
-  pickers.setting = (field) => {
-    const names = field.getSourceBlock()!.workspace.getTopBlocks(false).filter((t) => t.type === "purple_setting").map((t) => t.getFieldValue("NAME") as string);
-    dropDown(field, h("div", { class: "setting-pick" }, ...(names.length
-      ? names.map((n) => h("button", { type: "button", onclick: choose(field, n) }, n))
-      : [h("p", { class: "dim small" }, "Make a knob first: it's in Knobs.")])));
   };
   // Studio's own emoji picker, which offers the family's pictures too, opened where the field is.
   pickers.emoji = (field) => {

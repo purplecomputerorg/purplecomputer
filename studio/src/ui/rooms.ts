@@ -254,7 +254,7 @@ function editor(room: RoomDraft): View {
   const made = room.made;
   const hasKnobs = readKnobs(room.source).length > 0;
   // A made room's Python is looked at under its form, not edited: a tab for it would read as a way to switch.
-  const tabs: Tab[] = [...(made ? ["made" as const] : []), ...((!made || made.kind === "blocks") && hasKnobs ? ["knobs" as const] : []), ...(made ? [] : ["python" as const])];
+  const tabs: Tab[] = made ? ["made"] : [...(hasKnobs ? ["knobs" as const] : []), "python"];
   const LABELS: Record<Tab, string> = { made: made?.kind === "rules" ? "Rules" : made?.kind === "blocks" ? "Blocks" : "Form", knobs: "Knobs", python: "Python" };
   let tab: Tab = tabs[0];
   const pane = h("div", {});
@@ -306,9 +306,7 @@ function editor(room: RoomDraft): View {
     } else if (which === "knobs") {
       const knobs = readKnobs(room.source);
       pane.replaceChildren(toPython("Knobs are the settings at the top of this room's Python, and the Python changes to match. "),
-        knobs.length ? knobsForm(knobs, () => made?.kind === "blocks"
-          ? void blocks().then((m) => { m.applyKnobs(made.workspace, knobs); edited(m.blocksSource(made.workspace), 500); })
-          : edited(writeKnobs(room.source, knobs), 500))
+        knobs.length ? knobsForm(knobs, () => edited(writeKnobs(room.source, knobs), 500))
         : h("p", { class: "note" }, "The settings at the top of the Python can't be read as knobs right now. Everything still works in Python."));
     } else {
       code.value = room.source;

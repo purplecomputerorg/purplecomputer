@@ -1,11 +1,10 @@
-// Blocks made from the room library's own ideas (keys on the keyboard, squares, things, a player, settings) and
+// Blocks made from the room library's own ideas (keys on the keyboard, squares, things, a player) and
 // the Python they write. The Python is what ships in the pack; the workspace is saved beside it so the room
 // reopens as blocks. Typed text goes into the code only as JSON string literals, so nothing typed can become code.
 import * as Blockly from "blockly";
 import { Order, pythonGenerator as py } from "blockly/python";
 import { PURPLE } from "@sdk";
 import { INSTRUMENTS } from "@sdk/purple/sounds";
-import type { Knob, Lit } from "./knobs";
 import { draft } from "./state";
 
 const lit = (s: string) => JSON.stringify(s);
@@ -26,8 +25,8 @@ export const COLORS: [name: string, color: string][] = [
 const THEME_LOOKS: Record<string, string> = { tile: "#d9cdea", primary: "#7a2fb8", accent: "#e3b8ff", surface: "#2a1845" };
 export const colorLooks = (c: string) => THEME_LOOKS[c] ?? c;
 
-// A field that opens a picker: an emoji or picture, a square on the grid, a key, a color, or one of the room's settings.
-export type PickerKind = "emoji" | "square" | "key" | "color" | "setting";
+// A field that opens a picker: an emoji or picture, a square on the grid, a key, or a color.
+export type PickerKind = "emoji" | "square" | "key" | "color";
 // Studio's page fills these in; with none (tests, building a pack), the field just keeps its value.
 export const pickers: Partial<Record<PickerKind, (field: PickerField) => void>> = {};
 const CAPS: Record<string, string> = { space: "Space", enter: "Enter", backspace: "Backspace", up: "↑", down: "↓", left: "←", right: "→" };
@@ -36,7 +35,6 @@ const SHOWN: Record<PickerKind, (v: string) => string> = {
   square: (v) => `▦ ${v.replace(",", ", ")}`,
   key: (v) => CAPS[v] ?? v.toUpperCase(),
   color: () => "⬤",
-  setting: (v) => v || "?",
 };
 
 export class PickerField extends Blockly.Field<string> {
@@ -148,10 +146,6 @@ const BLOCKS = [
   statement("purple_change", "change %1 by %2", [{ type: "field_variable", name: "VAR", variable: "score" }, input("BY", "Number")], "score_blocks"),
   value("purple_get", "%1", [{ type: "field_variable", name: "VAR", variable: "score" }], null, "score_blocks"),
   statement("purple_game_over", "game over: %1", [input("TEXT")], "score_blocks"),
-
-  { type: "purple_setting", message0: "knob %1 starts as %2", args0: [{ type: "field_input", name: "NAME", text: "FRUIT" }, input("VALUE", "Literal")],
-    message1: "it's for %1", args1: [{ type: "field_input", name: "ABOUT", text: "what it's for" }], style: "setting_blocks" },
-  value("purple_setting_get", "knob %1", [pick("NAME", "setting", "FRUIT")], null, "setting_blocks"),
 ];
 
 // What each block does, shown when it's pointed at or picked, and the Room guide entry for the Python it writes.
@@ -209,8 +203,6 @@ const HELP: Record<string, [about: string, guide?: string]> = {
   purple_change: ["Adds to a score. A minus number takes away.", "state"],
   purple_get: ["A score's number right now.", "state"],
   purple_game_over: ["Ends the game: stops the timers and shows these words. The next key starts the room again from the top.", "game_over"],
-  purple_setting: ["A knob is something your family can change later on the Knobs tab, without opening the blocks, like which fruit falls. The knob block reads it."],
-  purple_setting_get: ["What a knob is set to."],
 };
 const withHelp = (block: { type: string }) => {
   const [tooltip, guide] = HELP[block.type];
@@ -231,7 +223,7 @@ const underKey = (block: Blockly.Block) => ["purple_on_key", "purple_on_this_key
 // lavender to plum, each dark enough for the white words on it.
 export const BLOCK_COLORS = {
   event: "#9b4fd6", screen: "#4f66d1", sound: "#7262d9", grid: "#5c2d91", thing: "#8060b5",
-  key: "#b04aa8", player: "#c2457f", score: "#3b3a9c", logic: "#8a3d9e", setting: "#6e5a7e",
+  key: "#b04aa8", player: "#c2457f", score: "#3b3a9c", logic: "#8a3d9e",
 };
 
 let defined = false;
@@ -247,10 +239,6 @@ export function defineBlocks(): void {
   });
   Object.assign(Blockly.Msg, MESSAGES);
   Blockly.defineBlocksWithJsonArray(BLOCKS.map(withHelp));
-  Blockly.Blocks.purple_setting.init = ((init) => function (this: Blockly.Block) {
-    init.call(this);
-    this.getField("NAME")!.setValidator((v: string) => v.toUpperCase().replace(/[^A-Z0-9_]/g, "_").replace(/^[^A-Z]+/, "") || null);
-  })(Blockly.Blocks.purple_setting.init);
   defineGenerators();
   const style = (c: string) => ({ colourPrimary: c, colourSecondary: c, colourTertiary: c });
   Blockly.Theme.defineTheme("purple", {
@@ -290,7 +278,6 @@ const key = (k: string) => b("purple_key", { KEY: k });
 const pressed = () => b("purple_key_pressed");
 const that = () => b("purple_that_key");
 const score = (name: string) => b("purple_get", { VAR: { name } });
-const setting = (name: string) => b("purple_setting_get", { NAME: name });
 
 // [drawer, color, what it's for, its blocks], each block as it comes out of the drawer, the likeliest first. A string
 // starts a group within the drawer.
@@ -318,7 +305,6 @@ export const CATEGORIES: [string, string, string, (BJ | string)[]][] = [
   ["If and repeat", BLOCK_COLORS.logic, "Choosing, and doing again", [b("controls_if"), b("logic_compare", {}, { A: score("score"), B: num(10) }),
     b("logic_operation"), b("logic_negate"), b("controls_repeat_ext", {}, { TIMES: num(5) }), b("math_random_int", {}, { FROM: num(1), TO: num(6) }),
     b("math_arithmetic", {}, { A: num(1), B: num(1) })]],
-  ["Knobs", BLOCK_COLORS.setting, "What your family can change later, on the Knobs tab", [b("purple_setting", {}, { VALUE: thing("🍎") }), setting("FRUIT")]],
 ];
 
 const label = (text: string, cls: string) => ({ kind: "label", text, "web-class": cls });
@@ -427,9 +413,8 @@ function defineGenerators(): void {
     return `def ${fn}():\n${body(b)}after(${val(b, "SECONDS", "1")}, ${fn})\n`;
   };
   f.purple_game_over = (b) => `game_over(${val(b, "TEXT", '"Press a key to play again"')})\n`;
-  f.purple_setting_get = (b) => atom(b.getFieldValue("NAME"));
-  // Hats and settings are written by toPython, never inside a stack.
-  for (const t of ["purple_on_start", "purple_on_key", "purple_on_this_key", "purple_every", "purple_on_meet", "purple_setting"]) f[t] = () => "";
+  // Hats are written by toPython, never inside a stack.
+  for (const t of ["purple_on_start", "purple_on_key", "purple_on_this_key", "purple_every", "purple_on_meet"]) f[t] = () => "";
 }
 
 // What each need adds to the top of the file: plain lines, then its function.
@@ -460,11 +445,6 @@ const HELPERS: Record<Need, (meets: boolean) => [lines: string, def: string]> = 
 `],
 };
 
-const literalSetting = (block: Blockly.Block) => {
-  const about = String(block.getFieldValue("ABOUT")).trim();
-  return `${about && about !== "what it's for" ? `# ${about.replace(/\n/g, " ")}\n` : ""}${block.getFieldValue("NAME")} = ${val(block, "VALUE", "None")}\n`;
-};
-
 export function toPython(ws: Blockly.Workspace): string {
   py.INDENT = INDENT;
   py.init(ws);
@@ -472,7 +452,6 @@ export function toPython(ws: Blockly.Workspace): string {
   laterCount = 0;
   const tops = ws.getTopBlocks(true);
   const of = (type: string) => tops.filter((t) => t.type === type);
-  const settings = of("purple_setting").map(literalSetting);
   const start = of("purple_on_start").map((t) => dedent(py.statementToCode(t, "DO")));
   const keys = [...of("purple_on_key"), ...of("purple_on_this_key")].map((t) => {
     const code = py.statementToCode(t, "DO");
@@ -489,7 +468,7 @@ export function toPython(ws: Blockly.Workspace): string {
   const lines = [vars.length ? `game = state(${vars.map((v) => `${v}=0`).join(", ")})\n` : "", ...helpers.map(([l]) => l)].join("");
   const defs = [...helpers.map(([, d]) => d), keys.length ? `def on_key(key):\n${keys.join("")}` : "",
     meets.length ? `def meet(thing):\n${meets.join("")}` : "", ...timers.map(([def]) => def)];
-  const top = ["from purple import *\n", settings.join(""), lines].filter(Boolean).join("\n");
+  const top = ["from purple import *\n", lines].filter(Boolean).join("\n");
   const source = [top, ...defs, start.join("") + timers.map(([, go]) => go).join("")].filter((p) => p.trim()).join("\n\n").trimEnd() + "\n";
   return /\brandom\./.test(source) ? `import random\n\n${source}` : source;
 }
@@ -506,35 +485,11 @@ export function blocksSource(state: object): string {
   }
 }
 
-// Knobs -> blocks ---------------------------------------------------------------------------
-
-type Saved = { blocks?: { blocks?: BJ[] } };
-
-// The literal block for a value a knob holds, or null for one blocks can't show.
-function literalBlock(v: Lit): BJ | null {
-  if (v.t === "num") return num(v.v);
-  if (v.t === "picture") return thing(PIC + v.v);
-  if (v.t === "str") return /^#[0-9a-f]{6}$/i.test(v.v) || COLORS.some(([, c]) => c === v.v) ? color(v.v) : /[a-z0-9]/i.test(v.v) ? text(v.v) : thing(v.v);
-  if (v.t === "list" && v.items.every((x) => x.t === "str" && !/\s/.test(x.v))) return b("purple_things", { THINGS: v.items.map((x) => (x as { v: string }).v).join(" ") });
-  return null;
-}
-
-// Each knob's value written into its setting block, so the Knobs tab and the blocks stay one room.
-export function applyKnobs(state: object, knobs: Knob[]): void {
-  for (const top of (state as Saved).blocks?.blocks ?? []) {
-    const knob = top.type === "purple_setting" && knobs.find((k) => k.name === top.fields?.NAME);
-    const block = knob && literalBlock(knob.value);
-    if (block) top.inputs = { ...top.inputs, VALUE: slot(block) };
-  }
-}
-
 // Starters ---------------------------------------------------------------------------------
 
 // A workspace of top blocks, with no places yet: the editor lays them out down the page when it opens.
 const workspace = (vars: string[], ...tops: BJ[]): object =>
   ({ blocks: { languageVersion: 0, blocks: tops }, variables: vars.map((name) => ({ name, id: name })) });
-
-const settingOf = (name: string, about: string, v: BJ) => b("purple_setting", { NAME: name, ABOUT: about }, { VALUE: v });
 
 // The Rooms page's whole room, in blocks: every key puts a dog on the screen.
 export const WHOLE_ROOM_BLOCKS = () => workspace([], on("purple_on_key", { WHICH: "any" }, {},
@@ -574,4 +529,4 @@ export const BLOCK_STARTERS: { icon: string; label: string; workspace: () => obj
 ];
 
 // For tests that build their own small rooms.
-export const build = { b, on, thing, text, num, square, score, workspace, settingOf };
+export const build = { b, on, thing, text, num, square, score, workspace };

@@ -394,9 +394,10 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .blockly { position: relative; height: 560px; background: var(--bg); }
 .blockly .blocklyToolbox { display: none !important; }
 .blockly .blocklyToolboxFlyout { filter: drop-shadow(4px 0 14px rgba(53, 42, 74, 0.16)); animation: drawer-in 0.18s ease-out; }
-.blockly .drawer-title .blocklyFlyoutLabelText { font-size: 16px; font-weight: 700; fill: var(--text); }
-.blockly .drawer-hint .blocklyFlyoutLabelText { font-size: 12px; }
-.blockly .drawer-group .blocklyFlyoutLabelText { font-size: 12px; font-weight: 700; fill: var(--dim); }
+/* Drawn at the canvas's zoom (70% to start), so these sizes look about 15px and 12px */
+.blockly .drawer-title .blocklyFlyoutLabelText { font-size: 22px; font-weight: 700; fill: var(--text) !important; }
+.blockly .drawer-hint .blocklyFlyoutLabelText { font-size: 17px; }
+.blockly .drawer-group .blocklyFlyoutLabelText { font-size: 17px; font-weight: 700; }
 .block-help { margin: 0; padding: 9px 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--dim); }
 .block-help a { margin-left: 6px; white-space: nowrap; }
 body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--card);
@@ -444,9 +445,6 @@ body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid
 .key-pick button.word { padding: 4px 8px; border-radius: 8px; background: var(--fill); font-weight: 600; }
 .color-pick { display: grid; grid-template-columns: repeat(7, 26px); gap: 5px; padding: 6px; }
 .color-pick button, .color-pick input { width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
-.setting-pick { display: grid; gap: 2px; padding: 4px; }
-.setting-pick button { text-align: left; padding: 4px 10px; border: none; border-radius: 8px; background: none; cursor: pointer; font-weight: 600; }
-.setting-pick button:hover { background: var(--fill); }
 .block-emoji { position: fixed; z-index: 1000; }
 .block-anchor { width: 1px; height: 48px; opacity: 0; padding: 0; border: none; }
 .push { margin-left: auto; }

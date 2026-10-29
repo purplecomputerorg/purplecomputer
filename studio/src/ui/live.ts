@@ -22,6 +22,10 @@ export interface RoomProblem { text: string; line: number | null }
 
 // Quiet time after the last edit before the pack is rebuilt and Purple picks it up.
 const SETTLE_MS = 150;
+// How long a click on Purple shows that it only takes keys.
+const NUDGE_MS = 2500;
+// A click this soon after Purple took the keys is the rest of the one that opened it.
+const SETTLE_CLICK_MS = 1000;
 // A close-up of Purple's screen: this much bigger, around the spot given here, or else the room's
 // cursor (Art and Blocks follow theirs). A phone starts in it, since the whole screen is too small
 // to read there; a computer starts on the whole screen and can zoom in.
@@ -45,6 +49,9 @@ class LiveScreen {
   // An edit on its way: Purple still plays meanwhile, with what it had.
   private updating = h("div", { class: "live-updating", hidden: true }, "Updating Purple");
   private note = h("div", { class: "screen-note", hidden: true });
+  private prompted: string | null = null;
+  private nudging = 0;
+  private focusedAt = 0;
   private zoomed = PHONE.matches;
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
   // Set by Studio: Purple moved to another room, or opened or closed a menu.
@@ -79,7 +86,7 @@ class LiveScreen {
     PHONE.addEventListener("change", () => { this.zoomed = PHONE.matches; this.reframe(); });
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
-    addEventListener(KEY_EVENT, () => (this.note.hidden = true));
+    addEventListener(KEY_EVENT, () => this.prompt(null));
     onRoomVoice(() => this.queueSync());
     this.queueSync();
   }
@@ -110,6 +117,19 @@ class LiveScreen {
 
   // A handwritten note on the screen saying what to do, until the next key.
   prompt(text: string | null): void {
+    this.prompted = text;
+    this.showNote(text);
+  }
+
+  // A click on Purple says why nothing happened, then puts back the note it covered.
+  private nudge(): void {
+    if (performance.now() - this.focusedAt < SETTLE_CLICK_MS) return;
+    this.showNote("Keyboard only, on purpose!");
+    this.nudging = window.setTimeout(() => this.showNote(this.prompted), NUDGE_MS);
+  }
+
+  private showNote(text: string | null): void {
+    clearTimeout(this.nudging);
     this.note.textContent = text;
     this.note.hidden = !text;
   }
@@ -216,8 +236,10 @@ class LiveScreen {
     }
     if (m.type === "focus") this.element.classList.toggle("focused", m.on);
     if (m.type === "focus" && m.on) this.element.classList.add("tried");
+    if (m.type === "focus" && m.on) this.focusedAt = performance.now();
     if (m.type === "voice") this.voiceLoading(m.text);
     if (m.type === "keydown") announceKey(m.key);
+    if (m.type === "click") this.nudge();
     if (m.type === "place") this.moved(m.place);
     if (m.type === "place" && this.asked === this.entering) this.element.classList.remove("entering");
     if (m.type === "print") this.onPrint(m.text);

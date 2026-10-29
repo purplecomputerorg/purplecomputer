@@ -25,6 +25,7 @@ export type FromFrame =
   | { type: "failed"; text: string }
   | { type: "focus"; on: boolean }
   | { type: "keydown"; key: string }
+  | { type: "click" }
   | { type: "place"; place: Place }
   | { type: "print"; text: string }
   | { type: "answer"; id: number; value: unknown }
@@ -43,6 +44,7 @@ Object.assign(globalThis, {
 onVoiceNote((text) => post({ type: "voice", text }));
 canvas.addEventListener("focus", () => post({ type: "focus", on: true }));
 canvas.addEventListener("blur", () => post({ type: "focus", on: false }));
+addEventListener("pointerdown", (e) => e.pointerType === "mouse" && post({ type: "click" }));
 addEventListener("keydown", (e) => {
   const key = browserKey(e);
   if (key) post({ type: "keydown", key });

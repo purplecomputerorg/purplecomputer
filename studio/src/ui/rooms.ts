@@ -8,6 +8,7 @@ import { changed, draft, freeName, mine, withSample, type Made, type RoomDraft }
 import { go, h } from "./dom";
 import { knobsForm } from "./knobsform";
 import { liveScreen, type RoomProblem } from "./live";
+import { codeHints } from "./codehints";
 import { copyGuideRow, LIBRARY_NAMES } from "./guide";
 import { openPackButton } from "./packfile";
 import { roomFilesBox } from "./roomfiles";
@@ -117,6 +118,18 @@ function problemBox(): { element: HTMLElement; show(p: RoomProblem | null): void
   };
 }
 
+// The Python as it stands can't run yet, likely mid-word or mid-line: said gently, while Purple keeps the last version that ran.
+function typingNote(): { element: HTMLElement; show(p: RoomProblem | null): void } {
+  const element = h("p", { class: "typing-note small", hidden: true });
+  return {
+    element,
+    show(p) {
+      element.hidden = !p;
+      if (p) element.replaceChildren(h("strong", {}, "Still writing? "), `${p.line ? `Line ${p.line}: ` : ""}${p.text}${/[.?!]$/.test(p.text) ? "" : "."} Purple keeps playing the last version that worked.`);
+    },
+  };
+}
+
 // Above the Python: it's the whole room, what Purple calls, and which names come from Purple.
 function pythonHelp(source: string): HTMLElement {
   const code = source.replace(/#.*$/gm, "").replace(/"[^"\n]*"|'[^'\n]*'/g, '""');
@@ -130,24 +143,43 @@ function pythonHelp(source: string): HTMLElement {
       ...LIBRARY_NAMES.filter(uses).map((n) => h("a", { class: "lib-name", href: `#guide/${n}` }, n))));
 }
 
+// A new line lined up with the one before, one step further in after a ":".
+function newLine(before: string): string {
+  const line = before.slice(before.lastIndexOf("\n") + 1);
+  return `\n${/^ */.exec(line)![0]}${/:\s*$/.test(line) ? "    " : ""}`;
+}
+
 type Tab = "made" | "knobs" | "python";
 const IN_PLACE = " The copy goes in your Purple Pack in place of this one.";
 
 function editor(room: RoomDraft): View {
   const problems = problemBox();
+  const typing = typingNote();
   const out = h("pre", { class: "console" });
   const live = liveScreen();
   // The room opens over Play on the real Purple, as the Esc menu opens it on a laptop.
   const family = () => ({ name: room.name, source: room.source, pack: draft.id });
   const setup: RoomSetup = { room: "play", family: family() };
+  // The Python Purple is playing now.
+  let playing = room.source;
   const restart = () => {
+    playing = room.source;
     out.textContent = "";
     problems.show(null);
+    typing.show(null);
     setup.family = family();
     live.show(setup);
   };
+  // Typed Python restarts the room once it reads as whole; forms and knobs always write whole Python.
+  const settle = async () => {
+    const source = room.source;
+    const problem = await live.check(source, [...LIBRARY_NAMES, ...CALLED]);
+    if (source !== room.source) return;
+    typing.show(problem);
+    if (!problem && source !== playing) restart();
+  };
   let timer = 0;
-  const later = (ms: number) => { clearTimeout(timer); timer = window.setTimeout(restart, ms); };
+  const later = (ms: number, typed: boolean) => { clearTimeout(timer); timer = window.setTimeout(typed ? settle : restart, ms); };
 
   const nameIn = h("input", { type: "text", class: "room-name", value: roomTitle(room.name), "aria-label": "Room name", maxLength: 40 });
   const nameNote = h("span", { class: "dim small" });
@@ -159,7 +191,7 @@ function editor(room: RoomDraft): View {
 
   // Every change goes through here: the first one makes a try the family's. Focus stays put, so the
   // page doesn't jump away from what they just changed.
-  const edited = (source: string, ms: number) => {
+  const edited = (source: string, ms: number, typed = false) => {
     room.source = source;
     if (room.sample) {
       mine(room);
@@ -167,15 +199,16 @@ function editor(room: RoomDraft): View {
       nameIn.classList.add("just-yours");
     }
     changed();
-    later(ms);
+    later(ms, typed);
   };
 
   const code = h("textarea", { class: "code", rows: 24, spellcheck: false, readOnly: !!room.made });
-  code.addEventListener("input", () => edited(code.value, 700));
+  const hints = codeHints(code);
+  code.addEventListener("input", () => edited(code.value, 700, true));
   code.addEventListener("keydown", (e) => {
-    if (e.key !== "Tab" || code.readOnly) return;
+    if (hints.key(e) || !(e.key === "Tab" || e.key === "Enter") || e.shiftKey || code.readOnly) return;
     e.preventDefault();
-    code.setRangeText("    ", code.selectionStart, code.selectionEnd, "end");
+    code.setRangeText(e.key === "Tab" ? "    " : newLine(code.value.slice(0, code.selectionStart)), code.selectionStart, code.selectionEnd, "end");
     code.dispatchEvent(new Event("input"));
   });
   const insert = (text: string) => {
@@ -221,7 +254,7 @@ function editor(room: RoomDraft): View {
       code.value = room.source;
       pane.replaceChildren(pythonHelp(room.source),
         made ? h("p", { class: "note" }, `Made from ${LABELS.made.toLowerCase()}, so its Python changes when they do. `, h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy"), ` to write it yourself.${IN_PLACE}`) : "",
-        code);
+        hints.element, typing.element);
     }
   };
 

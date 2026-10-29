@@ -2,7 +2,11 @@
 # the running Purple read it, or start it again when its rooms changed, as it would after a reboot.
 # Each Studio page then sets up the room it shows, with the same calls Purple's own menus and code
 # panel make.
+import ast
 import asyncio
+import builtins
+import difflib
+import re
 import shutil
 from pathlib import Path
 
@@ -124,3 +128,56 @@ def place():
     vp, cursor = _app._viewport_rect(), _app._get_cursor_position()
     at = [(vp.x + cursor[0] * vp.w) / _app.g.w, (vp.y + cursor[1] * vp.h) / _app.g.h] if cursor else None
     return [_app.active_room, bool(_app.top), at]
+
+
+# Python's words for a line that isn't finished, as a parent would put them.
+_UNFINISHED = [
+    (re.compile(r"'(.)' was never closed"), "the {0} needs its closing one"),
+    (re.compile(r"unterminated (triple-quoted )?string"), "the words need a closing quote"),
+    (re.compile(r"expected ':'"), "the line needs a : at the end"),
+    (re.compile(r"expected an indented block"), "the line after a : needs spaces in front"),
+    (re.compile(r"unindent does not match|unexpected indent"), "the spaces in front don't line up with the lines around it"),
+]
+
+
+def _plain(msg):
+    msg = re.sub(r" \(detected at line \d+\)", "", msg)
+    for pattern, said in _UNFINISHED:
+        if m := pattern.search(msg):
+            return said.format(*m.groups())
+    return f"Python can't read it yet (Technical: {msg})"
+
+
+def _bound(tree):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+            yield node.id
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.ExceptHandler, ast.MatchAs, ast.MatchStar)):
+            yield node.name
+        elif isinstance(node, ast.arg):
+            yield node.arg
+        elif isinstance(node, ast.alias):
+            yield (node.asname or node.name).split(".")[0]
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            yield from node.names
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            yield node.rest
+
+
+def check(source, purple_names):
+    """Why the room can't run as written, as [text, line], or None. It's read, never run: Studio keeps
+    the last version playing while someone is partway through a line or a name."""
+    try:
+        tree = ast.parse(source, "room.py")
+    except SyntaxError as e:
+        return [_plain(e.msg), e.lineno]
+    if any(isinstance(n, ast.ImportFrom) and n.module != "purple" and n.names[0].name == "*" for n in ast.walk(tree)):
+        return None
+    known = set(purple_names) | set(_bound(tree))
+    unknown = [n for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+               and n.id not in known and not hasattr(builtins, n.id)]
+    if not unknown:
+        return None
+    first = min(unknown, key=lambda n: (n.lineno, n.col_offset))
+    close = difflib.get_close_matches(first.id, [*purple_names, *known], 1)
+    return [f"{first.id} isn't a name Purple knows" + (f". Did you mean {close[0]}?" if close else "."), first.lineno]

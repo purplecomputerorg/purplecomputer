@@ -17,7 +17,8 @@ import re as _re
 import traceback as _traceback
 
 __all__ = ["grid", "keep", "images", "sounds", "show", "write", "status", "clear", "background", "say", "play", "drum", "sound",
-           "picture", "pixels", "mix", "held", "ask", "every", "after", "game_over", "state"]
+           "picture", "pixels", "mix", "held", "ask", "every", "after", "game_over", "state",
+           "ARROWS"]
 
 W, H = 26, 12
 CELL = 8.75
@@ -28,6 +29,8 @@ OVER_PAUSE_S = 1.0  # so the key that ended the game, or the tap right after it,
 _HEX = _re.compile(r"^#[0-9a-fA-F]{6}$")
 _KEY_NAMES = _re.compile(r"(?<!\{)\b(Space|Enter|Tab|Backspace)\b(?!\})")
 _NOTE = _re.compile(r"^[A-Ga-g]#?\d$")
+# Each arrow key's step on the grid, as (across, down).
+ARROWS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 DRUMS = ("kick", "snare", "hi-hat", "clap", "cowbell", "woodblock", "triangle", "tambourine", "bongo", "gong")
 # The theme's colors by name: Purple paints them in the family's theme.
 ROLES = ("bg", "surface", "tile", "field", "hair", "line", "primary", "on_primary", "accent", "text", "muted", "dim")
@@ -250,6 +253,18 @@ class _Grid(_Layer):
     def cursor(self, *where):
         """A ring around one square, or around a bigger thing in it, to show what's picked; grid.cursor() takes it away."""
         _s.cursor = _pos(where) if where and where[0] is not None else None
+
+    @property
+    def here(self):
+        """Where the ring is, as (x, y), or None when there's none."""
+        return _s.cursor
+
+    def move(self, key):
+        """An arrow key moves the ring a square, around the edges, starting it in the middle if there's none; other keys do nothing."""
+        if key in ARROWS:
+            x, y = _s.cursor or (W // 2, H // 2)
+            dx, dy = ARROWS[key]
+            _s.cursor = _pos([(x + dx, y + dy)])
 
 
 grid = _Grid()

@@ -14,7 +14,7 @@ import { h } from "./dom";
 // "tried"), it shrinks to a small reminder, since they already know how.
 function tryHint(hint: string): HTMLElement {
   return h("button", { class: "playable-hint", type: "button" },
-    h("strong", {}, "Click to try it"), h("span", {}, hint), h("em", {}, "Click to type here"));
+    h("strong", {}, "Click to try it"), h("span", {}, hint), h("em", {}, "Click to type here"), h("small", {}, "Esc picks a room"));
 }
 
 // Why a family room stopped, as Purple's FamilyRoom put it.
@@ -40,7 +40,7 @@ class LiveScreen {
   readonly element: HTMLElement;
   private frame = h("iframe", { class: "live-frame", src: "purple.html", title: "Purple", tabindex: -1 });
   private status = h("span", {}, "Loading Purple Computer in your browser");
-  private hint = tryHint("then use the keyboard, like on Purple");
+  private hint = tryHint("then it's keyboard only, on purpose");
   private voiceNote = h("div", { class: "voice-loading", hidden: true });
   // An edit on its way: Purple still plays meanwhile, with what it had.
   private updating = h("div", { class: "live-updating", hidden: true }, "Updating Purple");
@@ -68,8 +68,9 @@ class LiveScreen {
   private packed: RoomDraft[] = [];
   // Messages wait for the frame's page to be listening; until then the iframe holds about:blank.
   private hello!: () => void;
-  private filtering = new Map<number, (text: string) => void>();
-  private nextFilter = 0;
+  // Questions for Purple's Python, by id, each with what it answers when Purple can't run.
+  private asking = new Map<number, { resolve: (value: unknown) => void; fallback: unknown }>();
+  private nextAsk = 0;
   private listening = new Promise<void>((resolve) => (this.hello = resolve));
 
   constructor() {
@@ -85,16 +86,26 @@ class LiveScreen {
 
   // Words as Purple would say them, run through Purple's own speech filter. Nothing passes if Purple can't run.
   filter(text: string): Promise<string> {
-    const id = ++this.nextFilter;
+    return this.ask((id) => ({ type: "filter", id, text }), "");
+  }
+
+  // Why a room's Python can't run as written; null when it can, or when Purple can't tell.
+  check(source: string, names: string[]): Promise<RoomProblem | null> {
+    return this.ask<[string, number | null] | null>((id) => ({ type: "check", id, source, names }), null)
+      .then((p) => p && { text: p[0], line: p[1] });
+  }
+
+  private ask<T>(message: (id: number) => ToFrame, fallback: T): Promise<T> {
+    const id = ++this.nextAsk;
     return new Promise((resolve) => {
-      this.filtering.set(id, resolve);
-      this.post({ type: "filter", id, text });
+      this.asking.set(id, { resolve: resolve as (value: unknown) => void, fallback });
+      this.post(message(id));
     });
   }
 
-  private filtered(id: number, text: string): void {
-    this.filtering.get(id)?.(text);
-    this.filtering.delete(id);
+  private answered(id: number, value: unknown): void {
+    this.asking.get(id)?.resolve(value);
+    this.asking.delete(id);
   }
 
   // A handwritten note on the screen saying what to do, until the next key.
@@ -135,7 +146,6 @@ class LiveScreen {
   // the new pack makes it start again.
   changed(): void {
     clearTimeout(this.timer);
-    this.updating.hidden = false;
     this.timer = window.setTimeout(() => this.queueSync(), SETTLE_MS);
   }
 
@@ -176,8 +186,9 @@ class LiveScreen {
     this.packed = rooms.map((r) => ({ ...r }));
     const live = { ...draft, rooms, pictures: draft.pictures.filter((p) => p.kept) };
     const key = JSON.stringify([live, roomVoiceVersion()], (_, v) => (v instanceof Float32Array ? `${v.length}:${v[v.length >> 1]}` : v));
-    if (key === this.sent) return void (this.updating.hidden = true);
+    if (key === this.sent) return;
     this.sent = key;
+    this.updating.hidden = false;
     const spec = await packSpec(live, true);
     const entries = await buildEntries(spec);
     const id = manifest(spec).id;
@@ -191,9 +202,9 @@ class LiveScreen {
 
   private onMessage(m: FromFrame): void {
     if (m.type === "hello") this.hello();
-    if (m.type === "failed") this.last.id = "";
-    if (m.type === "failed") [...this.filtering.keys()].forEach((id) => this.filtered(id, ""));
-    if (m.type === "filtered") this.filtered(m.id, m.text);  // the next pack goes whole, since this one may not have landed
+    if (m.type === "failed") this.last.id = "";  // the next pack goes whole, since this one may not have landed
+    if (m.type === "failed") [...this.asking].forEach(([id, a]) => this.answered(id, a.fallback));
+    if (m.type === "answer") this.answered(m.id, m.value);
     if (m.type === "failed") { this.status.textContent = "Purple Computer couldn't start in this browser"; this.element.classList.add("failed"); console.warn("Purple failed:", m.text); }
     if (m.type === "restarting") this.busy(true);
     if (m.type === "loaded") { this.busy(false); this.updating.hidden = true; }

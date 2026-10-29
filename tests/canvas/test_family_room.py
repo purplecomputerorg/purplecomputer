@@ -629,6 +629,18 @@ def test_the_library_mixes_like_purples_paint():
         purple_lib.mix("tile", "#1e5bd6")
 
 
+def test_arrows_move_the_ring_around_the_edges():
+    grid = purple_lib.grid
+    grid.cursor()
+    grid.move("left")
+    assert grid.here == (purple_lib.W // 2 - 1, purple_lib.H // 2)
+    grid.cursor(0, 0)
+    grid.move("up")
+    grid.move("a")
+    assert grid.here == (0, purple_lib.H - 1)
+    grid.cursor()
+
+
 def test_theme_colors_paint_the_grid_and_the_background(pack):
     pack("themed", 'from purple import *\nbackground("surface")\ngame = state(at=1)\ngame.at += 1\n'
                    'grid.set(game.at, 0, "tile")\ngrid.set(0, 0, "Q")\n')

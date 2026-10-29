@@ -56,6 +56,9 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `grid.random_empty()` | An `(x, y)` with nothing in it, or `None` when the grid is full. |
 | `grid.floor.set(x, y, thing)` | The floor under the grid: grass under a hero, soil under a plant. It has `get`, `erase`, and `clear` too. |
 | `grid.cursor(x, y)` | A ring around a square, to show what's picked. `grid.cursor()` takes it away. |
+| `ARROWS` | The four arrow keys, each with its step on the grid: `if key in ARROWS:` for any arrow, `dx, dy = ARROWS[key]` to move something yourself. |
+| `grid.move(key)` | An arrow key moves the ring a square, around the edges. Other keys do nothing. |
+| `grid.here` | Where the ring is, as `(x, y)`, for `grid.set(grid.here, "🌻")`. |
 | `picture("cat")` | One of the pack's pictures, for `grid.set` or `show`, wherever an emoji could go. In text, or said, it's its name. |
 | `pixels(rows, colors)` | A small picture written as letters (below). |
 | `mix("#ffd400", "#1e5bd6")` | Colors mixed like paint, so yellow and blue make green. Give a color twice to use more of it. |

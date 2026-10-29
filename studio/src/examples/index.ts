@@ -207,9 +207,18 @@ export const EXAMPLES: Example[] = [
 
 export const BLANK_ROOM = `from purple import *
 
-show("👋")
+# Place these symbols on the 26x12 grid, as (across, down)
+grid.set(10, 5, "👋")
+grid.set(15, 5, "🌟")
+
+# A ring around one square
+grid.cursor(12, 7)
 
 
+# Purple calls this each time a key is pressed
 def on_key(key):
-    show(key)
+    if key in ARROWS:
+        grid.move(key)
+    else:
+        grid.set(grid.here, "🌸")
 `;

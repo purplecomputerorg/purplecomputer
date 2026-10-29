@@ -511,8 +511,20 @@ label.your-card { cursor: pointer; }
 
 /* Python console */
 textarea { resize: vertical; line-height: 1.5; }
-textarea.code { font-family: var(--mono); font-size: 13px; background: #2a1845; color: #e8daf0; border-color: #2a1845; border-radius: 14px; }
+/* A wrapped line of Python would lose its indent, so a long one scrolls instead. */
+textarea.code { white-space: pre; overflow-x: auto; overflow-wrap: normal; font-family: var(--mono); font-size: 13px; background: #2a1845; color: #e8daf0; border-color: #2a1845; border-radius: 14px; }
 textarea.code:focus { border-color: var(--magenta); box-shadow: none; }
+.code-wrap { position: relative; }
+.code-wrap textarea.code { width: 100%; }
+.code-hints { position: absolute; z-index: 5; width: min(420px, 90%); background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 4px; font-size: 13px; }
+.code-hints .hint { display: flex; gap: 10px; align-items: baseline; padding: 5px 8px; border-radius: 8px; cursor: pointer; }
+.code-hints .hint.picked { background: var(--fill); }
+.code-hints .hint.sig { cursor: default; }
+.code-hints code { font-family: var(--mono); white-space: nowrap; color: var(--purple); }
+.code-hints .hint span { min-width: 0; }
+.code-hints .more { margin-left: auto; font-size: 12px; }
+.code-hints .keys { padding: 4px 8px 2px; font-size: 11px; color: var(--dim); }
+.typing-note { margin: 8px 0 0; padding: 8px 14px; border-radius: 12px; background: var(--fill); color: var(--text); }
 pre.console { min-height: 40px; margin: 12px 0 0; white-space: pre-wrap; }
 pre.console:empty { display: none; }
 .emoji-big { font-size: 22px; vertical-align: middle; }
@@ -744,9 +756,11 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .live.ready:not(.busy):not(.entering) .live-status { opacity: 0; pointer-events: none; }
 .live .playable-hint { border: 0; font: inherit; cursor: pointer; opacity: 0; pointer-events: none; }
 .playable-hint em { display: none; font-style: normal; font-weight: 600; font-size: 12px; }
-.tried .playable-hint { inset: auto auto 10px 50%; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); white-space: nowrap; }
+.playable-hint small { font-size: 12px; opacity: 0.75; }
+.tried .playable-hint { flex-direction: row; gap: 10px; inset: auto auto 10px 50%; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); white-space: nowrap; }
 .tried .playable-hint strong, .tried .playable-hint span { display: none; }
 .tried .playable-hint em { display: inline; }
+.tried .playable-hint small { border-left: 1px solid rgba(255, 255, 255, 0.3); padding-left: 10px; }
 .live.ready:not(.focused) .playable-hint { opacity: 1; pointer-events: auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .live-status i { animation: none; } }

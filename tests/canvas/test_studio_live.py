@@ -103,3 +103,15 @@ def test_the_familys_rooms_wait_in_the_esc_menu(live, tmp_path, monkeypatch):
         assert [r.name for r in app.top.family] == ["farm", "zoo", "sea"]
         assert not live.install(ID, [text("content/emoji.json", {"zorb": "🦑"})], fresh=False)
     run(go())
+
+
+def test_a_room_partway_written_is_caught_before_it_runs(live):
+    from purple_tui.roomkit import purple
+    names = [*purple.__all__, "on_key", "on_key_up"]
+    for starter in (LIVE.parents[1] / "examples").glob("*.py"):
+        assert live.check(starter.read_text(), names) is None, starter.name
+    assert live.check('from purple import *\n\ndef on_key(key):\n    say(\n', names) == ["the ( needs its closing one", 4]
+    assert live.check('from purple import *\nsa("hi")\n', names) == ["sa isn't a name Purple knows. Did you mean say?", 2]
+    assert live.check('say("hi)\n', names)[0] == "the words need a closing quote"
+    assert live.check('def on_key(key)\n    pass\n', names)[0] == "the line needs a : at the end"
+    assert live.check('from random import *\nshuffle([1])\n', names) is None

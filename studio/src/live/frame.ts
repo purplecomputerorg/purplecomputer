@@ -12,6 +12,7 @@ export type ToFrame =
   | { type: "key"; char: string }
   | { type: "focus" }
   | { type: "filter"; id: number; text: string }
+  | { type: "check"; id: number; source: string; names: string[] }
   | { type: "view"; view: View };
 // The part of Purple's screen to show, as fractions of it: x, y, width, height.
 export type View = [number, number, number, number];
@@ -26,7 +27,7 @@ export type FromFrame =
   | { type: "keydown"; key: string }
   | { type: "place"; place: Place }
   | { type: "print"; text: string }
-  | { type: "filtered"; id: number; text: string }
+  | { type: "answer"; id: number; value: unknown }
   | { type: "problem"; text: string; line: number | null };
 
 // SDL draws into #canvas, kept off screen; #screen is what people see, at its own pixel size.
@@ -85,7 +86,8 @@ const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
   if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(async () => m.setup && placed(await live.setup(m.setup))).then(() => post({ type: "loaded" }));
   if (m.type === "setup") return live.setup(m.setup).then(placed);
   if (m.type === "key") return live.key(m.char).then(placed);
-  if (m.type === "filter") return live.filter(m.text).then((text) => post({ type: "filtered", id: m.id, text }));
+  if (m.type === "filter") return live.filter(m.text).then((value) => post({ type: "answer", id: m.id, value }));
+  if (m.type === "check") return live.check(m.source, m.names).then((value) => post({ type: "answer", id: m.id, value }));
   canvas.focus();
   return Promise.resolve();
 };

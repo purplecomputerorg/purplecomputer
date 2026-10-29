@@ -1,7 +1,7 @@
 // The one way every page shows whether something is in the family's Purple Pack. Studio's examples start
 // out of it; anything the family makes or changes goes in, until they take it out.
 import { isTheirs, keep, whileShown, type Keepable } from "../state";
-import { h } from "./dom";
+import { ask, h } from "./dom";
 
 // For the thing a page is about: in the Purple Pack, or not with one way in. It follows the item as the
 // page changes it, and lights up when a change puts it in.
@@ -31,7 +31,7 @@ export interface YourCard { href: string; title: string; face: Node; current?: b
 export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (gone: T[]) => void, warn?: (gone: T[]) => string): HTMLElement | null {
   const theirs = items.filter(isTheirs);
   if (!theirs.length) return null;
-  const throwAway = (gone: T[], what: string) => confirm(`Throw away ${what}?${warn?.(gone) ?? ""}`) && remove(gone);
+  const throwAway = async (gone: T[], what: string) => (await ask(`Throw away ${what}?${warn?.(gone) ?? ""}`, "Throw away")) && remove(gone);
   const chosen = new Set<T>();
   const bin = h("button", { type: "button", class: "btn small", onclick: () => throwAway([...chosen], chosen.size > 1 ? `these ${chosen.size}` : "this one") });
   const counted = () => { bin.disabled = !chosen.size; bin.textContent = chosen.size ? `Throw away ${chosen.size}` : "Throw away"; };

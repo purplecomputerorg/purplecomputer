@@ -5,7 +5,7 @@ import { play } from "../audio";
 import { isLoud, type Knob, type Lit } from "../knobs";
 import { roomLine } from "../roomvoice";
 import { isQuiet, phraseFor, putPhrase, QUIET } from "../state";
-import { addRowButton, field, h, removeButton } from "./dom";
+import { addRowButton, ask, field, h, removeButton } from "./dom";
 import { emojiCell, isEmoji, searchEmoji } from "./emojipicker";
 import { isMap, isWorld, legendFor, legendNames, lettersIn, mapPainter } from "./mappainter";
 import { recordButton } from "./record";
@@ -102,8 +102,8 @@ function spoken(el: HTMLInputElement | HTMLTextAreaElement, v: Str): HTMLElement
     if (c) play(c);
   };
   const record = () => recordButton((clip) => (v.v.trim() ? (putPhrase(v.v, clip, true), draw()) : say("Type the words first, then record them.")), say, true);
-  const pick = (to: Voice) => () => {
-    if (now() === "mine" && to !== "mine" && !confirm("Throw away your recording of these words?")) return;
+  const pick = (to: Voice) => async () => {
+    if (now() === "mine" && to !== "mine" && !(await ask("Throw away your recording of these words?", "Throw it away"))) return;
     if (to !== "mine" || now() === "quiet") putPhrase(v.v, to === "quiet" ? QUIET : null, true);
     voice = to;
     draw();

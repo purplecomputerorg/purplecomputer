@@ -5,7 +5,7 @@ import { audioContext, decodeToClip, encodeWav, playBuffer } from "../audio";
 import { PICTURE_KINDS, bitmapFromSrc, dataUrl, pictureFailure } from "../photo";
 import { roomFileOf, shelf, shelve, shelveFile, type Shelved } from "../shelf";
 import { changed, draft, freeName, names, type Made, type RoomDraft, type RoomFile } from "../state";
-import { filePicker, h } from "./dom";
+import { askText, filePicker, h } from "./dom";
 import { recordButton } from "./record";
 
 const MAX_SIDE = 1024;  // pack_manager.IMAGE_MAX_SIDE
@@ -131,7 +131,7 @@ export function roomFilesBox(onPick?: (call: string) => boolean, onChange = () =
       ? h("div", { class: "photo-list" }, ...draft.roomFiles.map((f) => h("div", { class: "try-chip tray-item" },
         h("button", { type: "button", title: `Use ${call(f)}`, onclick: () => pick(f) }, face(f)),
         f.kind === "sounds" ? h("button", { type: "button", class: "hear", title: `Hear ${f.name}`, "aria-label": `Hear ${f.name}`, onclick: () => hearRoomSound(f.name) }, "▶") : null,
-        h("button", { type: "button", class: "linkbtn small", title: "Rename", onclick: () => { const t = prompt("A new name", f.name); if (t) { renameRoomFile(f, t); changedHere(); } } }, f.name),
+        h("button", { type: "button", class: "linkbtn small", title: "Rename", onclick: async () => { const t = await askText("A new name", f.name, "Rename"); if (t) { renameRoomFile(f, t); changedHere(); } } }, f.name),
         h("button", { type: "button", class: "drop", title: `Throw away ${f.name}`, "aria-label": `Throw away ${f.name}`, onclick: () => drop(f) }, "×"))))
       : h("p", { class: "dim small" }, "A photo of your pet, a voice saying hello: add them here, and any room in this Purple Pack can use them."),
     shelfOnly().length ? h("div", {}, h("p", { class: "dim small" }, "From your pictures:"),

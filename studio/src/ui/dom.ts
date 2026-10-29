@@ -30,6 +30,26 @@ export function field(label: string, input: HTMLElement): HTMLLabelElement {
 export const removeButton = (onclick: () => void) => h("button", { class: "x", title: "Remove", "aria-label": "Remove", onclick }, "×");
 export const addRowButton = (label: string, onclick: () => void) => h("button", { class: "add-row", onclick }, `+ ${label}`);
 
+// Studio's own confirm(): resolves true when the family picks yes. Cancel has focus so Enter is safe, unless
+// extra brings its own autofocus (an earlier one wins). Esc cancels.
+export function ask(question: string, yes: string, ...extra: Child[]): Promise<boolean> {
+  return new Promise((done) => {
+    const dialog = h("dialog", { class: "card stack", onclose: () => { dialog.remove(); done(dialog.returnValue === "yes"); } },
+      h("form", { method: "dialog", class: "stack" }, h("p", {}, question), ...extra,
+        h("p", { class: "row" },
+          h("button", { class: "btn small", value: "yes" }, yes),
+          h("button", { class: "btn secondary small", value: "", autofocus: true }, "Cancel"))));
+    document.body.append(dialog);
+    dialog.showModal();
+  });
+}
+
+// Studio's own prompt(): the new text, or null when cancelled or left empty.
+export async function askText(question: string, value: string, yes: string): Promise<string | null> {
+  const input = h("input", { type: "text", value, maxLength: 40, autofocus: true, "aria-label": question });
+  return (await ask(question, yes, input)) ? input.value.trim() || null : null;
+}
+
 export function filePicker(accept: string, onFile: (f: File) => void, label = "or choose a file", cls = "linkbtn dim"): HTMLElement {
   const input = h("input", { type: "file", accept, hidden: true, onchange: () => input.files?.[0] && onFile(input.files[0]) });
   return h("span", {}, h("button", { type: "button", class: cls, onclick: () => input.click() }, label), input);

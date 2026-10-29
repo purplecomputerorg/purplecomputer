@@ -3,7 +3,7 @@ import { canvasOrigin } from "@sdk/purple/art";
 import { CANVAS_SHAPE, EXAMPLES, PICTURE_KINDS, clampCrop, cropTo, examplePicture, pictureFailure, fillCrop, letterPx, onScreen, pictureFromSrc, wordLetters, wordsAt, type Crop, type Example, type Picture } from "../photo";
 import { artOf, forget, removeFromPack, renameShelved, roomFileOf, shelf, shelveFile, usedIn, type Shelved } from "../shelf";
 import { changed, draft, freeName, isTheirs, mine, titleOf, withSample, type Keepable } from "../state";
-import { go, h } from "./dom";
+import { ask, go, h } from "./dom";
 import { purpleEmoji } from "./icons";
 import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
@@ -262,13 +262,13 @@ function usedCard(item: Shelved): HTMLElement {
   const used = usedIn(item);
   const title = titleOf(artOf(item) ?? item);
   const inPack = !!artOf(item)?.kept || !!roomFileOf(item);
-  const takeOut = () => {
-    if (!confirm(`Take ${title} out of this Purple Pack?${used.length ? ` It's used in ${used.join(", ")}.` : ""} It stays in your pictures.`)) return;
+  const takeOut = async () => {
+    if (!(await ask(`Take ${title} out of this Purple Pack?${used.length ? ` It's used in ${used.join(", ")}.` : ""} It stays in your pictures.`, "Take it out"))) return;
     removeFromPack(item);
     go(location.hash);
   };
-  const remove = () => {
-    if (!confirm(`Delete ${title} from your pictures?${alsoOut(used)}`)) return;
+  const remove = async () => {
+    if (!(await ask(`Delete ${title} from your pictures?${alsoOut(used)}`, "Delete"))) return;
     forget(item);
     go("#pictures");
   };

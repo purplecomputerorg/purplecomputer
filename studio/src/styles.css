@@ -33,8 +33,9 @@ body {
   margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans);
   font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
 }
-a { color: var(--purple); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
-a:hover { color: var(--purple-dark); }
+/* :where() keeps plain links from outranking a class's color, so a link styled as a button keeps its own */
+:where(a) { color: var(--purple); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+:where(a:hover) { color: var(--purple-dark); }
 h1 { font-family: var(--hero); font-weight: 800; letter-spacing: -0.03em; font-size: 38px; line-height: 1.1; margin: 0 0 12px; }
 h2 { font-family: var(--display); font-weight: 600; letter-spacing: -0.02em; font-size: 22px; line-height: 1.2; margin: 0; }
 h3 { font-family: var(--display); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); margin: 28px 0 10px; }
@@ -271,7 +272,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 
 .btn {
   font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 999px; padding: 9px 20px;
-  border: 1.5px solid transparent; background: var(--purple); color: #fff; transition: background 0.15s, transform 0.1s;
+  border: 1.5px solid transparent; background: var(--purple); color: #fff; text-decoration: none; transition: background 0.15s, transform 0.1s;
 }
 .btn:hover { background: var(--purple-dark); }
 .btn:active { transform: translateY(1px); }

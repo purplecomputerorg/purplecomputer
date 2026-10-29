@@ -6,7 +6,6 @@ import beats from "./beats.py?raw";
 import explore from "./explore.py?raw";
 import garden from "./garden.py?raw";
 import memory from "./memory.py?raw";
-import paint from "./paint.py?raw";
 import snake from "./snake.py?raw";
 import story from "./story.py?raw";
 
@@ -200,12 +199,13 @@ export const EXAMPLES: Example[] = [
   { name: "story", icon: "📖", label: "A story with choices", about: "Each page shows an emoji or your own photo, read in Purple's voice or yours. Number keys pick what happens next.", source: story },
   { name: "memory", icon: "🃏", label: "Memory", about: "Turn over cards to find the pairs, alone or taking turns. The cards can be your own photos.", source: memory },
   { name: "garden", icon: "🌻", label: "A garden", about: "Plant seeds on the letter keys and water them to grow. It remembers the garden.", source: garden },
-  { name: "paint", icon: "🎨", label: "A paint pot", about: "Drop in paints with their letter keys and see what they mix into, like real paint. Purple says each color, with names you can change.", source: paint },
   { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off with the keys, then Space plays them round and round.", source: beats },
   { name: "snake", icon: "🐍", label: "A wandering snake", about: "Arrows move a snake that leaves flowers. The smallest room to read.", source: snake },
 ];
 
-export const BLANK_ROOM = `from purple import *
+// A blank room's first Python, one of a few tiny ones to pick from while it's still untouched.
+export const BLANK_ROOMS = [
+  { icon: "🌸", label: "Flowers", source: `from purple import *
 
 # Place these symbols on the 26x12 grid, as (across, down)
 grid.set(10, 5, "👋")
@@ -221,4 +221,41 @@ def on_key(key):
         grid.move(key)
     else:
         grid.set(grid.here, "🌸")
-`;
+` },
+  { icon: "🎨", label: "Paint", source: `from purple import *
+
+# Each key adds its own color to the pot, the one on its sticker
+pot = []
+status("Press a letter or number key to mix its color into the pot, Space empties it")
+grid.set(9, 2, "tile", size=8)
+
+
+# Purple calls this each time a key is pressed
+def on_key(key):
+    if key in KEY_COLORS:
+        pot.append(KEY_COLORS[key])
+        # The color just added, beside the pot
+        grid.set(5, 5, KEY_COLORS[key], size=2)
+    elif key == "space":
+        pot.clear()
+        grid.erase(5, 5)
+    # Only the last 6 colors count, so a new one always shows
+    del pot[:-6]
+    # Mixed like real paint: yellow and blue make green
+    grid.set(9, 2, mix(*pot) if pot else "tile", size=8)
+` },
+  { icon: "📷", label: "Photo", source: `import random
+
+from purple import *
+
+# Your photos: add them below, under Pictures and sounds for your rooms
+photos = list(images)
+show("📷")
+
+
+# Purple calls this each time a key is pressed
+def on_key(key):
+    if photos:
+        show(picture(random.choice(photos)))
+` },
+];

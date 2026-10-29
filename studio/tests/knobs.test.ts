@@ -78,7 +78,6 @@ describe("knobs", () => {
     expect(names).toEqual({
       explore: ["WORLD", "THINGS", "GROUND", "HERO_COLORS", "TALK"],
       garden: ["SEEDS", "SOIL"],
-      paint: ["PAINTS", "COLOR_NAMES"],
       beats: ["DRUMS", "SPEED"],
       memory: ["CARDS", "TURNED"],
       story: ["TITLE", "PAGES"],

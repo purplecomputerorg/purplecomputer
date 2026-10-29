@@ -18,7 +18,7 @@ import traceback as _traceback
 
 __all__ = ["grid", "keep", "images", "sounds", "show", "write", "status", "clear", "background", "say", "play", "drum", "sound",
            "picture", "pixels", "mix", "held", "ask", "every", "after", "game_over", "state",
-           "ARROWS"]
+           "ARROWS", "KEY_COLORS"]
 
 W, H = 26, 12
 CELL = 8.75
@@ -38,6 +38,19 @@ ROLES = ("bg", "surface", "tile", "field", "hair", "line", "primary", "on_primar
 
 def _is_color(thing) -> bool:
     return isinstance(thing, str) and bool(_HEX.match(thing) or thing in ROLES)
+
+
+def _shades(hue, keys):
+    return {k: "#%02X%02X%02X" % tuple(int(c * 255) for c in colorsys.hls_to_rgb(hue / 360, 0.80 - (i / (len(keys) - 1)) * 0.60, 0.75))
+            for i, k in enumerate(keys)}
+
+
+# Each key's color, as on its sticker: the number row grays, then a row each of reds, yellows, and blues, light to dark.
+KEY_COLORS = {
+    **dict(zip("1234567890-=", ("#FFFFFF", "#E8E8E8", "#D0D0D0", "#B8B8B8", "#A0A0A0", "#888888",
+                                "#707070", "#585858", "#404040", "#282828", "#101010", "#000000"))),
+    **_shades(0, "qwertyuiop[]"), **_shades(50, "asdfghjkl;'"), **_shades(220, "zxcvbnm,./"),
+}
 
 _send = None   # the host's: send(reply: dict)
 _recv = None   # the host's: blocking recv() -> event dict

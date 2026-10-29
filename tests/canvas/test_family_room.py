@@ -809,3 +809,10 @@ def test_letting_go_of_a_spinning_room_ends_it():
     proc.wait(timeout=5)
     time.sleep(0.1)
     assert not os.path.exists(f"/proc/{room[0]}") or "Z" in open(f"/proc/{room[0]}/stat").read().rsplit(")", 1)[1].split()[0]
+
+
+def test_a_room_sees_each_key_in_its_sticker_color():
+    from purple_tui.palette import KEY_COLORS
+    from purple_tui.roomkit import purple
+    assert purple.KEY_COLORS == {k: KEY_COLORS[k] for k in purple.KEY_COLORS}
+    assert set(KEY_COLORS) - set(purple.KEY_COLORS) == {"+", "×", "÷"}

@@ -1,11 +1,11 @@
 import { purpleEmoji } from "./icons";
 import { ROOM_NAME, roomTitle } from "@sdk/pack";
-import { BLANK_ROOM, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
+import { BLANK_ROOMS, EXAMPLES, TEMPLATES, templateSource, type TemplateDraft } from "../examples";
 import { readKnobs, writeKnobs } from "../knobs";
 import type { RoomSetup } from "../live/boot";
 import { rulesSource } from "../rules";
 import { changed, draft, freeName, mine, withSample, type Made, type RoomDraft } from "../state";
-import { go, h } from "./dom";
+import { ask, go, h } from "./dom";
 import { knobsForm } from "./knobsform";
 import { liveScreen, type RoomProblem } from "./live";
 import { codeHints } from "./codehints";
@@ -50,7 +50,7 @@ function drop(gone: RoomDraft[]) {
 }
 
 // Opening a way to start only tries it: it becomes the family's room, in their Purple Pack, when they change something.
-function tryRoom(base: string, made: Made | null, source = made ? sourceOf(made) : BLANK_ROOM) {
+function tryRoom(base: string, made: Made | null, source = made ? sourceOf(made) : BLANK_ROOMS[0].source) {
   const name = roomName(base);
   draft.rooms = withSample(draft.rooms, { name, source, made });
   changed();
@@ -95,7 +95,7 @@ const WHOLE_ROOM = [
 ];
 
 // The starters' order on the Rooms page: the liveliest first.
-const ORDER = ["story", "explore", "memory", "beats", "garden", "paint", "picture-quiz", "picture-keyboard", "snake"];
+const ORDER = ["story", "explore", "memory", "beats", "garden", "picture-quiz", "picture-keyboard", "snake"];
 
 const choice = (s: { icon: string; label: string; about: string }, go: () => void, cls = "pick") =>
   h("button", { class: cls, onclick: go }, purpleEmoji(s.icon, "pick-icon"),
@@ -238,6 +238,19 @@ function editor(room: RoomDraft): View {
   const toPython = (text: string) => h("p", { class: "to-python small" }, text,
     made ? h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy") : h("button", { class: "linkbtn", onclick: () => showTab("python") }, "Open the Python"),
     made ? ` to write the rest yourself.${IN_PLACE}` : " to change anything else.");
+  // A room opened as a blank room can start over from any of them, for as long as it stays open.
+  const isBlank = () => BLANK_ROOMS.some((b) => b.source === room.source);
+  const startedBlank = !made && room.sample && isBlank();
+  const startFrom = async (source: string) => {
+    if (!isBlank() && !(await ask("Start over from this one? Your changes to the Python go away.", "Start over"))) return;
+    room.source = source;
+    changed();
+    restart();
+    showTab("python");
+  };
+  const blankPicker = () => startedBlank ? h("p", { class: "row small" }, h("span", { class: "dim" }, "Start from:"),
+    h("span", { class: "seg" }, ...BLANK_ROOMS.map((b) =>
+      h("button", { "aria-pressed": String(b.source === room.source), onclick: () => startFrom(b.source) }, `${b.icon} ${b.label}`)))) : "";
   const showTab = (which: Tab) => {
     tab = which;
     tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(tabs[i] === which)));
@@ -252,7 +265,7 @@ function editor(room: RoomDraft): View {
         : h("p", { class: "note" }, "The settings at the top of the Python can't be read as knobs right now. Everything still works in Python."));
     } else {
       code.value = room.source;
-      pane.replaceChildren(pythonHelp(room.source),
+      pane.replaceChildren(blankPicker(), pythonHelp(room.source),
         made ? h("p", { class: "note" }, `Made from ${LABELS.made.toLowerCase()}, so its Python changes when they do. `, h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy"), ` to write it yourself.${IN_PLACE}`) : "",
         hints.element, typing.element);
     }

@@ -57,6 +57,7 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `grid.floor.set(x, y, thing)` | The floor under the grid: grass under a hero, soil under a plant. It has `get`, `erase`, and `clear` too. |
 | `grid.cursor(x, y)` | A ring around a square, to show what's picked. `grid.cursor()` takes it away. |
 | `ARROWS` | The four arrow keys, each with its step on the grid: `if key in ARROWS:` for any arrow, `dx, dy = ARROWS[key]` to move something yourself. |
+| `KEY_COLORS` | Each key's color, the same as its sticker: `KEY_COLORS["q"]` is a light red. The number row is grays, then a row each of reds, yellows, and blues, light to dark. |
 | `grid.move(key)` | An arrow key moves the ring a square, around the edges. Other keys do nothing. |
 | `grid.here` | Where the ring is, as `(x, y)`, for `grid.set(grid.here, "🌻")`. |
 | `picture("cat")` | One of the pack's pictures, for `grid.set` or `show`, wherever an emoji could go. In text, or said, it's its name. |
@@ -151,7 +152,7 @@ Purple won't let the screen flash: a change that brightens or darkens a big part
 
 ## Starter rooms
 
-Studio's Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a paint pot, a beat maker, memory for any number of players, a story with choices, and a wandering snake, the smallest room. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
+Studio's Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for any number of players, a story with choices, and a wandering snake, the smallest room. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
 
 ## A Purple Pack made by hand
 

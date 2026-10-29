@@ -41,11 +41,15 @@ function needsNewer(format: number): string {
 const skippedNote = (s: PackSkipped) => `${s.added} need ${downloadedOn(s.date)}. On an older one, ${s.older}.`;
 
 // add: an Add button on each one.
-const groups = (list: Count[], add?: (item: Keepable) => void) => list.map((p) => h("div", { class: "pack-group" },
-  h("a", { class: "pack-heading", href: `#${p.section}` }, countOf(p)),
-  h("div", { class: "pack-items" }, ...p.items.map((i) => add
-    ? h("span", { class: "pack-add" }, FACES[p.id](i), h("button", { class: "btn secondary small", onclick: () => add(i) }, "Add"))
-    : FACES[p.id](i)))));
+const groups = (list: Count[], add?: (item: Keepable) => void) => list.map((p) => {
+  const href = `#${p.section}`;
+  return h("div", { class: "pack-group" },
+    h("a", { class: "pack-heading", href }, countOf(p)),
+    h("div", { class: "pack-items" }, ...p.items.map((i) => {
+      const face = h("a", { class: "pack-link", href }, FACES[p.id](i));
+      return add ? h("span", { class: "pack-add" }, face, h("button", { class: "btn secondary small", onclick: () => add(i) }, "Add")) : face;
+    })));
+});
 
 export function downloadView(): View {
   const nameIn = h("input", { type: "text", value: draft.name, oninput: () => { draft.name = nameIn.value; changed(); } });
@@ -88,7 +92,7 @@ export function downloadView(): View {
       {},
       h("p", { class: "lead" }, "Everything you added goes into your Purple Pack."),
       staysHere("Your Purple Pack is made in your browser and saved to your downloads. No copy goes anywhere else."),
-      h("div", { class: "card" }, h("h3", { style: "margin-top:0" }, "In your Purple Pack"), summary),
+      h("div", { class: "card in-pack" }, h("h3", {}, "✓ In your Purple Pack"), summary),
       others,
       field("File name", h("div", { class: "row", style: "flex-wrap:nowrap" }, nameIn, h("span", { class: "mono dim" }, ".purplepack"))),
       h("div", { class: "row", style: "margin-top:22px" }, button),

@@ -786,10 +786,9 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .live .playable-hint { border: 0; font: inherit; cursor: pointer; opacity: 0; pointer-events: none; }
 .playable-hint em { display: none; font-style: normal; font-weight: 600; font-size: 12px; }
 .playable-hint small { font-size: 12px; opacity: 0.75; }
-.tried .playable-hint { flex-direction: row; gap: 10px; inset: auto auto 10px 50%; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); white-space: nowrap; }
-.tried .playable-hint strong, .tried .playable-hint span { display: none; }
+.tried .playable-hint { inset: 50% auto auto 50%; transform: translate(-50%, -50%); padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); white-space: nowrap; }
+.tried .playable-hint strong, .tried .playable-hint span, .tried .playable-hint small { display: none; }
 .tried .playable-hint em { display: inline; }
-.tried .playable-hint small { border-left: 1px solid rgba(255, 255, 255, 0.3); padding-left: 10px; }
 .live.ready:not(.focused) .playable-hint { opacity: 1; pointer-events: auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .live-status i { animation: none; } }

@@ -1,7 +1,7 @@
 import type { Clip } from "../audio";
 import { GRID_ROWS, LETTER_KEYS, PERCUSSION_ROW } from "@sdk/purple/sounds";
 import { changed, draft, whileShown } from "../state";
-import { h, pageKeys } from "./dom";
+import { h } from "./dom";
 import { keyLabel, sticker } from "./stickers";
 import { tryBar } from "./trybar";
 import { liveScreen } from "./live";
@@ -44,12 +44,8 @@ export function keysView(): View {
     changed();
     render();
   };
-  // Typing a key anywhere on the page jumps to it, and Purple says it.
-  const unlisten = pageKeys((k) => {
-    if (!LETTER_KEYS.includes(k)) return;
-    select(k);
-    liveScreen().key(k);
-  });
+  // A key typed on the page or in Purple jumps to it, and Purple says it.
+  const unlisten = liveScreen().followKeys((k) => LETTER_KEYS.includes(k) && select(k));
   render();
 
   return {

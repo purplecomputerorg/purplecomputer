@@ -3,7 +3,7 @@ import { BASES, BASE_NAMES, defaults, type BaseName, type Params } from "@sdk/pu
 import { playGridKey } from "../sounds";
 import { changed, draft, freeName, isTheirs, mine, titleOf, withSample, type Instrument } from "../state";
 import { tryBar, yoursList } from "./trybar";
-import { field, go, h, pageKeys } from "./dom";
+import { field, go, h } from "./dom";
 import { liveScreen } from "./live";
 import type { View } from "./view";
 
@@ -100,10 +100,7 @@ function editor(inst: Instrument): View {
   }
 
   // Typing on the page plays Purple's Music room, which has this instrument once edits settle.
-  const unlisten = pageKeys((k) => {
-    lastKey = k;
-    liveScreen().key(k);
-  });
+  const unlisten = liveScreen().followKeys((k) => (lastKey = k));
 
   const reset = () => {
     Object.assign(inst.params, defaults(inst.base));

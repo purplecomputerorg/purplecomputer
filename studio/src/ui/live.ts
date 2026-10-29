@@ -9,7 +9,7 @@ import { KEY_EVENT, announceKey } from "../keys";
 import { manifest, packChanges, packSpec, type Sent } from "../pack";
 import { onRoomVoice, roomReady, roomVoiceVersion, warmRoomVoice } from "../roomvoice";
 import { draft, type RoomDraft } from "../state";
-import { h } from "./dom";
+import { h, pageKeys } from "./dom";
 
 // Covers Purple while it isn't getting keys. Once someone has played with it (the screen marked
 // "tried"), it shrinks to a small reminder, since they already know how.
@@ -185,6 +185,15 @@ class LiveScreen {
   // too. A phone keeps its own keyboard's focus.
   engage(): void {
     if (MOUSE.matches) this.focus();
+  }
+
+  // Typing on the page plays Purple and hands it the keyboard, so Enter and Esc work from then on.
+  // onKey hears every key Purple gets, however it got there.
+  followKeys(onKey: (key: string) => void): () => void {
+    const off = pageKeys((k) => { this.key(k); this.engage(); });
+    const heard = (e: Event) => onKey((e as CustomEvent<string>).detail);
+    addEventListener(KEY_EVENT, heard);
+    return () => { off(); removeEventListener(KEY_EVENT, heard); };
   }
 
   // One at a time, so each one's changes are against what Purple last got.

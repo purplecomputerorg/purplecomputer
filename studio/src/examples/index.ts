@@ -200,7 +200,7 @@ export const EXAMPLES: Example[] = [
   { name: "memory", icon: "🃏", label: "Memory", about: "Turn over cards to find the pairs, alone or taking turns. The cards can be your own photos.", source: memory },
   { name: "garden", icon: "🌻", label: "A garden", about: "Plant seeds on the letter keys and water them to grow. It remembers the garden.", source: garden },
   { name: "beats", icon: "🥁", label: "A beat maker", about: "Turn beats on and off with the keys, then Space plays them round and round.", source: beats },
-  { name: "snake", icon: "🐍", label: "A wandering snake", about: "Arrows move a snake that leaves flowers. The smallest room to read.", source: snake },
+  { name: "snake", icon: "🐍", label: "A wandering snake", about: "Press a key and a snake crawls to it, lighting it up with a note.", source: snake },
 ];
 
 // A blank room's first Python, one of a few tiny ones to pick from while it's still untouched.

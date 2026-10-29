@@ -18,7 +18,7 @@ import traceback as _traceback
 
 __all__ = ["grid", "keep", "images", "sounds", "show", "write", "status", "clear", "background", "say", "play", "drum", "sound",
            "picture", "pixels", "mix", "held", "ask", "every", "after", "game_over", "state",
-           "ARROWS", "KEY_COLORS"]
+           "ARROWS", "KEY_COLORS", "KEY_ROWS"]
 
 W, H = 26, 12
 CELL = 8.75
@@ -31,6 +31,8 @@ _KEY_NAMES = _re.compile(r"(?<!\{)\b(Space|Enter|Tab|Backspace)\b(?!\})")
 _NOTE = _re.compile(r"^[A-Ga-g]#?\d$")
 # Each arrow key's step on the grid, as (across, down).
 ARROWS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+# The keys the Music room plays, a row at a time, top to bottom.
+KEY_ROWS = ("1234567890", "qwertyuiop", "asdfghjkl;", "zxcvbnm,./")
 DRUMS = ("kick", "snare", "hi-hat", "clap", "cowbell", "woodblock", "triangle", "tambourine", "bongo", "gong")
 # The theme's colors by name: Purple paints them in the family's theme.
 ROLES = ("bg", "surface", "tile", "field", "hair", "line", "primary", "on_primary", "accent", "text", "muted", "dim")
@@ -278,6 +280,11 @@ class _Grid(_Layer):
             x, y = _s.cursor or (W // 2, H // 2)
             dx, dy = ARROWS[key]
             _s.cursor = _pos([(x + dx, y + dy)])
+
+    def keyboard(self, rows=KEY_ROWS, size=2):
+        """Each key's (x, y) with the rows laid out like the keyboard, size squares apart and centered on the grid."""
+        left, top = (W - size * max(map(len, rows))) // 2, (H - size * len(rows)) // 2
+        return {key: (left + c * size, top + r * size) for r, row in enumerate(rows) for c, key in enumerate(row)}
 
 
 grid = _Grid()

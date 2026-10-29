@@ -81,7 +81,7 @@ describe("knobs", () => {
       beats: ["DRUMS", "SPEED"],
       memory: ["CARDS", "TURNED"],
       story: ["TITLE", "PAGES"],
-      snake: ["SNAKE", "LENGTH", "TRAIL"],
+      snake: ["SNAKE", "LENGTH", "SPEED", "NOTES"],
     });
   });
 

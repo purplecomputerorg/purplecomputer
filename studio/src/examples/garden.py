@@ -16,8 +16,7 @@ SEEDS = {
 # The soil's two colors, laid like a checkerboard.
 SOIL = ("#7a5230", "#6f4a2b")
 
-rows = ("qwertyuiop", "asdfghjkl;", "zxcvbnm,./")
-spots = {key: (3 + x * 2, 3 + r * 2) for r, keys in enumerate(rows) for x, key in enumerate(keys)}
+spots = grid.keyboard(KEY_ROWS[1:])
 game = state(seed="1")
 # keep remembers the garden for next time: patch key -> [seed, step].
 plants = keep.setdefault("plots", {})

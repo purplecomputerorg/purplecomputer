@@ -58,6 +58,8 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `grid.cursor(x, y)` | A ring around a square, to show what's picked. `grid.cursor()` takes it away. |
 | `ARROWS` | The four arrow keys, each with its step on the grid: `if key in ARROWS:` for any arrow, `dx, dy = ARROWS[key]` to move something yourself. |
 | `KEY_COLORS` | Each key's color, the same as its sticker: `KEY_COLORS["q"]` is a light red. The number row is grays, then a row each of reds, yellows, and blues, light to dark. |
+| `KEY_ROWS` | The keys the Music room plays, a row at a time: `"1234567890"`, `"qwertyuiop"`, `"asdfghjkl;"`, `"zxcvbnm,./"`. |
+| `grid.keyboard()` | Where each key sits with the rows laid out like the keyboard, centered on the grid: `spots = grid.keyboard()`, then `grid.set(spots["q"], "🐸", size=2)`. Keys are 2 squares apart; `grid.keyboard(rows, size)` takes your own rows and spacing, like `grid.keyboard(KEY_ROWS[1:])` for just the letters. |
 | `grid.move(key)` | An arrow key moves the ring a square, around the edges. Other keys do nothing. |
 | `grid.here` | Where the ring is, as `(x, y)`, for `grid.set(grid.here, "🌻")`. |
 | `picture("cat")` | One of the pack's pictures, for `grid.set` or `show`, wherever an emoji could go. In text, or said, it's its name. |

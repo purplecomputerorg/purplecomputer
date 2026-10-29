@@ -40,16 +40,14 @@ const squares = (r: Msg) => shapes(r).slice(1).filter((s) => s[0] === "rect").ma
 const GREEN = "#5ec46a";
 
 describe("family rooms in Studio's Python", () => {
-  it("runs the Snake example: a square each arrow, flowers behind it, and nothing on its own", async () => {
-    const replies = await runRoom(example("snake"), [{ ev: "key", key: "down" }, { ev: "key", key: "space" }, { ev: "key", key: "a" }]);
-    expect(squares(replies[0])).toEqual([[12, 6, GREEN], [11, 6, GREEN], [10, 6, GREEN], [9, 6, GREEN]]);
-    expect(replies[0].wake).toBeNull();
-    expect(squares(replies[1])).toContainEqual([12, 7, GREEN]);
-    expect(squares(replies[1])).not.toContainEqual([9, 6, GREEN]);
-    expect(texts(replies[1])).toEqual(["🌼"]);
-    expect(squares(replies[2])).toContainEqual([12, 8, GREEN]);
-    expect(texts(replies[2]).sort()).toEqual(["🌸", "🌼"]);
-    expect(replies[3]).not.toHaveProperty("scene");
+  it("runs the Snake example: it crawls a square each tick to the key pressed, which lights up and plays its note", async () => {
+    const ticks = [1, 2, 3, 4].map((t) => ({ ev: "tick", t }));
+    const replies = await runRoom(example("snake"), [{ ev: "key", key: "h" }, ...ticks]);
+    expect(squares(replies[0])).toEqual(expect.arrayContaining([[11, 9, GREEN], [10, 9, GREEN], [9, 9, GREEN]]));
+    expect(texts(replies[0])).toEqual(expect.arrayContaining(["1", "Q", "H", "/"]));
+    expect(replies[0].wake).not.toBeNull();
+    expect(squares(replies[5])).toEqual(expect.arrayContaining([[12, 6, "primary"], [12, 7, GREEN]]));
+    expect(replies[5].sounds).toEqual([["note", "C5", "glockenspiel"]]);
     expect(replies.at(-1)).toMatchObject({ error: { text: expect.stringContaining(END) } });
   }, 60_000);
 

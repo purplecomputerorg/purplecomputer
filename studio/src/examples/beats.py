@@ -9,8 +9,9 @@ DRUMS = (("🐘", "kick", "#a0a0a0"), ("🐸", "snare", "#e44444"), ("🐝", "hi
 # Seconds from one beat to the next, 0.1 to 1: smaller is faster.
 SPEED = 0.2
 
-keys = ("12345678", "qwertyui", "asdfghjk", "zxcvbnm,")
-spots = {key: (r, c, (6 + c * 2, 2 + r * 2)) for r, row in enumerate(keys) for c, key in enumerate(row)}
+keys = [row[:8] for row in KEY_ROWS]
+at = grid.keyboard(keys)
+spots = {key: (r, c, at[key]) for r, row in enumerate(keys) for c, key in enumerate(row)}
 beats = set()
 game = state(at=-1, loop=None)
 
@@ -60,7 +61,8 @@ def on_key(key):
         game.loop = every(SPEED, tick)
 
 
-for r, (picture, _, _) in enumerate(DRUMS):
-    grid.set(3, 2 + r * 2, picture, size=2)
+for row, (picture, _, _) in zip(keys, DRUMS):
+    x, y = at[row[0]]
+    grid.set(x - 3, y, picture, size=2)
 draw()
 status("Press a key for a beat. Space plays.")

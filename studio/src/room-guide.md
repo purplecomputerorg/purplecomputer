@@ -58,11 +58,12 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `grid.cursor(x, y)` | A ring around a square, to show what's picked. `grid.cursor()` takes it away. |
 | `ARROWS` | The four arrow keys, each with its step on the grid: `if key in ARROWS:` for any arrow, `dx, dy = ARROWS[key]` to move something yourself. |
 | `KEY_COLORS` | Each key's color, the same as its sticker: `KEY_COLORS["q"]` is a light red. The number row is grays, then a row each of reds, yellows, and blues, light to dark. |
+| `KEY_NOTES` | Each key's note, as the Music room plays the letters: a row an octave in C, `KEY_NOTES["q"]` is `"C4"`, `"a"` is `"C3"`, `"z"` is `"C2"`, and the number row is highest, from `"C5"`. `play(KEY_NOTES[key])` plays the key pressed. |
 | `KEY_ROWS` | The keys the Music room plays, a row at a time: `"1234567890"`, `"qwertyuiop"`, `"asdfghjkl;"`, `"zxcvbnm,./"`. |
 | `grid.keyboard()` | Where each key sits with the rows laid out like the keyboard, centered on the grid: `spots = grid.keyboard()`, then `grid.set(spots["q"], "🐸", size=2)`. Keys are 2 squares apart; `grid.keyboard(rows, size)` takes your own rows and spacing, like `grid.keyboard(KEY_ROWS[1:])` for just the letters. |
 | `grid.move(key)` | An arrow key moves the ring a square, around the edges. Other keys do nothing. |
-| `grid.here` | Where the ring is, as `(x, y)`, for `grid.set(grid.here, "🌻")`. |
-| `picture("cat")` | One of the pack's pictures, for `grid.set` or `show`, wherever an emoji could go. In text, or said, it's its name. |
+| `grid.here` | Where the ring is, as `(x, y)`, for `grid.set(grid.here, "🌻")`. Before there's a ring, it's the middle, where `grid.move` starts it. |
+| `picture("cat")` | One of the pack's pictures, for `grid.set` or `show`, wherever an emoji could go. In text, or said, it's its name. `picture()` with no name is one of them at random, or 🖼️ when the pack has none. |
 | `pixels(rows, colors)` | A small picture written as letters (below). |
 | `mix("#ffd400", "#1e5bd6")` | Colors mixed like paint, so yellow and blue make green. Give a color twice to use more of it. |
 | `every(seconds, fn)`, `after(seconds, fn)` | Call `fn` over and over, or once, at least 0.1 seconds apart. Both give back a timer you can `.stop()`. |

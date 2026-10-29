@@ -253,18 +253,28 @@ def on_key(key):
     # Mixed like real paint: yellow and blue make green
     grid.set(9, 2, mix(*pot) if pot else "tile", size=8)
 ` },
-  { icon: "📷", label: "Photo", source: `import random
-
-from purple import *
+  { icon: "📷", label: "Photo", source: `from purple import *
 
 # Your photos: add them below, under Pictures and sounds for your rooms
-photos = list(images)
 show("📷")
 
 
-# Purple calls this each time a key is pressed
+# Purple calls this each time a key is pressed: one of your photos at random
 def on_key(key):
-    if photos:
-        show(picture(random.choice(photos)))
+    show(picture())
+` },
+  { icon: "🎹", label: "Light the keys", source: `from purple import *
+
+# Each key's square, laid out like the keyboard, with its letter on it
+spots = grid.keyboard()
+for key in spots:
+    grid.set(spots[key], key.upper())
+
+
+# Purple calls this each time a key is pressed: its square lights up in its sticker's color, and it plays its note
+def on_key(key):
+    if key in spots:
+        grid.floor.set(spots[key], KEY_COLORS[key])
+        play(KEY_NOTES[key])
 ` },
 ];

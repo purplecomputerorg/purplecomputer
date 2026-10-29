@@ -30,18 +30,26 @@ export function field(label: string, input: HTMLElement): HTMLLabelElement {
 export const removeButton = (onclick: () => void) => h("button", { class: "x", title: "Remove", "aria-label": "Remove", onclick }, "×");
 export const addRowButton = (label: string, onclick: () => void) => h("button", { class: "add-row", onclick }, `+ ${label}`);
 
+// A Studio dialog; resolves with the value of the button picked, or "" for Esc.
+function dialog(question: string, buttons: Child[], extra: Child[] = []): Promise<string> {
+  return new Promise((done) => {
+    const box = h("dialog", { class: "card stack", onclose: () => { box.remove(); done(box.returnValue); } },
+      h("form", { method: "dialog", class: "stack" }, h("p", {}, question), ...extra, h("p", { class: "row" }, ...buttons)));
+    document.body.append(box);
+    box.showModal();
+  });
+}
+
 // Studio's own confirm(): resolves true when the family picks yes. Cancel has focus so Enter is safe, unless
 // extra brings its own autofocus (an earlier one wins). Esc cancels.
-export function ask(question: string, yes: string, ...extra: Child[]): Promise<boolean> {
-  return new Promise((done) => {
-    const dialog = h("dialog", { class: "card stack", onclose: () => { dialog.remove(); done(dialog.returnValue === "yes"); } },
-      h("form", { method: "dialog", class: "stack" }, h("p", {}, question), ...extra,
-        h("p", { class: "row" },
-          h("button", { class: "btn small", value: "yes" }, yes),
-          h("button", { class: "btn secondary small", value: "", autofocus: true }, "Cancel"))));
-    document.body.append(dialog);
-    dialog.showModal();
-  });
+export async function ask(question: string, yes: string, ...extra: Child[]): Promise<boolean> {
+  return (await dialog(question, [h("button", { class: "btn small", value: "yes" }, yes),
+    h("button", { class: "btn secondary small", value: "", autofocus: true }, "Cancel")], extra)) === "yes";
+}
+
+// Studio's own alert().
+export async function tell(message: string): Promise<void> {
+  await dialog(message, [h("button", { class: "btn small", value: "ok", autofocus: true }, "OK")]);
 }
 
 // Studio's own prompt(): the new text, or null when cancelled or left empty.

@@ -18,7 +18,7 @@ import traceback as _traceback
 
 __all__ = ["grid", "keep", "images", "sounds", "show", "write", "status", "clear", "background", "say", "play", "drum", "sound",
            "picture", "pixels", "mix", "held", "ask", "every", "after", "game_over", "state",
-           "ARROWS", "KEY_COLORS", "KEY_ROWS"]
+           "ARROWS", "KEY_COLORS", "KEY_NOTES", "KEY_ROWS"]
 
 W, H = 26, 12
 CELL = 8.75
@@ -53,6 +53,9 @@ KEY_COLORS = {
                                 "#707070", "#585858", "#404040", "#282828", "#101010", "#000000"))),
     **_shades(0, "qwertyuiop[]"), **_shades(50, "asdfghjkl;'"), **_shades(220, "zxcvbnm,./"),
 }
+
+# Each key's note in C, a row an octave, as the Music room plays the letters: q is C4, a is C3, z is C2, 1 is C5.
+KEY_NOTES = {k: "CDEFGAB"[i % 7] + str(octave + i // 7) for octave, row in zip((5, 4, 3, 2), KEY_ROWS) for i, k in enumerate(row)}
 
 _send = None   # the host's: send(reply: dict)
 _recv = None   # the host's: blocking recv() -> event dict
@@ -164,8 +167,14 @@ class _Picture:
         return self.source if isinstance(self.source, str) else "picture"
 
 
-def picture(name, w=None, h=None):
-    """One of the pack's pictures, content/images/<name>.png: where an emoji would go, or w squares wide."""
+def picture(name=None, w=None, h=None):
+    """One of the pack's pictures, content/images/<name>.png: where an emoji would go, or w squares wide.
+    With no name, one of them at random, or 🖼️ when the pack has none."""
+    if name is None:
+        import random
+        if not images:
+            return "🖼️"
+        name = random.choice(sorted(images))
     if name not in images:
         raise ValueError(f"the pack has no picture called {name!r}")
     return _Picture(name, images[name], w, h)
@@ -214,8 +223,11 @@ def game_over(text="Press a key to play again"):
 
 
 def _pos(args):
-    x, y = args if len(args) == 2 else args[0]
-    return int(x) % W, int(y) % H
+    try:
+        x, y = args if len(args) == 2 else args[0]
+        return int(x) % W, int(y) % H
+    except (TypeError, ValueError):
+        raise ValueError(f"a square is (across, down), like (3, 4), not {args[0] if len(args) == 1 else args!r}") from None
 
 
 class _Layer:
@@ -271,8 +283,8 @@ class _Grid(_Layer):
 
     @property
     def here(self):
-        """Where the ring is, as (x, y), or None when there's none."""
-        return _s.cursor
+        """Where the ring is, as (x, y); before there's a ring, the middle, where grid.move starts it."""
+        return _s.cursor or (W // 2, H // 2)
 
     def move(self, key):
         """An arrow key moves the ring a square, around the edges, starting it in the middle if there's none; other keys do nothing."""

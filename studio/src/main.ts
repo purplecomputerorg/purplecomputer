@@ -24,7 +24,7 @@ import { liveScreen } from "./ui/live";
 import { roomsView } from "./ui/rooms";
 import { keysView } from "./ui/keys";
 import { wordsView } from "./ui/words";
-import type { View } from "./ui/view";
+import { WIDER, type View } from "./ui/view";
 
 interface Section extends HomeSection {
   // What "Clear all" names on this section's pages; colors has its own undo instead.
@@ -99,6 +99,7 @@ const widen = (r: number, dragging = true) => {
   liveWidth = Math.min(WIDEST, Math.max(NARROWEST, r));
   body.style.setProperty("--live", `${liveWidth}fr`);
   body.classList.toggle("resized", dragging && liveWidth !== USUAL);
+  body.classList.toggle("widest", liveWidth === NARROWEST);
 };
 // Stacked on a phone, the page scrolls so the divider stays where it was under the finger.
 const flip = () => {
@@ -142,6 +143,11 @@ const split = h("div", { class: "split", onpointerdown: drag, ondblclick: (e: Ev
   h("button", { type: "button", class: "swap", title: "Swap sides", "aria-label": "Swap sides", onclick: () => { if (!dragged) swap(); dragged = false; } }));
 const body = h("div", { class: `body${pref(SWAPPED) === "1" ? " swapped" : ""}` }, main, split, stage);
 widen(Number(pref(WIDTH)) || USUAL, false);
+// The block editor's Wider button: the line goes as far toward the live Purple as dragging can, or back.
+document.addEventListener(WIDER, () => {
+  widen(liveWidth === NARROWEST ? USUAL : NARROWEST);
+  keep(WIDTH, String(liveWidth));
+});
 app.append(top, body);
 
 let current: View | null = null;

@@ -69,11 +69,8 @@ function list(): View {
           h("p", {}, "Any game or toy. Purple comes with the pieces every room needs, so a whole room can be a few lines of Python, written by you or with an AI helper, or a few blocks snapped together."),
           h("ul", {}, ...["Key presses and timers", "Emoji, pictures, text", "Notes, drums, sounds", "Talking out loud", "Remembering for next time"].map((t) => h("li", {}, t))),
           h("div", { class: "row" },
-            h("button", { class: "btn", onclick: () => tryRoom("my-room", null) }, "Start with Python"),
-            h("button", { class: "btn", onclick: () => void blocks().then((m) => {
-              const workspace = m.BLOCK_STARTERS[0].workspace();
-              tryRoom("my-room", { kind: "blocks", workspace }, m.blocksSource(workspace));
-            }) }, "Start with blocks"))),
+            h("button", { class: "btn", onclick: startPython }, "Start with Python"),
+            h("button", { class: "btn", onclick: startBlocks }, "Start with blocks"))),
         wholeRoom()),
       h("h3", {}, "Or start from one of these"),
       h("div", { class: "cards" },
@@ -96,13 +93,19 @@ const WHOLE_ROOM = [
   "    ", call("say"), "(key)",
 ];
 
-// A whole room, as Python and as the same room in blocks, which draw once Blockly has loaded.
+const startPython = () => tryRoom("my-room", null);
+const startBlocks = () => void blocks().then((m) => {
+  const workspace = m.BLOCK_STARTERS[0].workspace();
+  tryRoom("my-room", { kind: "blocks", workspace }, m.blocksSource(workspace));
+});
+
+// A whole room, as Python and as the same room in blocks, which draw once Blockly has loaded. Each starts a room that way.
 function wholeRoom(): HTMLElement {
   const picture = h("div", { class: "blocks-picture" });
   void blocks().then((m) => picture.replaceChildren(m.blocksPicture(m.WHOLE_ROOM_BLOCKS())));
   return h("figure", {}, h("figcaption", {}, "A whole room: every key puts a dog on the screen"),
-    h("div", { class: "whole-room" }, ...([["Python", h("pre", {}, ...WHOLE_ROOM)], ["Blocks", picture]] as const).map(([label, pane]) =>
-      h("div", {}, pane, h("span", {}, label)))));
+    h("div", { class: "whole-room" }, ...([["Python", h("pre", {}, ...WHOLE_ROOM), startPython], ["Blocks", picture, startBlocks]] as const).map(([label, pane, go]) =>
+      h("button", { type: "button", title: `Start with ${label.toLowerCase()}`, onclick: go }, pane, h("span", {}, label)))));
 }
 
 // The starters' order on the Rooms page: the liveliest first.
@@ -212,6 +215,7 @@ function editor(room: RoomDraft): View {
   };
   const edited = (source: string, ms: number, typed = false) => {
     room.source = source;
+    peekCode.textContent = source;
     own();
     later(ms, typed);
   };
@@ -221,17 +225,17 @@ function editor(room: RoomDraft): View {
     restart();
   }, { title: "The room's emoji in Purple's room picker" }));
 
-  const code = h("textarea", { class: "code", rows: 24, spellcheck: false, readOnly: !!room.made });
+  const code = h("textarea", { class: "code", rows: 24, spellcheck: false });
   const hints = codeHints(code);
   code.addEventListener("input", () => edited(code.value, 700, true));
   code.addEventListener("keydown", (e) => {
-    if (hints.key(e) || !(e.key === "Tab" || e.key === "Enter") || e.shiftKey || code.readOnly) return;
+    if (hints.key(e) || !(e.key === "Tab" || e.key === "Enter") || e.shiftKey) return;
     e.preventDefault();
     code.setRangeText(e.key === "Tab" ? "    " : newLine(code.value.slice(0, code.selectionStart)), code.selectionStart, code.selectionEnd, "end");
     code.dispatchEvent(new Event("input"));
   });
   const insert = (text: string) => {
-    if (code.readOnly || tab !== "python") return false;
+    if (tab !== "python") return false;
     code.setRangeText(text, code.selectionStart, code.selectionEnd, "end");
     code.focus();
     code.dispatchEvent(new Event("input"));
@@ -249,13 +253,21 @@ function editor(room: RoomDraft): View {
   const tray = roomFilesBox((call) => insert(call), () => showTab(tab));
   const made = room.made;
   const hasKnobs = readKnobs(room.source).length > 0;
-  const tabs: Tab[] = [...(made ? ["made" as const] : []), ...((!made || made.kind === "blocks") && hasKnobs ? ["knobs" as const] : []), "python"];
+  // A made room's Python is looked at under its form, not edited: a tab for it would read as a way to switch.
+  const tabs: Tab[] = [...(made ? ["made" as const] : []), ...((!made || made.kind === "blocks") && hasKnobs ? ["knobs" as const] : []), ...(made ? [] : ["python" as const])];
   const LABELS: Record<Tab, string> = { made: made?.kind === "rules" ? "Rules" : made?.kind === "blocks" ? "Blocks" : "Form", knobs: "Knobs", python: "Python" };
   let tab: Tab = tabs[0];
   const pane = h("div", {});
+  const peekCode = h("pre", {});
+  const peek = h("details", { class: "peek" }, h("summary", {}, "See the Python it writes"), peekCode);
   const tabButtons = tabs.map((t) => h("button", { class: "tab", role: "tab", onclick: () => showTab(t) }, LABELS[t]));
   // Forms and knobs cover only part of a room; the way to the rest stays in view above them.
+  const seePython = () => {
+    peek.open = true;
+    peek.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
   const toPython = (text: string) => h("p", { class: "to-python small" }, text,
+    ...(made && tab === "made" ? [h("button", { class: "linkbtn", onclick: seePython }, "See the Python"), ". "] : []),
     made ? h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy") : h("button", { class: "linkbtn", onclick: () => showTab("python") }, "Open the Python"),
     made ? ` to write the rest yourself.${IN_PLACE}` : " to change anything else.");
   // A room opened as a blank room, or as blocks, can start over from any of its starters for as long as it stays open.
@@ -276,18 +288,19 @@ function editor(room: RoomDraft): View {
   const formPane = (made: FormMade) => {
     const onEdit = () => edited(sourceOf(made), 500);
     return [toPython("This form writes the room's Python for you. "),
-      made.kind === "rules" ? rulesForm(made.rules, onEdit) : templateForm(made, onEdit, tray.refresh)];
+      made.kind === "rules" ? rulesForm(made.rules, onEdit) : templateForm(made, onEdit, tray.refresh), peek];
   };
   const blocksPane = (made: { workspace: object }) => {
     const holder = h("div", {});
     void blocks().then((m) => holder.replaceChildren(
       startPicker(m.BLOCK_STARTERS, (s) => m.blocksSource(s.workspace()), (s) => (made.workspace = s.workspace())),
       m.blocksForm(made, (source) => edited(source, 500))));
-    return [toPython("These blocks write the room's Python for you. "), holder];
+    return [toPython("These blocks write the room's Python for you. "), holder, peek];
   };
   const showTab = (which: Tab) => {
     tab = which;
     tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(tabs[i] === which)));
+    peekCode.textContent = room.source;
     if (which === "made" && made) {
       pane.replaceChildren(...(made.kind === "blocks" ? blocksPane(made) : formPane(made)));
     } else if (which === "knobs") {
@@ -299,9 +312,7 @@ function editor(room: RoomDraft): View {
         : h("p", { class: "note" }, "The settings at the top of the Python can't be read as knobs right now. Everything still works in Python."));
     } else {
       code.value = room.source;
-      pane.replaceChildren(made ? "" : startPicker(BLANK_ROOMS, (b) => b.source), pythonHelp(room.source),
-        made ? h("p", { class: "note" }, `Made from ${LABELS.made.toLowerCase()}, so its Python changes when they do. `, h("button", { class: "linkbtn", onclick: pythonCopy }, "Make a Python copy"), ` to write it yourself.${IN_PLACE}`) : "",
-        hints.element, typing.element);
+      pane.replaceChildren(startPicker(BLANK_ROOMS, (b) => b.source), pythonHelp(room.source), hints.element, typing.element);
     }
   };
 
@@ -314,7 +325,7 @@ function editor(room: RoomDraft): View {
       h("div", { class: "editor-head" }, iconCell, nameIn, h("button", { class: "linkbtn dim small", onclick: () => nameIn.select() }, "✏️ Rename"), nameNote),
       tryBar(room),
       copyGuideRow(h("span", { class: "small" }, "Using an AI helper? The ", h("a", { href: "#guide" }, "Room guide"), " is everything it needs:")),
-      h("div", { class: "row between" }, h("div", { class: "tabs", role: "tablist" }, ...tabButtons),
+      h("div", { class: "row between tab-row" }, h("div", { class: "tabs", role: "tablist", hidden: tabs.length < 2 }, ...tabButtons),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),
       pane,
       problems.element,

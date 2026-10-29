@@ -16,3 +16,6 @@ export interface View {
   // What the topbar's Download button does while this page is open, instead of linking here.
   download?: () => void;
 }
+
+// Sent by a page to widen its editor as far as the line between it and the live Purple goes, or back.
+export const WIDER = "studio-wider";

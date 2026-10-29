@@ -3,7 +3,7 @@ import { loadPyodide } from "pyodide";
 import purpleSource from "../../purple_tui/roomkit/purple.py?raw";
 import runnerSource from "../../purple_tui/roomkit/runner.py?raw";
 import guest from "../src/rooms/guest.py?raw";
-import { EXAMPLES, TEMPLATES, quizSource, soundboardSource } from "../src/examples";
+import { BLANK_ROOMS, EXAMPLES, TEMPLATES, quizSource, soundboardSource } from "../src/examples";
 import { blankRules, rulesSource, type Rule } from "../src/rules";
 import { applyKnobs, BLOCK_STARTERS, blocksSource, build, WHOLE_ROOM_BLOCKS } from "../src/blocks";
 import { readKnobs } from "../src/knobs";
@@ -208,11 +208,14 @@ describe("family rooms in Studio's Python", () => {
     expect(replies[2]).not.toHaveProperty("sounds");
   }, 60_000);
 
-  it("runs the catch blocks: the arrows move the basket and fruit drops in along the top", async () => {
-    const replies = await runRoom(blocksSource(starter("Catch")), [{ ev: "key", key: "left" }, { ev: "tick", t: 2 }]);
-    expect(texts(replies[0])).toEqual(["🧺", "Catch the fruit with the arrows!"]);
-    expect(texts(replies[2])).toContain("🍎");
-  }, 60_000);
+  it("offers the same starters in blocks as in Python, and each one's blocks play like its Python", async () => {
+    expect(BLOCK_STARTERS.map((s) => s.label)).toEqual(BLANK_ROOMS.map((r) => r.label));
+    const keys = ["left", "q", "1", "space", "a"].map((key) => ({ ev: "key", key }));
+    for (const r of BLANK_ROOMS) {
+      const [python, blocks] = await Promise.all([runRoom(r.source, keys), runRoom(blocksSource(starter(r.label)), keys)]);
+      expect(blocks, r.label).toEqual(python);
+    }
+  }, 120_000);
 
   it("meets the player from blocks: walls stop it, it walks onto a star, and a falling thing lands on it", async () => {
     const { b, on, thing, text, num, square, score, workspace } = build;
@@ -242,7 +245,9 @@ describe("family rooms in Studio's Python", () => {
   });
 
   it("writes a knob's new value back into its setting block", () => {
-    const room = starter("Catch");
+    const { b, on, thing, num, square, workspace, settingOf } = build;
+    const room = workspace([], settingOf("FRUIT", "What falls.", thing("🍎")), settingOf("BASKET", "What catches it.", thing("🧺")),
+      settingOf("SPEED", "Seconds a square.", num(0.5)), on("purple_on_start", {}, {}, b("purple_put", { SIZE: "1" }, { THING: thing("🍎"), SQUARE: square(1, 1) })));
     const knobs = readKnobs(blocksSource(room));
     expect(knobs.map((k) => k.name)).toEqual(["FRUIT", "BASKET", "SPEED"]);
     knobs[0].value = { t: "str", v: "🍌" };

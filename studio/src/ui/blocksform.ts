@@ -85,6 +85,14 @@ const drawerWidth = (ws: Blockly.WorkspaceSvg) => {
   return fly?.isVisible() && !ws.horizontalLayout ? fly.getWidth() : 0;
 };
 
+// The canvas scrolls no further up or left than just above and beside the blocks; Blockly's own leaves half a
+// canvas of nothing there. Below and to the right keep Blockly's room for more blocks.
+class TopLeftMetrics extends Blockly.MetricsManager {
+  protected override getPaddedContent_(view: Blockly.MetricsManager.ContainerRegion, content: Blockly.MetricsManager.ContainerRegion) {
+    return { ...super.getPaddedContent_(view, content), top: content.top - 24, left: content.left - 24 };
+  }
+}
+
 // The blocks start at the canvas's top left. The drawer opens over them rather than pushing them aside.
 function home(ws: Blockly.WorkspaceSvg) {
   const box = ws.getBlocksBoundingBox();
@@ -205,6 +213,7 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
       theme: purpleTheme(), horizontalLayout: phone, toolboxPosition: phone ? "end" : "start",
       zoom: { controls: false, wheel: false, startScale: 0.7, minScale: 0.4, maxScale: 1.2 }, move: { scrollbars: true, drag: true, wheel: true },
       grid: { spacing: 24, length: 3, colour: "#e3dcec", snap: false },
+      plugins: { metricsManager: TopLeftMetrics },
     });
     // Opening the room isn't a change to it. A starter's blocks have no places yet, so they're laid out here.
     Blockly.Events.disable();

@@ -816,3 +816,15 @@ def test_a_room_sees_each_key_in_its_sticker_color():
     from purple_tui.roomkit import purple
     assert purple.KEY_COLORS == {k: KEY_COLORS[k] for k in purple.KEY_COLORS}
     assert set(KEY_COLORS) - set(purple.KEY_COLORS) == {"+", "×", "÷"}
+
+
+def test_a_letter_reads_on_its_floor_light_or_dark():
+    from purple_tui.roomkit import purple
+    purple.grid.clear()
+    for x, floor in enumerate(("#FFFFFF", "#101010", "primary", None)):
+        if floor:
+            purple.grid.floor.set(x, 0, floor)
+        purple.grid.set(x, 0, "A")
+    inks = [s[5] for s in purple._scene() if s[0] == "text"]
+    assert inks == ["#2a1845", "#f4eefb", "on_primary", "text"]
+    purple.grid.clear()

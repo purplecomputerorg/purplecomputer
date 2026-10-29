@@ -54,7 +54,7 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `grid.set(x, y, thing)` | Puts something in a square of the grid (below). `grid.set((x, y), thing)` works too. |
 | `grid.get(x, y)`, `grid.erase(x, y)`, `grid.clear()` | What's in a square, empty one, or empty the whole grid, its floor and cursor too. |
 | `grid.random_empty()` | An `(x, y)` with nothing in it, or `None` when the grid is full. |
-| `grid.floor.set(x, y, thing)` | The floor under the grid: grass under a hero, soil under a plant. It has `get`, `erase`, and `clear` too. |
+| `grid.floor.set(x, y, thing)` | The floor under the grid: grass under a hero, soil under a plant. A letter on a floor color is drawn dark or light so it reads. It has `get`, `erase`, and `clear` too. |
 | `grid.cursor(x, y)` | A ring around a square, to show what's picked. `grid.cursor()` takes it away. |
 | `ARROWS` | The four arrow keys, each with its step on the grid: `if key in ARROWS:` for any arrow, `dx, dy = ARROWS[key]` to move something yourself. |
 | `KEY_COLORS` | Each key's color, the same as its sticker: `KEY_COLORS["q"]` is a light red. The number row is grays, then a row each of reds, yellows, and blues, light to dark. |

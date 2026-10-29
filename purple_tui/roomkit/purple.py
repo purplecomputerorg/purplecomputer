@@ -317,12 +317,21 @@ _INKS = {True: {"text": "#2a1845", "muted": "#5b4a75", "accent": "#7a2fb8"},
          False: {"text": "#f4eefb", "muted": "#cbbfe0", "accent": "#e3b8ff"}}
 
 
+def _light(hex_color) -> bool:
+    return sum(k * int(hex_color[i:i + 2], 16) for k, i in ((0.299, 1), (0.587, 3), (0.114, 5))) > 150
+
+
 def _ink(color):
     bg = _s.background
-    if not _HEX.match(bg):
-        return color
-    light = sum(k * int(bg[i:i + 2], 16) for k, i in ((0.299, 1), (0.587, 3), (0.114, 5))) > 150
-    return _INKS[light].get(color, color)
+    return _INKS[_light(bg)].get(color, color) if _HEX.match(bg) else color
+
+
+def _ink_on(floor) -> str:
+    """Text that reads on a square's floor, so a letter shows on a light or dark tile alike."""
+    thing = floor and floor[0]
+    if thing == "primary":
+        return "on_primary"
+    return _INKS[_light(thing)]["text"] if isinstance(thing, str) and _HEX.match(thing) else "text"
 
 
 def _label(x, y, size, text, color="text", **how):
@@ -353,7 +362,7 @@ def _fit(thing, size) -> tuple:
     return (size - w) / 2, (size - h) / 2, w, h
 
 
-def _thing(x, y, thing, size, corner=False) -> list:
+def _thing(x, y, thing, size, corner=False, ink="text") -> list:
     if isinstance(thing, _Picture):
         dx, dy, w, h = _fit(thing, size)
         return ["image", x + CELL * dx, y + CELL * dy, CELL * w, CELL * h, thing.source]
@@ -362,7 +371,7 @@ def _thing(x, y, thing, size, corner=False) -> list:
         return ["rect", x + 0.5, y + 0.5, side - 1, side - 1, thing, side / 8]
     if corner:
         return _label(x + side - 1, y + side - 1, side * 0.5, thing, anchor="bottomright", box="surface", pad=0.8, radius=1.5)
-    return _label(x + side / 2, y + side / 2, side * 0.6, thing)
+    return _label(x + side / 2, y + side / 2, side * 0.6, thing, ink)
 
 
 def _covered(cells) -> set:
@@ -390,7 +399,7 @@ def _scene() -> list:
         shapes += [_thing(ox + x * CELL, oy + y * CELL, *item) for (x, y), item in _s.floor.items()]
         # A letter on part of a bigger thing, like a key's letter on its picture, goes on top as a small corner badge.
         over = _covered(_s.cells)
-        shapes += [_thing(ox + x * CELL, oy + y * CELL, *item, corner=(x, y) in over)
+        shapes += [_thing(ox + x * CELL, oy + y * CELL, *item, corner=(x, y) in over, ink=_ink_on(_s.floor.get((x, y))))
                    for (x, y), item in sorted(_s.cells.items(), key=lambda kv: kv[0] in over)]
         if _s.cursor:
             x, y = _s.cursor

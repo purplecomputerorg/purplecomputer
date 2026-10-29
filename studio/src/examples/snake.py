@@ -5,13 +5,16 @@ from purple import *
 
 # The snake's color.
 SNAKE = "#5ec46a"
-# How many squares long the snake is, 2 to 20.
-LENGTH = 4
 # Seconds between each square it crawls.
 SPEED = 0.15
-# The note each column of keys plays, left to right.
-NOTES = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5", "G5", "A5"]
+# Keys it reaches light up in their sticker's color.
+STICKERS = True
+# The color keys light up in when they don't use their sticker's.
+LIT = "#f2c94c"
+# The snake grows a square longer at each key it reaches.
+GROWS = False
 
+scale = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5", "G5", "A5"]
 spots = grid.keyboard()
 keys = {spot: key for key, spot in spots.items()}
 head = pixels([
@@ -24,7 +27,7 @@ head = pixels([
     "SSSSSSSS",
     ".SSSSSS.",
 ], {"S": SNAKE, "W": "#ffffff", "K": "#1b1b1b"})
-snake = [(13 - i, 10) for i in range(LENGTH)]
+snake = [(13 - i, 10) for i in range(3)]
 game = state(target=None)
 
 for key, spot in spots.items():
@@ -45,9 +48,11 @@ def toward(a, b):
 
 
 def arrive(key):
-    grid.floor.set(spots[key], "primary")
+    grid.floor.set(spots[key], KEY_COLORS[key] if STICKERS else LIT)
     column = next(row.index(key) for row in KEY_ROWS if key in row)
-    play(NOTES[column], "glockenspiel")
+    play(scale[column], "glockenspiel")
+    if GROWS and len(snake) < 20:
+        snake.append(snake[-1])
 
 
 def crawl():

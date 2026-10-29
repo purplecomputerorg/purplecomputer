@@ -5,6 +5,8 @@ import runnerSource from "../../purple_tui/roomkit/runner.py?raw";
 import guest from "../src/rooms/guest.py?raw";
 import { EXAMPLES, TEMPLATES, quizSource, soundboardSource } from "../src/examples";
 import { blankRules, rulesSource, type Rule } from "../src/rules";
+import { applyKnobs, BLOCK_STARTERS, blocksSource, build } from "../src/blocks";
+import { readKnobs } from "../src/knobs";
 
 type Msg = Record<string, unknown>;
 type Shape = [string, ...unknown[]];
@@ -195,4 +197,57 @@ describe("family rooms in Studio's Python", () => {
     expect([texts(replies[2]).sort(), replies[2].sounds]).toEqual([["🌼", "🐄"], [["drum", "kick"]]]);
     expect(texts(replies[3])).toContain('it\'s "x"');
   }, 60_000);
+
+  const starter = (label: string) => BLOCK_STARTERS.find((s) => s.label === label)!.workspace();
+
+  it("runs the light-the-keys blocks: a key lights its square in its sticker color and plays its column's note", async () => {
+    const replies = await runRoom(blocksSource(starter("Light the keys")), [{ ev: "key", key: "q" }, { ev: "key", key: "space" }]);
+    expect(texts(replies[0])).toEqual(expect.arrayContaining(["1", "Q", "/"]));
+    expect(replies[1].sounds).toEqual([["note", "C4", "marimba"]]);
+    expect(squares(replies[1]).filter(([, , c]) => c !== "tile")).toHaveLength(1);
+    expect(replies[2]).not.toHaveProperty("sounds");
+  }, 60_000);
+
+  it("runs the catch blocks: the arrows move the basket and fruit drops in along the top", async () => {
+    const replies = await runRoom(blocksSource(starter("Catch")), [{ ev: "key", key: "left" }, { ev: "tick", t: 2 }]);
+    expect(texts(replies[0])).toEqual(["🧺", "Catch the fruit with the arrows!"]);
+    expect(texts(replies[2])).toContain("🍎");
+  }, 60_000);
+
+  it("meets the player from blocks: walls stop it, it walks onto a star, and a falling thing lands on it", async () => {
+    const { b, on, thing, text, num, square, score, workspace } = build;
+    const room = workspace(["found"],
+      on("purple_on_start", {}, {},
+        b("purple_wall", {}, { THING: thing("🌳") }),
+        b("purple_put", { SIZE: "1" }, { THING: thing("🌳"), SQUARE: square(0, 1) }),
+        b("purple_put", { SIZE: "1" }, { THING: thing("⭐"), SQUARE: square(1, 0) }),
+        b("purple_put", { SIZE: "1" }, { THING: thing("🍎"), SQUARE: square(1, 5) }),
+        b("purple_player_put", {}, { THING: thing("🦊"), SQUARE: square(0, 0) })),
+      on("purple_on_key", { WHICH: "arrow" }, {}, b("purple_player_move", { WAY: "key" })),
+      on("purple_every", {}, { SECONDS: num(1) }, b("purple_move_all", { WAY: "up" }, { THING: thing("🍎") })),
+      on("purple_on_meet", {}, { THING: thing("⭐") }, b("purple_change", { VAR: { id: "found" } }, { BY: num(1) }),
+        b("purple_status", {}, { TEXT: b("purple_join", {}, { A: text("found "), B: score("found") }) })),
+      on("purple_on_meet", {}, { THING: thing("🍎") }, b("purple_say", {}, { TEXT: text("yum") })));
+    const ticks = [1, 2, 3, 4, 5].map((t) => ({ ev: "tick", t }));
+    const replies = await runRoom(blocksSource(room), [{ ev: "key", key: "down" }, { ev: "key", key: "right" }, ...ticks]);
+    expect(replies[1]).not.toHaveProperty("scene");
+    expect(texts(replies[2])).toContain("found 1");
+    expect(texts(replies[2])).not.toContain("⭐");
+    expect(replies.slice(3).map((r) => r.sounds).filter(Boolean)).toEqual([[["say", "yum"]]]);
+    expect(texts(replies.at(-2)!)).not.toContain("🍎");
+  }, 60_000);
+
+  it("writes a knob's new value back into its setting block", () => {
+    const room = starter("Catch");
+    const knobs = readKnobs(blocksSource(room));
+    expect(knobs.map((k) => k.name)).toEqual(["FRUIT", "BASKET", "SPEED"]);
+    knobs[0].value = { t: "str", v: "🍌" };
+    knobs[1].value = { t: "picture", v: "grandma" };
+    knobs[2].value = { t: "num", v: 0.3 };
+    applyKnobs(room, knobs);
+    const source = blocksSource(room);
+    expect(source).toContain('FRUIT = "🍌"\n');
+    expect(source).toContain('BASKET = picture("grandma")\n');
+    expect(source).toContain("SPEED = 0.3\n");
+  });
 });

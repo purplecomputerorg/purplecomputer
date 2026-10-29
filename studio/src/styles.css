@@ -389,6 +389,25 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .rule-do::before { content: "→"; color: var(--dim); margin-left: -22px; width: 14px; }
 .rule > .linkbtn { justify-self: start; padding-left: 22px; }
 .rule input.bad, .form-row input.bad { border-color: #d77; }
+/* Rooms: the block editor and the pickers its fields open */
+.blockly { height: 560px; border-radius: 16px; border: 1px solid var(--line); overflow: hidden; background: #fbfaf8; }
+.blocklyToolboxDiv { border-right: 1px solid var(--line); }
+.square-pick { display: grid; grid-template-columns: repeat(26, 11px); gap: 1px; padding: 6px; }
+.square-pick button { width: 11px; height: 11px; padding: 0; border: none; border-radius: 2px; background: #e6def0; cursor: pointer; }
+.square-pick button:hover, .square-pick button[aria-pressed="true"] { background: var(--purple); }
+.key-pick { display: grid; gap: 4px; padding: 6px; font-size: 12px; }
+.key-pick div { display: flex; gap: 3px; }
+.key-pick div:nth-child(3) { margin-left: 0.6em; }
+.key-pick div:nth-child(4) { margin-left: 1.2em; }
+.key-pick button { padding: 0; border: none; background: none; cursor: pointer; font-size: inherit; }
+.key-pick button.word { padding: 4px 8px; border-radius: 8px; background: var(--fill); font-weight: 600; }
+.color-pick { display: grid; grid-template-columns: repeat(7, 26px); gap: 5px; padding: 6px; }
+.color-pick button, .color-pick input { width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+.setting-pick { display: grid; gap: 2px; padding: 4px; }
+.setting-pick button { text-align: left; padding: 4px 10px; border: none; border-radius: 8px; background: none; cursor: pointer; font-weight: 600; }
+.setting-pick button:hover { background: var(--fill); }
+.block-emoji { position: fixed; z-index: 1000; }
+.block-anchor { width: 1px; height: 48px; opacity: 0; padding: 0; border: none; }
 .push { margin-left: auto; }
 /* The picture keyboard and quiz forms: rows that share columns under one line of headings */
 .sheet { display: grid; grid-template-columns: var(--cols); gap: 8px 10px; align-items: center; }
@@ -609,8 +628,8 @@ h3 + .cards { margin-top: 0; }
 .write-own p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--text); }
 .write-own ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 12px; padding: 0; list-style: none; }
 .write-own li { padding: 2px 9px; border-radius: 999px; background: #fff; border: 1px solid var(--border); color: var(--purple); font-size: 12px; font-weight: 600; }
-.pick.write-own span.btn { display: inline-block; margin-top: 12px; color: #fff; font-size: 14px; }
-.pick.write-own ul + span.btn { margin-top: 0; }
+.pick.write-own { cursor: default; }
+.pick.write-own .row { gap: 8px; }
 .write-own:hover .btn { background: var(--purple-dark); }
 .write-own figure { margin: 0; }
 .write-own figcaption { font-size: 11px; font-weight: 600; color: var(--purple); margin: 0 0 4px 2px; }

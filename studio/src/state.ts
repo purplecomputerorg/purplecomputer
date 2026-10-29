@@ -23,8 +23,9 @@ export interface Phrase extends Keepable { text: string; clip: Clip; said?: stri
 export interface Letter extends Keepable { clip: Clip; said?: string }
 // title: the name as the family typed it, which Purple shows as is; name is its file name in the pack.
 export interface Instrument extends Keepable { name: string; title?: string; base: BaseName; params: Params }
-// What a room's Python is generated from, kept so it reopens: rules or a form. Null when the Python is the room's own.
-export type Made = { kind: "rules"; rules: Rule[] } | TemplateDraft;
+// What a room's Python is generated from, kept so it reopens: rules, blocks (Blockly's saved workspace), or a form.
+// Null when the Python is the room's own.
+export type Made = { kind: "rules"; rules: Rule[] } | { kind: "blocks"; workspace: object } | TemplateDraft;
 // The typed-answer trivia form is gone: a room made with it keeps its Python.
 export const madeOf = (made: unknown): Made | null => (made && (made as { kind: string }).kind !== "trivia" ? made as Made : null);
 // icon: the emoji the family picked for it.

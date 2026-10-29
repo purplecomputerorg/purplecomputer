@@ -205,7 +205,7 @@ export const EXAMPLES: Example[] = [
 ];
 
 // Rules aren't offered any more, but a room made from them still opens in them.
-const MADE_ICONS: Record<Made["kind"], string> = { rules: "🧱", quiz: TEMPLATES.quiz.icon, soundboard: TEMPLATES.soundboard.icon };
+const MADE_ICONS: Record<Made["kind"], string> = { rules: "🧱", blocks: "🧩", quiz: TEMPLATES.quiz.icon, soundboard: TEMPLATES.soundboard.icon };
 export const IDEA = "💡";
 // The room's emoji, in Studio and in Purple's room picker: the family's pick, else its starter's (garden-3 came
 // from garden), else the lightbulb that Python with no starter shows.

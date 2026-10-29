@@ -445,6 +445,9 @@ input.mono-in { font-family: var(--mono); font-size: 13px; }
 .knob .field { margin: 0; }
 .knob .field > span:first-child { margin-bottom: 3px; font-size: 11px; }
 .knob-inline > .knob-item { display: inline-flex; align-items: center; gap: 4px; }
+.sticker-pick { display: flex; flex-shrink: 0; align-items: center; gap: 16px; white-space: nowrap; }
+.sticker-pick > * { flex-shrink: 0; }
+.sticker-pick > label { flex-wrap: nowrap; gap: 8px; }
 /* Entries hold wrapping words, so they take the card's width instead of sizing the grid to their text */
 .knob-rows:has(> .knob-entry) { grid-template-columns: minmax(0, 1fr); }
 /* A row of words (who says what) gives the words the room that's left, so they wrap inside the card */

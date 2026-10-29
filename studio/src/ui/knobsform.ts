@@ -18,10 +18,11 @@ type Face = Extract<Lit, { t: "str" | "picture" }>;
 // pages: the knob's own keys when its entries point at each other by name (a story's pages); links: the
 // dicts holding those names, shown as dropdowns. taken: the emoji in the list being edited, so none repeats.
 // drums: its comment or labels say drums, so a drum's name, or one of the pack's sounds, is picked from a list.
+// stickers: its comment says sticker, so a color can be "stickers" instead: each key's sticker color.
 // loud: its comment says out loud, so each of its words is read by Purple or recorded in the family's voice.
 interface Ctx {
   onEdit: () => void; redraw: () => void; pages: string[]; links: Set<Dict>;
-  relink: (from: string, to: string) => void; taken?: () => string[]; drums?: boolean; loud?: boolean;
+  relink: (from: string, to: string) => void; taken?: () => string[]; drums?: boolean; stickers?: boolean; loud?: boolean;
   // range: the lowest and highest a number may be, from its comment ("1 to 6"); without one, any number.
   range?: [number, number];
   // A map's legend, and the map it names the letters of; keyedBy: the legend a dict's keys are letters of (who says what).
@@ -29,10 +30,11 @@ interface Ctx {
   // The knob's own list, which can be cleared to start over; lists nested in rows can't.
   top?: Lit[];
 }
-type Edit = Pick<Ctx, "onEdit" | "taken" | "drums" | "loud" | "range">;
+type Edit = Pick<Ctx, "onEdit" | "taken" | "drums" | "stickers" | "loud" | "range">;
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 const DRUMS = /\bdrums?\b/i;
+const STICKERS = "stickers";
 const RANGE = /\b(\d+(?:\.\d+)?) to (\d+(?:\.\d+)?)\b/;
 const LONG = 40;
 // Letters a legend's new thing can take, plainest first.
@@ -134,11 +136,7 @@ function spoken(el: HTMLInputElement | HTMLTextAreaElement, v: Str): HTMLElement
 
 function scalar(v: Lit, edit: Edit): HTMLElement {
   const { onEdit } = edit;
-  if (v.t === "str" && COLOR.test(v.v)) {
-    const el = h("input", { type: "color", value: v.v });
-    el.addEventListener("input", () => { v.v = el.value; onEdit(); });
-    return el;
-  }
+  if (v.t === "str" && (COLOR.test(v.v) || (edit.stickers && v.v === STICKERS))) return colorIn(v, edit);
   if (isFace(v)) return faceIn(v as Face, edit);
   if (v.t === "str") return text(v, edit);
   if (v.t === "num") {
@@ -156,6 +154,15 @@ function scalar(v: Lit, edit: Edit): HTMLElement {
     return el;
   }
   return h("span", { class: "dim small" }, "nothing");
+}
+
+function colorIn(v: Str, { onEdit, stickers }: Edit): HTMLElement {
+  const el = h("input", { type: "color", value: COLOR.test(v.v) ? v.v : "#f2c94c", disabled: v.v === STICKERS });
+  el.addEventListener("input", () => { v.v = el.value; onEdit(); });
+  if (!stickers) return el;
+  const box = h("input", { type: "checkbox", checked: v.v === STICKERS });
+  box.addEventListener("change", () => { v.v = box.checked ? STICKERS : el.value; el.disabled = box.checked; onEdit(); });
+  return h("span", { class: "sticker-pick" }, el, h("label", { class: "row" }, box, "Sticker colors"));
 }
 
 // peers: the values beside this one in the same spot of the other entries, so an empty dict knows what to add.
@@ -356,7 +363,7 @@ export function knobsForm(knobs: Knob[], onEdit: () => void): HTMLElement {
       const legend = map && { dict: k.value as Dict, map };
       const by = keyedBy(k.value);
       const range = RANGE.exec(k.about)?.slice(1).map(Number) as [number, number] | undefined;
-      const ctx = { onEdit: edited, redraw: () => redraw(), drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), loud: isLoud(k), legend, range,
+      const ctx = { onEdit: edited, redraw: () => redraw(), drums: DRUMS.test(`${k.about} ${k.labels.join(" ")}`), stickers: /\bsticker/i.test(k.about), loud: isLoud(k), legend, range,
         keyedBy: by && { dict: k.value as Dict, legend: by }, top: k.value.t === "list" ? k.value.items : undefined, ...linksOf(k.value) };
       const redraw = () => card.replaceChildren(head(), editor(k.value, ctx, [], k.labels),
         legend ? h("p", { class: "dim small" }, "The letter beside each thing is how the Python writes it on the map. You only need it if you open the Python.") : "");

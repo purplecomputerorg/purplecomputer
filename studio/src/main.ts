@@ -97,10 +97,11 @@ const WIDTH = "studio-live-width";
 // The live Purple's width over the editor's: dragging moves the line only somewhat either way of the usual 1.3.
 const [NARROWEST, USUAL, WIDEST] = [0.8, 1.3, 2.1];
 let liveWidth = USUAL;
-const widen = (r: number) => {
+// A width kept from an earlier visit still opens with the headline; only dragging this visit folds it away.
+const widen = (r: number, dragging = true) => {
   liveWidth = Math.min(WIDEST, Math.max(NARROWEST, r));
   body.style.setProperty("--live", `${liveWidth}fr`);
-  body.classList.toggle("resized", liveWidth !== USUAL);
+  body.classList.toggle("resized", dragging && liveWidth !== USUAL);
 };
 // Stacked on a phone, the page scrolls so the divider stays where it was under the finger.
 const flip = () => {
@@ -143,7 +144,7 @@ function drag(e: PointerEvent) {
 const split = h("div", { class: "split", onpointerdown: drag, ondblclick: (e: Event) => { if (e.target === split) { widen(USUAL); keep(WIDTH, String(USUAL)); } } },
   h("button", { type: "button", class: "swap", title: "Swap sides", "aria-label": "Swap sides", onclick: () => { if (!dragged) swap(); dragged = false; } }));
 const body = h("div", { class: `body${pref(SWAPPED) === "1" ? " swapped" : ""}` }, main, split, stage);
-widen(Number(pref(WIDTH)) || USUAL);
+widen(Number(pref(WIDTH)) || USUAL, false);
 app.append(top, body);
 
 let current: View | null = null;

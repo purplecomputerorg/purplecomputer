@@ -55,6 +55,9 @@ const PAGES: Record<string, (item: string | null) => View> = { pack: downloadVie
 
 const app = document.getElementById("app")!;
 const top = h("header", { class: "topbar" });
+// It wraps to more rows on a phone, and sideways there it doesn't stick, so what scrolls under it measures from here.
+new ResizeObserver(() => document.documentElement.style.setProperty("--topbar",
+  `${getComputedStyle(top).position === "sticky" ? top.offsetHeight : 0}px`)).observe(top);
 const main = h("main", { class: "main" });
 const live = liveScreen();
 // The laptop and the live Purple inside it stay put for the whole visit (moving an iframe reloads it).

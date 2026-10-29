@@ -79,10 +79,10 @@ function attach(ws: Blockly.WorkspaceSvg, block: Blockly.BlockSvg, picked: Block
   block.moveTo(new Blockly.utils.Coordinate(below.left, below.bottom + 32));
 }
 
-// How much of the canvas's left the open drawer covers; on a phone it opens along the bottom instead.
+// How much of the canvas's left the open drawer covers.
 const drawerWidth = (ws: Blockly.WorkspaceSvg) => {
   const fly = ws.getToolbox()?.getFlyout();
-  return fly?.isVisible() && !ws.horizontalLayout ? fly.getWidth() : 0;
+  return fly?.isVisible() ? fly.getWidth() : 0;
 };
 
 // The canvas scrolls no further up or left than just above and beside the blocks; Blockly's own leaves half a
@@ -168,6 +168,8 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
   addPatterns();
   Blockly.config.snapRadius = 48;
   Blockly.config.connectingSnapRadius = 64;
+  // Blockly makes them 25px on any touch screen, a third of a phone's canvas between the two.
+  Blockly.Scrollbar.scrollbarThickness = 10;
   const div = h("div", { class: "blockly" });
   const [help, explain] = helpLine();
   // The categories are tabs above the blocks; Blockly's own toolbox stays hidden and opens the drawer for them.
@@ -184,8 +186,7 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     redo.disabled = !editor!.getRedoStack().length;
     const fly = toolbox().getFlyout()!;
     close.hidden = !fly.isVisible();
-    if (fly.isVisible()) Object.assign(close.style, editor!.horizontalLayout
-      ? { left: `${div.clientWidth - 44}px`, top: `${div.clientHeight - fly.getHeight() + 8}px` } : { left: `${fly.getWidth() - 48}px`, top: "8px" });
+    if (fly.isVisible()) Object.assign(close.style, { left: `${fly.getWidth() - 48}px`, top: "8px" });
   };
   const openDrawer = (name: string | null) => {
     toolbox().clearSelection();
@@ -207,10 +208,9 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     tool("", "More room for the blocks, or back", () => document.dispatchEvent(new Event(WIDER)), "icon wider"));
   requestAnimationFrame(() => {
     current?.dispose();
-    const phone = matchMedia("(max-width: 700px)").matches;
     const ws = editor = current = Blockly.inject(div, {
       toolbox: TOOLBOX, renderer: "zelos", media: "blockly/", sounds: false, trashcan: true, maxTrashcanContents: 0,
-      theme: purpleTheme(), horizontalLayout: phone, toolboxPosition: phone ? "end" : "start",
+      theme: purpleTheme(),
       zoom: { controls: false, wheel: false, startScale: 0.7, minScale: 0.4, maxScale: 1.2 }, move: { scrollbars: true, drag: true, wheel: true },
       grid: { spacing: 24, length: 3, colour: "#e3dcec", snap: false },
       plugins: { metricsManager: TopLeftMetrics },
@@ -261,6 +261,8 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
       onEdit(toPython(ws));
     });
   });
-  return h("div", { class: "blocks-editor", onkeydown: (e: KeyboardEvent) => e.key === "Escape" && editor && openDrawer(null) },
+  // After the click, not on press: scrolling mid-drag would pull the canvas out from under the pointer.
+  const reveal = (e: Event) => (e.currentTarget as HTMLElement).scrollIntoView({ behavior: "smooth", block: "nearest" });
+  return h("div", { class: "blocks-editor", onpointerup: reveal, onkeydown: (e: KeyboardEvent) => e.key === "Escape" && editor && openDrawer(null) },
     h("div", { class: "block-bar" }, h("div", { class: "block-tabs" }, ...tabs), tools), div, help);
 }

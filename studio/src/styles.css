@@ -205,8 +205,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .room-buttons button[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
 .card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .card-head h2 { font-size: 17px; }
-.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--fill); }
-.seg button { font: 600 13px var(--sans); padding: 6px 14px; border: none; border-radius: 999px; background: none; color: var(--dim); cursor: pointer; }
+.seg { display: inline-flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 3px; border-radius: 999px; background: var(--fill); }
+.seg button { flex: none; white-space: nowrap; font: 600 13px var(--sans); padding: 6px 14px; border: none; border-radius: 999px; background: none; color: var(--dim); cursor: pointer; }
 .seg button:hover { color: var(--purple); }
 .seg button[aria-pressed="true"] { background: #fff; color: var(--purple); box-shadow: 0 1px 4px rgba(53, 42, 74, 0.15); }
 .crop-stage { display: flex; justify-content: center; padding: 20px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
@@ -393,8 +393,10 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .rule > .linkbtn { justify-self: start; padding-left: 22px; }
 .rule input.bad, .form-row input.bad { border-color: #d77; }
 /* Rooms: the block editor and the pickers its fields open */
-.blocks-editor { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--card); }
-.blockly { position: relative; height: 560px; background: var(--bg); }
+/* The whole editor fits under the top bar, so clicking into it can bring all of it into view */
+.blocks-editor { display: flex; flex-direction: column; max-height: calc(100dvh - var(--topbar, 60px) - 16px); scroll-margin: calc(var(--topbar, 60px) + 8px) 0 8px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--card); }
+.blocks-editor > :not(.blockly) { flex: none; }
+.blockly { position: relative; flex: 1 1 560px; min-height: 200px; background: var(--bg); }
 .blockly .blocklyToolbox { display: none !important; }
 .blockly .blocklyToolboxFlyout { filter: drop-shadow(4px 0 14px rgba(53, 42, 74, 0.16)); animation: drawer-in 0.18s ease-out; }
 /* Drawn at the canvas's zoom (70% to start), so these sizes look about 15px and 12px */
@@ -409,7 +411,6 @@ body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid
   color: var(--purple); font: 400 20px/1 var(--sans); cursor: pointer; animation: drawer-in 0.18s ease-out; }
 .drawer-close:hover { background: var(--fill-hover); }
 @keyframes drawer-in { from { translate: -24px 0; opacity: 0; } }
-@keyframes sheet-in { from { translate: 0 24px; opacity: 0; } }
 /* One wrapping row: the tabs fill each line, and the tools sit at the end of the last */
 .block-bar { display: flex; flex-wrap: wrap; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--line); }
 .block-tabs { display: contents; }
@@ -432,9 +433,8 @@ body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid
 .widest .block-tools .wider::after { content: "Narrower"; }
 @media (max-width: 960px) { .block-tools .wider { display: none; } }
 @media (max-width: 700px) {
-  .blockly { height: 70vh; }
-  .blockly .blocklyToolboxFlyout { filter: drop-shadow(0 -4px 14px rgba(53, 42, 74, 0.16)); animation-name: sheet-in; }
-  .drawer-close { animation-name: sheet-in; }
+  .blockly { flex-basis: 70vh; }
+  .block-tabs button { padding: 9px 7px 7px; }
 }
 @media (prefers-reduced-motion: reduce) { .blockly .blocklyToolboxFlyout, .drawer-close { animation: none; } }
 .square-pick { display: grid; grid-template-columns: repeat(26, 11px); gap: 1px; padding: 6px; }
@@ -838,6 +838,12 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
   .voice-now > .stack > :last-child { grid-column: 1 / -1; }
   .voice-key { font-size: 26px; }
 }
+ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
+
+/* The live Purple, covered by a quiet message until it's running and while it restarts */
+.screen-wrap.live { background: #1d1234; font-family: var(--mono); }
+.live-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.live-status { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; background: #1d1234; color: #e8daf0; font-size: 15px; text-align: center; transition: opacity 0.3s; }
 .live-status i { width: 34px; height: 34px; border-radius: 99px; border: 3px solid rgba(232, 218, 240, 0.18); border-top-color: #e8daf0; animation: spin 1s linear infinite; }
 .live.failed .live-status i { display: none; }
 .live:not(.ready) .zoom-toggle { display: none; }

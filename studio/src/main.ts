@@ -97,7 +97,11 @@ const WIDTH = "studio-live-width";
 // The live Purple's width over the editor's: dragging moves the line only somewhat either way of the usual 1.3.
 const [NARROWEST, USUAL, WIDEST] = [0.8, 1.3, 2.1];
 let liveWidth = USUAL;
-const widen = (r: number) => { liveWidth = Math.min(WIDEST, Math.max(NARROWEST, r)); body.style.setProperty("--live", `${liveWidth}fr`); };
+const widen = (r: number) => {
+  liveWidth = Math.min(WIDEST, Math.max(NARROWEST, r));
+  body.style.setProperty("--live", `${liveWidth}fr`);
+  body.classList.toggle("resized", liveWidth !== USUAL);
+};
 // Stacked on a phone, the page scrolls so the divider stays where it was under the finger.
 const flip = () => {
   const was = split.getBoundingClientRect().top;

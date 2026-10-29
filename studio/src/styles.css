@@ -113,10 +113,10 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .stage-inner { width: 100%; }
 /* Only the laptop shrinks to fit a short window, so the headline keeps the column's width; below the floor the stage scrolls */
 .stage .laptop { max-width: max(340px, calc((100vh - var(--reserve)) / 0.82)); margin: 0 auto; }
-/* Once the window's height is what holds the laptop back, the headline gives up its rows so a wider stage still means a bigger laptop */
+/* Once a dragged-wider pane is held back by the window's height, the headline gives up its rows so the laptop can grow; the usual width always keeps it */
 @container stage (width > calc((100vh - 230px) / 0.82)) {
-  .stage-inner { --reserve: 160px; }
-  .stage h3 { height: 0; margin-block: 0; opacity: 0; }
+  .resized .stage-inner { --reserve: 160px; }
+  .resized .stage h3 { height: 0; margin-block: 0; opacity: 0; }
 }
 .stage .caption { font-size: 13px; color: var(--dim); margin: 14px 0 0; text-align: center; }
 .stage .caption:empty { display: none; }

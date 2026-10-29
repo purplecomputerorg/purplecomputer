@@ -3,7 +3,7 @@
 import type * as Ort from "onnxruntime-web";
 import { cached, espeak, onnx, sentences } from "./live/espeak";
 
-export interface Kokoro { model: string; voice: string; speed: number; rate: number; vocab: Record<string, number> }
+export interface Kokoro { model: string; voice: string; tempo: number; rate: number; vocab: Record<string, number> }
 // The model's longest input, its start and end pads aside.
 const MAX_TOKENS = 510;
 const STYLE = 256;
@@ -42,7 +42,7 @@ async function speak(voice: Voice, text: string): Promise<Float32Array> {
     const { audio } = await voice.session.run({
       tokens: new ort.Tensor("int64", BigInt64Array.from(tokens, BigInt), [1, tokens.length]),
       style: new ort.Tensor("float32", voice.styles.slice(ids.length * STYLE, (ids.length + 1) * STYLE), [1, STYLE]),
-      speed: new ort.Tensor("float32", [voice.spec.speed], [1]),
+      speed: new ort.Tensor("float32", [1], [1]),
     });
     parts.push(audio.data as Float32Array);
   }

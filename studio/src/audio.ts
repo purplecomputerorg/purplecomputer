@@ -23,6 +23,28 @@ export async function renderClip(source: AudioBuffer, rate: number, playbackRate
   return { samples: out.getChannelData(0).slice(), rate };
 }
 
+// Slower at the same pitch, by WSOLA: each 40 ms frame is taken from near its place in the input, nudged
+// up to 10 ms to where it best continues the frame before, and the frames overlap by half.
+export function stretch({ samples, rate }: Clip, tempo: number): Clip {
+  const n = Math.round(rate * 0.02) * 2, hop = n / 2, tol = Math.round(rate * 0.01);
+  const window = Float32Array.from({ length: n }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n));
+  const at = (i: number) => samples[i] ?? 0;
+  const length = Math.round(samples.length / tempo);
+  const out = new Float32Array(length + n);
+  for (let k = 0, prev = 0; k * hop < length; k++) {
+    const nominal = Math.round(k * hop * tempo);
+    let best = nominal;
+    for (let d = -tol, score = -Infinity; k > 0 && d <= tol; d++) {
+      let s = 0;
+      for (let i = 0; i < n; i += 2) s += at(prev + hop + i) * at(nominal + d + i);
+      if (s > score) [score, best] = [s, nominal + d];
+    }
+    for (let i = 0; i < n; i++) out[k * hop + i] += at(best + i) * window[i];
+    prev = best;
+  }
+  return { samples: out.slice(0, length), rate };
+}
+
 export function clipToBuffer({ samples, rate }: Clip): AudioBuffer {
   const buffer = new AudioBuffer({ length: samples.length, sampleRate: rate, numberOfChannels: 1 });
   buffer.getChannelData(0).set(samples);

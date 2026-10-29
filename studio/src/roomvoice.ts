@@ -5,7 +5,7 @@ import { type PackRoomLine } from "@sdk/pack";
 import { voiceClipFilename } from "@sdk/purple/sounds";
 import { asSaid, fits, fixedSays } from "@sdk/says";
 import { decodeWav } from "@sdk/wav";
-import { decodeToClip, encodeWav, normalize, tidy, type Clip } from "./audio";
+import { decodeToClip, encodeWav, normalize, stretch, tidy, type Clip } from "./audio";
 import { loudLines } from "./knobs";
 import type { Kokoro } from "./roomvoice.worker";
 import { speakable } from "./speakable";
@@ -13,7 +13,7 @@ import { draft, phraseFor, type RoomDraft } from "./state";
 
 const CACHE = "purple-room-voice-1";
 const base = () => document.baseURI;
-let settings: Promise<Pick<Kokoro, "model" | "voice" | "speed" | "rate"> | null> | null = null;
+let settings: Promise<Pick<Kokoro, "model" | "voice" | "tempo" | "rate"> | null> | null = null;
 let worker: Promise<Worker | null> | null = null;
 let loaded = false;
 let queue: Promise<unknown> = Promise.resolve();
@@ -63,13 +63,13 @@ async function render(text: string): Promise<Clip | null> {
   const s = await spec();
   if (!s || !(text = await speakable(text))) return null;
   const cache = await caches.open(CACHE);
-  const key = new URL(`room-voice/${encodeURIComponent(`${s.model}|${s.voice}|${s.speed}`)}/${encodeURIComponent(text)}`, base()).href;
+  const key = new URL(`room-voice/${encodeURIComponent(`${s.model}|${s.voice}|${s.tempo}`)}/${encodeURIComponent(text)}`, base()).href;
   const hit = await cache.match(key);
   if (hit) return decodeWav(new Uint8Array(await hit.arrayBuffer()));
   const samples = await speak(text);
   if (!samples) return null;
   // Purple's clip rate, trimmed and leveled like a recorded phrase.
-  const clip = normalize(tidy(await decodeToClip(new Blob([encodeWav({ samples, rate: s.rate }) as BlobPart]))));
+  const clip = normalize(tidy(await decodeToClip(new Blob([encodeWav(stretch({ samples, rate: s.rate }, s.tempo)) as BlobPart]))));
   await cache.put(key, new Response(encodeWav(clip) as BlobPart));
   return clip;
 }

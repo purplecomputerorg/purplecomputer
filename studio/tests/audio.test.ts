@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeWav, tidy } from "../src/audio";
+import { encodeWav, stretch, tidy } from "../src/audio";
 import { CLIP_SAMPLE_RATE } from "../sdk/src/purple/sounds";
 import { decodeWav } from "../sdk/src/wav";
 
@@ -39,5 +39,16 @@ describe("tidy", () => {
 
   it("returns an empty clip for silence", () => {
     expect(tidy({ samples: new Float32Array(1000), rate: CLIP_SAMPLE_RATE }).samples.length).toBe(0);
+  });
+});
+
+describe("stretch", () => {
+  it("makes a clip longer at the same pitch", () => {
+    const rate = 24000;
+    const out = stretch({ samples: sine(440, 1, rate), rate }, 0.75).samples;
+    expect(out.length).toBe(Math.round(rate / 0.75));
+    const middle = out.subarray(rate * 0.1, rate * 1.2);
+    const crossings = middle.filter((s, i) => i > 0 && Math.sign(s) !== Math.sign(middle[i - 1])).length;
+    expect(crossings / (middle.length / rate) / 2).toBeCloseTo(440, -1);
   });
 });

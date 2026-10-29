@@ -85,10 +85,16 @@ const drawerWidth = (ws: Blockly.WorkspaceSvg) => {
   return fly?.isVisible() && !ws.horizontalLayout ? fly.getWidth() : 0;
 };
 
-// The blocks start at the canvas's top left, or just right of the open drawer, so they never hide under it.
-function home(ws: Blockly.WorkspaceSvg, top = false) {
+// The blocks start at the canvas's top left. The drawer opens over them rather than pushing them aside.
+function home(ws: Blockly.WorkspaceSvg) {
   const box = ws.getBlocksBoundingBox();
-  ws.scroll(drawerWidth(ws) + 24 - box.left * ws.scale, top ? 24 - box.top * ws.scale : ws.scrollY);
+  ws.scroll(24 - box.left * ws.scale, 24 - box.top * ws.scale);
+}
+
+// A block just added from the drawer scrolls out from under it, if it landed there.
+function uncover(ws: Blockly.WorkspaceSvg, block: Blockly.BlockSvg) {
+  const under = drawerWidth(ws) + 24 - (block.getBoundingRectangle().left * ws.scale + ws.scrollX);
+  if (under > 0) ws.scroll(ws.scrollX + under, ws.scrollY);
 }
 
 // A faint white pattern on some kinds of block, so they tell apart by more than color: squares on grid blocks,
@@ -173,24 +179,16 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     if (fly.isVisible()) Object.assign(close.style, editor!.horizontalLayout
       ? { left: `${div.clientWidth - 44}px`, top: `${div.clientHeight - fly.getHeight() + 8}px` } : { left: `${fly.getWidth() - 48}px`, top: "8px" });
   };
-  // The drawer's width the blocks were last moved for: they move again when it opens or closes, but not mid-drag.
-  let homedFor = 0;
-  const settle = () => {
-    if (editor!.isDragging() || drawerWidth(editor!) === homedFor) return;
-    homedFor = drawerWidth(editor!);
-    home(editor!);
-  };
   const openDrawer = (name: string | null) => {
     toolbox().clearSelection();
     const item = toolbox().getToolboxItems().find((i) => (i as Blockly.ToolboxCategory).getName?.() === name);
     if (item) toolbox().setSelectedItem(item as Blockly.ISelectableToolboxItem);
-    settle();
     sync();
   };
   const tool = (label: string, title: string, go: (ws: Blockly.WorkspaceSvg) => void, cls = "") =>
     h("button", { type: "button", class: cls, title, "aria-label": title, onclick: () => editor && go(editor) }, label);
   // These move the blocks, which then go back to the top left.
-  const settled = (go: (ws: Blockly.WorkspaceSvg) => void) => (ws: Blockly.WorkspaceSvg) => { go(ws); home(ws, true); };
+  const settled = (go: (ws: Blockly.WorkspaceSvg) => void) => (ws: Blockly.WorkspaceSvg) => { go(ws); home(ws); };
   // Deleted blocks come back with Undo, rather than from a look inside the trash.
   const undo = tool("", "Undo", (ws) => ws.undo(false), "icon undo");
   const redo = tool("", "Redo", (ws) => ws.undo(true), "icon redo");
@@ -214,17 +212,23 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     if (!("x" in ((made.workspace as { blocks?: { blocks?: object[] } }).blocks?.blocks?.[0] ?? { x: 0 }))) ws.cleanUp();
     Blockly.Events.enable();
     div.append(close);
-    // Blockly sizes itself to the window, not its box, so a wider editor pane needs telling.
-    new ResizeObserver(() => Blockly.svgResize(ws)).observe(div);
-    void Blockly.renderManagement.finishQueuedRenders().then(() => home(ws, true));
-    // The drawer stays open while blocks are added from it; a click on the canvas, Esc, or its close button closes it.
-    toolbox().getFlyout()!.autoClose = false;
+    // Blockly sizes itself to the window, not its box, so a wider editor pane needs telling. The box settles its size
+    // after the blocks are first placed (the tabs wrap, the page lays out), so they go back to the top left each time.
+    new ResizeObserver(() => {
+      Blockly.svgResize(ws);
+      home(ws);
+    }).observe(div);
+    void Blockly.renderManagement.finishQueuedRenders().then(() => home(ws));
+    // A click in the drawer adds a block, and then Blockly closes the drawer; it stays open instead, so blocks can be
+    // added one after another. (autoClose off would keep it open, but Blockly then keeps the drawer's width free on the canvas.)
+    let inDrawer = false;
+    div.addEventListener("pointerdown", (e) => { inDrawer = !!(e.target as Element).closest(".blocklyToolboxFlyout"); }, true);
+    const tb = toolbox(), autoHide = tb.autoHide.bind(tb);
+    tb.autoHide = (onlyPopups) => { if (!inDrawer) autoHide(onlyPopups); };
     let picked: Blockly.BlockSvg | null = ws.getTopBlocks(true)[0] ?? null;
     if (picked) Blockly.common.setSelected(picked);
     ws.addChangeListener((e: Blockly.Events.Abstract) => {
       sync();
-      settle();
-      if (e.type === Blockly.Events.CLICK && (e as Blockly.Events.Click).targetType === "workspace") openDrawer(null);
       if (e.type === Blockly.Events.SELECTED) {
         const block = ws.getBlockById((e as Blockly.Events.Selected).newElementId ?? "");
         picked = block ?? picked;
@@ -240,7 +244,7 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
           ws.cleanUp();
           Blockly.common.setSelected(block);
           ws.scrollBoundsIntoView(block.getBoundingRectangle(), 40);
-          home(ws);
+          uncover(ws, block);
         });
       }
       if (e.isUiEvent || ws.isDragging()) return;

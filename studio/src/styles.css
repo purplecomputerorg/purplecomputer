@@ -515,7 +515,7 @@ label.your-card { cursor: pointer; }
 .guide td:first-child { width: 38%; }
 .guide h2 { margin: 8px 0 12px; }
 
-/* Python console */
+/* Room Python */
 textarea { resize: vertical; line-height: 1.5; }
 /* A wrapped line of Python would lose its indent, so a long one scrolls instead. */
 textarea.code { white-space: pre; overflow-x: auto; overflow-wrap: normal; font-family: var(--mono); font-size: 13px; background: #2a1845; color: #e8daf0; border-color: #2a1845; border-radius: 14px; }

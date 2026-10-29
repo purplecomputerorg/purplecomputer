@@ -9,7 +9,7 @@ import { voiceClipFilename } from "@sdk/purple/sounds";
 import type { BaseName, Params } from "@sdk/purple/synth";
 import { asSaid } from "@sdk/says";
 
-// Set false to hide the Rooms page, Room guide, and pack.room. Mutable so tests can flip it.
+// Set false to hide the Rooms page and Room guide. Mutable so tests can flip it.
 export const features = { rooms: true };
 
 // A sample is one of Studio's examples, being tried: Studio's Purple plays it, the download leaves it out.

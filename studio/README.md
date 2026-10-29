@@ -50,7 +50,7 @@ Or from `studio/`: `npm install`, `npm run dev`, `npm test`, `npm run build` (st
 
 The dev server uses a self-signed certificate, so your browser warns once; accept it to continue. It has to be https: the live Purple needs a cross-origin isolated page, which browsers only allow in a secure context. Recording from the microphone needs it too.
 
-**Rooms are switched off for now:** `features.rooms = false` in `src/state.ts` hides the Rooms page, the Room guide, and `pack.room`. Set it to `true` to turn them back on.
+**Rooms are switched off for now:** `features.rooms = false` in `src/state.ts` hides the Rooms page and the Room guide. Set it to `true` to turn them back on.
 
 ## Hosting
 

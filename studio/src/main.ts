@@ -1,7 +1,7 @@
 import "./fonts";
 import "./styles.css";
 import logo from "../../assets/logo.svg";
-import { features, hasWork, onChange, pieces, replaceDraft } from "./state";
+import { changed, draft, features, hasWork, onChange, pieces, replaceDraft } from "./state";
 import { recall, remember } from "./saved";
 import { loadShelf, shelveDraft } from "./shelf";
 import { clearEverythingButton, clearSectionButton } from "./ui/packfile";
@@ -13,9 +13,7 @@ import { instrumentsView } from "./ui/instrument";
 import { picturesView } from "./ui/pictures";
 import { licensesView } from "./ui/licenses";
 import { privacyView, staysHere } from "./ui/privacy";
-import { pythonView } from "./ui/python";
 import { EXAMPLES } from "./examples";
-import { addRoom } from "./pybridge";
 import { guideView } from "./ui/guide";
 import { homeView, rainbow, type HomeSection } from "./ui/home";
 import { purpleEmoji } from "./ui/icons";
@@ -43,13 +41,12 @@ const SECTIONS: Section[] = [
   { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "Like a world for them to walk around", voice: true, view: roomsView },
 ].filter((s) => features.rooms || s.id !== "rooms");
 // Old links to pages that moved.
-const MOVED: Record<string, string> = { voice: "keys", "voice/phrases": "words", "words/phrases": "words" };
+const MOVED: Record<string, string> = { voice: "keys", "voice/phrases": "words", "words/phrases": "words", python: "rooms" };
 
 type Page = [id: string, label: string, view: (item: string | null) => View];
 const MORE = ([
   ["install", "Putting it on Purple", installView],
   ["guide", "Room guide", guideView],
-  ["python", "Python console", pythonView],
   ["format", "What is in a Purple Pack", formatView],
   ["privacy", "Your privacy", privacyView],
   ["licenses", "Open source licenses", licensesView],
@@ -210,7 +207,10 @@ function route() {
 }
 
 // ?sample seeds a room so a screenshot or a demo lands on a filled editor.
-if (features.rooms && new URLSearchParams(location.search).has("sample")) addRoom(EXAMPLES[0].name, EXAMPLES[0].source);
+if (features.rooms && new URLSearchParams(location.search).has("sample")) {
+  draft.rooms = [...draft.rooms, { name: EXAMPLES[0].name, source: EXAMPLES[0].source, made: null, kept: false }];
+  changed();
+}
 
 onChange(() => { renderTop(); renderClear(); renderPhoneBar(); live.changed(); remember(); });
 window.addEventListener("hashchange", route);

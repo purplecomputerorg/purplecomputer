@@ -572,7 +572,9 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .home .serif { font-size: clamp(22px, 6cqi, 24px); line-height: 1.35; margin: 16px 0 20px; max-width: 30em; text-wrap: pretty; }
 .home-note { max-width: 40em; padding: 10px 14px; border-radius: 10px; background: linear-gradient(90deg, color-mix(in srgb, var(--fill) 45%, transparent), transparent 75%); color: var(--dim); font-size: 13.5px; line-height: 1.55; text-wrap: pretty; }
 .home-note b { color: var(--text); font-weight: 600; }
-.home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 26px 16px; margin: 30px 0 36px; }
+/* Six cards: only 3 or 2 across, so the rows stay even */
+.home-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 16px; margin: 30px 0 36px; }
+@container (min-width: 500px) { .home-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .home-card { --tilt: -1deg; position: relative; container-type: inline-size; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 14px; background: var(--card); border-radius: 6px; box-shadow: 0 2px 0 #ece5f3, 0 10px 22px rgba(92, 45, 145, 0.09); color: inherit; text-decoration: none; transform: rotate(var(--tilt)); transition: transform 0.15s, box-shadow 0.15s; }
 .home-card:nth-child(3n + 2) { --tilt: 1deg; }
 .home-card:nth-child(3n) { --tilt: -0.5deg; }

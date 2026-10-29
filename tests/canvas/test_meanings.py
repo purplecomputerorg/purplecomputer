@@ -36,12 +36,13 @@ def test_meanings_load_trimmed_capped_and_found_by_plural(meanings):
 
 
 @pytest.mark.parametrize("text", ["who is grandma", "what's grandma?", "whats a grandma", "what grandma",
-                                  "Who is the Grandma??", "what are grandmas"])
+                                  "Who is the Grandma??", "what are grandmas",
+                                  "who grandma", "grandma?", "Grandma ??"])
 def test_every_way_of_asking_finds_the_meaning(meanings, text):
     assert asked_meaning(text) == ("👵", GRANDMA)
 
 
-@pytest.mark.parametrize("text", ["grandma", "who is cat", "what is 2 + 3", "who is grandma now"])
+@pytest.mark.parametrize("text", ["grandma", "who is cat", "what is 2 + 3", "who is grandma now", "cat?", "grandma now?"])
 def test_anything_else_is_not_a_question(meanings, text):
     assert asked_meaning(text) is None
 

@@ -42,7 +42,7 @@ SPEECH_ICONS = {"generating": "··", "playing": ICON_VOLUME_HIGH, "filtered": I
 ABACUS_MARK = "\x1e"
 ABACUS_RE = re.compile(r"\x1e(\d+) (.*?)\x1e")
 ABACUS_SLOTS = 12  # 9 beads plus the gap they slide across
-QUESTION = re.compile(r"(?:what|who)(?:'?s|\s+(?:is|are))?\s+(?:(?:a|an|the)\s+)?([a-z][a-z'-]*)\s*\?*", re.I)
+QUESTION = re.compile(r"(?:what|who)(?:'?s|\s+(?:is|are))?\s+(?:(?:a|an|the)\s+)?([a-z][a-z'-]*)\s*\?*|([a-z][a-z'-]*)\s*\?+", re.I)
 
 
 class PlayEvaluator(SimpleEvaluator):
@@ -210,9 +210,9 @@ def asked_meaning(text: str) -> tuple | None:
     """(picture, meaning) when the line asks what or who a word the family explained is."""
     if not (m := QUESTION.fullmatch(text.strip())):
         return None
-    content = get_content()
-    meaning = content.meaning(m.group(1))
-    return (content.exact_emoji(m.group(1)) or "", meaning) if meaning else None
+    content, word = get_content(), m[1] or m[2]
+    meaning = content.meaning(word)
+    return (content.exact_emoji(word) or "", meaning) if meaning else None
 
 
 def scroll_thumb(track, viewport: int, total: int, hidden: int, min_h: int) -> pygame.Rect:

@@ -142,7 +142,7 @@ function wordTable(): HTMLElement {
       e.preventDefault();
       focusNew();
     });
-    return field("Meaning", input, `what is ${entry.word}`, `who is ${entry.word}`);
+    return field("Meaning", input, `${entry.word}?`, `who ${entry.word}`, `what is ${entry.word}`);
   }
 
   // A word's recording is the phrase of the word itself: Purple plays it whenever it says the word.
@@ -178,7 +178,8 @@ export function wordsView(): View {
       h("p", {}, "Each word can also have a meaning, and a sound in your voice or Purple's."),
       h("h3", {}, "What can a word do?"),
       examples(),
-      h("p", { class: "dim small" }, "Purple talks when your kid ends with ", h("kbd", {}, "!"), " or starts with ", h("kbd", {}, "say"), ": ", h("kbd", {}, "nana!"), " and ", h("kbd", {}, "say nana"), " both work. Plain ", h("kbd", {}, "nana"), " just shows the picture."),
+      h("p", { class: "dim small" }, "Plain ", h("kbd", {}, "nana"), " shows the picture. To get the meaning, ask a question: ", h("kbd", {}, "nana?"), ", ", h("kbd", {}, "who nana"), " and ", h("kbd", {}, "who is nana"), " all work, and so does ", h("kbd", {}, "what"), "."),
+      h("p", { class: "dim small" }, "Purple talks when your kid ends with ", h("kbd", {}, "!"), " or starts with ", h("kbd", {}, "say"), ". ", h("kbd", {}, "nana!"), " and ", h("kbd", {}, "say nana"), " say the word, or play its sound. ", h("kbd", {}, "nana?!"), " and ", h("kbd", {}, "say who is nana"), " say the meaning."),
       table,
       h("p", { class: "dim small" }, "Purple already knows hundreds of words, like cat and dog. Your words come first when Purple suggests what to type."),
       voiceStays(),

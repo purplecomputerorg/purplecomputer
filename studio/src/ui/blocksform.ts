@@ -1,7 +1,7 @@
 // The block editor: Blockly with Purple's blocks, and the pickers its fields open. Loaded only when a room
 // made of blocks opens, so the rest of Studio never waits for Blockly.
 import * as Blockly from "blockly";
-import { CATEGORIES, COLORS, colorLooks, defineBlocks, PIC, pickers, toPython, TOOLBOX, type PickerField } from "../blocks";
+import { BLOCK_COLORS, CATEGORIES, COLORS, colorLooks, defineBlocks, PIC, pickers, toPython, TOOLBOX, type PickerField } from "../blocks";
 import { ask, askText, h, tell } from "./dom";
 import { isEmoji, openEmojiPicker } from "./emojipicker";
 import { sticker } from "./stickers";
@@ -52,7 +52,7 @@ function setUpPickers() {
     const names = field.getSourceBlock()!.workspace.getTopBlocks(false).filter((t) => t.type === "purple_setting").map((t) => t.getFieldValue("NAME") as string);
     dropDown(field, h("div", { class: "setting-pick" }, ...(names.length
       ? names.map((n) => h("button", { type: "button", onclick: choose(field, n) }, n))
-      : [h("p", { class: "dim small" }, "Make a setting first: it's in Settings.")])));
+      : [h("p", { class: "dim small" }, "Make a knob first: it's in Knobs.")])));
   };
   // Studio's own emoji picker, which offers the family's pictures too, opened where the field is.
   pickers.emoji = (field) => {
@@ -97,6 +97,36 @@ function home(ws: Blockly.WorkspaceSvg, top = false) {
   ws.scroll(drawerWidth(ws) + 24 - box.left * ws.scale, top ? 24 - box.top * ws.scale : ws.scrollY);
 }
 
+// A faint white pattern on some kinds of block, so they tell apart by more than color: squares on grid blocks,
+// dots on keys, stripes on scores. Matched by the fill Blockly gives each block, so it reaches flyouts and pictures too.
+const PATTERNS: Partial<Record<keyof typeof BLOCK_COLORS, string>> = {
+  grid: '<path d="M12 0V12H0" fill="none" stroke="#fff" stroke-opacity=".12"/>',
+  key: '<circle cx="6" cy="6" r="1.4" fill="#fff" fill-opacity=".16"/>',
+  score: '<path d="M-3 3 3-3M0 12 12 0M9 15 15 9" stroke="#fff" stroke-opacity=".12" stroke-width="2.5"/>',
+};
+function addPatterns() {
+  if (document.getElementById("block-patterns")) return;
+  const kinds = Object.entries(PATTERNS) as [keyof typeof BLOCK_COLORS, string][];
+  const box = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  box.id = "block-patterns";
+  box.setAttribute("style", "position:absolute;width:0;height:0");
+  box.innerHTML = `<defs>${kinds.map(([k, art]) => `<pattern id="pattern-${k}" width="12" height="12" patternUnits="userSpaceOnUse">` +
+    `<rect width="12" height="12" fill="${BLOCK_COLORS[k]}"/>${art}</pattern>`).join("")}</defs>` +
+    `<style>${kinds.map(([k]) => `:not(.blocklyDisabledPattern) > .blocklyPath[fill="${BLOCK_COLORS[k]}"] { fill: url(#pattern-${k}); }`).join("")}</style>`;
+  document.body.append(box);
+}
+
+// Under the blocks: what the picked one does, and where the Room guide says more.
+const HINT = "Open a drawer above, then click a block to add it or drag it out. Click a block here to see what it does.";
+function helpLine(): [HTMLElement, (block: Blockly.Block | null) => void] {
+  const line = h("p", { class: "block-help" }, HINT);
+  return [line, (block) => {
+    const about = block && Blockly.Tooltip.getTooltipOfObject(block);
+    const url = block && (typeof block.helpUrl === "function" ? block.helpUrl() : block.helpUrl);
+    line.replaceChildren(...(about ? [about, url ? h("a", { href: url, target: "_blank" }, "More in the Room guide") : ""] : [HINT]));
+  }];
+}
+
 let current: Blockly.WorkspaceSvg | null = null;
 let shown: Blockly.WorkspaceSvg | null = null;
 
@@ -105,6 +135,7 @@ const purpleTheme = () => Blockly.registry.getObject(Blockly.registry.Type.THEME
 // Blocks to look at, not change: as tall as their box, cut off on the right like the Python beside them.
 export function blocksPicture(workspace: object): HTMLElement {
   defineBlocks();
+  addPatterns();
   const div = h("div", {});
   requestAnimationFrame(() => {
     shown?.dispose();
@@ -126,9 +157,11 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
   defineBlocks();
   setUpPickers();
   setUpDialogs();
+  addPatterns();
   Blockly.config.snapRadius = 48;
   Blockly.config.connectingSnapRadius = 64;
   const div = h("div", { class: "blockly" });
+  const [help, explain] = helpLine();
   // The categories are tabs above the blocks; Blockly's own toolbox stays hidden and opens the drawer for them.
   let editor: Blockly.WorkspaceSvg | null = null;
   const toolbox = () => editor!.getToolbox() as Blockly.Toolbox;
@@ -198,7 +231,11 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
       sync();
       settle();
       if (e.type === Blockly.Events.CLICK && (e as Blockly.Events.Click).targetType === "workspace") openDrawer(null);
-      if (e.type === Blockly.Events.SELECTED) picked = ws.getBlockById((e as Blockly.Events.Selected).newElementId ?? "") ?? picked;
+      if (e.type === Blockly.Events.SELECTED) {
+        const block = ws.getBlockById((e as Blockly.Events.Selected).newElementId ?? "");
+        picked = block ?? picked;
+        explain(block);
+      }
       // A block made by a click in the palette, not a drag out of it.
       if (e.type === Blockly.Events.BLOCK_CREATE) {
         setTimeout(() => {
@@ -218,5 +255,5 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     });
   });
   return h("div", { class: "blocks-editor", onkeydown: (e: KeyboardEvent) => e.key === "Escape" && editor && openDrawer(null) },
-    h("div", { class: "block-bar" }, h("div", { class: "block-tabs" }, ...tabs), tools), div);
+    h("div", { class: "block-bar" }, h("div", { class: "block-tabs" }, ...tabs), tools), div, help);
 }

@@ -396,6 +396,11 @@ input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 
 .blockly .blocklyToolboxFlyout { filter: drop-shadow(4px 0 14px rgba(53, 42, 74, 0.16)); animation: drawer-in 0.18s ease-out; }
 .blockly .drawer-title .blocklyFlyoutLabelText { font-size: 16px; font-weight: 700; fill: var(--text); }
 .blockly .drawer-hint .blocklyFlyoutLabelText { font-size: 12px; }
+.blockly .drawer-group .blocklyFlyoutLabelText { font-size: 12px; font-weight: 700; fill: var(--dim); }
+.block-help { margin: 0; padding: 9px 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+.block-help a { margin-left: 6px; white-space: nowrap; }
+body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+  color: var(--text); font: 13px/1.4 var(--sans); box-shadow: var(--shadow); }
 .drawer-close { position: absolute; z-index: 80; width: 30px; height: 30px; padding: 0; border: none; border-radius: 50%; background: var(--fill);
   color: var(--purple); font: 400 20px/1 var(--sans); cursor: pointer; animation: drawer-in 0.18s ease-out; }
 .drawer-close:hover { background: var(--fill-hover); }

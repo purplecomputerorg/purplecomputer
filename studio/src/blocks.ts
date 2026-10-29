@@ -72,10 +72,10 @@ const size = menu("SIZE", ["1", "2", "3", "4", "6", "8"].map((n) => [n, n]));
 const DO: Arg[] = [{ type: "input_dummy" }, { type: "input_statement", name: "DO" }];
 const THING = ["Thing", "Color", "String", "Number"];
 const message = (text: string, args: Arg[]) => ({ message0: text, args0: args, inputsInline: true });
-const statement = (type: string, text: string, args: Arg[], style: string, tooltip = "") =>
-  ({ type, ...message(text, args), previousStatement: null, nextStatement: null, style, tooltip });
-const hat = (type: string, text: string, args: Arg[], tooltip = "") =>
-  ({ type, ...message(`${text} %${args.length + 1} %${args.length + 2}`, [...args, ...DO]), style: "event_blocks", tooltip, inputsInline: false });
+const statement = (type: string, text: string, args: Arg[], style: string) =>
+  ({ type, ...message(text, args), previousStatement: null, nextStatement: null, style });
+const hat = (type: string, text: string, args: Arg[]) =>
+  ({ type, ...message(`${text} %${args.length + 1} %${args.length + 2}`, [...args, ...DO]), style: "event_blocks", inputsInline: false });
 const value = (type: string, text: string, args: Arg[], output: string | string[] | null, style: string, extensions?: string[]) =>
   ({ type, ...message(text, args), output, style, ...(extensions ? { extensions } : {}) });
 const wrap = (type: string, text: string, args: Arg[], style: string) =>
@@ -86,81 +86,152 @@ const drums = (): [string, string][] => [...DRUMS.map((d): [string, string] => [
   ...draft.roomFiles.filter((f) => f.kind === "sounds").map((f): [string, string] => [`🎤 ${f.name}`, f.name])];
 
 const BLOCKS = [
-  hat("purple_on_start", "when the room opens", [], "Runs once, when your kid comes in."),
+  hat("purple_on_start", "when the room opens", []),
   hat("purple_on_key", "when %1 is pressed", [menu("WHICH", [["any key", "any"], ["an arrow", "arrow"], ["a keyboard key", "keyboard"], ["a number key", "number"], ["a key that isn't an arrow", "not_arrow"], ["Space", "space"], ["Enter", "enter"]])]),
   hat("purple_on_this_key", "when key %1 is pressed", [pick("KEY", "key", "q")]),
-  hat("purple_every", "every %1 seconds", [input("SECONDS", "Number")], "Over and over, at least a tenth of a second apart."),
-  hat("purple_on_meet", "when the player meets %1", [input("THING", THING)], "When the player walks onto it, or it moves onto the player. It goes away."),
+  hat("purple_every", "every %1 seconds", [input("SECONDS", "Number")]),
+  wrap("purple_after", "after %1 seconds", [input("SECONDS", "Number")], "event_blocks"),
+  hat("purple_on_meet", "when the player meets %1", [input("THING", THING)]),
 
-  statement("purple_player_put", "put the player %1 at %2", [input("THING", THING), input("SQUARE", "Square")], "player_blocks"),
-  { ...statement("purple_player_move", "move the player %1", [menu("WAY", [["the arrow's way", "key"], ...WAYS.map((w): [string, string] => [w, w])])], "player_blocks",
-    "A square that way, unless a wall is there. Off one edge comes back on the other."), extensions: ["key_only"] },
-  statement("purple_wall", "%1 is a wall", [input("THING", THING)], "player_blocks", "The player can't walk through it."),
-  value("purple_player_square", "the player's square", [], "Square", "player_blocks"),
+  statement("purple_show", "show %1 big", [input("TEXT")], "screen_blocks"),
+  statement("purple_write", "write %1 under the middle", [input("TEXT")], "screen_blocks"),
+  statement("purple_status", "write %1 along the top", [input("TEXT")], "screen_blocks"),
+  statement("purple_background", "make the background %1", [input("COLOR", "Color")], "screen_blocks"),
+  statement("purple_clear", "clear the screen", [], "screen_blocks"),
+
+  statement("purple_say", "say %1", [input("TEXT")], "sound_blocks"),
+  statement("purple_play", "play %1 on %2", [input("NOTE", "Note"), menu("INSTRUMENT", instruments)], "sound_blocks"),
+  statement("purple_drum", "hit the %1", [menu("DRUM", drums)], "sound_blocks"),
+  value("purple_note", "note %1", [menu("NOTE", NOTES.map((n) => [n, n]))], "Note", "sound_blocks"),
 
   statement("purple_put", "put %1 at %2 size %3", [input("THING", THING), input("SQUARE", "Square"), size], "grid_blocks"),
-  statement("purple_floor", "paint the floor %1 at %2 size %3", [input("COLOR", "Color"), input("SQUARE", "Square"), size], "grid_blocks", "The floor stays under whatever is on the square."),
   statement("purple_erase", "erase %1", [input("SQUARE", "Square")], "grid_blocks"),
-  statement("purple_move_all", "move every %1 one square %2", [input("THING", THING), menu("WAY", WAYS.map((w) => [w, w]))], "grid_blocks",
-    "Off the edge, it's gone. Onto the player, they meet."),
+  statement("purple_floor", "paint the floor %1 at %2 size %3", [input("COLOR", "Color"), input("SQUARE", "Square"), size], "grid_blocks"),
   value("purple_square", "square %1", [pick("SQUARE", "square", "13,6")], "Square", "grid_blocks"),
   value("purple_random_square", "a random square %1", [menu("WHERE", [["that's empty", "empty"], ["along the top", "top"], ["along the bottom", "bottom"], ["along the left", "left"], ["along the right", "right"]])], "Square", "grid_blocks"),
   value("purple_what_at", "what's at %1", [input("SQUARE", "Square")], "Thing", "grid_blocks"),
   value("purple_is_empty", "%1 is empty", [input("SQUARE", "Square")], "Boolean", "grid_blocks"),
-  statement("purple_ring_put", "put the ring at %1", [input("SQUARE", "Square")], "grid_blocks", "A ring around one square, to show what's picked."),
-  { ...statement("purple_ring_move", "move the ring %1", [menu("WAY", [["the arrow's way", "key"], ...WAYS.map((w): [string, string] => [w, w])])], "grid_blocks",
-    "A square that way. Off one edge comes back on the other."), extensions: ["key_only"] },
+  statement("purple_move_all", "move every %1 one square %2", [input("THING", THING), menu("WAY", WAYS.map((w) => [w, w]))], "grid_blocks"),
+  statement("purple_ring_put", "put the ring at %1", [input("SQUARE", "Square")], "grid_blocks"),
+  { ...statement("purple_ring_move", "move the ring %1", [menu("WAY", [["the arrow's way", "key"], ...WAYS.map((w): [string, string] => [w, w])])], "grid_blocks"),
+    extensions: ["key_only"] },
   value("purple_ring_square", "the ring's square", [], "Square", "grid_blocks"),
 
   value("purple_key_pressed", "the key pressed", [], "Key", "key_blocks", ["key_only"]),
-  value("purple_key", "key %1", [pick("KEY", "key", "q")], "Key", "key_blocks"),
-  wrap("purple_each_key", "for every key on the keyboard", [], "key_blocks"),
-  value("purple_that_key", "that key", [], "Key", "key_blocks"),
-  value("purple_key_spot", "where %1 is", [input("KEY", "Key")], "Square", "key_blocks"),
-  value("purple_key_letter", "%1 as a letter", [input("KEY", "Key")], "String", "key_blocks"),
+  value("purple_key_letter", "%1's letter", [input("KEY", "Key")], "String", "key_blocks"),
   value("purple_key_color", "%1's sticker color", [input("KEY", "Key")], "Color", "key_blocks"),
-  value("purple_key_note", "%1's note", [input("KEY", "Key")], "Note", "key_blocks", ),
+  value("purple_key_note", "%1's note", [input("KEY", "Key")], "Note", "key_blocks"),
+  value("purple_key_spot", "%1's square", [input("KEY", "Key")], "Square", "key_blocks"),
+  value("purple_key", "key %1", [pick("KEY", "key", "q")], "Key", "key_blocks"),
+  wrap("purple_each_key", "for each key on the keyboard", [], "key_blocks"),
+  value("purple_that_key", "that key", [], "Key", "key_blocks"),
+
+  statement("purple_player_put", "put the player %1 at %2", [input("THING", THING), input("SQUARE", "Square")], "player_blocks"),
+  { ...statement("purple_player_move", "move the player %1", [menu("WAY", [["the arrow's way", "key"], ...WAYS.map((w): [string, string] => [w, w])])], "player_blocks"),
+    extensions: ["key_only"] },
+  statement("purple_wall", "%1 is a wall", [input("THING", THING)], "player_blocks"),
+  value("purple_player_square", "the player's square", [], "Square", "player_blocks"),
 
   value("purple_thing", "%1", [pick("THING", "emoji", "⭐")], ["Thing", "Literal"], "thing_blocks"),
+  value("purple_text", "“%1”", [{ type: "field_input", name: "TEXT", text: "Hello!" }], ["String", "Literal"], "thing_blocks"),
+  value("purple_number", "%1", [{ type: "field_number", name: "NUM", value: 1 }], ["Number", "Literal"], "thing_blocks"),
   value("purple_color", "%1", [pick("COLOR", "color", "#4a8a50")], ["Color", "Literal"], "thing_blocks"),
   value("purple_things", "[ %1 ]", [{ type: "field_input", name: "THINGS", text: "🍎 🍌 🍇" }], ["List", "Literal"], "thing_blocks"),
   value("purple_one_of", "one of %1", [input("LIST", "List")], "Thing", "thing_blocks"),
-  value("purple_text", "“%1”", [{ type: "field_input", name: "TEXT", text: "Hello!" }], ["String", "Literal"], "thing_blocks"),
-  value("purple_number", "%1", [{ type: "field_number", name: "NUM", value: 1 }], ["Number", "Literal"], "thing_blocks"),
-  value("purple_join", "%1 %2", [input("A"), input("B")], "String", "thing_blocks"),
   value("purple_any_picture", "one of your pictures", [], "Thing", "thing_blocks"),
-  statement("purple_pot_add", "mix %1 into the pot", [input("COLOR", "Color")], "thing_blocks", "The last six colors in the pot mix like paint."),
+  value("purple_join", "join %1 and %2", [input("A"), input("B")], "String", "thing_blocks"),
+  statement("purple_pot_add", "mix %1 into the pot", [input("COLOR", "Color")], "thing_blocks"),
   statement("purple_pot_empty", "empty the pot", [], "thing_blocks"),
   value("purple_pot_color", "the pot's color", [], "Color", "thing_blocks"),
-  value("purple_note", "note %1", [menu("NOTE", NOTES.map((n) => [n, n]))], "Note", "sound_blocks"),
 
-  statement("purple_show", "show %1 big", [input("TEXT")], "screen_blocks"),
-  statement("purple_write", "write %1", [input("TEXT")], "screen_blocks", "A line under the middle. The last five stay."),
-  statement("purple_status", "put %1 at the top", [input("TEXT")], "screen_blocks", "For a score, or what to do next."),
-  statement("purple_clear", "clear the screen", [], "screen_blocks"),
-  statement("purple_background", "make the background %1", [input("COLOR", "Color")], "screen_blocks"),
-  statement("purple_say", "say %1", [input("TEXT")], "sound_blocks"),
-  statement("purple_play", "play %1 on %2", [input("NOTE", "Note"), menu("INSTRUMENT", instruments)], "sound_blocks"),
-  statement("purple_drum", "hit the %1", [menu("DRUM", drums)], "sound_blocks"),
+  statement("purple_set", "set %1 to %2", [{ type: "field_variable", name: "VAR", variable: "score" }, input("VALUE")], "score_blocks"),
+  statement("purple_change", "change %1 by %2", [{ type: "field_variable", name: "VAR", variable: "score" }, input("BY", "Number")], "score_blocks"),
+  value("purple_get", "%1", [{ type: "field_variable", name: "VAR", variable: "score" }], null, "score_blocks"),
+  statement("purple_game_over", "game over: %1", [input("TEXT")], "score_blocks"),
 
-  statement("purple_set", "set %1 to %2", [{ type: "field_variable", name: "VAR", variable: "score" }, input("VALUE")], "game_blocks"),
-  statement("purple_change", "change %1 by %2", [{ type: "field_variable", name: "VAR", variable: "score" }, input("BY", "Number")], "game_blocks"),
-  value("purple_get", "%1", [{ type: "field_variable", name: "VAR", variable: "score" }], null, "game_blocks"),
-  wrap("purple_after", "after %1 seconds", [input("SECONDS", "Number")], "game_blocks"),
-  statement("purple_game_over", "game over: %1", [input("TEXT")], "game_blocks", "Stops the timers. A key starts the room again from the top."),
-  { type: "purple_setting", message0: "setting %1 is %2", args0: [{ type: "field_input", name: "NAME", text: "FRUIT" }, input("VALUE", "Literal")],
-    message1: "for %1", args1: [{ type: "field_input", name: "ABOUT", text: "what it's for" }], style: "setting_blocks",
-    tooltip: "A setting your family can change on the Knobs tab." },
-  value("purple_setting_get", "%1", [pick("NAME", "setting", "FRUIT")], null, "setting_blocks"),
+  { type: "purple_setting", message0: "knob %1 starts as %2", args0: [{ type: "field_input", name: "NAME", text: "FRUIT" }, input("VALUE", "Literal")],
+    message1: "it's for %1", args1: [{ type: "field_input", name: "ABOUT", text: "what it's for" }], style: "setting_blocks" },
+  value("purple_setting_get", "knob %1", [pick("NAME", "setting", "FRUIT")], null, "setting_blocks"),
 ];
+
+// What each block does, shown when it's pointed at or picked, and the Room guide entry for the Python it writes.
+const HELP: Record<string, [about: string, guide?: string]> = {
+  purple_on_start: ["Runs once, when your kid comes into the room. Put what the room starts with here."],
+  purple_on_key: ["Runs every time a key of that kind is pressed. The key pressed block, in Keys, says which one.", "ARROWS"],
+  purple_on_this_key: ["Runs when this one key is pressed. Click the key to pick another."],
+  purple_every: ["Runs over and over, this many seconds apart: for things that fall, blink, or count down.", "every"],
+  purple_after: ["Waits this many seconds, then runs what's inside once.", "after"],
+  purple_on_meet: ["Runs when the player walks onto this thing, or it moves onto the player. The thing goes away."],
+  purple_show: ["Shows an emoji, words, or one of your pictures big in the middle of the screen, in place of what was there.", "show"],
+  purple_write: ["Writes a line of words under the middle, for stories and questions. The last five lines stay.", "write"],
+  purple_status: ["Writes a line along the top of the screen, for a score or what to do next.", "status"],
+  purple_background: ["Paints the whole screen, behind everything, in one color.", "background"],
+  purple_clear: ["Empties the screen: the middle, the lines, the top line, and the grid.", "clear"],
+  purple_say: ["Says the words out loud in Purple's voice.", "say"],
+  purple_play: ["Plays one note on an instrument, like a key in the Music room.", "play"],
+  purple_drum: ["Plays a drum, or one of your own sounds from Pictures and sounds.", "drum"],
+  purple_note: ["A note, from low C2 to high C6. C4 is middle C.", "play"],
+  purple_put: ["Puts an emoji, a letter, a color, or one of your pictures on a square. A bigger size covers more squares, to the right and down.", "grid"],
+  purple_erase: ["Empties a square.", "grid"],
+  purple_floor: ["Paints a square's floor. The floor stays under whatever is put on the square, like grass under a hero.", "grid"],
+  purple_square: ["One square of the grid, counted across from the left and down from the top. Click it to pick one.", "grid"],
+  purple_random_square: ["A square picked by chance: any empty one, or one along an edge.", "grid"],
+  purple_what_at: ["What's on a square right now, or nothing.", "grid"],
+  purple_is_empty: ["Yes when nothing is on the square. For if blocks.", "grid"],
+  purple_move_all: ["Moves every one of this thing a square that way. Off the edge, it's gone. Onto the player, they meet.", "grid"],
+  purple_ring_put: ["The ring is a circle around one square, to show which one is picked. This puts it on a square.", "grid"],
+  purple_ring_move: ["Moves the ring a square that way. Off one edge, it comes back on the other.", "grid"],
+  purple_ring_square: ["The square the ring is on. Before there's a ring, the middle one.", "grid"],
+  purple_key_pressed: ["The key that was just pressed, inside a when a key is pressed block."],
+  purple_key_letter: ["The key as a capital letter or symbol, to put on the screen."],
+  purple_key_color: ["The color of the key's sticker on Purple's keyboard.", "KEY_COLORS"],
+  purple_key_note: ["The note the key plays in the Music room.", "KEY_NOTES"],
+  purple_key_spot: ["The key's square when the keys are laid out on the grid like the keyboard.", "grid"],
+  purple_key: ["One key. Click it to pick which."],
+  purple_each_key: ["Runs what's inside once for each key on the keyboard. That key is the one it's on each time.", "grid"],
+  purple_that_key: ["The key a for each key block is on right now."],
+  purple_player_put: ["The player is someone who walks around the grid with the arrow keys. This puts them on a square and picks how they look."],
+  purple_player_move: ["Moves the player a square that way, unless a wall is there. Off one edge, they come back on the other.", "ARROWS"],
+  purple_wall: ["The player can't walk onto this thing."],
+  purple_player_square: ["The square the player is on."],
+  purple_thing: ["An emoji or one of your pictures. Click it to pick.", "picture"],
+  purple_text: ["Words. Click them to type your own."],
+  purple_number: ["A number. Click it to type your own."],
+  purple_color: ["A color. Click it to pick."],
+  purple_things: ["A list of emoji, with a space between each."],
+  purple_one_of: ["One thing from a list, picked by chance each time."],
+  purple_any_picture: ["One of the pictures you added under Pictures and sounds, picked by chance each time.", "picture"],
+  purple_join: ["Puts two things together into one line of words, like ⭐ and a score."],
+  purple_pot_add: ["The paint pot mixes colors like real paint: yellow and blue make green. This adds a color; only the last six count.", "mix"],
+  purple_pot_empty: ["Empties the paint pot.", "mix"],
+  purple_pot_color: ["The color of everything in the paint pot, mixed together.", "mix"],
+  purple_set: ["Sets a score, or any count you name, to a number. Click the name to rename it or make another.", "state"],
+  purple_change: ["Adds to a score. A minus number takes away.", "state"],
+  purple_get: ["A score's number right now.", "state"],
+  purple_game_over: ["Ends the game: stops the timers and shows these words. The next key starts the room again from the top.", "game_over"],
+  purple_setting: ["A knob is something your family can change later on the Knobs tab, without opening the blocks, like which fruit falls. The knob block reads it."],
+  purple_setting_get: ["What a knob is set to."],
+};
+const withHelp = (block: { type: string }) => {
+  const [tooltip, guide] = HELP[block.type];
+  return { ...block, tooltip, ...(guide ? { helpUrl: `#guide/${guide}` } : {}) };
+};
+
+// Blockly's own blocks in Purple's words, with no help links out to the web.
+const MESSAGES: Record<string, string> = {
+  CONTROLS_IF_MSG_THEN: "then", MATH_RANDOM_INT_TITLE: "a random number from %1 to %2",
+  ...Object.fromEntries(["CONTROLS_IF", "CONTROLS_REPEAT", "LOGIC_COMPARE", "LOGIC_OPERATION", "LOGIC_NEGATE", "MATH_ARITHMETIC", "MATH_RANDOM_INT"]
+    .map((m) => [`${m}_HELPURL`, ""])),
+};
 
 const usesKey = (block: Blockly.Block) => !block.getField("WAY") || block.getFieldValue("WAY") === "key";
 const underKey = (block: Blockly.Block) => ["purple_on_key", "purple_on_this_key"].includes(block.getRootBlock().type);
 
-// Each kind of block's color: its blocks and its toolbox category.
-const BLOCK_COLORS = {
-  event: "#9b59d0", player: "#d0577f", grid: "#5c2d91", key: "#c9a227", thing: "#7f6a9e",
-  screen: "#4a6fb5", sound: "#3f9fbf", game: "#d08a3a", setting: "#4c9a6a",
+// Each kind of block's color: its blocks and its toolbox category. All purples, from periwinkle to raspberry and
+// lavender to plum, each dark enough for the white words on it.
+export const BLOCK_COLORS = {
+  event: "#9b4fd6", screen: "#4f66d1", sound: "#7262d9", grid: "#5c2d91", thing: "#8060b5",
+  key: "#b04aa8", player: "#c2457f", score: "#3b3a9c", logic: "#8a3d9e", setting: "#6e5a7e",
 };
 
 let defined = false;
@@ -174,7 +245,8 @@ export function defineBlocks(): void {
       this.setWarningText(usesKey(this) && !underKey(this) ? "The key pressed only means something under \"when a key is pressed\"." : null);
     });
   });
-  Blockly.defineBlocksWithJsonArray(BLOCKS);
+  Object.assign(Blockly.Msg, MESSAGES);
+  Blockly.defineBlocksWithJsonArray(BLOCKS.map(withHelp));
   Blockly.Blocks.purple_setting.init = ((init) => function (this: Blockly.Block) {
     init.call(this);
     this.getField("NAME")!.setValidator((v: string) => v.toUpperCase().replace(/[^A-Z0-9_]/g, "_").replace(/^[^A-Z]+/, "") || null);
@@ -186,7 +258,7 @@ export function defineBlocks(): void {
     base: Blockly.Themes.Zelos,
     blockStyles: {
       ...Object.fromEntries(Object.entries(BLOCK_COLORS).map(([kind, c]) => [`${kind}_blocks`, style(c)])),
-      logic_blocks: style(BLOCK_COLORS.game), loop_blocks: style(BLOCK_COLORS.game), math_blocks: style(BLOCK_COLORS.thing),
+      logic_blocks: style(BLOCK_COLORS.logic), loop_blocks: style(BLOCK_COLORS.logic), math_blocks: style(BLOCK_COLORS.logic),
     },
     categoryStyles: Object.fromEntries(CATEGORIES.map(([name, colour]) => [`${name}_category`, { colour }])),
     componentStyles: {
@@ -220,36 +292,41 @@ const that = () => b("purple_that_key");
 const score = (name: string) => b("purple_get", { VAR: { name } });
 const setting = (name: string) => b("purple_setting_get", { NAME: name });
 
-// [category, color, its blocks], each block as it comes out of the toolbox.
-export const CATEGORIES: [string, string, BJ[]][] = [
-  ["When", BLOCK_COLORS.event, [on("purple_on_key", {}, {}), on("purple_on_start", {}, {}), on("purple_on_this_key", {}, {}),
-    on("purple_every", {}, { SECONDS: num(1) }), on("purple_on_meet", {}, { THING: thing("⭐") })]],
-  ["Show and say", BLOCK_COLORS.screen, [b("purple_say", {}, { TEXT: text("Hello!") }), b("purple_show", {}, { TEXT: thing("🎉") }),
-    b("purple_play", {}, { NOTE: b("purple_note", { NOTE: "C4" }) }), b("purple_drum"), b("purple_write", {}, { TEXT: text("Hello!") }),
+// [drawer, color, what it's for, its blocks], each block as it comes out of the drawer, the likeliest first. A string
+// starts a group within the drawer.
+export const CATEGORIES: [string, string, string, (BJ | string)[]][] = [
+  ["When", BLOCK_COLORS.event, "What starts things", [on("purple_on_key", {}, {}), on("purple_on_start", {}, {}), on("purple_on_this_key", {}, {}),
+    on("purple_every", {}, { SECONDS: num(1) }), b("purple_after", {}, { SECONDS: num(1) }), on("purple_on_meet", {}, { THING: thing("⭐") })]],
+  ["Show", BLOCK_COLORS.screen, "Pictures and words on the screen", [b("purple_show", {}, { TEXT: thing("🎉") }), b("purple_write", {}, { TEXT: text("Hello!") }),
     b("purple_status", {}, { TEXT: text("Find the stars!") }), b("purple_background", {}, { COLOR: color("#1e1033") }), b("purple_clear")]],
-  ["Grid", BLOCK_COLORS.grid, [b("purple_put", {}, { THING: thing("⭐"), SQUARE: square(13, 6) }), b("purple_erase", {}, { SQUARE: square(13, 6) }),
-    b("purple_random_square"), square(13, 6), b("purple_floor", {}, { COLOR: color("#4a8a50"), SQUARE: square(13, 6) }),
-    b("purple_ring_put", {}, { SQUARE: square(13, 6) }), b("purple_ring_move"), b("purple_ring_square"),
-    b("purple_move_all", { WAY: "down" }, { THING: thing("🍎") }), b("purple_what_at", {}, { SQUARE: square(13, 6) }), b("purple_is_empty", {}, { SQUARE: square(13, 6) })]],
-  ["Things", BLOCK_COLORS.thing, [thing("⭐"), text("Hello!"), num(1), color("#4a8a50"), b("purple_one_of", {}, { LIST: b("purple_things") }), b("purple_things"),
-    b("purple_any_picture"), b("purple_join", {}, { A: text("⭐ "), B: score("score") }),
-    b("purple_pot_add", {}, { COLOR: color("#e0c020") }), b("purple_pot_empty"), b("purple_pot_color")]],
-  ["Keys", BLOCK_COLORS.key, [pressed(), b("purple_key_letter", {}, { KEY: pressed() }), b("purple_key_color", {}, { KEY: pressed() }),
-    b("purple_key_note", {}, { KEY: pressed() }), b("purple_key_spot", {}, { KEY: pressed() }), b("purple_each_key"), that(), key("q")]],
-  ["Player", BLOCK_COLORS.player, [b("purple_player_put", {}, { THING: thing("🧒"), SQUARE: square(13, 6) }), b("purple_player_move"),
+  ["Sound", BLOCK_COLORS.sound, "Talking, notes, and drums", [b("purple_say", {}, { TEXT: text("Hello!") }),
+    b("purple_play", {}, { NOTE: b("purple_note", { NOTE: "C4" }) }), b("purple_drum"), b("purple_note", { NOTE: "C4" })]],
+  ["Grid", BLOCK_COLORS.grid, "The 26 by 12 squares", [b("purple_put", {}, { THING: thing("⭐"), SQUARE: square(13, 6) }), b("purple_erase", {}, { SQUARE: square(13, 6) }),
+    b("purple_floor", {}, { COLOR: color("#4a8a50"), SQUARE: square(13, 6) }), square(13, 6), b("purple_random_square"),
+    b("purple_what_at", {}, { SQUARE: square(13, 6) }), b("purple_is_empty", {}, { SQUARE: square(13, 6) }), b("purple_move_all", { WAY: "down" }, { THING: thing("🍎") }),
+    "The ring: a circle that marks one square", b("purple_ring_put", {}, { SQUARE: square(13, 6) }), b("purple_ring_move"), b("purple_ring_square")]],
+  ["Things", BLOCK_COLORS.thing, "Emoji, words, numbers, and colors", [thing("⭐"), text("Hello!"), num(1), color("#4a8a50"), b("purple_things"),
+    b("purple_one_of", {}, { LIST: b("purple_things") }), b("purple_any_picture"), b("purple_join", {}, { A: text("⭐ "), B: score("score") }),
+    "The paint pot: colors mix like paint", b("purple_pot_add", {}, { COLOR: color("#e0c020") }), b("purple_pot_empty"), b("purple_pot_color")]],
+  ["Keys", BLOCK_COLORS.key, "The keys on the keyboard", [pressed(), b("purple_key_letter", {}, { KEY: pressed() }), b("purple_key_color", {}, { KEY: pressed() }),
+    b("purple_key_note", {}, { KEY: pressed() }), b("purple_key_spot", {}, { KEY: pressed() }), key("q"),
+    "Every key", b("purple_each_key"), that()]],
+  ["Player", BLOCK_COLORS.player, "Someone who walks with the arrows", [b("purple_player_put", {}, { THING: thing("🧒"), SQUARE: square(13, 6) }), b("purple_player_move"),
     b("purple_wall", {}, { THING: thing("🌳") }), b("purple_player_square")]],
-  ["Game", BLOCK_COLORS.game, [b("purple_set", {}, { VALUE: num(0) }), b("purple_change", {}, { BY: num(1) }), score("score"),
-    b("controls_if"), b("logic_compare", {}, { A: score("score"), B: num(10) }), b("purple_after", {}, { SECONDS: num(1) }),
-    b("controls_repeat_ext", {}, { TIMES: num(5) }), b("purple_game_over", {}, { TEXT: text("You did it! Press a key to play again.") }),
-    b("math_random_int", {}, { FROM: num(1), TO: num(6) }), b("math_arithmetic", {}, { A: num(1), B: num(1) }), b("logic_operation"), b("logic_negate")]],
-  ["Settings", BLOCK_COLORS.setting, [b("purple_setting", {}, { VALUE: thing("🍎") }), setting("FRUIT")]],
+  ["Scores", BLOCK_COLORS.score, "Counting and winning", [b("purple_set", {}, { VALUE: num(0) }), b("purple_change", {}, { BY: num(1) }), score("score"),
+    b("purple_game_over", {}, { TEXT: text("You did it! Press a key to play again.") })]],
+  ["If and repeat", BLOCK_COLORS.logic, "Choosing, and doing again", [b("controls_if"), b("logic_compare", {}, { A: score("score"), B: num(10) }),
+    b("logic_operation"), b("logic_negate"), b("controls_repeat_ext", {}, { TIMES: num(5) }), b("math_random_int", {}, { FROM: num(1), TO: num(6) }),
+    b("math_arithmetic", {}, { A: num(1), B: num(1) })]],
+  ["Knobs", BLOCK_COLORS.setting, "What your family can change later, on the Knobs tab", [b("purple_setting", {}, { VALUE: thing("🍎") }), setting("FRUIT")]],
 ];
 
+const label = (text: string, cls: string) => ({ kind: "label", text, "web-class": cls });
 export const TOOLBOX = {
   kind: "categoryToolbox",
-  contents: CATEGORIES.map(([name, , blocks]) => ({ kind: "category", name, categorystyle: `${name}_category`,
-    contents: [{ kind: "label", text: name, "web-class": "drawer-title" }, { kind: "label", text: "Click to add, or drag out", "web-class": "drawer-hint" },
-      ...blocks.map((x) => ({ kind: "block", ...x }))] })),
+  contents: CATEGORIES.map(([name, , about, blocks]) => ({ kind: "category", name, categorystyle: `${name}_category`,
+    contents: [label(name, "drawer-title"), label(about, "drawer-hint"),
+      ...blocks.map((x) => (typeof x === "string" ? label(x, "drawer-group") : { kind: "block", ...x }))] })),
 };
 
 // Workspace -> Python ---------------------------------------------------------------------

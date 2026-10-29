@@ -29,7 +29,10 @@ const purple = (): Credit[] => [
 const STUDIO: Credit[] = [
   ["Pyodide", "https://pyodide.org", "Runs Purple's Python in the browser.", "MPL-2.0"],
   ["ONNX Runtime Web", "https://onnxruntime.ai", "Runs the voice models in the browser.", "MIT"],
-  ...(features.rooms ? [["Kokoro", "https://huggingface.co/hexgrad/Kokoro-82M", "Text to speech for rooms made in Studio.", "Apache-2.0"] satisfies Credit] : []),
+  ...(features.rooms ? [
+    ["Kokoro", "https://huggingface.co/hexgrad/Kokoro-82M", "Text to speech for rooms made in Studio.", "Apache-2.0"],
+    ["Blockly", "https://developers.google.com/blockly", "The blocks for making rooms.", "Apache-2.0"],
+  ] satisfies Credit[] : []),
   ["Emojibase", "https://emojibase.dev", "Emoji search in the emoji picker.", "MIT"],
   ["Figtree, Inter, Sora, Caveat, Nunito, Spectral", "https://fontsource.org", "Studio's fonts, self-hosted.", "OFL-1.1"],
 ];

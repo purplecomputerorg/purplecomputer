@@ -69,15 +69,17 @@ function picturesSection(pick: (name: string) => void, taken: string[]): HTMLEle
 // taken: emoji to leave out. pictures: the family's pictures are offered too, picked by name. empty: what an
 // unpicked cell shows. clear: the label for leaving it unpicked, for a field where that means something.
 // title: what's being picked for, above the search, so the search can't be taken for another field.
-export interface PickOptions { taken?: () => string[]; pictures?: boolean; empty?: string; clear?: string; title?: string }
+// onClose: called when it closes without a pick.
+export interface PickOptions { taken?: () => string[]; pictures?: boolean; empty?: string; clear?: string; title?: string; onClose?: () => void }
 
 // Opens under anchor with the search box focused; Enter picks the first match, Esc closes.
-export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void, { taken: takenNow, pictures, clear, title }: PickOptions = {}): void {
+export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void, { taken: takenNow, pictures, clear, title, onClose }: PickOptions = {}): void {
   const taken = takenNow?.() ?? [];
   closeEmojiPicker();
   const search = h("input", { type: "text", class: "emoji-search", placeholder: "Search, like dog or star", value: query });
   const grid = h("div", { class: "emoji-grid" });
   const pick = (emoji: string) => { closeEmojiPicker(); onPick(emoji); };
+  const dismiss = () => { closeEmojiPicker(); onClose?.(); };
   const render = () => {
     const found = searchEmoji(search.value, 32, taken);
     grid.replaceChildren(...(found.length
@@ -87,7 +89,7 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
   search.addEventListener("input", render);
   void loadAll().then(() => open === pop && render());
   search.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { e.preventDefault(); closeEmojiPicker(); anchor.focus(); }
+    if (e.key === "Escape") { e.preventDefault(); anchor.focus(); dismiss(); }
     if (e.key === "Enter") {
       e.preventDefault();
       const first = searchEmoji(search.value, 1, taken)[0];
@@ -104,7 +106,7 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
   search.select();
   const outside = (e: MouseEvent) => {
     if (open !== pop) return document.removeEventListener("mousedown", outside);
-    if (!pop.contains(e.target as Node) && e.target !== anchor) { closeEmojiPicker(); document.removeEventListener("mousedown", outside); }
+    if (!pop.contains(e.target as Node) && e.target !== anchor) { document.removeEventListener("mousedown", outside); dismiss(); }
   };
   document.addEventListener("mousedown", outside);
 }

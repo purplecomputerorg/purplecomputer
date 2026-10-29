@@ -215,9 +215,16 @@ function list(items: Lit[], growable: boolean, ctx: Ctx, labels: string[]): HTML
     const twice = [...new Set(items.filter(repeat).map((x) => (x.t === "picture" ? `The picture "${(x as Face).v}"` : (x as Face).v)))];
     const tilesEl = h("span", { class: "knob-inline" },
       ...items.map((x, i) => h("span", { class: `knob-item tile${repeat(x) ? " bad" : ""}` }, labelled(labels[i], item(x)), drop(i))), add());
-    // Down to one, with the picker open on it, to fill the list with the family's own.
+    // An empty slot with the picker open on it: the first pick replaces the list, closing without one keeps it.
+    const startOver = (e: MouseEvent) => {
+      (e.currentTarget as HTMLElement).hidden = true;
+      const cell = emojiCell("", () => "", (v) => { items.splice(0, items.length, { t: isEmoji(v) ? "str" : "picture", v } as Lit); changed(ctx); },
+        { pictures: true, empty: "?", onClose: ctx.redraw });
+      tilesEl.replaceChildren(h("span", { class: "knob-item tile" }, h("span", { class: "emoji-wrap" }, cell)));
+      cell.click();
+    };
     const clear = taken && growable && items === ctx.top && items.length > 1
-      ? h("button", { type: "button", class: "linkbtn dim small", onclick: () => { items.splice(0, items.length, unusedEmoji([])!); fresh = items[0]; changed(ctx); } }, "Clear and pick your own")
+      ? h("button", { type: "button", class: "linkbtn dim small", onclick: startOver }, "Clear and pick your own")
       : null;
     // Wrapped only when there's something to add, so rows that line up their tiles keep doing so.
     return twice.length || clear ? h("span", { class: "knob-tiles" }, tilesEl, clear,

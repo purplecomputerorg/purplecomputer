@@ -629,12 +629,17 @@ h3 + .cards { margin-top: 0; }
 .write-own ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 12px; padding: 0; list-style: none; }
 .write-own li { padding: 2px 9px; border-radius: 999px; background: #fff; border: 1px solid var(--border); color: var(--purple); font-size: 12px; font-weight: 600; }
 .pick.write-own { cursor: default; }
-.pick.write-own .row { gap: 8px; }
-.write-own:hover .btn { background: var(--purple-dark); }
+.pick.write-own .row { gap: 10px; }
+@media (min-width: 961px) { .write-own .row .btn { font-size: 16px; padding: 12px 28px; } }
 .write-own figure { margin: 0; }
 .write-own figcaption { font-size: 11px; font-weight: 600; color: var(--purple); margin: 0 0 4px 2px; }
 .write-own pre { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--tui-bg); color: #e8defa; font: 12.5px/1.55 var(--mono); }
 .write-own .call { color: #c39cf0; font-weight: 700; }
+.whole-room { display: flex; gap: 8px; }
+.whole-room > div { display: grid; gap: 3px; justify-items: center; font-size: 11px; font-weight: 600; color: var(--purple); }
+.whole-room pre { width: 160px; height: 137px; box-sizing: border-box; overflow: hidden; }
+.blocks-picture { width: 180px; height: 137px; box-sizing: border-box; border-radius: 10px; overflow: hidden; background: #fff; border: 1px solid var(--border); pointer-events: none; }
+.blocks-picture > div { width: 100%; height: 100%; }
 @media (max-width: 900px) { .write-own figure { display: none; } }
 @media (max-width: 600px) {
   .write-own { grid-template-columns: 1fr; padding: 14px 16px; }

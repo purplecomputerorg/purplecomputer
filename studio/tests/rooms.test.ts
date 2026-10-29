@@ -5,7 +5,7 @@ import runnerSource from "../../purple_tui/roomkit/runner.py?raw";
 import guest from "../src/rooms/guest.py?raw";
 import { EXAMPLES, TEMPLATES, quizSource, soundboardSource } from "../src/examples";
 import { blankRules, rulesSource, type Rule } from "../src/rules";
-import { applyKnobs, BLOCK_STARTERS, blocksSource, build } from "../src/blocks";
+import { applyKnobs, BLOCK_STARTERS, blocksSource, build, WHOLE_ROOM_BLOCKS } from "../src/blocks";
 import { readKnobs } from "../src/knobs";
 
 type Msg = Record<string, unknown>;
@@ -236,6 +236,10 @@ describe("family rooms in Studio's Python", () => {
     expect(replies.slice(3).map((r) => r.sounds).filter(Boolean)).toEqual([[["say", "yum"]]]);
     expect(texts(replies.at(-2)!)).not.toContain("🍎");
   }, 60_000);
+
+  it("pictures the Rooms page's whole room in blocks as the same Python shown beside it", () => {
+    expect(blocksSource(WHOLE_ROOM_BLOCKS())).toBe('from purple import *\n\n\ndef on_key(key):\n    grid.set(grid.random_empty(), "🐶")\n    drum("bongo")\n    say(key)\n');
+  });
 
   it("writes a knob's new value back into its setting block", () => {
     const room = starter("Catch");

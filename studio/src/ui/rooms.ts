@@ -66,15 +66,15 @@ function list(): View {
       h("div", { class: "pick featured write-own" }, purpleEmoji(IDEA, "pick-icon"),
         h("div", {},
           h("b", {}, "Make any room you can imagine"),
-          h("p", {}, "Any game or toy. Purple comes with the pieces every room needs, so a whole room can be a few blocks snapped together, or a few lines of Python written by you or with an AI helper."),
+          h("p", {}, "Any game or toy. Purple comes with the pieces every room needs, so a whole room can be a few lines of Python, written by you or with an AI helper, or a few blocks snapped together."),
           h("ul", {}, ...["Key presses and timers", "Emoji, pictures, text", "Notes, drums, sounds", "Talking out loud", "Remembering for next time"].map((t) => h("li", {}, t))),
           h("div", { class: "row" },
-            h("button", { class: "btn small", onclick: () => void blocks().then((m) => {
+            h("button", { class: "btn", onclick: () => tryRoom("my-room", null) }, "Start with Python"),
+            h("button", { class: "btn", onclick: () => void blocks().then((m) => {
               const workspace = m.BLOCK_STARTERS[0].workspace();
               tryRoom("my-room", { kind: "blocks", workspace }, m.blocksSource(workspace));
-            }) }, "Start with blocks"),
-            h("button", { class: "btn small secondary", onclick: () => tryRoom("my-room", null) }, "Start with Python"))),
-        h("figure", {}, h("figcaption", {}, "A whole room: every key puts a dog on the screen"), h("pre", {}, ...WHOLE_ROOM))),
+            }) }, "Start with blocks"))),
+        wholeRoom()),
       h("h3", {}, "Or start from one of these"),
       h("div", { class: "cards" },
         ...[
@@ -95,6 +95,15 @@ const WHOLE_ROOM = [
   "    ", call("drum"), "(\"bongo\")\n",
   "    ", call("say"), "(key)",
 ];
+
+// A whole room, as Python and as the same room in blocks, which draw once Blockly has loaded.
+function wholeRoom(): HTMLElement {
+  const picture = h("div", { class: "blocks-picture" });
+  void blocks().then((m) => picture.replaceChildren(m.blocksPicture(m.WHOLE_ROOM_BLOCKS())));
+  return h("figure", {}, h("figcaption", {}, "A whole room: every key puts a dog on the screen"),
+    h("div", { class: "whole-room" }, ...([["Python", h("pre", {}, ...WHOLE_ROOM)], ["Blocks", picture]] as const).map(([label, pane]) =>
+      h("div", {}, pane, h("span", {}, label)))));
+}
 
 // The starters' order on the Rooms page: the liveliest first.
 const ORDER = ["story", "explore", "memory", "beats", "garden", "picture-quiz", "picture-keyboard", "snake"];

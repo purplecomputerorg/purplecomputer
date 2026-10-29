@@ -149,6 +149,12 @@ const BLOCKS = [
 const usesKey = (block: Blockly.Block) => block.type !== "purple_player_move" || block.getFieldValue("WAY") === "key";
 const underKey = (block: Blockly.Block) => ["purple_on_key", "purple_on_this_key"].includes(block.getRootBlock().type);
 
+// Each kind of block's color: its blocks and its toolbox category.
+const BLOCK_COLORS = {
+  event: "#9b59d0", player: "#d0577f", grid: "#5c2d91", key: "#c9a227", thing: "#7f6a9e",
+  screen: "#4a6fb5", sound: "#3f9fbf", game: "#d08a3a", setting: "#4c9a6a",
+};
+
 let defined = false;
 
 export function defineBlocks(): void {
@@ -171,9 +177,8 @@ export function defineBlocks(): void {
     name: "purple",
     base: Blockly.Themes.Zelos,
     blockStyles: {
-      event_blocks: style("#9b59d0"), player_blocks: style("#d0577f"), grid_blocks: style("#5c2d91"), key_blocks: style("#c9a227"),
-      thing_blocks: style("#7f6a9e"), screen_blocks: style("#4a6fb5"), sound_blocks: style("#3f9fbf"), game_blocks: style("#d08a3a"),
-      setting_blocks: style("#4c9a6a"), logic_blocks: style("#d08a3a"), loop_blocks: style("#d08a3a"), math_blocks: style("#7f6a9e"),
+      ...Object.fromEntries(Object.entries(BLOCK_COLORS).map(([kind, c]) => [`${kind}_blocks`, style(c)])),
+      logic_blocks: style(BLOCK_COLORS.game), loop_blocks: style(BLOCK_COLORS.game), math_blocks: style(BLOCK_COLORS.thing),
     },
     categoryStyles: Object.fromEntries(CATEGORIES.map(([name, colour]) => [`${name}_category`, { colour }])),
     componentStyles: {
@@ -209,25 +214,25 @@ const setting = (name: string) => b("purple_setting_get", { NAME: name });
 
 // [category, color, its blocks], each block as it comes out of the toolbox.
 const CATEGORIES: [string, string, BJ[]][] = [
-  ["When", "#9b59d0", [on("purple_on_start", {}, {}), on("purple_on_key", {}, {}), on("purple_on_this_key", {}, {}),
+  ["When", BLOCK_COLORS.event, [on("purple_on_start", {}, {}), on("purple_on_key", {}, {}), on("purple_on_this_key", {}, {}),
     on("purple_every", {}, { SECONDS: num(1) }), on("purple_on_meet", {}, { THING: thing("⭐") })]],
-  ["Player", "#d0577f", [b("purple_player_put", {}, { THING: thing("🧒"), SQUARE: square(13, 6) }), b("purple_player_move"),
+  ["Player", BLOCK_COLORS.player, [b("purple_player_put", {}, { THING: thing("🧒"), SQUARE: square(13, 6) }), b("purple_player_move"),
     b("purple_wall", {}, { THING: thing("🌳") }), b("purple_player_square")]],
-  ["Grid", "#5c2d91", [b("purple_put", {}, { THING: thing("⭐"), SQUARE: square(13, 6) }), b("purple_floor", {}, { COLOR: color("#4a8a50"), SQUARE: square(13, 6) }),
+  ["Grid", BLOCK_COLORS.grid, [b("purple_put", {}, { THING: thing("⭐"), SQUARE: square(13, 6) }), b("purple_floor", {}, { COLOR: color("#4a8a50"), SQUARE: square(13, 6) }),
     b("purple_erase", {}, { SQUARE: square(13, 6) }), b("purple_move_all", { WAY: "down" }, { THING: thing("🍎") }),
     square(13, 6), b("purple_random_square"), b("purple_what_at", {}, { SQUARE: square(13, 6) }), b("purple_is_empty", {}, { SQUARE: square(13, 6) })]],
-  ["Keys", "#c9a227", [pressed(), key("q"), b("purple_each_key"), that(), b("purple_key_spot", {}, { KEY: pressed() }),
+  ["Keys", BLOCK_COLORS.key, [pressed(), key("q"), b("purple_each_key"), that(), b("purple_key_spot", {}, { KEY: pressed() }),
     b("purple_key_letter", {}, { KEY: pressed() }), b("purple_key_color", {}, { KEY: pressed() }), b("purple_key_note", {}, { KEY: pressed() })]],
-  ["Things", "#7f6a9e", [thing("⭐"), color("#4a8a50"), b("purple_things"), b("purple_one_of", {}, { LIST: b("purple_things") }),
+  ["Things", BLOCK_COLORS.thing, [thing("⭐"), color("#4a8a50"), b("purple_things"), b("purple_one_of", {}, { LIST: b("purple_things") }),
     text("Hello!"), num(1), b("purple_join", {}, { A: text("⭐ "), B: score("score") })]],
-  ["Show and say", "#4a6fb5", [b("purple_show", {}, { TEXT: thing("🎉") }), b("purple_write", {}, { TEXT: text("Hello!") }),
+  ["Show and say", BLOCK_COLORS.screen, [b("purple_show", {}, { TEXT: thing("🎉") }), b("purple_write", {}, { TEXT: text("Hello!") }),
     b("purple_status", {}, { TEXT: text("Find the stars!") }), b("purple_clear"), b("purple_background", {}, { COLOR: color("#1e1033") }),
     b("purple_say", {}, { TEXT: text("Hello!") }), b("purple_play", {}, { NOTE: b("purple_note", { NOTE: "C4" }) }), b("purple_drum")]],
-  ["Game", "#d08a3a", [b("purple_set", {}, { VALUE: num(0) }), b("purple_change", {}, { BY: num(1) }), score("score"),
+  ["Game", BLOCK_COLORS.game, [b("purple_set", {}, { VALUE: num(0) }), b("purple_change", {}, { BY: num(1) }), score("score"),
     b("controls_if"), b("logic_compare", {}, { A: score("score"), B: num(10) }), b("logic_operation"), b("logic_negate"),
     b("controls_repeat_ext", {}, { TIMES: num(5) }), b("math_arithmetic", {}, { A: num(1), B: num(1) }), b("math_random_int", {}, { FROM: num(1), TO: num(6) }),
     b("purple_after", {}, { SECONDS: num(1) }), b("purple_game_over", {}, { TEXT: text("You did it! Press a key to play again.") })]],
-  ["Settings", "#4c9a6a", [b("purple_setting", {}, { VALUE: thing("🍎") }), setting("FRUIT")]],
+  ["Settings", BLOCK_COLORS.setting, [b("purple_setting", {}, { VALUE: thing("🍎") }), setting("FRUIT")]],
 ];
 
 export const TOOLBOX = {
@@ -435,6 +440,12 @@ const workspace = (vars: string[], ...tops: BJ[]): object =>
   ({ blocks: { languageVersion: 0, blocks: tops }, variables: vars.map((name) => ({ name, id: name })) });
 
 const settingOf = (name: string, about: string, v: BJ) => b("purple_setting", { NAME: name, ABOUT: about }, { VALUE: v });
+
+// The Rooms page's whole room, in blocks: every key puts a dog on the screen.
+export const WHOLE_ROOM_BLOCKS = () => workspace([], on("purple_on_key", { WHICH: "any" }, {},
+  b("purple_put", { SIZE: "1" }, { THING: thing("🐶"), SQUARE: b("purple_random_square", { WHERE: "empty" }) }),
+  b("purple_drum", { DRUM: "bongo" }),
+  b("purple_say", {}, { TEXT: pressed() })));
 
 // Empty first: it's where "Start with blocks" opens.
 export const BLOCK_STARTERS: { icon: string; label: string; workspace: () => object }[] = [

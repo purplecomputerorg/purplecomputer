@@ -96,7 +96,7 @@ function yourPictures(current: string | null): HTMLElement | null {
     keep: c.pic ? keepButton(c.pic) : c.used.length ? h("span", { class: "keep on", title: `In this Purple Pack: ${c.used.join(", ")}` }, "✓ In my Pack") : null,
   }), throwAway, (gone) => alsoOut([...new Set(gone.flatMap((c) => c.used))]));
   return list && h("div", {}, list,
-    h("p", { class: "dim small" }, "Pictures here stay on this computer, ready for any Purple Pack you make. Download your Purple Pack to keep them."));
+    h("p", { class: "dim small yours-note" }, "Pictures here stay on this computer, ready for any Purple Pack you make. Download your Purple Pack to keep them."));
 }
 
 function more(current: Picture | null, name: string | null = current?.name ?? null): (HTMLElement | null)[] {

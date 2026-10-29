@@ -486,7 +486,7 @@ input.room-name.just-yours, .trybar.just-added { animation: just-yours 1.8s ease
 .your-card { position: relative; display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
 .your-card[aria-current="page"] { border-color: var(--purple); }
 .your-face { display: flex; padding-right: 22px; align-items: center; gap: 10px; text-decoration: none; color: var(--text); min-width: 0; }
-.your-face b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.your-face b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; }
 .your-face img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; }
 .your-face .pick-icon, .your-face .pick-swatch { margin: 0; flex-shrink: 0; }
 .your-card .keep { justify-self: start; }
@@ -499,6 +499,7 @@ input.room-name.just-yours, .trybar.just-added { animation: just-yours 1.8s ease
 label.your-card { cursor: pointer; }
 .your-card .choose { position: absolute; top: 10px; right: 10px; margin: 0; accent-color: var(--magenta); width: 18px; height: 18px; }
 .your-card:has(.choose:checked) { border-color: var(--magenta); }
+.yours-note { margin-top: 12px; }
 .guide .flash { background: var(--fill); transition: background 1.5s; }
 
 /* Room editor tabs, the problem box, and the Room guide */

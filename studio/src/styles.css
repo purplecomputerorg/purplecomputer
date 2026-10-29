@@ -825,12 +825,6 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .sound-picker .type-it { justify-self: stretch; }
 .sound-picker .status:empty { display: none; }
 .type-it input { flex: 1; min-width: 0; }
-ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
-
-/* The live Purple, covered by a quiet message until it's running and while it restarts */
-.screen-wrap.live { background: #1d1234; font-family: var(--mono); }
-.live-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
-.live-status { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; background: #1d1234; color: #e8daf0; font-size: 15px; text-align: center; transition: opacity 0.3s; }
 /* Narrow: the key sits beside its question, and the voice choice and typing get the card's full width below */
 @media (max-width: 560px) {
   .voice-now { display: grid; grid-template-columns: auto 1fr; gap: 14px 16px; padding: 18px 16px; }

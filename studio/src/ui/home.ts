@@ -6,7 +6,6 @@ import { countOf, hasWork, notInPieces, onChange, pieces, type Count } from "../
 import { h } from "./dom";
 import { clearEverythingButton, openPackButton } from "./packfile";
 import { staysHere } from "./privacy";
-import { purpleEmoji } from "./icons";
 import { MIC } from "./record";
 import { sticker } from "./stickers";
 import type { View } from "./view";
@@ -75,9 +74,9 @@ const micIcon = () => { const el = h("span", { class: "mic", "aria-hidden": "tru
 
 const card = (s: HomeSection) =>
   h("a", { class: "home-card", href: `#${s.id}` },
-    h("div", { class: "bezel" }, h("div", { class: `mini ${s.id}` }, ...SCREENS[s.id]())),
-    h("b", {}, purpleEmoji(s.icon), s.label,
-      s.voice ? h("span", { class: "voice-badge", title: "Takes your recorded voice" }, micIcon(), "Your voice") : null),
+    h("div", { class: "bezel" }, h("div", { class: `mini ${s.id}` }, ...SCREENS[s.id]()),
+      s.voice ? h("span", { class: "voice-badge", title: "Can use your recorded voice" }, micIcon()) : null),
+    h("b", {}, s.label),
     h("span", {}, ...(typeof s.blurb === "string" ? [s.blurb] : s.blurb())));
 
 // What's in the family's Purple Pack, and what isn't, as the download page counts them.
@@ -106,7 +105,7 @@ export function homeView(sections: HomeSection[]): View {
     editor: h("section", { class: "home" },
       h("h1", {}, "Make Purple ", h("span", { class: "stroke" }, "your own.")),
       h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
-      h("p", { class: "home-note" }, h("b", {}, "For Purple Computer customers: "), "Purple Studio lets you customize it for your family. Make changes here and transfer them to your Purple Computer with a USB drive."),
+      h("p", { class: "home-note" }, h("b", {}, "For Purple Computer customers: "), "Purple Studio lets you customize the experience for your family. Make changes here and transfer them to your Purple Computer with a USB drive."),
       h("div", { class: "home-cards" }, ...sections.map(card)),
       packLine,
     ),

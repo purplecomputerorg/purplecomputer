@@ -138,7 +138,7 @@ export function roomFilesBox(onPick?: (call: string) => boolean, onChange = () =
       h("div", { class: "photo-list" }, ...shelfOnly().map((s) => h("div", { class: "try-chip tray-item" },
         h("button", { type: "button", title: `Add ${s.name} for your rooms`, onclick: () => roomFileFor(s).then(changedHere, failed("images")) }, shelfThumb(s)),
         h("span", { class: "dim" }, s.name))))) : null,
-    h("p", { class: "row" }, filePicker("image/*", add("images"), "Add a picture"), filePicker("audio/*", add("sounds"), "Add a sound"),
+    h("p", { class: "row" }, filePicker("image/*", add("images"), "Add a picture", "btn secondary"), filePicker("audio/*", add("sounds"), "Add a sound", "btn secondary"),
       recordButton((clip) => { addRoomData("sounds", "recording", encodeWav(clip)); changedHere(); }, say), status),
     h("p", { class: "dim small" }, `Pictures: ${PICTURE_KINDS}. Studio makes each one small enough for Purple.`),
   ));

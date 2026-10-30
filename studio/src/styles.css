@@ -54,14 +54,15 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .brand b { font-family: var(--display); font-weight: 600; font-size: 15px; }
 .brand span { color: var(--dim); }
 .tabs-nav { display: flex; gap: 10px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.tabs-nav a { display: flex; position: relative; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 999px; text-decoration: none; color: var(--text); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.tabs-nav a { --pad: 12px; display: flex; position: relative; align-items: center; gap: 10px; padding: 7px var(--pad); border-radius: 999px; text-decoration: none; color: var(--text); font-size: 14px; font-weight: 500; white-space: nowrap; }
 .tabs-nav a:hover { background: var(--fill-hover); }
 .tabs-nav a[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .tabs-nav .icon { width: 20px; height: 20px; }
 .tabs-nav .sticker { font-size: 9px; }
 /* A white edge like the purple sticker sheet's, so each icon reads as a sticker */
 .purple-emoji { filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff) drop-shadow(0 1px 2px rgba(53, 42, 74, 0.25)); }
-.tabs-nav .n { position: absolute; left: 26px; top: 0; box-shadow: 0 0 0 2px var(--bg); font-size: 10px; line-height: 15px; min-width: 15px; text-align: center; box-sizing: border-box; font-weight: 700; color: #fff; background: var(--purple); border-radius: 999px; padding: 0 4px; }
+/* Centered a little in from the icon's corner, so it covers only the corner and stays clear of the name */
+.tabs-nav .n { position: absolute; left: calc(var(--pad) + 20px); translate: -60%; top: 0; box-shadow: 0 0 0 2px var(--bg); font-size: 10px; line-height: 15px; min-width: 15px; text-align: center; box-sizing: border-box; font-weight: 700; color: #fff; background: var(--purple); border-radius: 999px; padding: 0 4px; }
 .privacy-link { flex-shrink: 0; font-size: 14px; color: var(--dim); text-decoration: none; padding: 7px 10px; border-radius: 999px; }
 .privacy-link:hover, .privacy-link[aria-current="page"] { background: var(--fill); color: var(--purple); }
 .more-menu { position: relative; flex-shrink: 0; }
@@ -79,8 +80,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 /* Too narrow for every tab with its icon: tighten, then drop the extras before any tab gets cut off */
 @media (max-width: 1400px) {
   .tabs-nav { gap: 4px; }
-  .tabs-nav a { gap: 6px; padding: 7px 8px; }
-  .tabs-nav .n { left: 22px; }
+  .tabs-nav a { --pad: 8px; gap: 8px; }
+  .tabs-nav .n { min-width: 13px; padding: 0 3px; font-size: 9px; line-height: 13px; }
   .privacy-link { padding: 7px 6px; }
   .privacy-link span { display: none; }
   .more-menu summary { font-size: 0; padding: 7px 6px; }
@@ -147,8 +148,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .brand { flex: 1; }
   .tabs-nav { order: 3; flex: 0 0 100%; max-width: 420px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 4px; }
   .tabs-nav a { --pad: 10px; padding: 6px var(--pad); font-size: 14px; }
-  /* On the icon's corner, clear of the name */
-  .tabs-nav .n { top: 2px; left: calc(var(--pad) + 11px); min-width: 13px; padding: 0 3px; font-size: 9px; line-height: 13px; }
+  .tabs-nav .n { top: 2px; }
   .topbar .btn.download { padding: 8px 14px; }
   .word-field { grid-template-columns: 1fr; gap: 4px; }
   .word-field .label { padding-top: 0; }

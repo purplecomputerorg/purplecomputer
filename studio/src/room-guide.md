@@ -2,7 +2,7 @@
 
 A **room** is a small Python program your family adds to Purple Computer: a game, a story, a toy. Your kid finds it next to Purple's own rooms and plays it with the keyboard. Rooms come in a **Purple Pack**, the file Purple Studio downloads.
 
-You can make one on Purple Studio's Rooms page (from a form, or by changing a starter room), or have an AI helper write it. This guide is everything either of you needs. If you are an AI helping a parent: write the room, check it with the room checker (near the end), and then tell the parent how to try it in Purple Studio and put it on Purple.
+You can make one on Purple Studio's New Rooms page (from a form, or by changing a starter room), or have an AI helper write it. This guide is everything either of you needs. If you are an AI helping a parent: write the room, check it with the room checker (near the end), and then tell the parent how to try it in Purple Studio and put it on Purple.
 
 ## A room
 
@@ -115,7 +115,7 @@ Up to 64 by 64 letters, and one color dict can serve many pictures. A letter mis
 
 ## Pictures and sounds of your own
 
-A photo of your pet, a recording of Grandma saying hello: in Purple Studio, add them on the Rooms page under "Pictures and sounds for your rooms", and every room in the pack can use them by name, `picture("biscuit")` and `sound("hello")`. Studio turns any photo or recording into what Purple needs.
+A photo of your pet, a recording of Grandma saying hello: in Purple Studio, add them on the New Rooms page under "Pictures and sounds for your rooms", and every room in the pack can use them by name, `picture("biscuit")` and `sound("hello")`. Studio turns any photo or recording into what Purple needs.
 
 In a pack made by hand, they are files: `content/images/<name>.png` (PNG, at most 1024 pixels a side and 1 MB) and `content/sounds/<name>.wav` (WAV, 22050 Hz, mono, 16-bit). Names are lowercase letters, digits, `-` and `_`, up to 40 characters.
 
@@ -155,7 +155,7 @@ Purple won't let the screen flash: a change that brightens or darkens a big part
 
 ## Starter rooms
 
-Studio's Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for any number of players, a story with choices, and a wandering snake, the smallest room. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
+Studio's New Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for any number of players, a story with choices, and a wandering snake, the smallest room. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
 
 ## A Purple Pack made by hand
 
@@ -191,7 +191,7 @@ tar czf garden.purplepack --exclude=__pycache__ -C my-pack manifest.json content
 
 ## Trying it before it goes on Purple
 
-- **In Purple Studio:** on the Rooms page, choose "Open it here" and pick the `.purplepack`. Its rooms run on the real Purple right there in your browser, with their pictures and sounds, and you can change them and download the pack again.
+- **In Purple Studio:** on the New Rooms page, choose "Open it here" and pick the `.purplepack`. Its rooms run on the real Purple right there in your browser, with their pictures and sounds, and you can change them and download the pack again.
 - **With the room checker:** download `https://studio.purplecomputer.org/purple/purple-room-check.pyz` and run `python3 purple-room-check.pyz my-pack` (a folder, a `.purplepack`, or one room's `.py`; Python 3.10 or newer). It checks the pack the way Purple does, then plays each room with a few hundred keys on a fast clock, and says what would stop it and on which line. `--show --keys "right right space"` prints the screen as text after each key, with the sounds and speech it made; each picture shows as a letter, named under the grid. `--room garden` tries just one room. The checker finds what would stop a room, not whether the game can be won: walk through the important parts yourself with `--show`.
 
 ## Putting it on Purple Computer

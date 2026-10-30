@@ -38,7 +38,7 @@ const SECTIONS: Section[] = [
   { id: "keys", clears: "letters", label: "Letters", icon: "z", blurb: "Grandma, every time they press G", voice: true, view: keysView },
   { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "Like a kazoo or a harp", view: instrumentsView },
   { id: "colors", label: "Colors", icon: "🎨", blurb: () => ["Purple, but green, or ", rainbow("any color")], view: colorsView },
-  { id: "rooms", clears: "rooms", label: "Rooms", icon: "🧩", blurb: "Like a world for them to walk around", voice: true, view: roomsView },
+  { id: "rooms", clears: "rooms", label: "New Rooms", icon: "🧩", blurb: "Like a world for them to walk around", voice: true, view: roomsView },
 ].filter((s) => features.rooms || s.id !== "rooms");
 // Old links to pages that moved.
 const MOVED: Record<string, string> = { voice: "keys", "voice/phrases": "words", "words/phrases": "words", python: "rooms" };

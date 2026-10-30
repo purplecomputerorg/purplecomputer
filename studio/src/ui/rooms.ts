@@ -57,7 +57,7 @@ function tryRoom(base: string, made: Made | null, source = made && made.kind !==
 function list(): View {
   const template = (kind: TemplateDraft["kind"]) => ({ kind, data: TEMPLATES[kind].defaults() }) as TemplateDraft;
   return {
-    title: "Rooms",
+    title: "New Rooms",
     editor: h(
       "section",
       {},

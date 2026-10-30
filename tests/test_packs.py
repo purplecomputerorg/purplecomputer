@@ -93,11 +93,11 @@ class TestLoader:
     def test_pictures_say_their_grid_and_one_bigger_than_art_is_not_listed(self, tmp_path):
         d = make_pack(tmp_path)
         pics = d / "content" / "pictures"
-        (pics / "palm.json").write_text(json.dumps({"grid": [64, 28], "ops": [[63, 27, "#ffffff"]]}))
+        (pics / "palm.json").write_text(json.dumps({"grid": [70, 30], "ops": [[69, 29, "#ffffff"]]}))
         (pics / "huge.json").write_text(json.dumps({"grid": [999, 28], "ops": [[100, 0, "#ffffff"]]}))
         cm = ContentManager(packs_dir=tmp_path)
         cm.load_all()
-        assert [(p.name, p.grid) for p in cm.pictures] == [("grandmas-dog", (56, 24)), ("palm", (64, 28))]
+        assert [(p.name, p.grid) for p in cm.pictures] == [("grandmas-dog", (56, 24)), ("palm", (70, 30))]
 
     def test_room_with_a_syntax_error_is_refused_by_the_installer(self, tmp_path):
         d = make_pack(tmp_path)

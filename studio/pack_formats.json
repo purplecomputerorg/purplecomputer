@@ -13,7 +13,7 @@
   {
    "format": 2,
    "date": "2026-10-29",
-   "added": "Pictures on the bigger 64 by 28 Art grid",
+   "added": "Pictures on the bigger 70 by 30 Art grid",
    "needs": {
     "files": [
      "^content/pictures/[^/]+\\.json$"

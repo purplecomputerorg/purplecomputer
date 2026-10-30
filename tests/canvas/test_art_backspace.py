@@ -1,13 +1,14 @@
 """Art's Backspace: a tap erases the square under the brush, or right after typing or stamping, the
-one before it. Backing off the start of a line lands on the last thing on the line above. Held, it
-takes squares for a second, then whole lines, each fading out first; letting go mid-fade brings the line back."""
+one before it, backing up against the way the brush last painted. Backing off the start of a line lands on the
+last thing on the line above. Held, it takes squares for a second, then whole lines, each fading out
+first; letting go mid-fade brings the line back. Backing up a column takes squares only."""
 
 import pytest
 
 from purple_tui.canvas.harness import make_app, press, run
 from purple_tui.canvas.rooms import art_room
 from purple_tui.canvas.rooms.art_room import COLS, LINE_FADE_S, LINES_AFTER
-from purple_tui.keyboard import ControlAction
+from purple_tui.keyboard import ControlAction, NavigationAction
 
 
 @pytest.fixture
@@ -112,4 +113,51 @@ def test_held_lines_skip_empty_ones_and_stop_when_nothing_is_left(clock):
         clock[0] += LINE_FADE_S
         room._step_fade()
         assert not room._grid and room._fade is None and room._fade_timer is None
+    run(go())
+
+
+async def _line(app, way, n):
+    await press(app, "space")
+    for _ in range(n):
+        await app._dispatch_keyboard_action(NavigationAction(direction=way))
+    await press(app, "space")
+
+
+@pytest.mark.parametrize("way, back", [("down", (0, -1)), ("up", (0, 1)), ("left", (1, 0))])
+def test_backspace_backs_up_a_line_the_way_it_was_drawn(way, back):
+    async def go():
+        app, room = _art()
+        room._cursor_x, room._cursor_y = 10, 10
+        await _line(app, way, 4)
+        end = (room._cursor_x, room._cursor_y)
+        await press(app, "backspace")
+        await press(app, "backspace")
+        assert (room._cursor_x, room._cursor_y) == (end[0] + back[0], end[1] + back[1])
+        assert len(room._grid) == 3
+    run(go())
+
+
+def test_moving_with_the_brush_up_keeps_backing_up_the_line_drawn():
+    async def go():
+        app, room = _art()
+        room._cursor_x, room._cursor_y = 10, 10
+        await _line(app, "down", 4)
+        for way in ("down", "down", "up", "up"):    # off the end, then back up onto it
+            await app._dispatch_keyboard_action(NavigationAction(direction=way))
+        for _ in range(3):
+            await press(app, "backspace")
+        assert sorted(room._grid) == [(10, 10), (10, 11)]
+    run(go())
+
+
+def test_holding_backspace_up_a_column_never_takes_whole_lines(clock):
+    async def go():
+        app, room = _art(rows=1)
+        room._cursor_x, room._cursor_y = 10, 1
+        await _line(app, "down", 6)
+        await _down(app, repeat=False)
+        clock[0] += LINES_AFTER + 0.1
+        for _ in range(6):
+            await _down(app)
+        assert room._fade is None and len(room._grid) == COLS
     run(go())

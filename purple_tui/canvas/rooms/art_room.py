@@ -38,6 +38,7 @@ BRUSH_HEAD = 0.55                   # of the brush's height from the tip: bristl
 SPRITE_HALF = 3.5                   # cells from the cursor cell's center to the sprite's edge
 LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three quick frames
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
+BACK = {"right": "left", "left": "right", "up": "down", "down": "up"}
 HINTS = {
     "littles": "Type to paint!",
     "pen": "Brush down! Arrows paint. {Space} lifts it.",
@@ -229,6 +230,7 @@ class ArtRoom(Room):
         self._use_heading_cursor = False
         self._post_stamp_x = None
         self._wrap_at = None            # a right-edge cell just stamped: the next stamp starts the next line
+        self._way = "right"             # the way the brush last painted, which Backspace backs up against
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
         self._backspace_since = None    # when a held Backspace went down
@@ -327,7 +329,7 @@ class ArtRoom(Room):
         self._repaint_all()
         x, y = state.get("cursor", [-dx, -dy])
         self._cursor_x, self._cursor_y = max(0, min(x + dx, COLS - 1)), max(0, min(y + dy, ROWS - 1))
-        self._wrap_at = None
+        self._wrap_at, self._way = None, "right"
         self._paint_mode = bool(state.get("paint", True))
         self._set_pen(False)
         self._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
@@ -451,20 +453,21 @@ class ArtRoom(Room):
     def _advance_after_stamp(self, direction: str):
         """On past a typed or stamped cell. At the right edge the brush stays in view
         until the next stamp, which wraps like lines of text."""
-        self._post_stamp_x = self._cursor_x
+        self._post_stamp_x, self._way = self._cursor_x, direction
         if direction == "right" and self._cursor_x >= COLS - 1:
             self._wrap_at = (self._cursor_x, self._cursor_y)
         else:
             self._move_in_direction(direction, wrap=True)
 
     def execute_logo_command(self, action: str, direction: str, distance: int):
-        back = self._TURN_RIGHT[self._TURN_RIGHT[direction]]
+        back = BACK[direction]
         if distance and self._run_end == (back, self._cursor_x, self._cursor_y):
             self._move_in_direction(direction, wrap=True)    # turning straight back starts on the run's last cell
         self._run_end = None
         for _ in range(distance):
             if action == "paint":
                 self._paint_at_cursor()
+                self._way = direction
             self._move_in_direction(direction, wrap=True)    # as tapped arrows do, so echoed strokes replay whole
         if action == "paint" and distance:
             self._run_end = (direction, self._cursor_x, self._cursor_y)
@@ -476,7 +479,7 @@ class ArtRoom(Room):
         elif direction in ("spin", "rotate"):
             self._heading = self._TURN_RIGHT[self._heading]
         elif direction in ("back", "backward", "around"):
-            self._heading = self._TURN_RIGHT[self._TURN_RIGHT[self._heading]]
+            self._heading = BACK[self._heading]
         self._use_heading_cursor = True
         self.refresh()
 
@@ -510,24 +513,29 @@ class ArtRoom(Room):
 
     def _backspace(self, just_stamped: bool = False):
         """Erase the square under the brush, like a spreadsheet cell. Right after typing or stamping,
-        or on an empty square, first back one cell, or up to the last thing on the line above."""
+        or on an empty square, first back up one cell against the way the brush last painted."""
         waiting, self._wrap_at = self._wrap_at == (self._cursor_x, self._cursor_y), None
         if (just_stamped and not waiting) or (self._cursor_x, self._cursor_y) not in self._grid:
-            if self._cursor_x > 0:
-                self._cursor_x -= 1
-            elif self._cursor_y > 0:
-                self._cursor_y -= 1
-                self._cursor_x = max((x for x, y in self._grid if y == self._cursor_y), default=0)
+            self._back_up()
         self._erase((self._cursor_x, self._cursor_y))
         self.app.invalidate()
 
+    def _back_up(self):
+        """Backing off the start of a line, as in text, lands on the last thing on the line above."""
+        if self._way != "right" or self._cursor_x > 0:
+            self._move_in_direction(BACK[self._way])
+        elif self._cursor_y > 0:
+            self._cursor_y -= 1
+            self._cursor_x = max((x for x, y in self._grid if y == self._cursor_y), default=0)
+
     def _hold_backspace(self, repeat: bool, just_stamped: bool):
-        """Squares one at a time, then after LINES_AFTER whole lines, the way Write takes letters then words."""
+        """Squares one at a time, then after LINES_AFTER whole lines, the way Write takes letters then words.
+        Backing up a column only ever takes squares: whole lines would wipe across it."""
         now = time.monotonic()
         if not repeat or self._backspace_since is None:
             self._backspace_since = now
             self._backspace(just_stamped)
-        elif now - self._backspace_since < LINES_AFTER:
+        elif now - self._backspace_since < LINES_AFTER or self._way in ("up", "down"):
             self._backspace()
         elif self._fade is None:
             self._fade_next_line()
@@ -578,6 +586,7 @@ class ArtRoom(Room):
     def _paint_stroke(self, direction: str):
         """One cell of an arrow trail, written down as code too."""
         self._paint_at_cursor()
+        self._way = direction
         self.echo.color(self._last_key_color)
         self.echo.step(direction)
 

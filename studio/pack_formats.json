@@ -9,6 +9,17 @@
     "files": [],
     "calls": []
    }
+  },
+  {
+   "format": 2,
+   "date": "2026-10-29",
+   "added": "Pictures on the bigger 64 by 28 Art grid",
+   "needs": {
+    "files": [
+     "^content/pictures/[^/]+\\.json$"
+    ],
+    "calls": []
+   }
   }
  ],
  "skipped": [
@@ -36,10 +47,10 @@
   }
  ],
  "fingerprint": {
-  "studio/sdk/src/pack.ts": "ba6905cc77a3b4c1",
-  "studio/src/pack.ts": "b2a4993f4d041e29",
-  "purple_tui/content.py": "bbbfb850e0bfd978",
-  "purple_tui/pack_manager.py": "a8c25ce9e5d548ed",
+  "studio/sdk/src/pack.ts": "10d215b546a97052",
+  "studio/src/pack.ts": "944ae929ddac7e14",
+  "purple_tui/content.py": "dcd131563a09b714",
+  "purple_tui/pack_manager.py": "41f6ab779c96aafd",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
   "purple_tui/canvas/rooms/family_room.py": "7b29343630c98692",
   "purple_tui/roomkit/purple.py": "fe359f3abea06bfa",

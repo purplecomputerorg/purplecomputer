@@ -14,7 +14,7 @@ describe("photo to cells", () => {
 
 describe("cropping to the Art canvas", () => {
   it("fills the canvas from a tall photo and a wide one", () => {
-    for (const [w, h] of [[1146, 1258], [4000, 1000], [56, 24]]) {
+    for (const [w, h] of [[1146, 1258], [4000, 1000], [CANVAS_WIDTH, CANVAS_HEIGHT]]) {
       const c = fillCrop(w, h);
       expect(c.w / c.h).toBeCloseTo(CANVAS_SHAPE);
       expect(c.x >= 0 && c.y >= 0 && c.x + c.w <= w + 1e-9 && c.y + c.h <= h + 1e-9).toBe(true);

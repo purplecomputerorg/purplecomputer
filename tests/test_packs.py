@@ -90,6 +90,15 @@ class TestLoader:
         cm.load_all()
         assert [p.name for p in cm.pictures] == ["grandmas-dog"]
 
+    def test_pictures_say_their_grid_and_one_bigger_than_art_is_not_listed(self, tmp_path):
+        d = make_pack(tmp_path)
+        pics = d / "content" / "pictures"
+        (pics / "palm.json").write_text(json.dumps({"grid": [64, 28], "ops": [[63, 27, "#ffffff"]]}))
+        (pics / "huge.json").write_text(json.dumps({"grid": [999, 28], "ops": [[100, 0, "#ffffff"]]}))
+        cm = ContentManager(packs_dir=tmp_path)
+        cm.load_all()
+        assert [(p.name, p.grid) for p in cm.pictures] == [("grandmas-dog", (56, 24)), ("palm", (64, 28))]
+
     def test_room_with_a_syntax_error_is_refused_by_the_installer(self, tmp_path):
         d = make_pack(tmp_path)
         (d / "content" / "rooms" / "bad.py").write_text("def on_key(key)\n    show(key)\n")
@@ -195,7 +204,7 @@ class TestCheckPack:
         (lambda d: (d / "content" / "word-pictures.json").write_text('{"cat": "nope"}'), "word-pictures.json: every entry"),
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "marimba", "params": {"reverb": 1}})), "no parameter 'reverb'"),
         (lambda d: (d / "content" / "instruments" / "kitchen.json").write_text(json.dumps({"name": "k", "base": "piano"})), "base must be one of"),
-        (lambda d: (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [[999, 0, "#ffffff"]]})), "off the 56 by 24 Art grid"),
+        (lambda d: (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [[999, 0, "#ffffff"]]})), "off the 56 by 24 grid"),
         (lambda d: (d / "content" / "pictures" / "palm.json").write_text(json.dumps({"ops": [], "letters": [[0, 0, " ", "#ffffff"]]})), "letters must be a list"),
         (lambda d: (d / "manifest.json").write_text(json.dumps({"id": "x", "name": "x", "version": "1.0", "type": "emoji"})), "Invalid version"),
         (lambda d: (d / "manifest.json").write_text(json.dumps({"id": "../x", "name": "x", "version": "1.0.0", "type": "emoji"})), "Invalid pack id"),

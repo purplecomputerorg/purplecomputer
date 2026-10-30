@@ -19,6 +19,8 @@ from functools import cache
 from pathlib import Path
 from typing import Optional
 
+from .constants import ART_COLS, ART_ROWS, OLD_ART_GRID
+
 
 # Play shows a word mapped to one of a pack's pictures as a character from Supplementary Private Use Area-B
 # (A holds the icon font's glyphs), picked from the word so it stays the same across boots (Time Travel keeps
@@ -34,7 +36,7 @@ def is_word_picture(char: str) -> bool:
 # Newest manifest "format" this loader reads. A pack declaring a higher one is
 # skipped whole rather than half-loaded. Format 1 is described in
 # studio/PACK_FORMAT.md.
-PACK_FORMAT = 1
+PACK_FORMAT = 2
 
 
 @dataclass
@@ -102,6 +104,7 @@ class Picture:
     ops: list[tuple[int, int, str]]
     label: str = ""  # the name as the family typed it, apostrophes and all
     letters: list[tuple[int, int, str, str]] = field(default_factory=list)
+    grid: tuple[int, int] = OLD_ART_GRID
 
     @property
     def title(self) -> str:
@@ -421,12 +424,13 @@ class ContentManager:
     def _load_pictures(self, content_dir: Path) -> None:
         for spec in sorted((content_dir / "pictures").glob("*.json")):
             data = _read_json(spec)
-            ops = data.get("ops") if isinstance(data, dict) else None
-            letters = data.get("letters", []) if isinstance(data, dict) else None
-            if (isinstance(ops, list) and all(is_paint_op(op) for op in ops)
-                    and isinstance(letters, list) and all(is_letter_op(op) for op in letters)):
+            if not isinstance(data, dict) or not (grid := picture_grid(data)):
+                continue
+            ops, letters = data.get("ops"), data.get("letters", [])
+            if (isinstance(ops, list) and all(is_paint_op(op, grid) for op in ops)
+                    and isinstance(letters, list) and all(is_letter_op(op, grid) for op in letters)):
                 self.pictures.append(Picture(spec.stem, [tuple(op) for op in ops], typed_name(data, spec.stem),
-                                             [tuple(op) for op in letters]))
+                                             [tuple(op) for op in letters], grid))
 
     def pack_dirs(self, sub: str) -> list[Path]:
         """content/<sub>/ in every user pack that has one, last installed first,
@@ -894,25 +898,32 @@ def _read_json(path: Path):
         return None
 
 
-def _on_grid(op, size: int) -> bool:
-    from .constants import ART_COLS, ART_ROWS
+def picture_grid(data: dict) -> tuple[int, int] | None:
+    """The grid a picture was made on, [cols, rows] (Art's old one when it names none), or None when Art can't hold it."""
+    grid = data.get("grid", OLD_ART_GRID)
+    ok = (isinstance(grid, (list, tuple)) and len(grid) == 2 and all(type(n) is int for n in grid)
+          and 0 < grid[0] <= ART_COLS and 0 < grid[1] <= ART_ROWS)
+    return tuple(grid) if ok else None
+
+
+def _on_grid(op, size: int, grid) -> bool:
     return (isinstance(op, list) and len(op) == size
-            and isinstance(op[0], int) and 0 <= op[0] < ART_COLS
-            and isinstance(op[1], int) and 0 <= op[1] < ART_ROWS)
+            and isinstance(op[0], int) and 0 <= op[0] < grid[0]
+            and isinstance(op[1], int) and 0 <= op[1] < grid[1])
 
 
 def _is_hex(v) -> bool:
     return isinstance(v, str) and len(v) == 7 and v[0] == "#"
 
 
-def is_paint_op(op) -> bool:
-    """[x, y, "#rrggbb"] on the Art grid."""
-    return _on_grid(op, 3) and _is_hex(op[2])
+def is_paint_op(op, grid) -> bool:
+    """[x, y, "#rrggbb"] on the picture's grid."""
+    return _on_grid(op, 3, grid) and _is_hex(op[2])
 
 
-def is_letter_op(op) -> bool:
-    """[x, y, "A", "#rrggbb"]: a letter written on the Art grid, in that ink."""
-    return _on_grid(op, 4) and isinstance(op[2], str) and len(op[2]) == 1 and not op[2].isspace() and _is_hex(op[3])
+def is_letter_op(op, grid) -> bool:
+    """[x, y, "A", "#rrggbb"]: a letter written on the picture's grid, in that ink."""
+    return _on_grid(op, 4, grid) and isinstance(op[2], str) and len(op[2]) == 1 and not op[2].isspace() and _is_hex(op[3])
 
 
 # Global content manager instance

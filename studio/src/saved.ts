@@ -1,5 +1,6 @@
 // The draft kept in this browser, so a reload or a closed tab loses nothing. Best effort only: Safari clears it
 // after a week away, which is why the downloaded Purple Pack, reopened with openPack, is the copy that lasts.
+import { refit } from "./photo";
 import type { Shelved } from "./shelf";
 import { draft, emptyDraft, madeOf, type Draft, type Made, type RoomDraft } from "./state";
 
@@ -21,12 +22,13 @@ function store<T>(mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBReques
 }
 
 // Rooms saved before rules: a form room keeps its form, and a blocks room keeps its Python.
-// A draft saved before a field existed gets that field empty.
+// A draft saved before a field existed gets that field empty, and pictures fill today's Art grid.
 type OldRoom = RoomDraft & { template?: Made | null };
 export const upgrade = (saved: Partial<Draft> | undefined) => {
   if (!saved) return undefined;
   const d = { ...emptyDraft(), ...saved };
-  return { ...d, rooms: d.rooms.map(({ template, ...r }: OldRoom) => ({ ...r, made: madeOf(r.made ?? template) })) };
+  return { ...d, rooms: d.rooms.map(({ template, ...r }: OldRoom) => ({ ...r, made: madeOf(r.made ?? template) })),
+    pictures: d.pictures.map(refit) };
 };
 
 export const recall = (): Promise<Draft | undefined> => store<Draft | undefined>("readonly", (s) => s.get(KEY)).then(upgrade).catch(() => undefined);

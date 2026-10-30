@@ -54,7 +54,9 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 # units (minus its header and hint rows), so no computer gets a wider picture.
 CANVAS_COLS = 48
 CANVAS_ROWS = 24
-ART_COLS, ART_ROWS = 56, 24   # the canvas Art grid, in square cells; pack pictures are painted on it
+ART_COLS, ART_ROWS = 64, 28   # the canvas Art grid, in square cells
+# Art's grid before it grew: pack pictures and Art states that name no grid were made on it, and are centered on today's.
+OLD_ART_GRID = (56, 24)
 
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 29          # Viewport widget height (CSS)

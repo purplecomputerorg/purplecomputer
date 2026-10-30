@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEntries, formatOf, manifest, roomTitle, skippedBy, type PackSpec } from "../sdk/src/pack";
+import { ART_GRID } from "../sdk/src/purple/art";
 import { SAMPLE_PITCHES } from "../sdk/src/purple/sounds";
 import { defaults } from "../sdk/src/purple/synth";
 import { gunzip, gzip, tar, untar } from "../sdk/src/tar";
@@ -168,8 +169,8 @@ describe("pack assembly", () => {
       { name: "palm", ops: [[0, 0, "#00ff00"]], letters: [] },
     ] };
     const read = async (path: string) => JSON.parse(new TextDecoder().decode((await buildEntries(spec)).find((e) => e.path === path)!.data));
-    expect(await read("content/pictures/t-rex.json")).toEqual({ name: "T. rex", ops: [[0, 0, "#00ff00"]], letters: [[1, 0, "T", "#ffffff"]] });
-    expect(await read("content/pictures/palm.json")).toEqual({ name: "palm", ops: [[0, 0, "#00ff00"]] });
+    expect(await read("content/pictures/t-rex.json")).toEqual({ name: "T. rex", grid: ART_GRID, ops: [[0, 0, "#00ff00"]], letters: [[1, 0, "T", "#ffffff"]] });
+    expect(await read("content/pictures/palm.json")).toEqual({ name: "palm", grid: ART_GRID, ops: [[0, 0, "#00ff00"]] });
   });
 
   it("writes a room's Python next to the rules it came from, and the library it runs on", async () => {

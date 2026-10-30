@@ -1,7 +1,7 @@
 // Builds a .purplepack from a plain description. Everything Purple reads is described
 // in studio/PACK_FORMAT.md; this is the one place that knows the file layout.
 import exported from "./purple/export.json";
-import { type LetterOp, type PaintOp } from "./purple/art";
+import { ART_GRID, type LetterOp, type PaintOp } from "./purple/art";
 import { LETTER_FILES, SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
 import { SYNTH_RATE, renderNote, type BaseName, type Params } from "./purple/synth";
 import { themeJson, type Theme } from "./purple/theme";
@@ -139,7 +139,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   for (const p of spec.phrases) entries.push({ path: phrasePath(p.text), data: encodeWav(p.clip) });
 
   for (const pic of spec.pictures) {
-    entries.push(json(`content/pictures/${pic.name}.json`, { name: pic.title ?? pic.name, ops: pic.ops, ...(pic.letters?.length ? { letters: pic.letters } : {}) }));
+    entries.push(json(`content/pictures/${pic.name}.json`, { name: pic.title ?? pic.name, grid: ART_GRID, ops: pic.ops, ...(pic.letters?.length ? { letters: pic.letters } : {}) }));
     if (pic.png) entries.push({ path: picturePngPath(pic.name), data: pic.png });
     if (pic.source) entries.push({ path: pictureSourcePath(pic.name), data: pic.source });
   }

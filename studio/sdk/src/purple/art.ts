@@ -9,6 +9,8 @@ const art = exported.art;
 export const CANVAS_WIDTH = art.canvas[0];
 export const CANVAS_HEIGHT = art.canvas[1];
 export const CELL_ASPECT = art.cell_aspect;
+// Said in every picture, so a Purple whose grid is another size still places it.
+export const ART_GRID: [cols: number, rows: number] = [CANVAS_WIDTH, CANVAS_HEIGHT];
 
 export const CANVAS_BG = art.canvas_bg;
 export const CANVAS_ALT = art.canvas_alt;
@@ -67,8 +69,8 @@ export function canvasOrigin(cols: number, rows: number): [x0: number, y0: numbe
 export type PaintOp = [x: number, y: number, hex: string];
 // A letter written over the paint, in its ink.
 export type LetterOp = [x: number, y: number, char: string, ink: string];
-// What a pack picture puts on the Art canvas.
-export interface ArtPicture { ops: PaintOp[]; letters: LetterOp[] }
+// What a pack picture puts on the Art canvas, and the grid it was made on.
+export interface ArtPicture { ops: PaintOp[]; letters: LetterOp[]; grid: [cols: number, rows: number] }
 
 export function cellsToOps(cells: string[][]): PaintOp[] {
   const [x0, y0] = canvasOrigin(cells[0].length, cells.length);

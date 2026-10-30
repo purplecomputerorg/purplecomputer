@@ -3,7 +3,7 @@ import dog from "./assets/dog.jpg";
 import saturn from "./assets/saturn.jpg";
 import starryNight from "./assets/starry-night.jpg";
 import type { Keepable } from "./state";
-import { CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type ArtPicture, type LetterOp, type PaintOp } from "@sdk/purple/art";
+import { ART_GRID, CANVAS_BG, CANVAS_HEIGHT, CANVAS_WIDTH, CELL_ASPECT, canvasOrigin, cellsToOps, fitToCanvas, type ArtPicture, type LetterOp, type PaintOp } from "@sdk/purple/art";
 import { DEFAULT_PALETTE, contrast } from "@sdk/purple/theme";
 
 // crop: the part of the photo on the screen, in its own pixels and the Art canvas's shape; none is the whole photo.
@@ -107,13 +107,23 @@ export function cropTo(pic: Picture, crop?: Crop) {
   pic.ops = cellsToOps(pic.cells);
 }
 
+// Painted again from its photo to fill today's grid: a draft or pack can hold cells made for Art's older, smaller one.
+// Moved words keep their place in the photo. Without its photo, a picture is only centered again.
+export function refit(pic: Picture): Picture {
+  const cols = pic.cells[0]?.length;
+  if (!pic.bitmap) return { ...pic, ops: cols ? cellsToOps(pic.cells) : [] };
+  cropTo(pic, pic.crop && clampCrop(pic.crop, pic.bitmap.width, pic.bitmap.height));
+  const k = cols ? pic.cells[0].length / cols : 1;
+  if (pic.words?.x !== undefined && k !== 1) pic.words = { ...pic.words, x: Math.round(pic.words.x * k), y: pic.words.y === undefined ? undefined : Math.round(pic.words.y * k) };
+  return pic;
+}
+
 export const CANVAS_SHAPE = CANVAS_WIDTH / (CANVAS_HEIGHT * CELL_ASPECT);
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
 // The biggest canvas-shaped crop of a w by h photo, centered.
 export function fillCrop(w: number, h: number): Crop {
-  const cw = Math.min(w, h * CANVAS_SHAPE);
-  const ch = cw / CANVAS_SHAPE;
+  const [cw, ch] = w / h > CANVAS_SHAPE ? [h * CANVAS_SHAPE, h] : [w, w / CANVAS_SHAPE];
   return { x: (w - cw) / 2, y: (h - ch) / 2, w: cw, h: ch };
 }
 
@@ -166,7 +176,7 @@ export function wordLetters(pic: Picture): LetterOp[] {
   }));
 }
 
-export const onScreen = (pic: Picture): ArtPicture => ({ ops: pic.ops, letters: wordLetters(pic) });
+export const onScreen = (pic: Picture): ArtPicture => ({ ops: pic.ops, letters: wordLetters(pic), grid: ART_GRID });
 
 // Purple's Art letters (MartianMonoArt-Bold, declared in styles.css), sized as _letter_px in art_room.py.
 export const ART_FONT = "PurpleArt";

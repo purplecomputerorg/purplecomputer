@@ -13,6 +13,8 @@ from purple_tui import palette as P
 from purple_tui import settings
 from purple_tui.canvas import theme
 from purple_tui.canvas.harness import make_app, run
+from purple_tui.canvas.rooms.art_room import shift_from
+from purple_tui.constants import OLD_ART_GRID
 from purple_tui.music_constants import instruments
 from tests.test_packs import make_pack
 
@@ -81,7 +83,8 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
         room, menu, at = live.setup("art", picture={"ops": [[3, 2, "#ff0000"]], "letters": [[4, 2, "H", "#ffffff"]]})
         art = app.rooms["art"]
         assert (room, menu) == ("art", False) and art._paint_mode
-        assert art._grid[(3, 2)][2] == "#ff0000" and art._grid[(4, 2)][0] == "H"
+        dx, dy = shift_from(OLD_ART_GRID)
+        assert art._grid[(3 + dx, 2 + dy)][2] == "#ff0000" and art._grid[(4 + dx, 2 + dy)][0] == "H"
         assert all(0 <= v <= 1 for v in at)
 
         assert (await live.key("escape"))[1]

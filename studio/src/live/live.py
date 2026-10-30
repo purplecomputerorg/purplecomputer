@@ -85,7 +85,8 @@ def setup(room, letters=False, instrument=None, picture=None, family=None):
         music.set_instrument_by_name(instrument or "marimba")
     if picture:
         from purple_tui.canvas.secret_doodle import paint_cells
-        paint_cells(_app, picture["ops"], picture.get("letters", []))
+        from purple_tui.content import picture_grid
+        paint_cells(_app, picture["ops"], picture.get("letters", []), picture_grid(picture))
     if room == "art":
         _app.rooms["art"]._set_paint_mode(True)
     if family:

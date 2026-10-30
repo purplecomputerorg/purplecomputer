@@ -7,6 +7,8 @@ import pytest
 from purple_tui.canvas import saves
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.library import DELETE_HOLD_S, Library, PictureTile
+from purple_tui.canvas.rooms.art_room import COLS, ROWS, shift_from
+from purple_tui.constants import OLD_ART_GRID
 
 
 @pytest.fixture(autouse=True)
@@ -65,8 +67,10 @@ def test_pack_pictures_open_in_art_only_and_cannot_be_removed(monkeypatch):
         await press(app, "backspace", hold=DELETE_HOLD_S + 0.2)
         assert library.tiles == [tile]
         await press(app, "enter")
-        assert app.room_state("art")["c:2,3"][:3] == ["P", "#ffffff", "#ff0000"]
-        assert app.rooms["art"].picture() == ([[2, 3, "#ff0000"]], [[2, 3, "P", "#ffffff"], [5, 5, "Q", "#000000"]])
+        dx, dy = shift_from(OLD_ART_GRID)
+        assert app.room_state("art")[f"c:{2 + dx},{3 + dy}"][:3] == ["P", "#ffffff", "#ff0000"]
+        assert app.rooms["art"].picture() == ([[2 + dx, 3 + dy, "#ff0000"]],
+                                              [[2 + dx, 3 + dy, "P", "#ffffff"], [5 + dx, 5 + dy, "Q", "#000000"]])
         assert app._timelines["art"].tip() != drawn, "the picture is a new Time Travel step"
         library.close()
         app.action_switch_room("music")
@@ -303,4 +307,23 @@ def test_a_save_flashes_shows_its_picture_and_stars_the_title_until_the_work_cha
         assert "Already" in app._toasts[-1].text
         await type_text(app, "z")
         assert "art" not in app._saved_digest
+    run(go())
+
+
+def test_art_from_the_old_grid_opens_centered_and_time_travels():
+    """A save and Time Travel steps from before the grid grew name no grid; they come back centered."""
+    old = {"c:0,0": ["", "#000000", "#ff0000", 1], "c:55,23": ["A", "#ffffff", "#00ff00", 1], "cursor": [55, 23]}
+    dx, dy = shift_from(OLD_ART_GRID)
+
+    async def go():
+        app = make_app()
+        app.action_switch_room("art")
+        app.apply_room_state("art", old)
+        art = app.rooms["art"]
+        assert art.picture() == ([[dx, dy, "#ff0000"], [55 + dx, 23 + dy, "#00ff00"]], [[55 + dx, 23 + dy, "A", "#ffffff"]])
+        assert (art._cursor_x, art._cursor_y) == (55 + dx, 23 + dy)
+        now = app.room_state("art")
+        assert now["grid"] == [COLS, ROWS]
+        app.apply_room_state("art", now)
+        assert app.room_state("art") == now, "today's states come back where they were"
     run(go())

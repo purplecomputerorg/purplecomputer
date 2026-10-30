@@ -1,13 +1,12 @@
 // The app's draft, turned into the plain spec the SDK builds a pack from, and a pack turned back into a draft.
 import { buildEntries, formatOf, letterPath, skippedBy, packBlob, packFilename as filename, phrasePath, pictureSourcePath, ROOM_FILE_NAME, ROOM_NAME, roomFilePath, type PackSkipped, type PackSpec, type RoomFileKind } from "@sdk/pack";
-import { cellsToOps } from "@sdk/purple/art";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar, type TarEntry } from "@sdk/tar";
 import { decodeWav } from "@sdk/wav";
 import type { PackFiles } from "./live/boot";
 import { instrumentNotes } from "./notes";
 import { roomVoice } from "./roomvoice";
-import { dataUrl, onScreen, previewPng, sourceJpeg, type Crop, type Words } from "./photo";
+import { dataUrl, onScreen, previewPng, refit, sourceJpeg, type Crop, type Words } from "./photo";
 import { roomIcon } from "./examples";
 import { draft, emptyDraft, madeOf, type Draft, type Keepable, type RoomDraft, type RoomFile } from "./state";
 
@@ -132,7 +131,7 @@ export async function openPack(file: Blob): Promise<Draft> {
     phrases: s.phrases.map((text) => kept({ text, clip: decodeWav(read(phrasePath(text))) })),
     pictures: await Promise.all(s.pictures.map(async (p) => {
       const photo = image(pictureSourcePath(p.name), "image/jpeg");
-      return kept({ ...p, ops: cellsToOps(p.cells), sourceUrl: await dataUrl(photo), bitmap: await createImageBitmap(photo) });
+      return refit(kept({ ...p, ops: [], sourceUrl: await dataUrl(photo), bitmap: await createImageBitmap(photo) }));
     })),
   };
 }

@@ -11,7 +11,7 @@ import pygame
 
 from ... import palette as P
 from ...code_runner import ArtCodeRunner
-from ...constants import ART_COLS, ART_ROWS, ICON_PALETTE
+from ...constants import ART_COLS, ART_ROWS, ICON_PALETTE, OLD_ART_GRID
 from ...color_mixing import mix_colors_paint
 from ..gfx import _Cache, hexcolor, mix, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
@@ -45,6 +45,11 @@ HINTS = {
     "write": "Type to write! Arrow keys move. {Enter} for a new line.",
     "pick": PICK_HINT,
 }
+
+
+def shift_from(grid) -> tuple[int, int]:
+    """How far work made on a cols x rows grid moves to sit centered on this one."""
+    return (COLS - grid[0]) // 2, (ROWS - grid[1]) // 2
 
 
 def brush_for_key(char: str):
@@ -302,7 +307,7 @@ class ArtRoom(Room):
         state = {f"c:{x},{y}": [ch, fg, bg, 1 if (x, y) in self._painted_positions else 0]
                  for (x, y), (ch, fg, bg) in self._grid.items()}
         state.update(cursor=[self._cursor_x, self._cursor_y], paint=self._paint_mode, color=self._last_key_color,
-                     ink=self._ink)
+                     ink=self._ink, grid=[COLS, ROWS])
         return state
 
     def restore_timeline_state(self, state: dict):
@@ -310,14 +315,18 @@ class ArtRoom(Room):
         self._grid.clear()
         self._painted_positions.clear()
         self._last_paint_pos = self._mixed = None
+        dx, dy = shift_from(state.get("grid", OLD_ART_GRID))
         for key, val in state.items():
             if key.startswith("c:"):
                 x, y = (int(n) for n in key[2:].split(","))
-                self._grid[(x, y)] = (val[0], val[1], val[2])
-                if val[3]:
-                    self._painted_positions.add((x, y))
+                pos = (x + dx, y + dy)
+                if 0 <= pos[0] < COLS and 0 <= pos[1] < ROWS:
+                    self._grid[pos] = (val[0], val[1], val[2])
+                    if val[3]:
+                        self._painted_positions.add(pos)
         self._repaint_all()
-        self._cursor_x, self._cursor_y = state.get("cursor", [0, 0])
+        x, y = state.get("cursor", [-dx, -dy])
+        self._cursor_x, self._cursor_y = max(0, min(x + dx, COLS - 1)), max(0, min(y + dy, ROWS - 1))
         self._wrap_at = None
         self._paint_mode = bool(state.get("paint", True))
         self._set_pen(False)

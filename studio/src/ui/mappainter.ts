@@ -27,8 +27,11 @@ const mapsOf = (v: Lit): { name?: Str; rows: Str[] }[] =>
   isWorld(v) ? (v as Dict).entries.map(([k, x]) => ({ name: k as Str, rows: (x as { items: Str[] }).items })) : [{ rows: (v as { items: Str[] }).items }];
 
 type Legend = Extract<Lit, { t: "dict" }>;
+// How a legend's entry looks: the entry itself, or the first part of one with more parts (a thing's look, what it is...).
+const faceOfEntry = (x: Lit): Face | undefined =>
+  x.t === "str" || x.t === "picture" ? x : x.t === "tuple" && x.items[0] && (x.items[0].t === "str" || x.items[0].t === "picture") ? x.items[0] : undefined;
 const isLegend = (v: Lit): v is Legend =>
-  v.t === "dict" && v.entries.length > 0 && v.entries.every(([k, x]) => k.t === "str" && [...k.v].length === 1 && (x.t === "str" || x.t === "picture"));
+  v.t === "dict" && v.entries.length > 0 && v.entries.every(([k, x]) => k.t === "str" && [...k.v].length === 1 && !!faceOfEntry(x));
 
 // The dict of one-letter keys that names the most letters on the map or world.
 export function legendFor(map: Lit, values: Lit[]): Legend | undefined {
@@ -40,7 +43,7 @@ export function legendFor(map: Lit, values: Lit[]): Legend | undefined {
 // Every letter on the map or world's squares.
 export const lettersIn = (v: Lit) => new Set(mapsOf(v).flatMap((m) => lettersOf(m.rows).flat()));
 
-export const legendNames = (d: Legend | undefined) => new Map(d?.entries.map(([k, x]) => [(k as Str).v, x as Face]));
+export const legendNames = (d: Legend | undefined) => new Map(d?.entries.map(([k, x]) => [(k as Str).v, faceOfEntry(x)!]));
 
 // The numbers that don't join two squares: they lead nowhere, or it's unclear where.
 export const lonelyNumbers = (v: Lit): string[] => {
@@ -60,7 +63,16 @@ function blankMap(world: Dict): Lit {
 const faceOf = (letter: string, legend: Map<string, Face>) =>
   legend.get(letter) ?? (/\d/.test(letter) ? [...legend].find(([k]) => /\d/.test(k))?.[1] : undefined);
 
-function look(el: HTMLElement, letter: string, legend: Map<string, Face>) {
+// Letters drawn as something of the builder's own, like the hero where it starts.
+export type Special = Map<string, () => Node>;
+
+function look(el: HTMLElement, letter: string, legend: Map<string, Face>, special?: Special) {
+  const own = special?.get(letter);
+  if (own) {
+    el.style.background = "";
+    el.classList.remove("letter");
+    return el.replaceChildren(own());
+  }
   const shown = faceOf(letter, legend);
   const color = shown?.t === "str" && COLOR.test(shown.v);
   el.style.background = color ? shown.v : "";
@@ -70,16 +82,26 @@ function look(el: HTMLElement, letter: string, legend: Map<string, Face>) {
   if (shown && /\d/.test(letter)) el.append(h("span", { class: "map-num" }, letter));
 }
 
-// Returns the painter and its redraw, for when the legend changes.
-export function mapPainter(knob: Lit, legend: () => Map<string, Face>, onEdit: () => void): [HTMLElement, () => void] {
+// Options a builder gives: special looks, each brush's name for its tooltip, what shows under the brushes for the one
+// picked, more buttons after them, and which map and brush are picked (shared between painters of the same world, so
+// the big one opens where the small one was).
+export interface PainterOptions {
+  special?: () => Special; names?: () => Map<string, string>; detail?: (letter: string) => Node | null; more?: () => Node[];
+  view?: { map: number; brush: string };
+}
+
+// Returns the painter, its redraw (for when the legend changes), and a way to pick its brush.
+export function mapPainter(knob: Lit, legend: () => Map<string, Face>, onEdit: () => void, opts: PainterOptions = {}): [HTMLElement, () => void, (letter: string) => void] {
   const world = isWorld(knob) ? (knob as Dict) : undefined;
-  let brush = ".";
+  const view = opts.view ?? { map: 0, brush: "." };
   const el = h("div", { class: "map-painter" });
 
   const redraw = () => {
     const maps = mapsOf(knob);
     const grids = maps.map((m) => lettersOf(m.rows));
     const names = legend();
+    const special = opts.special?.();
+    const tips = opts.names?.();
     const count = (l: string) => grids.flat(2).filter((c) => c === l).length;
     const only = (l: string) => !names.has(l) && !/[.\d]/.test(l) && count(l) === 1;
     const used = [...new Set([...names.keys(), ".", ...grids.flat(2)])];
@@ -101,21 +123,21 @@ export function mapPainter(knob: Lit, legend: () => Map<string, Face>, onEdit: (
 
     const paint = (m: number, r: number, c: number) => {
       const was = grids[m][r][c];
-      if (was === brush || only(was)) return;
+      if (was === view.brush || only(was)) return;
       const set = (mm: number, rr: number, cc: number, l: string) => {
         grids[mm][rr][cc] = l;
-        look(cells[mm][rr][cc], l, names);
+        look(cells[mm][rr][cc], l, names, special);
         maps[mm].rows[rr].v = grids[mm][rr].join("");
       };
-      if (only(brush)) grids.forEach((g, mm) => g.forEach((line, rr) => line.forEach((l, cc) => l === brush && set(mm, rr, cc, blank))));
-      set(m, r, c, brush);
+      if (only(view.brush)) grids.forEach((g, mm) => g.forEach((line, rr) => line.forEach((l, cc) => l === view.brush && set(mm, rr, cc, blank))));
+      set(m, r, c, view.brush);
       lonely();
       onEdit();
     };
 
     const cells = grids.map((grid, m) => grid.map((line, r) => line.map((l, c) => {
       const cell = h("div", { class: "map-cell" });
-      look(cell, l, names);
+      look(cell, l, names, special);
       cell.addEventListener("pointerdown", (e) => {
         down = true;
         window.addEventListener("pointerup", () => { down = false; }, { once: true });
@@ -134,12 +156,13 @@ export function mapPainter(knob: Lit, legend: () => Map<string, Face>, onEdit: (
       if (!name || !world) return b;
       const nameIn = textIn(name.v, (s) => {
         name.v = s;
+        tabs[m].textContent = s || "?";
         nameIn.classList.toggle("bad", !s || maps.filter((o) => o.name!.v === s).length > 1);
         onEdit();
       }, { class: "inline map-name" });
       // The map holding the hero's start stays, so the room always has somewhere to begin.
       const keep = maps.length === 1 || grids[m].flat().some(only);
-      const drop = () => { world.entries.splice(m, 1); onEdit(); redraw(); };
+      const drop = () => { world.entries.splice(m, 1); view.map = Math.max(0, m - 1); onEdit(); redraw(); };
       return h("div", { class: "map-one" }, h("div", { class: "map-head" }, nameIn, keep ? "" : removeButton(drop)), b);
     };
 
@@ -148,23 +171,27 @@ export function mapPainter(knob: Lit, legend: () => Map<string, Face>, onEdit: (
       const taken = new Set(maps.map((m) => m.name!.v));
       let n = maps.length + 1;
       while (taken.has(`map${n}`)) n++;
-      return addRowButton("Add a map", () => { world.entries.push([{ t: "str", v: `map${n}` }, blankMap(world)]); onEdit(); redraw(); });
+      return addRowButton("Add a map", () => { world.entries.push([{ t: "str", v: `map${n}` }, blankMap(world)]); view.map = maps.length; onEdit(); redraw(); });
     };
+    // A world shows one map at a time, picked by name.
+    const shown = Math.min(view.map, maps.length - 1);
+    const tabs = maps.map((m, i) => h("button", { type: "button", "aria-pressed": String(i === shown), onclick: () => { view.map = i; redraw(); } }, m.name?.v || "?"));
 
     const swatches = letters.map((l) => {
       const face = h("span", { class: "map-cell" });
-      look(face, l, names);
+      look(face, l, names, special);
       return h("button", {
-        type: "button", class: `map-brush${l === brush ? " on" : ""}`,
-        title: only(l) ? "There's just one of these. Paint to move it." : "",
-        onclick: () => { brush = l; redraw(); },
+        type: "button", class: `map-brush${l === view.brush ? " on" : ""}`,
+        title: [tips?.get(l), only(l) ? "There's just one of these. Paint to move it." : ""].filter(Boolean).join(". "),
+        onclick: () => { view.brush = l; redraw(); },
       }, face);
     });
     lonely();
-    el.replaceChildren(h("div", { class: "map-brushes" }, ...swatches), ...maps.map((_, m) => board(m)), add(), note,
+    el.replaceChildren(h("div", { class: "map-brushes" }, ...swatches, ...(opts.more?.() ?? [])), opts.detail?.(view.brush) ?? "",
+      world ? h("div", { class: "map-tabs" }, maps.length > 1 ? h("span", { class: "seg" }, ...tabs) : "", add()) : "", board(shown), note,
       h("p", { class: "dim small" }, "Pick something above, then click or drag on the map to paint it."));
   };
 
   redraw();
-  return [el, redraw];
+  return [el, redraw, (letter) => { view.brush = letter; redraw(); }];
 }

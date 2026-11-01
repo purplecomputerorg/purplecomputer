@@ -1,6 +1,6 @@
 from purple import *
 
-# A world to walk around. Find all the stars and the house opens. Some stars are through the door, in the cave.
+# A world to walk around. Find all the stars and home opens. Some stars are through the door, in the cave.
 
 # The world's maps, one letter a square, 26 across and 12 down: Y is where the hero starts. A number is a door, and
 # it leads to the other door with the same number: put a 1 on two maps and the hero can walk between them.
@@ -34,20 +34,25 @@ WORLD = {
         "RRRRRRRRRRRRRRRRRRRRRRRRRR",
     ],
 }
-# What each letter in the world is: an emoji, one of your photos, or a color for the ground.
-THINGS = {"T": "🌳", "R": "🪨", "~": "#4677b0", ",": "#5c4b3b", "*": "⭐", "F": "🦊", "B": "🦇", "H": "🏠", "1": "🚪"}
+# Everything in the world, by its letter on the maps: how it looks (an emoji, one of your photos, or a color), what it
+# is, and what it says. It is a wall, ground to walk on, something to find, a friend, home, or a door. A friend
+# says its words out loud when the hero bumps into them. Home opens once everything is found.
+# Labels: letter, looks like, it is, it says
+THINGS = {
+    "T": ("🌳", "wall", ""),
+    "R": ("🪨", "wall", ""),
+    "~": ("#4677b0", "wall", ""),
+    ",": ("#5c4b3b", "ground", ""),
+    "*": ("⭐", "find", ""),
+    "F": ("🦊", "friend", "Hello! Find all the stars and home will open. Some are through the door."),
+    "B": ("🦇", "friend", "Squeak! The door goes back outside."),
+    "H": ("🏠", "home", ""),
+    "1": ("🚪", "door", ""),
+}
 # The grass's two colors.
 GROUND = ("#4a8a50", "#4f9154")
-# The hero's colors: H hair, S skin, K eyes and shoes, B shirt.
-HERO_COLORS = {"H": "#6b3e1e", "S": "#f2c49b", "K": "#222222", "B": "#e0457b"}
-# What someone in the world says out loud when the hero bumps into them.
-TALK = {"F": "Hello! Find all the stars and the house will open. Some are through the door.", "B": "Squeak! The door goes back outside."}
-
-# The letters the hero can't walk through. The house opens once every star is found. Past a map's edge is a wall too.
-walls = "TR~H"
-# The hero, a tiny picture: each letter is a color from HERO_COLORS, and . is see-through. Or
-# picture("name") for a photo you added on the Rooms page.
-hero = pixels([
+# The hero, drawn square by square: each letter is one of the hero's colors, and . is see-through.
+HERO = [
     "..HHHH..",
     ".HSSSSH.",
     "..SKSK..",
@@ -56,13 +61,40 @@ hero = pixels([
     "S.BBBB.S",
     "..B..B..",
     "..K..K..",
-], HERO_COLORS)
+]
+# The hero's colors, by the letter that paints them on the hero.
+# Labels: letter, name, color
+HERO_COLORS = {"H": ("hair", "#6b3e1e"), "S": ("skin", "#f2c49b"), "K": ("eyes and shoes", "#222222"), "B": ("shirt", "#e0457b")}
+# An emoji or one of your photos to be the hero instead of the drawing, or nothing to use the drawing.
+HERO_PICTURE = ""
+# The drum when something is found: one of Purple's drums, one of your sounds, or none.
+FIND_SOUND = ""
+# The drum when the hero goes through a door, or none.
+DOOR_SOUND = ""
+# The drum when the hero bumps into a wall, or none.
+BUMP_SOUND = ""
+# The drum when the hero gets home, or none.
+HOME_SOUND = ""
+
+hero = HERO_PICTURE or pixels(HERO, {letter: color for letter, (_, color) in HERO_COLORS.items()})
 moves = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 # Every square of every map, by (map, x, y).
 spots = {(name, c, r): ch for name, rows in WORLD.items() for r, row in enumerate(rows) for c, ch in enumerate(row)}
-stars = list(spots.values()).count("*")
 # A door numbered 2, 3, and so on looks like door 1 unless THINGS gives it a look of its own.
-door = next((v for k, v in THINGS.items() if k.isdigit()), None)
+door = next((look for letter, (look, _, _) in THINGS.items() if letter.isdigit()), "🚪")
+
+
+# How a square looks, what it is, and what it says. Past a map's edge is a wall.
+def what(ch):
+    if ch in THINGS:
+        return THINGS[ch]
+    if ch and ch.isdigit():
+        return (door, "door", "")
+    return (None, "ground", "") if ch else (None, "wall", "")
+
+
+finds = sum(1 for ch in spots.values() if what(ch)[1] == "find")
+prize = next((look for look, kind, _ in THINGS.values() if kind == "find" and isinstance(look, str)), "⭐")
 game = state(at=next(s for s, ch in spots.items() if ch == "Y"), found=set(), held_for=0)
 
 
@@ -72,34 +104,42 @@ def show_map():
     grid.clear()
     for r, row in enumerate(WORLD[name]):
         for c, ch in enumerate(row):
-            look = None if (name, c, r) in game.found else THINGS.get(ch, door if ch.isdigit() else None)
-            ground = isinstance(look, str) and look.startswith("#")
-            grid.floor.set(c, r, look if ground else GROUND[(c + r) % 2])
-            if look and not ground:
+            look = None if (name, c, r) in game.found else what(ch)[0]
+            color = isinstance(look, str) and look.startswith("#")
+            grid.floor.set(c, r, look if color else GROUND[(c + r) % 2])
+            if look and not color:
                 grid.set(c, r, look)
     grid.set(x, y, hero)
-    status(f"⭐ {len(game.found)} of {stars}" if len(game.found) < stars else "⭐ All the stars! The house is open.")
+    status(f"{prize} {len(game.found)} of {finds}" if len(game.found) < finds else f"{prize} All found! Home is open.")
+
+
+def sound(name):
+    if name:
+        drum(name)
 
 
 def step(dx, dy):
     name, x, y = game.at
     spot = (name, x + dx, y + dy)
-    here = spots.get(spot, walls[0])
-    if here in TALK:
-        say(TALK[here])
-        return status(TALK[here])
-    if here in walls and not (here == "H" and len(game.found) == stars):
-        return drum("woodblock")
-    if here == "*" and spot not in game.found:
+    here = spots.get(spot, "")
+    _, kind, words = what(here)
+    if kind == "friend":
+        if words:
+            say(words)
+            status(words)
+        return
+    if kind == "wall" or (kind == "home" and len(game.found) < finds):
+        return sound(BUMP_SOUND)
+    if kind == "find" and spot not in game.found:
         game.found.add(spot)
-        play("C5")
-    if here.isdigit():
-        play("A5")
+        sound(FIND_SOUND)
+    if kind == "door":
+        sound(DOOR_SOUND)
         spot = next((s for s, ch in spots.items() if ch == here and s != spot), spot)
     game.at = spot
     show_map()
-    if here == "H":
-        play("G5")
+    if kind == "home":
+        sound(HOME_SOUND)
         game_over("You made it home! Press a key to walk again.")
 
 

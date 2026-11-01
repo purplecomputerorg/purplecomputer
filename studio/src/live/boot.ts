@@ -74,6 +74,8 @@ export interface LivePurple {
   key(char: string): Promise<Place>;
   // Where Purple is now, after keys it got straight from the browser.
   place(): Promise<Place>;
+  // Stops Purple's speech and sounds.
+  hush(): Promise<void>;
   // The words as Purple would say them: its speech filter drops words it never says ("" when nothing's left).
   filter(text: string): Promise<string>;
   // Why a room's Python can't run as written, read but not run: names lists what Purple gives it.
@@ -128,6 +130,7 @@ sys.path.insert(0, "${ROOT}")
     setup: (room) => place(`setup(**${arg(room)})`),
     key: (char) => place(`await key(${arg(char)})`),
     place: () => place("place()"),
+    hush: async () => void (await call("hush()")),
     filter: async (text) => String(await call(`__import__("purple_tui.speech_filter", fromlist=["_"]).filter_speech(${arg(text)})`)),
     check: async (source, names) => JSON.parse(String(await call(`__import__("json").dumps(check(${arg(source)}, ${arg(names)}))`))),
   };

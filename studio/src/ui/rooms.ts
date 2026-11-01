@@ -7,7 +7,10 @@ import { rulesSource } from "../rules";
 import { changed, draft, freeName, mine, withSample, type Made, type RoomDraft } from "../state";
 import { ask, go, h } from "./dom";
 import { emojiCell } from "./emojipicker";
+import { hush } from "../audio";
 import { knobsForm } from "./knobsform";
+import { storyBuilder } from "./storybuilder";
+import { worldBuilder } from "./worldbuilder";
 import { liveScreen, type RoomProblem } from "./live";
 import { codeHints } from "./codehints";
 import { copyGuideRow, LIBRARY_NAMES } from "./guide";
@@ -298,6 +301,7 @@ function editor(room: RoomDraft): View {
     return [toPython("These blocks write the room's Python for you. "), holder, peek];
   };
   const showTab = (which: Tab) => {
+    if (which !== tab) hush();
     tab = which;
     tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(tabs[i] === which)));
     peekCode.textContent = room.source;
@@ -305,9 +309,12 @@ function editor(room: RoomDraft): View {
       pane.replaceChildren(...(made.kind === "blocks" ? blocksPane(made) : formPane(made)));
     } else if (which === "knobs") {
       const knobs = readKnobs(room.source);
-      pane.replaceChildren(toPython("Knobs are the settings at the top of this room's Python, and the Python changes to match. "),
-        knobs.length ? knobsForm(knobs, () => edited(writeKnobs(room.source, knobs), 500))
-        : h("p", { class: "note" }, "The settings at the top of the Python can't be read as knobs right now. Everything still works in Python."));
+      const onEdit = () => edited(writeKnobs(room.source, knobs), 500);
+      // A room with a builder of its own shows it; any other gets a form of its settings.
+      const built = storyBuilder(knobs, onEdit) ?? worldBuilder(knobs, onEdit);
+      pane.replaceChildren(toPython(built ? "This builds the room, and the room's Python changes to match. " : "Knobs are the settings at the top of this room's Python, and the Python changes to match. "),
+        built ?? (knobs.length ? knobsForm(knobs, onEdit)
+        : h("p", { class: "note" }, "The settings at the top of the Python can't be read as knobs right now. Everything still works in Python.")));
     } else {
       code.value = room.source;
       pane.replaceChildren(startPicker(BLANK_ROOMS, (b) => b.source), pythonHelp(room.source), hints.element, typing.element);

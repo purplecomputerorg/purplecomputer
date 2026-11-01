@@ -15,6 +15,10 @@ SEEDS = {
 }
 # The soil's two colors, laid like a checkerboard.
 SOIL = ("#7a5230", "#6f4a2b")
+# The drum when a seed is planted: one of Purple's drums, one of your sounds, or none.
+PLANT_SOUND = ""
+# The drum when a plant grows a step, or none.
+GROW_SOUND = ""
 
 spots = grid.keyboard(KEY_ROWS[1:])
 game = state(seed="1")
@@ -40,7 +44,6 @@ def show_seed():
 def on_key(key):
     if key in SEEDS:
         game.seed = key
-        play("G4", "glockenspiel")
         show_seed()
     elif key in spots:
         tend(key)
@@ -49,13 +52,14 @@ def on_key(key):
 def tend(key):
     if key not in plants:
         plants[key] = [game.seed, 0]
-        drum("bongo")
+        if PLANT_SOUND:
+            drum(PLANT_SOUND)
     elif plants[key][1] < 2:
         plants[key][1] += 1
-        play(["C4", "E4", "G4"][plants[key][1]], "glockenspiel")
+        if GROW_SOUND:
+            drum(GROW_SOUND)
     else:
         name, looks = SEEDS[plants[key][0]]
-        play("C5", "glockenspiel")
         status(f"The {name} is all grown! {looks[-1]}")
     patch(key)
 

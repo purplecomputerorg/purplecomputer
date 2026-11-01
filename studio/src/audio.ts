@@ -58,14 +58,48 @@ export function audioContext(): AudioContext {
   return playCtx;
 }
 
+// Everything Studio's own pages are playing, so a page change or a new preview can stop it.
+const playing = new Set<{ stop(): void }>();
+const hushers: (() => void)[] = [];
+// Called on every hush, for what plays elsewhere (the live Purple).
+export const onHush = (f: () => void) => void hushers.push(f);
+
+export function stopPreviews(): void {
+  playing.forEach((p) => p.stop());
+  playing.clear();
+}
+
+// Silence: Studio's previews and the live Purple both.
+export function hush(): void {
+  stopPreviews();
+  hushers.forEach((f) => f());
+}
+
+// A preview (a recording, a line in the room voice, a sound): one at a time, over a quiet Purple.
 export function play(clip: Clip): void {
-  playBuffer(clipToBuffer(clip));
+  preview(clipToBuffer(clip));
+}
+
+export function preview(buffer: AudioBuffer): void {
+  hush();
+  playBuffer(buffer);
+}
+
+export function previewUrl(url: string): void {
+  hush();
+  const el = new Audio(url);
+  const p = { stop: () => el.pause() };
+  playing.add(p);
+  el.onended = () => playing.delete(p);
+  void el.play();
 }
 
 export function playBuffer(buffer: AudioBuffer, volume = 1): void {
   const ctx = audioContext();
   const node = new AudioBufferSourceNode(ctx, { buffer });
   node.connect(new GainNode(ctx, { gain: volume })).connect(ctx.destination);
+  playing.add(node);
+  node.onended = () => playing.delete(node);
   node.start();
 }
 

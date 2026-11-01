@@ -61,8 +61,18 @@ describe("family rooms in Studio's Python", () => {
     expect(texts(replies[0])).toEqual(expect.arrayContaining(["🌳", "🚪", "⭐ 0 of 1"]));
     expect(texts(replies[1])).toEqual(expect.arrayContaining(["🪨", "⭐", "⭐ 0 of 1"]));
     expect(texts(replies[1])).not.toContain("🌳");
-    expect(texts(replies[2])).toContain("⭐ All the stars! The house is open.");
+    expect(texts(replies[2])).toContain("⭐ All found! Home is open.");
     expect(texts(replies[2])).not.toContain("⭐");
+    expect(replies.flatMap((r) => (r.sounds ?? []) as unknown[])).toEqual([]);
+  }, 60_000);
+
+  it("has a friend in explore say their words, bumps walls quietly, and walks a hero that's an emoji", async () => {
+    const world = 'WORLD = {"a": ["TTTT", "TYFT", "TTTT"]}';
+    const source = example("explore").replace(/^WORLD = \{[\s\S]*?^\}$/m, world).replace('HERO_PICTURE = ""', 'HERO_PICTURE = "🐸"');
+    const replies = await runRoom(source, [{ ev: "key", key: "up" }, { ev: "key", key: "right" }]);
+    expect(texts(replies[0])).toContain("🐸");
+    expect(replies[1].sounds ?? []).toEqual([]);
+    expect(replies[2].sounds).toEqual([["say", expect.stringMatching(/^Hello!/)]]);
   }, 60_000);
 
   it("runs the memory example: a card on each letter key, turned over by pressing it, and players taking turns", async () => {
@@ -145,11 +155,12 @@ describe("family rooms in Studio's Python", () => {
     expect(replies[1].sounds).toEqual([["clip", "kitty"], ["clip", "meow"]]);
   }, 60_000);
 
-  it("opens a story on its cover, and a key starts it with Purple saying the page", async () => {
-    const replies = await runRoom(example("story"), [{ ev: "key", key: "a" }, { ev: "key", key: "1" }]);
+  it("opens a story on its cover, and a key starts it with Purple saying the page and its choices", async () => {
+    const keys = ["a", "2"].map((key) => ({ ev: "key", key }));
+    const replies = await runRoom(example("story"), keys);
     expect([texts(replies[0]), replies[0].sounds]).toEqual([["📖", "Mia and the map", "Press any key to start"], [["say", "Mia and the map"]]]);
-    expect(replies[1].sounds).toEqual([["say", expect.stringMatching(/^Mia finds a map/)]]);
-    expect(replies[2].sounds).toEqual([["note", "G4", "marimba"], ["say", expect.stringMatching(/^In the forest/)]]);
+    expect(replies[1].sounds).toEqual([["say", "Mia finds a map. It shows a forest and the sea."], ["say", "Press 1 to go to the forest. Press 2 to go to the sea."]]);
+    expect(texts(replies[2])).toContain("🦀");
   }, 60_000);
 
   it("remembers what a room keeps, and hands it back next time", async () => {

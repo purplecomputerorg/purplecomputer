@@ -1,7 +1,7 @@
 // A pack's own pictures and sounds for its rooms: a photo becomes a PNG no bigger than Purple takes,
 // any sound the browser can play becomes the WAV Purple plays.
 import { ROOM_FILE_NAME, type RoomFileKind } from "@sdk/pack";
-import { audioContext, decodeToClip, encodeWav, playBuffer } from "../audio";
+import { audioContext, decodeToClip, encodeWav, preview } from "../audio";
 import { PICTURE_KINDS, bitmapFromSrc, dataUrl, pictureFailure } from "../photo";
 import { roomFileOf, shelf, shelve, shelveFile, type Shelved } from "../shelf";
 import { changed, draft, freeName, names, type Made, type RoomDraft, type RoomFile } from "../state";
@@ -109,7 +109,7 @@ const face = (f: RoomFile) => (f.kind === "images" ? thumb(f) : h("span", { clas
 // Plays one of the pack's sounds by name; false when the pack has none by that name.
 export function hearRoomSound(name: string): boolean {
   const f = draft.roomFiles.find((x) => x.kind === "sounds" && x.name === name);
-  if (f) void audioContext().decodeAudioData(f.data.slice().buffer).then((b) => playBuffer(b));
+  if (f) void audioContext().decodeAudioData(f.data.slice().buffer).then(preview);
   return !!f;
 }
 

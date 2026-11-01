@@ -4,6 +4,7 @@
 import { buildEntries } from "@sdk/pack";
 import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
+import { onHush, stopPreviews } from "../audio";
 import { roomIcon } from "../examples";
 import { KEY_EVENT, announceKey } from "../keys";
 import { manifest, packChanges, packSpec, type Sent } from "../pack";
@@ -39,6 +40,7 @@ const ZOOM: Record<Room, { scale: number; at?: [number, number] }> = {
 // The same test as the phone rules in styles.css.
 export const PHONE = matchMedia("(max-width: 700px), (max-height: 500px) and (pointer: coarse)");
 const MOUSE = matchMedia("(pointer: fine)");
+const BIG = "big-live";
 const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
 
 class LiveScreen {
@@ -55,6 +57,8 @@ class LiveScreen {
   private focusedAt = 0;
   private zoomed = PHONE.matches;
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
+  // The whole page given to Purple, for a room too small to see beside the editor.
+  private bigButton = h("button", { class: "big-toggle", type: "button", onclick: () => { this.big(!document.documentElement.classList.contains(BIG)); this.engage(); } }, "⛶ Big");
   // Set by Studio: Purple moved to another room, or opened or closed a menu.
   onMove = () => {};
   // Set by the Rooms page: a family room's print() output, and why one stopped.
@@ -83,11 +87,12 @@ class LiveScreen {
 
   constructor() {
     this.hint.onclick = () => this.focus();
-    this.element = h("div", { class: "screen-wrap live" }, this.frame, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote, this.updating, this.note);
+    this.element = h("div", { class: "screen-wrap live" }, this.frame, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.bigButton, this.voiceNote, this.updating, this.note);
     PHONE.addEventListener("change", () => { this.zoomed = PHONE.matches; this.reframe(); });
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
-    addEventListener(KEY_EVENT, () => this.prompt(null));
+    addEventListener(KEY_EVENT, () => { this.prompt(null); stopPreviews(); });
+    onHush(() => this.ready && this.post({ type: "hush" }));
     onRoomVoice(() => this.queueSync());
     this.queueSync();
   }
@@ -114,6 +119,11 @@ class LiveScreen {
   private answered(id: number, value: unknown): void {
     this.asking.get(id)?.resolve(value);
     this.asking.delete(id);
+  }
+
+  big(on: boolean): void {
+    document.documentElement.classList.toggle(BIG, on);
+    this.bigButton.textContent = on ? "✕ Close" : "⛶ Big";
   }
 
   // A handwritten note on the screen saying what to do, until the next key.

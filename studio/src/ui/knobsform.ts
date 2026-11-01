@@ -69,7 +69,7 @@ let fresh: Lit | null = null;
 const dictsIn = (v: Lit): Dict[] =>
   v.t === "dict" ? [v, ...v.entries.flatMap(([, x]) => dictsIn(x))] : v.t === "list" || v.t === "tuple" ? v.items.flatMap(dictsIn) : [];
 
-function faceIn(v: Face, { onEdit, taken }: Edit): HTMLElement {
+export function faceIn(v: Face, { onEdit, taken }: Edit): HTMLElement {
   return h("span", { class: "emoji-wrap" }, emojiCell(v.v, () => "", (e) => {
     Object.assign(v, { t: isEmoji(e) ? "str" : "picture", v: e });
     onEdit();
@@ -77,7 +77,7 @@ function faceIn(v: Face, { onEdit, taken }: Edit): HTMLElement {
 }
 
 function text(v: Str, { onEdit, drums, loud }: Edit): HTMLElement {
-  if (drums && isDrum(v.v)) return drumIn(v.v, (s) => { v.v = s; onEdit(); });
+  if (drums && (isDrum(v.v) || !v.v)) return drumIn(v.v, (s) => { v.v = s; onEdit(); }, true);
   if (v.v.length > LONG) {
     const el = h("textarea", { class: "words-in", rows: 2, value: v.v });
     el.addEventListener("input", () => { v.v = el.value; onEdit(); });
@@ -88,7 +88,7 @@ function text(v: Str, { onEdit, drums, loud }: Edit): HTMLElement {
 }
 
 // Words the room says out loud, read by Purple's room voice or recorded by the family, which Purple then plays instead.
-function spoken(el: HTMLInputElement | HTMLTextAreaElement, v: Str): HTMLElement {
+export function spoken(el: HTMLInputElement | HTMLTextAreaElement, v: Str): HTMLElement {
   const row = h("div", { class: "voice-row" });
   const note = h("span", { class: "dim small" });
   const say = (text: string) => void (note.textContent = text);
@@ -286,8 +286,10 @@ const thingsOf = (legend: Dict): [string, string][] => legend.entries
 function addThing(d: Dict, map: Lit): Lit {
   const taken = new Set([...lettersIn(map), ...d.entries.map(([k]) => keyText(k))]);
   const letter = [...FREE_LETTERS].find((l) => !taken.has(l))!;
-  const face = unusedEmoji(d.entries.map(([, x]) => (x.t === "str" || x.t === "picture" ? x.v : "")))!;
-  d.entries.push([{ t: "str", v: letter }, face]);
+  const looks = legendNames(d);
+  const face = unusedEmoji([...looks.values()].map((x) => x.v))!;
+  const like = d.entries.at(-1)?.[1];
+  d.entries.push([{ t: "str", v: letter }, like?.t === "tuple" ? { t: "tuple", items: [face, ...structuredClone(like.items.slice(1))] } : face]);
   return face;
 }
 

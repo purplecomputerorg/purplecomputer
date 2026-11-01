@@ -10,6 +10,10 @@ from purple import *
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
 # The color under a card turned over but not matched yet.
 TURNED = "#7a5ac8"
+# The drum when a card turns over: one of Purple's drums, one of your sounds, or none.
+FLIP_SOUND = ""
+# The drum when a pair is found, or none.
+MATCH_SOUND = ""
 
 # Each player's mark, and the color under the pairs they find.
 players = [("🔴", "#e44444"), ("🔵", "#2e6ae1"), ("🟢", "#2e9e4f"), ("🟡", "#e0a020"), ("🟣", "#9b4dca"), ("🟠", "#ec7a1c")]
@@ -54,20 +58,20 @@ def turn_back():
 def on_key(key):
     if key.isdigit() and 0 < int(key) <= len(players) and not game.started:
         game.players = keep["players"] = int(key)
-        play("G4")
     if key in faces and len(up) < 2 and key not in shown and key not in up:
         up.append(key)
         game.started = True
-        play("E5")
+        if FLIP_SOUND:
+            drum(FLIP_SOUND)
         if len(up) == 2 and faces[up[0]] == faces[up[1]]:
             shown.update(dict.fromkeys(up, players[game.turn][1]))
             up.clear()
-            play("G5")
+            if MATCH_SOUND:
+                drum(MATCH_SOUND)
         elif len(up) == 2:
             after(1.5, turn_back)
     draw()
     if len(shown) == len(faces):
-        play("C5")
         game_over("All the pairs! Press a key to play again.")
 
 

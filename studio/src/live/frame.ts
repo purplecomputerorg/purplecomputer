@@ -11,6 +11,7 @@ export type ToFrame =
   | { type: "setup"; setup: RoomSetup }
   | { type: "key"; char: string }
   | { type: "focus" }
+  | { type: "hush" }
   | { type: "filter"; id: number; text: string }
   | { type: "check"; id: number; source: string; names: string[] }
   | { type: "view"; view: View };
@@ -88,6 +89,7 @@ const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
   if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(async () => m.setup && placed(await live.setup(m.setup))).then(() => post({ type: "loaded" }));
   if (m.type === "setup") return live.setup(m.setup).then(placed);
   if (m.type === "key") return live.key(m.char).then(placed);
+  if (m.type === "hush") return live.hush();
   if (m.type === "filter") return live.filter(m.text).then((value) => post({ type: "answer", id: m.id, value }));
   if (m.type === "check") return live.check(m.source, m.names).then((value) => post({ type: "answer", id: m.id, value }));
   canvas.focus();

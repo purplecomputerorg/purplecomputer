@@ -2,6 +2,7 @@ import "./fonts";
 import "./styles.css";
 import logo from "../../assets/logo.svg";
 import { changed, draft, features, hasWork, onChange, pieces, replaceDraft } from "./state";
+import { hush } from "./audio";
 import { recall, remember } from "./saved";
 import { loadShelf, shelveDraft } from "./shelf";
 import { clearEverythingButton, clearSectionButton } from "./ui/packfile";
@@ -200,6 +201,8 @@ function route() {
   const moved = MOVED[location.hash.slice(1)];
   if (moved) return location.replace(`#${moved}`);
   current?.cleanup?.();
+  hush();
+  live.big(false);
   const [sec, item] = parseHash();
   const section = SECTIONS.find((s) => s.id === sec);
   const view = section ? section.view(item) : PAGES[sec] ? PAGES[sec](item) : homeView(SECTIONS);

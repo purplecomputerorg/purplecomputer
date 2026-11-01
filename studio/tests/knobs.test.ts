@@ -3,6 +3,8 @@ import { EXAMPLES } from "../src/examples";
 import { type Lit, loudLines, readKnobs, writeKnobs } from "../src/knobs";
 import { searchEmoji } from "../src/ui/emojipicker";
 import { isMap, isWorld, legendFor, lonelyNumbers } from "../src/ui/mappainter";
+import { storyPages } from "../src/ui/storybuilder";
+import { worldParts } from "../src/ui/worldbuilder";
 
 const ROOM = `from purple import *
 
@@ -64,23 +66,23 @@ describe("knobs", () => {
     }
   });
 
-  it("finds the words a story says out loud, leaving out its pictures and page names", () => {
+  it("finds the words a story says out loud, leaving out its pictures, page names, and choices", () => {
     const lines = loudLines(EXAMPLES.find((e) => e.name === "story")!.source);
     expect(lines[0]).toBe("Mia and the map");
-    expect(lines).toHaveLength(8);
-    expect(lines.filter((l) => /^(start|forest|sea|owl|tree|sand|boat)$|🏡/.test(l))).toEqual([]);
+    expect(lines).toHaveLength(4);
+    expect(lines.filter((l) => /^(start|forest|sea)$|🗺️|^go to/.test(l))).toEqual([]);
     expect(loudLines(EXAMPLES.find((e) => e.name === "explore")!.source)).toEqual([
-      "Hello! Find all the stars and the house will open. Some are through the door.", "Squeak! The door goes back outside."]);
+      "Hello! Find all the stars and home will open. Some are through the door.", "Squeak! The door goes back outside."]);
   });
 
   it("offers only the fun settings of each starter room", () => {
     const names = Object.fromEntries(EXAMPLES.map((e) => [e.name, readKnobs(e.source).map((k) => k.name)]));
     expect(names).toEqual({
-      explore: ["WORLD", "THINGS", "GROUND", "HERO_COLORS", "TALK"],
-      garden: ["SEEDS", "SOIL"],
+      explore: ["WORLD", "THINGS", "GROUND", "HERO", "HERO_COLORS", "HERO_PICTURE", "FIND_SOUND", "DOOR_SOUND", "BUMP_SOUND", "HOME_SOUND"],
+      garden: ["SEEDS", "SOIL", "PLANT_SOUND", "GROW_SOUND"],
       beats: ["DRUMS", "SPEED"],
-      memory: ["CARDS", "TURNED"],
-      story: ["TITLE", "PAGES"],
+      memory: ["CARDS", "TURNED", "FLIP_SOUND", "MATCH_SOUND"],
+      story: ["TITLE", "PAGES", "PAGE_SOUND"],
       snake: ["SNAKE", "SPEED", "LIT", "GROWS"],
     });
   });
@@ -124,5 +126,14 @@ describe("knobs", () => {
     const out = writeKnobs(source, knobs);
     expect(out).toContain('    "cave": [\n        "RRRRRRRRRRRRRRRRRRRRRRRRRR",\n        "R,,,,,,,RR');
     expect(readKnobs(out).find((k) => k.name === "WORLD")!.value).toEqual(world.value);
+  });
+
+  it("opens the story and world starters in their own builders, and an older story in the plain knobs", () => {
+    const knobs = (name: string) => readKnobs(EXAMPLES.find((e) => e.name === name)!.source);
+    expect(storyPages(knobs("story"))?.entries).toHaveLength(3);
+    expect(worldParts(knobs("explore"))?.things.entries).toHaveLength(9);
+    expect(storyPages(knobs("explore"))).toBeNull();
+    expect(worldParts(knobs("story"))).toBeNull();
+    expect(storyPages(readKnobs('PAGES = {"start": ("🏡", "Hi. Press 1.", {"1": "end"}), "end": ("🌙", "Bye.", {})}\n'))).toBeNull();
   });
 });

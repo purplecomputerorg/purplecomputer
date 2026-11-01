@@ -49,16 +49,18 @@ const numIn = (value: number, min: number, max: number, onNum: (n: number) => vo
 const roomFiles = (kind: "images" | "sounds"): Options => draft.roomFiles.filter((f) => f.kind === kind).map((f) => [f.name, f.name]);
 export const isDrum = (name: string) => DRUMS.includes(name) || roomFiles("sounds").some(([n]) => n === name);
 
-// Purple's drums, then the pack's own sounds, which drum() plays too.
-export function drumIn(value: string, onPick: (v: string) => void): HTMLSelectElement {
+// Purple's drums, then the pack's own sounds, which drum() plays too. orNone: "" is No sound.
+export function drumIn(value: string, onPick: (v: string) => void, orNone = false): HTMLSelectElement {
   const opts = (names: string[], label: (n: string) => string) => names.map((n) => h("option", { value: n }, label(n)));
   const mine = roomFiles("sounds").map(([n]) => n);
+  const ok = (v: string) => isDrum(v) || (orNone && !v);
   const el = h("select", { class: "inline", onchange: () => { el.classList.remove("bad"); hearRoomSound(el.value); onPick(el.value); } },
-    isDrum(value) ? null : h("option", { value }, `${value || "nothing"} (missing)`),
+    orNone ? h("option", { value: "" }, "No sound") : null,
+    ok(value) ? null : h("option", { value }, `${value || "nothing"} (missing)`),
     h("optgroup", { label: "Drums" }, ...opts(DRUMS, (n) => `🥁 ${n}`)),
     mine.length ? h("optgroup", { label: "Your sounds" }, ...opts(mine, (n) => `🎤 ${roomTitle(n)}`)) : null);
   el.value = value;
-  el.classList.toggle("bad", !isDrum(value));
+  el.classList.toggle("bad", !ok(value));
   return el;
 }
 

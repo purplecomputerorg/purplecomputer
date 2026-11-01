@@ -1,5 +1,5 @@
 import { CORE_EMOJI } from "@sdk/purple/core";
-import { play } from "../audio";
+import { play, previewUrl } from "../audio";
 import { roomLine } from "../roomvoice";
 import { changed, draft, phraseFor, putPhrase, type WordEntry } from "../state";
 import { typingKeys } from "../keys";
@@ -34,7 +34,7 @@ function examples(): HTMLElement {
 
 function hearExample(text: string, voice?: string): HTMLElement {
   const button = h("button", { type: "button", class: "rec-mini", title: "Hear it", "aria-label": "Hear it", onclick: async () => {
-    if (voice) return void new Audio(voice).play();
+    if (voice) return previewUrl(voice);
     button.disabled = true;
     const clip = await roomLine(text);
     button.disabled = false;

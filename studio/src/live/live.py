@@ -123,6 +123,16 @@ async def key(name):
     return place()
 
 
+def hush():
+    """Stops whatever Purple is saying or playing: Studio is playing something, or the page changed."""
+    import pygame
+    from purple_tui import tts
+
+    tts.stop()
+    if pygame.mixer.get_init():
+        pygame.mixer.stop()
+
+
 def place():
     """Where Purple is: its room, whether a menu (the room picker, say) is open over it, the
     room's cursor as fractions of the screen, if it has one (a phone zooms in around it)."""

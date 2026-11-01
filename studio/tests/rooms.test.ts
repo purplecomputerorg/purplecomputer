@@ -44,7 +44,7 @@ describe("family rooms in Studio's Python", () => {
   it("runs the Snake example: it crawls a square each tick to the key pressed, which lights up in its sticker color, turning the head that color too, and plays its note", async () => {
     const ticks = [1, 2, 3, 4].map((t) => ({ ev: "tick", t }));
     const replies = await runRoom(example("snake"), [{ ev: "key", key: "h" }, ...ticks]);
-    expect(squares(replies[0])).toEqual(expect.arrayContaining([[11, 9, GREEN], [10, 9, GREEN]]));
+    expect(squares(replies[0])).toEqual(expect.arrayContaining([[11, 9, GREEN], [10, 9, "#3e9e4c"]]));
     expect(texts(replies[0])).toEqual(expect.arrayContaining(["1", "Q", "H", "/"]));
     expect(replies[0].wake).not.toBeNull();
     expect(squares(replies[5])).toEqual(expect.arrayContaining([[12, 6, "#DFBF1F"], [12, 7, GREEN]]));
@@ -52,6 +52,16 @@ describe("family rooms in Studio's Python", () => {
     expect([head(replies[0]), head(replies[5])]).toEqual([GREEN, "#DFBF1F"]);
     expect(replies[5].sounds).toEqual([["note", "C5", "glockenspiel"]]);
     expect(replies.at(-1)).toMatchObject({ error: { text: expect.stringContaining(END) } });
+  }, 60_000);
+
+  it("steers the Snake with an arrow: a step on the press, then one each tick while it's held", async () => {
+    const at = (r: Msg) => shapes(r).find((s) => s[0] === "image")?.slice(1, 3);
+    const replies = await runRoom(example("snake"), [{ ev: "key", key: "up" }, { ev: "tick", t: 1 }, { ev: "keyup", key: "up" }, { ev: "tick", t: 2 }]);
+    const ys = replies.map((r) => at(r)?.[1] as number | undefined);
+    const square = ys[0]! - ys[1]!;
+    expect(square).toBeGreaterThan(0);
+    expect(ys[1]! - ys[2]!).toBe(square);
+    expect(ys[4] ?? ys[2]).toBe(ys[2]);
   }, 60_000);
 
   it("walks the explore example from map to map through the doors with the same number", async () => {

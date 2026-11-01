@@ -26,15 +26,15 @@ export function tryBar(item: Keepable): HTMLElement {
 export interface YourCard { href: string; title: string; face: Node; current?: boolean; rename?: (text: string) => string | null; keep?: HTMLElement | null }
 
 // What the family made on a list page, one card each with an Add to my Pack button and an × that throws it
-// away, plus a pencil beside the name when it can be renamed; "Choose several" throws away many at once. Examples only tried aren't theirs yet, so they aren't listed.
+// away, plus a pencil beside the name when it can be renamed; the bin above throws away many at once. Examples only tried aren't theirs yet, so they aren't listed.
 // warn: anything more the confirm should say about throwing these away.
 export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (gone: T[]) => void, warn?: (gone: T[]) => string): HTMLElement | null {
   const theirs = items.filter(isTheirs);
   if (!theirs.length) return null;
   const throwAway = async (gone: T[], what: string) => (await ask(`Throw away ${what}?${warn?.(gone) ?? ""}`, "Throw away")) && remove(gone);
   const chosen = new Set<T>();
-  const bin = h("button", { type: "button", class: "btn small", onclick: () => throwAway([...chosen], chosen.size > 1 ? `these ${chosen.size}` : "this one") });
-  const counted = () => { bin.disabled = !chosen.size; bin.textContent = chosen.size ? `Throw away ${chosen.size}` : "Throw away"; };
+  const bin = h("button", { type: "button", class: "btn small", title: "Throw away the ones you chose", "aria-label": "Throw away the ones you chose", onclick: () => throwAway([...chosen], chosen.size > 1 ? `these ${chosen.size}` : "this one") });
+  const counted = () => { bin.disabled = !chosen.size; bin.textContent = chosen.size ? `🗑️ ${chosen.size}` : "🗑️"; };
   const head = h("div", { class: "row between" });
   const list = h("div", { class: "yours" });
   const render = (choosing: boolean) => {
@@ -43,9 +43,9 @@ export function yoursList<T extends Keepable>(items: T[], card: (item: T) => You
     const boxes: HTMLInputElement[] = [];
     const tick = (box: HTMLInputElement, item: T) => { box.checked ? chosen.add(item) : chosen.delete(item); counted(); };
     head.replaceChildren(h("h3", {}, "Yours"), h("div", { class: "row" }, ...(choosing
-      ? [h("button", { class: "linkbtn dim small", onclick: () => boxes.forEach((b) => { b.checked = true; b.dispatchEvent(new Event("change")); }) }, "Choose all"),
+      ? [h("button", { class: "linkbtn dim small", onclick: () => boxes.forEach((b) => { b.checked = true; b.dispatchEvent(new Event("change")); }) }, "All"),
         h("button", { class: "linkbtn dim small", onclick: () => render(false) }, "Cancel"), bin]
-      : theirs.length > 1 ? [h("button", { class: "linkbtn dim small", onclick: () => render(true) }, "Choose several to throw away")] : [])));
+      : theirs.length > 1 ? [h("button", { type: "button", class: "icon-btn", title: "Throw away several", "aria-label": "Throw away several", onclick: () => render(true) }, "🗑️")] : [])));
     list.replaceChildren(...theirs.map((item) => {
       const c = card(item);
       const face = h(choosing ? "span" : "a", { class: "your-face", href: choosing ? null : c.href }, c.face, h("b", {}, c.title));

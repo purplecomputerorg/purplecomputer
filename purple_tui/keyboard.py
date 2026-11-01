@@ -856,7 +856,8 @@ class KeyboardStateMachine:
 
         # Handle other control keys (repeats allowed)
         if keycode == KeyCode.KEY_BACKSPACE:
-            actions.append(ControlAction(action='backspace', is_down=True, is_repeat=is_repeat))
+            actions.append(ControlAction(action='backspace', is_down=True, is_repeat=is_repeat,
+                                         arrow_held=self.held_arrow_direction))
             return actions
         if keycode == KeyCode.KEY_ENTER:
             actions.append(ControlAction(action='enter', is_down=True, is_repeat=is_repeat, space_held=self._space_held))

@@ -362,6 +362,8 @@
   "Support info": "Info de soporte",
   "{0} {1} choose   Enter open   Esc back": "{0} {1} elegir   Enter abrir   Esc volver",
   "Arrows move  {0} {1} {2} {3}": "Flechas mueven  {0} {1} {2} {3}",
+  "Arrows clean  {0} {1} {2} {3}": "Flechas limpian  {0} {1} {2} {3}",
+  "{Backspace} + arrows cleans that way.": "{Backspace} + flechas limpia hacia allá.",
   "{0} try again: {1}": "{0} intentar otra vez: {1}",
   "Enter to": "Enter para",
   "Try": "Prueba",

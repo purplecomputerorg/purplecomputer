@@ -386,6 +386,8 @@
   "Support info": "支持信息",
   "{0} {1} choose   Enter open   Esc back": "{0} {1} 选择   Enter 打开   Esc 返回",
   "Arrows move  {0} {1} {2} {3}": "方向键移动  {0} {1} {2} {3}",
+  "Arrows clean  {0} {1} {2} {3}": "方向键清除  {0} {1} {2} {3}",
+  "{Backspace} + arrows cleans that way.": "{Backspace} + 方向键，往那边清除。",
   "{0} try again: {1}": "{0} 再试一次：{1}",
   "Enter to": "按 Enter",
   "Try": "试试",

@@ -19,7 +19,7 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo
-from ..ui import (AUTO, MOVE_HINT, PICK_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
+from ..ui import (AUTO, CLEAN_HINT, MOVE_HINT, PICK_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
                   status_row_h, status_row_px, swatch_dot)
 from .base import Room
 
@@ -46,6 +46,7 @@ HINTS = {
     "paint": "Type to paint! {Space} puts the brush down.",
     "write": "Type to write! Arrow keys move. {Enter} for a new line.",
     "pick": PICK_HINT,
+    "clean": "{Backspace} + arrows cleans that way.",
 }
 
 
@@ -114,6 +115,18 @@ def _dash_outline(surf, mid: int, u: float, edge: int, color: str, alpha: int):
             pygame.draw.line(surf, (*rgb(color), alpha), *line, w)
 
 
+def _water_drop(surf, turn, u: float, edge: int):
+    """A clear drop over the cursor cell, its round end leading the way Backspace cleans."""
+    r, head, tail = u * 0.42, u * 0.15, u * 0.85
+    back = math.pi - math.acos(r / (head + tail))
+    arc = [head + r * math.cos(t) for t in (back - 2 * back * i / 23 for i in range(24))]
+    outline = [turn(-tail, 0)] + [turn(x, r * math.sin(back - 2 * back * i / 23)) for i, x in enumerate(arc)]
+    pygame.draw.polygon(surf, (255, 255, 255, 190), outline)
+    pygame.draw.polygon(surf, rgb(TIP_EDGE), outline, edge)
+    shine = turn(head + r * 0.35, -r * 0.4)
+    pygame.draw.circle(surf, (255, 255, 255), shine, round(u * 0.09))
+
+
 def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground="cell") -> pygame.Surface:
     """A 7c square centered on the cursor cell, drawn 4x and smoothed down.
     tip "brush" is a paintbrush in the brush color: lift 1 floats it above a
@@ -147,10 +160,12 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground="c
             pygame.draw.polygon(surf, rgb(fill), poly)
         pygame.draw.circle(surf, rgb(P.ACCENT), end, r_end)
         pygame.draw.lines(surf, rgb(mix_colors_paint([color, "#FFFFFF"])), False, sheen, 2 * edge)
-    if arrow_turn is not None:
+    a = math.radians(arrow_turn or 0)
+    turn = lambda x, y: (mid + x * math.cos(a) + y * math.sin(a), mid - x * math.sin(a) + y * math.cos(a))
+    if tip == "drop":
+        _water_drop(surf, turn, u, edge)
+    elif arrow_turn is not None:
         x0, h = round(u * 0.65), round(u * 0.32)
-        a = math.radians(arrow_turn)
-        turn = lambda x, y: (mid + x * math.cos(a) + y * math.sin(a), mid - x * math.sin(a) + y * math.cos(a))
         tri = [turn(x0, -h), turn(x0 + h * 1.3, 0), turn(x0, h)]
         fill = color if tip else P.TEXT
         pygame.draw.polygon(surf, rgb(fill), tri)
@@ -300,7 +315,7 @@ class ArtRoom(Room):
         self.app.invalidate()
 
     def arrow_hint(self) -> str:
-        return MOVE_HINT
+        return CLEAN_HINT if self._backspace_since is not None else MOVE_HINT
 
     def cursor_fraction(self, vp):
         return ((self._origin[0] + self._cursor_x * self._cell - vp.x) / vp.w,
@@ -524,40 +539,24 @@ class ArtRoom(Room):
         self.app.invalidate()
 
     def _back_up(self):
-        spot = self._back_spot()
-        if spot:
-            self._cursor_x, self._cursor_y = spot
-
-    def _back_spot(self):
         """Backing off the start of a line, as in text, lands on the last thing on the line above."""
-        x, y = self._cursor_x, self._cursor_y
-        if self._way != "right" or x > 0:
-            dx, dy = STEPS[BACK[self._way]]
-            return onto_grid(x + dx, y + dy, COLS, ROWS, False)
-        if y > 0:
-            return max((gx for gx, gy in self._grid if gy == y - 1), default=0), y - 1
-        return None
+        if self._way != "right" or self._cursor_x > 0:
+            self._move_in_direction(BACK[self._way])
+        elif self._cursor_y > 0:
+            self._cursor_y -= 1
+            self._cursor_x = max((x for x, y in self._grid if y == self._cursor_y), default=0)
 
-    def _draw_next_erase(self, g, ox, oy, c):
-        """After a Backspace, a light arrow on the square the next one takes, pointing the way it backs up."""
-        spot = self._erasing and (self._cursor_x, self._cursor_y) not in self._grid and self._back_spot()
-        if not spot:
-            return
-        cx, cy = ox + spot[0] * c + c / 2, oy + spot[1] * c + c / 2
-        (fx, fy), r = STEPS[BACK[self._way]], c * 0.36
-        tri = [(cx + fx * r, cy + fy * r), (cx - fx * r - fy * r, cy - fy * r - fx * r), (cx - fx * r + fy * r, cy - fy * r + fx * r)]
-        pygame.draw.polygon(g.surface, rgb(TIP_EDGE), tri, max(2, c // 8))
-        pygame.draw.polygon(g.surface, rgb(P.TEXT), tri)
-
-    def _hold_backspace(self, repeat: bool, just_stamped: bool):
+    def _hold_backspace(self, repeat: bool, just_stamped: bool, arrow: str | None = None):
         """Squares one at a time, then after LINES_AFTER whole lines, the way Write takes letters then words.
-        Backing up a column only ever takes squares: whole lines would wipe across it."""
+        Backing up a column, or steering with an arrow, only ever takes squares: whole lines would wipe across it."""
         now = time.monotonic()
         self._erasing = True
+        if arrow:
+            self._way = BACK[arrow]     # Backspace with an arrow erases toward the arrow
         if not repeat or self._backspace_since is None:
             self._backspace_since = now
             self._backspace(just_stamped)
-        elif now - self._backspace_since < LINES_AFTER or self._way in ("up", "down"):
+        elif arrow or now - self._backspace_since < LINES_AFTER or self._way in ("up", "down"):
             self._backspace()
         elif self._fade is None:
             self._fade_next_line()
@@ -744,7 +743,7 @@ class ArtRoom(Room):
                     self._new_line()
                     self.app.invalidate()
             elif a == "backspace":
-                self._hold_backspace(action.is_repeat, prior_post_stamp_x is not None)
+                self._hold_backspace(action.is_repeat, prior_post_stamp_x is not None, action.arrow_held)
             return
         if isinstance(action, NavigationAction):
             self._navigate(action, prior_post_stamp_x)
@@ -772,6 +771,8 @@ class ArtRoom(Room):
             self.app.invalidate()
 
     def _navigate(self, action, prior_post_stamp_x):
+        if self._backspace_since is not None:
+            return self._hold_backspace(True, False, action.direction)
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
             self._arrow_repeat_count += 1
         else:
@@ -822,7 +823,6 @@ class ArtRoom(Room):
         self._draw_letters(g, ox, oy, c)
         self._draw_fade_wash(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
-        self._draw_next_erase(g, ox, oy, c)
         held = chrome_h and self._paint_mode and self._last_paint_pos and color_recipe.held_key(self.app, self._last_key_char)
         if held:
             x, y = self._last_paint_pos
@@ -837,6 +837,8 @@ class ArtRoom(Room):
                                            self._paint_mode and color_recipe.hint_row(self._last_key_char, self._mixed))
 
     def _hint_key(self) -> str:
+        if self._backspace_since is not None:
+            return "clean"
         if self._paint_mode and self.app._keyboard_state_machine.shift_active:
             return "pick"
         if self._paint_mode:
@@ -910,8 +912,9 @@ class ArtRoom(Room):
         if not self._paint_mode:  # underline caret: the next letter lands in this cell
             bar = (x, y + c - max(2, c // 4), c, max(2, c // 4))
             g.draw_caret(bar, lambda: g.rect(P.ACCENT, bar))
-        tip = "brush" if self._paint_mode else None
-        turn = HEADING_TURNS[self._heading] if self._use_heading_cursor else None
+        tip = "drop" if self._erasing else "brush" if self._paint_mode else None
+        turn = (HEADING_TURNS[BACK[self._way]] if self._erasing else
+                HEADING_TURNS[self._heading] if self._use_heading_cursor else None)
         if tip or turn is not None:
             key = (c, self._last_key_color, tip, turn, round(self._lift, 2))
             sprite = self._tips.get_or(key, lambda: _brush_tip(*key))

@@ -26,6 +26,7 @@ import { roomsView } from "./ui/rooms";
 import { keysView } from "./ui/keys";
 import { wordsView } from "./ui/words";
 import { WIDER, type View } from "./ui/view";
+import { startEmojiPictures } from "./emoji";
 
 interface Section extends HomeSection {
   // What "Clear all" names on this section's pages; colors has its own undo instead.
@@ -55,6 +56,7 @@ const MORE = ([
 const PAGES: Record<string, (item: string | null) => View> = { pack: downloadView, ...Object.fromEntries(MORE.map(([id, , view]) => [id, view])) };
 
 const app = document.getElementById("app")!;
+void startEmojiPictures();
 const top = h("header", { class: "topbar" });
 // It wraps to more rows on a phone, and sideways there it doesn't stick, so what scrolls under it measures from here.
 new ResizeObserver(() => document.documentElement.style.setProperty("--topbar",

@@ -990,3 +990,8 @@ dialog::backdrop { background: rgb(0 0 0 / 0.3); }
 .big-map .map-grid { max-width: none; }
 .big-map .map-grid > .map-cell { font-size: min(40px, 70cqi / var(--cols)); }
 .big-map .map-brush > .map-cell { width: 40px; font-size: 26px; }
+
+/* Emoji as Purple's own pictures (src/emoji.ts): sized like the text they stand in, at the height Purple
+   draws them (1.2em) and on its baseline, whatever box they land in; !important as photo rules (.emoji-cell img) would size them too. */
+span.emoji { white-space: nowrap; }
+span.emoji > img { display: inline !important; width: auto !important; height: 1.2em !important; max-width: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; object-fit: contain !important; vertical-align: -0.25em !important; }

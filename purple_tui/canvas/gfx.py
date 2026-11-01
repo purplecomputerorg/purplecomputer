@@ -311,12 +311,16 @@ class Gfx:
         return self._emoji.get_or((text, px, found), make)
 
     def _emoji_run(self, text: str, px: int) -> pygame.Surface:
-        if self._emoji_font is None:
+        native = self._emoji_native(text)
+        if native is None:
             return self.text(text, px, "sans", "#ffffff", _raw=True)
-        native = self._emoji_font.render(text, True, (255, 255, 255))
         target_h = max(1, round(px * 1.2))
         scale = target_h / native.get_height()
         return pygame.transform.smoothscale(native, (max(1, round(native.get_width() * scale)), target_h))
+
+    def _emoji_native(self, text: str) -> pygame.Surface | None:
+        """The run at the font's bitmap size; Studio's in-browser Purple draws it from pictures instead."""
+        return self._emoji_font.render(text, True, (255, 255, 255)) if self._emoji_font else None
 
     def _word_picture(self, char: str, px: int) -> pygame.Surface:
         """A pack's picture fitted in an emoji's square; a frame emoji once its pack is gone."""

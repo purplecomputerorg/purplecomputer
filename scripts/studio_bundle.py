@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Zip Purple itself for Studio's in-browser Purple: purple_tui, its fonts, the core packs, and
-the emoji font when this machine has one. Unpacked into Pyodide's file system as is.
+Noto's emoji as pictures. Unpacked into Pyodide's file system as is.
+
+The emoji come from the Noto Color Emoji package Purple's ISO installs (Ubuntu noble-updates), pulled
+out of the font as PNGs (purple_tui/canvas/emoji_pictures.py) since no emoji font format draws in
+every browser. Studio's pages show the same pictures, from studio/.cache/emoji/.
 
 Also fetches the Pyodide wheels Purple needs (pygame-ce and friends) and Purple's Piper voice once,
 since the page may only load files from its own site.
@@ -12,11 +16,15 @@ speaks a room's fixed lines in), and studio/.cache/purple-room-check.pyz, the ro
 Usage: just studio-bundle
 """
 
+import hashlib
+import io
 import json
+import lzma
 import shutil
 import subprocess
 import urllib.request
 import sys
+import tarfile
 import tempfile
 import zipapp
 import zipfile
@@ -41,7 +49,11 @@ KOKORO = {"model": "kokoro-v1.0.int8.onnx", "voice": "af_heart", "tempo": 0.75, 
 CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/pack_manager.py", "purple_tui/synth.py",
            "purple_tui/constants.py", "purple_tui/roomkit/purple.py", "purple_tui/roomkit/runner.py",
            "purple_tui/roomkit/limits.py", "purple_tui/roomkit/check.py"]
-EMOJI_FONTS = [Path("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"), Path.home() / ".local/share/fonts/NotoColorEmoji.ttf"]
+EMOJI = OUT.parent / "emoji"
+UBUNTU = "http://archive.ubuntu.com/ubuntu"
+# The pockets 00-build-golden-image.sh installs from, newest first.
+NOTO_POCKETS = ["noble-updates", "noble"]
+EMOJI_TEST = "https://unicode.org/Public/emoji/latest/emoji-test.txt"
 
 
 def fetch_wheels() -> None:
@@ -107,21 +119,72 @@ def build_checker(out: Path) -> Path:
     return out
 
 
+def fetch_noto() -> tuple[Path, str]:
+    """The font from the fonts-noto-color-emoji package Purple's ISO gets, and its version; the last
+    one fetched when Ubuntu can't be reached."""
+    cache = OUT.parent / "noto"
+    cache.mkdir(parents=True, exist_ok=True)
+    try:
+        package = next(filter(None, map(_noto_package, NOTO_POCKETS)))
+    except OSError as e:
+        cached = sorted(cache.glob("*.ttf"))
+        if not cached:
+            raise
+        print(f"Couldn't reach Ubuntu ({e}); using {cached[-1].name}", file=sys.stderr)
+        return cached[-1], cached[-1].stem
+    font = cache / f"{package['Version']}.ttf"
+    if not font.exists():
+        deb = urllib.request.urlopen(f"{UBUNTU}/{package['Filename']}").read()
+        if hashlib.sha256(deb).hexdigest() != package["SHA256"]:
+            sys.exit(f"{package['Filename']} doesn't match Ubuntu's checksum")
+        tar = subprocess.run(["dpkg-deb", "--fsys-tarfile", "/dev/stdin"], input=deb, capture_output=True, check=True).stdout
+        with tarfile.open(fileobj=io.BytesIO(tar)) as t:
+            member = next(m for m in t.getmembers() if m.name.endswith("/NotoColorEmoji.ttf"))
+            font.write_bytes(t.extractfile(member).read())
+    return font, package["Version"]
+
+
+def _noto_package(pocket: str) -> dict | None:
+    index = lzma.decompress(urllib.request.urlopen(f"{UBUNTU}/dists/{pocket}/main/binary-amd64/Packages.xz").read()).decode()
+    for stanza in index.split("\n\n"):
+        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and not line.startswith(" "))
+        if fields.get("Package") == "fonts-noto-color-emoji":
+            return fields
+    return None
+
+
+def build_emoji() -> None:
+    """studio/.cache/emoji/: every emoji Unicode lists, as the pictures the ISO's Noto draws it with."""
+    from purple_tui.canvas.emoji_pictures import build
+
+    font, version = fetch_noto()
+    if (EMOJI / version).is_dir() and (EMOJI / "map.json").exists():
+        return
+    listed = OUT.parent / "noto" / "emoji-test.txt"
+    if not listed.exists():
+        urllib.request.urlretrieve(EMOJI_TEST, listed)
+    sequences = ["".join(chr(int(c, 16)) for c in line.split(";")[0].split())
+                 for line in listed.read_text().splitlines() if ";" in line and not line.startswith("#")]
+    shutil.rmtree(EMOJI, ignore_errors=True)
+    build(font, EMOJI, sequences, version)
+
+
 def main() -> None:
     build_checker(OUT.parent / "purple-room-check.pyz")
     fetch_wheels()
     fetch_voice()
     fetch_kokoro()
+    build_emoji()
     files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
         for f in files:
             if not f.startswith(SKIP) and (ROOT / f).is_file():
                 z.write(ROOT / f, f)
-        emoji = next((p for p in EMOJI_FONTS if p.exists()), None)
-        if emoji:
-            z.write(emoji, "fonts/NotoColorEmoji.ttf")
-    print(f"{OUT} ({OUT.stat().st_size // 1024} KB, emoji font {'included' if emoji else 'missing'})", file=sys.stderr)
+        for f in sorted(EMOJI.rglob("*")):
+            if f.is_file():
+                z.write(f, f.relative_to(OUT.parent).as_posix())
+    print(f"{OUT} ({OUT.stat().st_size // 1024} KB)", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 // emoji Purple's font can draw, by its name and keywords (emojibase), so "lol" finds 😂. A pasted
 // emoji works too.
 import { CORE_EMOJI, CORE_RANKED_WORDS, CORE_SYNONYMS } from "@sdk/purple/core";
+import { drawable, loadEmojiMap, preloadEmoji } from "../emoji";
 import { pictureFailure } from "../photo";
 import { filePicker, h } from "./dom";
 import { addRoomFile, roomFileFor, roomPicture, roomPictures, shelfOnly, shelfThumb } from "./roomfiles";
@@ -11,19 +12,21 @@ const INDEX: [name: string, emoji: string][] = [
   ...Object.entries(CORE_SYNONYMS).flatMap(([alias, word]): [string, string][] => (CORE_EMOJI[word] ? [[alias, CORE_EMOJI[word]]] : [])),
 ];
 const CORE_SIZE = INDEX.length;
-// Purple's Noto Color Emoji (Ubuntu 24.04) draws emoji through Unicode 15.0.
+// Without Purple's emoji map (src/emoji.ts), what its Noto Color Emoji (Ubuntu 24.04) draws: Unicode 15.0.
 const FONT_VERSION = 15;
 let loading: Promise<void> | null = null;
 function loadAll(): Promise<void> {
-  loading ??= import("emojibase-data/en/data.json").then(({ default: all }) => {
+  loading ??= Promise.all([import("emojibase-data/en/data.json"), loadEmojiMap()]).then(([{ default: all }, map]) => {
     for (const e of all) {
-      if (e.version > FONT_VERSION || e.group === 2) continue;  // group 2 is skin tones and hair parts
+      if ((map ? !drawable(map, e.emoji) : e.version > FONT_VERSION) || e.group === 2) continue;  // group 2 is skin tones and hair parts
       INDEX.push([e.label, e.emoji], ...(e.tags ?? []).map((t): [string, string] => [t, e.emoji]));
     }
   });
   return loading;
 }
 const POPULAR = [...new Set(CORE_RANKED_WORDS.map((w) => CORE_EMOJI[w]).filter(Boolean))];
+// The picker opens on these, so their pictures load while Studio is idle.
+void loadEmojiMap().then(() => setTimeout(() => preloadEmoji(POPULAR.slice(0, 32)), 3000));
 const LETTERS = /[a-z0-9]/i;
 export const isEmoji = (s: string) => !!s.trim() && !LETTERS.test(s);
 
@@ -72,6 +75,16 @@ function picturesSection(pick: (name: string) => void, taken: string[]): HTMLEle
 // onClose: called when it closes without a pick.
 export interface PickOptions { taken?: () => string[]; pictures?: boolean; empty?: string; clear?: string; title?: string; onClose?: () => void }
 
+// The live Purple's side paints over anything past this side's edge, so the picker moves left to stay in it.
+function fitInside(pop: HTMLElement, side: Element): void {
+  const MARGIN = 12;
+  const box = side.getBoundingClientRect();
+  pop.style.maxWidth = `${box.width - 2 * MARGIN}px`;
+  const r = pop.getBoundingClientRect();
+  const over = r.right - (box.right - MARGIN);
+  if (over > 0) pop.style.left = `${-Math.min(over, r.left - box.left - MARGIN)}px`;
+}
+
 // Opens under anchor with the search box focused; Enter picks the first match, Esc closes.
 export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void, { taken: takenNow, pictures, clear, title, onClose }: PickOptions = {}): void {
   const taken = takenNow?.() ?? [];
@@ -102,6 +115,7 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
   open = pop;
   render();
   anchor.after(pop);
+  fitInside(pop, anchor.closest(".main, .big-map") ?? document.body);
   search.focus();
   search.select();
   const outside = (e: MouseEvent) => {

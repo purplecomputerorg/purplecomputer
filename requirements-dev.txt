@@ -1,3 +1,5 @@
 # Build-time only dependencies. NOT installed in the golden image.
 # Used by scripts that generate precomputed data shipped in the image.
 inflect>=7.0.0  # scripts/build_plural_tables.py
+fonttools>=4.50  # scripts/studio_bundle.py: Noto's emoji pictures for Studio
+uharfbuzz>=0.40  # scripts/studio_bundle.py: which picture each emoji sequence shapes to, as pygame does

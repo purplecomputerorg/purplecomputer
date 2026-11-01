@@ -19,19 +19,6 @@ interface Pyodide {
   toPy(value: unknown): { destroy(): void };
 }
 
-// An emoji run as RGBA pixels, height px, drawn in the Noto Color Emoji Purple itself uses.
-function drawEmoji(text: string, px: number): ImageData {
-  const probe = new OffscreenCanvas(1, 1).getContext("2d")!;
-  const font = `${Math.round(px / 1.17)}px PurpleEmoji`;
-  probe.font = font;
-  const width = Math.max(1, Math.ceil(probe.measureText(text).width));
-  const ctx = new OffscreenCanvas(width, px).getContext("2d")!;
-  ctx.font = font;
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, 0, px / 2);
-  return ctx.getImageData(0, 0, width, px);
-}
-
 // Only voices on this machine: Chrome's "Google" voices send the text to Google.
 function localVoice(): SpeechSynthesisVoice | undefined {
   const voices = speechSynthesis.getVoices().filter((v) => v.localService);
@@ -94,17 +81,12 @@ export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) 
   log("Loading Purple…");
   py.unpackArchive(await (await fetch(new URL("purple/purple.zip", document.baseURI))).arrayBuffer(), "zip", { extractDir: ROOT });
   py.canvas.setCanvas2D(canvas);
-  const emoji = new FontFace("PurpleEmoji", py.FS.readFile(`${ROOT}/fonts/NotoColorEmoji.ttf`).slice());
-  document.fonts.add(emoji);
-  // Safari can't load it; Purple runs anyway, with the browser's own emoji.
-  await emoji.load().catch(() => log("Emoji font didn't load"));
-  Object.assign(globalThis, { purpleDrawEmoji: drawEmoji, purpleSay: say, purplePiper: piperSay, purpleHush: () => (speechSynthesis.cancel(), piperHush()) });
+  Object.assign(globalThis, { purpleSay: say, purplePiper: piperSay, purpleHush: () => (speechSynthesis.cancel(), piperHush()) });
   void startIfCached();
   log("Starting Purple…");
   await py.runPythonAsync(`
 import os, sys
-os.environ.update(PURPLE_NO_EVDEV="1", PURPLE_DEV_MODE="1", PURPLE_TEST_BATTERY="1", PYGAME_HIDE_SUPPORT_PROMPT="1",
-                  PURPLE_EMOJI_FONT="${ROOT}/fonts/NotoColorEmoji.ttf")
+os.environ.update(PURPLE_NO_EVDEV="1", PURPLE_DEV_MODE="1", PURPLE_TEST_BATTERY="1", PYGAME_HIDE_SUPPORT_PROMPT="1")
 sys.path.insert(0, "${ROOT}")
 `);
   await py.runPythonAsync(browserShim);

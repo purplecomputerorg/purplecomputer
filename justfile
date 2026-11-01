@@ -420,6 +420,7 @@ studio: studio-bundle
 # Purple itself for Studio's live preview: purple.zip, the Pyodide wheels it needs, room posters
 studio-bundle:
     cd studio && npm install --no-audit --no-fund
+    {{venv}}/bin/pip install -q -r requirements-dev.txt
     {{venv}}/bin/python scripts/studio_bundle.py
 
 # Purple Studio: build here and upload to its Vercel project (link once with `cd studio && vercel link`); --prod for studio.purplecomputer.org

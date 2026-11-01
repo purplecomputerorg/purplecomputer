@@ -69,7 +69,7 @@ Vite, TypeScript, and plain DOM, with no backend. Two runtime dependencies: Pyod
 
 `purple.html` boots the real Purple, in Pyodide, in an iframe that stays up for the whole visit. After each edit Studio builds the pack exactly as Download would, and Purple installs it with its own `PackInstaller` and restarts, the same way it reads packs at boot.
 
-- `scripts/studio_bundle.py` zips `purple_tui`, its fonts, the core packs, and the emoji font, and fetches the Pyodide wheels Purple needs.
+- `scripts/studio_bundle.py` zips `purple_tui`, its fonts and the core packs, and fetches the Pyodide wheels Purple needs. Emoji come from the Noto package Purple's ISO installs, pulled out as PNGs (`purple_tui/canvas/emoji_pictures.py`) that both the in-browser Purple and Studio's pages draw (`src/emoji.ts`), since no emoji font format draws in every browser.
 - `src/live/browser.py` turns what a browser can't do into no-ops before Purple loads (threads, the mixer's subprocess probe, freetype glyph checks) and routes speech to recorded clips or Piper.
 - `src/live/live.py` installs a pack, restarts the app, and opens the room a page asks for.
 - **Voice:** Piper, with the same model, speaker, and settings as Purple, phonemized by espeak-ng built to WebAssembly (`vendor/espeak-ng/`, GPL-3.0, source linked under the screen) and run in `src/live/piper.worker.ts`. Purple's own `tts` then trims, levels, and caches the audio, so a phrase sounds the way it does on Purple. The model is cached with the browser's Cache API.

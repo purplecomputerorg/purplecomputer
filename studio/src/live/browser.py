@@ -48,18 +48,18 @@ def _patch_glyph_coverage():
 _patch_glyph_coverage()
 
 
-# SDL_ttf here can't draw Noto Color Emoji's bitmaps, so the page draws emoji with that same font
-# file (see boot.ts, drawEmoji) and Purple gets the pixels back as a surface.
+# SDL_ttf here can't draw Noto Color Emoji's bitmaps, so Purple draws the same pictures from the
+# ones studio_bundle.py pulled out of the ISO's font (purple.zip's emoji/).
 def _patch_emoji():
-    import pygame
-    from js import purpleDrawEmoji
+    from pathlib import Path
+    import purple_tui
     from purple_tui.canvas import gfx
+    from purple_tui.canvas.emoji_pictures import EmojiPictures
 
-    def emoji_run(self, text, px):
-        img = purpleDrawEmoji(text, max(1, round(px * 1.2)))
-        return pygame.image.frombuffer(bytes(img.data.to_py()), (img.width, img.height), "RGBA").convert_alpha()
-
-    gfx.Gfx._emoji_run = emoji_run
+    root = Path(purple_tui.__file__).parent.parent / "emoji"
+    if (root / "map.json").exists():
+        pictures = EmojiPictures(root)
+        gfx.Gfx._emoji_native = lambda self, text: pictures.render(text)
 
 
 _patch_emoji()

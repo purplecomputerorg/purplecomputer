@@ -837,14 +837,7 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .live-status { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; background: #1d1234; color: #e8daf0; font-size: 15px; text-align: center; transition: opacity 0.3s; }
 .live-status i { width: 34px; height: 34px; border-radius: 99px; border: 3px solid rgba(232, 218, 240, 0.18); border-top-color: #e8daf0; animation: spin 1s linear infinite; }
 .live.failed .live-status i { display: none; }
-.live:not(.ready) :is(.zoom-toggle, .big-toggle) { display: none; }
-.big-toggle { position: absolute; top: 6px; left: 6px; z-index: 3; padding: 4px 10px; border: 0; border-radius: 999px; background: rgba(20, 10, 35, 0.7); color: #fff; font: 600 11px var(--sans); cursor: pointer; }
-@media (max-width: 700px) { .big-toggle { display: none; } }
-/* Big: Purple over the whole page, as large as the window lets it be */
-.big-live .stage { position: fixed; inset: 0; z-index: 60; height: 100vh; align-items: center; padding: 16px; background: rgba(20, 10, 35, 0.88); }
-.big-live .stage-inner { max-width: none; }
-.big-live .stage .laptop { max-width: min(96vw, calc((100vh - 40px) / 0.62)); }
-.big-live .stage :is(h3, .caption, .laptop-base, .sticker-callout, .stays-here) { display: none; }
+.live:not(.ready) .zoom-toggle { display: none; }
 .live.ready:not(.busy):not(.entering) .live-status { opacity: 0; pointer-events: none; }
 .live .playable-hint { border: 0; font: inherit; cursor: pointer; opacity: 0; pointer-events: none; }
 .playable-hint em { display: none; font-style: normal; font-weight: 600; font-size: 12px; }

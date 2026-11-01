@@ -202,7 +202,6 @@ function route() {
   if (moved) return location.replace(`#${moved}`);
   current?.cleanup?.();
   hush();
-  live.big(false);
   const [sec, item] = parseHash();
   const section = SECTIONS.find((s) => s.id === sec);
   const view = section ? section.view(item) : PAGES[sec] ? PAGES[sec](item) : homeView(SECTIONS);

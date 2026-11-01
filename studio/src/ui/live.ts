@@ -11,6 +11,7 @@ import { manifest, packChanges, packSpec, type Sent } from "../pack";
 import { onRoomVoice, roomReady, roomVoiceVersion, warmRoomVoice } from "../roomvoice";
 import { draft, type RoomDraft } from "../state";
 import { h, pageKeys } from "./dom";
+import { trace } from "../live/trace";
 
 // Covers Purple while it isn't getting keys. Once someone has played with it (the screen marked
 // "tried"), it shrinks to a small reminder, since they already know how.
@@ -87,7 +88,12 @@ class LiveScreen {
     this.element = h("div", { class: "screen-wrap live" }, this.frame, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote, this.updating, this.note);
     PHONE.addEventListener("change", () => { this.zoomed = PHONE.matches; this.reframe(); });
     this.reframe();
-    addEventListener("message", (e: MessageEvent<FromFrame>) => e.source === this.frame.contentWindow && this.onMessage(e.data));
+    addEventListener("message", (e: MessageEvent<FromFrame>) => {
+      // Not e.source: once Purple runs, Safari stops giving the frame's window for its messages.
+      if (e.origin !== location.origin || !e.data?.type) return;
+      if (e.data.type !== "status") trace("[studio] got", e.data.type);
+      this.onMessage(e.data);
+    });
     addEventListener(KEY_EVENT, () => { this.prompt(null); stopPreviews(); });
     onHush(() => this.ready && this.post({ type: "hush" }));
     onRoomVoice(() => this.queueSync());
@@ -282,7 +288,7 @@ class LiveScreen {
   }
 
   private post(m: ToFrame): void {
-    void this.listening.then(() => this.frame.contentWindow?.postMessage(m, location.origin));
+    void this.listening.then(() => (trace("[studio] sends", m.type), this.frame.contentWindow?.postMessage(m, location.origin)));
   }
 }
 

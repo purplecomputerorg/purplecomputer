@@ -95,7 +95,9 @@ export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) 
   py.unpackArchive(await (await fetch(new URL("purple/purple.zip", document.baseURI))).arrayBuffer(), "zip", { extractDir: ROOT });
   py.canvas.setCanvas2D(canvas);
   const emoji = new FontFace("PurpleEmoji", py.FS.readFile(`${ROOT}/fonts/NotoColorEmoji.ttf`).slice());
-  document.fonts.add(await emoji.load());
+  document.fonts.add(emoji);
+  // Safari can't load it; Purple runs anyway, with the browser's own emoji.
+  await emoji.load().catch(() => log("Emoji font didn't load"));
   Object.assign(globalThis, { purpleDrawEmoji: drawEmoji, purpleSay: say, purplePiper: piperSay, purpleHush: () => (speechSynthesis.cancel(), piperHush()) });
   void startIfCached();
   log("Starting Purple…");

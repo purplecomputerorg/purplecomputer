@@ -5,6 +5,7 @@ import { browserKey } from "../keys";
 import { roomGuests } from "../rooms/guests";
 import { bootPurple, type LivePurple, type PackFiles, type Place, type RoomSetup } from "./boot";
 import { onVoiceNote } from "./piper";
+import { trace } from "./trace";
 
 export type ToFrame =
   | { type: "load"; pack: PackFiles | null; setup: RoomSetup | null }
@@ -35,7 +36,7 @@ export type FromFrame =
 // SDL draws into #canvas, kept off screen; #screen is what people see, at its own pixel size.
 const sdl = document.getElementById("canvas") as HTMLCanvasElement;
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
-const post = (m: FromFrame) => parent.postMessage(m, location.origin);
+const post = (m: FromFrame) => (m.type !== "status" && trace("[frame] sends", m.type), parent.postMessage(m, location.origin));
 // For Purple's FamilyRoom (browser.py): rooms run in workers from this page.
 const guests = roomGuests((text) => post({ type: "print", text }));
 Object.assign(globalThis, {
@@ -97,13 +98,16 @@ const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
 };
 
 // Messages queue up while Purple boots, then run in order, one at a time.
-const booted = bootPurple(sdl, (text) => post({ type: "status", text }));
+// Straight to the console too, to see how far Purple got in a browser where it never shows.
+const booted = bootPurple(sdl, (text) => (console.info("[purple]", text), post({ type: "status", text })));
 let queue: Promise<unknown> = booted;
 const run = (task: (live: LivePurple) => Promise<void>) => {
   queue = queue.then(async () => task(await booted)).catch((err) => post({ type: "failed", text: String(err?.message ?? err) }));
 };
 addEventListener("message", (e: MessageEvent<ToFrame>) => {
-  if (e.origin !== location.origin || e.source !== parent) return;
+  // Not e.source: Safari gives this page's own window for Studio's messages. Pyodide's own have no type.
+  if (e.origin !== location.origin || !e.data?.type) return;
+  trace("[frame] got", e.data.type);
   // A view doesn't wait for Purple: it's only how the frames are copied.
   if (e.data.type === "view") {
     target = e.data.view;

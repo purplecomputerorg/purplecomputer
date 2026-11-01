@@ -83,10 +83,11 @@ function look(el: HTMLElement, letter: string, legend: Map<string, Face>, specia
 }
 
 // Options a builder gives: special looks, each brush's name for its tooltip, what shows under the brushes for the one
-// picked, more buttons after them, and which map and brush are picked (shared between painters of the same world, so
+// picked, more buttons after them, a button right above the map, and which map and brush are picked (shared between painters of the same world, so
 // the big one opens where the small one was).
 export interface PainterOptions {
   special?: () => Special; names?: () => Map<string, string>; detail?: (letter: string) => Node | null; more?: () => Node[];
+  atMap?: () => Node;
   view?: { map: number; brush: string };
 }
 
@@ -153,7 +154,8 @@ export function mapPainter(knob: Lit, legend: () => Map<string, Face>, onEdit: (
       const b = h("div", { class: "map-grid" }, ...cells[m].flat());
       b.style.setProperty("--cols", String(grids[m][0].length));
       const name = maps[m].name;
-      if (!name || !world) return b;
+      const at = opts.atMap?.() ?? "";
+      if (!name || !world) return at ? h("div", { class: "map-one" }, h("div", { class: "map-head" }, at), b) : b;
       const nameIn = textIn(name.v, (s) => {
         name.v = s;
         tabs[m].textContent = s || "?";
@@ -163,7 +165,7 @@ export function mapPainter(knob: Lit, legend: () => Map<string, Face>, onEdit: (
       // The map holding the hero's start stays, so the room always has somewhere to begin.
       const keep = maps.length === 1 || grids[m].flat().some(only);
       const drop = () => { world.entries.splice(m, 1); view.map = Math.max(0, m - 1); onEdit(); redraw(); };
-      return h("div", { class: "map-one" }, h("div", { class: "map-head" }, nameIn, keep ? "" : removeButton(drop)), b);
+      return h("div", { class: "map-one" }, h("div", { class: "map-head" }, nameIn, keep ? "" : removeButton(drop), at), b);
     };
 
     const add = () => {

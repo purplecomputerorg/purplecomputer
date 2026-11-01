@@ -141,11 +141,10 @@ export function worldBuilder(knobs: Knob[], onEdit: () => void): HTMLElement | n
   };
 
   const mapPart = () => {
-    const [painter, redraw] = mapPainter(world, legend, onEdit, painterOpts);
+    const [painter, redraw] = mapPainter(world, legend, onEdit, { ...painterOpts, atMap: () => h("button", { class: "btn small map-big", onclick: openBig }, "⛶ Make it big") });
     if (small) painters.delete(small);
     painters.add(small = redraw);
-    return section("The world", "Pick something to change it, or to paint it on the map. + Add makes something new: an animal, a friend, a treasure, anything.",
-      h("button", { class: "btn small", onclick: openBig }, "⛶ Paint on a big map"), painter);
+    return section("The world", "Pick something to change it, or to paint it on the map. + Add makes something new: an animal, a friend, a treasure, anything.", painter);
   };
 
   // The world as large as the window, over everything.

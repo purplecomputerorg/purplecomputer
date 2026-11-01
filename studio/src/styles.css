@@ -891,7 +891,8 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .map-cell img { width: 100%; height: 100%; object-fit: contain; }
 .map-one { display: grid; gap: 6px; }
 .map-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.map-head { display: flex; align-items: center; gap: 6px; }
+.map-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.map-head > .map-big { margin-left: auto; }
 .map-name { font-weight: 600; }
 .map-painter > .bad:empty { display: none; }
 .map-painter > .bad { color: #b44; margin: 0; }
@@ -913,8 +914,8 @@ dialog.card { max-width: 440px; margin: auto; color: var(--text); }
 dialog::backdrop { background: rgb(0 0 0 / 0.3); }
 .spoken { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; }
 .voice-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
-/* The voice choices wrap rather than run past a narrow card. */
-.voice-row > .seg { flex-wrap: wrap; overflow: visible; border-radius: 18px; }
+/* Voice choices and map tabs wrap rather than run past a narrow card. */
+:is(.voice-row, .map-tabs) > .seg { min-width: 0; flex-wrap: wrap; overflow: visible; border-radius: 18px; }
 
 /* Room forms and builders: fields shrink with the pane instead of running past it */
 :is(.knobs, .form-card) :is(input[type="text"], textarea, select) { min-width: 0; max-width: 100%; }
@@ -973,11 +974,11 @@ dialog::backdrop { background: rgb(0 0 0 / 0.3); }
 /* The picked brush's settings, right under the brushes. */
 .thing-detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; max-width: 560px; padding: 10px 12px; border-radius: 12px; background: var(--fill); min-width: 0; }
 .thing-detail:has(> .dim:first-child) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.thing-detail > input[type="color"] { width: 36px; height: 30px; padding: 0; border: 0; background: none; }
+.thing-detail > input[type="color"] { width: 32px; height: 32px; }
 .thing-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .thing-top select { width: 100%; }
 .map-add { padding: 4px 12px; border-style: dashed; color: var(--purple); font: 600 13px var(--sans); }
-.thing-top input[type="color"] { width: 48px; height: 48px; padding: 0; border: 0; background: none; cursor: pointer; }
+.thing-top input[type="color"] { width: 48px; height: 48px; }
 .builder .thing-top .emoji-cell { width: 48px; height: 48px; font-size: 28px; }
 .thing-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 13px; }
 .thing-links .bad { color: #b44; }

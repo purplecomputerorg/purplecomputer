@@ -169,7 +169,8 @@ describe("family rooms in Studio's Python", () => {
     const keys = ["a", "2"].map((key) => ({ ev: "key", key }));
     const replies = await runRoom(example("story"), keys);
     expect([texts(replies[0]), replies[0].sounds]).toEqual([["📖", "Mia and the map", "Press any key to start"], [["say", "Mia and the map"]]]);
-    expect(replies[1].sounds).toEqual([["say", "Mia finds a map. It shows a forest and the sea."], ["say", "Press 1 to go to the forest. Press 2 to go to the sea."]]);
+    expect(replies[1].sounds).toEqual([["say", "Mia finds a map. It shows a forest and the sea."], ["say", "Press 1 to go to the forest, or 2 to go to the sea."]]);
+    expect(texts(replies[1])).toContain("1 go to the forest    2 go to the sea");
     expect(texts(replies[2])).toContain("🦀");
   }, 60_000);
 

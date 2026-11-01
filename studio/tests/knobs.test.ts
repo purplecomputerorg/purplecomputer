@@ -3,7 +3,7 @@ import { EXAMPLES } from "../src/examples";
 import { type Lit, loudLines, readKnobs, writeKnobs } from "../src/knobs";
 import { searchEmoji } from "../src/ui/emojipicker";
 import { isMap, isWorld, legendFor, lonelyNumbers } from "../src/ui/mappainter";
-import { storyPages } from "../src/ui/storybuilder";
+import { askFor, storyPages } from "../src/ui/storybuilder";
 import { worldParts } from "../src/ui/worldbuilder";
 
 const ROOM = `from purple import *
@@ -69,7 +69,8 @@ describe("knobs", () => {
   it("finds the words a story says out loud, leaving out its pictures, page names, and choices", () => {
     const lines = loudLines(EXAMPLES.find((e) => e.name === "story")!.source);
     expect(lines[0]).toBe("Mia and the map");
-    expect(lines).toHaveLength(4);
+    expect(lines).toHaveLength(5);
+    expect(lines).toContain("Press 1 to go to the forest, or 2 to go to the sea.");
     expect(lines.filter((l) => /^(start|forest|sea)$|🗺️|^go to/.test(l))).toEqual([]);
     expect(loudLines(EXAMPLES.find((e) => e.name === "explore")!.source)).toEqual([
       "Hello! Find all the stars and home will open. Some are through the door.", "Squeak! The door goes back outside."]);
@@ -135,5 +136,7 @@ describe("knobs", () => {
     expect(storyPages(knobs("explore"))).toBeNull();
     expect(worldParts(knobs("story"))).toBeNull();
     expect(storyPages(readKnobs('PAGES = {"start": ("🏡", "Hi. Press 1.", {"1": "end"}), "end": ("🌙", "Bye.", {})}\n'))).toBeNull();
+    expect(storyPages(readKnobs('PAGES = {"start": ("🏡", "Hi.", {"go": "end"}), "end": ("🌙", "Bye.", {})}\n'))).toBeNull();
+    expect([askFor(["go home"]), askFor(["a", "b", "c"]), askFor([])]).toEqual(["Press Space to go home.", "Press 1 to a, 2 to b, or 3 to c.", ""]);
   });
 });

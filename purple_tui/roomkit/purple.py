@@ -28,6 +28,7 @@ KEEP_MAX_BYTES = 4096
 OVER_PAUSE_S = 1.0  # so the key that ended the game, or the tap right after it, doesn't start the next one
 _HEX = _re.compile(r"^#[0-9a-fA-F]{6}$")
 _KEY_NAMES = _re.compile(r"(?<!\{)\b(Space|Enter|Tab|Backspace)\b(?!\})")
+_BRACED = _re.compile(r"\{([^{}]+)\}")
 _NOTE = _re.compile(r"^[A-Ga-g]#?\d$")
 # Each arrow key's step on the grid, as (across, down).
 ARROWS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
@@ -354,9 +355,11 @@ def _label(x, y, size, text, color="text", **how):
 
 
 def _keyed(text) -> tuple:
-    """Text and how, with key names drawn as keycaps where Purple can (api 3)."""
-    if _api[0] < 3 or not _KEY_NAMES.search(text):
+    """Text and how, with key names and {1}-style braced keys drawn as keycaps where Purple can (api 3)."""
+    if not (_KEY_NAMES.search(text) or _BRACED.search(text)):
         return text, {}
+    if _api[0] < 3:
+        return _BRACED.sub(r"\1", text), {}
     return _KEY_NAMES.sub(r"{\1}", text), {"keys": True}
 
 

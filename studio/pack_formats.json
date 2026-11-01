@@ -53,7 +53,7 @@
   "purple_tui/pack_manager.py": "41f6ab779c96aafd",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
   "purple_tui/canvas/rooms/family_room.py": "7b29343630c98692",
-  "purple_tui/roomkit/purple.py": "fe359f3abea06bfa",
+  "purple_tui/roomkit/purple.py": "1e09564b9c8ba085",
   "purple_tui/roomkit/runner.py": "9e62d3413c858a5a",
   "purple_tui/roomkit/limits.py": "07347f3ac2df15ea"
  }

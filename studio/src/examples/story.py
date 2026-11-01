@@ -5,12 +5,14 @@ from purple import *
 # The story's name, on its cover and said out loud.
 TITLE = "Mia and the map"
 # The pages, in the order they were written: the story starts on the first. Each has a picture, the words said out
-# loud, and its choices: what each one does, and the page it turns to. One choice turns with Space; none is an end.
-# Labels: page, picture, words, choices
+# loud, what Purple says next to ask for a choice, and its choices: what each one does, and the page it turns to.
+# One choice turns with Space; none is an end.
+# Labels: page, picture, words, then says, choices
 PAGES = {
-    "start": ("🗺️", "Mia finds a map. It shows a forest and the sea.", {"go to the forest": "forest", "go to the sea": "sea"}),
-    "forest": ("🦉", "In the forest, an owl shows Mia a cave full of glowing stones. The end!", {}),
-    "sea": ("🦀", "At the sea, a crab gives Mia a shiny shell. The end!", {}),
+    "start": ("🗺️", "Mia finds a map. It shows a forest and the sea.", "Press 1 to go to the forest, or 2 to go to the sea.",
+              {"go to the forest": "forest", "go to the sea": "sea"}),
+    "forest": ("🦉", "In the forest, an owl shows Mia a cave full of glowing stones. The end!", "", {}),
+    "sea": ("🦀", "At the sea, a crab gives Mia a shiny shell. The end!", "", {}),
 }
 # The drum when a page turns: one of Purple's drums, one of your sounds, or none.
 PAGE_SOUND = ""
@@ -29,24 +31,26 @@ def cover():
 
 
 def choices():
-    return list(PAGES[game.page][2].items())
+    return list(PAGES[game.page][3].items())
+
+
+def read_page():
+    for line in PAGES[game.page][1:3]:
+        if line:
+            say(line)
 
 
 def turn_to(name):
     game.page = name
-    picture, words, _ = PAGES[name]
     clear()
-    show(picture)
-    write(words)
-    say(words)
+    show(PAGES[name][0])
+    write(PAGES[name][1])
+    read_page()
     ways = choices()
     if len(ways) == 1:
-        what = ways[0][0] or "turn the page"
-        say(f"Press Space to {what}.")
-        status(f"Space: {what}")
+        status(f"Space {ways[0][0] or 'turn the page'}")
     elif ways:
-        say(" ".join(f"Press {n} to {what}." for n, (what, _) in enumerate(ways, 1)))
-        status("    ".join(f"{n}: {what}" for n, (what, _) in enumerate(ways, 1)))
+        status("    ".join(f"{{{n}}} {what}" for n, (what, _) in enumerate(ways, 1)))
     else:
         status("The end. Press Space to start again")
 
@@ -63,7 +67,7 @@ def on_key(key):
     elif key == "space" and not ways:
         cover()
     elif key == "space":
-        say(PAGES[game.page][1])
+        read_page()
 
 
 cover()

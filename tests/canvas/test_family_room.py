@@ -504,15 +504,17 @@ def test_long_text_wraps_and_shrinks_into_its_box(pack):
     run(go())
 
 
-def test_key_names_in_the_status_line_draw_as_keycaps(pack, monkeypatch):
-    pack("keys", 'from purple import *\nstatus("Space plays")\n')
+@pytest.mark.parametrize("typed, keyed, plain", [("Space plays", "{Space} plays", "Space plays"),
+                                                  ("{1} the forest", "{1} the forest", "1 the forest")])
+def test_key_names_in_the_status_line_draw_as_keycaps(pack, monkeypatch, typed, keyed, plain):
+    pack("keys", f'from purple import *\nstatus("{typed}")\n')
 
     async def go():
         app = make_app()
         room = _open(app, "keys")
         await until(lambda: room.scene)
         status = room.scene[-1]
-        assert status[4] == "{Space} plays" and status[-1] is True
+        assert status[4] == keyed and status[-1] is True
         app._draw()
         (_, _, pieces), = room._fit(status[4], 20, "#ffffff", 0, 0, 1000, True)
         assert len(pieces) == 2
@@ -523,7 +525,7 @@ def test_key_names_in_the_status_line_draw_as_keycaps(pack, monkeypatch):
     async def old():
         room = _open(make_app(), "keys")
         await until(lambda: room.scene)
-        assert room.scene[-1][4] == "Space plays"
+        assert room.scene[-1][4] == plain
         room.close()
     run(old())
 

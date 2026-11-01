@@ -43,7 +43,7 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | --- | --- |
 | `show(thing)` | Big in the middle, replacing what was there: text, an emoji, or a picture. Long text wraps and shrinks to fit. |
 | `write(text)` | A line of text under the middle. The last 5 stay, good for stories and questions. |
-| `status(text)` | A line along the top, for a score or what to do next; Space, Enter, Tab, and Backspace in it show as keys. `status()` takes it away. |
+| `status(text)` | A line along the top, for a score or what to do next; Space, Enter, Tab, and Backspace in it show as keys, and so does any key in braces, like `{1}`. `status()` takes it away. |
 | `clear()` | Empties the screen: the middle, the lines, the top line, and the grid. |
 | `background("#2a1845")` | The room's color: # and six letters or numbers, or a theme color (below). |
 | `say(text)` | Purple says it out loud. Everything said in one key or timer is spoken in order; the next key's `say` cuts off anything still being said, unless it says the same words again, which then just carry on. Notes, drums, and sounds play at the same time as speech. A `say` with its words written right in it, like `say("Hello!")`, speaks in Purple's room voice; words built while the room runs, like `say(name)` or `say(f"{n} stars")`, speak in Purple's everyday voice. |

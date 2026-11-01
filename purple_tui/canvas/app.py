@@ -1868,19 +1868,18 @@ class PurpleApp:
         self.g.surface.blit(veil, frame)
 
     def _draw_toasts(self):
-        """A calm centered pill above the status strip, stacking upward, so a
-        transient message never lands on top of the room's content. A toast's
-        picture sits left of its text."""
+        """A light centered pill above the status strip, stacking upward, so a
+        transient message stands apart from the dark chrome and never lands on
+        the room's content. A toast's picture sits left of its text."""
         g = self.g
         pad = g.vh(1.1)
         y = g.h - g.vh(11)
         for t in reversed(self._toasts[-3:]):
-            parts = [s for s in (t.picture, t.text and g.text(t.text, g.vh(2.4), "mono-bold", P.TEXT)) if s]
+            parts = [s for s in (t.picture, t.text and g.text(t.text, g.vh(2.4), "mono-bold", P.ON_PRIMARY)) if s]
             w = sum(s.get_width() for s in parts) + pad * (len(parts) - 1)
             pill = pygame.Rect(0, 0, w, max(s.get_height() for s in parts)).inflate(pad * 2, pad * 2)
             pill.midbottom = (g.w // 2, y + pad)
-            g.rect(P.SURFACE, pill, radius=g.em(0.5))
-            g.rect(P.HAIR, pill, width=1, radius=g.em(0.5))
+            g.rect(P.TEXT, pill, radius=g.em(0.5))
             x = pill.x + pad
             for s in parts:
                 x = g.surface.blit(s, s.get_rect(midleft=(x, pill.centery))).right + pad

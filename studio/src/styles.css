@@ -554,12 +554,12 @@ input.room-name.just-yours, .trybar.just-added { animation: just-yours 1.8s ease
 .your-head .your-face { padding-right: 0; }
 .your-card .rename { flex-shrink: 0; border: none; background: none; cursor: pointer; font-size: 14px; opacity: 0.6; padding: 4px; }
 .your-card .rename:hover { opacity: 1; }
-.icon-btn { border: none; background: none; cursor: pointer; font-size: 18px; opacity: 0.6; padding: 4px; }
-.icon-btn:hover { opacity: 1; }
 .your-rename { font: inherit; font-weight: 700; width: 100%; padding: 2px 6px; }
-label.your-card { cursor: pointer; }
-.your-card .choose { position: absolute; top: 10px; right: 10px; margin: 0; accent-color: var(--magenta); width: 18px; height: 18px; }
-.your-card:has(.choose:checked) { border-color: var(--magenta); }
+.your-card .choose { appearance: none; position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; margin: 0; border-radius: 50%; border: 1.5px solid var(--border); background: #fff center / 12px no-repeat; cursor: pointer; transition: border-color 0.15s, background-color 0.15s; }
+.your-card .choose:hover { border-color: var(--purple); }
+.your-card .choose:checked { border-color: var(--purple); background-color: var(--purple); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.your-card:has(.choose:checked) { border-color: var(--purple); background: var(--fill); }
+.choosing { min-height: 32px; }
 .yours-note { margin-top: 12px; }
 .guide .flash { background: var(--fill); transition: background 1.5s; }
 

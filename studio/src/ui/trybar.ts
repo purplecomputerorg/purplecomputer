@@ -25,41 +25,48 @@ export function tryBar(item: Keepable): HTMLElement {
 // rename says why a name can't be used, or renames the item and says nothing. keep stands in for the Add button.
 export interface YourCard { href: string; title: string; face: Node; current?: boolean; rename?: (text: string) => string | null; keep?: HTMLElement | null }
 
-// What the family made on a list page, one card each with an Add to my Pack button and an × that throws it
-// away, plus a pencil beside the name when it can be renamed; the bin above throws away many at once. Examples only tried aren't theirs yet, so they aren't listed.
+// What the family made on a list page, one card each with an Add to my Pack button and a round tick in the
+// corner, plus a pencil beside the name when it can be renamed. Ticking one or more shows "Throw away" above.
+// Examples only tried aren't theirs yet, so they aren't listed.
 // warn: anything more the confirm should say about throwing these away.
 export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (gone: T[]) => void, warn?: (gone: T[]) => string): HTMLElement | null {
   const theirs = items.filter(isTheirs);
   if (!theirs.length) return null;
-  const throwAway = async (gone: T[], what: string) => (await ask(`Throw away ${what}?${warn?.(gone) ?? ""}`, "Throw away")) && remove(gone);
   const chosen = new Set<T>();
-  const bin = h("button", { type: "button", class: "btn small", title: "Throw away the ones you chose", "aria-label": "Throw away the ones you chose", onclick: () => throwAway([...chosen], chosen.size > 1 ? `these ${chosen.size}` : "this one") });
-  const counted = () => { bin.disabled = !chosen.size; bin.textContent = chosen.size ? `🗑️ ${chosen.size}` : "🗑️"; };
-  const head = h("div", { class: "row between" });
-  const list = h("div", { class: "yours" });
-  const render = (choosing: boolean) => {
+  const titles = new Map<T, string>();
+  const boxes = new Map<T, HTMLInputElement>();
+  const throwAway = async () => {
+    const gone = [...chosen];
+    const what = gone.length > 1 ? `these ${gone.length}` : titles.get(gone[0]);
+    if (await ask(`Throw away ${what}?${warn?.(gone) ?? ""}`, "Throw away")) remove(gone);
+  };
+  const choose = (picked: T[]) => {
     chosen.clear();
+    picked.forEach((item) => chosen.add(item));
+    boxes.forEach((box, item) => { box.checked = chosen.has(item); });
     counted();
-    const boxes: HTMLInputElement[] = [];
-    const tick = (box: HTMLInputElement, item: T) => { box.checked ? chosen.add(item) : chosen.delete(item); counted(); };
-    head.replaceChildren(h("h3", {}, "Yours"), h("div", { class: "row" }, ...(choosing
-      ? [h("button", { class: "linkbtn dim small", onclick: () => boxes.forEach((b) => { b.checked = true; b.dispatchEvent(new Event("change")); }) }, "All"),
-        h("button", { class: "linkbtn dim small", onclick: () => render(false) }, "Cancel"), bin]
-      : theirs.length > 1 ? [h("button", { type: "button", class: "icon-btn", title: "Throw away several", "aria-label": "Throw away several", onclick: () => render(true) }, "🗑️")] : [])));
+  };
+  const bar = h("div", { class: "row choosing" });
+  const counted = () => bar.replaceChildren(...(chosen.size ? [
+    h("span", { class: "dim small" }, `${chosen.size} chosen`),
+    chosen.size < theirs.length ? h("button", { type: "button", class: "linkbtn dim small", onclick: () => choose(theirs) }, "Choose all") : null,
+    h("button", { type: "button", class: "linkbtn dim small", onclick: () => choose([]) }, "Clear"),
+    h("button", { type: "button", class: "btn small", onclick: throwAway }, "Throw away")] : []).filter((n) => n !== null));
+  const list = h("div", { class: "yours" });
+  const render = () => {
+    boxes.clear();
     list.replaceChildren(...theirs.map((item) => {
       const c = card(item);
-      const face = h(choosing ? "span" : "a", { class: "your-face", href: choosing ? null : c.href }, c.face, h("b", {}, c.title));
-      if (choosing) {
-        const box = h("input", { type: "checkbox", class: "choose", "aria-label": `Choose ${c.title}`, onchange: () => tick(box, item) });
-        boxes.push(box);
-        return h("label", { class: "your-card" }, face, box);
-      }
-      const head = h("div", { class: "your-head" }, face,
+      titles.set(item, c.title);
+      const box = h("input", { type: "checkbox", class: "choose", checked: chosen.has(item), title: `Choose ${c.title}`, "aria-label": `Choose ${c.title}`,
+        onchange: () => { box.checked ? chosen.add(item) : chosen.delete(item); counted(); } });
+      boxes.set(item, box);
+      const head = h("div", { class: "your-head" }, h("a", { class: "your-face", href: c.href }, c.face, h("b", {}, c.title)),
         c.rename ? h("button", { type: "button", class: "rename", title: `Rename ${c.title}`, "aria-label": `Rename ${c.title}`, onclick: () => renaming(el, head, c) }, "✏️") : null);
-      const el = h("div", { class: "your-card", "aria-current": c.current ? "page" : null }, head, c.keep === undefined ? keepButton(item) : c.keep,
-        h("button", { type: "button", class: "drop", title: `Throw away ${c.title}`, "aria-label": `Throw away ${c.title}`, onclick: () => throwAway([item], c.title) }, "×"));
+      const el = h("div", { class: "your-card", "aria-current": c.current ? "page" : null }, head, c.keep === undefined ? keepButton(item) : c.keep, box);
       return el;
     }));
+    counted();
   };
   // The name turns into a box in place: Enter or leaving it keeps the new name, Esc puts the old one back.
   const renaming = (card: HTMLElement, head: HTMLElement, c: YourCard) => {
@@ -71,7 +78,7 @@ export function yoursList<T extends Keepable>(items: T[], card: (item: T) => You
       const why = keepIt && input.value.trim() !== c.title ? c.rename!(input.value) : null;
       if (why) return void (note.textContent = why);
       done = true;
-      render(false);
+      render();
     };
     input.onkeydown = (e) => { if (e.key === "Enter") finish(true); else if (e.key === "Escape") finish(false); };
     input.onblur = () => finish(true);
@@ -79,8 +86,8 @@ export function yoursList<T extends Keepable>(items: T[], card: (item: T) => You
     card.append(note);
     input.select();
   };
-  render(false);
-  return h("div", {}, head, list);
+  render();
+  return h("div", {}, h("div", { class: "row between" }, h("h3", {}, "Yours"), bar), list);
 }
 
 // Add, or In my Pack (which takes it out again).

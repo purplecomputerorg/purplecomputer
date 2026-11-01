@@ -205,7 +205,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .room-buttons button[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
 .card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .card-head h2 { font-size: 17px; }
-.seg { display: inline-flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 3px; border-radius: 999px; background: var(--fill); }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; min-width: 0; padding: 3px; border-radius: 18px; background: var(--fill); }
 .seg button { flex: none; white-space: nowrap; font: 600 13px var(--sans); padding: 6px 14px; border: none; border-radius: 999px; background: none; color: var(--dim); cursor: pointer; }
 .seg button:hover { color: var(--purple); }
 .seg button[aria-pressed="true"] { background: #fff; color: var(--purple); box-shadow: 0 1px 4px rgba(53, 42, 74, 0.15); }
@@ -907,8 +907,6 @@ dialog.card { max-width: 440px; margin: auto; color: var(--text); }
 dialog::backdrop { background: rgb(0 0 0 / 0.3); }
 .spoken { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; }
 .voice-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
-/* Voice choices and map tabs wrap rather than run past a narrow card. */
-:is(.voice-row, .map-tabs) > .seg { min-width: 0; flex-wrap: wrap; overflow: visible; border-radius: 18px; }
 
 /* Room forms and builders: fields shrink with the pane instead of running past it */
 :is(.knobs, .form-card) :is(input[type="text"], textarea, select) { min-width: 0; max-width: 100%; }

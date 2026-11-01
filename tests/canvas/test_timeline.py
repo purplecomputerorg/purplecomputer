@@ -369,6 +369,19 @@ def test_scrub_previews_and_escape_restores(monkeypatch, tmp_path):
     run(scenario())
 
 
+def test_time_travel_keeps_the_room_full_size(monkeypatch, tmp_path):
+    monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+
+    async def scenario():
+        app = make_app()
+        _two_paints(app)
+        vp = app._viewport_rect()
+        app._start_time_travel()
+        assert app.content_rect(vp) == vp
+        app._draw()
+    run(scenario())
+
+
 def test_scrub_land_appends_instead_of_truncating(monkeypatch, tmp_path):
     monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
 

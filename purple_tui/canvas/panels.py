@@ -14,7 +14,7 @@ from functools import cache
 import pygame
 
 from .. import palette as P
-from ..constants import ICON_LOOP, ICON_MUSIC, ICON_TIME_TRAVEL
+from ..constants import ICON_LOOP, ICON_MUSIC
 from ..content import get_content
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..loop_station import LOOPING, RECORDING
@@ -630,15 +630,10 @@ class TimeTravelBar:
     ago it really was. A star marks each moment the kid saved. The track only
     shows where you are: the arrows travel (see PurpleApp._press_time_travel)."""
     kind = "time"
+    in_footer = True   # takes the status strip's place, so the room keeps its full size
 
     def __init__(self, app):
         self.app = app
-
-    def height(self, g) -> int:
-        return g.vh(11)
-
-    def arrow_hint(self) -> str:
-        return f"Hold to go fast  {LEFT} {RIGHT}"
 
     def draw(self, g, rect):
         index, times, saved = self.app.time_travel_position()
@@ -649,7 +644,7 @@ class TimeTravelBar:
         when = "Now" if index == len(times) - 1 else time_ago(times[index], now)
         if index in saved:
             when = f"{ICON_STAR}  Saved" + ("" if when == "Now" else f" {when.lower()}")
-        g.draw_text(f"{ICON_TIME_TRAVEL}  Time Travel", g.vh(2.1), rect.x + pad, cy, "mono-heavy", P.ACCENT, anchor="midleft")
+        g.draw_text(f"Hold to go fast  {LEFT} {RIGHT}", g.vh(1.8), rect.x + pad, cy, "mono", P.MUTED, anchor="midleft")
         g.draw_text(when, g.vh(2.6), rect.centerx, cy, "mono-heavy", P.TEXT, anchor="center")
         g.draw_text("Enter: keep this    Esc: never mind", g.vh(1.8), rect.right - pad, cy, "mono", P.MUTED, anchor="midright")
         track = pygame.Rect(rect.x + pad, rect.y + g.vh(5.2), rect.w - 2 * pad, g.vh(3))

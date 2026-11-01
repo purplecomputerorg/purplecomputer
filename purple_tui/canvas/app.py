@@ -22,7 +22,7 @@ from .. import palette as P
 from .. import printing
 from ..constants import (
     CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
-    ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_COMPUTER, ICON_MENU,
+    ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_COMPUTER, ICON_MENU, ICON_TIME_TRAVEL,
     ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, STICKY_SHIFT_GRACE,
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
     is_usb_cached, is_usb_needed, is_usb_present,
@@ -182,7 +182,7 @@ class PurpleApp:
         from . import theme
         theme.apply(theme.find())
         self.rooms = {c.name: c(self) for c in ROOM_CLASSES}
-        self._panel = None          # bottom panel drawn inside the viewport: code / loop / time
+        self._panel = None          # bottom panel: code / loop inside the viewport, time in the status strip
         self._legend_key = self._legend_fade = None
         self._legend_visible = True
         self._computer_name = None
@@ -448,7 +448,7 @@ class PurpleApp:
         self.invalidate()
 
     def set_panel(self, panel):
-        """Bottom-of-viewport panel (code line, loop station, time travel) or None."""
+        """Bottom panel (code line, loop station, time travel) or None."""
         self._panel = panel
         self._code_panel_active = panel is not None and getattr(panel, "kind", "") == "code"
         self.invalidate()
@@ -1687,10 +1687,14 @@ class PurpleApp:
     def _frame_rect(self, vp: pygame.Rect) -> pygame.Rect:
         return vp.inflate(2 * self.g.vh(FRAME_GAP_VH), 2 * self.g.vh(FRAME_GAP_VH))
 
+    def _viewport_panel(self):
+        """The open panel when it sits inside the viewport rather than in the status strip."""
+        return None if getattr(self._panel, "in_footer", False) else self._panel
+
     def content_rect(self, vp: pygame.Rect) -> pygame.Rect:
         """Room drawing area: the viewport minus any bottom panel and its side column."""
         inner = vp.copy()
-        if self._panel is not None:
+        if self._viewport_panel() is not None:
             inner.height -= self._panel.height(self.g)
             inner.width -= getattr(self._panel, "side_width", lambda g: 0)(self.g)
         return inner
@@ -1703,25 +1707,30 @@ class PurpleApp:
         frame = self._frame_rect(vp)
         self._draw_title(frame)
         g.rect(P.SURFACE, frame, radius=g.em(0.6))
-        g.rect(P.LINE, frame, width=1, radius=g.em(0.6))
+        # a past moment gets an accent frame, so the whole screen reads as somewhere else
+        travel = self._time_travel is not None
+        g.rect(P.ACCENT if travel else P.LINE, frame, width=max(2, g.vh(0.35)) if travel else 1, radius=g.em(0.6))
         content = self.content_rect(vp)
         g.surface.set_clip(frame.inflate(-4, -4))
         self.room.draw(g, content)
-        if self._panel is not None:
-            self._panel.draw(g, pygame.Rect(vp.x, content.bottom, vp.w, self._panel.height(g)))
+        if panel := self._viewport_panel():
+            panel.draw(g, pygame.Rect(vp.x, content.bottom, vp.w, panel.height(g)))
             if content.w < vp.w:
-                self._panel.draw_side(g, pygame.Rect(content.right, content.y, vp.right - content.right, content.h))
+                panel.draw_side(g, pygame.Rect(content.right, content.y, vp.right - content.right, content.h))
         hold = self.hold_progress()
         bar = ((hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1]) if hold and hold[0] > HOLD_QUIET else \
             (0, self._hold_nudge) if self._hold_nudge and not hold else None
         if bar:
             # over the open panel, or the room's whole footer, so nothing peeks out around it
-            top = content.bottom if self._panel else vp.bottom - self.room.footer_h(g)
+            top = content.bottom if self._viewport_panel() else vp.bottom - self.room.footer_h(g)
             strip = pygame.Rect(vp.x, top, vp.w, vp.bottom - top)
             draw_hold_bar(g, strip, *bar)
         self._draw_save_flash(frame)
         g.surface.set_clip(None)
-        self._draw_footer(frame)
+        if self._panel is not None and self._viewport_panel() is None:
+            self._panel.draw(g, pygame.Rect(frame.x, frame.bottom, frame.w, g.h - frame.bottom))
+        else:
+            self._draw_footer(frame)
         for o in self._overlays:
             o.draw(g)
         self._draw_toasts()
@@ -1741,7 +1750,7 @@ class PurpleApp:
         g.draw_text(self._boot_mode_text(), px, frame.x, y, "mono", P.MUTED, anchor="midleft")
         saved = title is None and self._time_travel is None and self.active_room in self._saved_digest
         if title is None:
-            title = f"{self.room.icon} {self.room.label}"
+            title = f"{ICON_TIME_TRAVEL} Time Travel" if self._time_travel else f"{self.room.icon} {self.room.label}"
         r = g.draw_text(title, px, frame.centerx, y, "mono-bold", P.ACCENT, anchor="center", track=0.04)
         if saved:
             from .panels import ICON_STAR

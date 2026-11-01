@@ -68,6 +68,12 @@ export function worldBuilder(knobs: Knob[], onEdit: () => void): HTMLElement | n
   };
   const legend = () => legendNames(things);
 
+  // The hero on a patch of the room's grass, as Purple shows them, so they're easy to spot there.
+  const scene = h("div", { class: "hero-scene", title: "How the hero looks on Purple" });
+  const drawScene = () => scene.replaceChildren(...Array.from({ length: 9 }, (_, i) =>
+    h("div", { style: `background: ${(ground.items[(i + Math.floor(i / 3)) % 2] as Str).v}` }, i === 4 ? heroLook(26) : null)));
+  painters.add(drawScene);
+
   // Every square with this letter, on every map, turned to grass.
   const unpaint = (letter: string) => maps().forEach((rows) => rows.forEach((r) => { r.v = [...r.v].map((l) => (l === letter ? "." : l)).join(""); }));
   const onMap = (letter: string) => maps().flat().reduce((n, r) => n + [...r.v].filter((l) => l === letter).length, 0);
@@ -132,12 +138,14 @@ export function worldBuilder(knobs: Knob[], onEdit: () => void): HTMLElement | n
     const mode = h("span", { class: "seg" },
       h("button", { "aria-pressed": String(drawn), onclick: () => { pictureKnob.value = str(""); changed(); } }, "🎨 Draw"),
       h("button", { "aria-pressed": String(!drawn), onclick: () => { if (drawn) { pictureKnob.value = str("🦸"); changed(); } } }, "🖼️ Emoji or photo"));
+    drawScene();
+    const top = h("div", { class: "hero-top" }, mode, h("div", { class: "hero-onpurple" }, scene, h("span", { class: "dim small" }, "On Purple")));
     if (!drawn) {
       const cell = emojiCell(p.v, () => "", (e) => { pictureKnob.value = isEmoji(e) ? str(e) : { t: "picture", v: e }; changed(); }, { pictures: true });
-      return section("The hero", "Who walks around the world.", mode, h("div", { class: "hero-row" }, h("div", { class: "hero-big" }, heroLook(160)),
+      return section("The hero", "Who walks around the world.", top, h("div", { class: "hero-row" }, h("div", { class: "hero-big" }, heroLook(160)),
         h("span", { class: "emoji-wrap" }, cell)));
     }
-    return section("The hero", "Who walks around the world.", mode, heroPainter(hero, colors, edited, changed));
+    return section("The hero", "Who walks around the world.", top, heroPainter(hero, colors, edited, changed));
   };
 
   const mapPart = () => {

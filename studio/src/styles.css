@@ -843,9 +843,13 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .live:not(.ready) .zoom-toggle { display: none; }
 .live.ready:not(.busy):not(.entering) .live-status { opacity: 0; pointer-events: none; }
 .live .playable-hint { border: 0; font: inherit; cursor: pointer; opacity: 0; pointer-events: none; }
+/* Sized to the laptop (cqw), so the hint stays small on a small screen */
+.live .playable-hint { font-size: clamp(9px, 1.9cqw, 13px); }
+.live .playable-hint strong { font-size: clamp(12px, 2.9cqw, 20px); }
+.live .playable-hint em, .live .playable-hint small { font-size: clamp(9px, 1.75cqw, 12px); }
 .playable-hint em { display: none; font-style: normal; font-weight: 600; font-size: 12px; }
 .playable-hint small { font-size: 12px; opacity: 0.75; }
-.tried .playable-hint { inset: 50% auto auto 50%; transform: translate(-50%, -50%); padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); white-space: nowrap; }
+.tried .playable-hint { inset: auto auto 3% 50%; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: rgba(20, 10, 35, 0.75); white-space: nowrap; }
 .tried .playable-hint strong, .tried .playable-hint span, .tried .playable-hint small { display: none; }
 .tried .playable-hint em { display: inline; }
 .live.ready:not(.focused) .playable-hint { opacity: 1; pointer-events: auto; }
@@ -948,6 +952,11 @@ dialog::backdrop { background: rgb(0 0 0 / 0.3); }
 .hero-big img { width: 160px; height: 160px; object-fit: contain; }
 .hero-art { image-rendering: pixelated; display: block; }
 .hero-emoji { line-height: 1; }
+.hero-top { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.hero-onpurple { display: flex; align-items: center; gap: 8px; }
+.hero-scene { display: grid; grid-template-columns: repeat(3, 30px); grid-auto-rows: 30px; border-radius: 6px; overflow: hidden; }
+.hero-scene > div { display: grid; place-items: center; overflow: hidden; }
+.hero-scene img { width: 26px; height: 26px; object-fit: contain; }
 .hero-paint { display: grid; gap: 12px; min-width: 0; }
 .hero-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); width: min(100%, 300px); border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; touch-action: none; user-select: none; cursor: crosshair; background: repeating-conic-gradient(#f1ecf8 0 25%, #fff 0 50%) 0 0 / 20px 20px; }
 .hero-cell { aspect-ratio: 1; outline: 1px solid rgba(0, 0, 0, 0.06); }

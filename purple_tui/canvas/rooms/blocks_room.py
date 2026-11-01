@@ -12,7 +12,7 @@ blocks; only the code line keeps the height it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
-opens the color wheel, Tab flips to the back side, and the code line opens
+opens the color bar, Tab flips to the back side, and the code line opens
 from the Esc menu."""
 
 import asyncio
@@ -651,10 +651,11 @@ class BlocksRoom(Room):
             self._draw_hold_badge(g, ox, oy, area)
         else:
             self._draw_turning(g, ox, oy, p)
-        draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
-                         1 if self._back else 0, self._color, wheel=wheel_chip(self))
+        self.bar_row = draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
+                                        1 if self._back else 0, self._color, wheel=wheel_chip(self))
+        self.bar_foot = None
         if foot_h:
-            foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
+            foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             draw_key_hint(g, PICK_HINT if self.app._keyboard_state_machine.shift_active else HINT, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
 

@@ -829,29 +829,30 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     swatch (or an icon standing in for it) left of it, then key chips further
     left: '[\\] Colors' when wheel (from color_wheel.chip) is set, and each of
     chips = (key, mark, label, on, noun). Slides right when the chips would
-    run past r's left edge."""
+    run past r's left edge. Returns the color bar's row: r from its left edge
+    to the Colors chip's right, or None without the chip."""
     px = g.vh(1.9)
     if wheel:
         from .color_wheel import OPEN_KEY, disc
         chips = ((OPEN_KEY, disc(round(px * 1.3)), "Colors", wheel == "open"), *chips)
     start = r.centerx - keycap_size(g, "Tab", px)[0]
     with g.drawing_on(pygame.Surface((1, 1))):
-        left = _draw_mode_switch_at(g, px, start, r.centery, labels, active, swatch, icon, chips)
-    _draw_mode_switch_at(g, px, start + max(0, r.x - left), r.centery, labels, active, swatch, icon, chips)
+        left = _draw_mode_switch_at(g, px, start, r.centery, labels, active, swatch, icon, chips).x
+    first = _draw_mode_switch_at(g, px, start + max(0, r.x - left), r.centery, labels, active, swatch, icon, chips)
+    return pygame.Rect(r.x, r.y, first.right - r.x, r.h) if wheel else None
 
 
-def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, swatch, icon, chips) -> int:
-    """Draws the header with the Tab switch at start; returns its left edge."""
+def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, swatch, icon, chips) -> pygame.Rect:
+    """Draws the header with the Tab switch at start; returns its leftmost piece."""
     gap = round(px * 1.2)
-    left = _draw_tab_switch(g, px, start, cy, labels, active).x - gap
+    piece = _draw_tab_switch(g, px, start, cy, labels, active)
     mark = icon or (swatch_dot(swatch, round(px * 2.1)) if swatch else None)
     if mark:
-        spot = mark.get_rect(midright=(left, cy))
-        g.surface.blit(mark, spot)
-        left = spot.x - gap
+        piece = mark.get_rect(midright=(piece.x - gap, cy))
+        g.surface.blit(mark, piece)
     for chip in reversed(chips):
-        left = _draw_key_chip(g, px, left, cy, *chip).x - gap
-    return left + gap
+        piece = _draw_key_chip(g, px, piece.x - gap, cy, *chip)
+    return piece
 
 
 def status_row_px(g: Gfx) -> int:

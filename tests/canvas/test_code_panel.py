@@ -477,7 +477,7 @@ def test_the_guide_never_shows_a_heading_with_nothing_under_it(name, monkeypatch
 
 @pytest.mark.parametrize("name", ["art", "blocks"])
 def test_colors_in_code_opens_the_wheel_and_writes_the_color_picked(name):
-    from purple_tui.canvas.color_wheel import ColorWheel
+    from purple_tui.canvas.color_wheel import ColorBar
     from purple_tui.content import get_content
 
     async def go():
@@ -486,7 +486,7 @@ def test_colors_in_code_opens_the_wheel_and_writes_the_color_picked(name):
         field = room.code_panel.field
         field.set("up 3 colors")
         await press(app, "enter")
-        assert isinstance(app.top, ColorWheel)
+        assert isinstance(app.top, ColorBar)
         for way in ("down", "down", "left"):
             await press(app, way)
         await press(app, "space")

@@ -1,10 +1,10 @@
-"""Backslash opens the color wheel in Art and Blocks: arrows move the dot and
-the brush follows it, Space keeps the color, Esc puts the old one back, any
-other key keeps it and reaches the room, the wheel reopens on the last color
-kept in that room, a wheel color paints like a letter color, the Esc menu
+"""Backslash opens the color bar in Art and Blocks: arrows move along it and
+the brush follows, Space keeps the color, Esc puts the old one back, any
+other key keeps it and reaches the room, the bar reopens on the last color
+kept in that room, a bar color paints like a letter color, the Esc menu
 opens it too, and in ABC it colors the letters typed next."""
 
-from purple_tui.canvas.color_wheel import ColorWheel, _cell, _spot, wheel_color
+from purple_tui.canvas.color_wheel import HUES, SHADES, ColorBar, _place, bar_color
 from purple_tui.canvas.harness import make_app, press, run
 from purple_tui.canvas.ui import AUTO
 from purple_tui import palette as P
@@ -22,7 +22,7 @@ def test_arrows_move_the_brush_and_space_keeps_it():
         for name in ("art", "blocks"):
             app, room = _room(name)
             await press(app, "\\")
-            assert isinstance(app.top, ColorWheel)
+            assert isinstance(app.top, ColorBar)
             await press(app, "up")
             await press(app, "up")
             picked = room.brush_color
@@ -98,9 +98,37 @@ def test_a_wheel_color_builds_like_a_letter_color():
     run(go())
 
 
-def test_the_dot_starts_on_the_brush_color():
-    for hue, ring in ((0, 0), (3, 2), (20, 6)):
-        assert wheel_color(*_cell(*_spot(wheel_color(hue, ring)))) == wheel_color(hue, ring)
+def test_the_bar_opens_on_the_brush_color():
+    for cell, shade in ((0, 0), (0, 3), (3, 2), (20, SHADES - 1)):
+        assert _place(bar_color(cell, shade)) == (cell, shade)
+
+
+def test_left_and_right_wrap_and_up_and_down_stop_at_the_ends():
+    async def go():
+        app, room = _room("art")
+        await press(app, "\\")
+        bar = app.top
+        bar._cell, bar._shade = 0, 0
+        await press(app, "left")
+        await press(app, "up")
+        assert (bar._cell, bar._shade) == (HUES, 0)
+        await press(app, "right")
+        assert bar._cell == 0
+        for _ in range(SHADES + 2):
+            await press(app, "down")
+        assert bar._shade == SHADES - 1 and room.brush_color == bar_color(0, SHADES - 1)
+    run(go())
+
+
+def test_the_bar_sits_in_the_header_and_its_keys_in_the_footer():
+    async def go():
+        for name in ("art", "blocks"):
+            app, room = _room(name)
+            await press(app, "\\")
+            app._draw()
+            assert room.bar_row.bottom <= room.bar_foot.top
+            assert room.bar_row.y < app._viewport_rect().centery
+    run(go())
 
 
 def test_backslash_does_nothing_in_littles():
@@ -121,7 +149,7 @@ def test_the_esc_menu_opens_the_wheel():
             await press(app, "escape")
             assert ("colors" in app.top.tools) == offered
             await press(app, "\\")
-            assert isinstance(app.top, ColorWheel) == offered
+            assert isinstance(app.top, ColorBar) == offered
     run(go())
 
 
@@ -166,7 +194,7 @@ def test_in_paint_the_center_stays_white():
     async def go():
         app, room = _room("art")
         await press(app, "\\")
-        app.top._x = app.top._y = 0.0
+        app.top._cell = app.top._shade = 0
         app.top._move([])
         assert room.brush_color == "#FFFFFF"
     run(go())

@@ -1,5 +1,5 @@
 """Art room: a grid of square cells. Every letter paints its sticker color,
-Backslash opens the color wheel (for the brush, or in ABC for the letters),
+Backslash opens the color bar (for the brush, or in ABC for the letters),
 Space puts the brush down so arrows draw (or only while held),
 holding Backspace takes squares, then whole lines, and Tab switches to writing letters.
 The Logo-style code line opens from the Esc menu."""
@@ -817,8 +817,9 @@ class ArtRoom(Room):
         ox = area.x + (area.w - c * COLS) // 2
         oy = area.y + (area.h - c * ROWS) // 2
         self._origin = (ox, oy)
+        self.bar_row = self.bar_foot = None
         if chrome_h:
-            self._draw_header(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h))
+            self.bar_row = self._draw_header(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h))
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
         self._draw_letters(g, ox, oy, c)
         self._draw_fade_wash(g, ox, oy, c)
@@ -829,7 +830,7 @@ class ArtRoom(Room):
             cell = pygame.Rect(ox + x * c, oy + y * c, c, c)
             color_recipe.draw_hold_badge(g, held, g.vh(1.9), cell, pygame.Rect(ox, oy, c * COLS, c * ROWS))
         if chrome_h:
-            foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
+            foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             key = "littles" if self.app._littles_mode else self._hint_key()
             draw_key_hint(g, HINTS[key], g.vh(1.9), foot.x, foot.centery)
             if not self.app._littles_mode:
@@ -928,10 +929,10 @@ class ArtRoom(Room):
         return (dot, "Paint"), (None, "Brush down" if self._code_brush_down else "Brush up")
 
     def _draw_header(self, g, r):
-        """The Tab switch between Paint and ABC, with the brush beside it."""
+        """The Tab switch between Paint and ABC, with the brush beside it; returns the color bar's row."""
         if self.app._littles_mode:
             draw_label(g, "Paint" if self._paint_mode else "Write", g.vh(1.9), r.centerx, r.centery, P.TEXT, anchor="center")
-            return
+            return None
         icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
-        draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self.brush_color,
-                         icon, wheel_chip(self))
+        return draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self.brush_color,
+                                icon, wheel_chip(self))

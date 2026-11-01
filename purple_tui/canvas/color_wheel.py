@@ -1,10 +1,13 @@
-"""Color wheel for Art and Blocks: Backslash opens a disc of every hue, white at
-the center to dark at the rim. Arrows move a dot over it and the brush takes
-the color under the dot; Space or Enter keeps it, Esc puts the old one back,
-and any other key keeps it and goes on to the room. Each room's wheel reopens
-on the last color kept from it, so a stray key never loses a hard-won pick.
-A room with wheel_auto set swaps the white center for AUTO, half the theme's light ink and
-half its dark: back to letters that turn light or dark to show up."""
+"""Color bar for Art and Blocks: Backslash opens a strip of colors in the
+header row, from the '[\\] Colors' chip leftward, so the picture stays in
+view. Left and Right go along the hues (wrapping round), Up and Down make the
+whole strip lighter or darker, and the brush takes the color picked; the
+footer says so while the bar is up. Space or Enter keeps it, Esc puts the old
+one back, and any other key keeps it and goes on to the room. Each room's bar
+reopens on the last color kept from it, so a stray key never loses a hard-won
+pick. The first cell is the grays, white to near black; a room with wheel_auto
+set makes its white AUTO, half the theme's light ink and half its dark: back
+to letters that turn light or dark to show up."""
 
 import colorsys
 import functools
@@ -16,62 +19,56 @@ from .. import palette as P
 from ..color_mixing import rgb_to_hex
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from .gfx import rgb
-from .ui import AUTO, Overlay, auto_inks, swatch_dot, arrow_key_metrics, arrow_keys_size, draw_arrow_keys, draw_keycap
+from .ui import (AUTO, DOWN, LEFT, RIGHT, UP, Overlay, auto_inks, draw_key_hint, hint_row_h, key_hint_width,
+                 keycap_size, swatch_dot)
 
 OPEN_KEY = "\\"
-HUES, RINGS = 36, 7          # ring 0 is the white center
+HUES, SHADES = 24, 6          # cell 0 is the grays, cells 1..HUES the hues
 LIGHT, DARK, SAT = 0.85, 0.22, 0.7
-STEP = 0.5 / RINGS           # dot travel per arrow press, in disc radii
-REACH = (RINGS - 0.5) / RINGS
-MOVES = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+GRAY_REACH = 0.88             # how far toward black the grays go
+HINT = f"{{{LEFT}}} {{{RIGHT}}} pick a color.  {{{UP}}} {{{DOWN}}} lighter or darker.  {{Space}} keeps it.  {{Esc}} goes back."
 
 
-def wheel_color(hue: int, ring: int) -> str:
-    if ring == 0:
-        return "#FFFFFF"
-    r, g, b = colorsys.hls_to_rgb(hue / HUES, LIGHT - (ring - 1) * (LIGHT - DARK) / (RINGS - 2), SAT)
+def bar_color(cell: int, shade: int) -> str:
+    if cell == 0:
+        v = round(255 * (1 - shade / (SHADES - 1) * GRAY_REACH))
+        return rgb_to_hex(v, v, v)
+    r, g, b = colorsys.hls_to_rgb((cell - 1) / HUES, LIGHT - shade * (LIGHT - DARK) / (SHADES - 1), SAT)
     return rgb_to_hex(round(r * 255), round(g * 255), round(b * 255))
 
 
-def _cell(x: float, y: float) -> tuple:
-    """(hue, ring) under (x, y), in disc radii from the center; hue 0 points up, going clockwise."""
-    ring = min(RINGS - 1, int(math.hypot(x, y) * RINGS))
-    return round(math.atan2(x, -y) / (2 * math.pi) * HUES) % HUES, ring
-
-
-def _spot(color: str) -> tuple:
-    """Where a color sits on the disc, so the dot starts on the brush's own color."""
+def _place(color: str) -> tuple:
+    """(cell, shade) nearest a color, so the bar opens on the brush's own color."""
     if color == AUTO:
-        return 0.0, 0.0
+        return 0, 0
     h, l, s = colorsys.rgb_to_hls(*(c / 255 for c in rgb(color)))
-    if s < 0.15 or l > LIGHT:
-        return 0.0, 0.0
-    ring = max(1, min(RINGS - 1, 1 + round((LIGHT - l) / (LIGHT - DARK) * (RINGS - 2))))
-    a, d = h * 2 * math.pi, (ring + 0.5) / RINGS
-    return d * math.sin(a), -d * math.cos(a)
+    if s < 0.15:
+        return 0, max(0, min(SHADES - 1, round((1 - l) / GRAY_REACH * (SHADES - 1))))
+    return round(h * HUES) % HUES + 1, max(0, min(SHADES - 1, round((LIGHT - l) / (LIGHT - DARK) * (SHADES - 1))))
 
 
 def disc(d: int, auto: bool = False) -> pygame.Surface:
+    """The chip's icon: the bar's colors as a little wheel."""
     return _disc(d, auto_inks() if auto else None)
 
 
 @functools.lru_cache(maxsize=4)
 def _disc(d: int, auto) -> pygame.Surface:
     """Pies from the rim inward, each ring painted over the last, drawn 2x and smoothed down."""
-    s = 2
+    s, rings = 2, SHADES + 1
     big = pygame.Surface((d * s, d * s), pygame.SRCALPHA)
     c = d * s / 2
-    for ring in range(RINGS - 1, -1, -1):
-        r = (ring + 1) / RINGS * c
+    for ring in range(rings - 1, -1, -1):
+        r = (ring + 1) / rings * c
         if ring == 0:
-            pygame.draw.circle(big, rgb(wheel_color(0, 0)), (c, c), r)
+            pygame.draw.circle(big, rgb(bar_color(0, 0)), (c, c), r)
             continue
         for hue in range(HUES):
             arc = [(hue - 0.5 + i / 4) / HUES * 2 * math.pi for i in range(5)]
-            pygame.draw.polygon(big, rgb(wheel_color(hue, ring)), [(c, c)] + [(c + r * math.sin(a), c - r * math.cos(a)) for a in arc])
+            pygame.draw.polygon(big, rgb(bar_color(hue + 1, ring - 1)), [(c, c)] + [(c + r * math.sin(a), c - r * math.cos(a)) for a in arc])
     small = pygame.transform.smoothscale(big, (d, d))
     if auto:
-        center = swatch_dot(AUTO, round(d / RINGS))
+        center = swatch_dot(AUTO, round(d / rings))
         small.blit(center, center.get_rect(center=(d / 2, d / 2)))
     return small
 
@@ -81,24 +78,37 @@ def can_open(room) -> bool:
 
 
 def chip(room) -> str | None:
-    """How the header's '[\\] Colors' chip shows: None hidden, "open" lit while the wheel is up."""
-    if room.app.has_overlay(ColorWheel):
+    """How the header's '[\\] Colors' chip shows: None hidden, "open" lit while the bar is up."""
+    if room.app.has_overlay(ColorBar):
         return "open"
     return "ready" if can_open(room) else None
 
 
 def open_on(room, char: str = OPEN_KEY, on_close=None) -> bool:
-    """Backslash opens the wheel over the room; True when it did. on_close gets
+    """Backslash opens the bar over the room; True when it did. on_close gets
     the color kept, or None on Esc."""
     if char != OPEN_KEY or not can_open(room):
         return False
-    room.app.push(ColorWheel(room.app, room), on_close=on_close)
+    room.app.push(ColorBar(room.app, room), on_close=on_close)
     return True
 
 
-class ColorWheel(Overlay):
-    """Floats beside the picture, on the side away from the cursor, so the
-    brush and the header swatch show each color as the dot reaches it."""
+def _fill(g, color: str, rect: pygame.Rect):
+    """A cell; AUTO splits it into the theme's light and dark ink."""
+    if color != AUTO:
+        g.rect(color, rect)
+        return
+    light, dark = auto_inks()
+    half = rect.w // 2
+    g.rect(light, (rect.x, rect.y, half, rect.h))
+    g.rect(dark, (rect.x + half, rect.y, rect.w - half, rect.h))
+
+
+class ColorBar(Overlay):
+    """Draws where the room left room for it: the room sets bar_row (the
+    header from its left edge to the chip) and bar_foot (its hint row) as it
+    draws; without them the bar sits at the top of the viewport and its hint
+    just under it."""
 
     scrim = False
 
@@ -107,7 +117,7 @@ class ColorWheel(Overlay):
         self.room = room
         self._was = room.brush_color
         spot = getattr(room, "wheel_spot", None)
-        self._x, self._y = spot or _spot(self._was)
+        self._cell, self._shade = spot or _place(self._was)
         if spot:
             self._move([])
 
@@ -123,7 +133,7 @@ class ColorWheel(Overlay):
         else:
             kept = self.room.brush_color
             if kept != self._was:
-                self.room.wheel_spot = (self._x, self._y)
+                self.room.wheel_spot = (self._cell, self._shade)
         self.close(kept)
         passes_on = isinstance(action, CharacterAction) and action.char != OPEN_KEY or \
             isinstance(action, ControlAction) and action.action in ("backspace", "tab")
@@ -132,36 +142,57 @@ class ColorWheel(Overlay):
 
     def _move(self, directions):
         for d in directions:
-            dx, dy = MOVES[d]
-            self._x, self._y = self._x + dx * STEP, self._y + dy * STEP
-        far = math.hypot(self._x, self._y)
-        if far > REACH:
-            self._x, self._y = self._x * REACH / far, self._y * REACH / far
-        hue, ring = _cell(self._x, self._y)
-        auto = ring == 0 and getattr(self.room, "wheel_auto", False)
-        self.room.set_brush_color(AUTO if auto else wheel_color(hue, ring))
+            if d in ("left", "right"):
+                self._cell = (self._cell + (1 if d == "right" else -1)) % (HUES + 1)
+            else:
+                self._shade = max(0, min(SHADES - 1, self._shade + (1 if d == "down" else -1)))
+        self.room.set_brush_color(self._color(self._cell, self._shade))
+
+    def _color(self, cell: int, shade: int) -> str:
+        auto = cell == 0 and shade == 0 and getattr(self.room, "wheel_auto", False)
+        return AUTO if auto else bar_color(cell, shade)
 
     def draw(self, g):
-        vp = self.app._viewport_rect()
-        d, pad, px = round(vp.h * 0.6), g.em(1.0), g.vh(1.9)
-        keys_w, keys_h = arrow_keys_size(g, px)
-        box = pygame.Rect(0, 0, d + 2 * pad, d + 2 * pad + keys_h)
-        box.centery = vp.centery
-        if self.app._get_cursor_position()[0] < 0.5:
-            box.right = vp.right - pad
-        else:
-            box.left = vp.left + pad
-        radius = g.em(0.6)
-        g.rect(P.SURFACE, box, radius=radius)
-        g.rect(P.LINE, box, width=1, radius=radius)
-        g.surface.blit(disc(d, getattr(self.room, "wheel_auto", False)), (box.x + pad, box.y + pad))
-        cx, cy = box.x + pad + d / 2 + self._x * d / 2, box.y + pad + d / 2 + self._y * d / 2
-        dot = max(4, d // 28)
-        pygame.draw.circle(g.surface, rgb(P.ON_PRIMARY), (cx, cy), dot + max(2, dot // 2))
-        pygame.draw.circle(g.surface, rgb(P.TEXT), (cx, cy), dot + max(1, dot // 4))
-        fill = swatch_dot(self.room.brush_color, 2 * dot)
-        g.surface.blit(fill, fill.get_rect(center=(cx, cy)))
-        space_w = g.measure("Space", px, "mono")[0] + round(px * 1.4)
-        x = box.centerx - (keys_w + px + space_w) // 2
-        y = box.bottom - pad // 2 - arrow_key_metrics(g, px)[1] // 2
-        draw_keycap(g, "Space", px, draw_arrow_keys(g, px, x, y).right + round(px * 1.7), y)
+        px = g.vh(1.9)
+        row = getattr(self.room, "bar_row", None)
+        if row is None:
+            vp = self.app._viewport_rect()
+            row = pygame.Rect(vp.x + g.em(0.7), vp.y + g.em(0.7), vp.w // 2, hint_row_h(g))
+        bar = self._draw_bar(g, px, row)
+        foot = getattr(self.room, "bar_foot", None)
+        if foot is None:
+            box = pygame.Rect(bar.x, bar.bottom + g.em(0.3), key_hint_width(g, HINT, px) + g.em(1.2),
+                              keycap_size(g, "X", px)[1] + g.em(0.4))
+            g.rect(P.SURFACE, box, radius=g.em(0.4))
+            g.rect(P.LINE, box, width=1, radius=g.em(0.4))
+            draw_key_hint(g, HINT, px, box.x + g.em(0.6), box.centery)
+            return
+        g.rect(P.SURFACE, foot.inflate(0, g.em(0.6)))
+        draw_key_hint(g, HINT, px, foot.x, foot.centery)
+
+    def _draw_bar(self, g, px: int, row: pygame.Rect) -> pygame.Rect:
+        """'< cells > shades' in one pill the chip's height; the picked cell
+        stands out above and below it."""
+        pad, gap = round(px * 0.35), px // 2
+        h = keycap_size(g, "X", px)[1] + 2 * pad
+        pill = pygame.Rect(row.x, row.centery - h // 2, row.w, h)
+        g.rect(P.FIELD, pill, radius=h // 2)
+        g.rect(P.LINE, pill, width=1, radius=h // 2)
+        inner = pill.inflate(-2 * pad, -2 * pad)
+        x = g.draw_text(LEFT, px, pill.x + h // 3, pill.centery, "mono", P.MUTED, anchor="midleft").right + gap
+        shades = pygame.Rect(0, inner.y, round(px * 0.9), inner.h)
+        shades.right = pill.right - h // 2
+        right = g.draw_text(RIGHT, px, shades.x - gap, pill.centery, "mono", P.MUTED, anchor="midright").x - gap
+        cw = (right - x) / (HUES + 1)
+        for cell in range(HUES + 1):
+            _fill(g, self._color(cell, self._shade), pygame.Rect(round(x + cell * cw), inner.y, round(x + (cell + 1) * cw) - round(x + cell * cw), inner.h))
+        sh = shades.h / SHADES
+        for s in range(SHADES):
+            _fill(g, self._color(self._cell, s), pygame.Rect(shades.x, round(shades.y + s * sh), shades.w, round(shades.y + (s + 1) * sh) - round(shades.y + s * sh)))
+        mark = pygame.Rect(shades.x, round(shades.y + self._shade * sh), shades.w, round(sh)).inflate(4, 4)
+        g.rect(P.TEXT, mark, width=2)
+        picked = pygame.Rect(round(x + self._cell * cw), inner.y, max(1, round(cw)), inner.h).inflate(round(px * 0.5), round(px * 0.7))
+        g.rect(P.ON_PRIMARY, picked.inflate(4, 4), radius=round(px * 0.25))
+        g.rect(P.TEXT, picked.inflate(2, 2), radius=round(px * 0.25))
+        _fill(g, self.room.brush_color, picked)
+        return pill

@@ -1,5 +1,6 @@
 """Art's Backspace: a tap erases the square under the brush, or right after typing or stamping, the
-one before it, backing up against the way the brush last painted. Backing off the start of a line lands on the
+one before it, backing up against the way the brush just painted (left once it moves off without painting),
+with the brush pointing that way until another key. Backing off the start of a line lands on the
 last thing on the line above. Held, it takes squares for a second, then whole lines, each fading out
 first; letting go mid-fade brings the line back. Backing up a column takes squares only."""
 
@@ -137,16 +138,27 @@ def test_backspace_backs_up_a_line_the_way_it_was_drawn(way, back):
     run(go())
 
 
-def test_moving_with_the_brush_up_keeps_backing_up_the_line_drawn():
+def test_moving_with_the_brush_up_sends_backspace_back_to_backing_up_left():
     async def go():
         app, room = _art()
         room._cursor_x, room._cursor_y = 10, 10
         await _line(app, "down", 4)
-        for way in ("down", "down", "up", "up"):    # off the end, then back up onto it
+        for way in ("down", "right"):
             await app._dispatch_keyboard_action(NavigationAction(direction=way))
-        for _ in range(3):
-            await press(app, "backspace")
-        assert sorted(room._grid) == [(10, 10), (10, 11)]
+        await press(app, "backspace")
+        assert (room._cursor_x, room._cursor_y) == (10, 15)
+    run(go())
+
+
+def test_the_brush_points_the_way_backspace_backs_up_until_another_key():
+    async def go():
+        app, room = _art()
+        room._cursor_x, room._cursor_y = 10, 10
+        await _line(app, "down", 4)
+        await press(app, "backspace")
+        assert room._erasing and art_room.BACK[room._way] == "up"
+        await app._dispatch_keyboard_action(NavigationAction(direction="right"))
+        assert not room._erasing and room._way == "right"
     run(go())
 
 

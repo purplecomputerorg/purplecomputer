@@ -38,6 +38,7 @@ BRUSH_HEAD = 0.55                   # of the brush's height from the tip: bristl
 SPRITE_HALF = 3.5                   # cells from the cursor cell's center to the sprite's edge
 LIFT_FRAME, LIFT_STEP = 0.03, 0.34  # Space drops or lifts the brush over three quick frames
 HEADING_TURNS = {"right": 0, "up": 90, "left": 180, "down": -90}
+STEPS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 BACK = {"right": "left", "left": "right", "up": "down", "down": "up"}
 HINTS = {
     "littles": "Type to paint!",
@@ -230,7 +231,8 @@ class ArtRoom(Room):
         self._use_heading_cursor = False
         self._post_stamp_x = None
         self._wrap_at = None            # a right-edge cell just stamped: the next stamp starts the next line
-        self._way = "right"             # the way the brush last painted, which Backspace backs up against
+        self._way = "right"             # the way the brush just painted, which Backspace backs up against
+        self._erasing = False           # since a Backspace, until another key: the cursor shows the way back
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
         self._backspace_since = None    # when a held Backspace went down
@@ -444,7 +446,7 @@ class ArtRoom(Room):
         self.app.invalidate()
 
     def _move_in_direction(self, direction: str, wrap: bool = False) -> bool:
-        dx, dy = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}.get(direction, (0, 0))
+        dx, dy = STEPS.get(direction, (0, 0))
         spot = onto_grid(self._cursor_x + dx, self._cursor_y + dy, COLS, ROWS, wrap)
         if spot:
             self._cursor_x, self._cursor_y = spot
@@ -467,8 +469,9 @@ class ArtRoom(Room):
         for _ in range(distance):
             if action == "paint":
                 self._paint_at_cursor()
-                self._way = direction
             self._move_in_direction(direction, wrap=True)    # as tapped arrows do, so echoed strokes replay whole
+        if distance:
+            self._way = direction if action == "paint" else "right"
         if action == "paint" and distance:
             self._run_end = (direction, self._cursor_x, self._cursor_y)
         self.refresh()
@@ -521,17 +524,36 @@ class ArtRoom(Room):
         self.app.invalidate()
 
     def _back_up(self):
+        spot = self._back_spot()
+        if spot:
+            self._cursor_x, self._cursor_y = spot
+
+    def _back_spot(self):
         """Backing off the start of a line, as in text, lands on the last thing on the line above."""
-        if self._way != "right" or self._cursor_x > 0:
-            self._move_in_direction(BACK[self._way])
-        elif self._cursor_y > 0:
-            self._cursor_y -= 1
-            self._cursor_x = max((x for x, y in self._grid if y == self._cursor_y), default=0)
+        x, y = self._cursor_x, self._cursor_y
+        if self._way != "right" or x > 0:
+            dx, dy = STEPS[BACK[self._way]]
+            return onto_grid(x + dx, y + dy, COLS, ROWS, False)
+        if y > 0:
+            return max((gx for gx, gy in self._grid if gy == y - 1), default=0), y - 1
+        return None
+
+    def _draw_next_erase(self, g, ox, oy, c):
+        """After a Backspace, a light arrow on the square the next one takes, pointing the way it backs up."""
+        spot = self._erasing and (self._cursor_x, self._cursor_y) not in self._grid and self._back_spot()
+        if not spot:
+            return
+        cx, cy = ox + spot[0] * c + c / 2, oy + spot[1] * c + c / 2
+        (fx, fy), r = STEPS[BACK[self._way]], c * 0.36
+        tri = [(cx + fx * r, cy + fy * r), (cx - fx * r - fy * r, cy - fy * r - fx * r), (cx - fx * r + fy * r, cy - fy * r + fx * r)]
+        pygame.draw.polygon(g.surface, rgb(TIP_EDGE), tri, max(2, c // 8))
+        pygame.draw.polygon(g.surface, rgb(P.TEXT), tri)
 
     def _hold_backspace(self, repeat: bool, just_stamped: bool):
         """Squares one at a time, then after LINES_AFTER whole lines, the way Write takes letters then words.
         Backing up a column only ever takes squares: whole lines would wipe across it."""
         now = time.monotonic()
+        self._erasing = True
         if not repeat or self._backspace_since is None:
             self._backspace_since = now
             self._backspace(just_stamped)
@@ -682,8 +704,12 @@ class ArtRoom(Room):
             self.echo.flush()
 
     async def handle(self, action):
-        if self._fade and not (isinstance(action, ControlAction) and action.action == "backspace"):
-            self._stop_fade()
+        if not (isinstance(action, ControlAction) and action.action == "backspace"):
+            if self._fade:
+                self._stop_fade()
+            if self._erasing and getattr(action, "is_down", True):
+                self._erasing = False
+                self.app.invalidate()
         if isinstance(action, ControlAction) and action.action == "space":
             if not action.is_repeat:
                 self._space_press(action.is_down)
@@ -762,6 +788,7 @@ class ArtRoom(Room):
             self._set_pen(True)
         trail = self._paint_mode and (self._pen_down or bool(action.char_held))
         if not trail:
+            self._way = "right"     # moving off a stroke: Backspace goes back to backing up left
             self.echo.flush()
         steps = HOLD_ACCEL_MULTIPLIER if (not trail and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD) else 1
         for direction in [action.direction] + list(action.other_arrows_held or ()):
@@ -795,6 +822,7 @@ class ArtRoom(Room):
         self._draw_letters(g, ox, oy, c)
         self._draw_fade_wash(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
+        self._draw_next_erase(g, ox, oy, c)
         held = chrome_h and self._paint_mode and self._last_paint_pos and color_recipe.held_key(self.app, self._last_key_char)
         if held:
             x, y = self._last_paint_pos

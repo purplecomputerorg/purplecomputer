@@ -1,6 +1,7 @@
 """Build the Purple 2.0 box cards from Typst: one 2-page PDF per card, plus PNG previews.
 
-  python cards/v2/build.py            # every card -> cards/v2/out/<card>.pdf and <card>-pad.pdf
+  python cards/v2/build.py            # every card -> cards/v2/out/<card>.pdf and <card>-pad.pdf,
+                                      # plus all.pdf and all-pad.pdf with every card in order
   python cards/v2/build.py rooms      # just one card
   python cards/v2/build.py --png      # also write PNG previews to /tmp/screenshots
 
@@ -50,6 +51,15 @@ def build(name: str, png_dir: Path | None) -> None:
             page.get_pixmap(dpi=150).save(png_dir / f"card-{name}-{i + 1}.png")
 
 
+def combine(suffix: str) -> None:
+    """One PDF of the whole set, to scroll through when reviewing."""
+    doc = fitz.open()
+    for name in CARDS:
+        if (OUT / f"{name}{suffix}.pdf").exists():
+            doc.insert_pdf(fitz.open(OUT / f"{name}{suffix}.pdf"))
+    doc.save(OUT / f"all{suffix}.pdf")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("cards", nargs="*", default=CARDS)
@@ -62,6 +72,8 @@ def main() -> None:
     write_qrs()
     for name in args.cards:
         build(name, png_dir)
+    for suffix in ("", "-pad"):
+        combine(suffix)
 
 
 if __name__ == "__main__":

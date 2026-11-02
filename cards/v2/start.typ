@@ -12,9 +12,9 @@
 
 #let big-step(n, body) = numbered(n, r: 9pt, text(size: 11.5pt, body))
 #big-step(1)[Turn off the laptop.]
-#v(5pt)
+#v(1pt)
 #big-step(2)[Plug in the Purple Key.]
-#v(5pt)
+#v(1pt)
 // Step 3's badge runs a rail down to the Mac and PC ways it owns
 #let way(title, keys, body) = panel(title: title)[
   #set text(size: 8.6pt)
@@ -29,7 +29,7 @@
   columns: (9pt, 9pt, 1fr), column-gutter: (0pt, 10pt), row-gutter: 6pt,
   align: (x, y) => if y == 0 { horizon } else { top },
   grid.cell(colspan: 2, badge(3, r: 9pt)), text(size: 11.5pt)[Turn it on:],
-  grid.vline(x: 1, start: 1, stroke: (paint: rgb("#ddd0ef"), thickness: 1.6pt, cap: "round")),
+  grid.vline(x: 1, start: 1, stroke: (paint: purple.lighten(76%), thickness: 1.6pt, cap: "round")),
   [], [],
   grid(
     columns: (1fr, 1fr), column-gutter: 6pt,
@@ -69,14 +69,7 @@
     ("ASUS", key("Esc")), ("Samsung", key("F10")), ("LG", key("F10")), ("Sony", key("F11")),
     ("Surface", [Hold *Volume Down*, press *Power*. Keep Volume Down pressed.]),
   )
-  #grid(
-    columns: (0.9in, 1fr),
-    row-gutter: 0pt,
-    ..brands.enumerate().map(((i, (b, k))) => {
-      let s = if i > 0 { (top: 0.5pt + hair) } else { none }
-      (grid.cell(stroke: s, inset: (y: 8pt), text(weight: "semibold", b)), grid.cell(stroke: s, inset: (y: 8pt), k))
-    }).flatten(),
-  )
+  #ruled(columns: (0.9in, 1fr), pad: 6.5pt, ..brands.map(((b, k)) => (text(weight: "semibold", b), k)))
 ]
 #gap
 #panel(title: [Another way, from Windows])[

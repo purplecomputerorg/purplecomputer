@@ -4,7 +4,7 @@
 // ── Front: the rooms ──
 #header()
 
-#text(size: 9.4pt)[Tap #key("Esc") to pick a room, then press its number.]
+#intro[Tap #key("Esc") to pick a room, then press its number.]
 #gap
 
 #let room(n, name, body) = panel(title: name, n: n, body)
@@ -45,7 +45,7 @@
 #header(title: [Cool things to try], qr: none, note: none)
 #gap
 
-#tiles(gutter: 9pt,
+#tiles(pad: 12pt,
   ([Colors mix like paint.], [Hold two letters in Art or Blocks: #sticker("F", "#E6CE55") + #sticker("V", "#4C7FE5") makes green. #key("\\") opens every color.]),
   ([Purple talks.], [In Play, add #mono("!") or start with #mono("say"): #typed("I love you!"). #key("Tab") turns talking on.]),
   ([Loop like a DJ.], [In Music, *hold* #key("Enter") to record a tune, then play along with it.]),

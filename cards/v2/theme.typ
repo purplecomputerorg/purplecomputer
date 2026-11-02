@@ -11,15 +11,15 @@
 #let magenta = rgb("#9b59d0")
 #let lilac = rgb("#efe6fa")
 
-// The box set in order. Kid cards wear the red and blue sticker rows (purple_tui/palette.py).
+// The box set in order. After Start, cards wear the keyboard's sticker rows (purple_tui/palette.py).
 #let SET = (
   (name: "Start", color: purple),
   (name: "Rooms", color: rgb("#E44444")),
   (name: "Type", color: rgb("#2E6AE1")),
-  (name: "Grown-ups", color: magenta),
+  (name: "Grown-ups", color: rgb("#C4A81C")),
 )
 #let card-n = state("card-n", 1)
-#let tint(c) = c.lighten(93%)
+#let tint(c) = c.lighten(88%)
 
 #let card(n, body) = {
   set page(width: 4in, height: 6in, margin: (x: 0.25in, top: 0.24in, bottom: 0.22in), fill: tint(SET.at(n - 1).color))
@@ -56,7 +56,7 @@
 )
 
 #let badge(n, color: purple, r: 6.2pt) = box(
-  circle(radius: r, fill: color.lighten(86%), stroke: none,
+  circle(radius: r, fill: color.lighten(76%), stroke: none,
     align(center + horizon, text(font: "Sora", weight: "extrabold", size: r * 1.13, fill: color.darken(10%), str(n)))),
 )
 
@@ -73,8 +73,8 @@
 // The card's number in its color; every header and the set strip draw it
 #let card-dot(n, r, on: true) = {
   let c = SET.at(n - 1).color
-  box(circle(radius: r, fill: if on { c } else { c.lighten(80%) },
-    align(center + horizon, text(font: "Sora", weight: "extrabold", size: r * 1.15, fill: if on { white } else { c.darken(15%) }, str(n)))))
+  box(circle(radius: r, fill: if on { c } else { c.lighten(65%) },
+    align(center + horizon, text(font: "Sora", weight: "extrabold", size: r * 1.15, fill: if on { white } else { c.darken(30%) }, str(n)))))
 }
 
 // Fronts leave the title out to use the card's name
@@ -116,10 +116,12 @@
   },
 )
 
-#let note(body) = block(width: 100%, inset: (x: 9pt, y: 8pt), radius: 8pt, fill: lilac, body)
+// The one line under a front's header that says how to get there
+#let intro(body) = text(size: 9.4pt, body)
+#let note(body) = context block(width: 100%, inset: (x: 9pt, y: 8pt), radius: 8pt, fill: SET.at(card-n.get() - 1).color.lighten(76%), body)
 
 // Space between a page's sections; every gap on a page is the same
-#let gap = v(1fr)
+#let gap = v(5pt) + v(1fr)
 // The whole set, this card filled in, so a missing card is easy to spot
 #let set-strip = context {
   let n = card-n.get()
@@ -128,7 +130,7 @@
     box[#card-dot(i + 1, 4.4pt, on: on)#h(2pt)#text(size: 6.8pt, weight: if on { "bold" } else { "regular" }, fill: if on { ink } else { ink-dim }, c.name)]
   }).join(h(4pt))
 }
-#let footer(end: []) = text(size: 8pt, fill: ink-med, grid(columns: (1fr, auto), align: (left + horizon, right + horizon), set-strip, end))
+#let footer(end: []) = v(7pt) + text(size: 8pt, fill: ink-med, grid(columns: (1fr, auto), align: (left + horizon, right + horizon), set-strip, end))
 #let flip(body) = footer(end: [#body #h(3pt) #text(fill: magenta, weight: "bold", sym.arrow.r)])
 #let support = footer(end: text(size: 7.4pt, fill: purple, weight: "semibold")[support\@purplecomputer.org])
 
@@ -145,16 +147,34 @@
   }).flatten(),
 )
 
-// Titled tips as small cards: one column reads title then text on a line, two columns stack them
-#let tiles(cols: 1, height: auto, gutter: 6pt, ..items) = grid(
-  columns: (1fr,) * cols, gutter: gutter,
-  ..items.pos().map(((title, body)) => block(
-    width: 100%, height: height, inset: (x: 9pt, y: 9pt), radius: 7pt, fill: white, stroke: 0.6pt + hair, {
-      let t = text(font: "Sora", weight: "semibold", size: 9pt, fill: purple.darken(8%), title)
-      if cols == 1 [#t #h(2pt) #body] else [#t #v(-3pt) #text(fill: ink-med, body)]
-    },
-  )),
-)
+// Rows split by hairlines; each row is an array of cells. The outer rows leave their edge
+// padding to the panel around them.
+#let ruled(columns: (1fr,), pad: 8pt, ..rows) = {
+  let last = rows.pos().len() - 1
+  grid(
+    columns: columns,
+    ..rows.pos().enumerate().map(((i, row)) => row.map(c => grid.cell(
+      stroke: if i > 0 { (top: 0.5pt + hair) },
+      inset: (top: if i > 0 { pad } else { 0pt }, bottom: if i < last { pad } else { 0pt }), c))).flatten(),
+  )
+}
+
+// Titled tips. One column is a single ruled list, title then text on a line. More columns are
+// small cards, title above text, each row as tall as its tallest card.
+#let tip-title(t) = text(font: "Sora", weight: "semibold", size: 9pt, fill: purple.darken(8%), t)
+#let tiles(cols: 1, gutter: 6pt, pad: 9pt, ..items) = if cols == 1 {
+  panel(ruled(pad: pad, ..items.pos().map(((t, body)) => ([#tip-title(t) #h(2pt) #body],))))
+} else { layout(size => {
+  let w = (size.width - gutter * (cols - 1)) / cols
+  let tile((t, body), tall) = block(
+    width: w, height: tall, inset: (x: 9pt, top: 7pt, bottom: 9pt), radius: 7pt, fill: white, stroke: 0.6pt + hair,
+    [#tip-title(t) #v(2pt) #text(fill: ink-med, body)],
+  )
+  grid(columns: (w,) * cols, gutter: gutter, ..items.pos().chunks(cols).map(row => {
+    let tall = calc.max(..row.map(i => measure(tile(i, auto)).height))
+    row.map(i => tile(i, tall))
+  }).flatten())
+}) }
 
 // A big physical-looking key: a white top sitting on a lilac base
 #let bigkey(k, width: 0.6in, height: 0.4in, size: 12pt) = box(

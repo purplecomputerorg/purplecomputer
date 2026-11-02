@@ -3,7 +3,7 @@
 
 // ── Front: things to type in Play ──
 #header()
-#text(size: 9.4pt)[In the *Play* room, type anything, then press #key("Enter").]
+#intro[In the *Play* room, type anything, then press #key("Enter").]
 #gap
 
 #let try(title, ..rows) = panel(title: title, examples(..rows))

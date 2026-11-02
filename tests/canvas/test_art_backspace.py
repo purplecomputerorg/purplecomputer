@@ -1,9 +1,7 @@
 """Art's Backspace: a tap erases the square under the brush, or right after typing or stamping, the
-one before it, backing up against the way the brush just painted (left once it moves off without painting),
-with the brush pointing that way until another key. Backing off the start of a line lands on the
-last thing on the line above. Held, it takes squares for a second, then whole lines, each fading out
-first; letting go mid-fade brings the line back. Backing up a column takes squares only.
-Backspace with an arrow, in either order, erases toward the arrow."""
+one to its left. Backing off the start of a line lands on the last thing on the line above. Held, it
+takes squares for a second, then whole lines, each fading out first; letting go mid-fade brings the
+line back. Backspace with an arrow, in either order, erases toward the arrow, squares only."""
 
 import pytest
 
@@ -125,57 +123,6 @@ async def _line(app, way, n):
     await press(app, "space")
 
 
-@pytest.mark.parametrize("way, back", [("down", (0, -1)), ("up", (0, 1)), ("left", (1, 0))])
-def test_backspace_backs_up_a_line_the_way_it_was_drawn(way, back):
-    async def go():
-        app, room = _art()
-        room._cursor_x, room._cursor_y = 10, 10
-        await _line(app, way, 4)
-        end = (room._cursor_x, room._cursor_y)
-        await press(app, "backspace")
-        await press(app, "backspace")
-        assert (room._cursor_x, room._cursor_y) == (end[0] + back[0], end[1] + back[1])
-        assert len(room._grid) == 3
-    run(go())
-
-
-def test_moving_with_the_brush_up_sends_backspace_back_to_backing_up_left():
-    async def go():
-        app, room = _art()
-        room._cursor_x, room._cursor_y = 10, 10
-        await _line(app, "down", 4)
-        for way in ("down", "right"):
-            await app._dispatch_keyboard_action(NavigationAction(direction=way))
-        await press(app, "backspace")
-        assert (room._cursor_x, room._cursor_y) == (10, 15)
-    run(go())
-
-
-def test_the_brush_points_the_way_backspace_backs_up_until_another_key():
-    async def go():
-        app, room = _art()
-        room._cursor_x, room._cursor_y = 10, 10
-        await _line(app, "down", 4)
-        await press(app, "backspace")
-        assert room._erasing and art_room.BACK[room._way] == "up"
-        await app._dispatch_keyboard_action(NavigationAction(direction="right"))
-        assert not room._erasing and room._way == "right"
-    run(go())
-
-
-def test_holding_backspace_up_a_column_never_takes_whole_lines(clock):
-    async def go():
-        app, room = _art(rows=1)
-        room._cursor_x, room._cursor_y = 10, 1
-        await _line(app, "down", 6)
-        await _down(app, repeat=False)
-        clock[0] += LINES_AFTER + 0.1
-        for _ in range(6):
-            await _down(app)
-        assert room._fade is None and len(room._grid) == COLS
-    run(go())
-
-
 def test_backspace_with_an_arrow_held_erases_toward_the_arrow(clock):
     async def go():
         app, room = _art(rows=1)
@@ -183,7 +130,6 @@ def test_backspace_with_an_arrow_held_erases_toward_the_arrow(clock):
         for _ in range(3):
             await app._dispatch_keyboard_action(ControlAction(action="backspace", is_repeat=True, arrow_held="right"))
         assert [x for x in range(COLS) if (x, 0) not in room._grid] == [5, 6, 7]
-        assert art_room.BACK[room._way] == "right"
     run(go())
 
 
@@ -204,10 +150,23 @@ def test_arrows_while_backspace_is_held_erase_instead_of_moving(clock):
     run(go())
 
 
-def test_holding_backspace_says_arrows_clean():
+def test_backspace_painted_down_still_backs_up_left():
+    async def go():
+        app, room = _art()
+        room._cursor_x, room._cursor_y = 10, 10
+        await _line(app, "down", 4)
+        await press(app, "backspace")
+        await press(app, "backspace")
+        assert (room._cursor_x, room._cursor_y) == (9, 14) and len(room._grid) == 4
+    run(go())
+
+
+def test_only_a_held_backspace_says_arrows_clean():
     async def go():
         app, room = _art()
         await _down(app, repeat=False)
+        assert room._hint_key() != "clean" and room.arrow_hint().startswith("Arrows move"), "a tap doesn't flash it"
+        await _down(app)
         assert room._hint_key() == "clean" and room.arrow_hint().startswith("Arrows clean")
         await app._dispatch_keyboard_action(ControlAction(action="backspace", is_down=False))
         assert room._hint_key() != "clean" and room.arrow_hint().startswith("Arrows move")

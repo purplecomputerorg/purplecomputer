@@ -35,7 +35,7 @@ In the Music room, the bottom right shows "Hold Space: close code" even though t
 
 **Expected:** 
 
-### [CONFUSION: MINOR] "Tab" and "ABC" mode labels are cryptic for kids and parents
+### ~~[CONFUSION: MINOR] "Tab" and "ABC" mode labels are cryptic for kids and parents~~ FIXED (commit e9863402: the switches say Letters)
 
 **Tried:** Understanding what the two modes "Tab" and "ABC" mean
 

@@ -146,8 +146,9 @@ Families can add their own rooms (games, stories, worlds) from [Purple Studio](#
 - **Esc (tap):** the Esc menu: rooms on top (press a number), then tools for the room you're in: **Code** (Space), **Colors** (\\), **Time Travel** (T), **Save** (S), **Open** (O), **Print** (P, when a USB printer is plugged in), **Clear** (C), and **Volume** (V)
 - **Hold Esc (1s):** Parent Menu
 - **Hold \\ (3s):** Parent Menu (alternate, works on all keyboards)
-- **Tab:** the room's switch: Paint/ABC in Art, Sounds/ABC in Music, Front/Back in Blocks, `say` on or off in Play
+- **Tab:** the room's switch: Paint/Letters in Art, Sounds/Letters in Music, Front/Back in Blocks, `say` on or off in Play
 - **Space** (Art, Blocks): put the brush down or lift it; hold it with the arrows to paint a trail or lay a line
+- **Space** (Music): note names on the keys on or off; in Letters, whether letters say their names ("bee") or their sounds ("b")
 - **Volume:** hardware media keys, or V in the Esc menu
 
 **Speech** (in Play room): Add `!` anywhere (e.g., `cat!`), start with `say`, or press Tab to hear the line spoken aloud.
@@ -349,7 +350,7 @@ Purple Computer includes code from the following open-source projects:
 
 - **[spectral.js](https://github.com/rvanwijnen/spectral.js)** by Ronald van Wijnen (MIT License): Spectral reflectance data and CIE color matching functions, used for Beer-Lambert paint-like color mixing (yellow + blue = green, red + blue = purple)
 - **[Twemoji](https://github.com/jdecked/twemoji)** by Twitter and contributors ([CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)): source artwork for several stickers — T-Rex (U+1F996), ringed planet (U+1FA90), Earth (U+1F30E), turtle (U+1F422), and sun-with-face (U+1F31E) — and Purple Studio's section and starter room icons (listed in `cards/make_studio_icons.py`), recolored to Purple Computer shades in the scripts under `cards/`.
-- **[nemophones](https://github.com/tavinathanson/nemophones)** ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)): the letter sounds Music says in ABC with Space (`packs/core-sounds/content/letter-sounds/`), raised to the letter names' volume.
+- **[nemophones](https://github.com/tavinathanson/nemophones)** ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)): the letter sounds Music says in Letters with Space (`packs/core-sounds/content/letter-sounds/`), raised to the letter names' volume.
 
 ---
 

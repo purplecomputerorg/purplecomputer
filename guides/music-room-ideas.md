@@ -10,7 +10,7 @@ Current thinking on extending Music Room to stay fun and interesting across a wi
 
 ## What Works Now
 
-Music Room maps every letter key to a note (default instrument marimba, default key C major across 3 octaves; the key and octave shift with the arrow keys) and every number key to a percussion sound. Any random combination of keys sounds pleasant. Colors cycle on each press. Enter swaps instruments, Tab toggles Letters mode (each letter named aloud), and Space drives the loop station.
+Music Room maps every letter key to a note (default instrument marimba, default key C major across 3 octaves; the key and octave shift with the arrow keys) and every number key to a percussion sound. Any random combination of keys sounds pleasant. Colors cycle on each press. Enter swaps instruments, Tab toggles Letters mode (each letter said aloud; Space picks its name or its phonics sound), and Space otherwise shows note names or drives the loop station.
 
 For young kids, this is great. Press a key, get a sound and a color. Immediate, predictable, satisfying. The core principle: **every key always makes the same sound.** This predictability is what makes it fun for toddlers and must not change.
 

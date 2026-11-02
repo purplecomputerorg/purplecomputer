@@ -6,7 +6,7 @@ The file sits beside PURPLE-LOG on PURPLEUSB, preallocated at image build
 header and a tar.gz of ~/.config/purple (settings, Time Travel, saves). Like
 purple-stick-log, whose helpers this reuses, it locates the file's sectors
 with the partition mounted read-only and then reads and writes them raw, so
-nothing stays mounted and no FAT metadata changes.
+nothing stays mounted and no filesystem metadata changes.
 
 --restore (purple-key-save.service, before Purple starts) unpacks the newest
 good copy and leaves MARKER, which tells Purple this Key keeps work.

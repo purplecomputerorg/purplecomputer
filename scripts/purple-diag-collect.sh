@@ -3,7 +3,7 @@
 #
 # purple-stick-log runs this every few seconds during boot, less often once
 # Purple is up, and writes the text in place into PURPLE-LOG on the stick's
-# PURPLEUSB partition (plain FAT, so Windows and macOS mount it like a thumb
+# PURPLEUSB partition (exFAT, so Windows and macOS mount it like a thumb
 # drive). A customer whose boot hangs holds the power button, plugs the stick
 # into their own computer and emails the file. Read-only. Runs as root.
 # Every section is capped so the whole report fits its 1MB slot in PURPLE-LOG.

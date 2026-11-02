@@ -162,6 +162,10 @@ verify_lean_initrd() {
         echo "ERROR: initrd.img-$kver still contains net/gpu modules or their firmware (lean-initrd hook did not run)"
         exit 1
     fi
+    if [ "$BOOT" != pi ] && ! chroot "$MOUNT_DIR" lsinitramfs "/boot/initrd.img-$kver" | grep -q '/fs/exfat/exfat\.ko'; then
+        echo "ERROR: initrd.img-$kver has no exfat module, so the initramfs cannot write PURPLE-LOG"
+        exit 1
+    fi
     log_info "Initrd size ($kver): $(du -h "$MOUNT_DIR/boot/initrd.img-$kver" | cut -f1) (net + gpu modules and unreferenced firmware excluded)"
 }
 
@@ -755,6 +759,10 @@ rm -f "$KEEP"
 exit 0
 LEANINITRD
     chmod +x "$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd"
+
+    # PURPLEUSB is exFAT so boot menus skip it; the initramfs stick report mounts it,
+    # and unlike FAT, exfat is a module. The Pi card has no PURPLEUSB.
+    [ "$BOOT" = pi ] || echo exfat >> "$MOUNT_DIR/etc/initramfs-tools/modules"
 
     # Rebuild initrd to include casper scripts (installed above, casper-stop neutered)
     KVERS="$KVER"

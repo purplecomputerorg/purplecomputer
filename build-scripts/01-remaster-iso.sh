@@ -225,7 +225,7 @@ purple_debug_if_key_held() {
 purple_stick_report() {
     local part mnt=/purple-stick f=/purple-stick/PURPLE-LOG r=/run/purple/stick-report head n
     part=$(blkid -L PURPLEUSB 2>/dev/null) || return 0
-    mkdir -p "$mnt" /run/purple && mount -t vfat -o rw,noatime "$part" "$mnt" 2>/dev/null || return 0
+    mkdir -p "$mnt" /run/purple && mount -t exfat -o rw,noatime "$part" "$mnt" 2>/dev/null || return 0
     [ -f "$f" ] || { umount "$mnt"; return 0; }
     if [ -s /run/purple/stick-start ]; then
         read -r n < /run/purple/stick-start
@@ -824,8 +824,10 @@ EFI_GRUB_EOF
         cp "$f" "$WORK_DIR/iso-new/EFI/boot/${name,,}"
     done
 
-    # Third partition: a plain FAT "basic data" volume named PURPLEUSB, which
+    # Third partition: an exFAT "basic data" volume named PURPLEUSB, which
     # Windows and macOS mount like any thumb drive (they hide the EFI partition).
+    # exFAT, not FAT: firmware boot menus list every FAT partition on a USB
+    # drive (AMI Aptio: "UEFI: <drive>, Partition 3") but has no exFAT driver.
     # It is what a parent sees when they plug the stick into a running computer,
     # so it carries the "turn it off first" instructions, and purple-stick-log
     # and purple-key-save write PURPLE-LOG and PURPLE-SAVE here during live boots. autorun.inf no
@@ -833,7 +835,7 @@ EFI_GRUB_EOF
     # 128MB: the log, PURPLE-SAVE, and room left for parents' Studio packs.
     LOG_IMG="$WORK_DIR/purpleusb.img"
     dd if=/dev/zero of="$LOG_IMG" bs=1M count=128 2>/dev/null
-    mkfs.vfat -F 16 -n PURPLEUSB "$LOG_IMG" >/dev/null
+    mkfs.exfat -L PURPLEUSB "$LOG_IMG" >/dev/null
     LOG_MNT="$WORK_DIR/purpleusb-mount"
     mkdir -p "$LOG_MNT"
     mount -o loop "$LOG_IMG" "$LOG_MNT"
@@ -887,8 +889,9 @@ README_EOF
     # slots of a 1MB report region and a 512KB kernel log region (sizes in
     # purple-stick-log.py). The initramfs and purple-stick-log
     # write into it in place, the latter by raw sector writes, so nothing
-    # stays mounted and no FAT metadata changes while Purple runs. Written
-    # last onto a fresh FAT so it is one contiguous run. Padded with newlines,
+    # stays mounted and no filesystem metadata changes while Purple runs. Written
+    # sequentially onto a fresh filesystem so it is one contiguous run (exFAT
+    # has no fallocate). Padded with newlines,
     # not spaces, so the unused space is empty lines rather than one huge one.
     # The header comes from purple-stick-log so cleanlog restores these exact bytes.
     LOG_HEAD=$(sed -n 's/^PRISTINE_HEAD = "\(.*\)"$/\1/p' /purple-src/scripts/purple-stick-log.py)

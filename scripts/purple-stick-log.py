@@ -11,7 +11,7 @@ and, after it, the kernel log streamed as it happens. Writes wait while other pr
 so they take at most a small share of the time, so a slow stick slows the
 log instead of the computer. The file's sectors are located once with the
 partition mounted read-only; from then on every write goes straight into
-those sectors of the partition device. Nothing stays mounted and no FAT
+those sectors of the partition device. Nothing stays mounted and no filesystem
 metadata changes, so a power cut at any moment leaves the partition clean and
 the file holding everything up to the last flush. The initramfs claims the
 start number and writes the same report region in place before this starts
@@ -92,7 +92,7 @@ def file_extent(part, name=NAME, expected=None, mnt=MNT):
     """Byte offset of name on the partition, or None if it is missing, the wrong size, or not one contiguous run."""
     expected = expected or file_bytes()
     os.makedirs(mnt, exist_ok=True)
-    subprocess.run(["mount", "-t", "vfat", "-o", "ro", part, mnt], check=True)
+    subprocess.run(["mount", "-t", "exfat", "-o", "ro", part, mnt], check=True)
     try:
         path = os.path.join(mnt, name)
         if not os.path.exists(path):

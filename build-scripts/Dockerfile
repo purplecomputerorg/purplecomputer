@@ -30,6 +30,7 @@ RUN sed -i "s|http://archive.ubuntu.com|${APT_MIRROR}|g" /etc/apt/sources.list.d
     gdisk \
     parted \
     dosfstools \
+    exfatprogs \
     e2fsprogs \
     squashfs-tools \
     # Loop device support

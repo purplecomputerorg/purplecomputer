@@ -421,8 +421,8 @@ def test_i386_kernel_reports_lid_open_at_boot():
 
 def test_stick_log_and_purpleusb_partition():
     """Every live boot writes PURPLE-LOG on the stick's third partition.
-    That partition must be basic-data FAT (Windows and macOS hide the EFI
-    partition), it carries the turn-it-off-first note for people who plug the
+    That partition must be basic-data (Windows and macOS hide the EFI
+    partition) and exFAT (firmware boot menus list FAT partitions), it carries the turn-it-off-first note for people who plug the
     stick into a running computer, and after the settle boot it is copied back
     from the ISO and rechecked. Installed systems never run the writer."""
     src = _build_source()
@@ -435,7 +435,12 @@ def test_stick_log_and_purpleusb_partition():
                  "DefaultDependencies=no", "WantedBy=sysinit.target"):
         assert line in unit, "writer must start before a flaky stick dies mid-boot, live boots only"
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
-    assert 'mkfs.vfat -F 16 -n PURPLEUSB "$LOG_IMG"' in remaster
+    assert 'mkfs.exfat -L PURPLEUSB "$LOG_IMG"' in remaster
+    assert 'mount -t exfat -o rw,noatime "$part" "$mnt"' in remaster
+    assert '"mount", "-t", "exfat"' in (ROOT / "scripts" / "purple-stick-log.py").read_text()
+    src_initrd = _build_source()
+    assert '[ "$BOOT" = pi ] || echo exfat >> "$MOUNT_DIR/etc/initramfs-tools/modules"' in src_initrd
+    assert "/fs/exfat/exfat" in src_initrd, "build must fail if an initrd lacks exfat"
     assert '-append_partition 3 EBD0A0A2-B9E5-4433-87C0-68B6B72699C7 "$LOG_IMG"' in remaster, \
         "PURPLEUSB must be a Microsoft basic data partition or desktops hide it"
     assert 'label=Start Purple Computer' in remaster
@@ -477,7 +482,7 @@ def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
     initramfs claims the start and writes its report region in place (1<> and
     dd conv=notrunc never truncate, so the sectors never move) before and
     after mounting the system and at the end of casper-bottom; purple-stick-log
-    then writes both regions by raw sector writes, never keeping FAT mounted.
+    then writes both regions by raw sector writes, never keeping the filesystem mounted.
     Sizes must agree between the build, the initramfs hook and the writer."""
     remaster = (ROOT / "build-scripts" / "01-remaster-iso.sh").read_text()
     writer = (ROOT / "scripts" / "purple-stick-log.py").read_text()
@@ -513,7 +518,7 @@ def test_one_preallocated_log_file_written_in_place_from_the_initramfs_on():
     for line in ("Before=purple-x11.service", "ConditionPathIsMountPoint=/cdrom", "purple-key-save --restore"):
         assert line in unit, "restored before Purple starts, live boots only"
     collect = (ROOT / "scripts" / "purple-diag-collect.sh").read_text()
-    assert "mount -t vfat" not in collect and "blkid" not in collect, "the collector only prints; purple-stick-log owns the stick"
+    assert "mount -t" not in collect and "blkid" not in collect, "the collector only prints; purple-stick-log owns the stick"
 
 
 def test_debug_menu_try_everything_entry():

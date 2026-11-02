@@ -6,7 +6,7 @@
 #text(size: 9.4pt)[In the *Play* room, type anything, then press #key("Enter").]
 #gap
 
-#let try(title, ..rows) = panel(title: title, color: violet, examples(color: violet, ..rows))
+#let try(title, ..rows) = panel(title: title, examples(..rows))
 
 #try([Words become pictures],
   ("cat", [a cat]),
@@ -41,8 +41,8 @@
   In *Art*, *Music* or *Blocks*, press #key("Esc") then #key("Space"). #key("↓") shows ideas. Typos get fixed for you.
 ]
 #gap
-#panel(title: [Art], color: red)[
-  #examples(color: red,
+#panel(title: [Art])[
+  #examples(
     ("right 5", [paint 5 squares]),
     ("brush up", [move without painting]),
     ("write hi", [letters on the grid]),
@@ -50,16 +50,16 @@
   )
 ]
 #gap
-#panel(title: [Music], color: blue)[
-  #examples(color: blue,
+#panel(title: [Music])[
+  #examples(
     ("asdf", [play those keys, #mono("1234") for drums]),
     ("fast qwertyuiop", [quick notes, or #mono("slow")]),
     ("choose ukulele zxcvbnm", [pick a sound, then play]),
   )
 ]
 #gap
-#panel(title: [Blocks], color: green)[
-  #examples(color: green,
+#panel(title: [Blocks])[
+  #examples(
     ("red up 5", [a tower]),
     ("right hello", [a block per letter]),
     ("green repeat 4 right 1 up 1", [stairs]),

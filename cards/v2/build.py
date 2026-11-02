@@ -24,7 +24,7 @@ OUT = HERE / "out"
 CARDS = ("start", "quick-start", "play", "parents")
 QRS = {"help-qr.svg": "https://purplecomputer.org/help", "studio-qr.svg": "https://studio.purplecomputer.org/"}
 QR_COLOR = "#3b1a5c"
-PAPER = "#faf8f5"  # theme.typ paper
+PAPER = "#f8f4fd"  # theme.typ paper
 
 sys.path.insert(0, str(HERE.parent))
 from add_bleed import add_bleed  # noqa: E402

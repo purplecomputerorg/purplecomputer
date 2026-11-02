@@ -16,7 +16,7 @@
 #big-step(2)[Plug in the Purple Key.]
 #v(5pt)
 // Step 3's badge runs a rail down to the Mac and PC ways it owns
-#let way(title, keys, body) = panel(title: title, color: violet)[
+#let way(title, keys, body) = panel(title: title)[
   #set text(size: 8.6pt)
   #box(height: 1.36in, width: 100%)[
     #v(2pt)

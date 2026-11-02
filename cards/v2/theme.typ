@@ -1,7 +1,7 @@
 // Shared look for the Purple 2.0 box cards: 4x6 portrait, the landing site's palette.
 // Sora for titles, Figtree for text, IBM Plex Mono for keys and code.
 
-#let paper = rgb("#faf8f5")
+#let paper = rgb("#f8f4fd")
 #let ink = rgb("#352a4a")
 #let ink-med = rgb("#6b5e7d")
 #let ink-dim = rgb("#8f82a3")
@@ -9,14 +9,8 @@
 #let purple = rgb("#5c2d91")
 #let purple-dk = rgb("#3b1a5c")
 #let magenta = rgb("#9b59d0")
-#let lilac = rgb("#f3eefb")
+#let lilac = rgb("#efe6fa")
 
-// Room accents, softened from the sticker rows (purple_tui/palette.py)
-#let red = rgb("#c4555a")
-#let blue = rgb("#4d70c4")
-#let green = rgb("#3b8a5c")
-#let violet = rgb("#8a57c9")
-#let amber = rgb("#b5862a")
 
 #let card(body) = {
   set page(width: 4in, height: 6in, margin: (x: 0.25in, top: 0.24in, bottom: 0.22in), fill: paper)
@@ -38,6 +32,9 @@
   text(font: "Figtree", weight: "semibold", size: size, fill: purple-dk, k),
 )
 #let key(k) = keycap(k, size: 0.86em)
+// A key wearing its real sticker color (purple_tui/palette.py KEY_COLORS)
+#let sticker(k, hex) = box(inset: (x: 0.36em), outset: (y: 0.24em), radius: 2.6pt, fill: rgb(hex),
+  text(font: "Figtree", weight: "bold", size: 0.86em, fill: purple-dk, k))
 
 // What a kid types, like Purple's code line
 #let typed(s, color: purple) = box(
@@ -127,14 +124,16 @@
   }).flatten(),
 )
 
-// Titled tips, one short paragraph each, with a thin rule between
-#let tips(color: purple, space: 1pt, ..items) = {
-  let rows = items.pos()
-  for (i, (title, body)) in rows.enumerate() {
-    [#text(font: "Sora", weight: "semibold", size: 9pt, fill: color.darken(8%), title) #h(2pt) #body]
-    if i < rows.len() - 1 { v(space); line(length: 100%, stroke: 0.5pt + hair); v(space) }
-  }
-}
+// Titled tips as small cards: one column reads title then text on a line, two columns stack them
+#let tiles(cols: 1, height: auto, gutter: 6pt, ..items) = grid(
+  columns: (1fr,) * cols, gutter: gutter,
+  ..items.pos().map(((title, body)) => block(
+    width: 100%, height: height, inset: (x: 9pt, y: 9pt), radius: 7pt, fill: white, stroke: 0.6pt + hair, {
+      let t = text(font: "Sora", weight: "semibold", size: 9pt, fill: purple.darken(8%), title)
+      if cols == 1 [#t #h(2pt) #body] else [#t #v(-3pt) #text(fill: ink-med, body)]
+    },
+  )),
+)
 
 // A big physical-looking key: a white top sitting on a lilac base
 #let bigkey(k, width: 0.6in, height: 0.4in, size: 12pt) = box(

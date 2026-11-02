@@ -104,6 +104,22 @@ def _fill(g, color: str, rect: pygame.Rect):
     g.rect(dark, (rect.x + half, rect.y, rect.w - half, rect.h))
 
 
+def _draw_graded(g, glyphs, px: int, x: int, ys):
+    """Glyphs centered at (x, y) for each y, filled with one gradient from white at the
+    top of the first's ink to near black at the bottom of the last's."""
+    marks = []
+    for glyph, y in zip(glyphs, ys):
+        s = g.text(glyph, px, "mono", "#ffffff").copy()
+        marks.append((s, s.get_rect(center=(x, y))))
+    top = marks[0][1].y + marks[0][0].get_bounding_rect().top
+    span = max(1, marks[-1][1].y + marks[-1][0].get_bounding_rect().bottom - top)
+    for s, r in marks:
+        for y in range(r.h):
+            v = round(255 * (1 - max(0.0, min(1.0, (r.y + y - top) / span)) * GRAY_REACH))
+            s.fill((v, v, v, 255), (0, y, r.w, 1), special_flags=pygame.BLEND_RGBA_MULT)
+        g.surface.blit(s, r)
+
+
 class ColorBar(Overlay):
     """Draws where the room left room for it: the room sets bar_row (the
     header from its left edge to the chip) and bar_foot (its hint row) as it
@@ -181,8 +197,7 @@ class ColorBar(Overlay):
         shades = pygame.Rect(0, inner.y, round(px * 0.9), inner.h)
         ud_px = round(px * 0.75)
         ud_x = pill.right - h // 3 - ud_px // 2
-        for glyph, dy in ((UP, -1), (DOWN, 1)):
-            g.draw_text(glyph, ud_px, ud_x, pill.centery + dy * inner.h // 4, "mono", P.MUTED, anchor="center")
+        _draw_graded(g, (UP, DOWN), ud_px, ud_x, (pill.centery - inner.h // 4, pill.centery + inner.h // 4))
         shades.right = ud_x - ud_px // 2 - gap // 2
         right = g.draw_text(RIGHT, px, shades.x - gap, pill.centery, "mono", P.MUTED, anchor="midright").x - gap
         cw = (right - x) / (HUES + 1)

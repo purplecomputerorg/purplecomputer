@@ -31,6 +31,7 @@ LINES_AFTER = 1.0                   # seconds of holding Backspace before it tak
 LINE_FADE_S = 0.5                   # each line fades out this long first; letting go brings it back
 CANVAS_BG = "#221440"
 CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
+GRID_EDGE = 0.3                     # the hairline round the grid, from the subtle border color toward the frame line
 TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
 BRUSH_LEAN = (0.5, -0.866)          # handle up and to the right, the way a right hand holds it
 BRUSH_FLOAT = 0.35                  # cells the lifted brush hovers above its ring
@@ -799,7 +800,7 @@ class ArtRoom(Room):
         if chrome_h:
             self.bar_row = self._draw_header(g, in_band(rect.y))
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
-        g.rect(P.HAIR, sheet.inflate(2, 2), width=1)
+        g.rect(mix(P.HAIR, P.LINE, GRID_EDGE), sheet.inflate(2, 2), width=1)
         self._draw_letters(g, ox, oy, c)
         self._draw_fade_wash(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)

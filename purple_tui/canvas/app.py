@@ -1878,7 +1878,7 @@ class PurpleApp:
             w = sum(s.get_width() for s in parts) + pad * (len(parts) - 1)
             pill = pygame.Rect(0, 0, w, max(s.get_height() for s in parts)).inflate(pad * 2, pad * 2)
             pill.midbottom = (g.w // 2, y + pad)
-            g.rect(P.TEXT, pill, radius=g.em(0.5))
+            g.rect(P.ACCENT, pill, radius=g.em(0.5))
             x = pill.x + pad
             for s in parts:
                 x = g.surface.blit(s, s.get_rect(midleft=(x, pill.centery))).right + pad

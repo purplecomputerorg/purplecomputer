@@ -66,14 +66,14 @@ class FullScreen(Overlay):
             g.draw_text(line or " ", g.vh(4), cx, y, "mono-bold", P.PRIMARY, anchor="midtop")
             y += g.vh(5)
         if self.message:
-            y += g.draw_markup(self.message, g.vh(2.8), g.vw(10), y, "mono-bold", P.PRIMARY, g.vw(80), "center", self.bg, g.vh(0.6))
+            y += g.draw_markup(self.message, g.vh(2.8), g.stage.x + g.vw(10), y, "mono-bold", P.PRIMARY, g.vw(80), "center", self.bg, g.vh(0.6))
         if self.hint:
             y += g.vh(2)
             for line in self.hint.split("\n"):
                 y = draw_key_hint(g, line, g.vh(2.8), cx, y + g.vh(2), color=P.TEXT, anchor="midtop").bottom
         if self.status:
             y += g.vh(5)
-            y += g.draw_markup(self.status, g.vh(1.9), g.vw(10), y, "mono", P.DIM, g.vw(80), "center", self.bg, g.vh(0.4))
+            y += g.draw_markup(self.status, g.vh(1.9), g.stage.x + g.vw(10), y, "mono", P.DIM, g.vw(80), "center", self.bg, g.vh(0.4))
         return y - top
 
 

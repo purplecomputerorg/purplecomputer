@@ -35,7 +35,7 @@ async function runRoom(source: string, events: Msg[], keep: Msg = {}, files: Msg
 
 const example = (name: string) => EXAMPLES.find((e) => e.name === name)!.source;
 const shapes = (r: Msg) => (r.scene ?? []) as Shape[];
-const texts = (r: Msg) => shapes(r).filter((s) => s[0] === "text").map((s) => s[4]);
+const texts = (r: Msg) => shapes(r).filter((s) => s[0] === "text").map((s) => s[4] as string);
 // Grid squares a reply drew: [column, row, color] for each square that isn't the background.
 const squares = (r: Msg) => shapes(r).slice(1).filter((s) => s[0] === "rect").map((s) => [Math.floor((s[1] as number) / 10), Math.floor((s[2] as number) / 10), s[5]]);
 const GREEN = "#5ec46a";

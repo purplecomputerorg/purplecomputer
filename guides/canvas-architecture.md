@@ -81,20 +81,21 @@ that invalidate at their own rate and stop themselves. `Timers.intervals()`
 lists what is armed; `tests/canvas/test_performance.py` asserts nothing under one
 second ticks while idle in Play.
 
-Sizes come from `g.vh(percent)` and `g.vw(percent)` so a 1024x768 netbook and
-a 1440x900 MacBook get the same proportions. Chrome (bars, menus, pills, the
-Music keys, the Play input) is sized in `g.em(n)`, 1.3% of screen width: the
-same unit the HTML design mock used, so its paddings, gaps and radii port
-verbatim. The viewport itself is a fixed
-`CANVAS_COLS x CANVAS_ROWS` (48x24) grid of square units, the 2:1 frame of
-the terminal UI, as large as fits inside the side margins and between the
-title and status strips, centered, so every machine shows the same shape and
-the same air around it; 4:3 screens get extra air above and below. The Art
-grid is those units: 48x21 cells under a 1.5 unit mode switch
-and over a 1.5 unit hint row, edge to edge with no leftover space. The code
-line is 3 units tall and takes those two rows, so the picture keeps its size
-while coding. Unpainted cells alternate two near-identical purples so the
-grid shows as a checkerboard rather than lines.
+Sizes come from `g.vh(percent)`, `g.vw(percent)` and `g.em(n)`, and all three
+measure `g.stage`: the largest 16:9 box centered on the screen, the shape the
+layout was drawn for. Bottom-anchored chrome anchors to `g.stage.bottom`, not
+the screen. So every machine shows the same picture in the same proportions;
+a 4:3 or 16:10 screen shows it a little smaller with more air around it, the
+way the terminal UI's font sizing did. Chrome (bars, menus, pills, the Music
+keys, the Play input) is sized in `g.em(n)`, 1.3% of stage width: the same
+unit the HTML design mock used, so its paddings, gaps and radii port verbatim.
+The viewport is a whole number of square units, `CANVAS_COLS x CANVAS_ROWS`,
+derived from the Art grid in `constants.py`: 70x30 cells, one unit beside
+it and a 3 unit band above and below for the mode switch and hint row, so
+72x36, the terminal UI's 2:1 frame. Leftover pixels from rounding land outside
+the frame, so Art fills it in whole cells on any screen. A bottom panel takes
+both bands and the grid shrinks to fit. Unpainted cells alternate two near-identical purples so the
+grid shows as a checkerboard rather than lines, inside one `P.HAIR` hairline that keeps its edge straight.
 
 ## Text
 

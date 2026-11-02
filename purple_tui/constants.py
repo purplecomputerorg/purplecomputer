@@ -49,12 +49,12 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 #   - Code panel: CODE_PANEL_MIN_HEIGHT rows (flexible via 1fr, no top border)
 #   - Compact indicator: 1 row (no margin)
 
-# The canvas viewport is this many square units on every machine, sized to fit:
-# a 2:1 stage, the shape of the terminal UI's frame. The Art grid is the same
-# units (minus its header and hint rows), so no computer gets a wider picture.
-CANVAS_COLS = 48
-CANVAS_ROWS = 24
 ART_COLS, ART_ROWS = 70, 30   # the canvas Art grid, in square cells
+ART_SIDE_UNITS, ART_BAND_UNITS = 1, 3   # Art's margin beside the grid, and its header and hint bands
+# The canvas viewport in square units, one unit per Art cell, so Art fills it in whole cells on every
+# screen and leftover pixels land outside the frame. 72x36: the terminal UI's 2:1 shape.
+CANVAS_COLS = ART_COLS + 2 * ART_SIDE_UNITS
+CANVAS_ROWS = ART_ROWS + 2 * ART_BAND_UNITS
 # Art's grid before it grew: pack pictures and Art states that name no grid were made on it, and are centered on today's.
 OLD_ART_GRID = (56, 24)
 

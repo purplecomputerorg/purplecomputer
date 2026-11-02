@@ -205,6 +205,9 @@ def _run_edge(pieces, i, step) -> bool:
     return a[1] + a[0].get_width() != b[1]
 
 
+DESIGN_ASPECT = 16 / 9
+
+
 class Gfx:
     """The screen. Owns the surface, the fonts, and the caches."""
 
@@ -228,7 +231,7 @@ class Gfx:
             pygame.display.set_caption("Purple")
             pygame.mouse.set_visible(False)
         self.headless = headless or self._kms is not None  # no SDL window either way
-        self.w, self.h = self.surface.get_size()
+        self._set_size()
         self.all_caps = False
         self.dirty = True
         self.caret = None             # [rect, pixels without, pixels with, shown, since] for the frame on screen
@@ -261,20 +264,27 @@ class Gfx:
         if self.headless or size == (self.w, self.h):
             return
         self.surface = pygame.display.set_mode(size, self._flags)
-        self.w, self.h = self.surface.get_size()
+        self._set_size()
         self.dirty = True
 
     # ----- units -----
+    def _set_size(self):
+        """The stage is the largest 16:9 box centered on the screen, the shape the layout was drawn
+        for. Units measure it and the chrome anchors to it, so any screen shows the same picture."""
+        self.w, self.h = self.surface.get_size()
+        w, h = min(self.w, round(self.h * DESIGN_ASPECT)), min(self.h, round(self.w / DESIGN_ASPECT))
+        self.stage = pygame.Rect((self.w - w) // 2, (self.h - h) // 2, w, h)
+
     def vh(self, pct: float) -> int:
-        return max(1, round(self.h * pct / 100))
+        return max(1, round(self.stage.h * pct / 100))
 
     def vw(self, pct: float) -> int:
-        return max(1, round(self.w * pct / 100))
+        return max(1, round(self.stage.w * pct / 100))
 
     def em(self, n: float = 1.0) -> int:
-        """The chrome unit: 1.3% of screen width, the same scale the design
+        """The chrome unit: 1.3% of the design width, the same scale the design
         mock used, so its em-based paddings, gaps and radii port verbatim."""
-        return max(1, round(self.w * 0.013 * n))
+        return max(1, round(self.stage.w * 0.013 * n))
 
     # ----- fonts -----
     def font(self, face: str, px: int) -> pygame.font.Font:

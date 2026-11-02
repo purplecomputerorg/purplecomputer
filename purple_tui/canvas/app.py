@@ -1661,12 +1661,12 @@ class PurpleApp:
         fit inside the side margins and between the title and status strips,
         so every machine shows the same shape and the Art grid fills it edge
         to edge."""
-        g = self.g
+        g, s = self.g, self.g.stage
         gap, title_h, status_h = g.vh(FRAME_GAP_VH), g.vh(TITLE_STRIP_VH), g.vh(STATUS_STRIP_VH)
-        unit = max(4, min((g.w - 2 * (g.vw(SIDE_MARGIN_VW) + gap)) // CANVAS_COLS,
-                          (g.h - title_h - status_h - 2 * gap) // CANVAS_ROWS))
+        unit = max(4, min((s.w - 2 * (g.vw(SIDE_MARGIN_VW) + gap)) // CANVAS_COLS,
+                          (s.h - title_h - status_h - 2 * gap) // CANVAS_ROWS))
         vp = pygame.Rect(0, 0, unit * CANVAS_COLS, unit * CANVAS_ROWS)
-        vp.center = (g.w // 2, (title_h - status_h + g.h) // 2)
+        vp.center = (s.centerx, s.y + (title_h - status_h + s.h) // 2)
         return vp
 
     @property
@@ -1718,7 +1718,7 @@ class PurpleApp:
         self._draw_save_flash(frame)
         g.surface.set_clip(None)
         if self._panel is not None and self.viewport_panel() is None:
-            self._panel.draw(g, pygame.Rect(frame.x, frame.bottom, frame.w, g.h - frame.bottom))
+            self._panel.draw(g, pygame.Rect(frame.x, frame.bottom, frame.w, g.stage.bottom - frame.bottom))
         else:
             self._draw_footer(frame)
         for o in self._overlays:
@@ -1729,7 +1729,7 @@ class PurpleApp:
         """The status strip and, beside it, the sticker keyboard: the same under every room."""
         esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
         if self._legend_visible and not self._code_panel_active:   # keys type code there, not colors
-            self._draw_legend(frame, esc_pill.bottom if esc_pill else self.g.h - self.g.vh(2))
+            self._draw_legend(frame, esc_pill.bottom if esc_pill else self.g.stage.bottom - self.g.vh(2))
 
     def _draw_title(self, frame, title=None):
         """The strip above the frame: computer name, screen title, battery.
@@ -1793,7 +1793,7 @@ class PurpleApp:
         reuses it with its own corners and no room tabs. A family room's name
         takes the arrow hint's corner, lit."""
         g = self.g
-        y = g.h - g.vh(STATUS_TEXT_VH)
+        y = g.stage.bottom - g.vh(STATUS_TEXT_VH)
         if self._littles_mode:
             g.draw_text("Littles Mode · Hold Esc to exit", g.em(0.92), frame.centerx, y, "mono", P.MUTED, anchor="center")
             return
@@ -1872,7 +1872,7 @@ class PurpleApp:
         the room's content. A toast's picture sits left of its text."""
         g = self.g
         pad = g.vh(1.1)
-        y = g.h - g.vh(11)
+        y = g.stage.bottom - g.vh(11)
         for t in reversed(self._toasts[-3:]):
             parts = [s for s in (t.picture, t.text and g.text(t.text, g.vh(2.4), "mono-bold", P.ON_PRIMARY)) if s]
             w = sum(s.get_width() for s in parts) + pad * (len(parts) - 1)

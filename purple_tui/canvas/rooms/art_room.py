@@ -11,7 +11,7 @@ import pygame
 
 from ... import palette as P
 from ...code_runner import ArtCodeRunner
-from ...constants import ART_COLS, ART_ROWS, ICON_PALETTE, OLD_ART_GRID
+from ...constants import ART_BAND_UNITS, ART_COLS, ART_ROWS, ART_SIDE_UNITS, ICON_PALETTE, OLD_ART_GRID
 from ...color_mixing import mix_colors_paint
 from ..gfx import _Cache, hexcolor, mix, rgb
 from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
@@ -31,7 +31,6 @@ LINES_AFTER = 1.0                   # seconds of holding Backspace before it tak
 LINE_FADE_S = 0.5                   # each line fades out this long first; letting go brings it back
 CANVAS_BG = "#221440"
 CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
-GROUND_SHADE = 0.2                  # both checker cells sit below the panel, so the grid edge reads as one straight line
 TIP_EDGE = "#120a24"                # dark rim so the brush tip reads on any paint, even its own color
 BRUSH_LEAN = (0.5, -0.866)          # handle up and to the right, the way a right hand holds it
 BRUSH_FLOAT = 0.35                  # cells the lifted brush hovers above its ring
@@ -780,25 +779,27 @@ class ArtRoom(Room):
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g, rect):
-        """The mode switch hugs the top edge and the hint the bottom, a touch in
-        from the border; the grid fills what is left. A bottom panel takes the
-        hint row instead."""
-        pad, gap = g.em(0.7), g.em(0.5)
-        inner = rect.inflate(-2 * pad, -2 * pad)
+        """Cells are viewport units, so the grid fills the frame on any screen: a unit in from
+        each side, the mode switch and hint centered in the bands above and below. A bottom
+        panel takes both bands, and the grid shrinks to fit what is left."""
+        u = self.app.unit
         chrome_h = 0 if self.app.viewport_panel() is not None else hint_row_h(g)
+        band = (ART_BAND_UNITS if chrome_h else ART_SIDE_UNITS) * u
         status_h = status_row_h(g) if self.code_panel is not None else 0
-        area = inner.inflate(0, -2 * (chrome_h + gap))
+        area = rect.inflate(-2 * ART_SIDE_UNITS * u, -2 * band)
+        area.y, area.h = area.y + status_h, area.h - status_h
+        c = self._cell = max(3, min(u, area.w // COLS, area.h // ROWS))
+        sheet = pygame.Rect(0, 0, c * COLS, c * ROWS)
+        sheet.center = area.center
+        self._origin = ox, oy = sheet.topleft
         if status_h:
-            area.y, area.h = area.y + status_h, area.h - status_h
-            draw_status_row(g, pygame.Rect(inner.x, inner.y, inner.w, status_h), self._code_status(g))
-        c = self._cell = max(3, min(area.w // COLS, area.h // ROWS))
-        ox = area.x + (area.w - c * COLS) // 2
-        oy = area.y + (area.h - c * ROWS) // 2
-        self._origin = (ox, oy)
+            draw_status_row(g, pygame.Rect(sheet.x, sheet.y - status_h, sheet.w, status_h), self._code_status(g))
+        in_band = lambda y: pygame.Rect(sheet.x, y + (band - chrome_h) // 2, sheet.w, chrome_h)
         self.bar_row = self.bar_foot = None
         if chrome_h:
-            self.bar_row = self._draw_header(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h))
+            self.bar_row = self._draw_header(g, in_band(rect.y))
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
+        g.rect(P.HAIR, sheet.inflate(2, 2), width=1)
         self._draw_letters(g, ox, oy, c)
         self._draw_fade_wash(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
@@ -806,14 +807,17 @@ class ArtRoom(Room):
         if held:
             x, y = self._last_paint_pos
             cell = pygame.Rect(ox + x * c, oy + y * c, c, c)
-            color_recipe.draw_hold_badge(g, held, g.vh(1.9), cell, pygame.Rect(ox, oy, c * COLS, c * ROWS))
+            color_recipe.draw_hold_badge(g, held, g.vh(1.9), cell, sheet)
         if chrome_h and self.app._panel is None:
-            foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
+            foot = self.bar_foot = in_band(rect.bottom - band)
             key = "littles" if self.app._littles_mode else self._hint_key()
             draw_key_hint(g, HINTS[key], g.vh(1.9), foot.x, foot.centery)
             if not self.app._littles_mode:
                 color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled,
                                            self._paint_mode and color_recipe.hint_row(self._last_key_char, self._mixed))
+
+    def footer_h(self, g) -> int:
+        return ART_BAND_UNITS * self.app.unit
 
     def _hint_key(self) -> str:
         if self._steering:
@@ -863,7 +867,7 @@ class ArtRoom(Room):
     def _ground(x: int, y: int) -> str:
         """Unpainted cells alternate two near-identical purples: a checkerboard
         shows the grid without lines."""
-        return hexcolor(mix(CANVAS_ALT if (x + y) % 2 else CANVAS_BG, "#000000", GROUND_SHADE))
+        return CANVAS_ALT if (x + y) % 2 else CANVAS_BG
 
     def _draw_letters(self, g, ox, oy, c, on_paper=False):
         """On paper a pale letter on an unpainted cell would vanish into the white, so it prints in ink."""

@@ -18,6 +18,7 @@ def test_window_size_change_resizes_canvas():
         assert (g.w, g.h) == (1024, 768)
         assert g.surface.get_size() == (1024, 768)
         assert g.dirty
-        assert g.vh(50) == 384
+        assert g.stage == pygame.Rect(0, 96, 1024, 576)   # the 16:9 stage, centered
+        assert g.vh(50) == 288
     finally:
         pygame.display.quit()

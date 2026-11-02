@@ -439,6 +439,11 @@ studio-deploy *args: studio-bundle
     cd studio && vercel deploy --prebuilt {{args}}
     @case " {{args}} " in *" --prod "*) ;; *) printf '\n\033[1;33m%s\n%s\033[0m\n\n' "  PREVIEW ONLY: studio.purplecomputer.org did not change." "  To go live: just studio-deploy --prod  (or: cd studio && vercel promote <preview-url>)" ;; esac
 
+# Purple Studio: every page and room at every editor width; lists anything sticking out of its card (needs Firefox)
+studio-layout *args:
+    cd studio && npm install --no-audit --no-fund
+    cd studio && node scripts/layout-check.mjs {{args}}
+
 # Purple Studio: type-check and unit tests
 studio-test:
     cd studio && npm install --no-audit --no-fund

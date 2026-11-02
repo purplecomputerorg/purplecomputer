@@ -91,9 +91,11 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   .tabs-nav .icon, .tabs-nav .n { display: none; }
 }
 
-.body { --first: 1; --last: 3; --live: 1.3fr; display: grid; grid-template-columns: minmax(0, 1fr) 1px minmax(0, var(--live)); min-height: calc(100vh - 60px); }
-.body.swapped { --first: 3; --last: 1; grid-template-columns: minmax(0, var(--live)) 1px minmax(0, 1fr); }
-.main { order: var(--first); padding: 28px 32px 64px; min-width: 0; }
+.body { --first: 1; --last: 3; --live: 1.3fr; display: grid; grid-template-columns: var(--pane) 1px minmax(0, var(--live)); min-height: calc(100vh - 60px); }
+/* The editor never gets narrower than a phone, so one narrow layout serves both; its forms adapt to .main's width, not the window's */
+.body { --pane: minmax(380px, 1fr); }
+.body.swapped { --first: 3; --last: 1; grid-template-columns: minmax(0, var(--live)) 1px var(--pane); }
+.main { order: var(--first); padding: 28px 32px 64px; min-width: 0; container: pane / inline-size; }
 .split { order: 2; position: relative; z-index: 4; background: var(--line); }
 /* A wider grip than the 1px line; the live Purple's frame mustn't catch the pointer mid-drag */
 .split::before { content: ""; position: absolute; inset: 0 -4px; cursor: col-resize; }
@@ -362,7 +364,7 @@ hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 ul.privacy { list-style: none; padding: 0; } ul.privacy li { margin-bottom: 12px; }
 .code-card { background: var(--fill); border-color: var(--border); }
 .code-card h3 { margin-top: 0; }
-ul.credits { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+ul.credits { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 12px; }
 ul.credits li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
 ul.credits p { margin: 4px 0 0; font-size: 14px; }
 .credit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -382,7 +384,7 @@ pre { background: #2a1845; color: #e8daf0; padding: 14px 18px; border-radius: 14
 pre code { background: none; color: inherit; padding: 0; }
 
 /* Rooms: the name, rules, knobs, the Python's header, and the pictures and sounds tray */
-input.room-name { font: 600 22px var(--display); letter-spacing: -0.02em; border-color: transparent; border-bottom: 1.5px dashed var(--line); background: none; padding: 4px 8px; margin-left: -8px; width: auto; min-width: 12ch; }
+input.room-name { font: 600 22px var(--display); letter-spacing: -0.02em; border-color: transparent; border-bottom: 1.5px dashed var(--line); background: none; padding: 4px 8px; margin-left: -8px; width: auto; min-width: 12ch; max-width: calc(100% + 8px); }
 input.room-name:hover { border-color: var(--line); background: #fff; }
 input[type="number"].num { width: 5em; font: inherit; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 10px; }
 .rules { display: grid; gap: 12px; justify-items: start; }
@@ -456,11 +458,10 @@ body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid
 .sheet-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
 .sheet-other { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .sheet > .add-row { grid-column: 1 / -1; }
-/* A narrow card puts a key's sound on a second line, under its word */
 .sheet input[type="text"] { width: 100%; min-width: 0; }
 .sound-in { display: flex; align-items: center; gap: 6px; }
 .sound-in select { width: 7em; text-overflow: ellipsis; }
-.q-block { position: relative; display: grid; gap: 12px; padding: 14px 40px 14px 14px; margin-bottom: 12px; border-radius: 12px; background: var(--bg); }
+.q-block { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px 40px 14px 14px; margin-bottom: 12px; border-radius: 12px; background: var(--bg); }
 .q-block > .x { position: absolute; top: 10px; right: 8px; }
 .q-ask { display: flex; gap: 10px; align-items: center; }
 .q-ask input { flex: 1; font-weight: 600; }
@@ -540,7 +541,7 @@ input.room-name.just-yours, .trybar.just-added { animation: just-yours 1.8s ease
 .sound-face { display: grid; place-items: center; font-size: 28px; background: var(--fill); box-sizing: border-box; }
 .tray-item .hear { position: absolute; top: 46px; left: 4px; width: 26px; height: 26px; padding: 0 0 0 2px; border-radius: 50%; border: none; background: var(--purple); color: #fff; font-size: 11px; cursor: pointer; box-shadow: var(--shadow); }
 /* Yours: what the family made, on the Rooms, Instruments, and Pictures pages */
-.yours { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.yours { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr)); gap: 10px; }
 .your-card { position: relative; display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
 .your-card[aria-current="page"] { border-color: var(--purple); }
 .your-face { display: flex; padding-right: 22px; align-items: center; gap: 10px; text-decoration: none; color: var(--text); min-width: 0; }
@@ -664,7 +665,7 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .pack-line p { margin: 0; }
 .stage h3 { font: 500 clamp(22px, min(5.5vw, 4.5vh), 30px)/1.15 Caveat, cursive; text-wrap: balance; text-transform: none; letter-spacing: 0; text-align: center; color: var(--purple); margin: min(24px, 3vw, 3vh) 0 min(16px, 3vw, 2vh); overflow: hidden; interpolate-size: allow-keywords; transition: height 0.3s, margin 0.3s, opacity 0.2s; }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr)); gap: 12px; margin: 24px 0; }
 h3 + .cards { margin-top: 0; }
 .pick { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: inherit; text-decoration: none; background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 16px 18px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pick.featured { border-color: var(--border); background: #f6f1fe; }
@@ -689,8 +690,8 @@ h3 + .cards { margin-top: 0; }
 .whole-room pre { width: 160px; height: 137px; box-sizing: border-box; overflow: hidden; }
 .blocks-picture { width: 180px; height: 137px; box-sizing: border-box; border-radius: 10px; overflow: hidden; background: #fff; border: 1px solid var(--border); pointer-events: none; }
 .blocks-picture > div { width: 100%; height: 100%; }
-@media (max-width: 900px) { .write-own figure { display: none; } }
-@media (max-width: 600px) {
+@container pane (width < 720px) { .write-own figure { display: none; } }
+@container pane (width < 560px) {
   .write-own { grid-template-columns: 1fr; padding: 14px 16px; }
   .write-own .pick-icon { display: none; }
   .write-own ul { grid-template-columns: 1fr; margin: 8px 0 10px; }
@@ -724,7 +725,7 @@ img.pick-icon { width: 30px; height: 30px; }
 .mini-screen em { font: 700 10px var(--sans); font-style: normal; }
 .mini-screen.wheel { background: conic-gradient(#e44, #ec4, #4c6, #4be, #64e, #d4c, #e44); padding: 0; display: flex; align-items: center; justify-content: center; }
 .mini-screen.wheel input { opacity: 0; position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
-.wells { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 18px; }
+.wells { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); gap: 10px 18px; }
 .sticker-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--text); }
 /* Staggered like a real keyboard: each row starts a little further in */
 .paint { container-type: inline-size; display: grid; gap: 12px; justify-items: start; }
@@ -826,7 +827,7 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .sound-picker .status:empty { display: none; }
 .type-it input { flex: 1; min-width: 0; }
 /* Narrow: the key sits beside its question, and the voice choice and typing get the card's full width below */
-@media (max-width: 560px) {
+@container pane (width < 520px) {
   .voice-now { display: grid; grid-template-columns: auto 1fr; gap: 14px 16px; padding: 18px 16px; }
   .voice-now > .stack { display: contents; }
   .voice-now > .stack > :last-child { grid-column: 1 / -1; }
@@ -857,7 +858,7 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 @media (prefers-reduced-motion: reduce) { .live-status i { animation: none; } }
 
 .pack-group { display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 6px 16px; padding: 6px 0; }
-@media (max-width: 700px) { .pack-group { grid-template-columns: 1fr; } }
+@container pane (width < 640px) { .pack-group { grid-template-columns: 1fr; } }
 .pack-heading { font-weight: 700; color: var(--text); text-decoration: none; }
 .pack-heading:hover { color: var(--purple); }
 .pack-items { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -899,7 +900,7 @@ ol.steps { padding-left: 22px; } ol.steps li { margin-bottom: 6px; }
 .map-grid > .map-cell:hover { outline: 2px solid var(--purple); outline-offset: -2px; }
 
 /* The Words page's read-only examples. */
-.word-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; max-width: 580px; margin: 4px 0 14px; }
+.word-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 10px; max-width: 580px; margin: 4px 0 14px; }
 .word-example { display: grid; align-content: start; gap: 6px; padding: 12px 14px; border-radius: 16px; background: var(--panel); font-size: 13px; line-height: 1.4; }
 .word-example .head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .word-example .pic { display: grid; place-items: center; width: 32px; height: 32px; font-size: 24px; }
@@ -995,3 +996,19 @@ dialog::backdrop { background: rgb(0 0 0 / 0.3); }
    draws them (1.2em) and on its baseline, whatever box they land in; !important as photo rules (.emoji-cell img) would size them too. */
 span.emoji { white-space: nowrap; }
 span.emoji > img { display: inline !important; width: auto !important; height: 1.2em !important; max-width: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; object-fit: contain !important; vertical-align: -0.25em !important; }
+
+/* The editor at its narrowest (a phone, or the pane dragged in): less padding at every level, and rows that won't fit go to two lines */
+@container pane (width < 440px) {
+  .card { padding: 16px 14px; }
+  .card.knobs { padding: 2px 14px; }
+  .q-block { padding: 12px; }
+  .q-ask { padding-right: 28px; }
+  .knob-entry { padding: 12px 36px 12px 12px; }
+  .sheet { column-gap: 8px; }
+  /* A key's note goes under its word */
+  .sheet:has(.note-in) { grid-template-columns: 3.5em 52px minmax(0, 1fr) 26px; }
+  .sheet:has(.note-in) .sheet-head span:nth-child(4) { display: none; }
+  .sheet-row { row-gap: 8px; }
+  .note-in { grid-column: 3; }
+  .sheet-row > .x { grid-column: 4; grid-row: 1; }
+}

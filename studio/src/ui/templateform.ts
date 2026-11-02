@@ -30,7 +30,7 @@ function noteIn(o: Sound, c: Ctx): HTMLElement {
     h("option", { value: "" }, "No note"),
     ...[...kept, ...NOTES].map((n) => h("option", { value: n }, clip(n) ? `🎤 ${roomTitle(n)}` : `♪ ${n}`)));
   pick.value = o.note;
-  return h("span", { class: "sound-in" }, pick);
+  return h("span", { class: "sound-in note-in" }, pick);
 }
 
 // A key's word, for Purple to say, or recorded in the family's own voice, which then plays in Purple's place.
@@ -76,7 +76,7 @@ function quizForm(data: QuizData, c: Ctx): Node[] {
       h("div", { class: "q-ask" },
         textIn(q.question, (v) => { q.question = v; c.onEdit(); }, { placeholder: "Which one says moo?" }),
         pictureIn(q, c, () => "", { empty: "Picture", clear: "No picture" })),
-      sheet("4.5em 4.25em minmax(5em, 1fr) 26px", ["", "Picture", "Purple says"],
+      sheet("auto 52px minmax(0, 1fr) 26px", ["", "Picture", "Purple says"],
         choice(h("span", { class: "tag right" }, "Right"), q.right),
         ...q.others.map((o, j) => choice(h("span", { class: "tag" }, "Other"), o, remove(q.others, j, c))),
         q.others.length < MAX_OTHERS ? add("Another choice", () => q.others.push({ emoji: "", word: "" }), c) : null))),

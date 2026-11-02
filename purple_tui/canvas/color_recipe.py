@@ -104,8 +104,9 @@ def dab(under: str | None, mix: tuple, brush: tuple) -> tuple | None:
 
 
 def hint_row(key: str, mixed: tuple | None) -> dict:
-    """draw_recipe's arguments for the hint row: what the last dab mixed, else an example to try."""
-    if mixed:
+    """draw_recipe's arguments for the hint row: what the last dab mixed, else an example
+    to try (also when every term was the same color, since that mixed nothing)."""
+    if mixed and len({c.lower() for _, c in mixed[0]}) > 1:
         return dict(terms=mixed[0], result=mixed[1], lead="You mixed", ink=P.DIM)
     terms, result = example(key)
     return dict(terms=terms, result=result, lead="Hold", ink=P.DIM)

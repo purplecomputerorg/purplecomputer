@@ -70,6 +70,12 @@ def test_hint_row_shows_the_keys_just_mixed_until_a_plain_key(name):
     run(go())
 
 
+def test_mixing_a_color_with_itself_shows_the_example_instead():
+    red = get_key_color("r")
+    assert hint_row("r", ([("r", red), ("r", red)], red))["lead"] == "Hold"
+    assert hint_row("r", ([("", red.lower()), ("r", red)], red))["lead"] == "Hold"
+
+
 def test_painting_over_paint_shows_what_was_there_first():
     from purple_tui.canvas.harness import press
 

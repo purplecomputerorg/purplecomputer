@@ -1283,7 +1283,6 @@ def _get_menu_items(app) -> list:
     if is_debug():
         items.append(("menu-system", "Exit to System"))
     items.append(("menu-shutdown", "Shut Down"))
-    items.append(("menu-exit", "Exit Parent Menu"))
     return items
 
 
@@ -1391,7 +1390,6 @@ class ParentMenu(Overlay):
             "menu-help": lambda: self.app.push(__import__("purple_tui.canvas.rooms.help_videos", fromlist=["HelpVideosScreen"]).HelpVideosScreen(self.app)),
             "menu-support": lambda: self.app.push(__import__("purple_tui.canvas.rooms.support_info", fromlist=["SupportInfoScreen"]).SupportInfoScreen(self.app)),
             "menu-shutdown": lambda: (self.close(), self.app._show_bye_screen()),
-            "menu-exit": self.close,
         }.get(item_id)
         if handler:
             handler()
@@ -1598,7 +1596,7 @@ class ParentMenu(Overlay):
                             P.ON_PRIMARY if on else (P.DIM if disabled else P.ACCENT), anchor="midleft", tr=False)
             y += row_h
         foot = box.bottom - pad - foot_h
-        g.draw_text(f"{UP} {DOWN}   Enter   Esc", em(0.92), box.centerx, foot + em(1.3), "mono", P.MUTED, anchor="center", track=0.08)
+        g.draw_text(f"{UP} {DOWN} choose   Enter open   Esc close", em(0.92), box.centerx, foot + em(1.3), "mono", P.MUTED, anchor="center", track=0.08)
         g.draw_markup("Purple is keyboard only, on purpose.\nKids explore by typing.", em(0.85), box.x, foot + em(2.3),
                       "mono", P.DIM, box.w, "center", P.SURFACE)
         g.draw_text(diagnostics.get_version_label() or "", em(0.8), box.centerx, foot + em(5.3), "mono", P.DIM, anchor="center")

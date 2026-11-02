@@ -194,6 +194,6 @@ class Library(Overlay):
             hint += "    P: print"
         rows = (len(self.tiles) + COLS - 1) // COLS
         more = ("▲ " if self.top_row > 0 else "") + ("▼ more" if self.top_row + ROWS_SHOWN < rows else "")
-        g.draw_text(f"{hint}    Esc: close".strip(), g.em(0.92), box.centerx, y + h // 2, "mono", P.DIM, anchor="center")
+        g.draw_text(f"{hint}    Esc: close".strip(), g.em(0.92), box.centerx, y + h // 2, "mono", P.MUTED, anchor="center")
         if more:
-            g.draw_text(more.strip(), g.em(0.92), box.right - g.em(1.8), y + h // 2, "mono", P.DIM, anchor="midright")
+            g.draw_text(more.strip(), g.em(0.92), box.right - g.em(1.8), y + h // 2, "mono", P.MUTED, anchor="midright")

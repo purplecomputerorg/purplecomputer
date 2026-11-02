@@ -107,9 +107,9 @@ def hint_row(key: str, mixed: tuple | None) -> dict:
     """draw_recipe's arguments for the hint row: what the last dab mixed, else an example
     to try (also when every term was the same color, since that mixed nothing)."""
     if mixed and len({c.lower() for _, c in mixed[0]}) > 1:
-        return dict(terms=mixed[0], result=mixed[1], lead="You mixed", ink=P.DIM)
+        return dict(terms=mixed[0], result=mixed[1], lead="You mixed", ink=P.MUTED)
     terms, result = example(key)
-    return dict(terms=terms, result=result, lead="Hold", ink=P.DIM)
+    return dict(terms=terms, result=result, lead="Hold", ink=P.MUTED)
 
 
 def draw_foot_right(g, foot: pygame.Rect, code_hint: bool, recipe: dict | None):

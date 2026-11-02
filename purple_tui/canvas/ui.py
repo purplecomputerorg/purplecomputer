@@ -300,7 +300,7 @@ class TextField:
         right = box.right - pad
         if placeholder and not self.value:
             hx = tx + px
-            g.draw_text(_fit(g, placeholder, px, right - hx), px, hx, ty, "mono", P.DIM)
+            g.draw_text(_fit(g, placeholder, px, right - hx), px, hx, ty, "mono", P.MUTED)
         self.draw(g, x, ty, right - x, px, label, label_px, gap, arrow)
         if ideas:
             self._draw_ideas(g, ideas, tx + g.measure(self.value, px, "mono", tr=False)[0] + px, box, right, px)
@@ -761,7 +761,7 @@ def key_hint_width(g: Gfx, text: str, px: int) -> int:
 
 def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft") -> pygame.Rect:
     """A dim hint line where {Key} draws as a solid keycap: '{hold Enter} loop'."""
-    color = color or P.DIM
+    color = color or P.MUTED
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
     setattr(box, anchor, (x, y))
     x = box.x

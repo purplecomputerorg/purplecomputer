@@ -1817,7 +1817,7 @@ class PurpleApp:
             draw_label(g, family.tab, px, frame.right, y, anchor="midright", on=True)
         else:
             h = g.markup_size(right, px, "mono")[1]
-            g.draw_markup(right, px, parts["right"].x, y - h // 2, "mono", P.DIM)
+            g.draw_markup(right, px, parts["right"].x, y - h // 2, "mono", P.MUTED)
         return esc_pill
 
     def _status_layout(self, frame, left: str, right: str, tabs: bool = True):

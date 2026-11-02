@@ -12,6 +12,7 @@ cursor's row fade when they hide it, and the Esc picker reaches the room with
 import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
+from purple_tui.canvas.rooms import blocks_room
 from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, SINK, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
@@ -405,6 +406,19 @@ def test_big_builds_still_turn():
         room._fade_start = time.monotonic() - TURN_S * 0.5
         app._draw()
         assert room._fade_progress() is not None
+    run(go())
+
+
+def test_slow_turn_frames_lower_the_detail_limit(monkeypatch):
+    monkeypatch.setattr(blocks_room, "TURN_FRAME_BUDGET_S", 0.0)
+
+    async def go():
+        app, room = _blocks()
+        await type_text(app, "abc")
+        await press(app, "tab")
+        room._fade_start = time.monotonic() - TURN_S * 0.5
+        app._draw()
+        assert room._turn_detail_limit == 2     # three blocks went over budget, so three now turn plain
     run(go())
 
 

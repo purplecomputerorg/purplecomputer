@@ -39,6 +39,7 @@ ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 WIDTH, DEPTH, HEIGHT = 30, 12, 12
 TURN_S = 0.5
 TURN_DETAIL_BLOCKS = 600     # visible blocks; past this the half turn drops seams and shadows
+TURN_FRAME_BUDGET_S = 0.012  # a detailed turn frame slower than this lowers that limit to its block count
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
 FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this when they hide the landing block
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
@@ -97,6 +98,7 @@ class BlocksRoom(Room):
         self._next = None             # where a run up or down the column (or a code run) goes on from
         self._dir = "right"           # the way typing builds: a key of WRAP
         self._fade_start = self._fade_timer = None
+        self._turn_detail_limit = TURN_DETAIL_BLOCKS
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
         self._c = 0
@@ -673,6 +675,7 @@ class BlocksRoom(Room):
         both ends land exactly on the front and back pictures, checkerboard,
         haze, shadows and all; only the cursor sits it out. Zooms out mid-turn
         so the long floor, end-on, still fits."""
+        start = time.monotonic()
         dz, hy, sx, slab = self._metrics()
         c = self._c
         angle = math.pi * ((p * p * (3 - 2 * p)) + (0 if self._back else 1))
@@ -719,9 +722,11 @@ class BlocksRoom(Room):
         slab_bg, seam = mix(art_room.CANVAS_BG, "#000000", 0.4), rgb(P.LINE)
         box(0, -SLAB / BLOCK_RISE, 0, shape(WIDTH, SLAB / BLOCK_RISE, DEPTH), rgb(art_room.CANVAS_BG), lambda dark: tint(slab_bg, "#000000", dark))
         tiles = rgb(art_room.CANVAS_BG), rgb(art_room.CANVAS_ALT)
+        grid = [[at(x, 0, z) for z in range(DEPTH + 1)] for x in range(WIDTH + 1)]
         for x in range(WIDTH):
-            for z in range(DEPTH):
-                pygame.draw.polygon(g.surface, tiles[(x + z) % 2], [at(x, 0, z), at(x + 1, 0, z), at(x + 1, 0, z + 1), at(x, 0, z + 1)])
+            for z in range(1 - x % 2, DEPTH, 2):        # the slab's top already painted the other tiles
+                pygame.draw.polygon(g.surface, tiles[1], [grid[x][z], grid[x + 1][z], grid[x + 1][z + 1], grid[x][z + 1]])
+
         def depth(x, z, y):
             dx, dz_ = x + 0.5 - cx, z + 0.5 - cz
             return (dx * sin + dz_ * cos) - ROW_SKEW * (dx * cos - dz_ * sin) - y * ROW_DEPTH / BLOCK_RISE
@@ -752,12 +757,16 @@ class BlocksRoom(Room):
             shown = [n for n, _, _ in cube if (x + n[0], z + n[1], y + (n == (0, 0))) not in self._blocks]
             if shown:                                   # a face against a neighbor is hidden by it
                 items.append((depth(x, z, y), block, (x, z, y, color, shown)))
-        if len(items) > TURN_DETAIL_BLOCKS:
-            seam = None                                 # too many to draw in full every frame: plain shapes only
-        else:
+        blocks = len(items)
+        detailed = blocks <= self._turn_detail_limit
+        if detailed:
             items += self._turning_shadows(depth, shadow)
+        else:
+            seam = None                                 # too many to draw in full every frame: plain shapes only
         for _, paint, args in sorted(items, key=lambda i: i[0], reverse=True):
             paint(*args)
+        if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
+            self._turn_detail_limit = blocks - 1        # a slow machine: from here on, builds this big turn plain
 
     def _turning_shadows(self, depth, shadow) -> list:
         items = []

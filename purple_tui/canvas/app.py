@@ -297,6 +297,7 @@ class PurpleApp:
         from .sdl_input import pump
         first = True
         while self.running:
+            tick = time.monotonic()
             for raw in pump(self.g):
                 if raw is None:
                     self.exit()
@@ -321,7 +322,7 @@ class PurpleApp:
                 if first:
                     first = False
                     self._mark_ui_ready()
-            await asyncio.sleep(1 / 60)
+            await asyncio.sleep(max(0.0, 1 / 60 - (time.monotonic() - tick)))
 
     def note_next_frame(self, why: str):
         """Log the next frame that reaches the screen (screen-went-black reports)."""

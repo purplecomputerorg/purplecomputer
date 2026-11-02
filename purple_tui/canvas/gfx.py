@@ -205,7 +205,7 @@ def _run_edge(pieces, i, step) -> bool:
     return a[1] + a[0].get_width() != b[1]
 
 
-DESIGN_ASPECT = 16 / 9
+DESIGN_ASPECT = 16 / 9   # most used laptops are 16:9; why not 16:10 or between: guides/canvas-architecture.md
 
 
 class Gfx:

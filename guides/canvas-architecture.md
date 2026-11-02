@@ -86,7 +86,12 @@ measure `g.stage`: the largest 16:9 box centered on the screen, the shape the
 layout was drawn for. Bottom-anchored chrome anchors to `g.stage.bottom`, not
 the screen. So every machine shows the same picture in the same proportions;
 a 4:3 or 16:10 screen shows it a little smaller with more air around it, the
-way the terminal UI's font sizing did. Chrome (bars, menus, pills, the Music
+way the terminal UI's font sizing did. 16:9 because most used laptops kids get are
+16:9 PCs (1366x768, 1920x1080), so they fill the screen exactly; 16:10 MacBooks
+(except the 11" Air) get about 5% air above and below. A 16:10 stage would flip
+that onto the more common PCs, and one in between (16:9.5) halves the worst
+case but wastes more on average. Revisit if 16:10 PCs take over the used market.
+Chrome (bars, menus, pills, the Music
 keys, the Play input) is sized in `g.em(n)`, 1.3% of stage width: the same
 unit the HTML design mock used, so its paddings, gaps and radii port verbatim.
 The viewport is a whole number of square units, `CANVAS_COLS x CANVAS_ROWS`,

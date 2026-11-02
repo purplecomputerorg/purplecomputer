@@ -639,7 +639,7 @@ class MusicRoom(Room):
         """Space's switch: what letters say in Letters, note names on the keys in Sounds."""
         if letters:
             return "Space", ("Names", "Sounds"), int(self.say_sounds), "ABC"
-        return "Space", ("Off", "On"), int(self.show_labels), ICON_MUSIC_NOTE
+        return "Space", ("Off", "On"), int(self.show_labels), f"{ICON_MUSIC_NOTE} Notes"
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""

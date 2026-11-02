@@ -809,18 +809,22 @@ def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, la
     return pill
 
 
-def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple, mark: str = "") -> tuple:
+def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple, mark: str = "", width: int = 0) -> tuple:
+    """Label plate widths and the content width; plates grow evenly to fill width."""
     gap = px // 2
     widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for t in labels]
     mark_w = g.measure(mark, px, "mono")[0] + gap if mark else 0
-    return widths, keycap_size(g, key_name, px)[0] + gap + mark_w + sum(widths) + gap * (len(labels) - 1)
+    content = keycap_size(g, key_name, px)[0] + gap + mark_w + sum(widths) + gap * (len(labels) - 1)
+    extra = max(0, width - content)
+    widths = [w + extra // len(labels) + (i < extra % len(labels)) for i, w in enumerate(widths)]
+    return widths, max(content, width)
 
 
 def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int,
-                 mark: str = "") -> pygame.Rect:
+                 mark: str = "", width: int = 0) -> pygame.Rect:
     """'[key] mark One Two' in one pill, the active label on the selection plate."""
     gap = px // 2
-    widths, content = _switch_widths(g, px, key_name, labels, mark)
+    widths, content = _switch_widths(g, px, key_name, labels, mark, width)
     pill, pad = header_pill(g, px, content, right, cy, False)
     x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
     if mark:
@@ -839,17 +843,31 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     chips = (key, mark, label, on, noun), or (key, labels, active, mark) for a
     switch like Tab's. Slides right when the chips would run past r's left edge, as far
     as the widest of chips and the other chip sets in also, so it holds still
-    when a room swaps its chips. Returns the color bar's row: r from its left edge
+    when a room swaps its chips; a switch also keeps the widest width it has
+    in any of those sets. Returns the color bar's row: r from its left edge
     to the Colors chip's right, or None without the chip."""
     px = g.vh(1.9)
     if wheel:
         from .color_wheel import OPEN_KEY, disc
         chips = ((OPEN_KEY, disc(round(px * 1.3)), "Colors", wheel == "open"), *chips)
+    chips = _hold_switch_widths(g, px, chips, also)
     start = r.centerx - keycap_size(g, "Tab", px)[0]
     with g.drawing_on(pygame.Surface((1, 1))):
         left = min(_draw_mode_switch_at(g, px, start, r.centery, labels, active, swatch, icon, c).x for c in (chips, *also))
     first = _draw_mode_switch_at(g, px, start + max(0, r.x - left), r.centery, labels, active, swatch, icon, chips)
     return pygame.Rect(r.x, r.y, first.right - r.x, r.h) if wheel else None
+
+
+def _hold_switch_widths(g: Gfx, px: int, chips: tuple, also: tuple) -> tuple:
+    """chips with each switch widened to its widest across also, matched from the right."""
+    def width(chip) -> int:
+        return _switch_widths(g, px, chip[0], chip[1], *chip[3:])[1] if isinstance(chip[1], tuple) else 0
+    held = list(chips)
+    for i in range(1, len(chips) + 1):
+        if isinstance(chips[-i][1], tuple):
+            w = max(width(s[-i]) for s in (chips, *also) if len(s) >= i)
+            held[-i] = (*chips[-i][:3], chips[-i][3] if len(chips[-i]) > 3 else "", w)
+    return tuple(held)
 
 
 def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, swatch, icon, chips) -> pygame.Rect:

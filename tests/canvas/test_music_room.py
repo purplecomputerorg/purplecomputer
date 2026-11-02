@@ -51,3 +51,13 @@ def test_space_in_abc_switches_letters_between_names_and_sounds(monkeypatch):
 def test_every_letter_has_a_sound_clip():
     from purple_tui.canvas.sounds import core_sounds
     assert {p.stem for p in (core_sounds() / "letter-sounds").glob("*.wav")} == set("abcdefghijklmnopqrstuvwxyz")
+
+
+def test_the_space_switch_keeps_one_width_in_sounds_and_letters():
+    from purple_tui.canvas.ui import _hold_switch_widths
+
+    async def go():
+        app = make_app(room="music")
+        sets = [app.room._header_chips("Marimba", letters) for letters in (False, True)]
+        assert len({_hold_switch_widths(app.g, 30, chips, sets)[1][4] for chips in sets}) == 1
+    run(go())

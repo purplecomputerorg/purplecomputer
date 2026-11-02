@@ -807,7 +807,7 @@ class ArtRoom(Room):
         hint row instead."""
         pad, gap = g.em(0.7), g.em(0.5)
         inner = rect.inflate(-2 * pad, -2 * pad)
-        chrome_h = 0 if self.app._panel is not None else hint_row_h(g)
+        chrome_h = 0 if self.app.viewport_panel() is not None else hint_row_h(g)
         status_h = status_row_h(g) if self.code_panel is not None else 0
         area = inner.inflate(0, -2 * (chrome_h + gap))
         if status_h:
@@ -829,7 +829,7 @@ class ArtRoom(Room):
             x, y = self._last_paint_pos
             cell = pygame.Rect(ox + x * c, oy + y * c, c, c)
             color_recipe.draw_hold_badge(g, held, g.vh(1.9), cell, pygame.Rect(ox, oy, c * COLS, c * ROWS))
-        if chrome_h:
+        if chrome_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             key = "littles" if self.app._littles_mode else self._hint_key()
             draw_key_hint(g, HINTS[key], g.vh(1.9), foot.x, foot.centery)

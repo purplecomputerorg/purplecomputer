@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 # Set environment before app imports
 
 from purple_tui import timeline as timeline_mod
@@ -379,6 +381,27 @@ def test_time_travel_keeps_the_room_full_size(monkeypatch, tmp_path):
         app._start_time_travel()
         assert app.content_rect(vp) == vp
         app._draw()
+    run(scenario())
+
+
+@pytest.mark.parametrize("room", ["art", "blocks", "music"])
+def test_time_travel_keeps_the_room_in_place(monkeypatch, tmp_path, room):
+    monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
+
+    async def scenario():
+        app = make_app()
+        app.action_switch_room(room)
+        r = app.rooms[room]
+        grids = []
+        if room == "music":
+            draw_grid = r._draw_grid
+            monkeypatch.setattr(r, "_draw_grid", lambda g, rect, **kw: (grids.append(rect.copy()), draw_grid(g, rect, **kw)))
+        where = lambda: grids[-1] if grids else r._origin
+        app._draw()
+        before = where()
+        app._start_time_travel()
+        app._draw()
+        assert where() == before
     run(scenario())
 
 

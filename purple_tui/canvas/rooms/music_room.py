@@ -593,7 +593,7 @@ class MusicRoom(Room):
         if self._is_noscreen:
             return self._draw_noscreen(g, rect)
         em = g.em
-        panel = self.app._panel
+        panel = self.app.viewport_panel()
         hint_h = em(FOOTER_EM) if panel is None else 0 if isinstance(panel, (LoopPanel, ReplayPanel)) else em(1.0)
         pad = em(1.6)
         if self.code_panel is None:

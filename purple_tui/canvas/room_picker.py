@@ -7,12 +7,13 @@ import pygame
 
 from .. import palette as P
 from .. import printing
-from ..constants import ICON_BROOM, ICON_ROBOT, ICON_TIME_TRAVEL, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
+from ..constants import ICON_BROOM, ICON_ROBOT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from . import color_wheel, key_save
 from .paper import can_print
 from .rooms.family_room import room_icon
 from .library import ICON_OPEN, ICON_SAVE
+from .panels import ICON_TIME_TRAVEL
 from .ui import DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_scrim
 
 ICON_PRINTER = "\U000F042A"  # nf-md-printer

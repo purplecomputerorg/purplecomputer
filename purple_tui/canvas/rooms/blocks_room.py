@@ -635,7 +635,7 @@ class BlocksRoom(Room):
         pad, gap = g.em(0.7), g.em(0.5)
         inner = rect.inflate(-2 * pad, -2 * pad)
         chrome_h = hint_row_h(g)
-        foot_h = 0 if self.app._panel is not None else chrome_h + gap
+        foot_h = 0 if self.app.viewport_panel() is not None else chrome_h + gap
         area = pygame.Rect(inner.x, inner.y + chrome_h + gap, inner.w, inner.h - chrome_h - gap - foot_h)
         c = self._fit(area.w, area.h)
         if c != self._c:
@@ -654,7 +654,7 @@ class BlocksRoom(Room):
         self.bar_row = draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
                                         1 if self._back else 0, self._color, wheel=wheel_chip(self))
         self.bar_foot = None
-        if foot_h:
+        if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
             draw_key_hint(g, PICK_HINT if self.app._keyboard_state_machine.shift_active else HINT, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))

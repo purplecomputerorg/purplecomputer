@@ -160,6 +160,7 @@ _INSTRUMENT_PREFIX = re.compile(r'.*\b(?:choose|select|use|play|instrument)\s+\S
 _DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
 _MAX_CONTEXT_RESULTS = 7
 ICON_STAR = "\U000F04CE"  # nf-md-star
+ICON_TIME_TRAVEL = "\U000F02DA"  # nf-md-history; the Textual UI keeps constants.ICON_TIME_TRAVEL
 MAX_STRETCHES = 7
 SCRUB_HOLD_S = 0.35       # an arrow held this long in Time Travel starts rewinding (or fast-forwarding)
 SCRUB_SLOW = 6.0          # steps a second when a hold starts,

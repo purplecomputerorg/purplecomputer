@@ -67,7 +67,7 @@ def test_starting_again_without_the_theme_puts_purples_colors_back(themed):
 
 
 def test_keycaps_and_hints_drawn_with_default_colors_follow_the_theme(themed):
-    themed({"colors": {"text": "#eeeeff", "dim": "#552233"}})
+    themed({"colors": {"text": "#eeeeff", "muted": "#552233"}})
 
     async def go():
         g = make_app().g

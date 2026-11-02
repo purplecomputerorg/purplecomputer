@@ -99,7 +99,7 @@ def test_the_familys_rooms_wait_in_the_esc_menu(live, tmp_path, monkeypatch):
     async def go():
         live.install(ID, files(tmp_path / "pack") + [text("content/rooms/farm.py", say.format("moo"))])
         live._app = app = make_app()
-        family = {"name": "zoo", "source": say.format("roar"), "pack": ID, "rooms": [["zoo", "old"], ["sea", say.format("splash")]]}
+        family = {"name": "zoo", "source": say.format("roar"), "icon": "", "pack": ID, "rooms": [["zoo", "old", ""], ["sea", say.format("splash"), ""]]}
         live.setup("play", family=family)
         assert type(app.top).__name__ == "FamilyRoom" and app.top.room.path.read_text() == family["source"]
         await live.key("escape")

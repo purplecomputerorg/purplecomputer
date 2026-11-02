@@ -37,6 +37,8 @@ A commit that is both fix and feature belongs with the feature. The `-x` flag st
 
 A commit that should stay on main for good (a feature for the next major release that touches shared paths) goes in `build-scripts/release-waits`, one line of `<sha> <why>`, and drops out of the decision list.
 
+**Picks are paused since 2026-11-02** (moving fully to canvas): pick only for an emergency the user names.
+
 When a pick needs hand-edits to fit the release branch (usually because it touches a feature that stays on main), log what changed in [release-pick-adaptations.md](release-pick-adaptations.md).
 
 Build, then flash, then ship: flashing first means a stick can be validated on real hardware before the downloads update. `purple-build --release` is a local wrapper (machine config, not this repo) around `build-in-docker.sh` pointed at the release worktree; it sets `PURPLE_WITH_BACKUP_ISO=1` so shipping builds always carry the backup image copy.

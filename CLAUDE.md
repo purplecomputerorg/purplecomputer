@@ -14,14 +14,11 @@
 
 ---
 
-## Two UIs, keep them in sync (until Textual is gone)
+## Two UIs (until Textual is gone)
 
-`main` carries both UIs. The shipping Textual UX (`purple_tui/purple_tui.py`, the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen: fixes only, and it must never diverge from `release/1.x` unpicked. A change to those files is fine when it is picked onto `release/1.x` too (as the mixer consolidation was); a change that stays on main only would make every later `release-pick` conflict. The TUI never imports canvas modules. The canvas UX lives under `purple_tui/canvas/` with its tests in `tests/canvas/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
+`main` carries both UIs. The Textual UX (`purple_tui/purple_tui.py`, the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen. The TUI never imports canvas modules. The canvas UX lives under `purple_tui/canvas/` with its tests in `tests/canvas/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
 
-- **Bug fixes and tweaks to behavior that ships today land in BOTH.** Prefer fixing a shared module: `constants.py` tunables (hold thresholds, volume steps), `audio.py`, `tts.py`, `settings.py`, `keyboard.py`, `play_eval.py`, `mixer.py`, `palette.py`. One edit serves both and cherry-picks cleanly.
-- **When the fix is in UI logic that exists twice, make two commits:** the TUI-only commit first, touching only original TUI paths (so `release-pick` is clean), then the canvas commit.
-- **The rule is NOT "everything twice".** Features that will only ever ship with the next major release are canvas-only, need no Textual counterpart, and wait on `main` (`release-status` marks them `~`). Anything that is more than a clear bug fix: ask the user whether it needs a TUI counterpart before assuming either way.
-- **DRY does not apply across the two UIs.** Duplicated logic between the frozen TUI and the canvas is deliberate; don't clean it up.
+**No more picks to `release/1.x` (since 2026-11-02):** we are moving fully to canvas soon. Don't propose or run `release-pick` for anything, fix or feature, unless the user calls it an emergency. Don't write TUI counterparts of canvas fixes. Shared-module changes (`code_runner.py`, `audio.py`, etc.) may change TUI behavior on main; update the TUI tests to match and move on. Duplicated logic between the TUI and canvas is deliberate; don't clean it up.
 
 ---
 
@@ -39,7 +36,7 @@ If you're unsure what message to use, propose one and ask the user to confirm be
 
 Customer ISOs build from `release/1.x`, a fixes-only branch checked out at `~/purplecomputer-release`. Never commit or merge there directly: fixes land on main first, then flow over via `just release-pick`. Full workflow: `guides/release-guide.md`, Release Branch section.
 
-Cherry-pick decisions (fix vs feature) are the user's to confirm: propose picks, and after every `release-pick`, show the `just release-status` output with a one-line reason per commit for why it ships or waits.
+Picks are paused (see Two UIs). For an emergency pick the user asks for, show the `just release-status` output afterward.
 
 ---
 

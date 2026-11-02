@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Publish a main (Purple 2.0) build for purple2.purplecomputer.org, under the
 # purple2/ prefix on R2. Never touches the 1.x paths: releases/, latest.json,
-# the /download*.iso redirects, or tags.
+# or the /download*.iso redirects. Tags the commit with its v2.0.N version.
 #
 # Usage: ./upload-purple2.sh [commit]   (default: HEAD of the main checkout)
 set -euo pipefail
@@ -101,5 +101,14 @@ for old in $(aws s3 ls "s3://${R2_BUCKET}/${PREFIX}/" --endpoint-url "$R2_ENDPOI
     aws s3 rm "s3://${R2_BUCKET}/${PREFIX}/${old}/" --recursive --endpoint-url "$R2_ENDPOINT" --quiet
     echo "Removed old $PREFIX/$old"
 done
+
+# The tag anchors image_version's count, so later builds keep this numbering
+if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if git -C "$PROJECT_DIR" tag "$VERSION" "$COMMIT" 2>/dev/null; then
+        git -C "$PROJECT_DIR" push -q origin "$VERSION" || echo "Could not push tag $VERSION; push it by hand: git push origin $VERSION"
+    else
+        echo "Tag $VERSION already exists (same image as an earlier upload); left as is."
+    fi
+fi
 
 echo -e "${GREEN}Published${NC} $VERSION: https://purple2.purplecomputer.org"

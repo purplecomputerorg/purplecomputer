@@ -10,6 +10,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
+source "$SCRIPT_DIR/image-lib.sh"
 IMAGE_NAME="purple-installer-builder"
 FAST_BUILD=0
 PI_BUILD=0
@@ -94,9 +95,8 @@ resolve_and_log_source() {
     local git_hash dirty=""
     git_hash=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
     PURPLE_COMMIT="${PURPLE_COMMIT:-$git_hash}"
-    if [ -z "${PURPLE_VERSION:-}" ]; then
-        PURPLE_VERSION="build-${git_hash}-$(date +%Y%m%d)"
-    fi
+    PURPLE_VERSION="${PURPLE_VERSION:-$(image_version "$PROJECT_DIR")}"
+    PURPLE_VERSION="${PURPLE_VERSION:-build-${git_hash}-$(date +%Y%m%d)}"
     if [ -n "$BUILD_REF" ]; then
         log_info "Ref: $BUILD_REF (built in isolation)"
     else

@@ -121,7 +121,7 @@ just flash-debug    # debug ISO
 
 ## Purple 2.0 Preview (main)
 
-`purple2.purplecomputer.org` offers a main build to people granted 2.0 access on the landing admin's downloads access page (or holding the `?key=PURPLE2_ACCESS_KEY` link). An order email alone doesn't unlock it. Build on main (`just build`), then `just ship-2 [commit]` uploads standard + debug to `purple2/<version>/` on the files host, writes `purple2/latest.json` (same shape as `latest.json`), and prunes `purple2/` to that version plus the one it replaced. It never touches `releases/`, `latest.json`, the redirects, or tags, so `release-status` and `release-check` keep reading 1.x. The page links the versioned paths straight from `purple2/latest.json`, so there are no redirects to maintain.
+`purple2.purplecomputer.org` offers a main build to people granted 2.0 access on the landing admin's downloads access page (or holding the `?key=PURPLE2_ACCESS_KEY` link). An order email alone doesn't unlock it. Build on main (`just build`), then `just ship-2 [commit]` uploads standard + debug to `purple2/<version>/` on the files host, writes `purple2/latest.json` (same shape as `latest.json`), and prunes `purple2/` to that version plus the one it replaced. It never touches `releases/`, `latest.json` or the redirects, so `release-status` and `release-check` keep reading 1.x. It tags the commit with its `v2.0.N` version (see Versioning) and pushes the tag. The page links the versioned paths straight from `purple2/latest.json`, so there are no redirects to maintain.
 
 ---
 
@@ -170,7 +170,10 @@ Every ISO is stamped with a version in `/etc/purple-version`, visible in the Par
 |------|---------|-------------------|------|
 | Semver | `v1.0` | Version 1.0 | Major releases (`just release v1.0`) |
 | Build time | `v2026.03.30-1430` | Build: Mar 30, 2026 | Regular releases (`just ship`), UTC |
-| Dev build | `build-abc1234-20260330` | Dev build: abc1234 | No `PURPLE_VERSION` set at build time |
+| Image count | `v2.0.1151` | Version 2.0.1151 | A clean commit on main (`just build`, `just ship-2`) |
+| Dev build | `build-abc1234-20260330` | Version abc1234 | Anything else with no `PURPLE_VERSION` set: uncommitted changes, a lane branch, `release/1.x` |
+
+The image count is the number of commits on main (first parent) that touch a path the image build copies in, or the scripts that build it (`image_paths` in `build-scripts/image-lib.sh`, the same list `release-status` uses). Docs, guides, tests and Studio commits leave it alone, so two builds with the same number carry the same image. It counts on from the newest `v2.0.N` tag, so a later change to the path list can't renumber published builds. `major.minor` comes from `__version__` in `purple_tui/__init__.py`; bump that by hand for a milestone and the count carries on.
 
 ---
 

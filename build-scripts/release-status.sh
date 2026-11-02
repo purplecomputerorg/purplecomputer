@@ -33,17 +33,8 @@ else
     echo "Nothing on release/1.x since then."
 fi
 
-# Paths the image build copies in, plus the scripts that build it: a commit
-# touching none of these cannot change what a customer runs.
-ships=$(grep -o '/purple-src/[^ "$)]*' build-scripts/00-build-golden-image.sh \
-    | sed 's|/purple-src/||; s|/\*.*||' | sort -u)
-ships+=$'\n'"build-scripts/00-build-golden-image.sh
-build-scripts/01-remaster-iso.sh
-build-scripts/build-all.sh
-build-scripts/build-in-docker.sh
-build-scripts/config.sh
-build-scripts/Dockerfile
-build-scripts/install.sh"
+source build-scripts/image-lib.sh
+ships=$(image_paths . | sort -u)
 
 reaches_iso() {
     local path prefix

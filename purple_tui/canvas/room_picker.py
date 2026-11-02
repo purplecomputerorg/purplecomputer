@@ -211,7 +211,7 @@ class RoomPicker(Overlay):
 
     def _move(self, d):
         if d in ("left", "right"):
-            self.col = max(0, min(len(self._items(self.row)) - 1, self.col + (1 if d == "right" else -1)))
+            self.col = (self.col + (1 if d == "right" else -1)) % len(self._items(self.row))
         else:
             x = self._centers(self.row)[self.col]
             i = self.rows.index(self.row) + (1 if d == "down" else -1)

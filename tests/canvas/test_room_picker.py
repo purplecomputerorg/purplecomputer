@@ -44,3 +44,17 @@ def test_the_code_card_says_when_code_is_on():
         await press(app, "space")
         assert app.room.code_panel is None
     run(go())
+
+
+def test_left_and_right_wrap_around_the_rooms():
+    async def go():
+        app = make_app()
+        app.action_switch_room(app.kid_rooms[0])
+        app._show_room_picker()
+        picker = app.top
+        assert (picker.row, picker.col) == (ROWS, 0)
+        await press(app, "left")
+        assert picker.col == len(picker.options) - 1
+        await press(app, "right")
+        assert picker.col == 0
+    run(go())

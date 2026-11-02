@@ -173,8 +173,6 @@ class PurpleApp:
         self._input_flood_guard = InputFloodGuard(repeats_only=True)
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
             detect_keyboard_mode()
-        from ..secret import SecretKnock
-        self._secret_knock = SecretKnock()
         from .. import pack_arrivals
         pack_arrivals.settle()
         self._arrivals_seen = None
@@ -589,9 +587,6 @@ class PurpleApp:
             else:
                 self.action_switch_room(action.room)
             return
-        if isinstance(action, CharacterAction):
-            if self._secret_knock.feed(action):
-                self._unlock_secret_menu()
         editing = self.room.edits_text and not self._overlays
         if _is_shortcut(action) and not editing:
             return
@@ -929,11 +924,6 @@ class PurpleApp:
             self._leave_closed_room()
         self.rooms["music"].on_littles_change()
         self.invalidate()
-
-    def _unlock_secret_menu(self):
-        from ..settings import get_secret_unlocked, set_secret_unlocked
-        if not get_secret_unlocked():
-            set_secret_unlocked(True)
 
     # ------------------------------------------------------------------ timeline / time travel
     def timeline_restore(self, room: str):

@@ -344,23 +344,6 @@ class AllCapsScreen(_YesNo):
         return get_all_caps()
 
 
-class KidLettersScreen(_YesNo):
-    title = "Kid Voice Letters"
-    DESCRIPTION = "Use the recorded kid-voice clips for A-Z in Say Letters mode"
-    OPTIONS = [(True, "On"), (False, "Off")]
-
-    @staticmethod
-    def getter():
-        from ...settings import get_kid_letters
-        return get_kid_letters()
-
-    def _on_confirm(self, value):
-        from ...settings import set_kid_letters
-        set_kid_letters(value)
-        self.app.rooms["music"].reset_letter_sounds()
-        self.close(value)
-
-
 class VoiceScreen(Picker):
     """Pick the synthesizer: Piper (Natural) or flite (Quick)."""
     title = "Voice"
@@ -412,18 +395,6 @@ def _second_language_menu_label() -> str:
 
 def _voice_menu_label(pref: str) -> str:
     return f"Voice: {VOICE_NAMES.get(pref, VOICE_NAMES[VOICE_NATURAL])}"
-
-
-class SecretMenuScreen(Picker):
-    title = "Secret Menu"
-    DESCRIPTION = "Family only"
-    OPTIONS = [("kid-letters", "Kid Voice Letters"), ("doodle", "Surprise Drawing"), ("photo", "Family Photo"), (None, "Close")]
-
-    def _on_confirm(self, value):
-        if value == "kid-letters":
-            self.app.push(KidLettersScreen(self.app))
-        else:
-            self.close(value)
 
 
 class PinActionScreen(Picker):
@@ -1246,7 +1217,7 @@ def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
     from ...pack_manager import get_installer
     from ...settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
-                            get_music_looping, get_parent_pin, get_secret_unlocked, get_voice, get_volume_lock)
+                            get_music_looping, get_parent_pin, get_voice, get_volume_lock)
     items = [("menu-help", "Help & Videos")]
     if is_live_boot():
         items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
@@ -1272,8 +1243,6 @@ def _get_menu_items(app) -> list:
     if display_control_available():
         items.append(("menu-display", "Display"))
     items.append(("sec-advanced", "Advanced"))
-    if get_secret_unlocked():
-        items.append(("menu-secret", "Secret Menu"))
     items.append(("menu-parent-pin", "Parent PIN: On" if get_parent_pin() else "Parent PIN: Off"))
     items.append(("menu-shell", "Open Terminal"))
     items.append(("menu-support", "Support Info"))
@@ -1376,7 +1345,7 @@ class ParentMenu(Overlay):
             "menu-code-panel": self._open_code_panel, "menu-rooms": self._open_rooms,
             "menu-purple-packs": lambda: self.app.push(PurplePacksScreen(self.app), on_close=lambda _: self._relabel("menu-purple-packs", _purple_packs_label())),
             "menu-music-looping": self._open_music_looping, "menu-music-key-switching": self._open_music_key_switching,
-            "menu-all-caps": self._open_all_caps, "menu-secret": self._open_secret_menu,
+            "menu-all-caps": self._open_all_caps,
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),
             "menu-volume": self._open_volume, "menu-voice": self._open_voice,
             "menu-language": self._open_language, "menu-second-language": self._open_second_language,
@@ -1451,14 +1420,6 @@ class ParentMenu(Overlay):
             self.app.g.all_caps = v
             self._relabel("menu-all-caps", "ALL CAPS: On" if v else "ALL CAPS: Off")
         self.app.push(AllCapsScreen(self.app), on_close=apply)
-
-    def _open_secret_menu(self):
-        def done(result):
-            if result in ("doodle", "photo"):
-                from ..secret_doodle import paint_doodle, paint_photo
-                self.close()
-                (paint_doodle if result == "doodle" else paint_photo)(self.app)
-        self.app.push(SecretMenuScreen(self.app), on_close=done)
 
     def _open_parent_pin(self):
         from ...settings import get_parent_pin

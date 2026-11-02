@@ -56,7 +56,7 @@ What a word is, for Play: when the kid types "who is grandma", "what's a biscuit
 
 ### letters/<key>.wav
 
-One clip per Music grid key, any of them: `a.wav` through `z.wav` and `0.wav` through `9.wav`, lowercase, plus `semicolon.wav`, `comma.wav`, `period.wav` and `slash.wav` (the names in `canvas/sounds.CLIP_NAMES`). The clip can be anything, not just the key's name. 22050 Hz, mono, 16-bit PCM, the numbers Piper writes for the core clips. The Music room's Say Letters mode searches user packs first, then `letters-kid/` when Kid Voice is on, then the core `letters/`, per key, so a pack that records only some keys falls back for the others; the four punctuation keys have no core clip and stay plain notes unless a pack gives them one. The Textual UI reads only the letters and numbers.
+One clip per Music grid key, any of them: `a.wav` through `z.wav` and `0.wav` through `9.wav`, lowercase, plus `semicolon.wav`, `comma.wav`, `period.wav` and `slash.wav` (the names in `canvas/sounds.CLIP_NAMES`). The clip can be anything, not just the key's name. 22050 Hz, mono, 16-bit PCM, the numbers Piper writes for the core clips. The Music room's Say Letters mode searches user packs first, then the core `letters/`, per key, so a pack that records only some keys falls back for the others; the four punctuation keys have no core clip and stay plain notes unless a pack gives them one. The Textual UI reads only the letters and numbers.
 
 ### voice/<phrase>.wav
 

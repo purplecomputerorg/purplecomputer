@@ -22,7 +22,7 @@ Actions (processed left to right):
     first_boot       Show the first-boot power-cycle screen
     install_done     Show the install-finished restart screen
     sleep            Show the sleep screen
-    doodle | photo   Paint the Secret Menu pictures onto the Art canvas
+    doodle | photo   Paint the saved pictures onto the Art canvas
     time_travel      Open the Time Travel scrubber
     clear            Clear the current room
     type:TEXT        Type text characters one at a time (_ types a space)

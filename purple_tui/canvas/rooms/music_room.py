@@ -216,9 +216,6 @@ class MusicRoom(Room):
         ids = [i for i, _ in instruments()]
         return ids.index(instrument_id) if instrument_id in ids else 0
 
-    def reset_letter_sounds(self):
-        self.sounds.clear()
-
     def cleanup_sounds(self):
         try:
             if pygame.mixer.get_init():

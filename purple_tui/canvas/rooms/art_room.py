@@ -617,7 +617,7 @@ class ArtRoom(Room):
         self.app.invalidate()
 
     def paint_at(self, x: int, y: int, color_key: str):
-        """Paint one cell by key char or '#rrggbb' (Secret Menu pictures)."""
+        """Paint one cell by key char or '#rrggbb' (saved pictures)."""
         self._cursor_x, self._cursor_y = max(0, min(x, COLS - 1)), max(0, min(y, ROWS - 1))
         k = color_key.lower()
         brush = brush_for_key(k)

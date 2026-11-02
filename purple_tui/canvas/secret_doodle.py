@@ -1,4 +1,4 @@
-"""Paint the Secret Menu pictures (purple_tui.secret_doodle) onto the canvas Art room."""
+"""Paint the saved pictures (purple_tui.secret_doodle) onto the canvas Art room."""
 
 from ..secret_doodle import build_ops
 from ..secret_photo import OPS
@@ -23,7 +23,7 @@ def paint_cells(app, cells: list, letters: list = (), grid=None) -> None:
 
 
 def paint_ops(app, ops: list) -> None:
-    """The Secret Menu pictures were authored on the old 132x25 terminal grid
+    """The saved pictures were authored on the old 132x25 terminal grid
     (2:1 cells), so they are scaled onto today's square grid keeping their proportions."""
     from .rooms.art_room import COLS
     s = COLS / 132

@@ -369,13 +369,12 @@ class TestSmartResolution:
         self._run(runner.run(["k"]))
         assert canvas._painted_chars == ['k']
 
-    def test_paint_off_unrecognized_does_nothing(self, canvas):
-        """With paint off, unrecognized text should not paint."""
+    def test_paint_off_writes_letters(self, canvas):
         from purple_tui.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "abc"]))
         assert canvas._painted_chars == []
-        assert canvas._typed_chars == []
+        assert canvas._typed_chars == ['a', 'b', 'c']
 
 
 # ---------------------------------------------------------------------------

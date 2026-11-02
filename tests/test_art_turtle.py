@@ -793,7 +793,7 @@ class TestNearestAnchor:
     def test_fuzzy_verb_falls_through_to_resolve(self):
         """forwrd 10: classifier sees no anchor (forwrd isn't a verb), so
         _resolve's fuzzy keyword fixes it and re-dispatches as 'forward 10'."""
-        c, runner = self._run(["paint off", "forwrd 10"])
+        c, runner = self._run(["brush up", "forwrd 10"])
         assert c._cursor_x == 10
         assert any('forwrd' in orig and 'forward' in corr
                    for orig, corr in runner.corrections)

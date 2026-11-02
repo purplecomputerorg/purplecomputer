@@ -595,6 +595,35 @@ class TestFreeOrderArgs:
         assert c._last_key_color == BLUE
 
 
+class TestModeWords:
+    """paint/draw switch to Paint, write/type/letters to Letters; on/off, with or
+    without a space; "paint hi" and "write hi" do one line and keep the mode."""
+
+    def _run(self, lines, paint=True):
+        from purple_tui.code_runner import ArtCodeRunner
+        canvas = FakeCanvas()
+        canvas._paint_mode = paint
+        asyncio.run(ArtCodeRunner(canvas).run(lines, paint=paint))
+        return canvas
+
+    @pytest.mark.parametrize("word", ["write", "type", "letters", "write on", "writeon", "paint off", "paintoff", "draw off"])
+    def test_switches_to_letters(self, word):
+        c = self._run([word, "hi"])
+        assert c._paint_mode is False
+        assert "".join(c._typed) == "hi"
+
+    @pytest.mark.parametrize("word", ["paint", "draw", "paint on", "painton", "write off", "writeoff", "type off"])
+    def test_switches_to_paint(self, word):
+        c = self._run([word, "hi"], paint=False)
+        assert c._paint_mode is True
+        assert c._typed == [] and len(c._painted_positions) == 2
+
+    def test_inline_keeps_mode(self):
+        c = self._run(["paint hi", "ok"], paint=False)
+        assert c._paint_mode is False
+        assert len(c._painted_positions) == 2 and "".join(c._typed) == "ok"
+
+
 class TestColorBeforeRepeat:
     """A color before `repeat` must paint the loop in that color instead of
     typing the letters of "repeat" (regression guards for _peel_color_before_repeat)."""
@@ -763,7 +792,7 @@ class TestNearestAnchor:
     def test_fuzzy_verb_falls_through_to_resolve(self):
         """forwrd 10: classifier sees no anchor (forwrd isn't a verb), so
         _resolve's fuzzy keyword fixes it and re-dispatches as 'forward 10'."""
-        c, runner = self._run(["paint off", "forwrd 10"])
+        c, runner = self._run(["brush up", "forwrd 10"])
         assert c._cursor_x == 10
         assert any('forwrd' in orig and 'forward' in corr
                    for orig, corr in runner.corrections)

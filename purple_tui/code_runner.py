@@ -464,6 +464,9 @@ _COMMAND_VOCAB = [
 _TURN_VOCAB = ['left', 'right', 'up', 'down', 'back', 'backward', 'around']
 _DIRECTION_VOCAB = ['left', 'right', 'up', 'down']
 _TOGGLE_VOCAB = ['on', 'off']
+# Mode words: True switches to Paint, False to Letters; "off" flips it.
+_MODE_WORDS = {'paint': True, 'draw': True, 'write': False, 'type': False, 'letters': False}
+_MODE_RE = '|'.join(_MODE_WORDS)
 _OPPOSITE = {'right': 'left', 'left': 'right', 'up': 'down', 'down': 'up'}
 
 # Self-directed motion verbs: the verb itself determines how the heading turns
@@ -494,10 +497,8 @@ class ArtCodeRunner:
     # handled by the bag-of-tokens classifier (`_classify_motion`) one stage
     # later, so any text not matched here goes through that pipeline.
     _COMMANDS = [
-        (re.compile(r'^paint\s+(on|off)\s*$', re.I), '_do_paint_toggle'),
-        (re.compile(r'^paint\s+(.+?)\s*$', re.I), '_do_paint_inline'),
-        (re.compile(r'^write\s+(on|off)\s*$', re.I), '_do_write_toggle'),
-        (re.compile(r'^write\s+(.+?)\s*$', re.I), '_do_write_inline'),
+        (re.compile(rf'^({_MODE_RE})\s*(on|off)?\s*$', re.I), '_do_mode'),
+        (re.compile(rf'^({_MODE_RE})\s+(.+?)\s*$', re.I), '_do_inline'),
         (re.compile(r'^color\s+(.+?)\s*$', re.I), '_do_color'),
         (re.compile(r'^lift\s*$', re.I), '_do_lift'),
         (re.compile(r'^(?:brush|pen)\s*up\s*$', re.I), '_do_pen_up'),
@@ -532,7 +533,7 @@ class ArtCodeRunner:
                 await self._dispatch_safely(text, _resolving)
 
     def _split_brush_words(self, text: str) -> list[str]:
-        if not self._COMMANDS or re.match(r'(?:paint|write)\s', text, re.I):
+        if not self._COMMANDS or re.match(rf'(?:{_MODE_RE})\s', text, re.I):
             return [text]
         return [t.strip() for t in self._BRUSH_WORDS.split(text) if t and t.strip()]
 
@@ -595,36 +596,22 @@ class ArtCodeRunner:
     # Command handlers (return True if handled, None to pass)
     # ------------------------------------------------------------------
 
-    async def _do_paint_toggle(self, m) -> bool | None:
-        self._paint_on = m.group(1).lower() == 'on'
-        if self._paint_on:
-            self._write_on = False
-        self.canvas._set_paint_mode(self._paint_on)
+    async def _do_mode(self, m) -> bool:
+        painting = _MODE_WORDS[m.group(1).lower()] != ((m.group(2) or 'on').lower() == 'off')
+        self._paint_on, self._write_on = painting, not painting
+        self.canvas._set_paint_mode(painting)
         return True
 
-    async def _do_paint_inline(self, m) -> bool | None:
-        """paint <text>: color name → one block in that color, else per-char blocks."""
-        arg = m.group(1).strip()
-        content = get_content()
-        hex_color = content.get_color(arg.lower())
+    async def _do_inline(self, m) -> bool:
+        """One line in the other mode, without switching: a lone color paints one block."""
+        arg, painting = m.group(2).strip(), _MODE_WORDS[m.group(1).lower()]
+        hex_color = painting and get_content().get_color(arg.lower())
         if hex_color:
             self._apply_color(hex_color)
             self.canvas.paint_char('█', direction=self.canvas._heading)
             await asyncio.sleep(0.05)
-            return True
-        await self._emit_text(arg, paint=True)
-        return True
-
-    async def _do_write_toggle(self, m) -> bool | None:
-        self._write_on = m.group(1).lower() == 'on'
-        if self._write_on:
-            self._paint_on = False
-        self.canvas._set_paint_mode(not self._write_on)
-        return True
-
-    async def _do_write_inline(self, m) -> bool | None:
-        """write <text>: type each character as text at cursor."""
-        await self._emit_text(m.group(1), paint=False)
+        else:
+            await self._emit_text(arg, paint=painting)
         return True
 
     async def _do_color(self, m) -> bool | None:

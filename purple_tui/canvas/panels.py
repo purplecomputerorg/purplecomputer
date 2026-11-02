@@ -106,8 +106,8 @@ TOPICS = {
         ("brush pen lift penup pendown", "Brush", [("brush up", "move without painting"), ("brush down", "paint again"),
                                                    ("lift", "brush up, or down again"), ("right 2 brush up right 3", "leaves a gap")]),
         ("repeat", "Again", [("repeat 4 forward 6 turn", "a square")] + _AGAIN_ROWS),
-        ("paint write", "Letters", [("asdf", "a color per key"), ("paint hi", "the same"), ("write hi", "real letters"),
-                                    ("write on", "keep typing letters"), ("paint on", "back to colors")]),
+        ("paint draw write type letters", "Letters", [("asdf", "a color per key"), ("paint hi", "the same"), ("write hi", "real letters"),
+                                                      ("write", "keep typing letters"), ("paint", "back to colors")]),
         (COLORS, *_COLOR_TOPIC),
     ],
     'music': [

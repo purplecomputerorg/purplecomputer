@@ -1,8 +1,8 @@
 #import "theme.typ": *
-#show: card
+#show: card.with(2)
 
 // ── Front: the rooms ──
-#header[Quick Start]
+#header()
 
 #text(size: 9.4pt)[Tap #key("Esc") to pick a room, then press its number.]
 #gap
@@ -37,12 +37,12 @@
 ]
 
 #gap
-#flip[Cool things to try on the back]
+#flip[Cool things to try]
 
 #pagebreak()
 
 // ── Back: the best things to try, coolest first ──
-#display[Cool things to try]
+#header(title: [Cool things to try], qr: none, note: none)
 #gap
 
 #tiles(gutter: 9pt,
@@ -57,4 +57,4 @@
 
 
 #gap
-#support[Quick Start]
+#support

@@ -11,12 +11,22 @@
 #let magenta = rgb("#9b59d0")
 #let lilac = rgb("#efe6fa")
 
+// The box set in order. Kid cards wear the red and blue sticker rows (purple_tui/palette.py).
+#let SET = (
+  (name: "Start", color: purple),
+  (name: "Rooms", color: rgb("#E44444")),
+  (name: "Type", color: rgb("#2E6AE1")),
+  (name: "Grown-ups", color: magenta),
+)
+#let card-n = state("card-n", 1)
+#let tint(c) = c.lighten(93%)
 
-#let card(body) = {
-  set page(width: 4in, height: 6in, margin: (x: 0.25in, top: 0.24in, bottom: 0.22in), fill: paper)
+#let card(n, body) = {
+  set page(width: 4in, height: 6in, margin: (x: 0.25in, top: 0.24in, bottom: 0.22in), fill: tint(SET.at(n - 1).color))
   set text(font: "Figtree", size: 9pt, fill: ink)
   set par(leading: 0.68em, spacing: 0.95em)
   set strong(delta: 250)
+  card-n.update(n)
   body
 }
 
@@ -60,18 +70,26 @@
   ..items.pos().enumerate().map(((i, b)) => numbered(i + 1, color: color, r: r, b)),
 )
 
-#let header(title, qr: "help-qr.svg", note: [Videos and help: #text(fill: purple)[purplecomputer.org/help]]) = {
+// The card's number in its color; every header and the set strip draw it
+#let card-dot(n, r, on: true) = {
+  let c = SET.at(n - 1).color
+  box(circle(radius: r, fill: if on { c } else { c.lighten(80%) },
+    align(center + horizon, text(font: "Sora", weight: "extrabold", size: r * 1.15, fill: if on { white } else { c.darken(15%) }, str(n)))))
+}
+
+// Fronts leave the title out to use the card's name
+#let header(title: none, qr: "help-qr.svg", note: [Videos and help: #text(fill: purple)[purplecomputer.org/help]]) = context {
+  let n = card-n.get()
   grid(
     columns: (0.46in, 1fr, auto),
     column-gutter: 8pt,
     align: (left + horizon, left + horizon, right + horizon),
-    image("bot.svg", width: 0.46in),
+    card-dot(n, 0.23in),
     stack(
-      text(weight: "bold", size: 6.6pt, fill: magenta, tracking: 0.14em, upper[Purple Computer]),
+      text(weight: "bold", size: 6.6pt, fill: SET.at(n - 1).color.darken(10%), tracking: 0.14em, upper[Purple Computer #sym.dot.c Card #n of #SET.len()]),
       v(7pt),
-      display(title),
-      v(8pt),
-      text(size: 7.2pt, fill: ink-dim, note),
+      display(if title == none { SET.at(n - 1).name } else { title }),
+      ..if note != none { (v(8pt), text(size: 7.2pt, fill: ink-dim, note)) },
     ),
     if qr != none {
       box(inset: 4pt, radius: 6pt, fill: white, stroke: 0.6pt + hair, image(qr, width: 0.5in))
@@ -102,14 +120,17 @@
 
 // Space between a page's sections; every gap on a page is the same
 #let gap = v(1fr)
-// Fronts point to the back on the right; backs point to the front on the left, beside support
-#let arrow(dir) = text(fill: magenta, weight: "bold", if dir == "r" { sym.arrow.r } else { sym.arrow.l })
-#let footer(start: [], end: []) = text(size: 8pt, fill: ink-med, grid(columns: (1fr, auto), align: (left, right), start, end))
-#let flip(body) = footer(end: [#body #h(3pt) #arrow("r")])
-#let support(front) = footer(
-  start: [#arrow("l") #h(3pt) Back to #front],
-  end: [#text(fill: purple, weight: "semibold")[support\@purplecomputer.org]],
-)
+// The whole set, this card filled in, so a missing card is easy to spot
+#let set-strip = context {
+  let n = card-n.get()
+  SET.enumerate().map(((i, c)) => {
+    let on = i + 1 == n
+    box[#card-dot(i + 1, 4.4pt, on: on)#h(2pt)#text(size: 6.8pt, weight: if on { "bold" } else { "regular" }, fill: if on { ink } else { ink-dim }, c.name)]
+  }).join(h(4pt))
+}
+#let footer(end: []) = text(size: 8pt, fill: ink-med, grid(columns: (1fr, auto), align: (left + horizon, right + horizon), set-strip, end))
+#let flip(body) = footer(end: [#body #h(3pt) #text(fill: magenta, weight: "bold", sym.arrow.r)])
+#let support = footer(end: text(size: 7.4pt, fill: purple, weight: "semibold")[support\@purplecomputer.org])
 
 // Code examples: a typed line beside what it does; long lines take the whole row
 #let examples(color: purple, ..rows) = grid(

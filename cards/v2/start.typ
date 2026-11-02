@@ -1,8 +1,8 @@
 #import "theme.typ": *
-#show: card
+#show: card.with(1)
 
 // ── Front: starting Purple from the Purple Key ──
-#header[Starting Purple]
+#header()
 
 #note[
   #set text(size: 8.8pt)
@@ -53,14 +53,13 @@
     text(font: "Sora", weight: "extrabold", size: 13pt, fill: magenta)[Flip #sym.arrow.r],
   )
 ]
+#gap
+#footer()
 
 #pagebreak()
 
 // ── Back: which keys to mash ──
-#v(2pt)
-#display[Find your laptop's key]
-#v(-2pt)
-#text(fill: ink-med)[Turn it off, press *Power*, then mash your brand's key.]
+#header(title: [Find your laptop's key], qr: none, note: [Turn it off, press *Power*, then mash your brand's key.])
 #gap
 
 #panel[
@@ -89,4 +88,4 @@
 ]
 
 #gap
-#support[Starting Purple]
+#support

@@ -1,7 +1,7 @@
 """Build the Purple 2.0 box cards from Typst: one 2-page PDF per card, plus PNG previews.
 
   python cards/v2/build.py            # every card -> cards/v2/out/<card>.pdf and <card>-pad.pdf
-  python cards/v2/build.py code       # just one card
+  python cards/v2/build.py rooms      # just one card
   python cards/v2/build.py --png      # also write PNG previews to /tmp/screenshots
 
 Needs the `typst`, `qrcode` and `pymupdf` pip packages. Fonts come from the app's own
@@ -21,10 +21,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 FONTS = ROOT / "purple_tui" / "canvas" / "fonts"
 OUT = HERE / "out"
-CARDS = ("start", "quick-start", "play", "parents")
+CARDS = ("start", "rooms", "type", "grown-ups")
 QRS = {"help-qr.svg": "https://purplecomputer.org/help", "studio-qr.svg": "https://studio.purplecomputer.org/"}
 QR_COLOR = "#3b1a5c"
-PAPER = "#f8f4fd"  # theme.typ paper
 
 sys.path.insert(0, str(HERE.parent))
 from add_bleed import add_bleed  # noqa: E402
@@ -37,10 +36,15 @@ def write_qrs() -> None:
         (HERE / name).write_text(svg.replace('<rect fill="white"', '<rect fill="none"'))
 
 
+def paper_color(pdf: Path) -> str:
+    """Each card tints its own page in theme.typ; the pad fill matches its top-left pixel."""
+    return "#%02x%02x%02x" % fitz.open(pdf)[0].get_pixmap(clip=fitz.Rect(0, 0, 1, 1)).pixel(0, 0)
+
+
 def build(name: str, png_dir: Path | None) -> None:
     pdf = OUT / f"{name}.pdf"
     typst.compile(str(HERE / f"{name}.typ"), output=str(pdf), root=str(HERE), font_paths=[str(FONTS), str(HERE / "fonts")])
-    add_bleed(pdf, OUT / f"{name}-pad.pdf", 0.0, 0.125, PAPER, "none", "#5c2d91", 0.12)
+    add_bleed(pdf, OUT / f"{name}-pad.pdf", 0.0, 0.125, paper_color(pdf), "none", "#5c2d91", 0.12)
     if png_dir:
         for i, page in enumerate(fitz.open(pdf)):
             page.get_pixmap(dpi=150).save(png_dir / f"card-{name}-{i + 1}.png")

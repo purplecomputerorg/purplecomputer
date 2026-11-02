@@ -1,8 +1,8 @@
 #import "theme.typ": *
-#show: card
+#show: card.with(3)
 
 // ── Front: things to type in Play ──
-#header[The Play Room]
+#header()
 #text(size: 9.4pt)[In the *Play* room, type anything, then press #key("Enter").]
 #gap
 
@@ -31,12 +31,12 @@
   ("say hello", [or start with #mono("say")]),
 )
 #gap
-#flip[Code for Art, Music and Blocks on the back]
+#flip[Write code]
 
 #pagebreak()
 
 // ── Back: code in Art, Music and Blocks ──
-#header[Write Code]
+#header(title: [Write Code])
 #note[
   In *Art*, *Music* or *Blocks*, press #key("Esc") then #key("Space"). #key("↓") shows ideas. Typos get fixed for you.
 ]
@@ -66,4 +66,4 @@
   )
 ]
 #gap
-#support[The Play Room]
+#support

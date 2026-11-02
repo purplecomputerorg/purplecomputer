@@ -1,8 +1,8 @@
 #import "theme.typ": *
-#show: card
+#show: card.with(4)
 
 // ── Front: the Parent Menu ──
-#header[For Grown-ups]
+#header()
 
 #note[*Hold* #key("Esc") for a second to open the Parent Menu.]
 #gap
@@ -25,12 +25,12 @@ Connect a printer with a USB printer cable (USB-B). Most printers have the port,
 ]
 
 #gap
-#flip[Make Purple your family's with Purple Studio]
+#flip[Purple Studio]
 
 #pagebreak()
 
 // ── Back: Purple Studio ──
-#header([Purple Studio], qr: "studio-qr.svg", note: text(fill: purple)[studio.purplecomputer.org])
+#header(title: [Purple Studio], qr: "studio-qr.svg", note: text(fill: purple)[studio.purplecomputer.org])
 
 #text(size: 11pt, weight: "semibold", fill: purple-dk)[Put your family into Purple.]
 #v(-2pt)
@@ -55,4 +55,4 @@ Connect a printer with a USB printer cable (USB-B). Most printers have the port,
 ]
 
 #gap
-#support[For Grown-ups]
+#support

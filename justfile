@@ -317,7 +317,7 @@ print-card *args:
 
 # Build the Purple 2.0 box cards from Typst into cards/v2/out, with PNG previews in /tmp/screenshots.
 #   just cards            -> every card
-#   just cards play       -> one card
+#   just cards rooms      -> one card
 cards *args:
     @{{venv}}/bin/python cards/v2/build.py --png /tmp/screenshots {{args}}
 

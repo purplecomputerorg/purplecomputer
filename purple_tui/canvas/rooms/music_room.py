@@ -1,5 +1,5 @@
 """Music room: a 10x4 grid that mirrors the keyboard. Letters play notes,
-digits play percussion, Tab says letters, arrows change key, Enter cycles the
+digits play percussion, Tab says letters (Space: names or sounds), arrows change key, Enter cycles the
 instrument, hold Enter records a loop, and the code line opens from the Esc menu."""
 
 import asyncio
@@ -50,6 +50,7 @@ class MusicRoom(Room):
         self.root_index = DEFAULT_ROOT_INDEX
         self.letters_mode = False
         self.show_labels = False
+        self.say_sounds = False
         self._note_labels: set = set()
         self._note_timers: dict = {}
         self._transition = None
@@ -101,7 +102,8 @@ class MusicRoom(Room):
     def timeline_state(self) -> dict:
         colors = self._replay[1] if self._replay else self.color_state
         state = {f"k:{k}": v for k, v in colors.items() if v != -1}
-        state.update(instrument=self.instrument_index, root=self.root_index, letters=self.letters_mode, labels=self.show_labels)
+        state.update(instrument=self.instrument_index, root=self.root_index, letters=self.letters_mode, labels=self.show_labels,
+                     sounds=self.say_sounds)
         return state
 
     def restore_timeline_state(self, state: dict):
@@ -110,6 +112,7 @@ class MusicRoom(Room):
         self.root_index = int(state.get("root", DEFAULT_ROOT_INDEX))
         self.letters_mode = bool(state.get("letters", False))
         self.show_labels = bool(state.get("labels", False))
+        self.say_sounds = bool(state.get("sounds", False))
         self.color_state = {k: -1 for k in ALL_KEYS}
         for key, val in state.items():
             if key.startswith("k:") and key[2:] in self.color_state:
@@ -201,7 +204,7 @@ class MusicRoom(Room):
     def play_letter(self, key: str):
         if self.app._effective_volume() == 0:
             return
-        if sound := self.sounds.letters().get(key):
+        if sound := self.sounds.letters(self.say_sounds).get(key):
             play_safe(sound)
 
     @staticmethod
@@ -431,6 +434,8 @@ class MusicRoom(Room):
             self._advance_loop_state()
         elif self.loop.state == LOOPING:
             self.loop.start_new_cycle()
+        elif self.letters_mode:
+            self.say_sounds = not self.say_sounds
         else:
             self.show_labels = not self.show_labels
         self.app.invalidate()
@@ -624,7 +629,13 @@ class MusicRoom(Room):
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
         bar.h = hint_row_h(g)
         draw_mode_switch(g, bar, ("Sounds", "ABC"), 1 if self.letters_mode else 0,
-                         chips=(("Enter", ICON_MUSIC, instrument, False, "sound"), ("Space", None, "notes", self.show_labels)))
+                         chips=(("Enter", ICON_MUSIC, instrument, False, "sound"), self._space_chip()))
+
+    def _space_chip(self) -> tuple:
+        """In ABC, Space picks what B says: its name or its sound (padded so the header holds still)."""
+        if self.letters_mode:
+            return "Space", None, "b  " if self.say_sounds else "bee", self.say_sounds, "B says"
+        return "Space", None, "notes", self.show_labels
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""

@@ -349,6 +349,7 @@ Purple Computer includes code from the following open-source projects:
 
 - **[spectral.js](https://github.com/rvanwijnen/spectral.js)** by Ronald van Wijnen (MIT License): Spectral reflectance data and CIE color matching functions, used for Beer-Lambert paint-like color mixing (yellow + blue = green, red + blue = purple)
 - **[Twemoji](https://github.com/jdecked/twemoji)** by Twitter and contributors ([CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)): source artwork for several stickers — T-Rex (U+1F996), ringed planet (U+1FA90), Earth (U+1F30E), turtle (U+1F422), and sun-with-face (U+1F31E) — and Purple Studio's section and starter room icons (listed in `cards/make_studio_icons.py`), recolored to Purple Computer shades in the scripts under `cards/`.
+- **[nemophones](https://github.com/tavinathanson/nemophones)** ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)): the letter sounds Music says in ABC with Space (`packs/core-sounds/content/letter-sounds/`), raised to the letter names' volume.
 
 ---
 

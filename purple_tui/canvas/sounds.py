@@ -76,13 +76,16 @@ class SoundBank:
     def drum(self, name: str):
         return self.percussion().get(DRUM_KEYS.get(name.lower(), ""))
 
-    def letters(self) -> dict:
-        """Keyed by key: pack recordings, then Purple's clips."""
+    def letters(self, sounds: bool = False) -> dict:
+        """Keyed by key: pack recordings, then Purple's clips. With sounds, letters
+        say their phonics sound and keys without one (digits) keep their names."""
         def load():
             from ..content import get_content
             dirs = get_content().pack_dirs("letters") + [core_sounds() / "letters"]
+            if sounds:
+                dirs = [core_sounds() / "letter-sounds", *dirs]
             found = {}
             for d in reversed([d for d in dirs if d.exists()]):
                 found.update(_load_dir(d, CLIP_NAMES.values()))
             return {k: found[n] for k, n in CLIP_NAMES.items() if n in found}
-        return self._get("letters", load)
+        return self._get(("letters", sounds), load)

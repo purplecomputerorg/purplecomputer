@@ -198,3 +198,15 @@ def test_in_paint_the_center_stays_white():
         app.top._move([])
         assert room.brush_color == "#FFFFFF"
     run(go())
+
+
+def test_backslash_again_closes_the_bar_and_keeps_the_color():
+    async def go():
+        for name in ("art", "blocks"):
+            app, room = _room(name)
+            await press(app, "\\")
+            await press(app, "down")
+            picked = room.brush_color
+            await press(app, "\\")
+            assert app.top is None and room.brush_color == picked
+    run(go())

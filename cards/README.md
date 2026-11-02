@@ -74,3 +74,13 @@ inkscape cards/purple-sticker-sheet.svg \
 Each script keeps its tunable constants at the top of the file. Common
 knobs: `BG_COLOR`, `PAD_IN`, `BLEED_IN`, `HALO_OUT_IN`, sticker placement
 lists, and the `PURPLE_RAMP` auto-recolor palette.
+
+## Purple 2.0 box cards (`v2/`)
+
+The box cards for Purple 2.0 are Typst sources, so an LLM can edit them and you can too. Four two-sided 4x6 cards: `start.typ` (booting from the Purple Key), `quick-start.typ` (the rooms, then cool things to try), `play.typ` (things to type in Play, then code in Art, Music and Blocks), and `parents.typ` (the Parent Menu, then Purple Studio). They share `theme.typ` for colors, keycaps and panels, in the landing site's palette. Text is Purple's own Figtree and IBM Plex Mono from `purple_tui/canvas/fonts/`; titles are Sora, from `v2/fonts/`.
+
+```bash
+just cards          # or: just cards play
+```
+
+Each card becomes `v2/out/<card>.pdf` (4x6 trim) and `<card>-pad.pdf` (0.125" safety pad, via `add_bleed.py`). The QR codes are generated on every build.

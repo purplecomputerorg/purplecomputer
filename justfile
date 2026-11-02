@@ -315,6 +315,12 @@ ship-oneoff commit *args:
 print-card *args:
     @{{venv}}/bin/python cards/add_bleed.py {{args}}
 
+# Build the Purple 2.0 box cards from Typst into cards/v2/out, with PNG previews in /tmp/screenshots.
+#   just cards            -> every card
+#   just cards play       -> one card
+cards *args:
+    @{{venv}}/bin/python cards/v2/build.py --png /tmp/screenshots {{args}}
+
 # Delete old releases from Cloudflare R2, keeping the current version (just ship runs this, also keeping the one it replaced).
 # E.g., just clean-releases --dry-run, just clean-releases --keep v1.0
 clean-releases *args:

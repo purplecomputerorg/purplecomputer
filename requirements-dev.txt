@@ -3,3 +3,6 @@
 inflect>=7.0.0  # scripts/build_plural_tables.py
 fonttools>=4.50  # scripts/studio_bundle.py: Noto's emoji pictures for Studio
 uharfbuzz>=0.40  # scripts/studio_bundle.py: which picture each emoji sequence shapes to, as pygame does
+typst>=0.13  # cards/v2/build.py: the box cards
+qrcode>=7.4  # cards/v2/build.py: QR codes on the cards
+pymupdf>=1.24  # cards/add_bleed.py, cards/v2/build.py: print padding and previews

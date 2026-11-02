@@ -19,9 +19,10 @@ They explore, create, and put it down on their own.
 > [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 > **Which branch?** `release/1.x` is the default branch and the code on a Purple
-> Key: clone it to run what is currently being shipped in boxes. `main` is the
-> next version in development (a new canvas UI replacing the Textual one) and
-> may be broken or half-migrated at any time.
+> Key: clone it to run what is currently being shipped in boxes. `main` is Purple
+> 2.0 in development (a new canvas UI, Blocks and Write rooms, code mode, saving,
+> printing, kid profiles, and Purple Studio) and may be broken at any time. This
+> README describes `main`.
 
 ---
 
@@ -41,7 +42,7 @@ Purple Computer turns your old laptop into a calm, creative computer for kids. W
 
 ## Does Purple use AI?
 
-No. There's no chatbot, no LLM in the product, nothing that generates unpredictable output. The one ML component is speak-out-loud, which uses [Piper](https://github.com/rhasspy/piper) for text-to-speech; it runs entirely on the laptop, offline, with nothing sent anywhere.
+No. There's no chatbot, no LLM in the product, nothing that generates unpredictable output. The one ML component is speak-out-loud, which uses [Piper](https://github.com/rhasspy/piper) for text-to-speech (or [flite](https://github.com/festvox/flite) as the Quick voice); it runs entirely on the laptop, offline, with nothing sent anywhere. Purple Studio voices a family room's fixed lines with [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), in the parent's browser, before the pack ever reaches Purple.
 
 A lot of the code is LLM-generated, and LLMs are also used to make the demo videos, but no LLM ships in the product. The image gets `purple_tui/`, `packs/`, and a named list of files from `scripts/` (see `build-scripts/00-build-golden-image.sh`); `anthropic` is only in `tools/requirements.txt`. Generated assets are checked in as fixed data, like the keypress list in `purple_tui/demo/segments/`. See [DISCLOSURE.md](/docs/DISCLOSURE.md).
 
@@ -61,7 +62,7 @@ just run      # Opens Purple in a window (SDL keyboard, no evdev needed)
 PURPLE_UX=tui just run   # The Textual UI the current release ships, in Alacritty
 ```
 
-Inside Purple Computer, try:
+In the Play room, try:
 ```
 2 + 2                  # Math with dot visualization
 3 * 4 + 2              # Operator precedence (= 14)
@@ -69,7 +70,9 @@ cat * 5                # Five cats
 dog + cat              # Emoji addition (🐶 🐱)
 3 + 4 + 2 bananas      # Numbers attach to emoji (= 9 bananas)
 red + blue             # Color mixing (= purple)
+2 dark red             # Two dark red squares
 purple truck           # Color swatch + emoji in free text
+1234                   # Big numbers show as an abacus
 I love cat!            # Speaks "I love cat" aloud (! triggers speech)
 ```
 
@@ -114,8 +117,10 @@ so the first boot on some sticks is slower; everything else is identical.
 
 **Install to hardware:**
 1. Boot laptop from USB (Secure Boot can remain enabled)
-2. Open the parent menu (hold Escape) and choose Install, then confirm
+2. Open the Parent Menu (hold Escape) and choose Install on this Computer, then confirm
 3. Installation runs (10-20 minutes), then system reboots into Purple Computer
+
+Settings, saves and Time Travel from the live session come along. Reinstalling over an existing Purple keeps the kid's work, Purple Packs and computer name by default; starting fresh has its own confirm.
 
 The system logs in automatically as the `purple` user (no password needed).
 
@@ -125,55 +130,81 @@ See [MANUAL.md](docs/MANUAL.md) for complete build/customization details.
 
 ---
 
-## The Three Rooms
-
-Purple has three rooms:
+## The Rooms
 
 | Room | What It Does |
 |------|--------------|
-| **Play** | Type a word, see an emoji, hear it spoken, mix colors, do math. Kids who can read get the most out of this, but even pre-readers can use it with just numbers (2 + 3). See [guides/play-room-design.md](guides/play-room-design.md) |
-| **Music** | Make music and draw with the keyboard. Press any key to play a sound and paint a color. Even a 2-year-old can have fun here. |
-| **Art** | Write and paint with colors that mix like real paint. Great around 3-4+. |
+| **Art** | Paint and write on a grid with colors that mix like real paint. Each letter paints its sticker color; hold two letters to mix them. Purple starts here. |
+| **Music** | Every key plays a note or a drum and lights up. Enter changes the instrument, hold Enter to record a loop, arrows change the key. Even a 2-year-old can have fun here. |
+| **Play** | Type a word, see an emoji, hear it spoken, mix colors, do math. Pre-readers can use it with just numbers (2 + 3). See [guides/play-room-design.md](guides/play-room-design.md) |
+| **Blocks** | Every letter stacks a block of its sticker color on a 3D floor. Enter builds up, Tab turns the room around. |
+| **Write** | A quiet page for stories and letters, for older kids. Off until a parent turns it on in Parent Menu, Rooms. |
+
+Families can add their own rooms (games, stories, worlds) from [Purple Studio](#purple-studio). They show as extra rooms on keys 6 to 0 in the Esc menu once a parent turns them on.
 
 **Controls:**
-- **Escape (tap):** Room picker (Play, Music, Art)
-- **Hold Escape (1s):** Parent menu
-- **Hold \\ (3s):** Parent menu (alternate, works on all keyboards)
-- **Caps Lock:** Toggle big/small letters
-- **Tab** (in Art): Toggle write/paint mode
-- **Volume:** Hardware media keys
+- **Esc (tap):** the Esc menu: rooms on top (press a number), then tools for the room you're in: **Code** (Space), **Colors** (\\), **Time Travel** (T), **Save** (S), **Open** (O), **Print** (P, when a USB printer is plugged in), **Clear** (C), and **Volume** (V)
+- **Hold Esc (1s):** Parent Menu
+- **Hold \\ (3s):** Parent Menu (alternate, works on all keyboards)
+- **Tab:** the room's switch: Paint/ABC in Art, Sounds/ABC in Music, Front/Back in Blocks, `say` on or off in Play
+- **Space** (Art, Blocks): put the brush down or lift it; hold it with the arrows to paint a trail or lay a line
+- **Volume:** hardware media keys, or V in the Esc menu
 
-**Speech** (in Play room): Add `!` anywhere (e.g., `cat!`) or use `say`/`talk` prefix to hear results spoken aloud.
+**Speech** (in Play room): Add `!` anywhere (e.g., `cat!`), start with `say`, or press Tab to hear the line spoken aloud.
+
+### Code
+
+Older kids can write code in Art, Music and Blocks: press Esc, then Space. The code line opens holding the code for what they just did by hand, with a guide of words beside it and example cards below. Esc then Space closes it. Parents can turn it off (Parent Menu, Allow Code Space).
+
+```
+red repeat 4 forward 6 turn       # Art: a red square
+right 2 brush up right 3          # Art: a line with a gap
+write hi                          # Art: letters on the grid
+choose ukulele zxcvbnm            # Music: pick a sound, then play keys
+fast qwertyuiop                   # Music: quick notes
+key g                             # Music: same keys, new notes
+green repeat 4 right 1 up 1       # Blocks: stairs
+right hello                       # Blocks: a block per letter
+```
+
+`repeat N` repeats the rest of the line, commas split it into steps, and misspellings are fixed and shown.
+
+### Saving, Time Travel and printing
+
+Every room is kept across restarts. **Time Travel** rewinds a room to any earlier moment (← and →, Enter keeps it). **Save** keeps a picture of the work and **Open** brings saves back; plugging in a USB printer adds **Print**, signed with the computer's name. Parents can copy saved work to a USB drive from the Parent Menu. On a live Purple Key, saves live on the Key itself.
+
+### Parent Menu
+
+Hold Esc for a second (behind an optional PIN): install, name the computer, **Kid Profiles** (each kid gets their own computer name, settings, saves and Time Travel), **Rooms** (turn rooms on and off, and **Littles Mode**: one activity, no menus), code and Music options, **Purple Packs**, ALL CAPS, Sound (with a volume limit, 0 is Silent Mode), Voice, Display, Copy Saved Work to USB, Open Terminal, Support Info and Shut Down.
+
+---
+
+## Purple Studio
+
+[studio.purplecomputer.org](https://studio.purplecomputer.org/) is a website for parents to make a **Purple Pack** for their family: their own words and photos (type "grandma" and see her picture), their voice on the keys, instruments, screen and paint colors, and whole new rooms written with blocks or Python, all tried live on a real Purple running in the browser. Nothing is uploaded. The pack goes onto any USB drive; plug it into Purple and it asks to add it. Source and pack format: [`studio/`](studio/), [`studio/PACK_FORMAT.md`](studio/PACK_FORMAT.md), [guides/family-rooms.md](guides/family-rooms.md).
 
 ---
 
 ## Keyboard Features
 
-Purple includes a hardware keyboard normalizer that makes typing easier for kids:
+Purple is keyboard only, on purpose. A few things make typing easier for kids:
 
-### Easy Capitals (No Shift Key Needed)
-- **Double-tap any key** — Types the shifted version (`a` `a` → `A`, `1` `1` → `!`)
-- **Tap Shift quickly** — Activates "sticky shift" for the next character
-- **Hold Shift + type** — Normal shift behavior (uppercase while held)
-
-Kids can type capital letters without holding two keys at once!
-
-### Parent Mode
-- **Hold Escape for 1 second** — Opens parent menu (display settings, volume, updates)
+- **Sticky Shift:** tap Shift and the next key is shifted, with a ⇧ badge on screen until it's used
+- **Kid math keys:** `=` types `+`, `/` types `÷`, Shift+8 types `×`, matching the sticker sheet
+- **ALL CAPS:** a Parent Menu setting that shows every letter as a capital
 
 ### How It Works
 
 **Purple Computer requires Linux with evdev.** macOS is not supported.
 
 Keyboard input is read directly from evdev; the screen is a pygame canvas the app paints itself. This gives us:
-- True key down/up events for reliable timing
-- Space-hold detection for paint mode
+- True key down/up events for holds, chords and color mixing
 - All keycodes (terminals drop some F-keys)
 
 The keyboard handling:
 - Grabs the hardware keyboard exclusively (kiosk mode)
 - Remaps physical F-keys via scancodes (survives Fn Lock changes)
-- Detects sticky shift, double-tap, and Escape long-press
+- Detects sticky shift and long presses (Escape, Enter, Backspace)
 - Processes events through a state machine that emits high-level actions
 
 See `guides/keyboard-architecture.md` for technical details.
@@ -182,7 +213,7 @@ See `guides/keyboard-architecture.md` for technical details.
 
 ## Screen Size
 
-Purple Computer displays a **134×29 character viewport** (plus header and footer). Font size is automatically calculated to fit the screen, clamped to 12-48pt. On typical old laptops (11-15"), this fills most of the screen with a visible purple border.
+The canvas is laid out in fractions of the screen, so it fills any display from a 1024×768 netbook to a 4K TV. Screens over 1920×1200 (Retina MacBooks, 4K TVs) switch to a smaller mode of the same shape to keep software drawing fast; touch `/opt/purple/native-resolution` to keep the native size. See [guides/canvas-architecture.md](guides/canvas-architecture.md).
 
 **Minimum supported resolution:** 1024×768
 
@@ -199,9 +230,12 @@ purplecomputer/
 │   ├── content.py        # Content API for packs
 │   ├── keyboard.py       # Keyboard state machine
 │   ├── input.py          # Direct evdev keyboard input
+│   ├── synth.py          # Instrument synthesis, shared with Studio
 │   └── tts.py            # Piper TTS integration
 │
 ├── packs/                # Built-in content (emoji, sounds)
+├── studio/               # Purple Studio, the parent-facing web app that builds Purple Packs
+├── cards/                # Print-ready cards and stickers for the box
 │
 ├── build-scripts/        # Ubuntu ISO remaster build pipeline
 │   ├── 00-build-golden-image.sh    # Pre-built Ubuntu system image
@@ -217,7 +251,8 @@ purplecomputer/
 │   └── zoom_editor_server.py      # Web UI for zoom keyframe editing
 │
 ├── scripts/              # Development utilities
-│   ├── calc_font_size.py           # Auto font sizing calculator
+│   ├── calc_font_size.py           # Font sizing for the Textual UI
+│   ├── export_studio.py            # Facts and reference renders Studio depends on
 │   ├── generate_sounds.py          # Procedural sound synthesis
 │   └── generate_voice_clips.py     # TTS narration generation
 │
@@ -241,7 +276,7 @@ What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies 
 
 There are **two separate systems** involved:
 
-1. **USB (live boot)** (temporary): A remastered Ubuntu Server ISO that boots straight into Purple. Ubuntu's boot stack (shim, GRUB, kernel) is untouched; we swap in our own squashfs. Installation is optional and is started from the parent menu inside the running TUI, not from GRUB.
+1. **USB (live boot)** (temporary): A remastered Ubuntu Server ISO that boots straight into Purple. Ubuntu's boot stack (shim, GRUB, kernel) is untouched; we swap in our own squashfs. Installation is optional and is started from the Parent Menu inside the running app, not from GRUB.
 
 2. **Installed System** (permanent): A pre-built Ubuntu 24.04 image created with debootstrap (Debian i386 for 32-bit CPUs). This is what kids use once a parent installs to disk.
 
@@ -252,7 +287,7 @@ When a parent chooses "Install on this Computer" from the (PIN-gated) parent men
 - Ubuntu's stock kernel → all hardware drivers included
 - No package installation during setup → fast, reliable, offline
 - Same root filesystem for live boot and install → built once, packaged twice
-- Install consent lives in the TUI (PIN + confirmation) → explicit user consent before disk writes
+- Install consent lives in the app (PIN + confirmation) → explicit user consent before disk writes
 
 See [guides/architecture-overview.md](guides/architecture-overview.md) for a detailed explanation of why this design exists and what alternatives we tried.
 
@@ -267,6 +302,8 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 - 1024×768 display minimum
 - Audio output (speakers or headphones)
 - BIOS or UEFI firmware (Secure Boot supported)
+
+**Also:** 2018-2020 Intel Macs with the T2 chip (t2linux kernel), 32-bit CPUs (Debian i386 image), and 32-bit UEFI firmware, each picked per machine by GRUB. `just build-pi` makes a card image for Raspberry Pi 4, 400, 5 and 500.
 
 **Tested on:** 2010-2020 era laptops (ThinkPad, Dell Latitude, HP EliteBook, Surface, MacBook Air/Pro)
 
@@ -286,7 +323,10 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 - **[guides/keyboard-architecture.md](guides/keyboard-architecture.md):** evdev input, state machine, F-key calibration
 - **[guides/play-room-design.md](guides/play-room-design.md):** How the Play room parses and evaluates input
 - **[guides/sound-synthesis.md](guides/sound-synthesis.md):** Procedural sound generation
-- **[guides/mode-reference.md](guides/mode-reference.md):** Reference for all rooms and controls
+- **[guides/canvas-architecture.md](guides/canvas-architecture.md):** How the canvas UI draws and takes input
+- **[guides/family-rooms.md](guides/family-rooms.md):** Family rooms from Purple Packs, and how they run sandboxed
+- **[guides/printing.md](guides/printing.md):** Plug-in USB printing
+- **[guides/mode-reference.md](guides/mode-reference.md):** Room mechanics for demo scripting (written for the Textual UI)
 - **[guides/kid-proofing.md](guides/kid-proofing.md):** Kiosk lockdown and safety measures
 - **[guides/usb-flash-settle.md](guides/usb-flash-settle.md):** Why freshly flashed drives get a one-time QEMU boot
 

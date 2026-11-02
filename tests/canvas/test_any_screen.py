@@ -33,17 +33,39 @@ def test_chrome_scales_with_the_frame(size):
     assert g.em(10) == round(g.stage.w * 0.13)
 
 
-@pytest.mark.parametrize("size", SCREENS)
-def test_full_screen_text_is_centered(size):
+def _sleep_text(app):
     from purple_tui.canvas.rooms.sleep_screen import FullScreen
+    screen = FullScreen(app)
+    screen.message, screen.status = "Sleeping", "Battery. Shuts off in about 1 hr."
+    return screen
+
+
+def _install(phase, diag=()):
+    def make(app):
+        from purple_tui.canvas.rooms.parent_menu import InstallProgressScreen
+        screen = InstallProgressScreen(app)
+        screen._phase, screen._diag_lines = phase, list(diag)
+        return screen
+    return make
+
+
+FULL_SCREENS = {"sleep": (_sleep_text, True), "installing": (_install("installing"), True),
+                "install_error": (_install("error"), True), "install_diag": (_install("error", ["diag line"]), False)}
+
+
+@pytest.mark.parametrize("size", SCREENS)
+@pytest.mark.parametrize("name", FULL_SCREENS)
+def test_full_screens_sit_on_the_stage(size, name):
+    make, centered = FULL_SCREENS[name]
 
     async def go():
         app = make_app(size=size)
-        screen = FullScreen(app)
-        screen.message, screen.status = "Sleeping", "Battery. Shuts off in about 1 hr."
-        screen.draw(app.g)
+        make(app).draw(app.g)
         return app.g
     g = run(go())
     bg = g.surface.get_at((0, 0))
-    cols = [x for x in range(g.w) if any(g.surface.get_at((x, y)) != bg for y in range(0, g.h, 2))]
-    assert abs((cols[0] + cols[-1]) / 2 - g.w / 2) <= g.vw(0.5)
+    ink = [(x, y) for x in range(0, g.w, 2) for y in range(0, g.h, 2) if g.surface.get_at((x, y)) != bg]
+    xs, ys = [x for x, _ in ink], [y for _, y in ink]
+    assert g.stage.inflate(4, 4).collidepoint(min(xs), min(ys)) and g.stage.inflate(4, 4).collidepoint(max(xs), max(ys))
+    if centered:
+        assert abs((min(xs) + max(xs)) / 2 - g.w / 2) <= g.vw(0.5)

@@ -281,6 +281,13 @@ class Gfx:
     def vw(self, pct: float) -> int:
         return max(1, round(self.stage.w * pct / 100))
 
+    def sx(self, pct: float) -> int:
+        """A screen x that far across the stage; vw() alone is a size, not a position."""
+        return self.stage.x + round(self.stage.w * pct / 100)
+
+    def sy(self, pct: float) -> int:
+        return self.stage.y + round(self.stage.h * pct / 100)
+
     def em(self, n: float = 1.0) -> int:
         """The chrome unit: 1.3% of the design width, the same scale the design
         mock used, so its em-based paddings, gaps and radii port verbatim."""

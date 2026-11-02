@@ -1011,36 +1011,36 @@ class InstallProgressScreen(FullScreen):
         g.fill(P.BG)
         if self._phase == "error" and (self._scrolling or self._diag_lines):
             g.draw_markup(f"Please record this with your phone and send to {SUPPORT_EMAIL}\nEsc: go back   Enter: replay",
-                          g.vh(2.4), g.vw(4), g.vh(3), "mono-bold", P.PRIMARY, g.vw(92), "left", P.BG)
+                          g.vh(2.4), g.sx(4), g.sy(3), "mono-bold", P.PRIMARY, g.vw(92), "left", P.BG)
             end = self._diag_scroll_pos if self._scrolling else len(self._diag_lines)
             visible = self._diag_lines[max(0, end - self._SCROLL_VISIBLE):end]
-            y = g.vh(11)
+            y = g.sy(11)
             for line in visible:
-                g.draw_text(line or " ", g.vh(2.4), g.vw(4), y, "mono", P.TEXT)
+                g.draw_text(line or " ", g.vh(2.4), g.sx(4), y, "mono", P.TEXT)
                 y += g.vh(3.2)
             return
         cx = g.w // 2
         if self._phase == "error":
-            g.draw_text("Setup did not finish.", g.vh(4), cx, g.vh(22), "mono-heavy", P.PRIMARY, anchor="center")
+            g.draw_text("Setup did not finish.", g.vh(4), cx, g.sy(22), "mono-heavy", P.PRIMARY, anchor="center")
             if self._corrupt_key:
                 summary = ("It looks like the installation data on\nthis Purple Key got damaged. This computer\n"
                            "is fine, and Purple still works from the\nUSB without installing.\n\n"
                            f"Email us for a replacement Key:\n{SUPPORT_EMAIL}")
             else:
                 summary = f"{self._get_error_summary()}\n\nIf this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
-            g.draw_markup(summary, g.vh(2.6), g.vw(10), g.vh(30), "mono", P.TEXT, g.vw(80), "center", P.BG, g.vh(0.6))
+            g.draw_markup(summary, g.vh(2.6), g.sx(10), g.sy(30), "mono", P.TEXT, g.vw(80), "center", P.BG, g.vh(0.6))
             g.draw_markup("Press Enter for technical details.\nEsc to go back. Power button to turn off.", g.vh(2.2),
-                          g.vw(10), g.vh(78), "mono-bold", P.MUTED, g.vw(80), "center", P.BG)
+                          g.sx(10), g.sy(78), "mono-bold", P.MUTED, g.vw(80), "center", P.BG)
             return
         bot = g.image("bot.png", g.vh(20))
-        g.surface.blit(bot, bot.get_rect(midbottom=(cx, g.vh(33))))
-        g.draw_text("Installing Purple Computer", g.vh(4), cx, g.vh(40), "mono-heavy", P.PRIMARY, anchor="center")
-        g.draw_text(self._status, g.vh(2.6), cx, g.vh(47.5), "mono-bold", P.TEXT, anchor="center")
+        g.surface.blit(bot, bot.get_rect(midbottom=(cx, g.sy(33))))
+        g.draw_text("Installing Purple Computer", g.vh(4), cx, g.sy(40), "mono-heavy", P.PRIMARY, anchor="center")
+        g.draw_text(self._status, g.vh(2.6), cx, g.sy(47.5), "mono-bold", P.TEXT, anchor="center")
         pill = pygame.Rect(0, 0, min(g.vw(60), g.vh(80)), g.vh(5.6))
-        pill.center = (cx, g.vh(56))
+        pill.center = (cx, g.sy(56))
         draw_fill_pill(g, pill, self._progress / 100, f"{self._progress}%")
-        g.draw_text(self._eta_hint(), g.vh(2.4), cx, g.vh(64), "mono", P.MUTED, anchor="center")
-        g.draw_text("Keep the Purple Key plugged in until it's done.", g.vh(2.1), cx, g.vh(90), "mono", P.DIM, anchor="center")
+        g.draw_text(self._eta_hint(), g.vh(2.4), cx, g.sy(64), "mono", P.MUTED, anchor="center")
+        g.draw_text("Keep the Purple Key plugged in until it's done.", g.vh(2.1), cx, g.sy(90), "mono", P.DIM, anchor="center")
 
 
 class InstallDoneScreen(FullScreen):

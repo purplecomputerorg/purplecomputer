@@ -1,5 +1,5 @@
 """Art room: a grid of square cells. Every letter paints its sticker color,
-Backslash opens the color bar (for the brush, or in ABC for the letters),
+Backslash opens the color bar (for the brush, or in Letters for the letters),
 Space puts the brush down so arrows draw (or only while held),
 holding Backspace takes squares, then whole lines, and Tab switches to writing letters.
 The Logo-style code line opens from the Esc menu."""
@@ -173,7 +173,7 @@ def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
 
 class _RoomBrushRunner(ArtCodeRunner):
     """The brush lives on the room, so `brush up` holds across lines and shows on
-    the cursor; `_paint_on` is Paint (not ABC) with that brush down."""
+    the cursor; `_paint_on` is Paint (not Letters) with that brush down."""
 
     @property
     def _paint_on(self) -> bool:
@@ -221,7 +221,7 @@ class ArtRoom(Room):
         self._last_key_char = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
         self._mixed = None                # (keycaps, color) of the last dab that mixed
-        self._ink = None              # ABC letters' color from the wheel; None: light, or black/white over paint
+        self._ink = None              # Letters mode: the letters' color from the wheel; None: light, or black/white over paint
         self._wheel_spots = {}        # per mode
         self._pen_down = False
         self._lift = 1.0              # the brush's height: 1 up, 0 pressed down; eases on Space
@@ -274,7 +274,7 @@ class ArtRoom(Room):
 
     @property
     def brush_color(self) -> str:
-        """In ABC the wheel's 'brush' is the letters' ink."""
+        """In Letters the wheel's 'brush' is the letters' ink."""
         return self._last_key_color if self._paint_mode else self._ink or AUTO
 
     def set_brush_color(self, color: str, key: str = ""):
@@ -911,10 +911,10 @@ class ArtRoom(Room):
         return (dot, "Paint"), (None, "Brush down" if self._code_brush_down else "Brush up")
 
     def _draw_header(self, g, r):
-        """The Tab switch between Paint and ABC, with the brush beside it; returns the color bar's row."""
+        """The Tab switch between Paint and Letters, with the brush beside it; returns the color bar's row."""
         if self.app._littles_mode:
             draw_label(g, "Paint" if self._paint_mode else "Write", g.vh(1.9), r.centerx, r.centery, P.TEXT, anchor="center")
             return None
         icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
-        return draw_mode_switch(g, r, ("Paint", "ABC"), 0 if self._paint_mode else 1, self.brush_color,
+        return draw_mode_switch(g, r, ("Paint", "Letters"), 0 if self._paint_mode else 1, self.brush_color,
                                 icon, wheel_chip(self))

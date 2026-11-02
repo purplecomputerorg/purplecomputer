@@ -809,14 +809,18 @@ def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, la
     return pill
 
 
-def _draw_tab_switch(g: Gfx, px: int, left: int, cy: int, labels: tuple, active: int) -> pygame.Rect:
-    """'[Tab] One Two' in one pill, the active label on the selection plate."""
+def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple) -> tuple:
     gap = px // 2
-    key_w = keycap_size(g, "Tab", px)[0]
     widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for t in labels]
-    content = key_w + gap + sum(widths) + gap * (len(labels) - 1)
-    pill, pad = header_pill(g, px, content, left + content + 2 * round(px * 0.35), cy, False)
-    x = draw_key(g, "Tab", px, pill.x + pad, cy).right + gap
+    return widths, keycap_size(g, key_name, px)[0] + gap + sum(widths) + gap * (len(labels) - 1)
+
+
+def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int) -> pygame.Rect:
+    """'[key] One Two' in one pill, the active label on the selection plate."""
+    gap = px // 2
+    widths, content = _switch_widths(g, px, key_name, labels)
+    pill, pad = header_pill(g, px, content, right, cy, False)
+    x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
         x += w + gap
@@ -824,12 +828,14 @@ def _draw_tab_switch(g: Gfx, px: int, left: int, cy: int, labels: tuple, active:
 
 
 def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str | None = None,
-                     icon=None, wheel: str | None = None, chips: tuple = ()):
+                     icon=None, wheel: str | None = None, chips: tuple = (), also: tuple = ()):
     """The room's header: the Tab switch starting at the middle, the brush
     swatch (or an icon standing in for it) left of it, then key chips further
     left: '[\\] Colors' when wheel (from color_wheel.chip) is set, and each of
-    chips = (key, mark, label, on, noun). Slides right when the chips would
-    run past r's left edge. Returns the color bar's row: r from its left edge
+    chips = (key, mark, label, on, noun), or (key, labels, active) for a switch
+    like Tab's. Slides right when the chips would run past r's left edge, as far
+    as the widest of chips and the other chip sets in also, so it holds still
+    when a room swaps its chips. Returns the color bar's row: r from its left edge
     to the Colors chip's right, or None without the chip."""
     px = g.vh(1.9)
     if wheel:
@@ -837,7 +843,7 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
         chips = ((OPEN_KEY, disc(round(px * 1.3)), "Colors", wheel == "open"), *chips)
     start = r.centerx - keycap_size(g, "Tab", px)[0]
     with g.drawing_on(pygame.Surface((1, 1))):
-        left = _draw_mode_switch_at(g, px, start, r.centery, labels, active, swatch, icon, chips).x
+        left = min(_draw_mode_switch_at(g, px, start, r.centery, labels, active, swatch, icon, c).x for c in (chips, *also))
     first = _draw_mode_switch_at(g, px, start + max(0, r.x - left), r.centery, labels, active, swatch, icon, chips)
     return pygame.Rect(r.x, r.y, first.right - r.x, r.h) if wheel else None
 
@@ -845,13 +851,15 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
 def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, swatch, icon, chips) -> pygame.Rect:
     """Draws the header with the Tab switch at start; returns its leftmost piece."""
     gap = round(px * 1.2)
-    piece = _draw_tab_switch(g, px, start, cy, labels, active)
+    piece = _draw_switch(g, px, start + _switch_widths(g, px, "Tab", labels)[1] + 2 * round(px * 0.35), cy, "Tab", labels,
+                         active)
     mark = icon or (swatch_dot(swatch, round(px * 2.1)) if swatch else None)
     if mark:
         piece = mark.get_rect(midright=(piece.x - gap, cy))
         g.surface.blit(mark, piece)
     for chip in reversed(chips):
-        piece = _draw_key_chip(g, px, piece.x - gap, cy, *chip)
+        draw = _draw_switch if isinstance(chip[1], tuple) else _draw_key_chip
+        piece = draw(g, px, piece.x - gap, cy, *chip)
     return piece
 
 

@@ -1,5 +1,5 @@
 """Music room: a 10x4 grid that mirrors the keyboard. Letters play notes,
-digits play percussion, Tab says letters (Space: names or sounds), arrows change key, Enter cycles the
+digits play percussion, Tab says letters (Space: their names or sounds), arrows change key, Enter cycles the
 instrument, hold Enter records a loop, and the code line opens from the Esc menu."""
 
 import asyncio
@@ -620,7 +620,7 @@ class MusicRoom(Room):
 
     def _draw_header(self, g, rect):
         """The same header as Art and Blocks: Enter and Space chips beside the
-        Sounds / ABC switch."""
+        Sounds / Letters switch."""
         instrument = self._instrument(self.instrument_index)[1]
         if self.app._littles_mode:
             plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {instrument}"
@@ -628,14 +628,18 @@ class MusicRoom(Room):
             return
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
         bar.h = hint_row_h(g)
-        draw_mode_switch(g, bar, ("Sounds", "ABC"), 1 if self.letters_mode else 0,
-                         chips=(("Enter", ICON_MUSIC, instrument, False, "sound"), self._space_chip()))
+        draw_mode_switch(g, bar, ("Sounds", "Letters"), 1 if self.letters_mode else 0,
+                         chips=self._header_chips(instrument, self.letters_mode),
+                         also=[self._header_chips(name, letters) for _, name in instruments() for letters in (False, True)])
 
-    def _space_chip(self) -> tuple:
-        """In ABC, Space picks what B says: its name or its sound (padded so the header holds still)."""
-        if self.letters_mode:
-            return "Space", None, "b  " if self.say_sounds else "bee", self.say_sounds, "B says"
-        return "Space", None, "notes", self.show_labels
+    def _header_chips(self, instrument: str, letters: bool) -> tuple:
+        return ("Enter", ICON_MUSIC, instrument, False, "sound"), self._space_chip(letters)
+
+    def _space_chip(self, letters: bool) -> tuple:
+        """Space's switch: what letters say in Letters, note names on the keys in Sounds."""
+        if letters:
+            return "Space", ("Names", "Sounds"), int(self.say_sounds)
+        return "Space", ("Notes off", "Notes on"), int(self.show_labels)
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""

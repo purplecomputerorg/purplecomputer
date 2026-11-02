@@ -2,11 +2,9 @@
 """
 Generate pre-recorded letter name clips for Music Mode's Letters sub-mode.
 
-Uses Piper TTS to generate a spoken clip of each letter (A-Z).
-These are loaded at runtime by MusicGrid instead of using live TTS.
-
-Same synthesis and leveling as live speech (purple_tui.tts), so a
-clip and a live letter sound identical.
+Speaks each letter (A-Z) and digit (0-9) in Kokoro, Studio's room voice
+(scripts/studio_bundle.py fetches it), on the same espeak-ng phonemes,
+respellings and leveling as Purple's live Piper speech.
 
 Output directory: packs/core-sounds/content/letters/
 
@@ -15,6 +13,8 @@ Usage:
     python scripts/generate_letter_clips.py --force   # regenerate all
 """
 
+import array
+import json
 import string
 import sys
 from pathlib import Path
@@ -24,11 +24,37 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 LETTERS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "letters"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.tts import _prepare_text, find_voice_model, load_voice, synthesize_to_file  # noqa: E402
+from purple_tui.tts import _prepare_text, _write_wav, postprocess_samples  # noqa: E402
+from scripts.studio_bundle import KOKORO, OUT, fetch_kokoro  # noqa: E402
+
+KOKORO_DIR = OUT.parent / "voice" / "kokoro"
+STYLE = 256
 
 
-def generate_letter_clip(voice, letter: str, output_path: Path) -> bool:
-    return synthesize_to_file(voice, _prepare_text(letter), str(output_path))
+class Kokoro:
+    def __init__(self):
+        import numpy as np
+        import onnxruntime
+        from piper.phonemize_espeak import EspeakPhonemizer
+        fetch_kokoro()
+        self.vocab = json.loads((KOKORO_DIR / "kokoro.json").read_text())["vocab"]
+        self.styles = np.fromfile(KOKORO_DIR / f"{KOKORO['voice']}.bin", dtype="<f4").reshape(-1, STYLE)
+        self.session = onnxruntime.InferenceSession(str(KOKORO_DIR / KOKORO["model"]))
+        self.espeak = EspeakPhonemizer()
+
+    def speak_to_file(self, text: str, wav_path: Path) -> bool:
+        import numpy as np
+        ids = [self.vocab[p] for s in self.espeak.phonemize("en-us", _prepare_text(text)) for p in s if p in self.vocab]
+        if not ids:
+            return False
+        audio = self.session.run(None, {
+            "tokens": np.array([[0, *ids, 0]], dtype=np.int64),
+            "style": self.styles[len(ids)][None],
+            "speed": np.array([1.0], dtype=np.float32),
+        })[0].reshape(-1)
+        samples = array.array("h", (np.clip(audio / max(float(np.abs(audio).max()), 1e-8), -1, 1) * 32767).astype(np.int16).tobytes())
+        _write_wav(str(wav_path), postprocess_samples(samples, KOKORO["rate"]), KOKORO["rate"])
+        return True
 
 
 def main():
@@ -55,17 +81,17 @@ def main():
         return 0
 
     try:
-        voice = load_voice()
-    except (ImportError, FileNotFoundError) as e:
+        voice = Kokoro()
+    except (ImportError, OSError) as e:
         print(f"ERROR: {e}")
         return 1
-    print(f"Using voice model: {find_voice_model()}")
+    print(f"Using voice model: {KOKORO['model']} ({KOKORO['voice']})")
     print()
 
     print(f"Generating {len(to_generate)} clips...")
     print()
     for letter, output_path in to_generate:
-        if generate_letter_clip(voice, letter, output_path):
+        if voice.speak_to_file(letter, output_path):
             print(f"  {letter} -> {output_path.name}")
         else:
             print(f"  FAILED: {letter}")

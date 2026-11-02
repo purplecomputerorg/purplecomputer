@@ -19,7 +19,7 @@ from .. import palette as P
 from ..color_mixing import rgb_to_hex
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from .gfx import rgb
-from .ui import (AUTO, DOWN, LEFT, RIGHT, UP, Overlay, auto_inks, draw_key_hint, hint_row_h, key_hint_width,
+from .ui import (AUTO, DOWN, LEFT, RIGHT, UP, Overlay, auto_inks, draw_key_hint, header_pill, hint_row_h, key_hint_width,
                  keycap_size, swatch_dot)
 
 OPEN_KEY = "\\"
@@ -173,11 +173,9 @@ class ColorBar(Overlay):
     def _draw_bar(self, g, px: int, row: pygame.Rect) -> pygame.Rect:
         """'< cells > shades' in one pill the chip's height; the picked cell
         stands out above and below it."""
-        pad, gap = round(px * 0.35), px // 2
-        h = keycap_size(g, "X", px)[1] + 2 * pad
-        pill = pygame.Rect(row.x, row.centery - h // 2, row.w, h)
-        g.rect(P.FIELD, pill, radius=h // 2)
-        g.rect(P.LINE, pill, width=1, radius=h // 2)
+        gap = px // 2
+        pill, pad = header_pill(g, px, row.w - 2 * round(px * 0.35), row.right, row.centery, False)
+        h = pill.h
         inner = pill.inflate(-2 * pad, -2 * pad)
         x = g.draw_text(LEFT, px, pill.x + h // 3, pill.centery, "mono", P.MUTED, anchor="midleft").right + gap
         shades = pygame.Rect(0, inner.y, round(px * 0.9), inner.h)

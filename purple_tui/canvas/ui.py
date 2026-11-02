@@ -776,7 +776,7 @@ CODE_KEYS = "{Esc} {Space}"   # the Esc menu, then its Code card
 CODE_HINT = f"{ICON_ROBOT} {CODE_KEYS} write code"
 
 
-def _pill(g: Gfx, px: int, content_w: int, right: int, cy: int, on: bool) -> tuple:
+def header_pill(g: Gfx, px: int, content_w: int, right: int, cy: int, on: bool) -> tuple:
     """The rounded plate a header control sits in; returns (pill, pad)."""
     pad = round(px * 0.35)
     pill = pygame.Rect(0, 0, content_w + 2 * pad, keycap_size(g, "X", px)[1] + 2 * pad)
@@ -796,7 +796,7 @@ def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, la
     noun_w = g.measure(noun, px, "mono")[0] + gap if noun else 0
     mark_w = (mark.get_width() if isinstance(mark, pygame.Surface) else g.measure(mark, px, "mono")[0]) + gap if mark else 0
     label_w = g.measure(label, px, "mono-bold" if on else "mono")[0]
-    pill, pad = _pill(g, px, key_w + gap + noun_w + mark_w + label_w + px - round(px * 0.35), right, cy, on)
+    pill, pad = header_pill(g, px, key_w + gap + noun_w + mark_w + label_w + px - round(px * 0.35), right, cy, on)
     ink, cap = (P.ON_PRIMARY, P.PRIMARY) if on else (P.TEXT, P.SURFACE)
     x = draw_key(g, key_name, px, pill.x + pad, cy, fill=ink, ink=cap).right + gap
     if noun:
@@ -815,7 +815,7 @@ def _draw_tab_switch(g: Gfx, px: int, left: int, cy: int, labels: tuple, active:
     key_w = keycap_size(g, "Tab", px)[0]
     widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for t in labels]
     content = key_w + gap + sum(widths) + gap * (len(labels) - 1)
-    pill, pad = _pill(g, px, content, left + content + 2 * round(px * 0.35), cy, False)
+    pill, pad = header_pill(g, px, content, left + content + 2 * round(px * 0.35), cy, False)
     x = draw_key(g, "Tab", px, pill.x + pad, cy).right + gap
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)

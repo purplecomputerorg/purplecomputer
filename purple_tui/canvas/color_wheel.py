@@ -171,7 +171,7 @@ class ColorBar(Overlay):
         draw_key_hint(g, HINT, px, foot.x, foot.centery)
 
     def _draw_bar(self, g, px: int, row: pygame.Rect) -> pygame.Rect:
-        """'< cells > shades' in one pill the chip's height; the picked cell
+        """'< cells > shades ^v' in one pill the chip's height; the picked cell
         stands out above and below it."""
         gap = px // 2
         pill, pad = header_pill(g, px, row.w - 2 * round(px * 0.35), row.right, row.centery, False)
@@ -179,7 +179,11 @@ class ColorBar(Overlay):
         inner = pill.inflate(-2 * pad, -2 * pad)
         x = g.draw_text(LEFT, px, pill.x + h // 3, pill.centery, "mono", P.MUTED, anchor="midleft").right + gap
         shades = pygame.Rect(0, inner.y, round(px * 0.9), inner.h)
-        shades.right = pill.right - h // 2
+        ud_px = round(px * 0.75)
+        ud_x = pill.right - h // 3 - ud_px // 2
+        for glyph, dy in ((UP, -1), (DOWN, 1)):
+            g.draw_text(glyph, ud_px, ud_x, pill.centery + dy * inner.h // 4, "mono", P.MUTED, anchor="center")
+        shades.right = ud_x - ud_px // 2 - gap // 2
         right = g.draw_text(RIGHT, px, shades.x - gap, pill.centery, "mono", P.MUTED, anchor="midright").x - gap
         cw = (right - x) / (HUES + 1)
         for cell in range(HUES + 1):

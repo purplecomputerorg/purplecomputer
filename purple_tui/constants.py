@@ -229,10 +229,32 @@ def is_usb_needed() -> bool:
     return os.path.exists(USB_KEEP_MARKER)
 
 
+MOUNTS_PATH = "/proc/self/mounts"
+SYS_BLOCK_DIR = "/sys/class/block"
+
+
+def _usb_block_device(path: str) -> str | None:
+    """Kernel name (sdb1, sr0) of the block device mounted under path, or None."""
+    best, dev = "", None
+    try:
+        with open(MOUNTS_PATH) as f:
+            for src, mnt, *_ in (line.split() for line in f):
+                if src.startswith("/dev/") and len(mnt) > len(best) and (path + "/").startswith(mnt.rstrip("/") + "/"):
+                    best, dev = mnt, os.path.basename(os.path.realpath(src))
+    except OSError:
+        pass
+    return dev
+
+
 def is_usb_present() -> bool:
     """Check if the USB drive is still physically connected."""
     if _FAKE_USB:
         return not _FAKE_USB.endswith("removed")
+    # The mount and the squashfs inode outlive a pulled stick; its sysfs entry does not.
+    if not getattr(is_usb_present, "_dev", None):
+        is_usb_present._dev = _usb_block_device(SQUASHFS_PATH)
+    if is_usb_present._dev:
+        return os.path.exists(os.path.join(SYS_BLOCK_DIR, is_usb_present._dev))
     return os.path.exists(SQUASHFS_PATH)
 
 # Room titles with icons (uses room name constants)

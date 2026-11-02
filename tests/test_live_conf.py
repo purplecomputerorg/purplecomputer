@@ -22,3 +22,28 @@ def test_conf_lines_become_paths(tmp_path, monkeypatch):
         "SQUASHFS": "/cdrom/purple32/filesystem.squashfs",
         "PURPLE_PAYLOAD_DIR": "/cdrom/purple32",
     }
+
+
+def _fake_mounts(tmp_path, monkeypatch, src):
+    mounts = tmp_path / "mounts"
+    mounts.write_text(f"/dev/loop0 /rofs squashfs ro 0 0\n{src} /cdrom iso9660 ro 0 0\n")
+    sys_block = tmp_path / "block"
+    (sys_block / "sdb1").mkdir(parents=True)
+    monkeypatch.setattr(constants, "MOUNTS_PATH", str(mounts))
+    monkeypatch.setattr(constants, "SYS_BLOCK_DIR", str(sys_block))
+    monkeypatch.setattr(constants, "_FAKE_USB", "")
+    monkeypatch.setattr(constants.is_usb_present, "_dev", None, raising=False)
+    return sys_block
+
+
+def test_usb_present_follows_the_stick_not_the_stale_mount(tmp_path, monkeypatch):
+    sys_block = _fake_mounts(tmp_path, monkeypatch, "/dev/sdb1")
+    assert constants.is_usb_present()
+    (sys_block / "sdb1").rmdir()
+    assert not constants.is_usb_present()
+
+
+def test_squashfs_off_a_block_device_falls_back_to_the_file(tmp_path, monkeypatch):
+    _fake_mounts(tmp_path, monkeypatch, "tmpfs")
+    monkeypatch.setattr(constants, "SQUASHFS_PATH", str(tmp_path / "filesystem.squashfs"))
+    assert not constants.is_usb_present()

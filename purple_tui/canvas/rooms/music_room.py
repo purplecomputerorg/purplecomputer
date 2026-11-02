@@ -10,7 +10,7 @@ import pygame
 from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
-from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC
+from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC, ICON_MUSIC_NOTE
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import warm_mixer
@@ -638,8 +638,8 @@ class MusicRoom(Room):
     def _space_chip(self, letters: bool) -> tuple:
         """Space's switch: what letters say in Letters, note names on the keys in Sounds."""
         if letters:
-            return "Space", ("Names", "Sounds"), int(self.say_sounds)
-        return "Space", ("Notes off", "Notes on"), int(self.show_labels)
+            return "Space", ("Names", "Sounds"), int(self.say_sounds), "ABC"
+        return "Space", ("Off", "On"), int(self.show_labels), ICON_MUSIC_NOTE
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""

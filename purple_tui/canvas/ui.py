@@ -809,18 +809,22 @@ def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, la
     return pill
 
 
-def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple) -> tuple:
+def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple, mark: str = "") -> tuple:
     gap = px // 2
     widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for t in labels]
-    return widths, keycap_size(g, key_name, px)[0] + gap + sum(widths) + gap * (len(labels) - 1)
+    mark_w = g.measure(mark, px, "mono")[0] + gap if mark else 0
+    return widths, keycap_size(g, key_name, px)[0] + gap + mark_w + sum(widths) + gap * (len(labels) - 1)
 
 
-def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int) -> pygame.Rect:
-    """'[key] One Two' in one pill, the active label on the selection plate."""
+def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int,
+                 mark: str = "") -> pygame.Rect:
+    """'[key] mark One Two' in one pill, the active label on the selection plate."""
     gap = px // 2
-    widths, content = _switch_widths(g, px, key_name, labels)
+    widths, content = _switch_widths(g, px, key_name, labels, mark)
     pill, pad = header_pill(g, px, content, right, cy, False)
     x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
+    if mark:
+        x = g.draw_text(mark, px, x, cy, "mono", P.MUTED, anchor="midleft").right + gap
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
         x += w + gap
@@ -832,8 +836,8 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     """The room's header: the Tab switch starting at the middle, the brush
     swatch (or an icon standing in for it) left of it, then key chips further
     left: '[\\] Colors' when wheel (from color_wheel.chip) is set, and each of
-    chips = (key, mark, label, on, noun), or (key, labels, active) for a switch
-    like Tab's. Slides right when the chips would run past r's left edge, as far
+    chips = (key, mark, label, on, noun), or (key, labels, active, mark) for a
+    switch like Tab's. Slides right when the chips would run past r's left edge, as far
     as the widest of chips and the other chip sets in also, so it holds still
     when a room swaps its chips. Returns the color bar's row: r from its left edge
     to the Colors chip's right, or None without the chip."""

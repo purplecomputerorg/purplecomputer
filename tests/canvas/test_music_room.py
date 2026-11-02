@@ -38,7 +38,7 @@ def test_space_in_abc_switches_letters_between_names_and_sounds(monkeypatch):
         await press(app, "tab")
         await press(app, "space")
         assert room.say_sounds and not room.show_labels
-        assert room._space_chip(True) == ("Space", ("Names", "Sounds"), 1)
+        assert room._space_chip(True)[1:3] == (("Names", "Sounds"), 1)
         room.play_letter("B")
         assert asked[-1] is True
         assert room.timeline_state()["sounds"] is True

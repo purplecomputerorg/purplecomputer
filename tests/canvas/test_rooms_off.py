@@ -6,7 +6,7 @@ from purple_tui import settings
 from purple_tui.canvas.harness import make_app, press, run
 from purple_tui.canvas.room_picker import RoomPicker
 from purple_tui.canvas.rooms.parent_menu import ParentMenu
-from purple_tui.canvas.rooms.rooms_screen import RoomsScreen
+from purple_tui.canvas.rooms.rooms_screen import RoomsScreen, rooms_label
 
 
 @pytest.fixture(autouse=True)
@@ -33,6 +33,7 @@ def test_turning_rooms_off_hides_them_and_leaves_the_room_youre_in():
         app.push(screen)
         assert [x for _, x in screen.rows[1]] == list(app.rooms)
         assert _states(screen) == ["on", "on", "on", "on", "off"]
+        assert rooms_label(app) == "Rooms: 4 of 5 On"
         app._draw()
         await press(app, "enter")
         assert app.active_room == "music" and settings.get_rooms_off() == ["art"]

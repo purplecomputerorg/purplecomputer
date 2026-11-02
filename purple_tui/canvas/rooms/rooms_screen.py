@@ -11,6 +11,7 @@ from ..ui import CANCELLED, DOWN, LEFT, RIGHT, UP, Dialog
 from .family_room import ICON_FAMILY, room_icon
 
 ICON_CHECKED = "\U000F0132"  # nf-md-checkbox_marked
+ICON_UNCHECKED = "\U000F0131"  # nf-md-checkbox_blank_outline
 ICON_HOME = "\U000F02DC"     # nf-md-home
 COLS = 6
 MIN_W = 44.0
@@ -41,8 +42,11 @@ def family_on(on: dict | None = None) -> int:
 def rooms_label(app) -> str:
     from ...settings import get_littles_mode
     from .parent_menu import littles_name
+    from ...content import get_content
     littles = get_littles_mode()
-    return f"Rooms: Littles Mode, {littles_name(littles)}" if littles else f"Rooms: {len(core_on(app)) + family_on()} On"
+    if littles:
+        return f"Rooms: Littles Mode, {littles_name(littles)}"
+    return f"Rooms: {len(core_on(app)) + family_on()} of {len(app.rooms) + len(get_content().rooms)} On"
 
 
 def _pack_name(room) -> str:
@@ -53,9 +57,9 @@ def _pack_name(room) -> str:
 class RoomsScreen(Dialog):
     """Given packs, it opens on their rooms: the step right after a pack is added."""
     title = "Rooms"
-    hint = f"{LEFT} {RIGHT} {UP} {DOWN} move   Enter on or off   Esc done"
-    DESCRIPTION = "Lit up rooms show in the Esc menu."
-    JUST_ADDED = "Pick the rooms to turn on now. You can change this later in the Parent Menu, under Rooms."
+    hint = f"{LEFT} {RIGHT} {UP} {DOWN} move   Enter check or uncheck   Esc done"
+    DESCRIPTION = "Checked rooms show in the Esc menu."
+    JUST_ADDED = "Check the rooms to turn on now. You can change this later in the Parent Menu, under Rooms."
     LITTLES_ON = "Littles Mode is on, so there's no Esc menu. These rooms come back when it's off."
 
     def __init__(self, app, packs=None):
@@ -188,7 +192,7 @@ class RoomsScreen(Dialog):
             kind, x = item
             icon, name = (self.app.rooms[x].icon, self.app.rooms[x].label) if kind == "core" else (room_icon(x), short_title(x.title))
             draw_card(g, r, icon, name, [NOTES[state]], (self.row, self.col) == (i, col),
-                      dim=state != "on", lit=state == "on", badge=ICON_CHECKED if state == "on" else "")
+                      dim=state != "on", lit=state == "on", badge=ICON_CHECKED if state == "on" else ICON_UNCHECKED)
 
     def _pill(self, g, cx, cy, text, selected):
         r = pygame.Rect(0, 0, g.em(PILL_W), g.em(PILL_H))

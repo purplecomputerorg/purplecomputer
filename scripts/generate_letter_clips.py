@@ -3,8 +3,9 @@
 Generate pre-recorded letter name clips for Music Mode's Letters sub-mode.
 
 Speaks each letter (A-Z) and digit (0-9) in Kokoro, Studio's room voice
-(scripts/studio_bundle.py fetches it), on the same espeak-ng phonemes,
-respellings and leveling as Purple's live Piper speech.
+(scripts/studio_bundle.py fetches it), leveled like Purple's live Piper speech.
+espeak-ng phonemizes the bare key, which it reads as the letter's name; tts.py's
+respellings are Piper workarounds that mislead it ("es" becomes "eez").
 
 Output directory: packs/core-sounds/content/letters/
 
@@ -24,7 +25,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 LETTERS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "letters"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.tts import _prepare_text, _write_wav, postprocess_samples  # noqa: E402
+from purple_tui.tts import _write_wav, postprocess_samples  # noqa: E402
 from scripts.studio_bundle import KOKORO, OUT, fetch_kokoro  # noqa: E402
 
 KOKORO_DIR = OUT.parent / "voice" / "kokoro"
@@ -42,9 +43,9 @@ class Kokoro:
         self.session = onnxruntime.InferenceSession(str(KOKORO_DIR / KOKORO["model"]))
         self.espeak = EspeakPhonemizer()
 
-    def speak_to_file(self, text: str, wav_path: Path) -> bool:
+    def speak_to_file(self, key: str, wav_path: Path) -> bool:
         import numpy as np
-        ids = [self.vocab[p] for s in self.espeak.phonemize("en-us", _prepare_text(text)) for p in s if p in self.vocab]
+        ids = [self.vocab[p] for s in self.espeak.phonemize("en-us", f"{key}.") for p in s if p in self.vocab]
         if not ids:
             return False
         audio = self.session.run(None, {

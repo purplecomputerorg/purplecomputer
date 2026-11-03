@@ -40,7 +40,8 @@ from ..timeline import RoomTimeline
 from ..audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
 from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
-                 draw_key, draw_keycap, draw_label, draw_level)
+                 draw_key, draw_key_hint, draw_keycap, draw_label, draw_level,
+                 key_hint_width, keycap_size)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
 PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
@@ -185,6 +186,7 @@ class PurpleApp:
         self._legend_visible = True
         self._computer_name = None
         self._frame_note = None
+        self.boot_hint = False      # the welcome card over the first room, until the first key
         self._printer_seen = (None, printing.status())  # (file stamp, status) from the last check
         self._load_settings()
         boot_log.heartbeat("PurpleApp.__init__ complete")
@@ -243,6 +245,7 @@ class PurpleApp:
         if is_live_boot():
             from . import old_install
             old_install.start()
+        self.boot_hint = True
         if os.environ.get("PURPLE_DEV_MODE") != "1" and is_live_boot():
             from .rooms.sleep_screen import LiveBootSplash
             self.push(LiveBootSplash(self))
@@ -578,6 +581,9 @@ class PurpleApp:
 
     async def _dispatch_action(self, action):
         self._frame_stats.key()
+        # a key release can belong to the splash or picker the press closed
+        if self.boot_hint and not self._overlays and getattr(action, "is_down", True):
+            self.boot_hint = False
         self._record_user_activity()
         self.invalidate()
         if isinstance(action, NavigationAction):
@@ -1704,6 +1710,8 @@ class PurpleApp:
         content = self.content_rect(vp)
         g.surface.set_clip(frame.inflate(-4, -4))
         self.room.draw(g, content)
+        if self.boot_hint:
+            self._draw_boot_hint(content)
         if panel := self.viewport_panel():
             panel.draw(g, pygame.Rect(vp.x, content.bottom, vp.w, panel.height(g)))
             if content.w < vp.w:
@@ -1855,6 +1863,26 @@ class PurpleApp:
         return px, {"left": pygame.Rect(frame.x, 0, lw, 1), "esc": rects[0],
                     "tabs": [(rid, t, r) for (rid, t), r in zip(names, rects[1:])],
                     "right": pygame.Rect(frame.right - rw, 0, rw, 1)}
+
+    def _draw_boot_hint(self, rect):
+        """The bot, 'Type anything!' and how to change rooms, on a card in the middle of the room."""
+        g = self.g
+        bot_h, title_px, hint_px, pad, gap = g.vh(12), g.em(1.8), g.em(1.0), g.em(1.8), g.em(1.0)
+        hint = None if self._littles_mode else "{Esc} change rooms"
+        title_h = g.line_height(title_px, "sans-bold")
+        hint_h = keycap_size(g, "X", hint_px)[1] if hint else -gap
+        widths = (g.measure("Type anything!", title_px, "sans-bold")[0], key_hint_width(g, hint, hint_px) if hint else 0)
+        card = pygame.Rect(0, 0, max(widths) + 2 * pad, bot_h + title_h + hint_h + 2 * gap + 2 * pad)
+        card.center = rect.center
+        g.rect(P.SURFACE, card, radius=g.em(0.8))
+        g.rect(P.LINE, card, width=1, radius=g.em(0.8))
+        bot = g.image("bot.png", bot_h)
+        y = card.y + pad
+        g.surface.blit(bot, bot.get_rect(midtop=(card.centerx, y)))
+        y += bot_h + gap
+        g.draw_text("Type anything!", title_px, card.centerx, y, "sans-bold", P.ACCENT, anchor="midtop")
+        if hint:
+            draw_key_hint(g, hint, hint_px, card.centerx, y + title_h + gap + hint_h // 2, color=P.TEXT, anchor="center")
 
     def _draw_save_flash(self, frame):
         """A camera flash over the frame that fades out, so a save is seen on the work itself."""

@@ -724,7 +724,7 @@ class MusicRoom(Room):
                 if key in self._note_labels and not on_paper:
                     sound = f"♪ {note}" if melodic else ICON_DRUM
                     g.draw_text(sound, max(10, int(size * 0.15)), tile.centerx, tile.bottom - int(size * 0.17),
-                                "mono-bold", mix(fg, bg, 0.3), anchor="center", tr=False)
+                                "mono-bold-italic", mix(fg, bg, 0.3), anchor="center", tr=False)
         if not self.letters_mode:
             self._draw_note_strip(g, xs, ys[4] + size * NOTE_STRIP / 2, max(10, int(size * 0.17)), on_paper)
 
@@ -755,7 +755,7 @@ class MusicRoom(Room):
             if sweeping:
                 g.rect(P.PRIMARY, plate, radius=plate.h // 2)
             color = P.ON_PRIMARY if sweeping else P.TEXT if played else ink
-            g.draw_text(note, px, plate.centerx, plate.centery, "mono-heavy" if played else "mono-bold",
+            g.draw_text(note, px, plate.centerx, plate.centery, "mono-heavy-italic" if played else "mono-bold-italic",
                         color, anchor="center", tr=False)
 
     def _draw_noscreen(self, g, rect):

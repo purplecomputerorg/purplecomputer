@@ -654,7 +654,7 @@ def draw_label(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="m
     w, h = g.measure(text, px, "mono-bold")
     plate = pygame.Rect(0, 0, w + round(px * 1.4), h + round(px * 0.56))
     setattr(plate, anchor, (x, y))
-    g.rect(P.PRIMARY, plate, radius=round(px * 0.5))
+    g.rect(P.PRIMARY, plate, radius=plate.h // 2)
     g.draw_text(text, px, plate.centerx, plate.centery, "mono-bold", P.ON_PRIMARY, anchor="center")
     return plate
 
@@ -732,13 +732,17 @@ def keycap_size(g: Gfx, text: str, px: int) -> tuple:
 
 
 def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=None, ink=None) -> pygame.Rect:
-    """A solid keycap: the one look for a key the kid can press inside a room.
+    """A solid keycap: the one look for a key the kid can press inside a room. It sits on a darker
+    lip like a real key (and the printed guide card), so it never reads as the flat selection pill.
     'hold Space' puts the verb on the cap, so the hold reads as part of the key;
     a symbol key shows its shifted mark up and to the left, as printed on the real key."""
     fill, ink = fill or P.TEXT, ink or P.SURFACE
     key = pygame.Rect((0, 0), keycap_size(g, text, px))
     setattr(key, anchor, (x, y))
-    g.rect(fill, key, radius=round(px * 0.5))
+    lip = max(2, round(px * 0.16))
+    key.y -= lip // 2
+    g.rect(mix(fill, P.BG, 0.45), key.move(0, lip), radius=round(px * 0.3))
+    g.rect(fill, key, radius=round(px * 0.3))
     if text in SHIFTED:
         for t, d in ((SHIFTED[text], -1), (text, 1)):
             g.draw_text(t, round(px * 0.85), key.centerx + d * key.w // 6, key.centery + d * key.h // 5, "mono-bold", ink, anchor="center")

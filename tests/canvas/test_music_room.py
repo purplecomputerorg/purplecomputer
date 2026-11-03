@@ -202,3 +202,15 @@ def test_short_everyday_words_are_known_and_clean():
     assert all(get_content().is_known_word(w) for w in ("the", "go", "run", "cat", "blue", "jump"))
     short = [w for w in open("purple_tui/common_words.txt").read().split() if len(w) < 5 and is_real_word(w)]
     assert short and all(is_clean(w) for w in short)
+
+
+def test_the_same_letter_over_and_over_fades_out_but_still_spells(monkeypatch):
+    async def go():
+        app = _letters_room(monkeypatch)
+        room = app.room
+        volumes = [room._letter_volume(k, i * 0.1) for i, k in enumerate("OOGGGGGGG")]
+        assert volumes == [1, 1, 1, 1, 0.6, 0.35, 0.15, 0, 0]
+        assert room._letter_volume("G", 2.0) == 1
+        await type_text(app, "ccccccat")
+        assert room.word == "cat"
+    run(go())

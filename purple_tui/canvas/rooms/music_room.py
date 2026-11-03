@@ -38,6 +38,8 @@ PITCH_TRANSITION_DURATION = 0.25
 NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
 NOTE_TAB = 0.6                # room each side for the note bar's key tab, in keys, past the stage padding
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
+LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past the end it's silent
+LETTER_FADE_REST_S = 1.0      # a rest this long, or another letter, brings it back to full
 ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
 WORD_LINGER = 2               # stray letters a found word stays up through
@@ -97,6 +99,7 @@ class MusicRoom(Room):
         self._saved_loop = None
         self._last_letter_press_t = float("-inf")
         self._letter_playing = None
+        self._letter_streak = (None, float("-inf"), 0)   # (key, last press, presses in a row)
         self._spelled = ""
         self._spelled_at = float("-inf")
         self.word = None          # the real word the letters just typed end with
@@ -241,11 +244,20 @@ class MusicRoom(Room):
     def play_letter(self, key: str):
         if self.app._effective_volume() == 0:
             return
+        volume = self._letter_volume(key, time.monotonic())
         if self._letter_playing is not None:
             self._letter_playing.stop()
-        if sound := self.sounds.letters(self.say_sounds).get(key):
+        if volume and (sound := self.sounds.letters(self.say_sounds).get(key)):
             self._letter_playing = sound
-            play_safe(sound)
+            ch = play_safe(sound)
+            if ch is not None:
+                ch.set_volume(volume)
+
+    def _letter_volume(self, key: str, now: float) -> float:
+        last, at, n = self._letter_streak
+        n = n + 1 if key == last and now - at < LETTER_FADE_REST_S else 0
+        self._letter_streak = (key, now, n)
+        return LETTER_FADE[n] if n < len(LETTER_FADE) else 0
 
     @staticmethod
     def _instrument(index: int) -> tuple:

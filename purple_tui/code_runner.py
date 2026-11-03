@@ -228,14 +228,15 @@ class MusicCodeRunner:
 
     # Command table: (compiled_regex, handler_method_name)
     _COMMANDS = [
-        (re.compile(r'^letters\s+(\S+)\s*$', re.I), '_do_letters'),
+        (re.compile(r'^letters(?:\s+(\S+))?\s*$', re.I), '_do_letters'),
+        (re.compile(r'^(?:notes|music|sounds)\s*$', re.I), '_do_notes'),
         (re.compile(r'^(?:choose|instrument|select|use)\s+(.+)$', re.I), '_do_instrument'),
         (re.compile(r'^play\s+(.+)$', re.I), '_do_play'),
         (re.compile(r'^key\s+(?:of\s+)?(.+?)\s*$', re.I), '_do_key'),
     ]
 
     # Command keywords for fuzzy matching
-    _KEYWORD_VOCAB = ['letters', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
+    _KEYWORD_VOCAB = ['letters', 'notes', 'music', 'sounds', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
 
     def __init__(self, play_key_fn, set_instrument_fn=None,
                  color_fn=None, flash_fn=None, set_letters_fn=None, set_key_fn=None, set_letter_sounds_fn=None):
@@ -348,8 +349,8 @@ class MusicCodeRunner:
     # ------------------------------------------------------------------
 
     async def _do_letters(self, m) -> bool | None:
-        """letters on / off, or names / sounds to turn letters on saying that."""
-        arg = m.group(1).lower()
+        """letters (on), letters off, or letters names / sounds to turn letters on saying that."""
+        arg = (m.group(1) or 'on').lower()
         choices = ['on', 'off', 'names', 'sounds'] if self.set_letter_sounds else ['on', 'off']
         if arg not in choices:
             from .fuzzy import fuzzy_match_small
@@ -364,6 +365,13 @@ class MusicCodeRunner:
             self.set_letters(letters_on)
         if arg in ('names', 'sounds'):
             self.set_letter_sounds(arg == 'sounds')
+        return True
+
+    async def _do_notes(self, m) -> bool:
+        """notes, music or sounds on their own: keys play notes again, like letters off."""
+        self._mode = "music"
+        if self.set_letters:
+            self.set_letters(False)
         return True
 
     def _resolve_leading_instrument(self, words: list[str]) -> tuple[str | None, int]:

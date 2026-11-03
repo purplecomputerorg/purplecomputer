@@ -79,11 +79,11 @@ GUIDE = {
     ],
     'music': [
         ("Notes", [("asdf", "play those keys"), ("1234", "drums")]),
+        ("Letters", [("letters", "keys say letters"), ("notes", "back to notes")]),
         ("Speed", [("fast asdf", "quick"), ("slow asdf", "slow")]),
         ("Sound", [("choose ukulele", "or marimba, accordion, glockenspiel")]),
         ("Key", [("key g", "same keys, new notes")]),
         ("Again", [("repeat 3 asdf", "three times")]),
-        ("Say", [("letters on", "keys say letters"), ("letters sounds", "a says ah")]),
     ],
     'blocks': [
         ("Colors", [(COLORS, "")]),
@@ -118,8 +118,8 @@ TOPICS = {
         ("key", "Key", [("key c", "where you start"), ("key g", "brighter"), ("key d", "brighter still"),
                         ("key f", "warmer"), ("key b flat", "warmer still")]),
         ("repeat", "Again", [("repeat 3 asdf", "three times"), ("repeat 2 asdf, jkl", "commas: both, each time"), ("repeat asdf", "with no number: twice")]),
-        ("letters", "Say", [("letters on", "keys say letters"), ("letters names", "a says ay"),
-                            ("letters sounds", "a says ah"), ("letters off", "keys play notes")]),
+        ("letters notes music sounds", "Letters", [("letters", "keys say letters"), ("letters names", "a says ay"),
+                                                   ("letters sounds", "a says ah"), ("notes", "keys play notes again")]),
     ],
     'blocks': [
         ("right left up down back front forward go", "Build",

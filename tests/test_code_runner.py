@@ -513,3 +513,14 @@ class TestArtFuzzyVerbResolution:
         canvas, runner = self._run_art(["blue 4"])
         assert canvas._painted_positions == control._painted_positions
         assert canvas._last_key_color == control._last_key_color
+
+
+@pytest.mark.parametrize("line, letters", [
+    ("letters", True), ("notes", False), ("music", False), ("sounds", False), ("Notes", False), ("nots", False),
+])
+def test_mode_words_switch_between_letters_and_notes(line, letters):
+    from purple_tui.code_runner import MusicCodeRunner
+    seen, played = [], []
+    runner = MusicCodeRunner(play_key_fn=lambda *a, **k: played.append(a), set_letters_fn=seen.append)
+    asyncio.run(runner.run([line], "letters" if not letters else "music"))
+    assert seen == [letters] and not played

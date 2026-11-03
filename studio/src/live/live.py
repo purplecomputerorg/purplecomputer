@@ -72,7 +72,7 @@ async def restart():
 
 
 def setup(room, letters=False, instrument=None, picture=None, family=None):
-    """The room a Studio page shows: Music in Say Letters or playing an instrument, Art with a
+    """The room a Studio page shows: Music in Letters or playing an instrument, Art with a
     picture's paint ops and letters on it, the way Art's Open paints one, or a family room being
     tried, opened over the room the way the Esc menu opens one, drawing and playing its pack's files."""
     while _app.top:

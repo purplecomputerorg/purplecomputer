@@ -34,7 +34,7 @@ Each cell displays its key character and can be colored.
 - **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [nemophones](https://github.com/tavinathanson/nemophones) in `packs/core-sounds/content/letter-sounds/`). Hold Enter to record a loop.
 - **Tab**: switch between Notes and Letters, which says each pressed letter aloud.
 - **Left/Right**: shift the musical key (B♭ / F / C / G / D).
-- **Space**: only drives the loop station while a loop records or plays.
+- **Space**: in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop records or plays, drives the loop station instead.
 - **Esc + Space**: open or close the code line.
 
 ## Color Cycling
@@ -559,4 +559,5 @@ Esc + Space: Code line (Art, Music, Blocks)
 Tab (in Art): Toggle text/paint mode
 Tab (in Music): Notes or Letters
 Enter (in Music): Next instrument; in Letters, names or sounds
+Space (in Music Letters): Say the word spelled
 ```

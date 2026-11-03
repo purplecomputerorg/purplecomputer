@@ -42,7 +42,7 @@ function say(text: string): Promise<void> {
 export type Room = "art" | "music" | "play" | "blocks";
 // at: the room's cursor, as fractions of the screen (see place() in live.py).
 export interface Place { room: Room; menu: boolean; at: [number, number] | null }
-// letters: Music in Say Letters.
+// letters: Music in Letters.
 // picture: painted on the Art canvas as Art's Open paints a pack picture.
 // family: a family room opened over the room, as the Esc menu opens one, with its pack's pictures and
 // sounds; rooms: the family's others not in the pack, listed in the Esc menu beside it.

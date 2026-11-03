@@ -36,7 +36,7 @@ READ_TODAY = {
     "content/emoji.json": "words and emoji, Play room",
     "content/synonyms.json": "nicknames for words, Play room",
     "content/rankings.txt": "autocomplete order, Play room",
-    "content/letters/": "letter and number clips, Music room Say Letters",
+    "content/letters/": "letter and number clips, Music room Letters",
     "content/voice/": "phrase clips, spoken by Purple",
     "content/pictures/": "pictures, Art room's Open",
     "content/instruments/": "instrument definitions; samples in content/<name>/",

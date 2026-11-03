@@ -57,7 +57,7 @@ export function keysView(): View {
       h("div", { class: "card voice-card" },
         keys,
         h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, picker))),
-      h("p", { class: "dim small" }, "Letters and numbers you skip say their own names in Purple's voice; the other keys stay quiet until you give them something. Type a key on your keyboard to jump to it."),
+      h("p", { class: "dim small" }, "Keys you skip play Purple's own: letters and numbers say their names, and ; , . / make silly sounds. Your sounds play when Letters says names; Enter switches it to letter sounds. Type a key on your keyboard to jump to it."),
       voiceStays(),
     ),
     live: { room: "music", letters: true },

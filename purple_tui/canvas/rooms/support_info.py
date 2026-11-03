@@ -2,6 +2,7 @@
 reports a parent can read out to support, and a Sound check that plays the
 startup chime and shows what first boot would decide."""
 
+import textwrap
 import threading
 
 from ... import diagnostics
@@ -14,14 +15,28 @@ from ..ui import DOWN, UP, Dialog, Picker
 SCROLL_LINES = 5
 
 
+def _wrap(text: str, cols: int) -> list:
+    """Word-wrap each line to cols, continuing under its own indent plus two."""
+    out = []
+    for line in text.splitlines() or ["(nothing to show)"]:
+        indent = " " * (len(line) - len(line.lstrip()) + 2)
+        out += textwrap.wrap(line, cols, subsequent_indent=indent, break_on_hyphens=False) or [""]
+    return out
+
+
 class _ScrollablePage(Dialog):
     hint = f"{UP} {DOWN} scroll   Esc back"
     width_pct = 80
 
     def __init__(self, app):
         super().__init__(app)
-        self.lines = self._collect_text().splitlines() or ["(nothing to show)"]
+        self.text = self._collect_text()
+        self.cols = 10_000  # until the first draw measures the box
         self.offset = 0
+
+    @property
+    def lines(self) -> list:
+        return _wrap(self.text, self.cols)
 
     def _collect_text(self) -> str:
         raise NotImplementedError
@@ -32,6 +47,7 @@ class _ScrollablePage(Dialog):
     def draw_body(self, g, rect):
         px = g.vh(2.1)
         lh = g.line_height(px, "mono")
+        self.cols = max(20, rect.w // g.measure("M", px, "mono", tr=False)[0])
         y = rect.y
         for line in self.lines[self.offset:self.offset + rect.h // lh]:
             g.draw_text(line or " ", px, rect.x, y, "mono", P.TEXT)
@@ -80,7 +96,7 @@ class SoundCheckScreen(_ScrollablePage):
         self.app.call_from_thread(self._show, sound_check.report(result, takes))
 
     def _show(self, text: str):
-        self.lines = text.splitlines()
+        self.text = text
         self.offset = 0
         self.app.invalidate()
 

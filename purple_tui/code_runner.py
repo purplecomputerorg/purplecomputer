@@ -238,12 +238,13 @@ class MusicCodeRunner:
     _KEYWORD_VOCAB = ['letters', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
 
     def __init__(self, play_key_fn, set_instrument_fn=None,
-                 color_fn=None, flash_fn=None, set_letters_fn=None, set_key_fn=None):
+                 color_fn=None, flash_fn=None, set_letters_fn=None, set_key_fn=None, set_letter_sounds_fn=None):
         self.play_key = play_key_fn
         self.set_instrument = set_instrument_fn
         self.color_fn = color_fn
         self.flash_fn = flash_fn
         self.set_letters = set_letters_fn
+        self.set_letter_sounds = set_letter_sounds_fn
         self.set_key = set_key_fn
         self.corrections: list[tuple[str, str]] = []
         self._original_text: str = ""
@@ -347,24 +348,23 @@ class MusicCodeRunner:
     # ------------------------------------------------------------------
 
     async def _do_letters(self, m) -> bool | None:
+        """letters on / off, or names / sounds to turn letters on saying that."""
         arg = m.group(1).lower()
-        if arg in ('on', 'off'):
-            letters_on = arg == 'on'
-            self._mode = "letters" if letters_on else "music"
-            if self.set_letters:
-                self.set_letters(letters_on)
-            return True
-        # Fuzzy match on/off
-        from .fuzzy import fuzzy_match_small
-        corrected = fuzzy_match_small(arg, ['on', 'off'], cutoff=0.7)
-        if corrected:
+        choices = ['on', 'off', 'names', 'sounds'] if self.set_letter_sounds else ['on', 'off']
+        if arg not in choices:
+            from .fuzzy import fuzzy_match_small
+            corrected = fuzzy_match_small(arg, choices, cutoff=0.7)
+            if not corrected:
+                return None
             self.corrections.append((f'letters {arg}', f'letters {corrected}'))
-            letters_on = corrected == 'on'
-            self._mode = "letters" if letters_on else "music"
-            if self.set_letters:
-                self.set_letters(letters_on)
-            return True
-        return None
+            arg = corrected
+        letters_on = arg != 'off'
+        self._mode = "letters" if letters_on else "music"
+        if self.set_letters:
+            self.set_letters(letters_on)
+        if arg in ('names', 'sounds'):
+            self.set_letter_sounds(arg == 'sounds')
+        return True
 
     def _resolve_leading_instrument(self, words: list[str]) -> tuple[str | None, int]:
         """Resolve an instrument from the first word. Instrument names and

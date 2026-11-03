@@ -33,6 +33,7 @@ PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
 PITCH_TRANSITION_DURATION = 0.25
 NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
+NOTE_TAB = 0.6                # room each side for the note bar's key tab, in keys, past the stage padding
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
 NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit"
@@ -471,6 +472,7 @@ class MusicRoom(Room):
                 color_fn=self.next_color,
                 flash_fn=self.flash_note,
                 set_letters_fn=lambda on: setattr(self, "letters_mode", on),
+                set_letter_sounds_fn=lambda on: setattr(self, "say_sounds", on),
                 set_key_fn=self.set_key,
             )
             await runner.run(lines, self._current_mode())
@@ -633,7 +635,7 @@ class MusicRoom(Room):
             head_h = em(4.3)
             self._draw_header(g, rect)
         else:
-            head_h = status_row_h(g) + em(0.4)
+            head_h = status_row_h(g) + em(1.2)
             draw_status_row(g, pygame.Rect(rect.x, rect.y + em(0.4), rect.w, status_row_h(g)), self._code_status(g))
         grid = pygame.Rect(rect.x + pad, rect.y + head_h, rect.w - 2 * pad, rect.h - head_h - hint_h)
         self._draw_grid(g, grid)
@@ -682,7 +684,7 @@ class MusicRoom(Room):
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""
         return ((ICON_MUSIC, self._instrument(self.instrument_index)[1]),
-                (ICON_KEYBOARD, "Letters on" if self.letters_mode else "Letters off"),
+                (ICON_KEYBOARD, f"Letter {'sounds' if self.say_sounds else 'names'}" if self.letters_mode else "Letters off"),
                 (None, f"Key of {FRIENDLY_KEY_NAMES[self.root_index]}"))
 
     def arrow_hint(self) -> str:
@@ -702,7 +704,7 @@ class MusicRoom(Room):
     def _draw_grid(self, g, r, on_paper=False):
         """Ten by four gapless square blocks: a quiet key is just its letter,
         a sounding key fills its whole block with color."""
-        size = min(r.w / 10, r.h / (4 + NOTE_STRIP))
+        size = min(r.w / (10 + 2 * NOTE_TAB), r.h / (4 + NOTE_STRIP))
         top = r.centery - (4 + NOTE_STRIP) * size / 2
         xs = [round(r.centerx - 5 * size + i * size) for i in range(11)]
         ys = [round(top + i * size) for i in range(5)]

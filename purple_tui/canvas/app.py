@@ -648,7 +648,7 @@ class PurpleApp:
         self.invalidate()
 
     def _esc_space_chord(self, action) -> bool:
-        """Space while Esc is held opens the code panel, the same place Esc then Space reaches."""
+        """Space while Esc is held opens the code panel (the same place Esc then Space reaches), or closes it."""
         if not (isinstance(action, ControlAction) and action.action == "space" and action.is_down and not action.is_repeat):
             return False
         if self._escape_down_at is None or self._escape_pressed_on is not None or self._overlays or self._littles_mode:
@@ -657,7 +657,10 @@ class PurpleApp:
             return False
         self._cancel_escape_hold_timer()
         self._escape_consumed_by_mode = True
-        self.room.open_code_panel()
+        if getattr(self.room, "code_panel", None) is None:
+            self.room.open_code_panel()
+        else:
+            self.room.close_code_panel()
         return True
 
     def _start_escape_hold_timer(self):

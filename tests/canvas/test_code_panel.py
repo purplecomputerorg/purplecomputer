@@ -272,7 +272,9 @@ def test_open_code_hides_the_room_header_key_chips(name, monkeypatch):
 
 
 @pytest.mark.parametrize("name, code, shown", [
-    ("music", ["letters on", "key g"], ["Letters on", "Key of G"]),
+    ("music", ["letters on", "key g"], ["Letter names", "Key of G"]),
+    ("music", ["letters sounds"], ["Letter sounds"]),
+    ("music", ["letters sounds", "letters off"], ["Letters off"]),
     ("art", ["write on"], ["Write"]),
     ("art", ["brush up"], ["Paint", "Brush up"]),
 ])
@@ -514,7 +516,7 @@ def test_escape_from_the_code_wheel_puts_the_line_back():
 
 
 @pytest.mark.parametrize("room", ["music", "art", "blocks"])
-def test_esc_and_space_together_open_the_code_panel(room):
+def test_esc_and_space_together_open_and_close_the_code_panel(room):
     from purple_tui.keyboard import ControlAction
 
     async def go():
@@ -523,5 +525,10 @@ def test_esc_and_space_together_open_the_code_panel(room):
         await press(app, "space")
         await app._dispatch_keyboard_action(ControlAction(action="escape", is_down=False))
         assert app.room.code_panel is not None
+        assert not app._overlays
+        await app._dispatch_keyboard_action(ControlAction(action="escape", is_down=True))
+        await press(app, "space")
+        await app._dispatch_keyboard_action(ControlAction(action="escape", is_down=False))
+        assert app.room.code_panel is None
         assert not app._overlays
     run(go())

@@ -36,6 +36,19 @@ class Room:
     def close_code_panel(self):
         pass
 
+    async def run_shown(self, runner, *args, **kwargs):
+        """Run code-panel code with the panel's hint following the runner's corrections as they're made."""
+        field = getattr(self, "code_panel", None) and self.code_panel.field
+        if field:
+            field.live = runner.corrections
+        try:
+            await runner.run(*args, **kwargs)
+        finally:
+            if field and field.live is runner.corrections:
+                field.live = None
+        if field and runner.corrections:
+            field.set_correction(*runner.corrections[-1])
+
     def arrow_hint(self) -> str:
         return ""
 

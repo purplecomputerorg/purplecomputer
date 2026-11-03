@@ -146,3 +146,28 @@ def test_typing_and_repainting_stays_cheap():
         elapsed = time.perf_counter() - start
         assert elapsed < 0.25, f"8 keystrokes with repaints took {elapsed * 1000:.0f} ms"
     run(scenario())
+
+
+def test_play_history_is_not_relaid_out_every_frame(monkeypatch):
+    """Play measures every history row each frame; a repaint with nothing new
+    must answer from the layout cache, or frame cost grows with the scrollback."""
+    from purple_tui.canvas.gfx import Gfx
+    from purple_tui.canvas.harness import make_app, press, run, type_text
+
+    async def scenario():
+        app = make_app(room="play")
+        for _ in range(15):
+            await type_text(app, "i love the big red cat 3 + 4")
+            await press(app, "enter")
+        app._draw()
+        calls = {"n": 0}
+        real = Gfx._layout
+
+        def counting(self, *a):
+            calls["n"] += 1
+            return real(self, *a)
+
+        monkeypatch.setattr(Gfx, "_layout", counting)
+        app._draw()
+        assert calls["n"] == 0, f"a still repaint laid out {calls['n']} markups again"
+    run(scenario())

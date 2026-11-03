@@ -475,9 +475,7 @@ class MusicRoom(Room):
                 set_letter_sounds_fn=lambda on: setattr(self, "say_sounds", on),
                 set_key_fn=self.set_key,
             )
-            await runner.run(lines, self._current_mode())
-            if runner.corrections and self.code_panel:
-                self.code_panel.set_correction(*runner.corrections[-1])
+            await self.run_shown(runner, lines, self._current_mode())
         except asyncio.CancelledError:
             raise
         except Exception:

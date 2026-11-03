@@ -289,6 +289,30 @@ def test_code_status_row_shows_what_code_changed(name, code, shown):
     run(go())
 
 
+def test_a_running_line_shows_its_corrections_never_the_typo_to_try_again():
+    class SlowRunner:
+        def __init__(self):
+            self.corrections, self.gate = [], asyncio.Event()
+
+        async def run(self, lines):
+            await self.gate.wait()
+
+    async def go():
+        app, art = await _room("art")
+        art.open_code_panel()
+        field, runner = art.code_panel.field, SlowRunner()
+        field.remember("repeet 2 right 3")
+        task = asyncio.create_task(art.run_shown(runner, ["repeet 2 right 3"]))
+        await asyncio.sleep(0)
+        assert field.recall_text() == ""
+        runner.corrections.append(("repeet 2 right 3", "repeat 2 right 3"))
+        assert field.recall_text() == "repeet 2 right 3 → repeat 2 right 3"
+        runner.gate.set()
+        await task
+        assert field.live is None and field.recall_text() == "repeet 2 right 3 → repeat 2 right 3"
+    run(go())
+
+
 def test_tab_on_an_empty_code_line_does_not_crash():
     async def go():
         app, art = await _room("art")

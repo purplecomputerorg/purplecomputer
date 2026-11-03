@@ -328,9 +328,6 @@ class CodePanel:
         m, _, box_h, _, sub_h, gap, cards_h = self._layout(g)
         return 2 * m + box_h + gap + sub_h + gap + cards_h
 
-    def set_correction(self, original: str, corrected: str):
-        self.field.set_correction(original, corrected)
-
     async def handle(self, action):
         """Returns 'tab_fallthrough' when Tab had nothing to accept, 'close' on `exit`."""
         f = self.field

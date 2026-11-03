@@ -131,9 +131,7 @@ class BlocksRoom(Room):
     async def run_code(self, lines: list):
         try:
             runner = BlocksCodeRunner(self)
-            await runner.run(lines)
-            if runner.corrections and self.code_panel:
-                self.code_panel.set_correction(*runner.corrections[-1])
+            await self.run_shown(runner, lines)
         except asyncio.CancelledError:
             raise
         except Exception:

@@ -656,10 +656,8 @@ class ArtRoom(Room):
     async def run_code(self, lines: list):
         try:
             runner = _RoomBrushRunner(self)
-            await runner.run(lines, paint=self._paint_mode)
+            await self.run_shown(runner, lines, paint=self._paint_mode)
             self._post_paint_mode_changed()
-            if runner.corrections and self.code_panel:
-                self.code_panel.set_correction(*runner.corrections[-1])
         except Exception as exc:
             if isinstance(exc, __import__("asyncio").CancelledError):
                 raise

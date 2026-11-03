@@ -6,6 +6,7 @@ in the box. Play, Music and Art all read from here.
 """
 
 import colorsys
+from functools import lru_cache
 
 from .color_mixing import hex_to_rgb
 
@@ -18,9 +19,14 @@ NAMED_COLORS = {
 def rgb(color) -> tuple:
     """'#rrggbb' or a tuple -> (r, g, b)."""
     if isinstance(color, str):
-        c = NAMED_COLORS.get(color, color).lstrip("#")
-        return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+        return _parse_hex(color)
     return tuple(color[:3])
+
+
+@lru_cache(maxsize=4096)  # every frame parses hundreds of the same few colors
+def _parse_hex(color: str) -> tuple:
+    c = NAMED_COLORS.get(color, color).lstrip("#")
+    return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
 
 
 def luminance(color) -> float:

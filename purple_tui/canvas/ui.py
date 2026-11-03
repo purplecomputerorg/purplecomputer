@@ -117,6 +117,7 @@ class TextField:
         self.exact_display = ""
         self.last_command = ""
         self._correction = None
+        self.live = None   # a running line's corrections so far, while it runs
 
     # --- editing ---
     def set(self, value: str, cursor: int | None = None):
@@ -180,12 +181,15 @@ class TextField:
 
     def recall_text(self, keycap: bool = False) -> str:
         """Dim hint under an empty field; a correction shows until the next edit. keycap
-        writes Enter as {Enter} for draw_key_hint."""
+        writes Enter as {Enter} for draw_key_hint. While a line runs only its corrections
+        show, so the typo is never offered to try again first."""
         if self.value or not self.last_command:
             return ""
-        if self._correction:
-            orig, corr = self._correction
-            return _truncate(f"{orig} → {corr}")
+        correction = self.live[-1] if self.live else self._correction
+        if correction:
+            return _truncate(" → ".join(correction))
+        if self.live is not None:
+            return ""
         return f"{'{Enter}' if keycap else 'Enter to'} try again: {_truncate(self.last_command)}"
 
     # --- autocomplete (logic unchanged from CodeInput) ---

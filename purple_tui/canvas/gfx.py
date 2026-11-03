@@ -18,6 +18,7 @@ import re
 import time
 from collections import OrderedDict
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
@@ -144,6 +145,7 @@ def _is_color(w: str) -> bool:
     return bool(_HEX_RE.match(w)) or w in NAMED_COLORS
 
 
+@lru_cache(maxsize=1024)  # Play asks it of every history row every frame
 def strip_markup(text: str) -> str:
     return "".join(t for t, _ in parse_markup(text))
 
@@ -239,6 +241,7 @@ class Gfx:
         self._text = _Cache()
         self._emoji = _Cache()
         self._images = _Cache()
+        self._layouts = _Cache(limit=512)
         self._coverage: dict = {}
         self._probes: dict = {}
         self._emoji_font = self._load_emoji_font()
@@ -373,7 +376,7 @@ class Gfx:
             text = i18n.translate(text)
         if self.all_caps and not _raw:
             text = text.upper()
-        key = (text, px, face, hexcolor(color), track)
+        key = (text, px, face, rgb(color), track)
 
         def make():
             if not text:
@@ -469,9 +472,13 @@ class Gfx:
         kept even at the start of a line; a colored span never breaks across
         lines, and one holding a single letter or emoji is a square tile, so
         letter blocks line up in columns when they wrap. dim_to is the
-        background dim text fades toward."""
+        background dim text fades toward. Cached: callers only read the result."""
         if tr:
             markup = i18n.translate(markup)
+        key = (markup, px, face, rgb(color), max_width, dim_to and rgb(dim_to), self.all_caps)
+        return self._layouts.get_or(key, lambda: self._layout(markup, px, face, color, max_width, dim_to))
+
+    def _layout(self, markup, px, face, color, max_width, dim_to) -> list:
         pieces = []
         for chunk, style in parse_markup(markup):
             fg = style.get("fg", color)

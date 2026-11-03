@@ -121,3 +121,67 @@ def test_arrows_toast_the_new_key_and_code_does_not():
         room.set_key(0)
         assert [t.text for t in app._toasts] == live
     run(go())
+
+
+def _letters_room(monkeypatch):
+    from purple_tui.canvas.rooms import music_room
+    monkeypatch.setattr(music_room, "LETTERS_MASH_S", 0)
+    app = make_app(room="music")
+    app.room.letters_mode = True
+    return app
+
+
+def test_letters_that_spell_a_word_show_it_and_space_says_it(monkeypatch):
+    from purple_tui import tts
+    from purple_tui.canvas.harness import press
+    said = []
+    monkeypatch.setattr(tts, "speak_many", lambda texts, **kw: said.append(texts) or True)
+
+    async def go():
+        app = _letters_room(monkeypatch)
+        await type_text(app, "ca")
+        assert app.room.word is None
+        await type_text(app, "t")
+        assert app.room.word == "cat"
+        await press(app, "space")
+        assert said == [["cat"]]
+        await type_text(app, "x")
+        assert app.room.word is None
+    run(go())
+
+
+def test_a_rest_or_a_mode_switch_starts_a_new_word(monkeypatch):
+    from purple_tui.canvas.harness import press
+    from purple_tui.canvas.rooms import music_room
+
+    async def go():
+        app = _letters_room(monkeypatch)
+        await type_text(app, "the")
+        assert app.room.word == "the"
+        await press(app, "tab")
+        assert app.room.word is None and app.room._spelled == ""
+        await press(app, "tab")
+        monkeypatch.setattr(music_room, "ECHO_PAUSE_S", 0)
+        await type_text(app, "the")
+        assert app.room.word is None
+    run(go())
+
+
+def test_a_blocked_word_is_never_shown(monkeypatch):
+    import base64
+    from purple_tui.content import ContentManager
+    monkeypatch.setattr(ContentManager, "is_known_word", lambda self, w: True)
+
+    async def go():
+        app = _letters_room(monkeypatch)
+        await type_text(app, base64.b64decode("cG9vcA==").decode())
+        assert app.room.word is None
+    run(go())
+
+
+def test_short_everyday_words_are_known_and_clean():
+    from purple_tui.content import get_content, is_real_word
+    from purple_tui.speech_filter import is_clean
+    assert all(get_content().is_known_word(w) for w in ("the", "go", "run", "cat", "blue", "jump"))
+    short = [w for w in open("purple_tui/common_words.txt").read().split() if len(w) < 5 and is_real_word(w)]
+    assert short and all(is_clean(w) for w in short)

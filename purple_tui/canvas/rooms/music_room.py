@@ -1,6 +1,7 @@
 """Music room: a 10x4 grid that mirrors the keyboard. Letters play notes,
 digits play percussion, Tab says letters, arrows change key, Enter cycles the
-instrument (in Letters: names or sounds), hold Enter records a loop, and the code line opens from the Esc menu."""
+instrument (in Letters: names or sounds), hold Enter records a loop, and the code line opens from the Esc menu.
+In Letters, a real word typed shows under the grid and Space says it."""
 
 import asyncio
 import time
@@ -10,10 +11,12 @@ import pygame
 from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
+from ...content import get_content
 from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_DRUM, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import warm_mixer
+from ...speech_filter import is_clean
 from ...music_constants import (
     ALL_KEYS, COLOR_KEYCAP, COLORS, DEFAULT_ROOT_INDEX, FRIENDLY_KEY_NAMES, FRIENDLY_KEYS, GRID_KEYS,
     INSTRUMENT_ALIASES, instruments, pitch_filename, pitch_for,
@@ -24,8 +27,8 @@ from ..gfx import mix
 from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
-from ..ui import (CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label, draw_mode_switch,
-                  draw_status_row, hint_row_h, hold_status, status_row_h)
+from ..ui import (CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
+                  draw_mode_switch, draw_status_row, hint_row_h, hold_status, key_hint_width, status_row_h)
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -35,7 +38,9 @@ PITCH_TRANSITION_DURATION = 0.25
 NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
 NOTE_TAB = 0.6                # room each side for the note bar's key tab, in keys, past the stage padding
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
-ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
+ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes, and a new word
+SPELL_MAX = 12                # letters kept toward a word; longer runs are never one
+WORD_HINT = "{Space} say it"
 NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit"
 FLAT_KEYS = {5, 10}           # F and B flat name their black keys as flats
 SHARP_TO_FLAT = {"C#": "D♭", "D#": "E♭", "F#": "G♭", "G#": "A♭", "A#": "B♭"}
@@ -90,6 +95,9 @@ class MusicRoom(Room):
         self._saved_loop = None
         self._last_letter_press_t = float("-inf")
         self._letter_playing = None
+        self._spelled = ""
+        self._spelled_at = float("-inf")
+        self.word = None          # the letters just typed, when they spell a real word
         self._toast = None
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
@@ -145,6 +153,7 @@ class MusicRoom(Room):
         self.recording = Recording.load(state.get("replay"), self.color_state)
         self._saved_loop = state.get("loop")
         self._transition = None
+        self._forget_word()
         self.echo.reset()
         self.app.invalidate()
 
@@ -461,6 +470,9 @@ class MusicRoom(Room):
             self._advance_loop_state()
         elif self.loop.state == LOOPING:
             self.loop.start_new_cycle()
+        elif self.letters_mode and self.word:
+            from ...tts import speak_many
+            speak_many([self.word])
         self.app.invalidate()
 
     def set_instrument_by_name(self, name: str):
@@ -493,6 +505,7 @@ class MusicRoom(Room):
     # ---------------------------------------------------------------- input
     def _toggle_letters(self):
         self.letters_mode = not self.letters_mode
+        self._forget_word()
         self._announce_voice()
         self.app.invalidate()
 
@@ -505,6 +518,17 @@ class MusicRoom(Room):
             text = f"{ICON_MUSIC}  {self._instrument(self.instrument_index)[1]}"
             self.play_sound_with_instrument("A", self.instrument_index)
         self._toast = self.app.notify(text, replaces=self._toast)
+
+    def _spell(self, key: str, now: float):
+        """Letters typed without a long rest build a word; anything else starts over."""
+        run = self._spelled if now - self._spelled_at < ECHO_PAUSE_S else ""
+        self._spelled = (run + key.lower())[-SPELL_MAX:] if key.isalpha() else ""
+        self._spelled_at = now
+        w = self._spelled
+        self.word = w if len(w) >= 2 and get_content().is_known_word(w) and is_clean(w) else None
+
+    def _forget_word(self):
+        self._spelled, self.word = "", None
 
     def _letters_mash_drop(self, now: float) -> bool:
         """A new letter cuts off the one still speaking, so only a whole hand landing at once needs dropping."""
@@ -562,8 +586,11 @@ class MusicRoom(Room):
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
             if lookup not in ALL_KEYS:
                 return
-            if self.letters_mode and self._letters_mash_drop(time.monotonic()):
-                return
+            now = time.monotonic()
+            if self.letters_mode:
+                if self._letters_mash_drop(now):
+                    return
+                self._spell(lookup, now)
             mode = self._current_mode()
             self.loop.record_event(lookup, mode, instrument=self.instrument_index)
             self._hit(lookup, mode)
@@ -734,17 +761,36 @@ class MusicRoom(Room):
                     sound = note_label(note) if melodic else ICON_DRUM
                     g.draw_text(sound, max(10, int(size * 0.15)), tile.centerx, tile.bottom - int(size * 0.17),
                                 "mono-bold-italic", mix(fg, bg, 0.3), anchor="center", tr=False)
+        bar = self._strip_bar(xs, ys[4] + size * NOTE_STRIP / 2)
+        px = max(10, int(size * 0.17))
         if not self.letters_mode:
-            self._draw_note_strip(g, xs, ys[4] + size * NOTE_STRIP / 2, max(10, int(size * 0.17)), on_paper)
+            self._draw_note_strip(g, xs, bar, px, on_paper)
+        elif self.word and not on_paper:
+            self._draw_word_strip(g, bar, px)
 
-    def _draw_note_strip(self, g, xs, cy, px, on_paper):
+    @staticmethod
+    def _strip_bar(xs, cy) -> pygame.Rect:
+        """The ledge under the grid, as wide as it."""
+        size = xs[1] - xs[0]
+        bar = pygame.Rect(xs[0], 0, xs[10] - xs[0], round(size * NOTE_STRIP * 0.62))
+        bar.centery = round(cy + size * 0.08)
+        return bar
+
+    def _draw_word_strip(self, g, bar, px):
+        """The word the letters spell, with its picture if it has one, and Space to hear it."""
+        picture = get_content().exact_emoji(self.word)
+        text, word_px, gap = f"{self.word} {picture}" if picture else self.word, round(px * 1.4), px * 2
+        text_w = g.measure(text, word_px, "mono-heavy", tr=False)[0]
+        x = bar.centerx - (text_w + gap + key_hint_width(g, WORD_HINT, px)) // 2
+        g.draw_text(text, word_px, x, bar.centery, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
+        draw_key_hint(g, WORD_HINT, px, x + text_w + gap, bar.centery)
+
+    def _draw_note_strip(self, g, xs, bar, px, on_paper):
         """Every letter row plays the same note in a column, so each column is named once, on a ledge
         as wide as the grid, with a tab naming the key tucked behind its left end. Played names go bold so the eye stays on the
         keys; the key-change sweep gets the selection plate."""
         size = xs[1] - xs[0]
-        h = round(size * NOTE_STRIP * 0.62)
-        bar = pygame.Rect(xs[0], 0, xs[10] - xs[0], h)
-        bar.centery = round(cy + size * 0.08)
+        h = bar.h
         key = f"{ICON_MUSIC} {FRIENDLY_KEY_NAMES[self.root_index]}"
         reach = g.measure(key, px, "mono-heavy-italic", tr=False)[0] + h
         tab = pygame.Rect(xs[0] - reach, bar.y, reach + h, h)

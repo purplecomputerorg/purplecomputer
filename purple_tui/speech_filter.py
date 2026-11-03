@@ -145,6 +145,10 @@ def filter_speech(text: str) -> str:
     return _filter_english(_filter_languages(text))
 
 
+def is_clean(text: str) -> bool:
+    return filter_speech(text) == text
+
+
 def _filter_languages(text: str) -> str:
     """Drop words on a language pack's list, whatever the language settings: a kid can type
     Spanish with Spanish off. Chinese entries match anywhere (no spaces between words);

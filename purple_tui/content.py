@@ -836,6 +836,10 @@ class ContentManager:
         count: a typo must stay correctable to a command or operator."""
         return bool(self.exact_emoji(word) or self.exact_color(word))
 
+    def is_known_word(self, word: str) -> bool:
+        """A real word: a picture or color word, or an everyday one."""
+        return self.is_exact_word(word) or is_real_word(word)
+
 
 ROOM_NAME = re.compile(r"^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$")  # purple.py is the pack's room library
 ROOM_LIB = "purple.py"

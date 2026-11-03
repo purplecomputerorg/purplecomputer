@@ -47,6 +47,14 @@ def note_name(col: int, root_index: int) -> str:
     return SHARP_TO_FLAT.get(note, note) if root in FLAT_KEYS else note.replace("#", "♯")
 
 
+def initials(names: list) -> list:
+    """Each name's shortest start that no other name shares: M, U, A, G; Ma and Mo for Marimba and Mom."""
+    def short(name):
+        others = [n.lower() for n in names if n != name]
+        return next((name[:k] for k in range(1, len(name)) if not any(o.startswith(name[:k].lower()) for o in others)), name)
+    return [short(n) for n in names]
+
+
 class MusicRoom(Room):
     name, label, icon = "music", "Music", ICON_MUSIC
     LANDSCAPE = True
@@ -661,13 +669,14 @@ class MusicRoom(Room):
         return [self._header_chips(i, False, False) for i in range(len(instruments()))]
 
     def _header_chips(self, index: int, letters: bool, sounds: bool) -> tuple:
-        """Enter as a switch like Tab's. Instruments show the current one on the plate with a dot
-        for each of the others, in order, so it's clear Enter steps through more than two."""
+        """Enter as a switch like Tab's. Instruments show the current one on the plate and the others,
+        in order, by their initials, so it's clear Enter steps through all of them (pack ones too)."""
         if letters:
             return ("Enter", ("Names", "Sounds"), int(sounds)),
         names = [name for _, name in instruments()]
         i = index % len(names)
-        labels = [part for part in (" ".join("•" * i), names[i], " ".join("•" * (len(names) - 1 - i))) if part]
+        short = initials(names)
+        labels = [part for part in (" ".join(short[:i]), names[i], " ".join(short[i + 1:])) if part]
         return ("Enter", tuple(labels), labels.index(names[i])),
 
     def _code_status(self, g) -> tuple:

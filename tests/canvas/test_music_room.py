@@ -98,3 +98,9 @@ def test_note_names_use_flats_in_flat_keys():
     assert scale["B♭"] == ["B♭", "C", "D", "E♭", "F", "G", "A"]
     assert scale["F"] == ["F", "G", "A", "B♭", "C", "D", "E"]
     assert scale["D"] == ["D", "E", "F♯", "G", "A", "B", "C♯"]
+
+
+def test_instrument_initials_stay_short_and_tell_names_apart():
+    from purple_tui.canvas.rooms.music_room import initials
+    assert initials(["Marimba", "Ukulele", "Accordion", "Glockenspiel"]) == ["M", "U", "A", "G"]
+    assert initials(["Marimba", "Ukulele", "Mom"]) == ["Ma", "U", "Mo"]

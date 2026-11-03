@@ -651,15 +651,16 @@ class MusicRoom(Room):
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
         bar.h = hint_row_h(g)
         draw_mode_switch(g, bar, (f"{ICON_MUSIC} Notes", f"{ICON_KEYBOARD} Letters"), 1 if self.letters_mode else 0,
-                         chips=self._header_chips(instrument, self.letters_mode, self.say_sounds),
-                         also=[self._header_chips(name, False, False) for _, name in instruments()]
-                         + [self._header_chips("", True, sounds) for sounds in (False, True)])
+                         chips=self._header_chips(self.instrument_index, self.letters_mode, self.say_sounds),
+                         also=[self._header_chips(i, False, False) for i in range(len(instruments()))]
+                         + [self._header_chips(0, True, sounds) for sounds in (False, True)])
 
-    @staticmethod
-    def _header_chips(instrument: str, letters: bool, sounds: bool) -> tuple:
+    def _header_chips(self, index: int, letters: bool, sounds: bool) -> tuple:
+        """Enter as a switch like Tab's: the voice on the plate and, beside it, the one Enter moves to."""
         if letters:
-            return ("Enter", ICON_KEYBOARD, "Sounds" if sounds else "Names", False, "say"),
-        return ("Enter", ICON_MUSIC, instrument, False, "sound"),
+            return ("Enter", ("Names", "Sounds"), int(sounds)),
+        names = [name for _, name in instruments()]
+        return ("Enter", tuple(dict.fromkeys((names[index % len(names)], names[(index + 1) % len(names)]))), 0),
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""

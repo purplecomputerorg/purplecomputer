@@ -484,7 +484,8 @@ class PurpleApp:
         """Run code-panel lines against a room; the last correction lands in the panel's recall hint."""
         self._stop_code_execution()
         self.add_code_lines(room, lines)
-        self._code_task = asyncio.create_task(self.rooms[room].run_code(lines))
+        # Eager: a typo fix is recorded before Enter returns, so no frame shows the typo first.
+        self._code_task = asyncio.Task(self.rooms[room].run_code(lines), loop=asyncio.get_running_loop(), eager_start=True)
 
     def add_code_lines(self, room: str, lines: list):
         """A line just like the newest one isn't kept twice, so ↑ never repeats itself."""

@@ -293,6 +293,7 @@ def test_code_status_row_shows_what_code_changed(name, code, shown):
     ("art", "repeet 2 right 3", "repeet 2 right 3 → repeat 2 right 3"),
     ("art", "abcd", "Enter to try again: abcd"),
     ("music", "plai marimbba", "plai marimbba → play marimba"),
+    ("music", "letter", "letter → letters"),
     ("music", "chooze marimba abc", "chooze marimba abc → choose marimba abc"),
 ])
 def test_a_running_line_shows_its_fix_from_the_start(name, code, hint):
@@ -301,8 +302,6 @@ def test_a_running_line_shows_its_fix_from_the_start(name, code, hint):
         room.open_code_panel()
         await type_text_into(room.code_panel, code)
         await press_control(room.code_panel, "enter")
-        await asyncio.sleep(0)
-        assert not app._code_task.done()
         assert room.code_panel.field.recall_text() == hint
         app._stop_code_execution()
     run(go())

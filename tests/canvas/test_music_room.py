@@ -104,3 +104,20 @@ def test_instrument_initials_stay_short_and_tell_names_apart():
     from purple_tui.canvas.rooms.music_room import initials
     assert initials(["Marimba", "Ukulele", "Accordion", "Glockenspiel"]) == ["M", "U", "A", "G"]
     assert initials(["Marimba", "Ukulele", "Mom"]) == ["Ma", "U", "Mo"]
+
+
+def test_arrows_toast_the_new_key_and_code_does_not():
+    from purple_tui.canvas.harness import press
+    from purple_tui.canvas.rooms.music_room import FRIENDLY_KEY_NAMES
+    from purple_tui.constants import ICON_MUSIC
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await press(app, "right")
+        await press(app, "right")
+        live = [t.text for t in app._toasts]
+        assert live == [f"{ICON_MUSIC}  Key of {FRIENDLY_KEY_NAMES[room.root_index]}"]
+        room.set_key(0)
+        assert [t.text for t in app._toasts] == live
+    run(go())

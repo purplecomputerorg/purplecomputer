@@ -41,6 +41,10 @@ FLAT_KEYS = {5, 10}           # F and B flat name their black keys as flats
 SHARP_TO_FLAT = {"C#": "D♭", "D#": "E♭", "F#": "G♭", "G#": "A♭", "A#": "B♭"}
 
 
+def key_label(root_index: int) -> str:
+    return f"Key of {FRIENDLY_KEY_NAMES[root_index]}"
+
+
 def note_name(col: int, root_index: int) -> str:
     """A column's note as a reader expects it in that key: F♯ in G and D, B♭ in F and B♭."""
     root = FRIENDLY_KEYS[root_index]
@@ -545,6 +549,7 @@ class MusicRoom(Room):
             if action.direction in ("left", "right"):
                 step = 1 if action.direction == "right" else -1
                 self.shift_root((self.root_index + step) % len(FRIENDLY_KEYS), step)
+                self._toast = self.app.notify(f"{ICON_MUSIC}  {key_label(self.root_index)}", replaces=self._toast)
             return
         if isinstance(action, CharacterAction):
             if action.is_repeat or not action.char:
@@ -683,11 +688,11 @@ class MusicRoom(Room):
         """What code can change, in its own words: choose, letters, key."""
         return ((ICON_MUSIC, self._instrument(self.instrument_index)[1]),
                 (ICON_KEYBOARD, f"Letter {'sounds' if self.say_sounds else 'names'}" if self.letters_mode else "Letters off"),
-                (None, f"Key of {FRIENDLY_KEY_NAMES[self.root_index]}"))
+                (None, key_label(self.root_index)))
 
     def arrow_hint(self) -> str:
         if not self.app._music_key_switching_enabled:
-            return f"Key of {FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]}"
+            return key_label(DEFAULT_ROOT_INDEX)
         return f"Arrows change key: {FRIENDLY_KEY_NAMES[self.root_index]}  {LEFT} {RIGHT}"
 
     def paper(self, g, size, on_screen=False):
@@ -737,13 +742,13 @@ class MusicRoom(Room):
         bar = pygame.Rect(xs[0], 0, xs[10] - xs[0], h)
         bar.centery = round(cy + size * 0.08)
         key = f"{ICON_MUSIC} {FRIENDLY_KEY_NAMES[self.root_index]}"
-        reach = g.measure(key, px, "mono-heavy", tr=False)[0] + h
+        reach = g.measure(key, px, "mono-heavy-italic", tr=False)[0] + h
         tab = pygame.Rect(xs[0] - reach, bar.y, reach + h, h)
         ink = paper.INK_MUTED if on_paper else P.MUTED
         ground = mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE
         g.rect(mix(ground, ink, 0.2), tab, radius=h // 2)
         g.rect(ground, bar, radius=h // 2)
-        g.draw_text(key, px, (tab.x + bar.x) // 2 + h // 10, bar.centery, "mono-heavy", paper.INK if on_paper else P.TEXT,
+        g.draw_text(key, px, (tab.x + bar.x) // 2 + h // 10, bar.centery, "mono-heavy-italic", paper.INK if on_paper else P.TEXT,
                     anchor="center", tr=False)
         plate = pygame.Rect(0, 0, round(size * 0.5), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):

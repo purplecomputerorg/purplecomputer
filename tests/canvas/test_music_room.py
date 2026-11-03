@@ -26,7 +26,7 @@ def test_the_popped_key_drops_back_after_a_moment(monkeypatch):
     run(go())
 
 
-def test_space_in_abc_switches_letters_between_names_and_sounds(monkeypatch):
+def test_enter_in_letters_switches_between_names_and_sounds(monkeypatch):
     from purple_tui.canvas.harness import press
     asked = []
 
@@ -35,16 +35,30 @@ def test_space_in_abc_switches_letters_between_names_and_sounds(monkeypatch):
         room = app.room
         monkeypatch.setattr(app, "_effective_volume", lambda: 1)
         monkeypatch.setattr(room.sounds, "letters", lambda sounds=False: asked.append(sounds) or {})
+        instrument = room.instrument_index
         await press(app, "tab")
-        await press(app, "space")
-        assert room.say_sounds and not room.show_labels
-        assert room._space_chip(True)[1:3] == (("Names", "Sounds"), 1)
+        await press(app, "enter")
+        assert room.say_sounds and room.instrument_index == instrument
         room.play_letter("B")
         assert asked[-1] is True
         assert room.timeline_state()["sounds"] is True
-        await press(app, "tab")
         await press(app, "space")
-        assert room.show_labels and room.say_sounds
+        assert room.say_sounds
+    run(go())
+
+
+def test_letters_say_the_letter_without_an_instrument_under_it(monkeypatch):
+    played = []
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        monkeypatch.setattr(room.sounds, "letters", lambda sounds=False: {"B": "clip"})
+        monkeypatch.setattr(room, "play_letter", lambda key: played.append(("letter", key)))
+        monkeypatch.setattr(room, "play_sound_with_instrument", lambda key, i, scale=1.0: played.append(("note", key)))
+        room._play_key("B", "letters")
+        room._play_key("B", "music")
+        assert played == [("letter", "B"), ("note", "B")]
     run(go())
 
 
@@ -53,11 +67,7 @@ def test_every_letter_has_a_sound_clip():
     assert {p.stem for p in (core_sounds() / "letter-sounds").glob("*.wav")} == set("abcdefghijklmnopqrstuvwxyz")
 
 
-def test_the_space_switch_keeps_one_width_in_sounds_and_letters():
-    from purple_tui.canvas.ui import _hold_switch_widths
+def test_every_fun_key_has_a_silly_sound():
+    from purple_tui.canvas.sounds import core_sounds, find_sound
+    assert all(find_sound(core_sounds() / "letters", n) for n in ("semicolon", "comma", "period", "slash"))
 
-    async def go():
-        app = make_app(room="music")
-        sets = [app.room._header_chips("Marimba", letters) for letters in (False, True)]
-        assert len({_hold_switch_widths(app.g, 30, chips, sets)[1][4] for chips in sets}) == 1
-    run(go())

@@ -1,6 +1,6 @@
 """Music room: a 10x4 grid that mirrors the keyboard. Letters play notes,
-digits play percussion, Tab says letters (Space: their names or sounds), arrows change key, Enter cycles the
-instrument, hold Enter records a loop, and the code line opens from the Esc menu."""
+digits play percussion, Tab says letters, arrows change key, Enter cycles the
+instrument (in Letters: names or sounds), hold Enter records a loop, and the code line opens from the Esc menu."""
 
 import asyncio
 import time
@@ -10,7 +10,7 @@ import pygame
 from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
-from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC, ICON_MUSIC_NOTE
+from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import warm_mixer
@@ -20,6 +20,7 @@ from ...music_constants import (
 )
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
+from ..gfx import mix
 from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
@@ -31,8 +32,8 @@ MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
 PITCH_TRANSITION_DURATION = 0.25
-LETTERS_SAME_KEY_DEBOUNCE_S = 0.40
-LETTERS_CROSS_KEY_DEBOUNCE_S = 0.20
+NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
+LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
 NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit"
 
@@ -49,7 +50,6 @@ class MusicRoom(Room):
         self.instrument_index = 0
         self.root_index = DEFAULT_ROOT_INDEX
         self.letters_mode = False
-        self.show_labels = False
         self.say_sounds = False
         self._note_labels: set = set()
         self._note_timers: dict = {}
@@ -62,8 +62,8 @@ class MusicRoom(Room):
         self.recording = Recording(self.color_state)
         self._replay = None       # (task, colors it ends on, when it started) while a save plays back
         self._saved_loop = None
-        self._last_letter_key = None
         self._last_letter_press_t = float("-inf")
+        self._letter_playing = None
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
         self._enter_down_at = None
@@ -102,8 +102,7 @@ class MusicRoom(Room):
     def timeline_state(self) -> dict:
         colors = self._replay[1] if self._replay else self.color_state
         state = {f"k:{k}": v for k, v in colors.items() if v != -1}
-        state.update(instrument=self.instrument_index, root=self.root_index, letters=self.letters_mode, labels=self.show_labels,
-                     sounds=self.say_sounds)
+        state.update(instrument=self.instrument_index, root=self.root_index, letters=self.letters_mode, sounds=self.say_sounds)
         return state
 
     def restore_timeline_state(self, state: dict):
@@ -111,7 +110,6 @@ class MusicRoom(Room):
         self.instrument_index = int(state.get("instrument", 0))
         self.root_index = int(state.get("root", DEFAULT_ROOT_INDEX))
         self.letters_mode = bool(state.get("letters", False))
-        self.show_labels = bool(state.get("labels", False))
         self.say_sounds = bool(state.get("sounds", False))
         self.color_state = {k: -1 for k in ALL_KEYS}
         for key, val in state.items():
@@ -204,7 +202,10 @@ class MusicRoom(Room):
     def play_letter(self, key: str):
         if self.app._effective_volume() == 0:
             return
+        if self._letter_playing is not None:
+            self._letter_playing.stop()
         if sound := self.sounds.letters(self.say_sounds).get(key):
+            self._letter_playing = sound
             play_safe(sound)
 
     @staticmethod
@@ -235,11 +236,10 @@ class MusicRoom(Room):
         instrument = self.instrument_index if instrument is None else instrument
         if self._replay is None:
             self.recording.add(key, mode, self._instrument(instrument)[0], time.monotonic())
-        is_letters_layer = mode == MODE_LETTERS and key in self.sounds.letters()
-        scale = 0.2 if is_letters_layer else 1.0
-        self.play_sound_with_instrument(key, instrument, scale)
-        if is_letters_layer:
+        if mode == MODE_LETTERS and key in self.sounds.letters():
             self.play_letter(key)
+        else:
+            self.play_sound_with_instrument(key, instrument)
 
     # ---------------------------------------------------------------- grid state
     def next_color(self, key: str):
@@ -434,10 +434,6 @@ class MusicRoom(Room):
             self._advance_loop_state()
         elif self.loop.state == LOOPING:
             self.loop.start_new_cycle()
-        elif self.letters_mode:
-            self.say_sounds = not self.say_sounds
-        else:
-            self.show_labels = not self.show_labels
         self.app.invalidate()
 
     def set_instrument_by_name(self, name: str):
@@ -475,11 +471,11 @@ class MusicRoom(Room):
         self.letters_mode = not self.letters_mode
         self.app.invalidate()
 
-    def _letters_debounce_drop(self, lookup: str, now: float) -> bool:
-        threshold = LETTERS_SAME_KEY_DEBOUNCE_S if lookup == self._last_letter_key else LETTERS_CROSS_KEY_DEBOUNCE_S
-        if now - self._last_letter_press_t < threshold:
+    def _letters_mash_drop(self, now: float) -> bool:
+        """A new letter cuts off the one still speaking, so only a whole hand landing at once needs dropping."""
+        if now - self._last_letter_press_t < LETTERS_MASH_S:
             return True
-        self._last_letter_key, self._last_letter_press_t = lookup, now
+        self._last_letter_press_t = now
         return False
 
     async def handle(self, action):
@@ -530,7 +526,7 @@ class MusicRoom(Room):
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
             if lookup not in ALL_KEYS:
                 return
-            if self.letters_mode and self._letters_debounce_drop(lookup, time.monotonic()):
+            if self.letters_mode and self._letters_mash_drop(time.monotonic()):
                 return
             mode = self._current_mode()
             self.loop.record_event(lookup, mode, instrument=self.instrument_index)
@@ -550,10 +546,17 @@ class MusicRoom(Room):
         elif not action.is_down:
             self._stop_enter_ring()
             if self.enter_hold.on_up():
-                self.instrument_index = (self.instrument_index + 1) % len(instruments())
-                self.echo.flush()
-                self.echo.word(f"choose {self._instrument(self.instrument_index)[0]}")
+                self._next_voice()
                 self.app.invalidate()
+
+    def _next_voice(self):
+        """Enter's tap: the next instrument, or in Letters, names or sounds."""
+        if self.letters_mode:
+            self.say_sounds = not self.say_sounds
+            return
+        self.instrument_index = (self.instrument_index + 1) % len(instruments())
+        self.echo.flush()
+        self.echo.word(f"choose {self._instrument(self.instrument_index)[0]}")
 
     def _flush_enter(self):
         self.enter_hold.on_other_key()
@@ -619,8 +622,7 @@ class MusicRoom(Room):
         return "{hold Enter} loop" if self.app._music_looping_enabled else ""
 
     def _draw_header(self, g, rect):
-        """The same header as Art and Blocks: Enter and Space chips beside the
-        Sounds / Letters switch."""
+        """The same header as Art and Blocks: the Enter chip beside the Notes / Letters switch."""
         instrument = self._instrument(self.instrument_index)[1]
         if self.app._littles_mode:
             plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {instrument}"
@@ -628,18 +630,16 @@ class MusicRoom(Room):
             return
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
         bar.h = hint_row_h(g)
-        draw_mode_switch(g, bar, ("Sounds", "Letters"), 1 if self.letters_mode else 0,
-                         chips=self._header_chips(instrument, self.letters_mode),
-                         also=[self._header_chips(name, letters) for _, name in instruments() for letters in (False, True)])
+        draw_mode_switch(g, bar, ("Notes", "Letters"), 1 if self.letters_mode else 0,
+                         chips=self._header_chips(instrument, self.letters_mode, self.say_sounds),
+                         also=[self._header_chips(name, False, False) for _, name in instruments()]
+                         + [self._header_chips("", True, sounds) for sounds in (False, True)])
 
-    def _header_chips(self, instrument: str, letters: bool) -> tuple:
-        return ("Enter", ICON_MUSIC, instrument, False, "sound"), self._space_chip(letters)
-
-    def _space_chip(self, letters: bool) -> tuple:
-        """Space's switch: what letters say in Letters, note names on the keys in Sounds."""
+    @staticmethod
+    def _header_chips(instrument: str, letters: bool, sounds: bool) -> tuple:
         if letters:
-            return "Space", ("Names", "Sounds"), int(self.say_sounds), "ABC"
-        return "Space", ("Off", "On"), int(self.show_labels), f"{ICON_MUSIC_NOTE} Notes"
+            return ("Enter", ICON_KEYBOARD, "Sounds" if sounds else "Names", False, "say"),
+        return ("Enter", ICON_MUSIC, instrument, False, "sound"),
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""
@@ -664,11 +664,11 @@ class MusicRoom(Room):
     def _draw_grid(self, g, r, on_paper=False):
         """Ten by four gapless square blocks: a quiet key is just its letter,
         a sounding key fills its whole block with color."""
-        size = min(r.w / 10, r.h / 4)
+        size = min(r.w / 10, r.h / (4 + NOTE_STRIP))
+        top = r.centery - (4 + NOTE_STRIP) * size / 2
         xs = [round(r.centerx - 5 * size + i * size) for i in range(11)]
-        ys = [round(r.centery - 2 * size + i * size) for i in range(5)]
+        ys = [round(top + i * size) for i in range(5)]
         letter_px = max(12, int(size * 0.3))
-        label_px = max(10, int(size * 0.15))
         for row_idx, row in enumerate(GRID_KEYS):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
@@ -688,12 +688,26 @@ class MusicRoom(Room):
                 fg = (paper.INK_MUTED if on_paper else P.MUTED) if quiet else text_color_for(bg)
                 g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
-                flashing = key in self._note_labels or (melodic and self._transition is not None)
-                show = (flashing and not on_paper) or (melodic and self.show_labels)
-                label = PERCUSSION_NAMES.get(key, "") if key.isdigit() else (note or "")
-                if show and label:
-                    muted = "#6a5a7a" if fg == "#000000" else "#a898c0"
-                    g.draw_text(f"♪ {label} ♪", label_px, tile.centerx, tile.y + label_px, "mono-bold", muted, anchor="center")
+                if key in self._note_labels and not on_paper:
+                    sound = (note or "").replace("#", "♯") if melodic else PERCUSSION_NAMES.get(key, "")
+                    g.draw_text(sound, max(10, int(size * 0.15)), tile.centerx, tile.bottom - int(size * 0.17),
+                                "mono-bold", mix(fg, bg, 0.3), anchor="center", tr=False)
+        if not self.letters_mode:
+            self._draw_note_strip(g, xs, ys[4] + size * NOTE_STRIP / 2, max(10, int(size * 0.17)), on_paper)
+
+    def _draw_note_strip(self, g, xs, cy, px, on_paper):
+        """Every letter row plays the same note in a column, so each column is named once,
+        threaded on one staff line under the grid."""
+        ground = paper.WHITE if on_paper else P.SURFACE
+        ink = paper.INK_MUTED if on_paper else P.DIM
+        g.rect(mix(ground, ink, 0.45), pygame.Rect(xs[0], cy, xs[10] - xs[0], max(1, px // 10)))
+        g.draw_text(ICON_MUSIC, px, xs[0] - px, cy, "sans", ink, anchor="midright", tr=False)
+        for col in range(10):
+            root_idx, _ = self._transition_state_for_col(col)
+            note, _ = pitch_for(0, col, FRIENDLY_KEYS[root_idx], 0)
+            lit = not on_paper and any(row[col] in self._note_labels for row in GRID_KEYS[1:])
+            g.draw_text(note.replace("#", "♯"), px, (xs[col] + xs[col + 1]) // 2, cy, "mono-bold", P.TEXT if lit else ink,
+                        anchor="center", bg=ground, pad=px // 2, tr=False)
 
     def _draw_noscreen(self, g, rect):
         cy = rect.centery

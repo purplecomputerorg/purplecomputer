@@ -8,6 +8,7 @@ Creates vibrant, kid-friendly sounds:
 - Ukulele: warm, plucky, cheerful
 - Glockenspiel: bright, metallic, inharmonic bell with long ring
 - Percussion: kick, snare, hi-hat, etc. (shared across instruments)
+- Silly sounds: what ; , . / say in Music's Letters (boing, pop, drip, slide whistle)
 """
 
 import sys
@@ -350,6 +351,35 @@ def generate_bongo() -> list[int]:
 
     return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
+def _glide(duration: float, freq, envelope) -> list[int]:
+    """A sine whose pitch follows freq(t), phase-integrated so the sweep stays smooth."""
+    sample_rate, phase, samples = 44100, 0.0, []
+    for i in range(int(sample_rate * duration)):
+        t = i / sample_rate
+        phase += 2 * math.pi * freq(t) / sample_rate
+        samples.append(math.sin(phase) * envelope(t) * min(1.0, t / 0.003))
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
+
+
+SILLY_SOUNDS = {
+    "semicolon": ("boing", lambda: _glide(
+        0.6, lambda t: 190 * (1 + t) * (1 + 0.3 * math.sin(2 * math.pi * 13 * t) * math.exp(-4 * t)),
+        lambda t: math.exp(-4 * t))),
+    "comma": ("pop", lambda: _glide(0.12, lambda t: 150 + 750 * math.exp(-t * 60), lambda t: math.exp(-t * 35))),
+    "period": ("drip", lambda: _glide(0.18, lambda t: 500 + 1100 * (1 - math.exp(-t * 30)), lambda t: math.exp(-t * 22))),
+    "slash": ("slide whistle", lambda: _glide(
+        0.45, lambda t: 520 * 2 ** (t / 0.3), lambda t: math.sin(math.pi * t / 0.45) ** 0.6)),
+}
+
+
+def generate_silly():
+    """Clips in letters/ named like the keys, so Letters says them for ; , . / in either voice."""
+    print("Silly sounds (; , . /):")
+    for name, (kind, generator) in SILLY_SOUNDS.items():
+        write_sound(f"{name}.wav", generator(), subdir="letters")
+        print(f"    {name} = {kind}")
+
+
 def main():
     """Generate all sounds"""
     print("Generating Purple Computer sounds...")
@@ -399,6 +429,8 @@ def main():
         write_sound(f"{num}.wav", samples)
         print(f"    {num} = {name}")
 
+    print()
+    generate_silly()
     print()
     print(f"Done! Sounds saved to {SOUNDS_DIR}")
 

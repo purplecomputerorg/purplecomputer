@@ -18,7 +18,6 @@ Actions (processed left to right):
     code_panel       Open the code panel
     parent_menu      Open the parent menu
     room_picker      Open the Esc room picker
-    boot_hint        Show the welcome card a fresh boot puts over the room
     help_videos      Open the Help & Videos screen
     first_boot       Show the first-boot power-cycle screen
     install_done     Show the install-finished restart screen
@@ -58,8 +57,6 @@ async def run_action(app, action: str):
         app.action_parent_menu()
     elif action == "room_picker":
         app._show_room_picker()
-    elif action == "boot_hint":
-        app.boot_hint = True
     elif action == "help_videos":
         from purple_tui.canvas.rooms.help_videos import HelpVideosScreen
         app.push(HelpVideosScreen(app))

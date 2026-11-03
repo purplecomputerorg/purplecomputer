@@ -27,7 +27,7 @@ from ..constants import (
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
     is_usb_cached, is_usb_needed, is_usb_present,
 )
-from .gfx import Gfx, _Cache, rgb
+from .gfx import Gfx, _Cache, mix, rgb
 from .press import ARROWS
 from .rooms import ROOM_CLASSES, ROOM_NAMES
 from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
@@ -1875,7 +1875,7 @@ class PurpleApp:
         card = pygame.Rect(0, 0, max(widths) + 2 * pad, bot_h + title_h + hint_h + 2 * gap + 2 * pad)
         card.center = rect.center
         veil = pygame.Surface(card.size, pygame.SRCALPHA)
-        pygame.draw.rect(veil, (*rgb(P.LINE), 190), veil.get_rect(), border_radius=g.em(0.8))
+        pygame.draw.rect(veil, (*mix(P.LINE, P.SURFACE, 0.3), 220), veil.get_rect(), border_radius=g.em(0.8))
         g.surface.blit(veil, card)
         bot = g.image("bot.png", bot_h)
         y = card.y + pad

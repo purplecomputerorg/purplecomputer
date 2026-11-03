@@ -135,18 +135,24 @@
 #let flip(body) = footer(end: [#body #h(3pt) #text(fill: magenta, weight: "bold", sym.arrow.r)])
 #let support = footer(end: text(size: 7.4pt, fill: purple, weight: "semibold")[support\@purplecomputer.org])
 
-// Code examples: a typed line beside what it does; long lines take the whole row
-#let examples(color: purple, ..rows) = grid(
-  columns: (auto, 1fr),
-  column-gutter: 8pt,
-  row-gutter: 10pt,
-  align: (left + horizon, left + horizon),
-  ..rows.pos().map(((c, d)) => if c.len() > 16 {
-    (grid.cell(colspan: 2)[#typed(c, color: color) #h(5pt) #text(fill: ink-med, d)],)
-  } else {
-    (typed(c, color: color), text(fill: ink-med, d))
-  }).flatten(),
-)
+// Code examples: a typed line beside what it does; long lines take the whole row.
+// `comments` styles the "what it does" as a code comment.
+#let examples(color: purple, comments: false, ..rows) = {
+  let say(d) = if comments {
+    text(font: "IBM Plex Mono", style: "italic", size: 0.84em, fill: ink-dim)[\# #d]
+  } else { text(fill: ink-med, d) }
+  grid(
+    columns: (auto, 1fr),
+    column-gutter: 8pt,
+    row-gutter: 10pt,
+    align: (left + horizon, left + horizon),
+    ..rows.pos().map(((c, d)) => if comments or c.len() > 16 {
+      (grid.cell(colspan: 2)[#typed(c, color: color) #h(5pt) #say(d)],)
+    } else {
+      (typed(c, color: color), say(d))
+    }).flatten(),
+  )
+}
 
 // Rows split by hairlines; each row is an array of cells. The outer rows leave their edge
 // padding to the panel around them.

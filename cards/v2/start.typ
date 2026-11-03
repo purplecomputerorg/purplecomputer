@@ -5,8 +5,10 @@
 #header()
 
 #note[
-  #set text(size: 8.8pt)
-  *Trying Purple changes nothing on the laptop.* Take out the Purple Key and restart to get it back. *Like it?* Hold #key("Esc") for the Parent Menu, then choose *Install* to keep it for good.
+  #set par(spacing: 7pt)
+  #text(size: 8.8pt)[*Trying Purple changes nothing on the laptop.* Take out the Purple Key and restart to exit Purple.]
+
+  #text(size: 7.6pt)[*Like it?* Hold #key("Esc") for the Parent Menu, then choose *Install* to keep it.]
 ]
 #gap
 

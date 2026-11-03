@@ -89,3 +89,12 @@ def test_switching_shows_one_toast_and_plays_a_sample(monkeypatch):
         assert heard == ["note", "note", "letter", "letter"]
         assert [t.text.split()[-1] for t in app._toasts] == ["sounds"]
     run(go())
+
+
+def test_note_names_use_flats_in_flat_keys():
+    from purple_tui.canvas.rooms.music_room import note_name
+    from purple_tui.music_constants import FRIENDLY_KEY_NAMES
+    scale = {name: [note_name(col, i) for col in range(7)] for i, name in enumerate(FRIENDLY_KEY_NAMES)}
+    assert scale["B♭"] == ["B♭", "C", "D", "E♭", "F", "G", "A"]
+    assert scale["F"] == ["F", "G", "A", "B♭", "C", "D", "E"]
+    assert scale["D"] == ["D", "E", "F♯", "G", "A", "B", "C♯"]

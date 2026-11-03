@@ -16,7 +16,7 @@ from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import warm_mixer
 from ...music_constants import (
     ALL_KEYS, COLOR_KEYCAP, COLORS, DEFAULT_ROOT_INDEX, FRIENDLY_KEY_NAMES, FRIENDLY_KEYS, GRID_KEYS,
-    INSTRUMENT_ALIASES, PERCUSSION_NAMES, instruments, pitch_filename, pitch_for,
+    INSTRUMENT_ALIASES, instruments, pitch_filename, pitch_for,
 )
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
@@ -36,6 +36,15 @@ NOTE_STRIP = 0.45             # height of the note-name row under the grid, in k
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
 NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit"
+FLAT_KEYS = {5, 10}           # F and B flat name their black keys as flats
+SHARP_TO_FLAT = {"C#": "D♭", "D#": "E♭", "F#": "G♭", "G#": "A♭", "A#": "B♭"}
+
+
+def note_name(col: int, root_index: int) -> str:
+    """A column's note as a reader expects it in that key: F♯ in G and D, B♭ in F and B♭."""
+    root = FRIENDLY_KEYS[root_index]
+    note = pitch_for(0, col, root, 0)[0]
+    return SHARP_TO_FLAT.get(note, note) if root in FLAT_KEYS else note.replace("#", "♯")
 
 
 class MusicRoom(Room):
@@ -641,7 +650,7 @@ class MusicRoom(Room):
             return
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
         bar.h = hint_row_h(g)
-        draw_mode_switch(g, bar, ("Notes", "Letters"), 1 if self.letters_mode else 0,
+        draw_mode_switch(g, bar, (f"{ICON_MUSIC} Notes", f"{ICON_KEYBOARD} Letters"), 1 if self.letters_mode else 0,
                          chips=self._header_chips(instrument, self.letters_mode, self.say_sounds),
                          also=[self._header_chips(name, False, False) for _, name in instruments()]
                          + [self._header_chips("", True, sounds) for sounds in (False, True)])
@@ -684,10 +693,7 @@ class MusicRoom(Room):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
                 bg = self.get_color(key)
-                note = None
-                if melodic:
-                    root_idx, _ = self._transition_state_for_col(col_idx)
-                    note, _ = pitch_for(row_idx - 1, col_idx, FRIENDLY_KEYS[root_idx], 0)
+                note = note_name(col_idx, self._transition_state_for_col(col_idx)[0]) if melodic else None
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
                 quiet = bg == P.TILE
                 if not quiet:
@@ -698,7 +704,7 @@ class MusicRoom(Room):
                 g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 if key in self._note_labels and not on_paper:
-                    sound = f"♪ {note.replace('#', '♯')}" if melodic else f"{ICON_DRUM} {PERCUSSION_NAMES.get(key, '')}"
+                    sound = f"♪ {note}" if melodic else ICON_DRUM
                     g.draw_text(sound, max(10, int(size * 0.15)), tile.centerx, tile.bottom - int(size * 0.17),
                                 "mono-bold", mix(fg, bg, 0.3), anchor="center", tr=False)
         if not self.letters_mode:
@@ -706,29 +712,32 @@ class MusicRoom(Room):
 
     def _draw_note_strip(self, g, xs, cy, px, on_paper):
         """Every letter row plays the same note in a column, so each column is named once, on a ledge
-        as wide as the grid, with a music tab tucked behind its left end. Played names go bold so the eye stays on the
+        as wide as the grid, with a tab naming the key tucked behind its left end. Played names go bold so the eye stays on the
         keys; the key-change sweep gets the selection plate."""
         size = xs[1] - xs[0]
         h = round(size * NOTE_STRIP * 0.62)
         bar = pygame.Rect(xs[0], 0, xs[10] - xs[0], h)
         bar.centery = round(cy + size * 0.08)
-        tab = pygame.Rect(xs[0] - round(h * 1.6), bar.y, round(h * 1.6) + h, h)
+        key = f"{ICON_MUSIC} {FRIENDLY_KEY_NAMES[self.root_index]}"
+        reach = g.measure(key, px, "mono-heavy", tr=False)[0] + h
+        tab = pygame.Rect(xs[0] - reach, bar.y, reach + h, h)
         ink = paper.INK_MUTED if on_paper else P.MUTED
         ground = mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE
         g.rect(mix(ground, ink, 0.2), tab, radius=h // 2)
         g.rect(ground, bar, radius=h // 2)
-        g.draw_text(ICON_MUSIC, px, (tab.x + bar.x) // 2 + h // 10, bar.centery, "sans", ink, anchor="center", tr=False)
+        g.draw_text(key, px, (tab.x + bar.x) // 2 + h // 10, bar.centery, "mono-heavy", paper.INK if on_paper else P.TEXT,
+                    anchor="center", tr=False)
         plate = pygame.Rect(0, 0, round(size * 0.5), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
             root_idx, sweeping = self._transition_state_for_col(col)
-            note, _ = pitch_for(0, col, FRIENDLY_KEYS[root_idx], 0)
+            note = note_name(col, root_idx)
             sweeping = sweeping and not on_paper
             played = not on_paper and any(row[col] in self._note_labels for row in GRID_KEYS[1:])
             plate.center = ((xs[col] + xs[col + 1]) // 2, bar.centery)
             if sweeping:
                 g.rect(P.PRIMARY, plate, radius=plate.h // 2)
             color = P.ON_PRIMARY if sweeping else P.TEXT if played else ink
-            g.draw_text(note.replace("#", "♯"), px, plate.centerx, plate.centery, "mono-heavy" if played else "mono-bold",
+            g.draw_text(note, px, plate.centerx, plate.centery, "mono-heavy" if played else "mono-bold",
                         color, anchor="center", tr=False)
 
     def _draw_noscreen(self, g, rect):

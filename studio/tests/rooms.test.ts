@@ -118,7 +118,7 @@ describe("family rooms in Studio's Python", () => {
 
   it("runs the picture quiz: a wrong pick goes away, the right one moves on to the next question", async () => {
     const keys = ["1", "2", "3"].map((key) => ({ ev: "key", key }));
-    const replies = await runRoom(quizSource(TEMPLATES.quiz.defaults()), [...keys, { ev: "key", key: "space" }, { ev: "tick", t: 2 }]);
+    const replies = await runRoom(quizSource({ ...TEMPLATES.quiz.defaults(), chimes: true }), [...keys, { ev: "key", key: "space" }, { ev: "tick", t: 2 }]);
     expect(texts(replies[0]).sort()).toEqual(["1", "2", "3", "Which one says moo?", "🐄", "🐑", "🐖"].sort());
     expect(replies[0].sounds).toEqual([["say", "Which one says moo?"]]);
     const picks = replies.slice(1, 4);
@@ -143,7 +143,7 @@ describe("family rooms in Studio's Python", () => {
     const replies = await runRoom(source, [{ ev: "key", key: "1" }], {}, { images: { grandma: [200, 300] } });
     expect(texts(replies[0])).toContain(tricky);
     expect(shapes(replies[0]).filter((s) => s[0] === "image").map((s) => s[5])).toEqual(["grandma", "grandma"]);
-    expect(replies[1].sounds).toEqual([["say", "Grandma"], ["note", "G5", "marimba"]]);
+    expect(replies[1].sounds).toEqual([["say", "Grandma"]]);
   }, 60_000);
 
   it("runs a soundboard: each key's sound, the fallback, and the key itself when no picture", async () => {

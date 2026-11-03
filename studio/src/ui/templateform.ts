@@ -81,6 +81,8 @@ function quizForm(data: QuizData, c: Ctx): Node[] {
         ...q.others.map((o, j) => choice(h("span", { class: "tag" }, "Other"), o, remove(q.others, j, c))),
         q.others.length < MAX_OTHERS ? add("Another choice", () => q.others.push({ emoji: "", word: "" }), c) : null))),
     add("Add a question", () => data.rows.push({ question: "", emoji: "", right: { emoji: "", word: "" }, others: [{ emoji: "", word: "" }] }), c),
+    h("label", { class: "row" }, h("input", { type: "checkbox", checked: !!data.chimes,
+      onchange: (e: Event) => { data.chimes = (e.target as HTMLInputElement).checked; c.onEdit(); } }), "Play a note for each pick"),
   ];
 }
 

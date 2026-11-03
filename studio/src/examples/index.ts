@@ -25,7 +25,8 @@ export function normalizeKey(v: string): string | null {
 // the room tells them apart by what the pack has.
 export interface QuizChoice { emoji: string; word: string }
 export interface QuizRow { question: string; emoji: string; right: QuizChoice; others: QuizChoice[] }
-export interface QuizData { rows: QuizRow[] }
+// chimes: a note for each pick and for the end; drafts from before it lack one, and stay quiet.
+export interface QuizData { rows: QuizRow[]; chimes?: boolean }
 // voice: a recording of the word that Purple plays instead of saying it; drafts from before it lack one.
 export interface Sound { emoji: string; word: string; voice?: string; note: string }
 export interface SoundboardData { rows: (Sound & { key: string })[]; other: Sound }
@@ -34,7 +35,8 @@ export type TemplateDraft = { kind: "quiz"; data: QuizData } | { kind: "soundboa
 export const MAX_OTHERS = 3;
 const filled = (c: QuizChoice) => !!(c.emoji.trim() || c.word.trim());
 
-export function quizSource({ rows }: QuizData): string {
+export function quizSource({ rows, chimes }: QuizData): string {
+  const chime = (note: string) => (chimes ? `\n        play(${lit(note)})` : "");
   const choice = (c: QuizChoice) => `(${lit(c.emoji.trim())}, ${lit(c.word.trim())})`;
   const questions = rows.filter((r) => r.question.trim() && filled(r.right))
     .map((r) => `    (${lit(r.question.trim())}, ${lit(r.emoji.trim())}, ${choice(r.right)}, [${r.others.filter(filled).slice(0, MAX_OTHERS).map(choice).join(", ")}]),`);
@@ -75,8 +77,7 @@ def ask_next():
     clear()
     if asked == len(QUESTIONS):
         show("🎉")
-        write("That was all of them!")
-        play("G5")
+        write("That was all of them!")${chime("G5")}
         game_over("Press a key to play again")
         return
     question, face, right, others = QUESTIONS[asked]
@@ -99,13 +100,11 @@ def pick(i):
     thing, word = choices[i]
     if word:
         say(word)
-    if choices[i] == QUESTIONS[asked][2]:
-        play("G5")
+    if choices[i] == QUESTIONS[asked][2]:${chime("G5")}
         asked += 1
         waiting = True
         after(1.5, ask_next)
-    else:
-        play("E3")
+    else:${chime("E3")}
         for spot in spots[i]:
             grid.erase(spot)
         spots[i] = None

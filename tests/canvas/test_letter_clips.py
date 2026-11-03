@@ -18,8 +18,8 @@ def test_a_recorded_punctuation_key_speaks_and_an_unrecorded_one_plays_a_note(mo
         said, notes = [], []
         monkeypatch.setattr(room.sounds, "letters", lambda: {"/": object()})
         monkeypatch.setattr(room, "play_letter", said.append)
-        monkeypatch.setattr(room, "play_sound_with_instrument", lambda key, inst, scale: notes.append((key, scale)))
+        monkeypatch.setattr(room, "play_sound_with_instrument", lambda key, inst: notes.append(key))
         room._play_key("/", MODE_LETTERS)
         room._play_key(";", MODE_LETTERS)
-        assert said == ["/"] and notes == [("/", 0.2), (";", 1.0)]
+        assert said == ["/"] and notes == [";"]
     run(go())

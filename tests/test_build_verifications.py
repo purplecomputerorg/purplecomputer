@@ -206,9 +206,10 @@ def test_boot_timing_timeline_is_seconds_since_boot(tmp_path):
     that bound a startup phase, and without the per-line prefixes."""
     import os
     import subprocess
-    from datetime import datetime, timedelta
-    boot = datetime.now() - timedelta(seconds=float(Path("/proc/uptime").read_text().split()[0]))
-    stamp = lambda offset: (boot + timedelta(seconds=offset)).strftime("%H:%M:%S.%f")[:-3]
+    import time
+    from datetime import datetime
+    boot = time.time() - float(Path("/proc/uptime").read_text().split()[0])
+    stamp = lambda offset: datetime.fromtimestamp(boot + offset).strftime("%H:%M:%S.%f")[:-3]
     log = tmp_path / "boot.log"
     log.write_text(
         f"[{stamp(9)}] [wait-display] === purple-wait-display started === kernel=6.8\n"

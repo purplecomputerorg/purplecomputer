@@ -69,9 +69,15 @@ unchanged from the terminal era and know nothing about drawing.
 
 ## Frame model
 
-One asyncio loop. A render task wakes at most 60 times a second and, when
+One asyncio loop. A render task draws at most 60 times a second and, when
 `app.g.dirty` is set, redraws the entire screen and flips. Everything that
-changes state calls `app.invalidate()`. There is no dirty-rect tracking:
+changes state calls `app.invalidate()`, which also wakes the loop (from any
+thread). An idle loop sleeps until woken, a toast is due to leave, or the next
+`IDLE_POLL_S` poll of SDL window events (the parent terminal closing over us);
+without evdev SDL is the keyboard, so it polls every frame instead. Drawing must
+never call `invalidate()` itself, or an idle screen redraws forever:
+`tests/canvas/conftest.py` checks every test that draws, and
+`tests/canvas/test_render_loop.py` pins the rest. There is no dirty-rect tracking:
 a full 1366x768 frame costs 1.5 to 3 ms warm on a modern machine and stays
 under a keystroke's worth of time on 2006 hardware, because every glyph and
 emoji is rasterized once and blitted from a cache (`Gfx.text`, `Gfx.emoji`).

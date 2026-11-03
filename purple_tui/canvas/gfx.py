@@ -584,8 +584,6 @@ class Gfx:
             self._kms.present()
         elif not self.headless:
             pygame.display.update(rect) if rect else pygame.display.flip()
-        if rect is None:
-            self.dirty = False
 
     def draw_caret(self, rect, draw, draw_dim=None):
         """Run draw() and keep the pixels under rect both ways (bare, or as

@@ -11,6 +11,7 @@ any, else to the active room. Rooms and overlays are plain objects with
 import asyncio
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -51,6 +52,8 @@ _EDIT_KEYS = {"home", "end", "page_up", "page_down"}
 BACKSLASH_HOLD = 3.0
 LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
 CARET_BLINK_S = 0.53          # the classic terminal half-second
+FRAME_S = 1 / 60
+IDLE_POLL_S = 0.1             # an idle screen still answers window events (the parent terminal closing) this fast
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
 SIDE_MARGIN_VW = 6            # air beside the frame
 TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
@@ -147,6 +150,7 @@ class PurpleApp:
         self._sticky_shift_timer = None
         self._evdev_reader = self._power_button_reader = self._lid_switch_reader = None
         self._frame_stats = FrameStats(self.g)
+        self._wake = self._loop_thread = None   # set by the render loop; invalidate() wakes it
         self._lid_close_time = None
         self._lid_was_closed_for = 0
         self._bye_screen_active = False
@@ -295,13 +299,14 @@ class PurpleApp:
 
     async def _render_loop(self):
         from .sdl_input import pump
+        self._wake, self._loop_thread = asyncio.Event(), threading.get_ident()
         first = True
         while self.running:
             tick = time.monotonic()
             for raw in pump(self.g):
                 if raw is None:
                     self.exit()
-                elif self._evdev_reader is None:
+                elif self._sdl_is_keyboard:
                     await self._handle_raw_key_event(raw)
             now = time.monotonic()
             live = [t for t in self._toasts if t.expires > now]
@@ -311,6 +316,7 @@ class PurpleApp:
             if self._save_flash_at is not None:
                 self.g.dirty = True
             if self.g.dirty:
+                self.g.dirty = False   # before drawing, so a request made mid-frame gets its own frame
                 start = time.monotonic()
                 self._draw()
                 drawn = time.monotonic()
@@ -322,7 +328,37 @@ class PurpleApp:
                 if first:
                     first = False
                     self._mark_ui_ready()
-            await asyncio.sleep(max(0.0, 1 / 60 - (time.monotonic() - tick)))
+            await asyncio.sleep(max(0.0, FRAME_S - (time.monotonic() - tick)))
+            await self._idle(tick)
+
+    async def _idle(self, since: float):
+        """Sleep until something asks for a frame, a toast is due to go, or the next window-event poll."""
+        self._wake.clear()
+        if self.g.dirty or self._save_flash_at is not None or not self.running:
+            return
+        until = since + (FRAME_S if self._sdl_is_keyboard else IDLE_POLL_S)
+        if self._toasts:
+            until = min(until, min(t.expires for t in self._toasts))
+        wait = until - time.monotonic()
+        if wait <= 0:
+            return
+        try:
+            await asyncio.wait_for(self._wake.wait(), wait)
+        except asyncio.TimeoutError:
+            pass
+
+    @property
+    def _sdl_is_keyboard(self) -> bool:
+        """Without evdev, keys arrive through SDL's window events (dev machines)."""
+        return self._evdev_reader is None
+
+    def _wake_loop(self):
+        if self._wake is None:
+            return
+        if threading.get_ident() == self._loop_thread:
+            self._wake.set()
+        else:
+            self.timers.call_from_thread(self._wake.set)
 
     def note_next_frame(self, why: str):
         """Log the next frame that reaches the screen (screen-went-black reports)."""
@@ -346,6 +382,8 @@ class PurpleApp:
 
     def exit(self):
         self.running = False
+        if self._wake is not None:   # signal handlers run on the loop thread mid-poll: only the threadsafe path interrupts it
+            self.timers.call_from_thread(self._wake.set)
 
     async def _shutdown(self):
         self._timeline_flush()
@@ -356,7 +394,6 @@ class PurpleApp:
                 except Exception:
                     pass
         try:
-            import threading
             if pygame.mixer.get_init():
                 t = threading.Thread(target=pygame.mixer.quit, daemon=True)
                 t.start()
@@ -367,6 +404,7 @@ class PurpleApp:
 
     def invalidate(self, *_):
         self.g.dirty = True
+        self._wake_loop()
 
     def call_from_thread(self, fn, *args):
         self.timers.call_from_thread(fn, *args)
@@ -1246,7 +1284,6 @@ class PurpleApp:
             except Exception:
                 self._sound_check_running = False  # a wedged flag would keep the sink frozen all session
 
-        import threading
         threading.Thread(target=_work, daemon=True, name="sound-check").start()
 
     def _apply_sound_check(self, level):
@@ -1454,7 +1491,6 @@ class PurpleApp:
 
     # ------------------------------------------------------------------ audio lifecycle
     def _start_mixer_warmup(self):
-        import threading
 
         def _warm():
             from .. import cras
@@ -1542,7 +1578,6 @@ class PurpleApp:
         request_idle_release()
 
     def _start_audio_retry_poll(self):
-        import threading
 
         def _poll():
             from ..mixer import reinit_mixer_after_hotplug
@@ -1935,7 +1970,6 @@ def _write_crash(header: str, exc_type, exc_value, exc_tb):
 
 
 def _install_crash_logger():
-    import threading
     prev = sys.excepthook
     sys.excepthook = lambda t, v, tb: (_write_crash("uncaught exception", t, v, tb), prev(t, v, tb))
     prev_thread = threading.excepthook

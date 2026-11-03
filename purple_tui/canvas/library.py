@@ -150,7 +150,7 @@ class Library(Overlay):
         self._deadline, self._filling = None, False
         self._draw(g)
         if self._filling:
-            self.app.timers.after(0, self.app.invalidate)   # a draw's own invalidate is cleared when the frame lands
+            self.app.timers.after(0, self.app.invalidate)   # drawing never invalidates itself (tests/canvas/conftest.py)
 
     def _draw(self, g):
         draw_scrim(g)

@@ -652,15 +652,23 @@ class MusicRoom(Room):
         bar.h = hint_row_h(g)
         draw_mode_switch(g, bar, (f"{ICON_MUSIC} Notes", f"{ICON_KEYBOARD} Letters"), 1 if self.letters_mode else 0,
                          chips=self._header_chips(self.instrument_index, self.letters_mode, self.say_sounds),
-                         also=[self._header_chips(i, False, False) for i in range(len(instruments()))]
-                         + [self._header_chips(0, True, sounds) for sounds in (False, True)])
+                         also=self._header_chip_sets(self.letters_mode))
+
+    def _header_chip_sets(self, letters: bool) -> list:
+        """Every Enter switch this mode can show, so it keeps one width while Enter steps through them."""
+        if letters:
+            return [self._header_chips(0, True, sounds) for sounds in (False, True)]
+        return [self._header_chips(i, False, False) for i in range(len(instruments()))]
 
     def _header_chips(self, index: int, letters: bool, sounds: bool) -> tuple:
-        """Enter as a switch like Tab's: the voice on the plate and, beside it, the one Enter moves to."""
+        """Enter as a switch like Tab's. Instruments show the current one on the plate with a dot
+        for each of the others, in order, so it's clear Enter steps through more than two."""
         if letters:
             return ("Enter", ("Names", "Sounds"), int(sounds)),
         names = [name for _, name in instruments()]
-        return ("Enter", tuple(dict.fromkeys((names[index % len(names)], names[(index + 1) % len(names)]))), 0),
+        i = index % len(names)
+        labels = [part for part in (" ".join("•" * i), names[i], " ".join("•" * (len(names) - 1 - i))) if part]
+        return ("Enter", tuple(labels), labels.index(names[i])),
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""

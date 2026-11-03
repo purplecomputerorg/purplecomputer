@@ -1005,11 +1005,12 @@ def draw_hold_bar(g: Gfx, rect: pygame.Rect, progress: float, label: str):
     """A hold gesture under way, over the bottom of the viewport: a pill that
     fills as the hold goes on, saying what a full one does."""
     g.rect(P.SURFACE, rect)
-    g.rect(P.LINE, (rect.x + g.em(1), rect.y, rect.w - g.em(2), 1))
-    h = min(round(g.em(0.95) * 2.4), rect.h - 2 * g.em(0.3))
+    below = rect.inflate(0, -g.em(0.5)).move(0, g.em(0.25))   # a gap so the line never touches what sits above
+    g.rect(P.LINE, (rect.x + g.em(1), below.y, rect.w - g.em(2), 1))
+    h = min(round(g.em(0.95) * 2.4), below.h - 2 * g.em(0.3))
     px = round(h / 2.4)
     pill = pygame.Rect(0, 0, g.measure(label, px, "mono-bold")[0] + g.em(3), h)
-    pill.center = rect.center
+    pill.center = below.center
     draw_fill_pill(g, pill, progress, label)
 
 

@@ -536,3 +536,14 @@ def test_cursor_paints_only_inside_its_redraw_box():
                     box = room._cursor_box(*room._view(x, z))
                     assert box.contains(room._layer.get_bounding_rect()), (x, z, top, way)
     run(go())
+
+
+def test_the_colors_chip_hides_while_the_code_panel_types_backslash():
+    async def go():
+        app, room = _blocks()
+        app._draw()
+        assert room.bar_row is not None
+        room.open_code_panel()
+        app._draw()
+        assert room.code_panel is not None and room.bar_row is None
+    run(go())

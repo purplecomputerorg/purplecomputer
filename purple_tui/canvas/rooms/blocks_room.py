@@ -654,7 +654,7 @@ class BlocksRoom(Room):
         else:
             self._draw_turning(g, ox, oy, p)
         self.bar_row = draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
-                                        1 if self._back else 0, self._color, wheel=wheel_chip(self))
+                                        1 if self._back else 0, self._color, wheel=None if self.code_panel else wheel_chip(self))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)

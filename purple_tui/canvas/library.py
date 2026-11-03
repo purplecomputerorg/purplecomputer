@@ -14,7 +14,7 @@ from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from . import saves
 from .saves import fit
 from .secret_doodle import paint_picture
-from .ui import Overlay, draw_bar, draw_label, draw_scrim, draw_window
+from .ui import Overlay, draw_bar, draw_key_hint, draw_label, draw_scrim, draw_window
 
 ICON_SAVE = "\U000F0193"  # nf-md-content_save
 ICON_OPEN = "\U000F0770"  # nf-md-folder_open
@@ -187,13 +187,13 @@ class Library(Overlay):
             draw_bar(g, r.x + em(0.6), r.bottom - em(1.2), r.w - em(1.2), em(0.6), progress, P.DANGER)
 
     def _draw_hint(self, g, box, y, h):
-        hint = "Enter: open" if self.tiles else ""
+        hint = "{Enter} open" if self.tiles else ""
         if self._removable(self._tile()):
-            hint += "    Hold ⌫: remove"
+            hint += "    {hold ⌫} remove"
         if self.can_print and self.tiles:
-            hint += "    P: print"
+            hint += "    {P} print"
         rows = (len(self.tiles) + COLS - 1) // COLS
         more = ("▲ " if self.top_row > 0 else "") + ("▼ more" if self.top_row + ROWS_SHOWN < rows else "")
-        g.draw_text(f"{hint}    Esc: close".strip(), g.em(0.92), box.centerx, y + h // 2, "mono", P.MUTED, anchor="center")
+        draw_key_hint(g, f"{hint}    {{Esc}} close".strip(), g.em(0.92), box.centerx, y + h // 2, anchor="center")
         if more:
             g.draw_text(more.strip(), g.em(0.92), box.right - g.em(1.8), y + h // 2, "mono", P.MUTED, anchor="midright")

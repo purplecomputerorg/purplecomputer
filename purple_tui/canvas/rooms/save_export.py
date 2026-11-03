@@ -69,7 +69,7 @@ def export_saves(dest: Path, export_for) -> int:
 
 class SaveExportScreen(Dialog):
     title = "Copy Saved Work to USB"
-    hint = "Enter: close"
+    hint = "{Enter} close"
     width_pct = 50
 
     def __init__(self, app):

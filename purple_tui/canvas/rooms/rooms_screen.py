@@ -57,7 +57,7 @@ def _pack_name(room) -> str:
 class RoomsScreen(Dialog):
     """Given packs, it opens on their rooms: the step right after a pack is added."""
     title = "Rooms"
-    hint = f"{LEFT} {RIGHT} {UP} {DOWN} move   Enter check or uncheck   Esc done"
+    hint = f"{LEFT} {RIGHT} {UP} {DOWN} move   {{Enter}} check or uncheck   {{Esc}} done"
     DESCRIPTION = "Checked rooms show in the Esc menu."
     JUST_ADDED = "Check the rooms to turn on now. You can change this later in the Parent Menu, under Rooms."
     LITTLES_ON = "Littles Mode is on, so there's no Esc menu. These rooms come back when it's off."

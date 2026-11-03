@@ -22,8 +22,8 @@ from ...audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volu
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_meter, draw_scrim,
-                  draw_text_caret, draw_window, field_height, window_title_height)
+from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_key_hint,
+                  draw_key_lines, draw_meter, draw_scrim, draw_text_caret, draw_window, field_height, window_title_height)
 from .rooms_screen import RoomsScreen, rooms_label
 from .sleep_screen import FullScreen
 from ..kids import KidsScreen, computer_name, many, write_computer_name
@@ -146,7 +146,7 @@ def draw_slider_row(g, rect, y, px, name, on, left, inset, filled, steps, value)
 
 class DisplaySettingsScreen(Dialog):
     title = "Display"
-    hint = f"{LEFT} {RIGHT} adjust   {UP} {DOWN} switch   Esc done"
+    hint = f"{LEFT} {RIGHT} adjust   {UP} {DOWN} switch   {{Esc}} done"
     width_pct = 50
 
     def __init__(self, app):
@@ -255,7 +255,7 @@ class PurplePacksScreen(Picker):
 
     def _options(self) -> list:
         from ...pack_manager import get_installer
-        return [(p["id"], p["name"], _pack_for(p["id"]) if many() else "Enter to remove")
+        return [(p["id"], p["name"], _pack_for(p["id"]) if many() else "{Enter} to remove")
                 for p in get_installer().list_installed()] + [(None, "Done")]
 
     def _on_confirm(self, pack_id):
@@ -462,8 +462,8 @@ class ParentVolumeModal(Dialog):
 
     @property
     def hint(self):
-        row = f"{LEFT} {RIGHT} change    {UP} {DOWN} switch" if self._focus == "volume" else f"Enter on/off    {UP} {DOWN} switch"
-        return f"{row}\nSpace plays sound    Esc done"
+        row = f"{LEFT} {RIGHT} change    {UP} {DOWN} switch" if self._focus == "volume" else f"{{Enter}} on/off    {UP} {DOWN} switch"
+        return f"{row}\n{{Space}} plays sound    {{Esc}} done"
 
     def body_height(self, g):
         return g.vh(19)
@@ -557,7 +557,7 @@ class _Entry(Dialog):
     """A dialog with a description and a boxed field below it; an error
     takes the description's place."""
 
-    hint = "Enter confirm   Esc cancel"
+    hint = "{Enter} confirm   {Esc} cancel"
     width_pct = 46
 
     def __init__(self, app, title, description):
@@ -1010,8 +1010,9 @@ class InstallProgressScreen(FullScreen):
     def draw(self, g):
         g.fill(P.BG)
         if self._phase == "error" and (self._scrolling or self._diag_lines):
-            g.draw_markup(f"Please record this with your phone and send to {SUPPORT_EMAIL}\nEsc: go back   Enter: replay",
-                          g.vh(2.4), g.sx(4), g.sy(3), "mono-bold", P.PRIMARY, g.vw(92), "left", P.BG)
+            y = g.sy(3) + g.draw_markup(f"Please record this with your phone and send to {SUPPORT_EMAIL}",
+                                        g.vh(2.4), g.sx(4), g.sy(3), "mono-bold", P.PRIMARY, g.vw(92), "left", P.BG)
+            draw_key_hint(g, "{Esc} go back   {Enter} replay", g.vh(2.4), g.sx(4), y, P.PRIMARY, "topleft")
             end = self._diag_scroll_pos if self._scrolling else len(self._diag_lines)
             visible = self._diag_lines[max(0, end - self._SCROLL_VISIBLE):end]
             y = g.sy(11)
@@ -1029,8 +1030,8 @@ class InstallProgressScreen(FullScreen):
             else:
                 summary = f"{self._get_error_summary()}\n\nIf this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
             g.draw_markup(summary, g.vh(2.6), g.sx(10), g.sy(30), "mono", P.TEXT, g.vw(80), "center", P.BG, g.vh(0.6))
-            g.draw_markup("Press Enter for technical details.\nEsc to go back. Power button to turn off.", g.vh(2.2),
-                          g.sx(10), g.sy(78), "mono-bold", P.MUTED, g.vw(80), "center", P.BG)
+            draw_key_lines(g, "Press {Enter} for technical details.\n{Esc} to go back. Power button to turn off.", g.vh(2.2),
+                           cx, g.sy(78), g.vw(80), P.MUTED, P.BG)
             return
         bot = g.image("bot.png", g.vh(20))
         g.surface.blit(bot, bot.get_rect(midbottom=(cx, g.sy(33))))
@@ -1098,7 +1099,7 @@ def _xterm_env() -> dict:
 
 class TerminalScreen(FullScreen):
     message = "Terminal"
-    hint = "Type exit and press Enter to go back to Purple."
+    hint = "Type exit and press {Enter} to go back to Purple."
 
     def on_open(self):
         self._proc = None
@@ -1118,7 +1119,7 @@ class TerminalScreen(FullScreen):
             self._proc = subprocess.Popen(_xterm_cmd(), env=_xterm_env())
         except OSError as e:
             self.message = "Terminal unavailable"
-            self.hint = f"Could not open a terminal.\nPress Enter to go back.\n(Technical: {e})"
+            self.hint = f"Could not open a terminal.\nPress {{Enter}} to go back.\n(Technical: {e})"
             self._running = False
             self.app.invalidate()
             return
@@ -1522,7 +1523,7 @@ class ParentMenu(Overlay):
         em = g.em
         live_h = g.vh(9) if is_live_boot() else 0
         n_gaps = sum(1 for i in range(len(self.items)) if self._is_section(i)) + 1
-        pad, head_h, foot_h = em(1.0), window_title_height(g, "Parent Menu"), em(6.0)
+        pad, head_h, foot_h = em(1.0), window_title_height(g, "Parent Menu"), em(6.5)
         avail = g.h - g.vh(4) - 2 * pad - head_h - live_h - foot_h
         row_h = min(em(1.9), int(avail / (len(self.items) + n_gaps * 0.8)))
         gap_h = int(row_h * 0.8)
@@ -1557,7 +1558,7 @@ class ParentMenu(Overlay):
                             P.ON_PRIMARY if on else (P.DIM if disabled else P.ACCENT), anchor="midleft", tr=False)
             y += row_h
         foot = box.bottom - pad - foot_h
-        g.draw_text(f"{UP} {DOWN} choose   Enter open   Esc close", em(0.92), box.centerx, foot + em(1.3), "mono", P.MUTED, anchor="center", track=0.08)
-        g.draw_markup("Purple is keyboard only, on purpose.\nKids explore by typing.", em(0.85), box.x, foot + em(2.3),
+        draw_key_hint(g, f"{UP} {DOWN} choose   {{Enter}} open   {{Esc}} close", em(0.92), box.centerx, foot + em(1.3), anchor="center")
+        g.draw_markup("Purple is keyboard only, on purpose.\nKids explore by typing.", em(0.85), box.x, foot + em(2.8),
                       "mono", P.DIM, box.w, "center", P.SURFACE)
-        g.draw_text(diagnostics.get_version_label() or "", em(0.8), box.centerx, foot + em(5.3), "mono", P.DIM, anchor="center")
+        g.draw_text(diagnostics.get_version_label() or "", em(0.8), box.centerx, foot + em(5.8), "mono", P.DIM, anchor="center")

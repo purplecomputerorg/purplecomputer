@@ -76,7 +76,7 @@ def ask_name(app, kid: str | None, title: str, description: str, then):
 
 class WhoIsPlaying(Picker):
     title = "Pick your computer"
-    hint = f"{UP} {DOWN}   Enter"
+    hint = f"{UP} {DOWN}   {{Enter}}"
 
     def __init__(self, app):
         super().__init__(app, [(k, computer_name(k)) for k in get_kids()])
@@ -107,7 +107,7 @@ class KidsScreen(Picker):
 
     def _options(self) -> list:
         now = get_kid()
-        return [(k, computer_name(k), "Playing now" if k == now else "Enter to switch or remove") for k in get_kids()] \
+        return [(k, computer_name(k), "Playing now" if k == now else "{Enter} to switch or remove") for k in get_kids()] \
             + [("add", "Add a kid"), (None, "Done")]
 
     def _refresh(self, *_):

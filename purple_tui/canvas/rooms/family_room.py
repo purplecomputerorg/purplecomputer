@@ -30,7 +30,7 @@ from ...roomkit.limits import (KEEP_MAX_BYTES, MAX_REPLY_CHARS, MAX_SHAPES, MAX_
 from ..gfx import is_one_emoji
 from ..sounds import SoundBank
 from ..theme import ROLES
-from ..ui import KEY_RE, KID_MATH_KEYS, Overlay, auto_ink, draw_key, keycap_size
+from ..ui import KEY_RE, KID_MATH_KEYS, Overlay, auto_ink, draw_key, draw_key_hint, keycap_size
 
 ICON_FAMILY = "\U000F0827"  # nf-md-home_heart
 API = 3                     # 3: a text's how.keys draws {Key} as a keycap
@@ -633,7 +633,7 @@ class FamilyRoom(Overlay):
         small, width = int(px * 0.7), int(vp.w * 0.8)
         x, y = vp.centerx - width // 2, vp.centery + px * 1.4
         if not self._why_shown:
-            g.draw_text("Enter shows what went wrong", small, vp.centerx, y, "sans", P.DIM, anchor="midtop")
+            draw_key_hint(g, "{Enter} shows what went wrong", small, vp.centerx, y, P.DIM, "midtop")
             return
         why = f"(Technical: {self.fault[:FAULT_SHOWN]})".replace("[", "\\[")
         y += g.draw_markup(why, small, x, y, "mono", P.DIM, max_width=width, align="center", tr=False) + small

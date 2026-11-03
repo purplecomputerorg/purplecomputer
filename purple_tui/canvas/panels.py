@@ -673,7 +673,7 @@ class TimeTravelBar:
             when = f"{ICON_STAR}  Saved" + ("" if when == "Now" else f" {when.lower()}")
         g.draw_text(f"Hold to go fast  {LEFT} {RIGHT}", g.vh(1.8), rect.x + pad, cy, "mono", P.MUTED, anchor="midleft")
         g.draw_text(when, g.vh(2.6), rect.centerx, cy, "mono-heavy", P.TEXT, anchor="center")
-        g.draw_text("Enter: keep this    Esc: never mind", g.vh(1.8), rect.right - pad, cy, "mono", P.MUTED, anchor="midright")
+        draw_key_hint(g, "{Enter} keep this    {Esc} never mind", g.vh(1.8), rect.right - pad, cy, anchor="midright")
         track = pygame.Rect(rect.x + pad, rect.y + g.vh(5.2), rect.w - 2 * pad, g.vh(3))
         labels = self._draw_track(g, track, index, times, saved, stretches(times, now))
         last_left = track.right

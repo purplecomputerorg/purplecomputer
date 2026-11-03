@@ -14,7 +14,8 @@ from .paper import can_print
 from .rooms.family_room import room_icon
 from .library import ICON_OPEN, ICON_SAVE
 from .panels import ICON_TIME_TRAVEL
-from .ui import DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_scrim
+from .ui import (DOWN, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_key_hint, draw_scrim,
+                 key_hint_width)
 
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
 KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "save": "s", "open": "o", "print": "p",
@@ -77,7 +78,8 @@ def draw_card(g, r, icon, label, lines=(), selected=False, dim=False, lit=False,
         g.rect(P.LINE if lit else P.HAIR, r, width=1, radius=em(0.6))
     fg = P.ON_PRIMARY if selected else (P.DIM if dim else P.TEXT)
     ink = fg if (selected or dim) else P.ACCENT
-    rows = [(label, em(1.0), "mono-bold", fg)] + [(t, em(0.9), "mono", fg if selected else P.DIM) for t in lines]
+    rows = [(label, em(1.0), "mono-bold", fg)] + [(t, _fit(g, t, em(0.9), r.w - em(1.2)), "mono", fg if selected else P.MUTED)
+                                                 for t in lines]
     if r.w > 2 * r.h:
         return _draw_beside(g, r, icon, ink, rows)
     at = lambda v: r.y + round(em(v) * r.h / em(CARD_H))
@@ -89,19 +91,34 @@ def draw_card(g, r, icon, label, lines=(), selected=False, dim=False, lit=False,
     if badge:
         g.draw_text(badge, em(1.1), r.right - em(1.0), r.y + em(1.0), "nerd", fg if selected else P.ACCENT, anchor="center")
     for i, (text, px, face, color) in enumerate(rows):
-        g.draw_text(text, px, r.centerx, at((4.1, 5.6, 6.7)[i]), face, color, anchor="center")
+        _draw_part(g, text, px, face, color, r.centerx, at((4.1, 6.0)[i]), "center", selected)
+
+
+def _part_width(g, text, px, face) -> int:
+    """A mono part is a key hint: its {Key}s draw as keycaps."""
+    return key_hint_width(g, text, px) if face == "mono" else g.measure(text, px, face)[0]
+
+
+def _draw_part(g, text, px, face, color, x, y, anchor, on):
+    if face == "mono":
+        return draw_key_hint(g, text, px, x, y, color, anchor, ink=P.PRIMARY if on else None)
+    return g.draw_text(text, px, x, y, face, color, anchor=anchor)
+
+
+def _fit(g, text, px, w) -> int:
+    return min(px, px * w // max(1, key_hint_width(g, text, px)))
 
 
 def _draw_beside(g, r, icon, ink, rows):
     """A wide card: the glyph, then its rows left-aligned beside it, centered as one group."""
     em = g.em
     icon_w = g.measure(icon, em(2.2), "nerd")[0]
-    text_w = max(g.measure(t, px, face)[0] for t, px, face, _ in rows)
+    text_w = max(_part_width(g, t, px, face) for t, px, face, _ in rows)
     x = r.centerx - (icon_w + em(1.1) + text_w) // 2
     g.draw_text(icon, em(2.2), x, r.centery, "nerd", ink, anchor="midleft")
     y = r.centery - em(1.25) * (len(rows) - 1) // 2
     for i, (text, px, face, color) in enumerate(rows):
-        g.draw_text(text, px, x + icon_w + em(1.1), y + i * em(1.25), face, color, anchor="midleft")
+        _draw_part(g, text, px, face, color, x + icon_w + em(1.1), y + i * em(1.25), "midleft", False)
 
 
 def draw_section(g, icon, label, x0, x1, cy):
@@ -126,11 +143,11 @@ def draw_pill(g, r, parts, on):
     parts = [(t, px, face, P.ON_PRIMARY if on else color or (P.ACCENT if face == "nerd" else P.TEXT))
              for t, px, face, color in parts if t]
     space = g.em(0.7)
-    x = r.centerx - (sum(g.measure(t, px, face)[0] for t, px, face, _ in parts) + space * (len(parts) - 1)) // 2
+    x = r.centerx - (sum(_part_width(g, t, px, face) for t, px, face, _ in parts) + space * (len(parts) - 1)) // 2
     label_drop = g.cap_drop(g.em(0.95), "mono-bold")
     for text, px, face, color in parts:
-        y = r.centery if face == "nerd" else round(r.centery + label_drop - g.cap_drop(px, face))
-        x = g.draw_text(text, px, x, y, face, color, anchor="midleft").right + space
+        y = r.centery if face != "mono-bold" else round(r.centery + label_drop - g.cap_drop(px, face))
+        x = _draw_part(g, text, px, face, color, x, y, "midleft", on).right + space
 
 
 class RoomPicker(Overlay):
@@ -284,7 +301,7 @@ class RoomPicker(Overlay):
                 r.centerx = box.x + pad + em(center)
                 on = (self.row, self.col) == (FAMILY, col)
                 draw_pill(g, r, [(room_icon(room), em(1.1), "nerd", None), (short_title(room.title), em(0.95), "mono-bold", None),
-                                 (FAMILY_KEYS[col], em(0.85), "mono", P.DIM)], on)
+                                 (f"{{{FAMILY_KEYS[col]}}}", em(0.85), "mono", P.MUTED)], on)
             y += em(PILL_H)
         if self.tools:
             y += em(1.6)
@@ -303,9 +320,9 @@ class RoomPicker(Overlay):
 
     def _cell(self, g, r, icon, label, key, disabled, lit=False, on=False):
         """The key beneath the name, "or Enter" on the picked one. Lit (code that's on) says the key closes it."""
-        enter = ("or Enter" if key else "" if disabled else "Press Enter") if on else ""
-        press = key and (f"{key} closes it" if lit else f"Press {key}")
-        draw_card(g, r, icon, label, [t for t in (press, enter) if t], on, disabled, lit)
+        keys = [f"{{{key}}}"] * bool(key) + ["{Enter}"] * (on and bool(key or not disabled))
+        line = " or ".join(keys) + (" closes it" if lit else "")
+        draw_card(g, r, icon, label, [line] if keys else [], on, disabled, lit)
 
     def _tool(self, tool):
         """Icon, label, key, disabled (and lit, for Code) for one of this room's tools."""
@@ -337,22 +354,21 @@ class RoomPicker(Overlay):
         icon, label = locked or (ICON_VOLUME_HIGH, "Volume")
         r = pygame.Rect(0, 0, em(PILL_W), em(PILL_H))
         r.center = (x0 + em(self._centers(VOLUME)[0]), cy)
-        hint = "" if locked else ("Press V or Enter" if on else "Press V")
+        hint = "" if locked else ("{V} or {Enter}" if on else "{V}")
         draw_pill(g, r, [(icon, em(1.2), "nerd", P.DIM if locked else None), (label, em(0.95), "mono-bold", P.DIM if locked else None),
-                         (hint, em(0.85), "mono", P.DIM)], on)
+                         (hint, em(0.85), "mono", P.MUTED)], on)
 
     def _draw_footer(self, g, cx, y):
         px = g.em(0.9)
-        label = "Hold Esc for Parent Menu   ·   Arrows move"
-        label_w = g.measure(label, px, "mono")[0]
-        x = cx - (label_w + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
-        x = g.draw_text(label, px, x, y, "mono", P.MUTED, anchor="midleft").right + g.em(0.9)
-        draw_arrow_keys(g, px, x, y, color=P.ACCENT)
+        label = "{hold Esc} Parent Menu   ·   Arrows move"
+        x = cx - (key_hint_width(g, label, px) + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
+        x = draw_key_hint(g, label, px, x, y).right + g.em(0.9)
+        draw_arrow_keys(g, px, x, y, color=P.MUTED)
 
 
 class VolumeModal(Dialog):
     title = "Volume"
-    hint = f"{LEFT} {RIGHT} {UP} {DOWN} adjust   Enter close"
+    hint = f"{LEFT} {RIGHT} {UP} {DOWN} adjust   {{Enter}} close"
     width_pct = 48
 
     def body_height(self, g):

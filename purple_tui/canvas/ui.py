@@ -454,7 +454,7 @@ class Dialog(Overlay):
     def _chrome(self, g: Gfx) -> tuple[int, int, int]:
         """(padding, hint height, everything but the body's height)."""
         pad = g.em(1.2)
-        hint_h = g.markup_size(self.hint, g.em(0.85), "mono", self.inner_width(g))[1] if self.hint else 0
+        hint_h = key_lines_height(g, self.hint, g.em(0.85), self.inner_width(g)) if self.hint else 0
         return pad, hint_h, window_title_height(g, self.title) + 2 * pad + (pad // 2 if self.hint else 0) + hint_h
 
     def body_limit(self, g: Gfx) -> int:
@@ -473,7 +473,7 @@ class Dialog(Overlay):
         inner = pygame.Rect(box.x + g.vw(3), y, self.inner_width(g), body_h)
         self.draw_body(g, inner)
         if self.hint:
-            g.draw_markup(self.hint, g.em(0.85), inner.x, box.bottom - pad - hint_h, "mono", P.MUTED, inner.w, "center", P.SURFACE)
+            draw_key_lines(g, self.hint, g.em(0.85), inner.centerx, box.bottom - pad - hint_h, inner.w)
         self.box = box
 
     def draw_body(self, g: Gfx, rect: pygame.Rect):
@@ -487,7 +487,7 @@ class Picker(Dialog):
     """Vertical option list: up/down wrap, Enter confirms, Esc cancels.
     Options are (value, label) or (value, label, description)."""
 
-    hint = f"{UP} {DOWN} choose   Enter confirm   Esc cancel"
+    hint = f"{UP} {DOWN} choose   {{Enter}} confirm   {{Esc}} cancel"
     width_pct = 44
     OPTIONS: list = []
     DESCRIPTION = ""
@@ -533,7 +533,8 @@ class Picker(Dialog):
             color = P.ON_PRIMARY if on else (P.DIM if opt[0] in self.dim_values else P.TEXT)
             if len(opt) == 3:
                 g.draw_text(opt[1], px, box.centerx, box.centery - g.em(0.6), "mono-bold" if on else "mono", color, anchor="center")
-                g.draw_text(opt[2], g.em(0.85), box.centerx, box.centery + g.em(0.65), "mono", color if on else P.MUTED, anchor="center")
+                draw_key_hint(g, opt[2], g.em(0.85), box.centerx, box.centery + g.em(0.65), color if on else P.MUTED, "center",
+                              ink=P.PRIMARY if on else None)
             else:
                 g.draw_text(opt[1], px, box.centerx, box.centery, "mono-bold" if on else "mono", color, anchor="center")
             if more := UP if i == self._first > 0 else DOWN if i == last < len(self.options) - 1 else None:
@@ -576,7 +577,7 @@ class Confirm(Picker):
 class Notice(Picker):
     """A message with one OK."""
 
-    hint = "Enter OK"
+    hint = "{Enter} OK"
 
     def __init__(self, app, title, body=""):
         super().__init__(app, [(True, "OK")])
@@ -668,8 +669,7 @@ def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", co
 
 
 def arrow_key_metrics(g: Gfx, px: int) -> tuple:
-    w, h = g.measure(DOWN, px, "mono")
-    return w + round(px * 1.4), h + round(px * 0.56), round(px * 0.2)
+    return *keycap_size(g, DOWN, px), round(px * 0.2)
 
 
 def arrow_keys_size(g: Gfx, px: int) -> tuple:
@@ -683,8 +683,8 @@ def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=None) -> pygame.Rect:
     key_w, key_h, space = arrow_key_metrics(g, px)
     mid = x + key_w // 2 + key_w + space
     for i, glyph in enumerate((LEFT, DOWN, RIGHT)):
-        draw_keycap(g, glyph, px, mid + (i - 1) * (key_w + space), y, anchor="center", color=color)
-    draw_keycap(g, UP, px, mid, y - key_h - space, anchor="center", color=color)
+        draw_key(g, glyph, px, mid + (i - 1) * (key_w + space), y, anchor="center", fill=color)
+    draw_key(g, UP, px, mid, y - key_h - space, anchor="center", fill=color)
     w, h = arrow_keys_size(g, px)
     return pygame.Rect(x, y + key_h // 2 - h, w, h)
 
@@ -774,8 +774,8 @@ def key_hint_width(g: Gfx, text: str, px: int) -> int:
                for i, t in enumerate(parts) if t)
 
 
-def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft") -> pygame.Rect:
-    """A dim hint line where {Key} draws as a solid keycap: '{hold Enter} loop'."""
+def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft", ink=None) -> pygame.Rect:
+    """A dim hint line where {Key} draws as a solid keycap: '{hold Enter} loop'. ink is the keycap's letters."""
     color = color or P.MUTED
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
     setattr(box, anchor, (x, y))
@@ -783,9 +783,27 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor
     for i, t in enumerate(KEY_RE.split(i18n.translate(text))):
         if t:
             pad = _chord_pad(t, px)
-            x = (draw_key(g, t, px, x, box.centery, fill=color) if i % 2 else
+            x = (draw_key(g, t, px, x, box.centery, fill=color, ink=ink) if i % 2 else
                  g.draw_text(t, px, x + pad, box.centery, "mono", color, anchor="midleft", tr=False)).right + pad
     return box
+
+
+def draw_key_lines(g: Gfx, text: str, px: int, cx: int, y: int, w: int, color=None, bg=None) -> int:
+    """Lines centered on cx: one with a {Key} draws its keycaps, the rest wrap within w. Returns the height."""
+    color, top = color or P.MUTED, y
+    for i, line in enumerate(text.split("\n")):
+        y += round(px * 0.3) * bool(i)
+        if KEY_RE.search(line):
+            y = draw_key_hint(g, line, px, cx, y, color, "midtop").bottom
+        else:
+            y += g.draw_markup(line or " ", px, cx - w // 2, y, "mono", color, w, "center", bg or P.SURFACE)
+    return y - top
+
+
+def key_lines_height(g: Gfx, text: str, px: int, w: int) -> int:
+    lines = text.split("\n")
+    return round(px * 0.3) * (len(lines) - 1) + sum(
+        keycap_size(g, "X", px)[1] if KEY_RE.search(line) else g.markup_size(line or " ", px, "mono", w)[1] for line in lines)
 
 
 CODE_KEYS = "{Esc}+{Space}"   # together, or the Esc menu then its Code card

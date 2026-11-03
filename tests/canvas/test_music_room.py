@@ -71,3 +71,21 @@ def test_every_fun_key_has_a_silly_sound():
     from purple_tui.canvas.sounds import core_sounds, find_sound
     assert all(find_sound(core_sounds() / "letters", n) for n in ("semicolon", "comma", "period", "slash"))
 
+
+
+def test_switching_shows_one_toast_and_plays_a_sample(monkeypatch):
+    from purple_tui.canvas.harness import press
+    heard = []
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        monkeypatch.setattr(room, "play_letter", lambda key: heard.append("letter"))
+        monkeypatch.setattr(room, "play_sound_with_instrument", lambda key, i, scale=1.0: heard.append("note"))
+        await press(app, "enter")
+        await press(app, "enter")
+        await press(app, "tab")
+        await press(app, "enter")
+        assert heard == ["note", "note", "letter", "letter"]
+        assert [t.text.split()[-1] for t in app._toasts] == ["sounds"]
+    run(go())

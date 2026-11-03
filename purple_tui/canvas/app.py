@@ -393,9 +393,14 @@ class PurpleApp:
     def has_overlay(self, cls) -> bool:
         return any(isinstance(o, cls) for o in self._overlays)
 
-    def notify(self, text: str, timeout: float = 1.5, title: str = "", picture=None):
-        self._toasts.append(Toast(text, timeout, picture))
+    def notify(self, text: str, timeout: float = 1.5, title: str = "", picture=None, replaces=None) -> Toast:
+        """replaces: an earlier toast this one takes the place of, so repeated switches don't stack."""
+        if replaces in self._toasts:
+            self._toasts.remove(replaces)
+        toast = Toast(text, timeout, picture)
+        self._toasts.append(toast)
         self.invalidate()
+        return toast
 
     def clear_notifications(self):
         self._toasts.clear()

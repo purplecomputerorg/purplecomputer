@@ -10,7 +10,7 @@ import pygame
 from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
-from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC
+from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_DRUM, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import warm_mixer
@@ -64,6 +64,7 @@ class MusicRoom(Room):
         self._saved_loop = None
         self._last_letter_press_t = float("-inf")
         self._letter_playing = None
+        self._toast = None
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
         self._enter_down_at = None
@@ -466,10 +467,19 @@ class MusicRoom(Room):
 
     # ---------------------------------------------------------------- input
     def _toggle_letters(self):
-        # The header shows the mode (instrument vs Say Letters) persistently,
-        # so the switch needs no toast over the keys.
         self.letters_mode = not self.letters_mode
+        self._announce_voice()
         self.app.invalidate()
+
+    def _announce_voice(self):
+        """What the keys play now, shown in a toast and heard on one sample, for kids who can't read the header."""
+        if self.letters_mode:
+            text = f"{ICON_KEYBOARD}  Letter {'sounds' if self.say_sounds else 'names'}"
+            self.play_letter("A")
+        else:
+            text = f"{ICON_MUSIC}  {self._instrument(self.instrument_index)[1]}"
+            self.play_sound_with_instrument("A", self.instrument_index)
+        self._toast = self.app.notify(text, replaces=self._toast)
 
     def _letters_mash_drop(self, now: float) -> bool:
         """A new letter cuts off the one still speaking, so only a whole hand landing at once needs dropping."""
@@ -553,10 +563,11 @@ class MusicRoom(Room):
         """Enter's tap: the next instrument, or in Letters, names or sounds."""
         if self.letters_mode:
             self.say_sounds = not self.say_sounds
-            return
-        self.instrument_index = (self.instrument_index + 1) % len(instruments())
-        self.echo.flush()
-        self.echo.word(f"choose {self._instrument(self.instrument_index)[0]}")
+        else:
+            self.instrument_index = (self.instrument_index + 1) % len(instruments())
+            self.echo.flush()
+            self.echo.word(f"choose {self._instrument(self.instrument_index)[0]}")
+        self._announce_voice()
 
     def _flush_enter(self):
         self.enter_hold.on_other_key()
@@ -675,10 +686,8 @@ class MusicRoom(Room):
                 bg = self.get_color(key)
                 note = None
                 if melodic:
-                    root_idx, at_front = self._transition_state_for_col(col_idx)
+                    root_idx, _ = self._transition_state_for_col(col_idx)
                     note, _ = pitch_for(row_idx - 1, col_idx, FRIENDLY_KEYS[root_idx], 0)
-                    if at_front and not on_paper:
-                        bg = P.LINE
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
                 quiet = bg == P.TILE
                 if not quiet:
@@ -689,25 +698,31 @@ class MusicRoom(Room):
                 g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 if key in self._note_labels and not on_paper:
-                    sound = (note or "").replace("#", "♯") if melodic else PERCUSSION_NAMES.get(key, "")
+                    sound = f"♪ {note.replace('#', '♯')}" if melodic else f"{ICON_DRUM} {PERCUSSION_NAMES.get(key, '')}"
                     g.draw_text(sound, max(10, int(size * 0.15)), tile.centerx, tile.bottom - int(size * 0.17),
                                 "mono-bold", mix(fg, bg, 0.3), anchor="center", tr=False)
         if not self.letters_mode:
             self._draw_note_strip(g, xs, ys[4] + size * NOTE_STRIP / 2, max(10, int(size * 0.17)), on_paper)
 
     def _draw_note_strip(self, g, xs, cy, px, on_paper):
-        """Every letter row plays the same note in a column, so each column is named once,
-        threaded on one staff line under the grid."""
-        ground = paper.WHITE if on_paper else P.SURFACE
-        ink = paper.INK_MUTED if on_paper else P.DIM
-        g.rect(mix(ground, ink, 0.45), pygame.Rect(xs[0], cy, xs[10] - xs[0], max(1, px // 10)))
-        g.draw_text(ICON_MUSIC, px, xs[0] - px, cy, "sans", ink, anchor="midright", tr=False)
+        """Every letter row plays the same note in a column, so each column is named once, on a ledge
+        under the grid. A played column's name and the key-change sweep get the selection plate."""
+        size = xs[1] - xs[0]
+        bar = pygame.Rect(0, 0, xs[10] - xs[0] + round(size * 0.4), round(size * NOTE_STRIP * 0.8))
+        bar.midright = (xs[10], round(cy))
+        ink = paper.INK_MUTED if on_paper else P.MUTED
+        g.rect(mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE, bar, radius=bar.h // 2)
+        g.draw_text(ICON_MUSIC, px, bar.x + bar.h // 2 + px // 4, bar.centery, "sans", P.DIM, anchor="center", tr=False)
+        plate = pygame.Rect(0, 0, round(size * 0.5), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
-            root_idx, _ = self._transition_state_for_col(col)
+            root_idx, at_front = self._transition_state_for_col(col)
             note, _ = pitch_for(0, col, FRIENDLY_KEYS[root_idx], 0)
-            lit = not on_paper and any(row[col] in self._note_labels for row in GRID_KEYS[1:])
-            g.draw_text(note.replace("#", "♯"), px, (xs[col] + xs[col + 1]) // 2, cy, "mono-bold", P.TEXT if lit else ink,
-                        anchor="center", bg=ground, pad=px // 2, tr=False)
+            lit = not on_paper and (at_front or any(row[col] in self._note_labels for row in GRID_KEYS[1:]))
+            plate.center = ((xs[col] + xs[col + 1]) // 2, bar.centery)
+            if lit:
+                g.rect(P.PRIMARY, plate, radius=plate.h // 2)
+            g.draw_text(note.replace("#", "♯"), px, plate.centerx, plate.centery, "mono-bold",
+                        P.ON_PRIMARY if lit else ink, anchor="center", tr=False)
 
     def _draw_noscreen(self, g, rect):
         cy = rect.centery

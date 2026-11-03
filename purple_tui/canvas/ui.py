@@ -181,15 +181,13 @@ class TextField:
 
     def recall_text(self, keycap: bool = False) -> str:
         """Dim hint under an empty field; a correction shows until the next edit. keycap
-        writes Enter as {Enter} for draw_key_hint. While a line runs only its corrections
-        show, so the typo is never offered to try again first."""
+        writes Enter as {Enter} for draw_key_hint. A running line's corrections show as
+        they're made, so the typo is never offered to try again first."""
         if self.value or not self.last_command:
             return ""
         correction = self.live[-1] if self.live else self._correction
         if correction:
             return _truncate(" → ".join(correction))
-        if self.live is not None:
-            return ""
         return f"{'{Enter}' if keycap else 'Enter to'} try again: {_truncate(self.last_command)}"
 
     # --- autocomplete (logic unchanged from CodeInput) ---

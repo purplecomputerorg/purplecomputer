@@ -249,11 +249,15 @@ class MusicCodeRunner:
         self.set_key = set_key_fn
         self.corrections: list[tuple[str, str]] = []
         self._original_text: str = ""
-        self._correction_final: str = ""
+        self._fix_at: int | None = None
 
-    def _build_final_correction(self, corrected_text: str) -> str:
-        """Return the final corrected form (handler may have further refined it)."""
-        return self._correction_final or corrected_text
+    def _record_fix(self, fixed: str) -> None:
+        """A handler's fix refines the keyword fix already recorded for this line, if any."""
+        entry = (self._original_text, fixed)
+        if self._fix_at is None:
+            self.corrections.append(entry)
+        else:
+            self.corrections[self._fix_at] = entry
 
     @staticmethod
     def _resolve_instrument(name: str) -> str | None:
@@ -318,8 +322,7 @@ class MusicCodeRunner:
 
     async def _dispatch(self, text: str) -> None:
         self._original_text = text  # Track for correction display
-        self._correction_final = ""  # Reset per-dispatch
-        self._suppress_handler_corrections = False
+        self._fix_at = None
 
         # Stage 1: a recognized command keyword claims the line.
         if await self._run_command_table(text):
@@ -335,11 +338,11 @@ class MusicCodeRunner:
             corrected_kw = fuzzy_match_small(words[0].lower(), self._KEYWORD_VOCAB, cutoff=0.7)
             if corrected_kw and corrected_kw != words[0].lower():
                 corrected = corrected_kw + (' ' + words[1] if len(words) > 1 else '')
-                self._suppress_handler_corrections = True
-                if await self._run_command_table(corrected):
-                    self.corrections.append((text, self._build_final_correction(corrected)))
-                    return
+                # Recorded before running so the fix shows while the command plays.
+                self._fix_at = len(self.corrections)
                 self.corrections.append((text, corrected))
+                if await self._run_command_table(corrected):
+                    return
 
         # Stage 3: not a command, play the line as notes.
         await self._play_notes(text)
@@ -390,20 +393,16 @@ class MusicCodeRunner:
         if not (resolved and self.set_instrument):
             return None
         if resolved.lower() != words[0].lower():
-            self._correction_final = f'{keyword} {resolved.lower()}'
-            if not self._suppress_handler_corrections:
-                self.corrections.append((self._original_text, self._correction_final))
+            self._record_fix(f'{keyword} {resolved.lower()}')
         self.set_instrument(resolved.lower())
         await asyncio.sleep(0.1)
         remainder = " ".join(words[used:])
         if remainder:
             # Re-dispatch resets the per-line correction fields, so save and
-            # restore them for the caller (stage 2 reads _correction_final).
-            saved = (self._original_text, self._correction_final,
-                     self._suppress_handler_corrections)
+            # restore them for the caller.
+            saved = (self._original_text, self._fix_at)
             await self._dispatch(remainder)
-            (self._original_text, self._correction_final,
-             self._suppress_handler_corrections) = saved
+            self._original_text, self._fix_at = saved
         return True
 
     async def _do_play(self, m) -> bool | None:
@@ -411,9 +410,7 @@ class MusicCodeRunner:
         resolved = self._resolve_instrument(arg)
         if resolved and self.set_instrument:
             if resolved.lower() != arg.lower():
-                self._correction_final = f'play {resolved.lower()}'
-                if not self._suppress_handler_corrections:
-                    self.corrections.append((self._original_text, self._correction_final))
+                self._record_fix(f'play {resolved.lower()}')
             self.set_instrument(resolved.lower())
             await asyncio.sleep(0.1)
             return True

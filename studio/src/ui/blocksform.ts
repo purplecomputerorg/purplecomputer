@@ -1,7 +1,7 @@
 // The block editor: Blockly with Purple's blocks, and the pickers its fields open. Loaded only when a room
 // made of blocks opens, so the rest of Studio never waits for Blockly.
 import * as Blockly from "blockly";
-import { BLOCK_COLORS, CATEGORIES, COLORS, colorLooks, defineBlocks, PIC, pickers, toPython, TOOLBOX, type PickerField } from "../blocks";
+import { BLOCK_COLORS, CATEGORIES, COLORS, colorLooks, defineBlocks, looseNote, PIC, pickers, toPython, TOOLBOX, type PickerField } from "../blocks";
 import { ask, askText, h, keep, pref, tell } from "./dom";
 import { isEmoji, openEmojiPicker } from "./emojipicker";
 import { sticker } from "./stickers";
@@ -89,7 +89,7 @@ function setUpPickers() {
 }
 
 // A block clicked in the palette goes where the family is working: right after the picked block, inside a
-// "when" block's empty space, or into the picked block's first slot that takes it. Otherwise it waits below the rest.
+// trigger's empty space, or into the picked block's first slot that takes it. Otherwise it waits below the rest.
 function attach(ws: Blockly.WorkspaceSvg, block: Blockly.BlockSvg, picked: Blockly.BlockSvg | null) {
   let at = picked && !picked.isDeadOrDying() ? picked : null;
   if (block.outputConnection) {
@@ -106,12 +106,6 @@ function attach(ws: Blockly.WorkspaceSvg, block: Blockly.BlockSvg, picked: Block
   block.moveTo(new Blockly.utils.Coordinate(below.left, below.bottom + 32));
 }
 
-// How much of the canvas's left the open drawer covers.
-const drawerWidth = (ws: Blockly.WorkspaceSvg) => {
-  const fly = ws.getToolbox()?.getFlyout();
-  return fly?.isVisible() ? fly.getWidth() : 0;
-};
-
 // The canvas scrolls no further up or left than just above and beside the blocks; Blockly's own leaves half a
 // canvas of nothing there. Below and to the right keep Blockly's room for more blocks.
 class TopLeftMetrics extends Blockly.MetricsManager {
@@ -120,16 +114,12 @@ class TopLeftMetrics extends Blockly.MetricsManager {
   }
 }
 
+const markLoose = (ws: Blockly.WorkspaceSvg) => ws.getAllBlocks(false).forEach((b) => b.setWarningText(looseNote(b), "loose"));
+
 // The blocks start at the canvas's top left. The drawer opens over them rather than pushing them aside.
 function home(ws: Blockly.WorkspaceSvg) {
   const box = ws.getBlocksBoundingBox();
   ws.scroll(24 - box.left * ws.scale, 24 - box.top * ws.scale);
-}
-
-// A block just added from the drawer scrolls out from under it, if it landed there.
-function uncover(ws: Blockly.WorkspaceSvg, block: Blockly.BlockSvg) {
-  const under = drawerWidth(ws) + 24 - (block.getBoundingRectangle().left * ws.scale + ws.scrollX);
-  if (under > 0) ws.scroll(ws.scrollX + under, ws.scrollY);
 }
 
 // A faint white pattern on some kinds of block, so they tell apart by more than color: squares on grid blocks,
@@ -210,8 +200,8 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
   const toolbox = () => editor!.getToolbox() as Blockly.Toolbox;
   const showing = () => (toolbox().getFlyout()?.isVisible() ? (toolbox().getSelectedItem() as Blockly.ToolboxCategory | null)?.getName() : undefined);
   const tabs = CATEGORIES.map(([name, color]) => h("button", { type: "button", style: `--c:${color}`, "aria-pressed": "false",
-    onclick: () => editor && openDrawer(showing() === name ? null : name) }, name));
-  const close = h("button", { type: "button", class: "drawer-close", title: "Close", "aria-label": "Close", hidden: true, onclick: () => openDrawer(null) }, "×");
+    onclick: () => editor && (showing() === name ? closeDrawer() : openDrawer(name)) }, name));
+  const close = h("button", { type: "button", class: "drawer-close", title: "Close", "aria-label": "Close", hidden: true, onclick: () => closeDrawer() }, "×");
   // The tabs show which drawer is open, and the drawer's close button sits in its top right corner.
   const sync = () => {
     tabs.forEach((t) => t.setAttribute("aria-pressed", String(t.textContent === showing())));
@@ -221,11 +211,20 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     close.hidden = !fly.isVisible();
     if (fly.isVisible()) Object.assign(close.style, { left: `${fly.getWidth() - 48}px`, top: "8px" });
   };
+  let leaving = 0;
   const openDrawer = (name: string | null) => {
+    clearTimeout(leaving);
+    div.classList.remove("drawer-leaving");
     toolbox().clearSelection();
     const item = toolbox().getToolboxItems().find((i) => (i as Blockly.ToolboxCategory).getName?.() === name);
     if (item) toolbox().setSelectedItem(item as Blockly.ISelectableToolboxItem);
     sync();
+  };
+  // Slides out first, as it slides in.
+  const closeDrawer = () => {
+    if (!toolbox().getFlyout()?.isVisible() || div.classList.contains("drawer-leaving")) return;
+    div.classList.add("drawer-leaving");
+    leaving = window.setTimeout(() => openDrawer(null), 150);
   };
   const tool = (label: string, title: string, go: (ws: Blockly.WorkspaceSvg) => void, cls = "") =>
     h("button", { type: "button", class: cls, title, "aria-label": title, onclick: () => editor && go(editor) }, label);
@@ -238,7 +237,9 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
   const tools = h("span", { class: "block-tools" }, undo, redo,
     tool("−", "Smaller", settled(zoom(-1))), tool("+", "Bigger", settled(zoom(1))),
     tool("Tidy up", "Line the blocks up", settled((ws) => ws.cleanUp())),
-    tool("", "More room for the blocks, or back", () => document.dispatchEvent(new Event(WIDER)), "icon wider"));
+    tool("", "More room for the blocks, or back", () => document.dispatchEvent(new Event(WIDER)), "icon wider"),
+    tool("", "Full screen, with the Python below", () => { root.classList.toggle("full"); root.focus(); }, "icon fullscreen"));
+  const python = h("pre", {});
   requestAnimationFrame(() => {
     current?.dispose();
     const ws = editor = current = Blockly.inject(div, {
@@ -253,6 +254,8 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     Blockly.serialization.workspaces.load(made.workspace, ws);
     if (!("x" in ((made.workspace as { blocks?: { blocks?: object[] } }).blocks?.blocks?.[0] ?? { x: 0 }))) ws.cleanUp();
     Blockly.Events.enable();
+    markLoose(ws);
+    python.textContent = toPython(ws);
     div.append(close);
     // Blockly sizes itself to the window, not its box, so a wider editor pane needs telling. The box settles its width
     // after the blocks are first placed (the tabs wrap, the page lays out), so they go back to the top left each time.
@@ -264,16 +267,16 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
       width = div.clientWidth;
     }).observe(div);
     void Blockly.renderManagement.finishQueuedRenders().then(() => home(ws));
-    // A click in the drawer adds a block, and then Blockly closes the drawer; it stays open instead, so blocks can be
-    // added one after another. (autoClose off would keep it open, but Blockly then keeps the drawer's width free on the canvas.)
+    // A block picked from the drawer, by a click or a drag, closes it once it lands; Blockly's own closing would take
+    // the drawer away mid-drag. (autoClose off would keep it open, but Blockly then keeps the drawer's width free on the canvas.)
     let inDrawer = false;
     div.addEventListener("pointerdown", (e) => { inDrawer = !!(e.target as Element).closest(".blocklyToolboxFlyout"); }, true);
-    const tb = toolbox(), autoHide = tb.autoHide.bind(tb);
-    tb.autoHide = (onlyPopups) => { if (!inDrawer) autoHide(onlyPopups); };
+    toolbox().autoHide = (onlyPopups) => { if (!onlyPopups && !inDrawer) closeDrawer(); };
     let picked: Blockly.BlockSvg | null = ws.getTopBlocks(true)[0] ?? null;
     if (picked) Blockly.common.setSelected(picked);
     ws.addChangeListener((e: Blockly.Events.Abstract) => {
       sync();
+      if (e.type === Blockly.Events.BLOCK_DRAG && !(e as Blockly.Events.BlockDrag).isStart && inDrawer) closeDrawer();
       if (e.type === Blockly.Events.SELECTED) {
         const block = ws.getBlockById((e as Blockly.Events.Selected).newElementId ?? "");
         picked = block ?? picked;
@@ -289,16 +292,26 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
           ws.cleanUp();
           Blockly.common.setSelected(block);
           ws.scrollBoundsIntoView(block.getBoundingRectangle(), 40);
-          uncover(ws, block);
+          if (inDrawer) closeDrawer();
         });
       }
       if (e.isUiEvent || ws.isDragging()) return;
+      markLoose(ws);
       made.workspace = Blockly.serialization.workspaces.save(ws);
-      onEdit(toPython(ws));
+      python.textContent = toPython(ws);
+      onEdit(python.textContent);
     });
   });
   // After the click, not on press: scrolling mid-drag would pull the canvas out from under the pointer.
   const reveal = (e: Event) => (e.currentTarget as HTMLElement).scrollIntoView({ behavior: "smooth", block: "nearest" });
-  return h("div", { class: "blocks-editor", onpointerup: reveal, onkeydown: (e: KeyboardEvent) => e.key === "Escape" && editor && openDrawer(null) },
-    h("div", { class: "block-bar" }, h("div", { class: "block-tabs" }, ...tabs), tools), div, help);
+  // Esc closes the drawer, then leaves full screen. A field being typed in or a picker takes its own Esc.
+  const escape = (e: KeyboardEvent) => {
+    if (e.key !== "Escape" || !editor || Blockly.WidgetDiv.isVisible() || Blockly.DropDownDiv.isVisible()) return;
+    if (showing()) closeDrawer();
+    else root.classList.remove("full");
+  };
+  const root = h("div", { class: "blocks-editor", tabindex: "-1", onpointerup: reveal, onkeydown: escape },
+    h("div", { class: "block-bar" }, h("div", { class: "block-tabs" }, ...tabs), tools), div, help,
+    h("div", { class: "block-python" }, h("div", { class: "block-python-title" }, "The Python these blocks write"), python));
+  return root;
 }

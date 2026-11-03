@@ -84,12 +84,12 @@ const drums = (): [string, string][] => [...DRUMS.map((d): [string, string] => [
   ...draft.roomFiles.filter((f) => f.kind === "sounds").map((f): [string, string] => [`🎤 ${f.name}`, f.name])];
 
 const BLOCKS = [
-  hat("purple_on_start", "when the room opens", []),
-  hat("purple_on_key", "when %1 is pressed", [menu("WHICH", [["any key", "any"], ["an arrow", "arrow"], ["a keyboard key", "keyboard"], ["a number key", "number"], ["a key that isn't an arrow", "not_arrow"], ["Space", "space"], ["Enter", "enter"]])]),
-  hat("purple_on_this_key", "when key %1 is pressed", [pick("KEY", "key", "q")]),
+  hat("purple_on_start", "at the start", []),
+  hat("purple_on_key", "whenever %1 is pressed", [menu("WHICH", [["any key", "any"], ["an arrow", "arrow"], ["a keyboard key", "keyboard"], ["a number key", "number"], ["a key that isn't an arrow", "not_arrow"], ["Space", "space"], ["Enter", "enter"]])]),
+  hat("purple_on_this_key", "whenever key %1 is pressed", [pick("KEY", "key", "q")]),
   hat("purple_every", "every %1 seconds", [input("SECONDS", "Number")]),
   wrap("purple_after", "after %1 seconds", [input("SECONDS", "Number")], "event_blocks"),
-  hat("purple_on_meet", "when the player meets %1", [input("THING", THING)]),
+  hat("purple_on_meet", "whenever your character touches %1", [input("THING", THING)]),
 
   statement("purple_show", "show %1 big", [input("TEXT")], "screen_blocks"),
   statement("purple_write", "write %1 under the middle", [input("TEXT")], "screen_blocks"),
@@ -116,19 +116,19 @@ const BLOCKS = [
   value("purple_ring_square", "the ring's square", [], "Square", "grid_blocks"),
 
   value("purple_key_pressed", "the key pressed", [], "Key", "key_blocks", ["key_only"]),
-  value("purple_key_letter", "%1's letter", [input("KEY", "Key")], "String", "key_blocks"),
-  value("purple_key_color", "%1's sticker color", [input("KEY", "Key")], "Color", "key_blocks"),
-  value("purple_key_note", "%1's note", [input("KEY", "Key")], "Note", "key_blocks"),
-  value("purple_key_spot", "%1's square", [input("KEY", "Key")], "Square", "key_blocks"),
+  value("purple_key_letter", "the letter of %1", [input("KEY", "Key")], "String", "key_blocks"),
+  value("purple_key_color", "the sticker color of %1", [input("KEY", "Key")], "Color", "key_blocks"),
+  value("purple_key_note", "the note of %1", [input("KEY", "Key")], "Note", "key_blocks"),
+  value("purple_key_spot", "the square of %1", [input("KEY", "Key")], "Square", "key_blocks"),
   value("purple_key", "key %1", [pick("KEY", "key", "q")], "Key", "key_blocks"),
   wrap("purple_each_key", "for each key on the keyboard", [], "key_blocks"),
   value("purple_that_key", "that key", [], "Key", "key_blocks"),
 
-  statement("purple_player_put", "put the player %1 at %2", [input("THING", THING), input("SQUARE", "Square")], "player_blocks"),
-  { ...statement("purple_player_move", "move the player %1", [menu("WAY", [["the arrow's way", "key"], ...WAYS.map((w): [string, string] => [w, w])])], "player_blocks"),
+  statement("purple_player_put", "put your character %1 at %2", [input("THING", THING), input("SQUARE", "Square")], "player_blocks"),
+  { ...statement("purple_player_move", "move your character %1", [menu("WAY", [["the arrow's way", "key"], ...WAYS.map((w): [string, string] => [w, w])])], "player_blocks"),
     extensions: ["key_only"] },
-  statement("purple_wall", "%1 is a wall", [input("THING", THING)], "player_blocks"),
-  value("purple_player_square", "the player's square", [], "Square", "player_blocks"),
+  statement("purple_wall", "your character can't walk onto %1", [input("THING", THING)], "player_blocks"),
+  value("purple_player_square", "your character's square", [], "Square", "player_blocks"),
 
   value("purple_thing", "%1", [pick("THING", "emoji", "⭐")], ["Thing", "Literal"], "thing_blocks"),
   value("purple_text", "“%1”", [{ type: "field_input", name: "TEXT", text: "Hello!" }], ["String", "Literal"], "thing_blocks"),
@@ -155,51 +155,51 @@ const HELP: Record<string, [about: string, guide?: string]> = {
   purple_on_this_key: ["Runs when this one key is pressed. Click the key to pick another."],
   purple_every: ["Runs over and over, this many seconds apart: for things that fall, blink, or count down.", "every"],
   purple_after: ["Waits this many seconds, then runs what's inside once.", "after"],
-  purple_on_meet: ["Runs when the player walks onto this thing, or it moves onto the player. The thing goes away."],
+  purple_on_meet: ["Runs when your character walks onto this thing, or the thing moves onto your character. The thing goes away, like a star picked up."],
   purple_show: ["Shows an emoji, words, or one of your pictures big in the middle of the screen, in place of what was there.", "show"],
-  purple_write: ["Writes a line of words under the middle, for stories and questions. The last five lines stay.", "write"],
+  purple_write: ["Writes a line of words under the middle of the screen, for stories and questions. The last five lines stay.", "write"],
   purple_status: ["Writes a line along the top of the screen, for a score or what to do next.", "status"],
   purple_background: ["Paints the whole screen, behind everything, in one color.", "background"],
-  purple_clear: ["Empties the screen: the middle, the lines, the top line, and the grid.", "clear"],
+  purple_clear: ["Empties the screen: the big thing in the middle, the lines of words, the top line, and everything on the squares.", "clear"],
   purple_say: ["Says the words out loud in Purple's voice.", "say"],
   purple_play: ["Plays one note on an instrument, like a key in the Music room.", "play"],
-  purple_drum: ["Plays a drum, or one of your own sounds from Pictures and sounds.", "drum"],
+  purple_drum: ["Plays a drum, or a sound you recorded or added on the New Rooms page, under Pictures and sounds for your rooms.", "drum"],
   purple_note: ["A note, from low C2 to high C6. C4 is middle C.", "play"],
-  purple_put: ["Puts an emoji, a letter, a color, or one of your pictures on a square. A bigger size covers more squares, to the right and down.", "grid"],
+  purple_put: ["Puts an emoji, a letter, a color, or one of your pictures on a square of the screen. A bigger size covers more squares, to the right and down. It stays there; for one that walks around, use Character.", "grid"],
   purple_erase: ["Empties a square.", "grid"],
-  purple_floor: ["Paints a square's floor. The floor stays under whatever is put on the square, like grass under a hero.", "grid"],
-  purple_square: ["One square of the grid, counted across from the left and down from the top. Click it to pick one.", "grid"],
+  purple_floor: ["Paints a square's floor. The floor stays under whatever is put on the square, like grass under your character.", "grid"],
+  purple_square: ["One square of the screen: 13, 6 is 13 squares across from the left and 6 down from the top. Click it to pick one on a picture of the screen.", "grid"],
   purple_random_square: ["A square picked by chance: any empty one, or one along an edge.", "grid"],
   purple_what_at: ["What's on a square right now, or nothing.", "grid"],
-  purple_is_empty: ["Yes when nothing is on the square. For if blocks.", "grid"],
-  purple_move_all: ["Moves every one of this thing a square that way. Off the edge, it's gone. Onto the player, they meet.", "grid"],
-  purple_ring_put: ["The ring is a circle around one square, to show which one is picked. This puts it on a square.", "grid"],
+  purple_is_empty: ["For an \"if\": yes when nothing is on the square.", "grid"],
+  purple_move_all: ["Moves every one of this thing a square that way. Off the edge, it's gone. Onto your character, they touch.", "grid"],
+  purple_ring_put: ["The ring is a circle drawn around one square, to show the one that's picked, like a cursor. This puts it on a square.", "grid"],
   purple_ring_move: ["Moves the ring a square that way. Off one edge, it comes back on the other.", "grid"],
   purple_ring_square: ["The square the ring is on. Before there's a ring, the middle one.", "grid"],
-  purple_key_pressed: ["The key that was just pressed, inside a when a key is pressed block."],
+  purple_key_pressed: ["The key that was just pressed, under a \"whenever … is pressed\" block."],
   purple_key_letter: ["The key as a capital letter or symbol, to put on the screen."],
   purple_key_color: ["The color of the key's sticker on Purple's keyboard.", "KEY_COLORS"],
   purple_key_note: ["The note the key plays in the Music room.", "KEY_NOTES"],
-  purple_key_spot: ["The key's square when the keys are laid out on the grid like the keyboard.", "grid"],
+  purple_key_spot: ["Where the key sits when the whole keyboard is drawn on the screen's squares: the number keys along the top, Z at the bottom left.", "grid"],
   purple_key: ["One key. Click it to pick which."],
-  purple_each_key: ["Runs what's inside once for each key on the keyboard. That key is the one it's on each time.", "grid"],
-  purple_that_key: ["The key a for each key block is on right now."],
-  purple_player_put: ["The player is someone who walks around the grid with the arrow keys. This puts them on a square and picks how they look."],
-  purple_player_move: ["Moves the player a square that way, unless a wall is there. Off one edge, they come back on the other.", "ARROWS"],
-  purple_wall: ["The player can't walk onto this thing."],
-  purple_player_square: ["The square the player is on."],
+  purple_each_key: ["Runs what's inside once for each key on the keyboard. Inside it, \"that key\" is the key it's on.", "grid"],
+  purple_that_key: ["Inside \"for each key on the keyboard\": the key it's on right now."],
+  purple_player_put: ["Your character is the one emoji in the room that moves around, like the hero of a game. This puts it on a square and picks its emoji. To walk it with the arrow keys, put \"move your character the arrow's way\" under \"whenever an arrow is pressed\"."],
+  purple_player_move: ["Moves your character a square that way, unless it can't walk onto what's there. Off one edge, it comes back on the other.", "ARROWS"],
+  purple_wall: ["Makes this thing a wall, like 🌳 or 🪨: your character stops in front of it."],
+  purple_player_square: ["The square your character is on."],
   purple_thing: ["An emoji or one of your pictures. Click it to pick.", "picture"],
   purple_text: ["Words. Click them to type your own."],
   purple_number: ["A number. Click it to type your own."],
   purple_color: ["A color. Click it to pick."],
-  purple_things: ["A list of emoji, with a space between each."],
+  purple_things: ["Several emoji, with a space between each. Put it in \"one of\" to pick one by chance."],
   purple_one_of: ["One thing from a list, picked by chance each time."],
-  purple_any_picture: ["One of the pictures you added under Pictures and sounds, picked by chance each time.", "picture"],
+  purple_any_picture: ["One of the pictures you added on the New Rooms page, under Pictures and sounds for your rooms, picked by chance each time.", "picture"],
   purple_join: ["Puts two things together into one line of words, like ⭐ and a score."],
   purple_pot_add: ["The paint pot mixes colors like real paint: yellow and blue make green. This adds a color; only the last six count.", "mix"],
   purple_pot_empty: ["Empties the paint pot.", "mix"],
   purple_pot_color: ["The color of everything in the paint pot, mixed together.", "mix"],
-  purple_set: ["Sets a score, or any count you name, to a number. Click the name to rename it or make another.", "state"],
+  purple_set: ["Sets a score, or anything else you want to count, to a number. Click the name to rename it or make another.", "state"],
   purple_change: ["Adds to a score. A minus number takes away.", "state"],
   purple_get: ["A score's number right now.", "state"],
   purple_game_over: ["Ends the game: stops the timers and shows these words. The next key starts the room again from the top.", "game_over"],
@@ -218,6 +218,12 @@ const MESSAGES: Record<string, string> = {
 
 const usesKey = (block: Blockly.Block) => !block.getField("WAY") || block.getFieldValue("WAY") === "key";
 const underKey = (block: Blockly.Block) => ["purple_on_key", "purple_on_this_key"].includes(block.getRootBlock().type);
+// A block on its own does nothing, and nothing else on the canvas says so.
+export const looseNote = (block: Blockly.Block) =>
+  block.getParent() ? null
+  : block.outputConnection ? "This goes in a space in another block, like \"show\", to do something."
+  : block.previousConnection ? "This only runs under a trigger, like \"whenever any key is pressed\"."
+  : null;
 
 // Each kind of block's color: its blocks and its toolbox category. All purples, from periwinkle to raspberry and
 // lavender to plum, each dark enough for the white words on it.
@@ -234,13 +240,14 @@ export function defineBlocks(): void {
   Blockly.fieldRegistry.register("field_picker", PickerField);
   Blockly.Extensions.register("key_only", function (this: Blockly.Block) {
     this.setOnChange(() => {
-      this.setWarningText(usesKey(this) && !underKey(this) ? "The key pressed only means something under \"when a key is pressed\"." : null);
+      this.setWarningText(usesKey(this) && !underKey(this) ? "The key pressed only means something under \"whenever … is pressed\"." : null);
     });
   });
   Object.assign(Blockly.Msg, MESSAGES);
   Blockly.defineBlocksWithJsonArray(BLOCKS.map(withHelp));
   defineGenerators();
-  const style = (c: string) => ({ colourPrimary: c, colourSecondary: c, colourTertiary: c });
+  // The darker shade outlines each block and fills an empty slot, so a block in a slot reads as its own piece.
+  const style = (c: string) => ({ colourPrimary: c, colourSecondary: c, colourTertiary: Blockly.utils.colour.blend("#2a1845", c, 0.45) ?? c });
   Blockly.Theme.defineTheme("purple", {
     name: "purple",
     base: Blockly.Themes.Zelos,
@@ -282,27 +289,27 @@ const score = (name: string) => b("purple_get", { VAR: { name } });
 // [drawer, color, what it's for, its blocks], each block as it comes out of the drawer, the likeliest first. A string
 // starts a group within the drawer.
 export const CATEGORIES: [string, string, string, (BJ | string)[]][] = [
-  ["When", BLOCK_COLORS.event, "What starts things", [on("purple_on_key", {}, {}), on("purple_on_start", {}, {}), on("purple_on_this_key", {}, {}),
+  ["Triggers", BLOCK_COLORS.event, "Purple runs these when something happens", [on("purple_on_key", {}, {}), on("purple_on_start", {}, {}), on("purple_on_this_key", {}, {}),
     on("purple_every", {}, { SECONDS: num(1) }), b("purple_after", {}, { SECONDS: num(1) }), on("purple_on_meet", {}, { THING: thing("⭐") })]],
   ["Show", BLOCK_COLORS.screen, "Pictures and words on the screen", [b("purple_show", {}, { TEXT: thing("🎉") }), b("purple_write", {}, { TEXT: text("Hello!") }),
     b("purple_status", {}, { TEXT: text("Find the stars!") }), b("purple_background", {}, { COLOR: color("#1e1033") }), b("purple_clear")]],
   ["Sound", BLOCK_COLORS.sound, "Talking, notes, and drums", [b("purple_say", {}, { TEXT: text("Hello!") }),
     b("purple_play", {}, { NOTE: b("purple_note", { NOTE: "C4" }) }), b("purple_drum"), b("purple_note", { NOTE: "C4" })]],
-  ["Grid", BLOCK_COLORS.grid, "The 26 by 12 squares", [b("purple_put", {}, { THING: thing("⭐"), SQUARE: square(13, 6) }), b("purple_erase", {}, { SQUARE: square(13, 6) }),
+  ["Grid", BLOCK_COLORS.grid, "The screen's squares, for putting things on", [b("purple_put", {}, { THING: thing("⭐"), SQUARE: square(13, 6) }), b("purple_erase", {}, { SQUARE: square(13, 6) }),
     b("purple_floor", {}, { COLOR: color("#4a8a50"), SQUARE: square(13, 6) }), square(13, 6), b("purple_random_square"),
     b("purple_what_at", {}, { SQUARE: square(13, 6) }), b("purple_is_empty", {}, { SQUARE: square(13, 6) }), b("purple_move_all", { WAY: "down" }, { THING: thing("🍎") }),
-    "The ring: a circle that marks one square", b("purple_ring_put", {}, { SQUARE: square(13, 6) }), b("purple_ring_move"), b("purple_ring_square")]],
+    "The ring: a circle that marks the picked square", b("purple_ring_put", {}, { SQUARE: square(13, 6) }), b("purple_ring_move"), b("purple_ring_square")]],
   ["Things", BLOCK_COLORS.thing, "Emoji, words, numbers, and colors", [thing("⭐"), text("Hello!"), num(1), color("#4a8a50"), b("purple_things"),
     b("purple_one_of", {}, { LIST: b("purple_things") }), b("purple_any_picture"), b("purple_join", {}, { A: text("⭐ "), B: score("score") }),
     "The paint pot: colors mix like paint", b("purple_pot_add", {}, { COLOR: color("#e0c020") }), b("purple_pot_empty"), b("purple_pot_color")]],
   ["Keys", BLOCK_COLORS.key, "The keys on the keyboard", [pressed(), b("purple_key_letter", {}, { KEY: pressed() }), b("purple_key_color", {}, { KEY: pressed() }),
     b("purple_key_note", {}, { KEY: pressed() }), b("purple_key_spot", {}, { KEY: pressed() }), key("q"),
-    "Every key", b("purple_each_key"), that()]],
-  ["Player", BLOCK_COLORS.player, "Someone who walks with the arrows", [b("purple_player_put", {}, { THING: thing("🧒"), SQUARE: square(13, 6) }), b("purple_player_move"),
+    "Going through every key", b("purple_each_key"), that()]],
+  ["Character", BLOCK_COLORS.player, "One emoji that walks around and touches things", [b("purple_player_put", {}, { THING: thing("🧒"), SQUARE: square(13, 6) }), b("purple_player_move"),
     b("purple_wall", {}, { THING: thing("🌳") }), b("purple_player_square")]],
   ["Scores", BLOCK_COLORS.score, "Counting and winning", [b("purple_set", {}, { VALUE: num(0) }), b("purple_change", {}, { BY: num(1) }), score("score"),
     b("purple_game_over", {}, { TEXT: text("You did it! Press a key to play again.") })]],
-  ["If and repeat", BLOCK_COLORS.logic, "Choosing, and doing again", [b("controls_if"), b("logic_compare", {}, { A: score("score"), B: num(10) }),
+  ["If and repeat", BLOCK_COLORS.logic, "Checks and repeats inside a stack", [b("controls_if"), b("logic_compare", {}, { A: score("score"), B: num(10) }),
     b("logic_operation"), b("logic_negate"), b("controls_repeat_ext", {}, { TIMES: num(5) }), b("math_random_int", {}, { FROM: num(1), TO: num(6) }),
     b("math_arithmetic", {}, { A: num(1), B: num(1) })]],
 ];

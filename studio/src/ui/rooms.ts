@@ -196,7 +196,9 @@ function editor(room: RoomDraft): View {
     if (!problem && source !== playing) restart();
   };
   let timer = 0;
-  const later = (ms: number, typed: boolean) => { clearTimeout(timer); timer = window.setTimeout(typed ? settle : restart, ms); };
+  // Moving a block that isn't under a trigger writes the same Python, and restarting would replay the room's opening.
+  const changedRestart = () => room.source !== playing && restart();
+  const later = (ms: number, typed: boolean) => { clearTimeout(timer); timer = window.setTimeout(typed ? settle : changedRestart, ms); };
 
   const nameIn = h("input", { type: "text", class: "room-name", value: roomTitle(room.name), "aria-label": "Room name", maxLength: 40 });
   const nameNote = h("span", { class: "dim small" });

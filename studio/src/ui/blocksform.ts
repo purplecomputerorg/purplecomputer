@@ -254,11 +254,14 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     if (!("x" in ((made.workspace as { blocks?: { blocks?: object[] } }).blocks?.blocks?.[0] ?? { x: 0 }))) ws.cleanUp();
     Blockly.Events.enable();
     div.append(close);
-    // Blockly sizes itself to the window, not its box, so a wider editor pane needs telling. The box settles its size
+    // Blockly sizes itself to the window, not its box, so a wider editor pane needs telling. The box settles its width
     // after the blocks are first placed (the tabs wrap, the page lays out), so they go back to the top left each time.
+    // Not on a height change: the help line below changes it on every click, and scrolling the canvas closes any picker.
+    let width = 0;
     new ResizeObserver(() => {
       Blockly.svgResize(ws);
-      home(ws);
+      if (div.clientWidth !== width) home(ws);
+      width = div.clientWidth;
     }).observe(div);
     void Blockly.renderManagement.finishQueuedRenders().then(() => home(ws));
     // A click in the drawer adds a block, and then Blockly closes the drawer; it stays open instead, so blocks can be

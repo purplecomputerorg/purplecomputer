@@ -34,7 +34,7 @@ export function formatView(): View {
     ["  synonyms.json", "nickname -> word", "Play room"],
     ["  meanings.json", "word -> what it is", "Play room, \"who is grandma\""],
     ["  rankings.txt", "one word per line", "Play room autocomplete"],
-    ["  letters/a.wav, slash.wav …", "your voice, per key", "Music room, Say Letters"],
+    ["  letters/a.wav, slash.wav …", "your voice, per key", "Music room, Letters"],
     ["  voice/<phrase>.wav", "your voice, per phrase", "spoken instead of Purple's voice"],
     ["  pictures/<name>.json, .png", "paint list and preview", "Art room, Open"],
     ["  <instrument>/c1.wav … d7.wav", "one note per file", "Music room"],

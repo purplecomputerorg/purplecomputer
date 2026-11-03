@@ -53,7 +53,7 @@ export function keysView(): View {
     editor: h(
       "section",
       {},
-      h("p", { class: "lead" }, "In the Music room's Say Letters, each key plays what you give it. Record its name in your voice, \"D is for Dad,\" a sneeze, a song, or type words for Purple to say."),
+      h("p", { class: "lead" }, "In the Music room, switch to ", h("b", {}, "Letters"), " and each key plays what you give it. Record its name in your voice, \"D is for Dad,\" a sneeze, a song, or type words for Purple to say."),
       h("div", { class: "card voice-card" },
         keys,
         h("div", { class: "voice-now" }, now, h("div", { class: "stack" }, prompt, picker))),
@@ -62,7 +62,7 @@ export function keysView(): View {
     ),
     live: { room: "music", letters: true },
     keys: () => { const mine = Object.keys(draft.letters).slice(0, 5); return mine.length ? mine : [..."abcde"]; },
-    caption: "Purple's Music room in Say Letters. Keys you gave a sound play it.",
+    caption: "Purple's Music room, switched to Letters. Keys you gave a sound play it.",
     cleanup: unlisten,
   };
 }

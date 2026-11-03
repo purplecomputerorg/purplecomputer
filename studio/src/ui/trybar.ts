@@ -22,6 +22,9 @@ export function tryBar(item: Keepable): HTMLElement {
   return bar;
 }
 
+// For something that's always in the Purple Pack once it exists, with any controls after the note.
+export const inPackBar = (...after: Node[]): HTMLElement => h("div", { class: "trybar" }, h("span", { class: "added" }, "✓ In your Purple Pack."), ...after);
+
 // rename says why a name can't be used, or renames the item and says nothing. keep stands in for the Add button.
 export interface YourCard { href: string; title: string; face: Node; current?: boolean; rename?: (text: string) => string | null; keep?: HTMLElement | null }
 

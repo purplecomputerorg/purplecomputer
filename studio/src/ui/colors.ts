@@ -2,7 +2,7 @@ import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, DEFAULT_THEME, hslToHex, themePalette, 
 import { changed, draft } from "../state";
 import { clear, h } from "./dom";
 import { PURPLE_STICKERS, sticker } from "./stickers";
-import { tryBar } from "./trybar";
+import { inPackBar, tryBar } from "./trybar";
 import type { View } from "./view";
 
 // Screen colors: one base each; Purple's text and panels follow it.
@@ -72,7 +72,7 @@ export function colorsView(): View {
     clear(body);
     body.append(h("div", {},
       !draft.theme ? null : draft.colors.kept
-        ? h("div", { class: "trybar" }, h("span", { class: "added" }, "✓ In your Purple Pack."))
+        ? inPackBar()
         : tryBar(draft.colors),
       h("h3", {}, "Screen"),
       h("div", { class: "presets" },

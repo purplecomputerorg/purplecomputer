@@ -340,6 +340,8 @@ input[type="range"] { accent-color: var(--purple); width: 100%; margin: 0; }
 .trybar .trying { color: var(--purple-dark); font-weight: 600; }
 .trybar .added { color: #3d7a4e; font-weight: 600; }
 .trybar:has(.added) { background: #e8f3ea; }
+.trybar .done { margin-left: auto; }
+.word-fields .trybar { margin: 0; }
 .try-chip { position: relative; display: inline-flex; }
 .try-chip .drop, .your-card .drop { position: absolute; top: -7px; right: -7px; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: #fff; color: var(--dim); font-size: 13px; line-height: 1; cursor: pointer; box-shadow: var(--shadow); }
 .try-chip .drop:hover, .your-card .drop:hover { color: #fff; background: var(--purple); border-color: var(--purple); }

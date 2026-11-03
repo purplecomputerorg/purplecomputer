@@ -6,6 +6,7 @@ import { typingKeys } from "../keys";
 import { h, removeButton } from "./dom";
 import { closeEmojiPicker, emojiCell, openEmojiPicker } from "./emojipicker";
 import { roomPicture } from "./roomfiles";
+import { inPackBar } from "./trybar";
 import { soundPicker, voiceStays } from "./record";
 import box from "../assets/purple-box.jpg";
 import daddy from "../assets/daddy.mp3";
@@ -82,7 +83,7 @@ function wordTable(): HTMLElement {
       e.preventDefault();
       add();
     });
-    return h("div", { class: "word-new emoji-wrap" }, input, h("button", { type: "button", class: "btn small", onclick: add }, "Add word"));
+    return h("div", { class: "word-new emoji-wrap" }, input, h("button", { type: "button", class: "btn small", onclick: add }, "Add new word"));
   }
 
   function row(entry: WordEntry): HTMLElement {
@@ -99,7 +100,8 @@ function wordTable(): HTMLElement {
         render();
       }));
     return h("div", { class: `word-row${isOpen ? " open" : ""}${entry === fresh ? " just-added" : ""}` }, head,
-      isOpen ? h("div", { class: "word-fields" }, wordField(entry), showsField(entry), meaning(entry), voice(entry)) : null);
+      isOpen ? h("div", { class: "word-fields" }, wordField(entry), showsField(entry), meaning(entry), voice(entry),
+        inPackBar(h("button", { type: "button", class: "btn small secondary done", onclick: toggle }, "Done"))) : null);
   }
 
   function wordField(entry: WordEntry): HTMLElement {

@@ -145,8 +145,6 @@ def test_letters_that_spell_a_word_show_it_and_space_says_it(monkeypatch):
         assert app.room.word == "cat"
         await press(app, "space")
         assert said == [["cat"]]
-        await type_text(app, "xx")
-        assert app.room.word == "cat"
         await type_text(app, "x")
         assert app.room.word is None
     run(go())
@@ -162,7 +160,22 @@ def test_a_word_is_found_at_the_end_of_whatever_came_before(monkeypatch):
         await type_text(app, "s")
         assert app.room.word == "cats"
         await type_text(app, "go")
-        assert app.room.word == "cats"
+        assert app.room.word is None
+    run(go())
+
+
+def test_a_two_letter_word_needs_a_rest_before_it(monkeypatch):
+    async def go():
+        app = _letters_room(monkeypatch)
+        room = app.room
+        await type_text(app, "go")
+        assert room.word == "go"
+        await type_text(app, "x")
+        room._typed_at[-1] -= 2
+        await type_text(app, "hi")
+        assert room.word == "hi"
+        await type_text(app, "xhi")
+        assert room.word is None
     run(go())
 
 

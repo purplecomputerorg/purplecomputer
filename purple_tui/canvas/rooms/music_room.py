@@ -706,19 +706,18 @@ class MusicRoom(Room):
 
     def _draw_note_strip(self, g, xs, cy, px, on_paper):
         """Every letter row plays the same note in a column, so each column is named once, on a ledge
-        as wide as the grid, capped on the left by a music badge. Played names go bold so the eye stays on the
+        as wide as the grid, with a music tab tucked behind its left end. Played names go bold so the eye stays on the
         keys; the key-change sweep gets the selection plate."""
         size = xs[1] - xs[0]
         h = round(size * NOTE_STRIP * 0.62)
-        badge = pygame.Rect(0, 0, round(h * 1.25), round(h * 1.25))
-        badge.midright = (xs[0], round(cy + size * 0.08))
-        bar = pygame.Rect(badge.centerx, 0, xs[10] - badge.centerx, h)
-        bar.centery = badge.centery
+        bar = pygame.Rect(xs[0], 0, xs[10] - xs[0], h)
+        bar.centery = round(cy + size * 0.08)
+        tab = pygame.Rect(xs[0] - round(h * 1.6), bar.y, round(h * 1.6) + h, h)
         ink = paper.INK_MUTED if on_paper else P.MUTED
         ground = mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE
-        g.rect(ground, bar, radius=bar.h // 2)
-        g.rect(mix(ground, ink, 0.2), badge, radius=badge.h // 2)
-        g.draw_text(ICON_MUSIC, px, badge.centerx, badge.centery, "sans", ink, anchor="center", tr=False)
+        g.rect(mix(ground, ink, 0.2), tab, radius=h // 2)
+        g.rect(ground, bar, radius=h // 2)
+        g.draw_text(ICON_MUSIC, px, (tab.x + bar.x) // 2 + h // 10, bar.centery, "sans", ink, anchor="center", tr=False)
         plate = pygame.Rect(0, 0, round(size * 0.5), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
             root_idx, sweeping = self._transition_state_for_col(col)

@@ -145,12 +145,28 @@ def test_letters_that_spell_a_word_show_it_and_space_says_it(monkeypatch):
         assert app.room.word == "cat"
         await press(app, "space")
         assert said == [["cat"]]
+        await type_text(app, "xx")
+        assert app.room.word == "cat"
         await type_text(app, "x")
         assert app.room.word is None
     run(go())
 
 
-def test_a_rest_or_a_mode_switch_starts_a_new_word(monkeypatch):
+def test_a_word_is_found_at_the_end_of_whatever_came_before(monkeypatch):
+    async def go():
+        app = _letters_room(monkeypatch)
+        await type_text(app, "qzdog")
+        assert app.room.word == "dog"
+        await type_text(app, "cat")
+        assert app.room.word == "cat"
+        await type_text(app, "s")
+        assert app.room.word == "cats"
+        await type_text(app, "go")
+        assert app.room.word == "cats"
+    run(go())
+
+
+def test_a_long_rest_or_a_mode_switch_starts_a_new_word(monkeypatch):
     from purple_tui.canvas.harness import press
     from purple_tui.canvas.rooms import music_room
 
@@ -161,7 +177,7 @@ def test_a_rest_or_a_mode_switch_starts_a_new_word(monkeypatch):
         await press(app, "tab")
         assert app.room.word is None and app.room._spelled == ""
         await press(app, "tab")
-        monkeypatch.setattr(music_room, "ECHO_PAUSE_S", 0)
+        monkeypatch.setattr(music_room, "WORD_REST_S", 0)
         await type_text(app, "the")
         assert app.room.word is None
     run(go())
@@ -174,8 +190,9 @@ def test_a_blocked_word_is_never_shown(monkeypatch):
 
     async def go():
         app = _letters_room(monkeypatch)
-        await type_text(app, base64.b64decode("cG9vcA==").decode())
-        assert app.room.word is None
+        blocked = base64.b64decode("cG9vcA==").decode()
+        await type_text(app, blocked)
+        assert app.room.word != blocked
     run(go())
 
 

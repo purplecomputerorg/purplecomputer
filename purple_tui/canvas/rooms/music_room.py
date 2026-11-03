@@ -38,8 +38,10 @@ PITCH_TRANSITION_DURATION = 0.25
 NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
 NOTE_TAB = 0.6                # room each side for the note bar's key tab, in keys, past the stage padding
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
-ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes, and a new word
-SPELL_MAX = 12                # letters kept toward a word; longer runs are never one
+ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
+WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
+WORD_LINGER = 2               # stray letters a found word stays up through
+SPELL_MAX = 12                # letters kept toward a word
 WORD_HINT = "{Space} say it"
 NOSCREEN_TEXT = "No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit"
 FLAT_KEYS = {5, 10}           # F and B flat name their black keys as flats
@@ -97,7 +99,8 @@ class MusicRoom(Room):
         self._letter_playing = None
         self._spelled = ""
         self._spelled_at = float("-inf")
-        self.word = None          # the letters just typed, when they spell a real word
+        self.word = None          # the real word the letters just typed end with
+        self._strays = 0
         self._toast = None
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
@@ -520,15 +523,28 @@ class MusicRoom(Room):
         self._toast = self.app.notify(text, replaces=self._toast)
 
     def _spell(self, key: str, now: float):
-        """Letters typed without a long rest build a word; anything else starts over."""
-        run = self._spelled if now - self._spelled_at < ECHO_PAUSE_S else ""
-        self._spelled = (run + key.lower())[-SPELL_MAX:] if key.isalpha() else ""
+        """Letters typed without a long rest build words; a found word stays up through a stray letter or two."""
+        if not key.isalpha() or now - self._spelled_at >= WORD_REST_S:
+            self._forget_word()
         self._spelled_at = now
-        w = self._spelled
-        self.word = w if len(w) >= 2 and get_content().is_known_word(w) and is_clean(w) else None
+        if not key.isalpha():
+            return
+        self._spelled = (self._spelled + key.lower())[-SPELL_MAX:]
+        if found := self._word_at_end(self._spelled):
+            self.word, self._strays = found, 0
+        else:
+            self._strays += 1
+            if self._strays > WORD_LINGER:
+                self.word = None
+
+    @staticmethod
+    def _word_at_end(run: str):
+        """The longest real word the letters end with: three letters or more, or two that are all of them."""
+        ends = (run[-n:] for n in range(len(run), 1, -1) if n >= 3 or n == len(run))
+        return next((w for w in ends if get_content().is_known_word(w) and is_clean(w)), None)
 
     def _forget_word(self):
-        self._spelled, self.word = "", None
+        self._spelled, self.word, self._strays = "", None, 0
 
     def _letters_mash_drop(self, now: float) -> bool:
         """A new letter cuts off the one still speaking, so only a whole hand landing at once needs dropping."""

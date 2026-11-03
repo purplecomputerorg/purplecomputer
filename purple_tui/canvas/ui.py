@@ -83,7 +83,10 @@ class Timers:
         return [(h._delay, getattr(h._fn, "__qualname__", repr(h._fn))) for h in self.active if h._repeat]
 
     def call_from_thread(self, fn, *args):
-        self.loop.call_soon_threadsafe(fn, *args)
+        try:
+            self.loop.call_soon_threadsafe(fn, *args)
+        except RuntimeError:  # the loop closed: a worker outlived the app and its reply has nowhere to go
+            pass
 
 
 # ----------------------------------------------------------------------------

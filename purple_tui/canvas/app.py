@@ -615,6 +615,8 @@ class PurpleApp:
                     if not self._overlays and not self._littles_mode:
                         self._show_room_picker()
                         return
+        if self._esc_space_chord(action):
+            return
         if isinstance(action, ControlAction) and action.is_down and not self._littles_mode:
             handler = {"volume_mute": self.action_volume_mute, "volume_down": self.action_volume_down,
                        "volume_up": self.action_volume_up, "brightness_hint": self._show_brightness_hint}.get(action.action)
@@ -644,6 +646,19 @@ class PurpleApp:
     def _unlight_arrow(self):
         self._lit_arrow = self._lit_arrow_timer = None
         self.invalidate()
+
+    def _esc_space_chord(self, action) -> bool:
+        """Space while Esc is held opens the code panel, the same place Esc then Space reaches."""
+        if not (isinstance(action, ControlAction) and action.action == "space" and action.is_down and not action.is_repeat):
+            return False
+        if self._escape_down_at is None or self._escape_pressed_on is not None or self._overlays or self._littles_mode:
+            return False
+        if not (self.room.has_code_panel and self._code_panel_enabled):
+            return False
+        self._cancel_escape_hold_timer()
+        self._escape_consumed_by_mode = True
+        self.room.open_code_panel()
+        return True
 
     def _start_escape_hold_timer(self):
         self._cancel_escape_hold_timer()

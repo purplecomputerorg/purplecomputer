@@ -776,7 +776,7 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor
     return box
 
 
-CODE_KEYS = "{Esc} then {Space}"   # the Esc menu, then its Code card: a sequence, not a chord
+CODE_KEYS = "{Esc} + {Space}"   # together, or the Esc menu then its Code card
 CODE_HINT = f"{ICON_ROBOT} {CODE_KEYS} write code"
 
 

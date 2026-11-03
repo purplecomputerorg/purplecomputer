@@ -511,3 +511,17 @@ def test_escape_from_the_code_wheel_puts_the_line_back():
         await press(app, "escape")
         assert app.top is None and room.code_panel.field.value == "right 2 wheel" and room.brush_color == before
     run(go())
+
+
+@pytest.mark.parametrize("room", ["music", "art", "blocks"])
+def test_esc_and_space_together_open_the_code_panel(room):
+    from purple_tui.keyboard import ControlAction
+
+    async def go():
+        app = make_app(room=room)
+        await app._dispatch_keyboard_action(ControlAction(action="escape", is_down=True))
+        await press(app, "space")
+        await app._dispatch_keyboard_action(ControlAction(action="escape", is_down=False))
+        assert app.room.code_panel is not None
+        assert not app._overlays
+    run(go())

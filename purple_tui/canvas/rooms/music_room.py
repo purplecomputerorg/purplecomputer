@@ -52,6 +52,10 @@ def note_name(col: int, root_index: int) -> str:
     return SHARP_TO_FLAT.get(note, note) if root in FLAT_KEYS else note.replace("#", "♯")
 
 
+def note_label(note: str) -> str:
+    return f"♪ {note}"
+
+
 def initials(names: list) -> list:
     """Each name's shortest start that no other name shares: M, U, A, G; Ma and Mo for Marimba and Mom."""
     def short(name):
@@ -727,7 +731,7 @@ class MusicRoom(Room):
                 g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 if key in self._note_labels and not on_paper:
-                    sound = f"♪ {note}" if melodic else ICON_DRUM
+                    sound = note_label(note) if melodic else ICON_DRUM
                     g.draw_text(sound, max(10, int(size * 0.15)), tile.centerx, tile.bottom - int(size * 0.17),
                                 "mono-bold-italic", mix(fg, bg, 0.3), anchor="center", tr=False)
         if not self.letters_mode:
@@ -750,10 +754,10 @@ class MusicRoom(Room):
         g.rect(ground, bar, radius=h // 2)
         g.draw_text(key, px, (tab.x + bar.x) // 2 + h // 10, bar.centery, "mono-heavy-italic", paper.INK if on_paper else P.TEXT,
                     anchor="center", tr=False)
-        plate = pygame.Rect(0, 0, round(size * 0.5), bar.h - 2 * max(2, bar.h // 8))
+        plate = pygame.Rect(0, 0, round(size * 0.8), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
             root_idx, sweeping = self._transition_state_for_col(col)
-            note = note_name(col, root_idx)
+            note = note_label(note_name(col, root_idx))
             sweeping = sweeping and not on_paper
             played = not on_paper and any(row[col] in self._note_labels for row in GRID_KEYS[1:])
             plate.center = ((xs[col] + xs[col + 1]) // 2, bar.centery)

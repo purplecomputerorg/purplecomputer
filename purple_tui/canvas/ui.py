@@ -724,6 +724,11 @@ HOLD = "hold "
 SHIFTED = dict(zip("[];',./-=`", "{}:\"<>?_+~"))
 
 
+def key_radius(px: int) -> int:
+    """A keycap's corner; a pill holding keys rounds by this plus its padding, so the corners nest."""
+    return round(px * 0.3)
+
+
 def keycap_size(g: Gfx, text: str, px: int) -> tuple:
     w, h = g.measure(text.removeprefix(HOLD), px, "mono-bold")
     if text.startswith(HOLD):
@@ -741,8 +746,8 @@ def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=
     setattr(key, anchor, (x, y))
     lip = max(2, round(px * 0.16))
     key.y -= lip // 2
-    g.rect(mix(fill, P.BG, 0.45), key.move(0, lip), radius=round(px * 0.3))
-    g.rect(fill, key, radius=round(px * 0.3))
+    g.rect(mix(fill, P.BG, 0.45), key.move(0, lip), radius=key_radius(px))
+    g.rect(fill, key, radius=key_radius(px))
     if text in SHIFTED:
         for t, d in ((SHIFTED[text], -1), (text, 1)):
             g.draw_text(t, round(px * 0.85), key.centerx + d * key.w // 6, key.centery + d * key.h // 5, "mono-bold", ink, anchor="center")
@@ -785,9 +790,9 @@ def header_pill(g: Gfx, px: int, content_w: int, right: int, cy: int, on: bool) 
     pad = round(px * 0.35)
     pill = pygame.Rect(0, 0, content_w + 2 * pad, keycap_size(g, "X", px)[1] + 2 * pad)
     pill.midright = (right, cy)
-    g.rect(P.PRIMARY if on else P.FIELD, pill, radius=round(px * 0.5) + pad)
+    g.rect(P.PRIMARY if on else P.FIELD, pill, radius=key_radius(px) + pad)
     if not on:
-        g.rect(P.LINE, pill, width=1, radius=round(px * 0.5) + pad)
+        g.rect(P.LINE, pill, width=1, radius=key_radius(px) + pad)
     return pill, pad
 
 

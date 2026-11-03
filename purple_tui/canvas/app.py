@@ -1869,18 +1869,19 @@ class PurpleApp:
         g = self.g
         bot_h, title_px, hint_px, pad, gap = g.vh(12), g.em(1.8), g.em(1.0), g.em(1.8), g.em(1.0)
         hint = None if self._littles_mode else "{Esc} change rooms"
-        title_h = g.line_height(title_px, "sans-bold")
+        title_h = g.line_height(title_px, "mono-bold")
         hint_h = keycap_size(g, "X", hint_px)[1] if hint else -gap
-        widths = (g.measure("Type anything!", title_px, "sans-bold")[0], key_hint_width(g, hint, hint_px) if hint else 0)
+        widths = (g.measure("Type anything!", title_px, "mono-bold")[0], key_hint_width(g, hint, hint_px) if hint else 0)
         card = pygame.Rect(0, 0, max(widths) + 2 * pad, bot_h + title_h + hint_h + 2 * gap + 2 * pad)
         card.center = rect.center
-        g.rect(P.SURFACE, card, radius=g.em(0.8))
-        g.rect(P.LINE, card, width=1, radius=g.em(0.8))
+        veil = pygame.Surface(card.size, pygame.SRCALPHA)
+        pygame.draw.rect(veil, (*rgb(P.SURFACE), 215), veil.get_rect(), border_radius=g.em(0.8))
+        g.surface.blit(veil, card)
         bot = g.image("bot.png", bot_h)
         y = card.y + pad
         g.surface.blit(bot, bot.get_rect(midtop=(card.centerx, y)))
         y += bot_h + gap
-        g.draw_text("Type anything!", title_px, card.centerx, y, "sans-bold", P.ACCENT, anchor="midtop")
+        g.draw_text("Type anything!", title_px, card.centerx, y, "mono-bold", P.ACCENT, anchor="midtop")
         if hint:
             draw_key_hint(g, hint, hint_px, card.centerx, y + title_h + gap + hint_h // 2, color=P.TEXT, anchor="center")
 

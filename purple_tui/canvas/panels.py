@@ -147,7 +147,6 @@ def guide_topic(room: str, text: str):
     return None
 
 
-PLACEHOLDER = f"Type code, or press {DOWN} to try one"
 HUES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'brown']
 # A few of these show under the plain hues, different ones each time code opens.
 MORE_COLORS = ['periwinkle', 'mint', 'gold', 'coral', 'sky', 'lime', 'turquoise', 'lavender', 'peach',
@@ -438,6 +437,11 @@ class CodePanel:
         self._back = max(0, min(len(lines), self._back + step))
         self.field.set(lines[-self._back] if self._back else "")
 
+    def placeholder(self) -> str:
+        if self.app.code_lines(self.room):
+            return f"Type code, {UP} your code, {DOWN} try one"
+        return f"Type code, or press {DOWN} to try one"
+
     def _sub(self) -> str | None:
         """The key hint under the line when the cards or a note own it, else None."""
         if self.card == self.CLOSE:
@@ -454,7 +458,7 @@ class CodePanel:
     def draw(self, g, rect):
         m, px, box_h, sub_px, sub_h, gap, cards_h = self._layout(g)
         x, w = rect.x + g.em(0.8), rect.w - g.em(1.6)
-        box = self.field.draw_boxed(g, x, rect.y + m, w, px, "Code", PLACEHOLDER)
+        box = self.field.draw_boxed(g, x, rect.y + m, w, px, "Code", self.placeholder())
         y = box.bottom + gap
         sub = self._sub()
         text_y = y + (sub_h - g.line_height(sub_px, "mono")) // 2

@@ -8,6 +8,7 @@ import pytest
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.constants import ICON_LOOP
 from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name
+from purple_tui.canvas.ui import UP
 from purple_tui.keyboard import NavigationAction
 from purple_tui.palette import get_key_color
 
@@ -531,4 +532,14 @@ def test_esc_and_space_together_open_and_close_the_code_panel(room):
         await app._dispatch_keyboard_action(ControlAction(action="escape", is_down=False))
         assert app.room.code_panel is None
         assert not app._overlays
+    run(go())
+
+
+def test_placeholder_offers_up_only_once_there_is_code_to_recall():
+    async def go():
+        app, _ = await _room("art")
+        panel = CodePanel(app, "art")
+        assert UP not in panel.placeholder()
+        app.add_code_lines("art", ["right 3"])
+        assert UP in panel.placeholder()
     run(go())

@@ -414,8 +414,7 @@ class CodePanel:
     def arrow_hint(self) -> str:
         if self.card is not None:
             return f"Arrows pick  {LEFT} {RIGHT}   Back  {UP}"
-        words = f"Words  {LEFT} {RIGHT}   " if self.field.value else ""
-        return f"{words}Your code  {UP}   Examples  {DOWN}"
+        return f"Your code  {UP}   Examples  {DOWN}"
 
     def _choose(self, i: int):
         self.card = i

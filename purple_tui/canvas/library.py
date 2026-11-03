@@ -191,7 +191,7 @@ class Library(Overlay):
         if self._removable(self._tile()):
             hint += "    {hold ⌫} remove"
         if self.can_print and self.tiles:
-            hint += "    {P} print"
+            hint += "    P: print"
         rows = (len(self.tiles) + COLS - 1) // COLS
         more = ("▲ " if self.top_row > 0 else "") + ("▼ more" if self.top_row + ROWS_SHOWN < rows else "")
         draw_key_hint(g, f"{hint}    {{Esc}} close".strip(), g.em(0.92), box.centerx, y + h // 2, anchor="center")

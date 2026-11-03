@@ -534,7 +534,7 @@ class Picker(Dialog):
             if len(opt) == 3:
                 g.draw_text(opt[1], px, box.centerx, box.centery - g.em(0.6), "mono-bold" if on else "mono", color, anchor="center")
                 draw_key_hint(g, opt[2], g.em(0.85), box.centerx, box.centery + g.em(0.65), color if on else P.MUTED, "center",
-                              ink=P.PRIMARY if on else None)
+                              ink=auto_ink(color) if on else None)
             else:
                 g.draw_text(opt[1], px, box.centerx, box.centery, "mono-bold" if on else "mono", color, anchor="center")
             if more := UP if i == self._first > 0 else DOWN if i == last < len(self.options) - 1 else None:
@@ -669,7 +669,8 @@ def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", co
 
 
 def arrow_key_metrics(g: Gfx, px: int) -> tuple:
-    return *keycap_size(g, DOWN, px), round(px * 0.2)
+    w, h = g.measure(DOWN, px, "mono")
+    return w + round(px * 1.4), h + round(px * 0.56), round(px * 0.2)
 
 
 def arrow_keys_size(g: Gfx, px: int) -> tuple:
@@ -683,8 +684,8 @@ def draw_arrow_keys(g: Gfx, px: int, x: int, y: int, color=None) -> pygame.Rect:
     key_w, key_h, space = arrow_key_metrics(g, px)
     mid = x + key_w // 2 + key_w + space
     for i, glyph in enumerate((LEFT, DOWN, RIGHT)):
-        draw_key(g, glyph, px, mid + (i - 1) * (key_w + space), y, anchor="center", fill=color)
-    draw_key(g, UP, px, mid, y - key_h - space, anchor="center", fill=color)
+        draw_keycap(g, glyph, px, mid + (i - 1) * (key_w + space), y, anchor="center", color=color)
+    draw_keycap(g, UP, px, mid, y - key_h - space, anchor="center", color=color)
     w, h = arrow_keys_size(g, px)
     return pygame.Rect(x, y + key_h // 2 - h, w, h)
 
@@ -761,6 +762,11 @@ def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=
 
 
 KEY_RE = re.compile(r"\{([^}]+)\}")
+
+
+def key_cap(key: str) -> str:
+    """A named key (Enter, Space) draws as a keycap in a key hint; a letter or digit stays plain text."""
+    return f"{{{key}}}" if len(key) > 1 else key
 
 
 def _chord_pad(t: str, px: int) -> int:

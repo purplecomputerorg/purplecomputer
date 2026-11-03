@@ -79,11 +79,11 @@ GUIDE = {
     ],
     'music': [
         ("Notes", [("asdf", "play those keys"), ("1234", "drums")]),
-        ("Letters", [("letters", "keys say letters"), ("notes", "back to notes")]),
         ("Speed", [("fast asdf", "quick"), ("slow asdf", "slow")]),
         ("Sound", [("choose ukulele", "or marimba, accordion, glockenspiel")]),
         ("Key", [("key g", "same keys, new notes")]),
         ("Again", [("repeat 3 asdf", "three times")]),
+        ("Letters", [("letters", "keys say letters"), ("notes", "back to notes")]),
     ],
     'blocks': [
         ("Colors", [(COLORS, "")]),
@@ -502,18 +502,23 @@ class CodePanel:
         """The word guide, top down until it runs out of room: all about the
         last code word typed, else a bit of everything. Each example is boxed
         like the code line, so it reads as something to type; its note sits
-        beside it, or under it when it won't fit."""
+        beside it, or under it when it won't fit. Sections the overview has no
+        room for end it as words to type, since typing one shows its section."""
         g.rect(P.LINE, (rect.x, rect.y + g.em(0.9), 1, rect.h - g.em(1.8)))
         topic = guide_topic(self.room, self.field.value)
         x, w = rect.x + g.em(0.95), rect.w - g.em(1.7)
         head_px, px = g.em(0.9), g.em(0.82)
-        bottom = rect.bottom - g.em(0.45)
+        more_h = 0 if topic else g.line_height(head_px, "mono-heavy") + g.em(0.35) + _example_height(g, "key", "", px, w)
+        bottom = rect.bottom - g.em(0.45) - more_h
         y = rect.y + g.em(0.9)
         word = topic[2] if topic else None
-        for heading, rows in [topic[:2]] if topic else GUIDE[self.room]:
+        sections = [topic[:2]] if topic else GUIDE[self.room]
+        for i, (heading, rows) in enumerate(sections):
             code, gloss = rows[0]
             first_h = g.line_height(px, "mono") if code in (COLORS, ALL_COLORS) else _example_height(g, code, gloss, px, w)
             if y + g.line_height(head_px, "mono-heavy") + g.em(0.35) + first_h > bottom:
+                if not topic:
+                    _draw_more(g, [_topic_word(h, r) for h, r in sections[i:]], head_px, px, x, y, w)
                 break
             y += g.draw_text(heading, head_px, x, y, "mono-heavy", P.ACCENT).h + g.em(0.35)
             for code, gloss in rows:
@@ -525,6 +530,23 @@ class CodePanel:
                     _draw_example(g, code, gloss, px, x, y, w, word)
                 y += h + g.em(0.12)
             y += g.em(0.6)
+
+
+def _topic_word(heading: str, rows: list) -> str:
+    """The word that brings up a guide section: its first example's first word, a color for Colors."""
+    code = rows[0][0]
+    return "red" if code in (COLORS, ALL_COLORS) else code.split()[0]
+
+
+def _draw_more(g, words: list, head_px: int, px: int, x: int, y: int, w: int):
+    """'Type for more' and the words, boxed like examples, in a row."""
+    y += g.draw_text("Type for more", head_px, x, y, "mono-heavy", P.MUTED).h + g.em(0.35)
+    for word in words:
+        chip = _example_layout(g, word, "", px, w)[0]
+        if x + chip[0] > x + w:
+            break
+        _draw_example(g, word, "", px, x, y, w)
+        x += chip[0] + g.em(0.4)
 
 
 def _example_layout(g, code: str, gloss: str, px: int, w: int) -> tuple:

@@ -543,3 +543,12 @@ def test_placeholder_offers_up_only_once_there_is_code_to_recall():
         app.add_code_lines("art", ["right 3"])
         assert UP in panel.placeholder()
     run(go())
+
+
+def test_each_type_for_more_word_brings_up_its_section():
+    from purple_tui.canvas.panels import GUIDE, TOPICS, _topic_word, guide_topic
+    for room, sections in GUIDE.items():
+        headings = {h for _, h, _ in TOPICS[room]}
+        for heading, rows in sections:
+            if heading in headings:
+                assert guide_topic(room, _topic_word(heading, rows))[0] == heading, (room, heading)

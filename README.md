@@ -146,16 +146,16 @@ Families can add their own rooms (games, stories, worlds) from [Purple Studio](#
 - **Esc (tap):** the Esc menu: rooms on top (press a number), then tools for the room you're in: **Code** (Space), **Colors** (\\), **Time Travel** (T), **Save** (S), **Open** (O), **Print** (P, when a USB printer is plugged in), **Clear** (C), and **Volume** (V)
 - **Hold Esc (1s):** Parent Menu
 - **Hold \\ (3s):** Parent Menu (alternate, works on all keyboards)
-- **Tab:** the room's switch: Paint/Letters in Art, Sounds/Letters in Music, Front/Back in Blocks, `say` on or off in Play
+- **Tab:** the room's switch: Paint/Letters in Art, Notes/Letters in Music, Front/Back in Blocks, `say` on or off in Play
 - **Space** (Art, Blocks): put the brush down or lift it; hold it with the arrows to paint a trail or lay a line
-- **Space** (Music): note names on the keys on or off; in Letters, whether letters say their names ("bee") or their sounds ("b")
+- **Enter** (Music): the next instrument; in Letters, whether letters say their names ("bee") or their sounds ("b")
 - **Volume:** hardware media keys, or V in the Esc menu
 
 **Speech** (in Play room): Add `!` anywhere (e.g., `cat!`), start with `say`, or press Tab to hear the line spoken aloud.
 
 ### Code
 
-Older kids can write code in Art, Music and Blocks: press Esc, then Space. The code line opens holding the code for what they just did by hand, with a guide of words beside it and example cards below. Esc then Space closes it. Parents can turn it off (Parent Menu, Allow Code Space).
+Older kids can write code in Art, Music and Blocks: hold Esc and press Space (or pick Code in the Esc menu). The code line opens holding the code for what they just did by hand, with a guide of words beside it and example cards below. Esc + Space closes it. Parents can turn it off (Parent Menu, Allow Code Space).
 
 ```
 red repeat 4 forward 6 turn       # Art: a red square
@@ -164,6 +164,7 @@ write hi                          # Art: letters on the grid
 choose ukulele zxcvbnm            # Music: pick a sound, then play keys
 fast qwertyuiop                   # Music: quick notes
 key g                             # Music: same keys, new notes
+letters sounds                    # Music: keys say their letter sounds
 green repeat 4 right 1 up 1       # Blocks: stairs
 right hello                       # Blocks: a block per letter
 ```
@@ -350,7 +351,7 @@ Purple Computer includes code from the following open-source projects:
 
 - **[spectral.js](https://github.com/rvanwijnen/spectral.js)** by Ronald van Wijnen (MIT License): Spectral reflectance data and CIE color matching functions, used for Beer-Lambert paint-like color mixing (yellow + blue = green, red + blue = purple)
 - **[Twemoji](https://github.com/jdecked/twemoji)** by Twitter and contributors ([CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)): source artwork for several stickers — T-Rex (U+1F996), ringed planet (U+1FA90), Earth (U+1F30E), turtle (U+1F422), and sun-with-face (U+1F31E) — and Purple Studio's section and starter room icons (listed in `cards/make_studio_icons.py`), recolored to Purple Computer shades in the scripts under `cards/`.
-- **[nemophones](https://github.com/tavinathanson/nemophones)** ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)): the letter sounds Music says in Letters with Space (`packs/core-sounds/content/letter-sounds/`), raised to the letter names' volume.
+- **[nemophones](https://github.com/tavinathanson/nemophones)** ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)): the letter sounds Music says in Letters with Enter (`packs/core-sounds/content/letter-sounds/`), raised to the letter names' volume.
 
 ---
 

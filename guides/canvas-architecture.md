@@ -126,8 +126,8 @@ key events into the same `RawKeyEvent`s.
 The Enter hold (loop station) shows a bar (`ui.draw_hold_bar`), and one let go
 early leaves a "Hold Enter longer to ..." hint up for a moment; the Esc hold for
 the Parent Menu shows nothing. Space never holds for anything: holding it in Art
-and Blocks keeps painting or building while the arrows move. Code opens from the
-Esc menu's Code card (Esc, then Space) in Music, Art and Blocks (rooms with
+and Blocks keeps painting or building while the arrows move. Code opens with Esc + Space,
+held together or the Esc menu then its Code card, in Music, Art and Blocks (rooms with
 `has_code_panel`). Their code panel opens holding `panels.Echo`'s
 code for the newest stroke drawn or played by hand, and ↓ steps into
 `panels.RECIPES`, finished programs drawn as small pictures. A panel with

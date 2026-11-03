@@ -38,7 +38,7 @@
 // ── Back: code in Art, Music and Blocks ──
 #header(title: [Write Code])
 #note[
-  In *Art*, *Music* or *Blocks*, press #key("Esc") then #key("Space"). #key("↓") shows ideas. Typos get fixed for you.
+  In *Art*, *Music* or *Blocks*, hold #key("Esc") and press #key("Space"). #key("↓") shows ideas. Typos get fixed for you.
 ]
 #gap
 #panel(title: [Art])[
@@ -55,6 +55,7 @@
     ("asdf", [each letter is a note]),
     ("fast qwertyuiop", [quick notes, or use #mono("slow")]),
     ("choose ukulele zxcvbnm", [play a ukulele]),
+    ("letters", [keys say letters, #mono("notes") goes back]),
   )
 ]
 #gap

@@ -31,10 +31,11 @@ Each cell displays its key character and can be colored.
 
 ## Other Controls
 
-- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel).
-- **Tab**: toggle Letters mode, which says each pressed letter aloud.
-- **Left/Right**: shift the musical key (B♭ / F / C / G / D); **Up/Down**: shift octave.
-- **Space**: note names on the keys on or off; in Letters, letter names ("bee") or letter sounds ("b", clips from [nemophones](https://github.com/tavinathanson/nemophones) in `packs/core-sounds/content/letter-sounds/`). While a loop records or plays, Space drives the loop station instead.
+- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [nemophones](https://github.com/tavinathanson/nemophones) in `packs/core-sounds/content/letter-sounds/`). Hold Enter to record a loop.
+- **Tab**: switch between Notes and Letters, which says each pressed letter aloud.
+- **Left/Right**: shift the musical key (B♭ / F / C / G / D).
+- **Space**: only drives the loop station while a loop records or plays.
+- **Esc + Space**: open or close the code line.
 
 ## Color Cycling
 
@@ -552,9 +553,10 @@ Blue + Yellow = Green
 
 ### Room Shortcuts
 ```
-Esc (tap): Open room picker (Play, Music, Art)
-Esc (hold 1s): Parent mode
+Esc (tap): Open the Esc menu (rooms and tools)
+Esc (hold 1s): Parent Menu
+Esc + Space: Code line (Art, Music, Blocks)
 Tab (in Art): Toggle text/paint mode
-Tab (in Music): Toggle Letters mode
-Space (in Music Letters): Letter names or letter sounds
+Tab (in Music): Notes or Letters
+Enter (in Music): Next instrument; in Letters, names or sounds
 ```

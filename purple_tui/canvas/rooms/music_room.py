@@ -706,23 +706,30 @@ class MusicRoom(Room):
 
     def _draw_note_strip(self, g, xs, cy, px, on_paper):
         """Every letter row plays the same note in a column, so each column is named once, on a ledge
-        under the grid. A played column's name and the key-change sweep get the selection plate."""
+        as wide as the grid with a music badge beside it. Played names go bold so the eye stays on the
+        keys; the key-change sweep gets the selection plate."""
         size = xs[1] - xs[0]
-        bar = pygame.Rect(0, 0, xs[10] - xs[0] + round(size * 0.4), round(size * NOTE_STRIP * 0.8))
-        bar.midright = (xs[10], round(cy))
+        bar = pygame.Rect(xs[0], 0, xs[10] - xs[0], round(size * NOTE_STRIP * 0.8))
+        bar.centery = round(cy)
+        badge = pygame.Rect(0, 0, bar.h, bar.h)
+        badge.midright = (bar.x - bar.h // 4, bar.centery)
         ink = paper.INK_MUTED if on_paper else P.MUTED
-        g.rect(mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE, bar, radius=bar.h // 2)
-        g.draw_text(ICON_MUSIC, px, bar.x + bar.h // 2 + px // 4, bar.centery, "sans", P.DIM, anchor="center", tr=False)
+        ground = mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE
+        g.rect(ground, bar, radius=bar.h // 2)
+        g.rect(mix(ground, ink, 0.2), badge, radius=bar.h // 2)
+        g.draw_text(ICON_MUSIC, px, badge.centerx, badge.centery, "sans", ink, anchor="center", tr=False)
         plate = pygame.Rect(0, 0, round(size * 0.5), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
-            root_idx, at_front = self._transition_state_for_col(col)
+            root_idx, sweeping = self._transition_state_for_col(col)
             note, _ = pitch_for(0, col, FRIENDLY_KEYS[root_idx], 0)
-            lit = not on_paper and (at_front or any(row[col] in self._note_labels for row in GRID_KEYS[1:]))
+            sweeping = sweeping and not on_paper
+            played = not on_paper and any(row[col] in self._note_labels for row in GRID_KEYS[1:])
             plate.center = ((xs[col] + xs[col + 1]) // 2, bar.centery)
-            if lit:
+            if sweeping:
                 g.rect(P.PRIMARY, plate, radius=plate.h // 2)
-            g.draw_text(note.replace("#", "♯"), px, plate.centerx, plate.centery, "mono-bold",
-                        P.ON_PRIMARY if lit else ink, anchor="center", tr=False)
+            color = P.ON_PRIMARY if sweeping else P.TEXT if played else ink
+            g.draw_text(note.replace("#", "♯"), px, plate.centerx, plate.centery, "mono-heavy" if played else "mono-bold",
+                        color, anchor="center", tr=False)
 
     def _draw_noscreen(self, g, rect):
         cy = rect.centery

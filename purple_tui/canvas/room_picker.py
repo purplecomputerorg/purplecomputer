@@ -14,7 +14,7 @@ from .paper import can_print
 from .rooms.family_room import room_icon
 from .library import ICON_OPEN, ICON_SAVE
 from .panels import ICON_TIME_TRAVEL
-from .ui import (DOWN, KEY_RE, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, auto_ink, draw_arrow_keys, draw_key_hint, draw_scrim,
+from .ui import (DOWN, KEY_RE, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_key_hint, draw_scrim,
                  key_cap, key_hint_width)
 
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
@@ -101,7 +101,7 @@ def _part_width(g, text, px, face) -> int:
 
 def _draw_part(g, text, px, face, color, x, y, anchor, on):
     if face == "mono":
-        return draw_key_hint(g, text, px, x, y, color, anchor, ink=auto_ink(color) if on else None)
+        return draw_key_hint(g, text, px, x, y, color, anchor, on)
     return g.draw_text(text, px, x, y, face, color, anchor=anchor)
 
 
@@ -116,7 +116,7 @@ def _draw_beside(g, r, icon, ink, rows, selected):
     text_w = max(_part_width(g, t, px, face) for t, px, face, _ in rows)
     x = r.centerx - (icon_w + em(1.1) + text_w) // 2
     g.draw_text(icon, em(2.2), x, r.centery, "nerd", ink, anchor="midleft")
-    step = em(1.75) if any(KEY_RE.search(t) for t, *_ in rows) else em(1.25)
+    step = em(2.2) if any(KEY_RE.search(t) for t, *_ in rows) else em(1.25)
     y = r.centery - step * (len(rows) - 1) // 2
     for i, (text, px, face, color) in enumerate(rows):
         _draw_part(g, text, px, face, color, x + icon_w + em(1.1), y + i * step, "midleft", selected)

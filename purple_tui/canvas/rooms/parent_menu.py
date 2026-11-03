@@ -1012,10 +1012,10 @@ class InstallProgressScreen(FullScreen):
         if self._phase == "error" and (self._scrolling or self._diag_lines):
             y = g.sy(3) + g.draw_markup(f"Please record this with your phone and send to {SUPPORT_EMAIL}",
                                         g.vh(2.4), g.sx(4), g.sy(3), "mono-bold", P.PRIMARY, g.vw(92), "left", P.BG)
-            draw_key_hint(g, "{Esc} go back   {Enter} replay", g.vh(2.4), g.sx(4), y, P.PRIMARY, "topleft")
+            keys = draw_key_hint(g, "{Esc} go back   {Enter} replay", g.vh(2.2), g.sx(4), y + g.vh(1), P.PRIMARY, "topleft")
             end = self._diag_scroll_pos if self._scrolling else len(self._diag_lines)
             visible = self._diag_lines[max(0, end - self._SCROLL_VISIBLE):end]
-            y = g.sy(11)
+            y = keys.bottom + g.vh(1.5)
             for line in visible:
                 g.draw_text(line or " ", g.vh(2.4), g.sx(4), y, "mono", P.TEXT)
                 y += g.vh(3.2)

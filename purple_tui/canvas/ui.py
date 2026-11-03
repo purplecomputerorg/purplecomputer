@@ -502,7 +502,7 @@ class Picker(Dialog):
         self._first = 0  # the top row shown when they don't all fit
 
     def option_height(self, g: Gfx) -> int:
-        return g.em(3.2) if any(len(o) == 3 for o in self.options) else g.em(1.9)
+        return g.em(4.2) if any(len(o) == 3 for o in self.options) else g.em(1.9)
 
     def _desc_height(self, g: Gfx) -> int:
         return g.markup_size(self.DESCRIPTION, g.em(0.92), "mono", self.inner_width(g))[1] + g.em(0.8) if self.DESCRIPTION else 0
@@ -532,9 +532,9 @@ class Picker(Dialog):
                 g.rect(P.PRIMARY, box, radius=g.em(0.35))
             color = P.ON_PRIMARY if on else (P.DIM if opt[0] in self.dim_values else P.TEXT)
             if len(opt) == 3:
-                g.draw_text(opt[1], px, box.centerx, box.centery - g.em(0.6), "mono-bold" if on else "mono", color, anchor="center")
-                draw_key_hint(g, opt[2], g.em(0.85), box.centerx, box.centery + g.em(0.65), color if on else P.MUTED, "center",
-                              ink=auto_ink(color) if on else None)
+                g.draw_text(opt[1], px, box.centerx, box.centery - g.em(0.95), "mono-bold" if on else "mono", color, anchor="center")
+                draw_key_hint(g, opt[2], g.em(0.85), box.centerx, box.centery + g.em(0.95), color if on else P.MUTED, "center",
+                              on=on)
             else:
                 g.draw_text(opt[1], px, box.centerx, box.centery, "mono-bold" if on else "mono", color, anchor="center")
             if more := UP if i == self._first > 0 else DOWN if i == last < len(self.options) - 1 else None:
@@ -780,8 +780,9 @@ def key_hint_width(g: Gfx, text: str, px: int) -> int:
                for i, t in enumerate(parts) if t)
 
 
-def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft", ink=None) -> pygame.Rect:
-    """A dim hint line where {Key} draws as a solid keycap: '{hold Enter} loop'. ink is the keycap's letters."""
+def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft", on=False) -> pygame.Rect:
+    """A dim hint line where {Key} draws as a solid keycap: '{hold Enter} loop'. on = it sits on the
+    selection plate, where the keycaps go light so they don't punch a dark hole in it."""
     color = color or P.MUTED
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
     setattr(box, anchor, (x, y))
@@ -789,7 +790,7 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor
     for i, t in enumerate(KEY_RE.split(i18n.translate(text))):
         if t:
             pad = _chord_pad(t, px)
-            x = (draw_key(g, t, px, x, box.centery, fill=color, ink=ink) if i % 2 else
+            x = (draw_key(g, t, px, x, box.centery, fill=P.TEXT if on else color, ink=P.ON_PRIMARY if on else None) if i % 2 else
                  g.draw_text(t, px, x + pad, box.centery, "mono", color, anchor="midleft", tr=False)).right + pad
     return box
 

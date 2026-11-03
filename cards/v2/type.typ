@@ -45,15 +45,15 @@
   #examples(comments: true,
     ("right 5", [paint 5 squares]),
     ("right 2 brush up right 3", [leaves a gap]),
-    ("write hi", [letters on the grid]),
+    ("write hi", [write letters]),
     ("red repeat 4 forward 6 turn", [a square!]),
   )
 ]
 #gap
 #panel(title: [Music])[
   #examples(comments: true,
-    ("asdf", [play keys, #mono("1234") for drums]),
-    ("fast qwertyuiop", [quick notes, or #mono("slow")]),
+    ("asdf", [each letter is a note]),
+    ("fast qwertyuiop", [quick notes, or use #mono("slow")]),
     ("choose ukulele zxcvbnm", [play a ukulele]),
   )
 ]
@@ -61,7 +61,7 @@
 #panel(title: [Blocks])[
   #examples(comments: true,
     ("red up 5", [a tower]),
-    ("right hello", [a block per letter]),
+    ("right hello", [each letter is a block]),
     ("green repeat 4 right 1 up 1", [stairs]),
   )
 ]

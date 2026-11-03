@@ -14,7 +14,7 @@
 ]
 #gap
 #room(2, [Music])[
-  Every key plays a note and lights up. Numbers are drums. #key("Enter") changes the instrument. #key("Tab") says letters, and #key("Enter") switches to their sounds. Spell a word and #key("Space") says it.
+  Every key plays a note and lights up. #key("Enter") changes the instrument. #key("Tab") switches to letters that say their names and sounds.
 ]
 #gap
 #room(3, [Play])[

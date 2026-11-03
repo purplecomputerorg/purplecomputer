@@ -72,8 +72,8 @@ function picturesSection(pick: (name: string) => void, taken: string[]): HTMLEle
 // taken: emoji to leave out. pictures: the family's pictures are offered too, picked by name. empty: what an
 // unpicked cell shows. clear: the label for leaving it unpicked, for a field where that means something.
 // title: what's being picked for, above the search, so the search can't be taken for another field.
-// onClose: called when it closes without a pick.
-export interface PickOptions { taken?: () => string[]; pictures?: boolean; empty?: string; clear?: string; title?: string; onClose?: () => void }
+// onClose: called when it closes without a pick. inline: opens in the page's flow under anchor's row, not floating.
+export interface PickOptions { taken?: () => string[]; pictures?: boolean; empty?: string; clear?: string; title?: string; onClose?: () => void; inline?: boolean }
 
 // The live Purple's side paints over anything past this side's edge, so the picker moves left to stay in it.
 function fitInside(pop: HTMLElement, side: Element): void {
@@ -86,7 +86,7 @@ function fitInside(pop: HTMLElement, side: Element): void {
 }
 
 // Opens under anchor with the search box focused; Enter picks the first match, Esc closes.
-export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void, { taken: takenNow, pictures, clear, title, onClose }: PickOptions = {}): void {
+export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emoji: string) => void, { taken: takenNow, pictures, clear, title, onClose, inline }: PickOptions = {}): void {
   const taken = takenNow?.() ?? [];
   closeEmojiPicker();
   const search = h("input", { type: "text", class: "emoji-search", placeholder: "Search, like dog or star", value: query });
@@ -109,13 +109,13 @@ export function openEmojiPicker(anchor: HTMLElement, query: string, onPick: (emo
       if (first) pick(first.emoji);
     }
   });
-  const pop = h("div", { class: "emoji-pop" }, title ? h("div", { class: "emoji-pop-title" }, title) : null, search,
+  const pop = h("div", { class: inline ? "emoji-pop inline" : "emoji-pop" }, title ? h("div", { class: "emoji-pop-title" }, title) : null, search,
     clear ? h("button", { type: "button", class: "linkbtn small clear-pick", onclick: () => pick("") }, clear) : null,
     ...(pictures ? picturesSection(pick, taken) : []), grid);
   open = pop;
   render();
   anchor.after(pop);
-  fitInside(pop, anchor.closest(".main, .big-map") ?? document.body);
+  if (!inline) fitInside(pop, anchor.closest(".main, .big-map") ?? document.body);
   search.focus();
   search.select();
   const outside = (e: MouseEvent) => {

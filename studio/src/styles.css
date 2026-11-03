@@ -530,7 +530,7 @@ textarea.words-in { field-sizing: content; width: 100%; min-width: 0; resize: ve
 .entry-fields > :has(textarea) { flex-basis: 100%; }
 .add-slot { min-width: 52px; min-height: 36px; align-self: stretch; border: 1.5px dashed var(--border); border-radius: 12px; background: none; color: var(--purple); font: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
 .add-slot:hover { background: var(--fill); border-style: solid; }
-input.room-name.just-yours, .trybar.just-added { animation: just-yours 1.8s ease-out; }
+input.room-name.just-yours, .trybar.just-added, .word-row.just-added { animation: just-yours 1.8s ease-out; }
 @keyframes just-yours { 0%, 40% { background: var(--fill); border-color: var(--border); } }
 .py-help { font-size: 14px; margin: 0 0 10px; }
 .py-help p { margin: 0 0 6px; }
@@ -769,7 +769,8 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .word-field .label { padding-top: 10px; font-size: 13px; font-weight: 600; color: var(--dim); }
 .word-field input { font-size: 14px; padding: 8px 12px; border-radius: 10px; }
 .word-field .types { margin-top: 6px; font-size: 12px; color: var(--dim); }
-.word-new { display: flex; gap: 10px; margin-top: 6px; }
+.word-new { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; padding: 12px; border: 1.5px dashed var(--border); border-radius: 14px; }
+.word-new .emoji-pop.inline { position: static; order: 1; flex-basis: 100%; width: auto; padding: 4px 0 0; border: none; box-shadow: none; background: none; }
 .word-new input { flex: 1; min-width: 0; }
 .word-rows + .status:empty { min-height: 0; }
 .emoji-wrap { position: relative; }

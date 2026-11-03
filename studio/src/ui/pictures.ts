@@ -324,6 +324,6 @@ export function picturesView(item: string | null): View {
     liveScreen().show(setup);
   });
   return view("Pictures", h("section", {},
-    h("p", { class: "lead" }, "A photo, or a drawing your kid made, becomes a painting in the Art room. Then your kid paints right on top of it: give the dog a hat, color in the dinosaur, add a sun. Your rooms can use the same pictures."),
+    h("p", { class: "lead" }, "A photo, or a drawing your kid made, becomes a painting in the Art room. Then your kid paints right on top of it: giving the dog a hat, coloring in the dinosaur, adding a sun. Rooms you make in New Rooms can show these pictures too."),
     ...more(null)));
 }

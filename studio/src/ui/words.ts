@@ -49,6 +49,7 @@ function wordTable(): HTMLElement {
   const rows = h("div", { class: "word-rows" });
   const status = h("div", { class: "status" });
   let open: WordEntry | null = null;
+  let fresh: WordEntry | null = null;
 
   const checkWord = (word: string, self: WordEntry | null): string | null => {
     if (!WORD.test(word)) return "A word is letters only, no spaces. Kids type one word at a time.";
@@ -66,15 +67,15 @@ function wordTable(): HTMLElement {
       status.textContent = checkWord(word, null) ?? "";
       if (status.textContent) return;
       const create = (emoji: string) => {
-        draft.words.push(open = { word, emoji, kept: true });
+        draft.words.push(open = fresh = { word, emoji, kept: true });
         status.textContent = "";
         changed();
         render();
         focusNew();
+        rows.querySelector(".just-added")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       };
       if (CORE_EMOJI[word]) return create(CORE_EMOJI[word]);
-      status.textContent = `Pick what “${word}” shows to add it.`;
-      openEmojiPicker(input, word, create, { pictures: true, title: showsTitle(word) });
+      openEmojiPicker(input, word, create, { pictures: true, title: showsTitle(word), inline: true });
     };
     input.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
@@ -97,7 +98,7 @@ function wordTable(): HTMLElement {
         putPhrase(entry.word, null);
         render();
       }));
-    return h("div", { class: `word-row${isOpen ? " open" : ""}` }, head,
+    return h("div", { class: `word-row${isOpen ? " open" : ""}${entry === fresh ? " just-added" : ""}` }, head,
       isOpen ? h("div", { class: "word-fields" }, wordField(entry), showsField(entry), meaning(entry), voice(entry)) : null);
   }
 
@@ -162,6 +163,7 @@ function wordTable(): HTMLElement {
   function render() {
     closeEmojiPicker();
     rows.replaceChildren(...draft.words.map(row), newWord());
+    fresh = null;
   }
   render();
   return h("div", { class: "card" }, rows, status);

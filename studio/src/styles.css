@@ -441,8 +441,8 @@ body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid
   .block-tabs button { padding: 9px 7px 7px; }
 }
 @media (prefers-reduced-motion: reduce) { .blockly .blocklyToolboxFlyout, .drawer-close { animation: none; } }
-.square-pick { display: grid; grid-template-columns: repeat(26, 18px); gap: 1px; padding: 6px; }
-.square-pick button { width: 18px; height: 18px; padding: 0; border: none; border-radius: 3px; background: #e6def0; cursor: pointer; font-size: 12px; line-height: 18px; overflow: hidden; }
+.square-pick { --cell: 18px; display: grid; grid-template-columns: repeat(26, var(--cell)); gap: 1px; padding: 6px; }
+.square-pick button { width: var(--cell); height: var(--cell); padding: 0; border: none; border-radius: 3px; background: #e6def0; cursor: pointer; font-size: calc(var(--cell) * 0.66); line-height: var(--cell); overflow: hidden; }
 .square-pick button:hover, .square-pick button[aria-pressed="true"] { background: var(--purple); outline: 2px solid var(--purple); }
 .key-pick { display: grid; gap: 4px; padding: 6px; font-size: 12px; }
 .key-pick div { display: flex; gap: 3px; }
@@ -452,7 +452,7 @@ body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid
 .key-pick button.word { padding: 4px 8px; border-radius: 8px; background: var(--fill); font-weight: 600; }
 .color-pick { display: grid; grid-template-columns: repeat(7, 26px); gap: 5px; padding: 6px; }
 .color-pick button, .color-pick input { width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
-.block-emoji { position: fixed; z-index: 1000; }
+.emoji-wrap.block-emoji { position: fixed; z-index: 1000; }
 .block-anchor { width: 1px; height: 48px; opacity: 0; padding: 0; border: none; }
 .push { margin-left: auto; }
 /* The picture keyboard and quiz forms: rows that share columns under one line of headings */

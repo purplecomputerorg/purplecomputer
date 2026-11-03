@@ -53,8 +53,11 @@ function placed(ws: Blockly.Workspace) {
 function setUpPickers() {
   pickers.square = (field) => {
     const at = field.getValue();
-    const squares = placed(field.getSourceBlock()!.workspace);
-    dropDown(field, h("div", { class: "square-pick" }, ...Array.from({ length: 26 * 12 }, (_, i) => {
+    const ws = field.getSourceBlock()!.workspace as Blockly.WorkspaceSvg;
+    const squares = placed(ws);
+    // Blockly keeps the drop-down inside the editor, so the 26 squares shrink to fit a narrow one.
+    const cell = Math.min(18, Math.floor((ws.getInjectionDiv().clientWidth - 64) / 26) - 1);
+    dropDown(field, h("div", { class: "square-pick", style: `--cell:${cell}px` }, ...Array.from({ length: 26 * 12 }, (_, i) => {
       const v = `${i % 26},${Math.floor(i / 26)}`;
       const spot = squares.get(v);
       return h("button", { type: "button", title: `${i % 26} across, ${Math.floor(i / 26)} down`, "aria-pressed": String(v === at),
@@ -80,6 +83,8 @@ function setUpPickers() {
       wrap.remove();
       if (e) field.setValue(isEmoji(e) ? e : PIC + e);
     }, { pictures: true, title: "Pick an emoji or one of your pictures", onClose: () => wrap.remove() });
+    const below = wrap.querySelector(".emoji-pop")!.getBoundingClientRect().bottom - innerHeight + 12;
+    if (below > 0) wrap.style.top = `${Math.max(12 - 48, box.bottom - 48 - below)}px`;
   };
 }
 

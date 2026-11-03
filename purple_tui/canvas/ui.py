@@ -763,9 +763,15 @@ def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=
 KEY_RE = re.compile(r"\{([^}]+)\}")
 
 
+def _chord_pad(t: str, px: int) -> int:
+    """A '+' joining two keys sits snug between them; a mono space each side reads as a gap."""
+    return round(px * 0.2) if t == "+" else 0
+
+
 def key_hint_width(g: Gfx, text: str, px: int) -> int:
     parts = KEY_RE.split(i18n.translate(text))
-    return sum(keycap_size(g, t, px)[0] if i % 2 else g.measure(t, px, "mono", tr=False)[0] for i, t in enumerate(parts) if t)
+    return sum(keycap_size(g, t, px)[0] if i % 2 else g.measure(t, px, "mono", tr=False)[0] + 2 * _chord_pad(t, px)
+               for i, t in enumerate(parts) if t)
 
 
 def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft") -> pygame.Rect:
@@ -776,12 +782,13 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor
     x = box.x
     for i, t in enumerate(KEY_RE.split(i18n.translate(text))):
         if t:
+            pad = _chord_pad(t, px)
             x = (draw_key(g, t, px, x, box.centery, fill=color) if i % 2 else
-                 g.draw_text(t, px, x, box.centery, "mono", color, anchor="midleft", tr=False)).right
+                 g.draw_text(t, px, x + pad, box.centery, "mono", color, anchor="midleft", tr=False)).right + pad
     return box
 
 
-CODE_KEYS = "{Esc} + {Space}"   # together, or the Esc menu then its Code card
+CODE_KEYS = "{Esc}+{Space}"   # together, or the Esc menu then its Code card
 CODE_HINT = f"{ICON_ROBOT} {CODE_KEYS} write code"
 
 

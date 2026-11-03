@@ -37,6 +37,7 @@ FACES = {
     "sans": "Figtree-Regular.ttf",
     "sans-bold": "Figtree-SemiBold.ttf",
     "sans-heavy": "Figtree-Bold.ttf",
+    "sans-italic": "Figtree-Italic.ttf",  # word-guide notes
     "mono": "IBMPlexMono-Regular.ttf",
     "mono-bold": "IBMPlexMono-SemiBold.ttf",
     "mono-heavy": "IBMPlexMono-Bold.ttf",

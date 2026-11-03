@@ -69,6 +69,7 @@ RECIPES = {
 # few words on what it does. COLORS lists the color words in their colors,
 # ALL_COLORS every one of the extras too.
 COLORS, ALL_COLORS = "colors", "all colors"
+_GLOSS_FACE = "sans-italic"
 GUIDE = {
     'art': [
         ("Colors", [(COLORS, "")]),
@@ -551,13 +552,13 @@ def _example_layout(g, code: str, gloss: str, px: int, w: int) -> tuple:
     tw, th = g.measure(code, px, "mono")
     chip = (tw + round(px * 0.8), th + round(px * 0.1))
     gpx = px
-    beside = not gloss or chip[0] + g.em(0.5) + g.markup_size(gloss, gpx, "sans")[0] <= w
+    beside = not gloss or chip[0] + g.em(0.5) + g.markup_size(gloss, gpx, _GLOSS_FACE)[0] <= w
     return chip, gpx, beside
 
 
 def _example_height(g, code, gloss, px, w) -> int:
     chip, gpx, beside = _example_layout(g, code, gloss, px, w)
-    return chip[1] if beside else chip[1] + g.em(0.1) + g.markup_size(gloss, gpx, "sans", w)[1]
+    return chip[1] if beside else chip[1] + g.em(0.1) + g.markup_size(gloss, gpx, _GLOSS_FACE, w)[1]
 
 
 def _draw_example(g, code, gloss, px, x, y, w, word=None):
@@ -572,8 +573,8 @@ def _draw_example(g, code, gloss, px, x, y, w, word=None):
     tw, th = g.markup_size(markup, px, "mono")
     g.draw_markup(markup, px, box.centerx - tw // 2, box.centery - th // 2, "mono", P.TEXT)
     if gloss:
-        gx, gy = (box.right + g.em(0.5), box.centery - g.line_height(gpx, "sans") // 2) if beside else (x + g.em(0.2), box.bottom + g.em(0.1))
-        g.draw_markup(gloss, gpx, gx, gy, "sans", P.MUTED, x + w - gx)
+        gx, gy = (box.right + g.em(0.5), box.centery - g.line_height(gpx, _GLOSS_FACE) // 2) if beside else (x + g.em(0.2), box.bottom + g.em(0.1))
+        g.draw_markup(gloss, gpx, gx, gy, _GLOSS_FACE, P.MUTED, x + w - gx)
 
 
 def _colors_markup(more: list) -> str:

@@ -77,16 +77,17 @@
     align(center + horizon, text(font: "Sora", weight: "extrabold", size: r * 1.15, fill: if on { white } else { c.darken(30%) }, str(n)))))
 }
 
-// Fronts leave the title out to use the card's name
+// Fronts leave the title out to use the card's name; a titled header is a back, with a softer dot
 #let header(title: none, qr: "help-qr.svg", note: [Videos and help: #text(fill: purple)[purplecomputer.org/help]]) = context {
   let n = card-n.get()
+  let front = title == none
   grid(
     columns: (0.46in, 1fr, auto),
     column-gutter: 8pt,
     align: (left + horizon, left + horizon, right + horizon),
-    card-dot(n, 0.23in),
+    card-dot(n, 0.23in, on: front),
     stack(
-      text(weight: "bold", size: 6.6pt, fill: SET.at(n - 1).color.darken(10%), tracking: 0.14em, upper[Purple Computer #sym.dot.c Card #n of #SET.len()]),
+      text(weight: "bold", size: 6.6pt, fill: SET.at(n - 1).color.darken(10%), tracking: 0.14em, upper(if front [Purple Computer #sym.dot.c Card #n of #SET.len()] else [Card #n of #SET.len() #sym.dot.c Back])),
       v(7pt),
       display(if title == none { SET.at(n - 1).name } else { title }),
       ..if note != none { (v(8pt), text(size: 7.2pt, fill: ink-dim, note)) },

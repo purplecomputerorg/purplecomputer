@@ -79,3 +79,7 @@ export function pageKeys(onKey: (key: string) => void): () => void {
   document.addEventListener("keydown", listener);
   return () => document.removeEventListener("keydown", listener);
 }
+
+// Per-browser choices, kept until changed back; in a private window they last the visit.
+export const pref = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
+export const keep = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* private window */ } };

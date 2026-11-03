@@ -2,7 +2,7 @@
 // made of blocks opens, so the rest of Studio never waits for Blockly.
 import * as Blockly from "blockly";
 import { BLOCK_COLORS, CATEGORIES, COLORS, colorLooks, defineBlocks, PIC, pickers, toPython, TOOLBOX, type PickerField } from "../blocks";
-import { ask, askText, h, tell } from "./dom";
+import { ask, askText, h, keep, pref, tell } from "./dom";
 import { isEmoji, openEmojiPicker } from "./emojipicker";
 import { sticker } from "./stickers";
 import { WIDER } from "./view";
@@ -31,12 +31,34 @@ function setUpDialogs() {
   Blockly.dialog.setPrompt((message, value, done) => void askText(message, value, yesFor(message)).then(done));
 }
 
+// What the blocks put on each square they name, and the floor painted there, so the square picker shows the room.
+const literal = (block: Blockly.Block, input: string, field: string) => {
+  const v = block.getInputTargetBlock(input);
+  return v?.getField(field) ? (v.getFieldValue(field) as string) : undefined;
+};
+function placed(ws: Blockly.Workspace) {
+  const squares = new Map<string, { thing?: string; floor?: string }>();
+  for (const block of ws.getAllBlocks(false)) {
+    const at = literal(block, "SQUARE", "SQUARE");
+    if (!at) continue;
+    const spot = squares.get(at) ?? {};
+    const thing = block.type === "purple_ring_put" ? "◯" : literal(block, "THING", "THING");
+    if (block.type === "purple_floor") spot.floor = literal(block, "COLOR", "COLOR");
+    else if (thing) spot.thing = thing.startsWith(PIC) ? "🖼️" : thing;
+    squares.set(at, spot);
+  }
+  return squares;
+}
+
 function setUpPickers() {
   pickers.square = (field) => {
     const at = field.getValue();
+    const squares = placed(field.getSourceBlock()!.workspace);
     dropDown(field, h("div", { class: "square-pick" }, ...Array.from({ length: 26 * 12 }, (_, i) => {
       const v = `${i % 26},${Math.floor(i / 26)}`;
-      return h("button", { type: "button", title: `${i % 26} across, ${Math.floor(i / 26)} down`, "aria-pressed": String(v === at), onclick: choose(field, v) });
+      const spot = squares.get(v);
+      return h("button", { type: "button", title: `${i % 26} across, ${Math.floor(i / 26)} down`, "aria-pressed": String(v === at),
+        style: spot?.floor ? `background:${colorLooks(spot.floor)}` : "", onclick: choose(field, v) }, spot?.thing ?? "");
     })));
   };
   pickers.key = (field) => dropDown(field, h("div", { class: "key-pick" },
@@ -135,6 +157,12 @@ function helpLine(): [HTMLElement, (block: Blockly.Block | null) => void] {
   }];
 }
 
+const ZOOM = "studio-blocks-zoom";
+const zoom = (by: number) => (ws: Blockly.WorkspaceSvg) => {
+  ws.zoomCenter(by);
+  keep(ZOOM, String(ws.scale));
+};
+
 let current: Blockly.WorkspaceSvg | null = null;
 let shown: Blockly.WorkspaceSvg | null = null;
 
@@ -203,7 +231,7 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
   const redo = tool("", "Redo", (ws) => ws.undo(true), "icon redo");
   undo.disabled = redo.disabled = true;
   const tools = h("span", { class: "block-tools" }, undo, redo,
-    tool("−", "Smaller", settled((ws) => ws.zoomCenter(-1))), tool("+", "Bigger", settled((ws) => ws.zoomCenter(1))),
+    tool("−", "Smaller", settled(zoom(-1))), tool("+", "Bigger", settled(zoom(1))),
     tool("Tidy up", "Line the blocks up", settled((ws) => ws.cleanUp())),
     tool("", "More room for the blocks, or back", () => document.dispatchEvent(new Event(WIDER)), "icon wider"));
   requestAnimationFrame(() => {
@@ -211,7 +239,7 @@ export function blocksForm(made: { workspace: object }, onEdit: (source: string)
     const ws = editor = current = Blockly.inject(div, {
       toolbox: TOOLBOX, renderer: "zelos", media: "blockly/", sounds: false, trashcan: true, maxTrashcanContents: 0,
       theme: purpleTheme(),
-      zoom: { controls: false, wheel: false, startScale: 0.7, minScale: 0.4, maxScale: 1.2 }, move: { scrollbars: true, drag: true, wheel: true },
+      zoom: { controls: false, wheel: false, startScale: Number(pref(ZOOM)) || 0.9, minScale: 0.4, maxScale: 1.2 }, move: { scrollbars: true, drag: true, wheel: true },
       grid: { spacing: 24, length: 3, colour: "#e3dcec", snap: false },
       plugins: { metricsManager: TopLeftMetrics },
     });

@@ -6,7 +6,7 @@ import { hush } from "./audio";
 import { recall, remember } from "./saved";
 import { loadShelf, shelveDraft } from "./shelf";
 import { clearEverythingButton, clearSectionButton } from "./ui/packfile";
-import { clear, h } from "./ui/dom";
+import { clear, h, keep, pref } from "./ui/dom";
 import { colorsView } from "./ui/colors";
 import { downloadView } from "./ui/download";
 import { formatView, installView } from "./ui/install";
@@ -93,8 +93,6 @@ const stageCaption = h("p", { class: "caption" });
 const stageStays = staysHere("This Purple runs in your browser. What you type into it stays on your device.");
 const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays));
 // Which side the live Purple sits on, and how wide, are per-browser choices kept until changed back.
-const pref = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
-const keep = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* private window: it lasts this visit */ } };
 const SWAPPED = "studio-swapped";
 const WIDTH = "studio-live-width";
 // The live Purple's width over the editor's: dragging moves the line only somewhat either way of the usual 1.3.

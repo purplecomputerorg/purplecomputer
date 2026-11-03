@@ -105,7 +105,7 @@ const BLOCKS = [
   statement("purple_put", "put %1 at %2 size %3", [input("THING", THING), input("SQUARE", "Square"), size], "grid_blocks"),
   statement("purple_erase", "erase %1", [input("SQUARE", "Square")], "grid_blocks"),
   statement("purple_floor", "paint the floor %1 at %2 size %3", [input("COLOR", "Color"), input("SQUARE", "Square"), size], "grid_blocks"),
-  value("purple_square", "square %1", [pick("SQUARE", "square", "13,6")], "Square", "grid_blocks"),
+  value("purple_square", "%1", [pick("SQUARE", "square", "13,6")], "Square", "grid_blocks"),
   value("purple_random_square", "a random square %1", [menu("WHERE", [["that's empty", "empty"], ["along the top", "top"], ["along the bottom", "bottom"], ["along the left", "left"], ["along the right", "right"]])], "Square", "grid_blocks"),
   value("purple_what_at", "what's at %1", [input("SQUARE", "Square")], "Thing", "grid_blocks"),
   value("purple_is_empty", "%1 is empty", [input("SQUARE", "Square")], "Boolean", "grid_blocks"),

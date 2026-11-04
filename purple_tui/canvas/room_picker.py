@@ -320,12 +320,12 @@ class RoomPicker(Overlay):
             self._cell(g, r, *cell, on=(self.row, self.col) == (row, col))
 
     def _cell(self, g, r, icon, label, key, disabled, lit=False, on=False):
-        """The key beneath the name, "or Enter" on the picked one. Lit (code that's on) says the key closes it."""
-        enter = (f"or {{Enter}} {KEEP}" if key else "" if disabled else f"{{Enter}} {KEEP}") if on else ""
-        press = key and (f"{key_cap(key)} closes it" if lit else f"Press {key_cap(key)}")
+        """The key's cap beneath the name, "or Enter" on the picked one. Lit (code that's on) says the key closes it."""
+        enter = ("or {Enter}" if key else "" if disabled else "{Enter}") if on else ""
+        press = key and (f"{key_cap(key)} closes it" if lit else f"{{{key}}}")
         lines = [t for t in (press, enter) if t]
         if len(lines) > 1 and r.w <= 2 * r.h:   # a narrow card fits one line under its name
-            lines = [f"{{Enter}} {KEEP}"]
+            lines = ["{Enter}"]
         draw_card(g, r, icon, label, lines, on, disabled, lit)
 
     def _tool(self, tool):
@@ -358,13 +358,13 @@ class RoomPicker(Overlay):
         icon, label = locked or (ICON_VOLUME_HIGH, "Volume")
         r = pygame.Rect(0, 0, em(PILL_W), em(PILL_H))
         r.center = (x0 + em(self._centers(VOLUME)[0]), cy)
-        hint = "" if locked else ("Press V or {Enter}" if on else "Press V")
+        hint = "" if locked else ("{V} or {Enter}" if on else "{V}")
         draw_pill(g, r, [(icon, em(1.2), "nerd", P.DIM if locked else None), (label, em(0.95), "mono-bold", P.DIM if locked else None),
                          (hint, em(0.85), "mono", P.MUTED)], on)
 
     def _draw_footer(self, g, cx, y):
         px = g.em(0.9)
-        label = f"{{Esc}} {BACK}   ·   Hold {{Esc}} for Parent Menu   ·   Arrows move"
+        label = f"{{Esc}} {BACK}        Hold {{Esc}} for Parent Menu        Arrows move"
         x = cx - (key_hint_width(g, label, px) + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
         x = draw_key_hint(g, label, px, x, y).right + g.em(0.9)
         draw_arrow_keys(g, px, x, y, color=P.ACCENT)

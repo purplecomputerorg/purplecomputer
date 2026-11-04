@@ -17,7 +17,7 @@ import pygame
 from ... import boot_log, diagnostics, i18n
 from ...backlight import set_level as set_backlight_level
 from ... import palette as P
-from ..gfx import FONT_DIR
+from ..gfx import FONT_DIR, mix
 from ...audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volume_step
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
@@ -1555,7 +1555,7 @@ class ParentMenu(Overlay):
         em = g.em
         live_h = g.vh(9) if is_live_boot() else 0
         n_gaps = sum(1 for i in range(len(self.items)) if self._is_section(i)) + 1
-        pad, head_h, foot_h = em(1.0), window_title_height(g, "Parent Menu"), em(6.5)
+        pad, head_h, foot_h = em(1.0), window_title_height(g, "Parent Menu"), em(7.4)
         avail = g.h - g.vh(4) - 2 * pad - head_h - live_h - foot_h
         row_h = min(em(1.9), int(avail / (len(self.items) + n_gaps * 0.8)))
         gap_h = int(row_h * 0.8)
@@ -1594,4 +1594,5 @@ class ParentMenu(Overlay):
         g.draw_markup("Purple is keyboard only, on purpose.\nKids explore by typing.", em(0.85), box.x, foot + em(2.8),
                       "mono", P.DIM, box.w, "center", P.SURFACE)
         version = diagnostics.get_version_label()
-        g.draw_text(f"{version} · {CREDITS}" if version else CREDITS, em(0.8), box.centerx, foot + em(5.8), "mono", P.DIM, anchor="center")
+        g.rect(mix(P.HAIR, P.LINE, 0.45), (x0, foot + em(5.9), col_w, max(1, g.vh(0.15))))
+        g.draw_text(f"{version} · {CREDITS}" if version else CREDITS, em(0.72), box.centerx, foot + em(6.8), "mono", P.DIM, anchor="center")

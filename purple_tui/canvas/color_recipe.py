@@ -1,7 +1,7 @@
 """Mixing paint, drawn as a sum of keycaps in their sticker colors, so a kid
 who can't read yet sees that one key and another make a third color. Art and
-Blocks show an example in the hint row, and a '[R] + [?]' badge over the
-spot a held letter would mix into."""
+Blocks show an example in the hint row, and a badge over the brush: the chord
+being painted, or '[R] + [?]' while one letter is held alone."""
 
 import pygame
 
@@ -14,6 +14,7 @@ HUE_ROWS = [[k for k in row if k.isalpha()] for row in (QWERTY_ROW, ASDF_ROW, ZX
 EXAMPLE_KEY = "f"
 MAX_TERMS = 3
 NO_MIX = ((), None)
+BADGE_DABS, BADGE_FADE = 10, 6   # dabs under one badge at full strength, then dabs it takes to fade
 
 
 def partner(key: str) -> str:
@@ -121,23 +122,52 @@ def draw_foot_right(g, foot: pygame.Rect, code_hint: bool, recipe: dict | None):
         draw_recipe(g, px=px, x=right, y=foot.centery, **recipe)
 
 
-def held_key(app, last_key: str) -> str | None:
-    """The letter held long enough to show the badge, when the next key would mix with it."""
+def _badge_recipe(app, last_key: str, mix: tuple, brush_color: str) -> tuple | None:
+    """(terms, result) for the plate over the brush: the chord it is painting with,
+    else '[R] + [?]' while one letter is held alone. None when no letter is held."""
     k = (app.held_letter or "").lower()
-    return k if k and k == last_key and not app._littles_mode else None
+    if not k or app._littles_mode:
+        return None
+    terms, made = mix
+    if len(terms) > 1 and made == brush_color:
+        return tuple(terms), made
+    return (((k, get_key_color(k)), ("?", None)), None) if k == last_key else None
 
 
-def draw_hold_badge(g, key: str, px: int, target: pygame.Rect, bounds: pygame.Rect):
-    """'[R] + [?]' on a plate just above `target`, the spot the next key would
-    mix into, or below it when there is no room above."""
-    terms = [(key, get_key_color(key)), ("?", None)]
-    w, h = recipe_size(g, terms, None, px)
+class HoldBadge:
+    """The plate over the brush. Once one recipe has painted BADGE_DABS dabs it
+    fades out over BADGE_FADE more, so a long stroke isn't trailed by a sign."""
+
+    def __init__(self):
+        self._shown, self._dabs = None, 0
+
+    def dabbed(self):
+        self._dabs += 1
+
+    def draw(self, g, app, last_key: str, mix: tuple, brush_color: str, target: pygame.Rect, bounds: pygame.Rect):
+        recipe = _badge_recipe(app, last_key, mix, brush_color)
+        if recipe != self._shown:
+            self._shown, self._dabs = recipe, 0
+        strength = min(1.0, 1 - (self._dabs - BADGE_DABS) / BADGE_FADE)
+        if recipe and strength > 0:
+            draw_hold_badge(g, *recipe, g.vh(1.9), target, bounds, strength)
+
+
+def draw_hold_badge(g, terms, result, px: int, target: pygame.Rect, bounds: pygame.Rect, strength: float = 1.0):
+    """The recipe on a plate just above `target`, the spot the brush last
+    painted, or below it when there is no room above; `strength` is its opacity."""
+    w, h = recipe_size(g, terms, result, px)
     pad = round(px * 0.6)
     plate = pygame.Rect(0, 0, w + 2 * pad, h + 2 * pad)
     plate.midbottom = (target.centerx, target.top - pad)
     if plate.top < bounds.top:
         plate.midtop = (target.centerx, target.bottom + pad)
     plate.clamp_ip(bounds)
-    g.rect(P.SURFACE, plate, radius=pad)
-    g.rect(P.LINE, plate, width=1, radius=pad)
-    draw_recipe(g, terms, None, px, plate.centerx, plate.centery, anchor="center", ink=P.TEXT)
+    layer = pygame.Surface(plate.size, pygame.SRCALPHA)
+    with g.drawing_on(layer):
+        local = layer.get_rect()
+        g.rect(P.SURFACE, local, radius=pad)
+        g.rect(P.LINE, local, width=1, radius=pad)
+        draw_recipe(g, terms, result, px, local.centerx, local.centery, anchor="center", ink=P.TEXT)
+    layer.set_alpha(round(255 * strength))
+    g.surface.blit(layer, plate)

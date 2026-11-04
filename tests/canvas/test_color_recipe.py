@@ -4,7 +4,9 @@ import time
 import pytest
 
 from purple_tui.canvas.app import LETTER_HOLD
-from purple_tui.canvas.color_recipe import example, hint_row, partner
+from types import SimpleNamespace
+
+from purple_tui.canvas.color_recipe import BADGE_DABS, BADGE_FADE, HoldBadge, _badge_recipe, example, hint_row, partner
 from purple_tui.canvas.harness import make_app, run
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
@@ -100,3 +102,38 @@ def test_dropping_a_block_onto_one_shows_its_color_first():
         await press(app, "b")
         assert [k for k, _ in _hint(room)["terms"]] == ["", "b"] and _hint(room)["terms"][0][1] == "#ff0000"
     run(go())
+
+
+def _holding(letter):
+    return SimpleNamespace(held_letter=letter, _littles_mode=False)
+
+
+def test_badge_shows_the_chord_being_painted_not_a_question_mark():
+    """Holding C then R paints purple: the badge says C + R = purple, not R + ?."""
+    c, r = ("c", get_key_color("c")), ("r", get_key_color("r"))
+    purple = mix_colors_paint([c[1], r[1]])
+    assert _badge_recipe(_holding("r"), "r", ([c, r], purple), purple) == ((c, r), purple)
+
+
+def test_badge_asks_for_a_partner_while_one_letter_is_held_alone():
+    red = get_key_color("r")
+    assert _badge_recipe(_holding("r"), "r", ((), None), red) == ((("r", red), ("?", None)), None)
+    stale = ([("c", get_key_color("c")), ("r", red)], "#800080")   # an old chord no longer on the brush
+    assert _badge_recipe(_holding("r"), "r", stale, red)[1] is None
+    assert _badge_recipe(_holding(None), "r", ((), None), red) is None
+
+
+def test_badge_fades_after_a_long_stroke_and_comes_back_for_a_new_recipe(monkeypatch):
+    import purple_tui.canvas.color_recipe as cr
+    drawn = []
+    monkeypatch.setattr(cr, "draw_hold_badge", lambda g, terms, result, px, t, b, strength: drawn.append(strength))
+    g = SimpleNamespace(vh=lambda pct: 10)
+    badge = HoldBadge()
+    paint = lambda letter: badge.draw(g, _holding(letter), letter, ((), None), get_key_color(letter), None, None)
+    for _ in range(BADGE_DABS + BADGE_FADE + 2):
+        paint("r")
+        badge.dabbed()
+    assert drawn[0] == 1 and drawn[BADGE_DABS] == 1 and 0 < drawn[-1] < 1
+    assert len(drawn) == BADGE_DABS + BADGE_FADE         # gone once faded
+    paint("f")
+    assert drawn[-1] == 1                                 # a new recipe shows in full again

@@ -232,6 +232,7 @@ class ArtRoom(Room):
                               for way, lift in (("down", 0.0), ("up", 1.0))})
         self._last_key_char = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
+        self._badge = color_recipe.HoldBadge()
         self._mixed = None                # (keycaps, color) of the last dab that mixed
         self._ink = None              # Letters mode: the letters' color from the wheel; None: light, or black/white over paint
         self._wheel_spots = {}        # per mode
@@ -408,6 +409,7 @@ class ArtRoom(Room):
         color = self._mixed[1] if self._mixed else self._last_key_color
         self._painted_positions.add(pos)
         self._last_paint_pos = pos
+        self._badge.dabbed()
         if cell and cell[0] not in ("", " ", BRUSH_CHAR):
             self._set_cell(pos, cell[0], auto_ink(color), color)
         else:
@@ -816,11 +818,10 @@ class ArtRoom(Room):
         self._draw_letters(g, ox, oy, c)
         self._draw_fade_wash(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
-        held = chrome_h and self._paint_mode and self._last_paint_pos and color_recipe.held_key(self.app, self._last_key_char)
-        if held:
+        if chrome_h and self._paint_mode and self._last_paint_pos:
             x, y = self._last_paint_pos
             cell = pygame.Rect(ox + x * c, oy + y * c, c, c)
-            color_recipe.draw_hold_badge(g, held, g.vh(1.9), cell, sheet)
+            self._badge.draw(g, self.app, self._last_key_char, self._mix, self._last_key_color, cell, sheet)
         if chrome_h and self.app._panel is None:
             foot = self.bar_foot = in_band(rect.bottom - band)
             key = "littles" if self.app._littles_mode else self._hint_key()

@@ -94,6 +94,7 @@ class BlocksRoom(Room):
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
+        self._badge = color_recipe.HoldBadge()
         self._mixed = None                # (keycaps, color) of the last block that mixed
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where a run up or down the column (or a code run) goes on from
@@ -211,6 +212,7 @@ class BlocksRoom(Room):
         self._mixed = color_recipe.dab(old, self._mix, (self._key, self._color))
         self._blocks[pos] = self._mixed[1] if self._mixed else self._color
         self._last = (pos, self._key)
+        self._badge.dabbed()
         self._changed()
         return bool(old)
 
@@ -662,12 +664,11 @@ class BlocksRoom(Room):
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
 
     def _draw_hold_badge(self, g, ox, oy, area):
-        held = self._last and self.app._panel is None and color_recipe.held_key(self.app, self._last[1])
-        if held:
+        if self._last and self.app._panel is None:
             bx, bz, by = self._last[0]
             x, y = self._corner(*self._view(bx, bz), by + 1)
             top = pygame.Rect(ox + x, oy + y - self._metrics()[0], self._c, self._metrics()[0])
-            color_recipe.draw_hold_badge(g, held, g.vh(1.9), top, area)
+            self._badge.draw(g, self.app, self._last[1], self._mix, self._color, top, area)
 
     def _draw_turning(self, g, ox, oy, p):
         """One frame of the half turn: the world spun about the floor's center

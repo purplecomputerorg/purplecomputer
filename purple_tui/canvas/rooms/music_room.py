@@ -35,6 +35,8 @@ MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
 PITCH_TRANSITION_DURATION = 0.25
+LETTER_PICTURES = ("letters/names.png", "letters/sounds.png")
+KEY_WORD = 0.75               # "Key" on the note bar's right tab, against the key name on its left
 NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past the end it's silent
@@ -527,13 +529,15 @@ class MusicRoom(Room):
 
     def _announce_voice(self):
         """What the keys play now, shown in a toast and heard on one sample, for kids who can't read the header."""
+        picture = None
         if self.letters_mode:
-            text = f"{ICON_KEYBOARD}  Letter {'sounds' if self.say_sounds else 'names'}"
+            text = f"Letter {'sounds' if self.say_sounds else 'names'}"
+            picture = self.app.g.image(LETTER_PICTURES[self.say_sounds], self.app.g.vh(3.4))
             self.play_letter("A")
         else:
             text = self._instrument_label(self.instrument_index)
             self.play_sound_with_instrument("A", self.instrument_index)
-        self._toast = self.app.notify(text, replaces=self._toast)
+        self._toast = self.app.notify(text, picture=picture, replaces=self._toast)
 
     def _spell(self, key: str, now: float):
         """Letters typed without a long rest build words; anything else starts over."""
@@ -725,7 +729,7 @@ class MusicRoom(Room):
     def _header_chips(self, letters: bool | None = None) -> tuple:
         """Enter steps through instruments, shown by their pictures, or in Letters, names and sounds."""
         if self.letters_mode if letters is None else letters:
-            return ("Enter", ("Names", "Sounds"), int(self.say_sounds), ("letters/names.png", "letters/sounds.png")),
+            return ("Enter", ("Names", "Sounds"), int(self.say_sounds), LETTER_PICTURES),
         available = instruments()
         return ("Enter", tuple(name for _, name in available), self.instrument_index % len(available),
                 tuple(instrument_icon(inst_id) for inst_id, _ in available)),
@@ -797,10 +801,11 @@ class MusicRoom(Room):
         return round(size * NOTE_STRIP * 0.62)
 
     def _key_tab_width(self, g, size) -> int:
-        """The key tab's visible width, the same in every key so the grid holds still: the longest name
-        and half a bar height either side."""
+        """The key tabs' visible width, the same in every key so the grid holds still: the longest name
+        (or "Key") and half a bar height either side."""
         px = self._strip_px(size)
-        return max(g.measure(name, px, "mono-heavy-italic", tr=False)[0] for name in FRIENDLY_KEY_NAMES) + self._bar_h(size)
+        labels = [(name, px) for name in FRIENDLY_KEY_NAMES] + [("Key", round(px * KEY_WORD))]
+        return max(g.measure(text, text_px, "mono-heavy-italic", tr=False)[0] for text, text_px in labels) + self._bar_h(size)
 
     def _draw_word_strip(self, g, bar, px):
         """The word the letters spell, with its picture if it has one, and Space to hear it."""
@@ -813,18 +818,20 @@ class MusicRoom(Room):
 
     def _draw_note_strip(self, g, tab_w, xs, bar, px, on_paper):
         """Every letter row plays the same note in a column, so each column is named once, on a ledge
-        as wide as the grid, with a tab naming the key, its note above, tucked behind its left end. Played names go bold so the eye stays on the
-        keys; the key-change sweep gets the selection plate."""
+        as wide as the grid, between a tab naming the key behind its left end and a matching one saying Key behind
+        its right. Played names go bold so the eye stays on the keys; the key-change sweep gets the selection plate."""
         size = xs[1] - xs[0]
         h = bar.h
-        tab = pygame.Rect(xs[0] - tab_w, bar.y, tab_w + h, h)
         ink = paper.INK_MUTED if on_paper else P.MUTED
         ground = mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE
-        g.rect(mix(ground, ink, 0.2), tab, radius=h // 2)
+        face, color = "mono-heavy-italic", paper.INK if on_paper else P.TEXT
+        for x, text, text_px in ((xs[0] - tab_w, FRIENDLY_KEY_NAMES[self.root_index], px),
+                                 (xs[10] - h, "Key", round(px * KEY_WORD))):
+            tab = pygame.Rect(x, bar.y, tab_w + h, h)
+            g.rect(mix(ground, ink, 0.2), tab, radius=h // 2)
+            g.draw_text(text, text_px, tab.centerx + (h // 2 if x > xs[0] else -h // 2), bar.centery, face, color,
+                        anchor="center", tr=False)
         g.rect(ground, bar, radius=h // 2)
-        face, color, cx = "mono-heavy-italic", paper.INK if on_paper else P.TEXT, xs[0] - tab_w // 2
-        g.draw_text(FRIENDLY_KEY_NAMES[self.root_index], px, cx, bar.centery, face, color, anchor="center", tr=False)
-        g.draw_text(ICON_MUSIC, px, cx, tab.y - h // 6, face, ink, anchor="midbottom", tr=False)
         plate = pygame.Rect(0, 0, round(size * 0.8), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
             root_idx, sweeping = self._transition_state_for_col(col)

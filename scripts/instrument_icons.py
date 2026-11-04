@@ -83,20 +83,25 @@ def glockenspiel():
     return svg("".join(out))
 
 
+def block(x, y, size, fill, letter):
+    """An alphabet block: a rounded tile with a thick dark letter on it."""
+    return f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="{size // 5}" fill="{fill}" {O}/>' + (
+        f'<path d="{letter}" transform="translate({x} {y}) scale({size / 64})" stroke="{D}" stroke-width="9"'
+        ' fill="none" stroke-linecap="round" stroke-linejoin="round"/>')
+
+
 def names():
-    """A B C in capitals, a little staggered like blocks."""
-    return svg(stroke("M6 98 L21 38 L36 98 M11 80 H31", P5, 11)
-               + stroke("M48 30 V90 H60 A15 15 0 0 0 60 60 H48 M48 30 H58 A14 14 0 0 1 58 58", P4, 11)
-               + stroke("M120 50 A18 26 0 1 0 120 88", P5, 11))
+    """Alphabet blocks: A in front of B."""
+    return svg(block(48, 6, 72, P3, "M20 14 V50 H35 A9 9 0 0 0 35 32 H20 M20 14 H33 A9 9 0 0 1 33 32")
+               + block(8, 46, 76, P5, "M16 52 L32 12 L48 52 M21 40 H43"))
 
 
 def sounds():
-    """A head in profile saying something: open mouth and sound arcs."""
-    head = ("M22 124 V100 C6 90 2 70 4 54 C6 24 30 6 56 8 C80 10 92 28 90 48 L100 64 C102 68 100 70 96 70 H90"
-            " L92 78 L84 80 L90 86 C90 94 86 96 80 96 H66 V124 Z")
-    return svg(f'<g transform="translate(2 8) scale(0.88)"><path d="{head}" fill="{P3}" {O}/>'
-               f'<circle cx="54" cy="44" r="6" fill="{D}"/></g>'
-               + stroke("M98 60 A7 13 0 0 1 98 86", P6, 7) + stroke("M108 48 A12 25 0 0 1 108 98", P5, 7))
+    """A happy round face saying something out loud: open mouth and sound waves."""
+    return svg(f'<circle cx="50" cy="64" r="42" fill="{P3}" {O}/>'
+               f'<path d="M28 54 Q36 42 44 54 M56 54 Q64 42 72 54" stroke="{D}" stroke-width="7" fill="none" stroke-linecap="round"/>'
+               f'<path d="M32 70 H68 A18 18 0 0 1 32 70 Z" fill="{D}" stroke="{D}" stroke-width="4" stroke-linejoin="round"/>'
+               + stroke("M102 52 A8 14 0 0 1 102 80", P6, 7) + stroke("M112 40 A13 26 0 0 1 112 92", P5, 7))
 
 
 def render(draw, folder):

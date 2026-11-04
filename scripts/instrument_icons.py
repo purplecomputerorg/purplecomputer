@@ -216,8 +216,8 @@ def keep():
 
 
 def go_back():
-    """Never mind, cancel, close: a turn-back arrow on a peach circle, partner of keep()."""
-    return svg(f'<circle cx="64" cy="64" r="52" fill="#ffb899"/>'
+    """Never mind, cancel, close: a turn-back arrow on a lavender circle, partner of keep()."""
+    return svg(f'<circle cx="64" cy="64" r="52" fill="{RAINBOW[4]}"/>'
                f'<path d="M86 86 V68 Q86 48 66 48 H42 M56 34 L42 48 L56 62" stroke="{INK}" stroke-width="11" {ROUND}/>')
 
 

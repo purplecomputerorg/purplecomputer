@@ -495,7 +495,7 @@ class Picker(Dialog):
     """Vertical option list: up/down wrap, Enter confirms, Esc cancels.
     Options are (value, label) or (value, label, description)."""
 
-    hint = f"{UP} {DOWN} choose   {{Enter}} {KEEP}   {{Esc}} {BACK}"
+    hint = f"{UP} {DOWN} choose   {{Enter}} pick   {{Esc}} back"
     width_pct = 44
     OPTIONS: list = []
     DESCRIPTION = ""

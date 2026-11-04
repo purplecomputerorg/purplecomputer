@@ -104,7 +104,7 @@ class TextField:
     """One-line editable text with a cursor, word underlining, and
     autocomplete suggestions of (word, color_hex, emoji)."""
 
-    def __init__(self, autocomplete_fn=None, validator=None, context_autocomplete=False, marks=None):
+    def __init__(self, autocomplete_fn=None, validator=None, context_autocomplete=False, marks=None, tints=None):
         self.value = ""
         self.cursor = 0
         self.selected = None   # (start, end) of the word the arrows picked; typing replaces it
@@ -112,6 +112,7 @@ class TextField:
         self._validator = validator
         self._context = context_autocomplete
         self._marks = marks  # value -> [(start, end)] spans drawn as accent pills
+        self._tints = tints  # value -> [(start, end, hex)] spans underlined in that color
         self.matches: list = []
         self.match_index = 0
         self.exact_display = ""
@@ -273,8 +274,8 @@ class TextField:
         shown, start = self._visible_slice(g, px, width - (tx - x) - px)
         before = shown[:self.cursor - start]
         g.draw_text(shown, px, tx, y, "mono", P.TEXT, tr=False)
-        if self._validator:
-            self._underline(g, shown, px, tx, y)
+        if self._validator or self._tints:
+            self._underline(g, shown, start, px, tx, y)
         if self._marks:
             self._draw_marks(g, shown, start, px, tx, y, self._marks(self.value))
         if self.selected:
@@ -354,13 +355,18 @@ class TextField:
                 g.rect(mix(P.FIELD, P.PRIMARY, 0.35), (x0 - px // 12, y + lh // 10, w + px // 6, lh - lh // 5), radius=px // 6)
                 g.draw_text(shown[a:b], px, x0, y, "mono", P.ACCENT, tr=False)
 
-    def _underline(self, g, shown, px, tx, y):
-        lh = g.line_height(px, "mono")
-        for m in re.finditer(r'[a-z]+', shown.lower()):
-            if self._validator(m.group()):
-                x0 = tx + g.measure(shown[:m.start()], px, "mono", tr=False)[0]
-                x1 = tx + g.measure(shown[:m.end()], px, "mono", tr=False)[0]
-                g.rect(P.MUTED, (x0, y + lh - 2, x1 - x0, 2))
+    def _underline(self, g, shown, start, px, tx, y):
+        """Keywords get a thin muted line; tinted spans a thicker one in their own color."""
+        lh, v = g.line_height(px, "mono"), self.value
+        lines = [(m.start(), m.end(), P.MUTED, 2) for m in re.finditer(r'[a-z]+', v.lower())
+                 if self._validator and self._validator(m.group())]
+        lines += [(a, b, c, max(3, px // 8)) for a, b, c in (self._tints(v) if self._tints else [])]
+        for a, b, color, h in lines:
+            a, b = max(a - start, 0), min(b - start, len(shown))
+            if a < b:
+                x0 = tx + g.measure(shown[:a], px, "mono", tr=False)[0]
+                x1 = tx + g.measure(shown[:b], px, "mono", tr=False)[0]
+                g.rect(color, (x0, y + lh - h, x1 - x0, h))
 
 
 def _truncate(text: str) -> str:

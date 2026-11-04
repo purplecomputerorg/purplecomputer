@@ -149,6 +149,22 @@ def guide_topic(room: str, text: str):
     return None
 
 
+def color_spans(text: str) -> list:
+    """(start, end, hex) for each color word in `text`, taking in its light, dark or bright words."""
+    from ..color_mixing import COLOR_ADJECTIVES
+    content, spans, adjs = get_content(), [], []
+    for m in re.finditer(r"[^\W\d_]+|\S", text):
+        word = m.group().lower()
+        if word in COLOR_ADJECTIVES:
+            adjs.append(m)
+            continue
+        if hex_color := content.exact_color(word):
+            mod = adjs and content.get_modified_color(" ".join(a.group() for a in adjs + [m]))
+            spans.append(((adjs or [m])[0].start(), m.end(), mod[0] if mod else hex_color))
+        adjs = []
+    return spans
+
+
 HUES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'brown']
 # A few of these show under the plain hues, different ones each time code opens.
 MORE_COLORS = ['periwinkle', 'mint', 'gold', 'coral', 'sky', 'lime', 'turquoise', 'lavender', 'peach',
@@ -305,7 +321,8 @@ class CodePanel:
         self.app = app
         self.room = room
         keywords = set(ROOM_KEYWORDS[room])
-        self.field = TextField(keyword_autocomplete(room), validator=lambda w: w.lower() in keywords, context_autocomplete=True)
+        self.field = TextField(keyword_autocomplete(room), validator=lambda w: w.lower() in keywords, context_autocomplete=True,
+                               tints=color_spans if room != 'music' else None)
         self.field.remember(prefill)
         self.note = (prefill, "You just did this!  {Enter} again")
         self._typed = 0

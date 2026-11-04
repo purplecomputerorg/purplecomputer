@@ -7,7 +7,7 @@ import pytest
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.ui import LOOP
-from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name
+from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name, color_spans
 from purple_tui.canvas.ui import UP
 from purple_tui.keyboard import NavigationAction
 from purple_tui.palette import get_key_color
@@ -570,3 +570,11 @@ def test_each_type_for_more_word_brings_up_its_section():
         for heading, rows in sections:
             if heading in headings:
                 assert guide_topic(room, _topic_word(heading, rows))[0] == heading, (room, heading)
+
+
+def test_color_words_are_underlined_in_their_color():
+    from purple_tui.content import get_content
+    content = get_content()
+    spans = color_spans("dark blue right 5, red up 3")
+    assert spans == [(0, 9, content.get_modified_color("dark blue")[0]), (19, 22, content.exact_color("red"))]
+    assert color_spans("right hello") == []

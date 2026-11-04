@@ -746,14 +746,18 @@ def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=
     """A solid keycap: the one look for a key the kid can press inside a room. It sits on a darker
     lip like a real key (and the printed guide card), so it never reads as the flat selection pill.
     'hold Space' puts the verb on the cap, so the hold reads as part of the key;
-    a symbol key shows its shifted mark up and to the left, as printed on the real key."""
-    fill, ink = fill or P.TEXT, ink or P.SURFACE
+    a symbol key shows its shifted mark up and to the left, as printed on the real key.
+    No fill = a glass keycap: a faint tint of the ink over whatever is under it, so it stays quiet."""
+    ink = ink or (P.TEXT if fill is None else P.SURFACE)
     key = pygame.Rect((0, 0), keycap_size(g, text, px))
     setattr(key, anchor, (x, y))
     lip = max(2, round(px * 0.16))
     key.y -= lip // 2
-    g.rect(mix(fill, P.BG, 0.45), key.move(0, lip), radius=key_radius(px))
-    g.rect(fill, key, radius=key_radius(px))
+    if fill is None:
+        _draw_glass_cap(g, key, lip, ink, px)
+    else:
+        g.rect(mix(fill, P.BG, 0.45), key.move(0, lip), radius=key_radius(px))
+        g.rect(fill, key, radius=key_radius(px))
     if text in SHIFTED:
         for t, d in ((SHIFTED[text], -1), (text, 1)):
             g.draw_text(t, round(px * 0.85), key.centerx + d * key.w // 6, key.centery + d * key.h // 5, "mono-bold", ink, anchor="center")
@@ -764,6 +768,17 @@ def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=
         left = g.draw_text(HOLD, px, left, key.centery, "mono", ink, anchor="midleft").right
     g.draw_text(name, px, left, key.centery, "mono-bold", ink, anchor="midleft")
     return key
+
+
+GLASS_FILL, GLASS_LIP = 40, 22   # alpha of the ink tint on a glass keycap's face and lip
+
+
+def _draw_glass_cap(g: Gfx, key: pygame.Rect, lip: int, ink, px: int) -> None:
+    cap = pygame.Surface((key.w, key.h + lip), pygame.SRCALPHA)
+    r, c = key_radius(px), rgb(ink)
+    pygame.draw.rect(cap, (*c[:3], GLASS_LIP), (0, lip, key.w, key.h), border_radius=r)
+    pygame.draw.rect(cap, (*c[:3], GLASS_FILL), (0, 0, key.w, key.h), border_radius=r)
+    g.surface.blit(cap, key.topleft)
 
 
 KEY_RE = re.compile(r"\{([^}]+)\}")
@@ -809,7 +824,7 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor
             pad = _chord_pad(t, px)
             pic = i % 2 and hint_picture(g, t, px)
             x = (g.surface.blit(pic, pic.get_rect(midleft=(x, box.centery))) if pic else
-                 draw_key(g, t, px, x, box.centery, fill=P.TEXT if on else color, ink=P.ON_PRIMARY if on else None) if i % 2 else
+                 draw_key(g, t, px, x, box.centery, fill=P.TEXT if on else None, ink=P.ON_PRIMARY if on else color) if i % 2 else
                  g.draw_text(t, px, x + pad, box.centery, "mono", color, anchor="midleft", tr=False)).right + pad
     return box
 
@@ -858,7 +873,7 @@ def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, la
     widths = [m.get_width() if isinstance(m, pygame.Surface) else g.measure(m, px, face)[0] for m, face, _ in parts]
     content = keycap_size(g, key_name, px)[0] + sum(widths) + gap * len(parts) + px - round(px * 0.35)
     pill, pad = header_pill(g, px, content, right, cy, on)
-    x = draw_key(g, key_name, px, pill.x + pad, cy, fill=ink, ink=cap).right
+    x = draw_key(g, key_name, px, pill.x + pad, cy, fill=ink if on else None, ink=cap if on else None).right
     for (m, face, color), w in zip(parts, widths):
         x += gap
         if isinstance(m, pygame.Surface):

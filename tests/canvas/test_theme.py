@@ -71,10 +71,17 @@ def test_keycaps_and_hints_drawn_with_default_colors_follow_the_theme(themed):
 
     async def go():
         g = make_app().g
+        g.surface.fill((0, 0, 0))
         cap = ui.draw_key(g, "Tab", 20, 10, 40)
         hint = ui.draw_key_hint(g, "{hold Enter} loop", 20, 10, 100)
-        assert tuple(g.surface.get_at((cap.x + 3, cap.centery)))[:3] == P.rgb("#eeeeff")
-        assert tuple(g.surface.get_at((hint.x + 3, hint.centery)))[:3] == P.rgb("#552233")
+
+        def glass(ink):
+            return tuple(round(c * ui.GLASS_FILL / 255) for c in P.rgb(ink))
+
+        def near(px, want):
+            return all(abs(a - b) <= 1 for a, b in zip(tuple(px)[:3], want))
+        assert near(g.surface.get_at((cap.x + 3, cap.centery)), glass("#eeeeff"))
+        assert near(g.surface.get_at((hint.x + 3, hint.centery)), glass("#552233"))
     run(go())
 
 

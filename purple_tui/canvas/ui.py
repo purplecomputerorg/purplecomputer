@@ -779,9 +779,15 @@ def _chord_pad(t: str, px: int) -> int:
     return round(px * 0.2) if t == "+" else 0
 
 
+HINT_PICTURES: dict = {}  # {name} -> fn(height) -> surface, for a picture a room draws itself
+
+
 def hint_picture(g: Gfx, t: str, px: int) -> pygame.Surface | None:
-    """A {hints/name.png} in a hint line is a picture standing in for words, the height of a keycap."""
-    return g.image(t, round(keycap_size(g, "X", px)[1] * 1.2)) if t.endswith(".png") else None
+    """A {hints/name.png} or a HINT_PICTURES name in a hint line is a picture standing in for words."""
+    h = round(keycap_size(g, "X", px)[1] * 1.2)
+    if t in HINT_PICTURES:
+        return HINT_PICTURES[t](h)
+    return g.image(t, h) if t.endswith(".png") else None
 
 
 def key_hint_width(g: Gfx, text: str, px: int) -> int:

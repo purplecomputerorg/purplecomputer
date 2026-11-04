@@ -4,6 +4,7 @@ Space puts the brush down so arrows draw (or only while held),
 holding Backspace takes squares, then whole lines, and Tab switches to writing letters.
 The Logo-style code line opens from the Esc menu."""
 
+import functools
 import math
 import time
 
@@ -19,7 +20,7 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo
-from ..ui import (ABC_PICTURE, AUTO, CLEAN_HINT, MOVE_HINT, PICK_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
+from ..ui import (ABC_PICTURE, AUTO, HINT_PICTURES, CLEAN_HINT, MOVE_HINT, PICK_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
                   status_row_h, status_row_px, swatch_dot)
 from .base import Room
 
@@ -44,8 +45,8 @@ STEPS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 BACK = {"right": "left", "left": "right", "up": "down", "down": "up"}
 HINTS = {
     "littles": "Type to paint!",
-    "pen": "Arrows paint!  {Space} {hints/brush_up.png}",
-    "paint": "Type to paint!  {Space} {hints/brush_down.png}",
+    "pen": "Arrows paint!  {Space} {brush:up} to lift",
+    "paint": "Type to paint!  {Space} {brush:down} to drop",
     "write": "Type to write!  {Enter} {hints/new_line.png}",
     "pick": PICK_HINT,
     "clean": "{Backspace} + arrows cleans that way.",
@@ -75,7 +76,7 @@ def onto_grid(x: int, y: int, w: int, h: int, wrap: bool):
     return (x % w, y % h) if wrap else None
 
 
-def _brush_shape(at, u: float, press: float) -> tuple:
+def _brush_shape(at, u: float, press: float, handle: float = 1.6) -> tuple:
     """Bristles, sheen, ferrule and handle as polygons, tip first along the lean.
     Pressing splays the bristles and bends their tip off sideways, the way a
     brush flattens against paper."""
@@ -97,7 +98,7 @@ def _brush_shape(at, u: float, press: float) -> tuple:
     ts = [i / n for i in range(n + 1)]
     bristles = [side(t, 1) for t in ts] + [side(t, -1) for t in reversed(ts)]
     sheen = [side(t, -0.45) for t in ts[4:15]]
-    f0, f1, h1 = length, length + 0.32 * u, length + 1.6 * u
+    f0, f1, h1 = length, length + 0.32 * u, length + handle * u
     ferrule = [at(f0, neck * 1.15), at(f1, neck * 0.95), at(f1, -neck * 0.95), at(f0, -neck * 1.15)]
     stations = ((f1, 0.12), (f1 + 0.35 * u, 0.16), (h1, 0.07))
     handle = [at(a, w * u) for a, w in stations] + [at(a, -w * u) for a, w in reversed(stations)]
@@ -117,7 +118,7 @@ def _dash_outline(surf, mid: int, u: float, edge: int, color: str, alpha: int):
             pygame.draw.line(surf, (*rgb(color), alpha), *line, w)
 
 
-def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground="cell") -> pygame.Surface:
+def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground="cell", handle: float = 1.6) -> pygame.Surface:
     """A 7c square centered on the cursor cell, drawn 4x and smoothed down.
     tip "brush" is a paintbrush in the brush color: lift 1 floats it above a
     ring on the cell (pen up), lift 0 presses its splayed bristles into the
@@ -140,10 +141,10 @@ def _brush_tip(c: int, color: str, tip, arrow_turn, lift: float = 1.0, ground="c
         tx, ty = mid + u * 0.3 * press, mid + u * (0.3 - BRUSH_FLOAT * lift)
         (dx, dy), (px, py) = BRUSH_LEAN, (-BRUSH_LEAN[1], BRUSH_LEAN[0])
         at = lambda a, b: (tx + dx * a + px * b, ty + dy * a + py * b)
-        bristles, sheen, ferrule, handle, end = _brush_shape(at, u, press)
+        bristles, sheen, ferrule, stick, end = _brush_shape(at, u, press, handle)
         r_end = round(u * 0.08)
         pygame.draw.circle(surf, rgb(TIP_EDGE), end, r_end + edge)
-        parts = ((handle, P.ACCENT), (ferrule, P.TEXT), (bristles, color))
+        parts = ((stick, P.ACCENT), (ferrule, P.TEXT), (bristles, color))
         for poly, _ in parts:
             pygame.draw.polygon(surf, rgb(TIP_EDGE), poly, 2 * edge)
         for poly, fill in parts:
@@ -170,6 +171,14 @@ def _brush_icon(h: int, color: str, lift: float) -> pygame.Surface:
     top = ink.bottom - round(ink.h * BRUSH_HEAD)
     head = surf.subsurface(pygame.Rect(full.x, top, full.w, full.bottom - top))
     return head.subsurface(head.get_bounding_rect()).copy()
+
+
+@functools.lru_cache(maxsize=8)
+def _brush_hint(h: int, color: str, lift: float) -> pygame.Surface:
+    """The cursor brush with a longer handle, for Space's hint: pressed down, or floating over its ring."""
+    s = _brush_tip(h, color, "brush", None, lift, ground="ring", handle=2.6)
+    s = s.subsurface(s.get_bounding_rect())
+    return pygame.transform.smoothscale(s, (max(1, round(s.get_width() * h / s.get_height())), h))
 
 
 class _RoomBrushRunner(ArtCodeRunner):
@@ -219,6 +228,8 @@ class ArtRoom(Room):
         self._cursor_x = self._cursor_y = 0
         self._paint_mode = True
         self._last_key_color = DEFAULT_BRUSH_COLOR
+        HINT_PICTURES.update({f"brush:{way}": lambda h, lift=lift: _brush_hint(h, self._last_key_color, lift)
+                              for way, lift in (("down", 0.0), ("up", 1.0))})
         self._last_key_char = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
         self._mixed = None                # (keycaps, color) of the last dab that mixed

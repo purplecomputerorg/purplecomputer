@@ -12,9 +12,44 @@ a PDF via Inkscape; PDFs are what the print shop actually receives.
 | Purple sticker sheet | `make_purple_sticker_sheet.py` | `purple-sticker-sheet.{svg,pdf}` | 4" × 6" | Kiss-cut |
 | Purple-logo sticker | `make_purple_logo_sticker.py` | `purple-logo-sticker.{svg,pdf}` | 2.14" × 3.00" (silhouette) | Die-cut through liner |
 | T-Rex sticker (standalone) | `make_trex_sticker.py` | `trex-sticker.{svg,pdf}` | 3" tall silhouette | Die-cut through liner |
+| Lid badge (takes an Avery label) | `make_lid_badge.py` | `lid-badge-<variant>.{svg,pdf}` | 3.5" × 2.25" (standard name-badge size) | Kiss-cut |
+| Name badge (written on directly) | `make_name_badge.py` | `name-badge-<variant>.{svg,pdf}` | 3.5" × 2.25" | Kiss-cut |
 
 The T-Rex is also available on the purple sticker sheet; the standalone
 script is kept for when we want to print it as a single die-cut.
+
+### The two badges
+
+Both are the same card, drawn from the same `badge_kit.py`: 3.5" × 2.25",
+kiss-cut, rounded corner, purple field bleeding 0.125" past the cut.
+
+**Lid badge** (`make_lid_badge.py`) reads "this computer belongs to" and
+leaves a white window in the middle cut to the footprint of a stock **Avery
+5160** label: 2.625" × 1", rounded corners, also sold as 8160/18660/5960, 30
+per sheet. One design gets printed in quantity, then a label goes on the
+window and the kid writes their name, so nothing is personalized at print
+time. A hairline mount is drawn just outside the window, so a slightly
+crooked label still lands inside a frame. Layouts: `crown`, `night`, `hero`,
+`duo`, `serif`, `ticket`, `footer`. Print on white stock: the window is
+unprinted material, not white ink.
+
+The window is the label's exact footprint. `LABEL_INSET_IN` shrinks it a
+little if hand-placed labels leave a white sliver down one side,
+`MOUNT_GAP_IN` moves the hairline, and `LABEL_W_IN`/`LABEL_H_IN`/`LABEL_R_IN`
+retarget a different Avery part. Measure the corner radius off a real sheet
+before a long run.
+
+**Name badge** (`make_name_badge.py`) writes the whole line onto the sticker
+instead, with a rule to fill in by hand: `sentence`, `stagger`, `age`.
+
+Either script takes a layout name as its first argument, or `all` (the
+default). `--png DIR` writes one preview per layout and `--sheet out.png`
+tiles them onto a single image for picking between them.
+
+The lid badge layouts use the site's own faces (Sora, Figtree, Spectral) alongside Nunito; the name badge is Nunito only.
+Those TTFs live in `~/landing/public/fonts`; copy them into
+`~/.local/share/fonts` and run `fc-cache` to render locally. PDF export turns
+text into paths, so the print shop needs none of them.
 
 Run any of them:
 
@@ -33,9 +68,12 @@ Omit `--pdf` to write SVG only.
 
 ## Design conventions across all products
 
+Geometry, palette, fonts, the bot, and the page/cut assembly for the two
+badges live in `badge_kit.py`; the badge scripts hold only their layouts.
+
 - **Layers**: `art` (everything visible), `cut` (die/kiss-cut paths), optional `guides` (dev-reference page border — not for printing).
 - **Purple ramp** (dark → light): `#1e1033`, `#3b1a5c`, `#5c2d91`, `#9b59d0`, `#ebe2fd`.
-- **Brand font**: Nunito (weights 500, 700, 800). Installed under `~/.local/share/fonts/Nunito/` if you need to re-render locally. Fallback chain in SVGs is `Nunito, Helvetica, Arial, sans-serif`.
+- **Brand font**: Nunito (weights 500, 700, 800); the lid badge also uses the site faces noted above. Installed under `~/.local/share/fonts/Nunito/` if you need to re-render locally. Fallback chain in SVGs is `Nunito, Helvetica, Arial, sans-serif`.
 - **Kid-math remaps on keyboard sheet**: `=` shows `+`, `/` shows `÷`, shift-`8` shows `×` — matches the global remap in `purple_tui/purple_tui.py`.
 
 ## Silhouette cutting (stickers that hug art)

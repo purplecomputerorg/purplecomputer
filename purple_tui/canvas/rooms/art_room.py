@@ -44,9 +44,9 @@ STEPS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 BACK = {"right": "left", "left": "right", "up": "down", "down": "up"}
 HINTS = {
     "littles": "Type to paint!",
-    "pen": "Brush down! Arrows paint. {Space} lifts it.",
-    "paint": "Type to paint! {Space} puts the brush down.",
-    "write": "Type to write! Arrow keys move. {Enter} for a new line.",
+    "pen": "Arrows paint!  {Space} {hints/brush_up.png}",
+    "paint": "Type to paint!  {Space} {hints/brush_down.png}",
+    "write": "Type to write!  {Enter} {hints/new_line.png}",
     "pick": PICK_HINT,
     "clean": "{Backspace} + arrows cleans that way.",
 }

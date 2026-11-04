@@ -2,7 +2,7 @@
 header row, from the '[\\] (color wheel)' chip leftward, so the picture stays in
 view. Left and Right go along the hues (wrapping round), Up and Down make the
 whole strip lighter or darker, and the brush takes the color picked; the
-footer shows each key beside a picture of what it does while the bar is up. Space or Enter keeps it, Esc puts the old
+footer shows each key with a picture of what it does while the bar is up. Space or Enter keeps it, Esc puts the old
 one back, and any other key keeps it and goes on to the room. Each room's bar
 reopens on the last color kept from it, so a stray key never loses a hard-won
 pick. The first cell is the grays, white to near black; a room with wheel_auto
@@ -19,13 +19,15 @@ from .. import palette as P
 from ..color_mixing import rgb_to_hex
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from .gfx import rgb
-from .ui import (AUTO, DOWN, LEFT, RIGHT, UP, Overlay, auto_inks, draw_key, header_pill, hint_row_h, keycap_size,
-                 swatch_dot)
+from .ui import (AUTO, DOWN, LEFT, RIGHT, UP, Overlay, auto_inks, draw_key_hint, header_pill, hint_row_h, key_hint_width,
+                 keycap_size, swatch_dot)
 
 OPEN_KEY = "\\"
 HUES, SHADES = 24, 6          # cell 0 is the grays, cells 1..HUES the hues
 LIGHT, DARK, SAT = 0.85, 0.22, 0.7
 GRAY_REACH = 0.88             # how far toward black the grays go
+HINT = (f"{{{LEFT}}} {{{RIGHT}}} {{hints/rainbow.png}}    {{{UP}}} {{hints/lighter.png}} {{{DOWN}}} {{hints/darker.png}}    "
+        "{Space} {hints/keep.png}    {Esc} {hints/go_back.png}")
 
 
 def bar_color(cell: int, shade: int) -> str:
@@ -184,37 +186,14 @@ class ColorBar(Overlay):
         bar = self._draw_bar(g, px, row)
         foot = getattr(self.room, "bar_foot", None)
         if foot is None:
-            with g.drawing_on(pygame.Surface((1, 1))):
-                w = self._draw_legend(g, px, 0, 0)
-            box = pygame.Rect(bar.x, bar.bottom + g.em(0.3), w + g.em(1.2), keycap_size(g, "X", px)[1] + g.em(0.4))
+            box = pygame.Rect(bar.x, bar.bottom + g.em(0.3), key_hint_width(g, HINT, px) + g.em(1.2),
+                              keycap_size(g, "X", px)[1] + g.em(0.4))
             g.rect(P.SURFACE, box, radius=g.em(0.4))
             g.rect(P.LINE, box, width=1, radius=g.em(0.4))
-            self._draw_legend(g, px, box.x + g.em(0.6), box.centery)
+            draw_key_hint(g, HINT, px, box.x + g.em(0.6), box.centery)
             return
         g.rect(P.SURFACE, foot.inflate(0, g.em(0.6)))
-        self._draw_legend(g, px, foot.x, foot.centery)
-
-    def _draw_legend(self, g, px: int, x: int, cy: int) -> int:
-        """The footer in pictures, no words: the arrows beside the colors and shades they walk
-        through, Space beside the color it keeps, Esc beside the one it goes back to. Returns its right."""
-        h = keycap_size(g, "X", px)[1]
-        hues = pygame.Rect(0, cy - h // 3, px * 5, 2 * (h // 3)), [self._color(c, self._shade) for c in range(HUES + 1)], False
-        shades = pygame.Rect(0, cy - h // 2, round(px * 0.9), h), [self._color(self._cell, s) for s in range(SHADES)], True
-        for keys, pic in (((LEFT, RIGHT), hues), ((UP, DOWN), shades), (("Space",), self.room.brush_color), (("Esc",), self._was)):
-            for key in keys:
-                x = draw_key(g, key, px, x, cy, fill=P.MUTED).right + px // 4
-            x += px // 4
-            if isinstance(pic, str):
-                dot = swatch_dot(pic, h)
-                x = g.surface.blit(dot, dot.get_rect(midleft=(x, cy))).right
-            else:
-                rect, colors, down = pic
-                rect.x = x
-                _strip(g, colors, rect, down)
-                g.rect(P.LINE, rect, width=1)
-                x = rect.right
-            x += px * 2
-        return x - px * 2
+        draw_key_hint(g, HINT, px, foot.x, foot.centery)
 
     def _draw_bar(self, g, px: int, row: pygame.Rect) -> pygame.Rect:
         """'< cells > shades ^v' in one pill the chip's height; the picked cell

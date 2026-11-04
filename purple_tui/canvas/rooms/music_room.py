@@ -708,7 +708,7 @@ class MusicRoom(Room):
     def _hint_text(self) -> str:
         if self.app._littles_mode:
             return "{Enter} sound"
-        return "{hold Enter} loop" if self.app._music_looping_enabled else ""
+        return "{hold Enter} {hints/loop.png}" if self.app._music_looping_enabled else ""
 
     def _draw_header(self, g, rect):
         """The same header as Art and Blocks: the Enter chip beside the Notes / Letters switch."""
@@ -725,10 +725,9 @@ class MusicRoom(Room):
     def _header_chips(self, letters: bool | None = None) -> tuple:
         """Enter steps through instruments, shown by their pictures, or in Letters, names and sounds."""
         if self.letters_mode if letters is None else letters:
-            return ("Enter", ("Names", "Sounds"), int(self.say_sounds), LETTER_PICTURES),
+            return ("Enter", int(self.say_sounds), LETTER_PICTURES),
         available = instruments()
-        return ("Enter", tuple(name for _, name in available), self.instrument_index % len(available),
-                tuple(instrument_icon(inst_id) for inst_id, _ in available)),
+        return ("Enter", self.instrument_index % len(available), tuple(instrument_icon(inst_id) for inst_id, _ in available)),
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""

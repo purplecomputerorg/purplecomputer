@@ -492,7 +492,7 @@ class Picker(Dialog):
     """Vertical option list: up/down wrap, Enter confirms, Esc cancels.
     Options are (value, label) or (value, label, description)."""
 
-    hint = f"{UP} {DOWN} choose   {{Enter}} confirm   {{Esc}} cancel"
+    hint = f"{UP} {DOWN} choose   {{Enter}} {{hints/keep.png}}   {{Esc}} {{hints/go_back.png}}"
     width_pct = 44
     OPTIONS: list = []
     DESCRIPTION = ""
@@ -582,7 +582,7 @@ class Confirm(Picker):
 class Notice(Picker):
     """A message with one OK."""
 
-    hint = "{Enter} OK"
+    hint = "{Enter} {hints/keep.png}"
 
     def __init__(self, app, title, body=""):
         super().__init__(app, [(True, "OK")])
@@ -779,14 +779,20 @@ def _chord_pad(t: str, px: int) -> int:
     return round(px * 0.2) if t == "+" else 0
 
 
+def hint_picture(g: Gfx, t: str, px: int) -> pygame.Surface | None:
+    """A {hints/name.png} in a hint line is a picture standing in for words, the height of a keycap."""
+    return g.image(t, round(keycap_size(g, "X", px)[1] * 1.2)) if t.endswith(".png") else None
+
+
 def key_hint_width(g: Gfx, text: str, px: int) -> int:
     parts = KEY_RE.split(i18n.translate(text))
-    return sum(keycap_size(g, t, px)[0] if i % 2 else g.measure(t, px, "mono", tr=False)[0] + 2 * _chord_pad(t, px)
+    return sum((pic.get_width() if (pic := hint_picture(g, t, px)) else keycap_size(g, t, px)[0]) if i % 2 else g.measure(t, px, "mono", tr=False)[0] + 2 * _chord_pad(t, px)
                for i, t in enumerate(parts) if t)
 
 
 def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor="midleft", on=False) -> pygame.Rect:
-    """A dim hint line where {Key} draws as a solid keycap: '{hold Enter} loop'. on = it sits on the
+    """A dim hint line where {Key} draws as a solid keycap and {hints/x.png} as a picture:
+    '{hold Enter} {hints/loop.png}'. on = it sits on the
     selection plate, where the keycaps go light so they don't punch a dark hole in it."""
     color = color or P.MUTED
     box = pygame.Rect(0, 0, key_hint_width(g, text, px), keycap_size(g, "X", px)[1])
@@ -795,7 +801,9 @@ def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, color=None, anchor
     for i, t in enumerate(KEY_RE.split(i18n.translate(text))):
         if t:
             pad = _chord_pad(t, px)
-            x = (draw_key(g, t, px, x, box.centery, fill=P.TEXT if on else color, ink=P.ON_PRIMARY if on else None) if i % 2 else
+            pic = i % 2 and hint_picture(g, t, px)
+            x = (g.surface.blit(pic, pic.get_rect(midleft=(x, box.centery))) if pic else
+                 draw_key(g, t, px, x, box.centery, fill=P.TEXT if on else color, ink=P.ON_PRIMARY if on else None) if i % 2 else
                  g.draw_text(t, px, x + pad, box.centery, "mono", color, anchor="midleft", tr=False)).right + pad
     return box
 
@@ -892,25 +900,20 @@ def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tu
     return pill
 
 
-def _draw_stepper(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int,
-                  marks: tuple) -> pygame.Rect:
-    """'[key] Current  a b c': the current value's name, then a picture per value
-    (an emoji, word picture or images/ PNG) with only the current one lit, so every
-    choice shows yet it reads differently from Tab's switch. Pictures fill the
-    pill's height; sized to the widest label."""
+def _draw_stepper(g: Gfx, px: int, right: int, cy: int, key_name: str, active: int, marks: tuple) -> pygame.Rect:
+    """'[key] a b c': a picture per value (an emoji, word picture or images/ PNG) with only
+    the current one lit, so every choice shows yet it reads differently from Tab's switch.
+    Pictures fill the pill's height."""
     gap = px // 2
     h = keycap_size(g, key_name, px)[1] + round(px * 0.35)
     pics = [g.image(m, h) if m.endswith(".png") else g.text(m, round(h / 1.2), "mono", P.TEXT) for m in marks]
     pics = [pic if i == active else _faded(pic) for i, pic in enumerate(pics)]
     step = pics[active].get_width() + gap
-    text_w = max(g.measure(t, px, "mono-bold")[0] for t in labels)
-    content = keycap_size(g, key_name, px)[0] + 3 * gap + text_w + px + step * len(pics)
+    content = keycap_size(g, key_name, px)[0] + 2 * gap + step * len(pics)
     pill, pad = header_pill(g, px, content, right, cy, False)
     x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
-    g.draw_text(labels[active], px, x + gap + text_w // 2, cy, "mono-bold", P.TEXT, anchor="center")
-    x += gap + text_w + px
     for i, pic in enumerate(pics):
-        g.surface.blit(pic, pic.get_rect(center=(x + i * step + step // 2 - gap // 2, cy)))
+        g.surface.blit(pic, pic.get_rect(center=(x + i * step + step // 2, cy)))
     return pill
 
 
@@ -926,7 +929,7 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     """The room's header: the Tab switch starting at the middle, the brush
     swatch (or an icon standing in for it) left of it, then key chips further
     left: '[\\] (color wheel)' when wheel (from color_wheel.chip) is set, and each of
-    chips = (key, mark, label, on, noun), or (key, labels, active) for a stepper.
+    chips = (key, mark, label, on, noun), or (key, active, pictures) for a stepper.
     Slides right when the chips would run past r's left edge, as far as the
     widest of chips and the other chip sets in also, so it holds still when a
     room swaps its chips. Returns the color bar's row: r from its left edge
@@ -952,7 +955,7 @@ def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, s
         piece = mark.get_rect(midright=(piece.x - gap, cy))
         g.surface.blit(mark, piece)
     for chip in reversed(chips):
-        draw = _draw_stepper if isinstance(chip[1], tuple) else _draw_key_chip
+        draw = _draw_stepper if isinstance(chip[2], tuple) else _draw_key_chip
         piece = draw(g, px, piece.x - gap, cy, *chip)
     return piece
 

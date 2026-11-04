@@ -100,9 +100,11 @@ def _fill(g, color: str, rect: pygame.Rect, radius: int = 0):
         g.rect(color, rect, radius=radius)
         return
     light, dark = auto_inks()
-    half = rect.w // 2
-    g.rect(light, (rect.x, rect.y, half, rect.h))
-    g.rect(dark, (rect.x + half, rect.y, rect.w - half, rect.h))
+    g.rect(light, rect, radius=radius)
+    clip = g.surface.get_clip()
+    g.surface.set_clip(pygame.Rect(rect.centerx, rect.y, rect.w, rect.h).clip(clip))
+    g.rect(dark, rect, radius=radius)
+    g.surface.set_clip(clip)
 
 
 def _strip(g, colors, rect: pygame.Rect, down: bool = False):
@@ -116,8 +118,8 @@ def _strip(g, colors, rect: pygame.Rect, down: bool = False):
 def _ring(g, rect: pygame.Rect, color: str, px: int):
     """A picked cell, raised: a light ring inside a dark one so it shows on any color."""
     r = min(rect.w, rect.h) // 3
-    g.rect(P.ON_PRIMARY, rect.inflate(6, 6), radius=r + 3)
-    g.rect("#ffffff", rect.inflate(2, 2), radius=r + 1)
+    g.rect(P.ON_PRIMARY, rect.inflate(10, 10), radius=r + 5)
+    g.rect("#ffffff", rect.inflate(6, 6), radius=r + 3)
     _fill(g, color, rect, r)
 
 

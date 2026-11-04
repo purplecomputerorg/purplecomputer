@@ -184,6 +184,7 @@ class TestLoader:
     def test_voice_clip_from_pack_beats_core(self, packs, tmp_path):
         assert tts._get_voice_clip("Hi there") == tmp_path / "the-tests-pack" / "content" / "voice" / "hi_there.wav"
         assert tts._get_voice_clip("definitely not a clip") is None
+        assert tts._get_voice_clip("Hi there", family=False) is None
 
     def test_a_rooms_own_line_beats_every_other_clip_only_in_that_room(self, packs, tmp_path):
         room_voice = tmp_path / "the-tests-pack" / "content" / "room-voice"

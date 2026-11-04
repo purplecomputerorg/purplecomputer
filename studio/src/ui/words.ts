@@ -186,6 +186,7 @@ export function wordsView(): View {
       h("p", { class: "dim small" }, "Purple talks when your kid ends with ", h("kbd", {}, "!"), " or starts with ", h("kbd", {}, "say"), ". ", h("kbd", {}, "nana!"), " and ", h("kbd", {}, "say nana"), " say the word, or play its sound. ", h("kbd", {}, "nana?!"), " and ", h("kbd", {}, "say who is nana"), " say the meaning."),
       table,
       h("p", { class: "dim small" }, "Purple already knows hundreds of words, like cat and dog. Your words come first when Purple suggests what to type."),
+      h("p", { class: "dim small" }, "In the Music room's Letters, spelling one of your words shows it with its picture, and ", h("kbd", {}, "Space"), " has Purple say it."),
       voiceStays(),
     ),
     live: { room: "play" },

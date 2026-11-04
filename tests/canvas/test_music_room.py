@@ -151,7 +151,7 @@ def test_letters_that_spell_a_word_show_it_and_space_says_it(monkeypatch):
     from purple_tui import tts
     from purple_tui.canvas.harness import press
     said = []
-    monkeypatch.setattr(tts, "speak_many", lambda texts, **kw: said.append(texts) or True)
+    monkeypatch.setattr(tts, "speak_many", lambda texts, **kw: said.append((texts, kw)) or True)
 
     async def go():
         app = _letters_room(monkeypatch)
@@ -160,9 +160,20 @@ def test_letters_that_spell_a_word_show_it_and_space_says_it(monkeypatch):
         await type_text(app, "t")
         assert app.room.word == "cat"
         await press(app, "space")
-        assert said == [["cat"]]
+        assert said == [(["cat"], {"family": False})]
         await type_text(app, "x")
         assert app.room.word is None
+    run(go())
+
+
+def test_a_familys_pack_word_spells_too(monkeypatch):
+    from purple_tui.content import get_content
+    monkeypatch.setitem(get_content().emojis, "zorb", "🐙")
+
+    async def go():
+        app = _letters_room(monkeypatch)
+        await type_text(app, "zorb")
+        assert app.room.word == "zorb"
     run(go())
 
 

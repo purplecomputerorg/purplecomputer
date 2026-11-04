@@ -489,7 +489,7 @@ class MusicRoom(Room):
             self._start_loop_playback()  # from the top: the sound and the bar start over together
         elif self.letters_mode and self.word:
             from ...tts import speak_many
-            speak_many([self.word])
+            speak_many([self.word], family=False)
         self.app.invalidate()
 
     def set_instrument_by_name(self, name: str):

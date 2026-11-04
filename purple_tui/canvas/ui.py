@@ -855,30 +855,55 @@ def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, la
     return pill
 
 
-def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple, mark: str = "", width: int = 0) -> tuple:
-    """Label plate widths and the content width; plates grow evenly to fill width."""
-    gap = px // 2
+def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple) -> tuple:
+    """Label plate widths and the content width."""
     widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for t in labels]
-    mark_w = g.measure(mark, px, "mono")[0] + gap if mark else 0
-    content = keycap_size(g, key_name, px)[0] + gap + mark_w + sum(widths) + gap * (len(labels) - 1)
-    extra = max(0, width - content)
-    widths = [w + extra // len(labels) + (i < extra % len(labels)) for i, w in enumerate(widths)]
-    return widths, max(content, width)
+    return widths, keycap_size(g, key_name, px)[0] + (px // 2) * len(labels) + sum(widths)
 
 
-def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int,
-                 mark: str = "", width: int = 0) -> pygame.Rect:
-    """'[key] mark One Two' in one pill, the active label on the selection plate."""
+def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int) -> pygame.Rect:
+    """'[key] One Two' in one pill, the active label on the selection plate."""
     gap = px // 2
-    widths, content = _switch_widths(g, px, key_name, labels, mark, width)
+    widths, content = _switch_widths(g, px, key_name, labels)
     pill, pad = header_pill(g, px, content, right, cy, False)
     x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
-    if mark:
-        x = g.draw_text(mark, px, x, cy, "mono", P.MUTED, anchor="midleft").right + gap
     for i, (label, w) in enumerate(zip(labels, widths)):
         draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
         x += w + gap
     return pill
+
+
+def _draw_stepper(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int,
+                  marks: tuple = ()) -> pygame.Rect:
+    """'[key] Current  a b c': one value at a time, then a mark per value (a dot, or
+    marks' icons) with only the current one lit, so it reads as stepping through
+    a list, unlike Tab's side by side switch. Sized to its widest label."""
+    gap = px // 2
+    dot = round(px * 0.75)
+    if marks:
+        pics = [g.text(m, px, "mono", P.TEXT).copy() for m in marks]
+    else:
+        pics = [pygame.Surface((dot, dot), pygame.SRCALPHA) for _ in labels]
+        for pic in pics:
+            pygame.draw.circle(pic, rgb(P.PRIMARY), (dot // 2, dot // 2), dot // 2)
+    pics = [pic if i == active else _faded(pic) for i, pic in enumerate(pics)]
+    step = pics[active].get_width() + gap
+    text_w = max(g.measure(t, px, "mono-bold")[0] for t in labels)
+    content = keycap_size(g, key_name, px)[0] + 3 * gap + text_w + px + step * len(pics) - gap
+    pill, pad = header_pill(g, px, content, right, cy, False)
+    x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
+    g.draw_text(labels[active], px, x + gap + text_w // 2, cy, "mono-bold", P.TEXT, anchor="center")
+    x += gap + text_w + px
+    for i, pic in enumerate(pics):
+        g.surface.blit(pic, pic.get_rect(center=(x + i * step + step // 2 - gap // 2, cy)))
+    return pill
+
+
+def _faded(pic: pygame.Surface) -> pygame.Surface:
+    """A stepper's mark for a value it isn't on: smaller and dim."""
+    small = pygame.transform.smoothscale(pic, (max(1, pic.get_width() * 3 // 4), max(1, pic.get_height() * 3 // 4)))
+    small.set_alpha(150)
+    return small
 
 
 def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str | None = None,
@@ -886,34 +911,20 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     """The room's header: the Tab switch starting at the middle, the brush
     swatch (or an icon standing in for it) left of it, then key chips further
     left: '[\\] Colors' when wheel (from color_wheel.chip) is set, and each of
-    chips = (key, mark, label, on, noun), or (key, labels, active, mark) for a
-    switch like Tab's. Slides right when the chips would run past r's left edge, as far
-    as the widest of chips and the other chip sets in also, so it holds still
-    when a room swaps its chips; a switch also keeps the widest width it has
-    in any of those sets. Returns the color bar's row: r from its left edge
+    chips = (key, mark, label, on, noun), or (key, labels, active) for a stepper.
+    Slides right when the chips would run past r's left edge, as far as the
+    widest of chips and the other chip sets in also, so it holds still when a
+    room swaps its chips. Returns the color bar's row: r from its left edge
     to the Colors chip's right, or None without the chip."""
     px = g.vh(1.9)
     if wheel:
         from .color_wheel import OPEN_KEY, disc
         chips = ((OPEN_KEY, disc(round(px * 1.3)), "Colors", wheel == "open"), *chips)
-    chips = _hold_switch_widths(g, px, chips, also)
     start = r.centerx - keycap_size(g, "Tab", px)[0]
     with g.drawing_on(pygame.Surface((1, 1))):
         left = min(_draw_mode_switch_at(g, px, start, r.centery, labels, active, swatch, icon, c).x for c in (chips, *also))
     first = _draw_mode_switch_at(g, px, start + max(0, r.x - left), r.centery, labels, active, swatch, icon, chips)
     return pygame.Rect(r.x, r.y, first.right - r.x, r.h) if wheel else None
-
-
-def _hold_switch_widths(g: Gfx, px: int, chips: tuple, also: tuple) -> tuple:
-    """chips with each switch widened to its widest across also, matched from the right."""
-    def width(chip) -> int:
-        return _switch_widths(g, px, chip[0], chip[1], *chip[3:])[1] if isinstance(chip[1], tuple) else 0
-    held = list(chips)
-    for i in range(1, len(chips) + 1):
-        if isinstance(chips[-i][1], tuple):
-            w = max(width(s[-i]) for s in (chips, *also) if len(s) >= i)
-            held[-i] = (*chips[-i][:3], chips[-i][3] if len(chips[-i]) > 3 else "", w)
-    return tuple(held)
 
 
 def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, swatch, icon, chips) -> pygame.Rect:
@@ -926,7 +937,7 @@ def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, s
         piece = mark.get_rect(midright=(piece.x - gap, cy))
         g.surface.blit(mark, piece)
     for chip in reversed(chips):
-        draw = _draw_switch if isinstance(chip[1], tuple) else _draw_key_chip
+        draw = _draw_stepper if isinstance(chip[1], tuple) else _draw_key_chip
         piece = draw(g, px, piece.x - gap, cy, *chip)
     return piece
 

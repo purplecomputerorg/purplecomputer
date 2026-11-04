@@ -719,24 +719,16 @@ class MusicRoom(Room):
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
         bar.h = hint_row_h(g)
         draw_mode_switch(g, bar, (f"{ICON_MUSIC} Notes", f"{ICON_KEYBOARD} Letters"), 1 if self.letters_mode else 0,
-                         chips=self._header_chips(self.instrument_index, self.letters_mode, self.say_sounds),
-                         also=self._header_chip_sets(self.letters_mode))
+                         chips=self._header_chips(),
+                         also=(self._header_chips(not self.letters_mode),))
 
-    def _header_chip_sets(self, letters: bool) -> list:
-        """Every Enter switch this mode can show, so it keeps one width while Enter steps through them."""
-        if letters:
-            return [self._header_chips(0, True, sounds) for sounds in (False, True)]
-        return [self._header_chips(i, False, False) for i in range(len(instruments()))]
-
-    def _header_chips(self, index: int, letters: bool, sounds: bool) -> tuple:
-        """Enter as a switch like Tab's. Instruments show the current one on the plate and the others,
-        in order, by their pictures, so it's clear Enter steps through all of them (pack ones too)."""
-        if letters:
-            return ("Enter", ("Names", "Sounds"), int(sounds)),
-        icons = [instrument_icon(inst_id) for inst_id, _ in instruments()]
-        i = index % len(icons)
-        labels = [part for part in (" ".join(icons[:i]), self._instrument_label(i), " ".join(icons[i + 1:])) if part]
-        return ("Enter", tuple(labels), int(i > 0)),
+    def _header_chips(self, letters: bool | None = None) -> tuple:
+        """Enter steps through instruments, shown by their pictures, or in Letters, names and sounds."""
+        if self.letters_mode if letters is None else letters:
+            return ("Enter", ("Names", "Sounds"), int(self.say_sounds)),
+        available = instruments()
+        return ("Enter", tuple(name for _, name in available), self.instrument_index % len(available),
+                tuple(instrument_icon(inst_id) for inst_id, _ in available)),
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""

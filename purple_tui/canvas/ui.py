@@ -1026,13 +1026,41 @@ def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=None
         g.rect(color, (x, y, max(h, int(w * min(1.0, fraction))), h), radius=radius)
 
 
-def draw_meter(g: Gfx, rect: pygame.Rect, filled: int, steps: int, color=None):
+def draw_meter(g: Gfx, rect: pygame.Rect, filled: int, steps: int, color=None, track=None):
     """A setting's level in the hold pill's look, filled a step at a time."""
     r = rect.h // 2
-    g.rect(P.FIELD, rect, radius=r)
+    g.rect(track or P.FIELD, rect, radius=r)
     if filled:
         g.rect(color or P.PRIMARY, (rect.x, rect.y, max(rect.h, round(rect.w * filled / steps)), rect.h), radius=r)
-    g.rect(P.LINE, rect, width=1, radius=r)
+    if not track:
+        g.rect(P.LINE, rect, width=1, radius=r)
+
+
+def draw_setting_rows(g: Gfx, rect: pygame.Rect, rows: list, focus: int, widest_value: str) -> int:
+    """Settings as rows in the Picker's idiom: name, a control, value; the focused row sits on the
+    selection plate. rows are (name, value, fraction filled, wide); a short bar is an on/off switch. Returns the bottom."""
+    px, pad, h = g.em(0.98), g.em(0.9), g.em(2.4)
+    name_w = max(g.measure(r[0], px, "mono-bold")[0] for r in rows) + g.em(1.5)
+    value_w = g.measure(widest_value, px, "mono-bold")[0] + g.em(1.5)
+    y = rect.y
+    for i, (name, value, fraction, wide) in enumerate(rows):
+        on = i == focus
+        box = pygame.Rect(rect.x, y, rect.w, h)
+        if on:
+            g.rect(P.PRIMARY, box, radius=g.em(0.35))
+        ink, track = (P.ON_PRIMARY, mix(P.PRIMARY, P.ON_PRIMARY, 0.3)) if on else (P.MUTED, P.FIELD)
+        g.draw_text(name, px, box.x + pad, box.centery, "mono-bold", P.ON_PRIMARY if on else P.TEXT, anchor="midleft")
+        g.draw_text(value, px, box.right - pad, box.centery, "mono-bold", ink, anchor="midright")
+        bh = 2 * g.em(0.4 if wide else 0.55)
+        bar = pygame.Rect(box.x + pad + name_w, box.centery - bh // 2, box.w - 2 * pad - name_w - value_w if wide else bh * 2, bh)
+        draw_meter(g, bar, round(fraction * 100), 100, ink, track)
+        if not wide:  # a switch: the knob sits at the end it's set to
+            knob = bar.inflate(-g.em(0.3), -g.em(0.3))
+            knob.w = knob.h
+            knob.x = bar.right - bar.h + (bar.h - knob.w) // 2 if fraction else knob.x
+            g.rect(track if fraction else ink, knob, radius=knob.h // 2)
+        y += h + g.em(0.3)
+    return y
 
 
 def draw_level(g: Gfx, px: int, cx: int, cy: int, icon: str, filled: int, steps: int, label: str, ink=None) -> pygame.Rect:

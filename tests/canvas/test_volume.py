@@ -61,6 +61,23 @@ def test_parent_limit_caps_the_keys_and_reads_max():
     run(go())
 
 
+def test_limit_row_switches_with_left_and_right():
+    from purple_tui.canvas.rooms.parent_menu import ParentVolumeModal
+    from purple_tui.keyboard import NavigationAction
+
+    async def go():
+        app = make_app()
+        modal = ParentVolumeModal(app)
+        await modal.handle(NavigationAction(direction="down"))
+        await modal.handle(NavigationAction(direction="right"))
+        assert app._volume_lock == app.volume_level
+        await modal.handle(NavigationAction(direction="right"))
+        assert app._volume_lock == app.volume_level
+        await modal.handle(NavigationAction(direction="left"))
+        assert app._volume_lock is None
+    run(go())
+
+
 def test_silent_mode_blocks_the_keys():
     settings.set_volume_lock(0)
     async def go():

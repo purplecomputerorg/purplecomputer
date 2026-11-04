@@ -24,7 +24,7 @@ from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_
 from ...input import KeyCode, PowerButtonEvent, RawKeyEvent
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_key_hint,
-                  draw_key_lines, draw_meter, draw_scrim, draw_text_caret, draw_window, field_height, window_title_height)
+                  draw_key_lines, draw_scrim, draw_setting_rows, draw_text_caret, draw_window, field_height, window_title_height)
 from .rooms_screen import RoomsScreen, rooms_label
 from .sleep_screen import FullScreen
 from ..kids import KidsScreen, computer_name, many, write_computer_name
@@ -135,20 +135,9 @@ def apply_saved_display_settings():
         set_backlight_level(BRIGHTNESS_DEFAULT)
 
 
-def draw_slider_row(g, rect, y, px, name, on, left, inset, filled, steps, value):
-    """A settings row: name, meter with arrows beside it when focused, value at the right."""
-    meter = pygame.Rect(rect.x + left, y - g.vh(1), rect.w - inset, g.vh(2))
-    g.draw_text(f"{name}:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")
-    if on:
-        g.draw_text("◀", px, meter.x - g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midright")
-        g.draw_text("▶", px, meter.right + g.vw(1.2), y, "mono-bold", P.PRIMARY, anchor="midleft")
-    draw_meter(g, meter, filled, steps, P.PRIMARY if on else P.MUTED)
-    g.draw_text(value, px, rect.right, y, "mono-bold", P.MUTED, anchor="midright")
-
-
 class DisplaySettingsScreen(Dialog):
     title = "Display"
-    hint = f"{LEFT} {RIGHT} adjust   {UP} {DOWN} switch   {{Esc}} done"
+    hint = f"{UP} {DOWN} choose   {LEFT} {RIGHT} change   {{Esc}} done"
     width_pct = 50
 
     def __init__(self, app):
@@ -158,16 +147,14 @@ class DisplaySettingsScreen(Dialog):
         self._focus = 0
 
     def body_height(self, g):
-        return g.vh(14)
+        return 2 * g.em(2.7)
 
     def draw_body(self, g, rect):
         rows = [("Brightness", self._brightness, BRIGHTNESS_MIN, BRIGHTNESS_MAX, BRIGHTNESS_STEP, BRIGHTNESS_MAX),
                 ("Contrast", self._contrast, CONTRAST_MIN, CONTRAST_MAX, CONTRAST_STEP, 1.0)]
-        px = g.em(0.98)
-        for i, (label, value, lo, hi, step, normal) in enumerate(rows):
-            offset = round((value - normal) / step)
-            draw_slider_row(g, rect, rect.y + i * g.vh(7) + g.vh(2), px, label, i == self._focus, g.vw(13), g.vw(22),
-                            round((value - lo) / step), round((hi - lo) / step), "Normal" if offset == 0 else f"{offset:+d}")
+        draw_setting_rows(g, rect, [(label, "Normal" if (offset := round((value - normal) / step)) == 0 else f"{offset:+d}",
+                                     (value - lo) / (hi - lo), True) for label, value, lo, hi, step, normal in rows],
+                          self._focus, "Normal")
 
     def _save_and_apply(self):
         apply_display_settings(self._brightness, self._contrast)
@@ -482,32 +469,25 @@ class ParentVolumeModal(Dialog):
         super().__init__(app)
         self._focus = "volume"
 
-    @property
-    def hint(self):
-        row = f"{LEFT} {RIGHT} change    {UP} {DOWN} switch" if self._focus == "volume" else f"{{Enter}} on/off    {UP} {DOWN} switch"
-        return f"{row}\n{{Space}} plays sound    {{Esc}} done"
+    hint = f"{UP} {DOWN} choose   {LEFT} {RIGHT} change   {{Space}} hear it   {{Esc}} done"
+
+    def _note(self):
+        return "The kid can't go louder than this. 0 is silent." if self.app._volume_lock is not None else \
+            "Turn Limit on to cap how loud the kid can turn it up."
 
     def body_height(self, g):
-        return g.vh(19)
+        return 2 * g.em(2.7) + g.em(1.2) + g.markup_size(self._note(), g.em(0.85), "mono", self.inner_width(g))[1]
 
     def _slider_level(self) -> int:
         lock = self.app._volume_lock
         return self.app.volume_level if lock is None else lock
 
     def draw_body(self, g, rect):
-        px = g.em(0.98)
-        level = self._slider_level()
-        y = rect.y + g.vh(2)
-        draw_slider_row(g, rect, y, px, "Volume", self._focus == "volume", g.vw(9), g.vw(24), volume_step(level), VOLUME_TOP,
-                        "Silent Mode" if level == 0 else volume_badge(level)[2])
-        bx = rect.x + g.vw(9)
-        y += g.vh(7)
-        on = self._focus == "lock"
-        g.draw_text("Limit:", px, rect.x, y, "mono-bold", P.TEXT if on else P.MUTED, anchor="midleft")
-        limited = self.app._volume_lock is not None
-        g.draw_text(("▶ " if on else "") + ("On" if limited else "Off"), px, bx, y, "mono-bold", P.PRIMARY if on else P.MUTED, anchor="midleft")
-        note = "The kid can't go louder than this. 0 is silent." if limited else "Turn on to cap how loud the kid can turn it up."
-        g.draw_text(note, g.em(0.85), rect.x, y + g.vh(4.5), "mono", P.MUTED, anchor="midleft")
+        level, limited = self._slider_level(), self.app._volume_lock is not None
+        y = draw_setting_rows(g, rect, [("Volume", "Silent Mode" if level == 0 else volume_badge(level)[2], volume_step(level) / VOLUME_TOP, True),
+                                        ("Limit", "On" if limited else "Off", float(limited), False)],
+                              ["volume", "lock"].index(self._focus), "Silent Mode")
+        g.draw_markup(self._note(), g.em(0.85), rect.x, y + g.em(0.3), "mono", P.MUTED, rect.w, "center", P.SURFACE)
 
     async def handle(self, action):
         if isinstance(action, NavigationAction):
@@ -518,6 +498,8 @@ class ParentVolumeModal(Dialog):
                 self._focus = "volume"
             elif d in ("left", "right") and self._focus == "volume":
                 self._adjust(d == "right")
+            elif d in ("left", "right") and (d == "right") != (self.app._volume_lock is not None):
+                self._toggle_lock()
             self.app.invalidate()
             return
         if isinstance(action, ControlAction) and action.is_down and not action.is_repeat:

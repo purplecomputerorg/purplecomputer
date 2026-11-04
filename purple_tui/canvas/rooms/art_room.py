@@ -908,6 +908,14 @@ class ArtRoom(Room):
         if not self._paint_mode:  # underline caret: the next letter lands in this cell
             bar = (x, y + c - max(2, c // 4), c, max(2, c // 4))
             g.draw_caret(bar, lambda: g.rect(P.ACCENT, bar))
+        self._draw_brush(g, x, y, c)
+
+    def draw_over_bar(self, g):
+        """The brush stays on top of the open color bar, as it does over the header."""
+        ox, oy = self._origin
+        self._draw_brush(g, ox + self._cursor_x * self._cell, oy + self._cursor_y * self._cell, self._cell)
+
+    def _draw_brush(self, g, x, y, c):
         tip = "brush" if self._paint_mode else None
         turn = HEADING_TURNS[self._heading] if self._use_heading_cursor else None
         if tip or turn is not None:

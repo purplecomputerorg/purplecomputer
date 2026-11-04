@@ -2,7 +2,7 @@
 header row, from the '[\\] (color wheel)' chip leftward, so the picture stays in
 view. Left and Right go along the hues (wrapping round), Up and Down make the
 whole strip lighter or darker, and the brush takes the color picked; the
-footer shows each key with a picture of what it does while the bar is up. Space or Enter keeps it, Esc puts the old
+footer shows each key with a picture of what it does while the bar is up. Enter or Space keeps it, Esc puts the old
 one back, and any other key keeps it and goes on to the room. Each room's bar
 reopens on the last color kept from it, so a stray key never loses a hard-won
 pick. The first cell is the grays, white to near black; a room with wheel_auto
@@ -27,7 +27,7 @@ HUES, SHADES = 24, 6          # cell 0 is the grays, cells 1..HUES the hues
 LIGHT, DARK, SAT = 0.85, 0.22, 0.7
 GRAY_REACH = 0.88             # how far toward black the grays go
 HINT = (f"{{{LEFT}}} {{{RIGHT}}} {{hints/rainbow.png}}    {{{UP}}} {{hints/lighter.png}} {{{DOWN}}} {{hints/darker.png}}    "
-        f"{{Space}} {KEEP}    {{Esc}} {BACK}")
+        f"{{Enter}} {KEEP}    {{Esc}} {BACK}")
 
 
 def bar_color(cell: int, shade: int) -> str:
@@ -94,10 +94,10 @@ def open_on(room, char: str = OPEN_KEY, on_close=None) -> bool:
     return True
 
 
-def _fill(g, color: str, rect: pygame.Rect):
+def _fill(g, color: str, rect: pygame.Rect, radius: int = 0):
     """A cell; AUTO splits it into the theme's light and dark ink."""
     if color != AUTO:
-        g.rect(color, rect)
+        g.rect(color, rect, radius=radius)
         return
     light, dark = auto_inks()
     half = rect.w // 2
@@ -113,20 +113,12 @@ def _strip(g, colors, rect: pygame.Rect, down: bool = False):
         _fill(g, color, pygame.Rect(rect.x, a, rect.w, b - a) if down else pygame.Rect(a, rect.y, b - a, rect.h))
 
 
-def _draw_graded(g, glyphs, px: int, x: int, ys):
-    """Glyphs centered at (x, y) for each y, filled with one gradient from white at the
-    top of the first's ink to near black at the bottom of the last's."""
-    marks = []
-    for glyph, y in zip(glyphs, ys):
-        s = g.text(glyph, px, "mono", "#ffffff").copy()
-        marks.append((s, s.get_rect(center=(x, y))))
-    top = marks[0][1].y + marks[0][0].get_bounding_rect().top
-    span = max(1, marks[-1][1].y + marks[-1][0].get_bounding_rect().bottom - top)
-    for s, r in marks:
-        for y in range(r.h):
-            v = round(255 * (1 - max(0.0, min(1.0, (r.y + y - top) / span)) * GRAY_REACH))
-            s.fill((v, v, v, 255), (0, y, r.w, 1), special_flags=pygame.BLEND_RGBA_MULT)
-        g.surface.blit(s, r)
+def _ring(g, rect: pygame.Rect, color: str, px: int):
+    """A picked cell, raised: a light ring inside a dark one so it shows on any color."""
+    r = min(rect.w, rect.h) // 3
+    g.rect(P.ON_PRIMARY, rect.inflate(6, 6), radius=r + 3)
+    g.rect("#ffffff", rect.inflate(2, 2), radius=r + 1)
+    _fill(g, color, rect, r)
 
 
 class ColorBar(Overlay):
@@ -184,6 +176,8 @@ class ColorBar(Overlay):
             vp = self.app._viewport_rect()
             row = pygame.Rect(vp.x + g.em(0.7), vp.y + g.em(0.7), vp.w // 2, hint_row_h(g))
         bar = self._draw_bar(g, px, row)
+        if over := getattr(self.room, "draw_over_bar", None):
+            over(g)
         foot = getattr(self.room, "bar_foot", None)
         if foot is None:
             box = pygame.Rect(bar.x, bar.bottom + g.em(0.3), key_hint_width(g, HINT, px) + g.em(1.2),
@@ -196,27 +190,31 @@ class ColorBar(Overlay):
         draw_key_hint(g, HINT, px, foot.x, foot.centery)
 
     def _draw_bar(self, g, px: int, row: pygame.Rect) -> pygame.Rect:
-        """'< cells > shades ^v' in one pill the chip's height; the picked cell
-        stands out above and below it."""
+        """'< hues >' in one pill the chip's height; the picked hue's shades hang
+        below its cell, so Up and Down move up and down the colors they pick from."""
         gap = px // 2
         pill, pad = header_pill(g, px, row.w - 2 * round(px * 0.35), row.right, row.centery, False)
-        h = pill.h
         inner = pill.inflate(-2 * pad, -2 * pad)
-        x = g.draw_text(LEFT, px, pill.x + h // 3, pill.centery, "mono", P.MUTED, anchor="midleft").right + gap
-        shades = pygame.Rect(0, inner.y, round(px * 0.9), inner.h)
-        ud_px = round(px * 0.75)
-        ud_x = pill.right - h // 3 - ud_px // 2
-        _draw_graded(g, (UP, DOWN), ud_px, ud_x, (pill.centery - inner.h // 4, pill.centery + inner.h // 4))
-        shades.right = ud_x - ud_px // 2 - gap // 2
-        right = g.draw_text(RIGHT, px, shades.x - gap, pill.centery, "mono", P.MUTED, anchor="midright").x - gap
+        x = g.draw_text(LEFT, px, pill.x + pill.h // 3, pill.centery, "mono", P.MUTED, anchor="midleft").right + gap
+        right = g.draw_text(RIGHT, px, pill.right - pill.h // 3, pill.centery, "mono", P.MUTED, anchor="midright").x - gap
         cw = (right - x) / (HUES + 1)
         _strip(g, [self._color(cell, self._shade) for cell in range(HUES + 1)], pygame.Rect(x, inner.y, right - x, inner.h))
-        sh = shades.h / SHADES
-        _strip(g, [self._color(self._cell, s) for s in range(SHADES)], shades, down=True)
-        mark = pygame.Rect(shades.x, round(shades.y + self._shade * sh), shades.w, round(sh)).inflate(4, 4)
-        g.rect(P.TEXT, mark, width=2)
         picked = pygame.Rect(round(x + self._cell * cw), inner.y, max(1, round(cw)), inner.h).inflate(round(px * 0.5), round(px * 0.7))
-        g.rect(P.ON_PRIMARY, picked.inflate(4, 4), radius=round(px * 0.25))
-        g.rect(P.TEXT, picked.inflate(2, 2), radius=round(px * 0.25))
-        _fill(g, self.room.brush_color, picked)
+        self._draw_shades(g, px, picked)
+        _ring(g, picked, self.room.brush_color, px)
         return pill
+
+    def _draw_shades(self, g, px: int, picked: pygame.Rect):
+        """The picked hue's shades as dots in a column no wider than its cell, the one in use ringed."""
+        gap = max(2, round(px * 0.2))
+        size = picked.w - 2 * gap
+        col = pygame.Rect(0, picked.bottom + gap, picked.w, SHADES * (size + gap) + gap)
+        col.centerx = picked.centerx
+        g.rect(P.SURFACE, col, radius=col.w // 2)
+        g.rect(P.LINE, col, width=1, radius=col.w // 2)
+        for s in range(SHADES):
+            center = (col.centerx, col.y + gap + s * (size + gap) + size // 2)
+            rings = ((P.ON_PRIMARY, size + 6), ("#ffffff", size + 2)) if s == self._shade else ()
+            for color, d in (*rings, (self._color(self._cell, s), size)):
+                dot = swatch_dot(color, d)
+                g.surface.blit(dot, dot.get_rect(center=center))

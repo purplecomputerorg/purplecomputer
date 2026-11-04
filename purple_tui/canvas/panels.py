@@ -14,7 +14,7 @@ from functools import cache
 import pygame
 
 from .. import palette as P
-from ..constants import ICON_LOOP, ICON_MUSIC
+from ..constants import ICON_MUSIC
 from ..content import get_content
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..loop_station import LOOPING, RECORDING
@@ -23,7 +23,8 @@ from ..palette import get_key_color
 from ..timeline import SESSION_GAP_S
 from . import color_wheel
 from .gfx import rgb
-from .ui import AUTO, CODE_KEYS, DOWN, LEFT, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, key_hint_width, keycap_size
+from .ui import (AUTO, BACK, CODE_KEYS, DOWN, KEEP, LEFT, LOOP, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, draw_marked, key_hint_width,
+                 keycap_size, marked_width)
 
 ROOM_KEYWORDS = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
@@ -601,11 +602,10 @@ def draw_status_row(g, rect, label: str, color, keys: str, frac: float, count: s
     never shrink: a status pill, the time bar, then the keys that matter."""
     px, pad, gap = g.em(0.92), g.em(1.6), g.em(1.4)
     cy = rect.bottom - g.em(1.4) - g.line_height(px, "mono") // 2
-    w, h = g.measure(label, px, "mono-bold")
-    pill = pygame.Rect(0, 0, w + round(px * 1.6), h + round(px * 0.7))
+    pill = pygame.Rect(0, 0, marked_width(g, label, px) + round(px * 1.6), g.line_height(px, "mono") + round(px * 0.7))
     pill.midleft = (rect.x + pad, cy)
     g.rect(color, pill, radius=pill.h // 2)
-    g.draw_text(label, px, pill.centerx, pill.centery, "mono-bold", P.ON_PRIMARY, anchor="center")
+    draw_marked(g, label, px, pill.centerx, pill.centery, P.ON_PRIMARY)
     right = draw_key_hint(g, keys, px, rect.right - pad, cy, color=P.MUTED, anchor="midright").x - gap
     if count:
         right = g.draw_text(count, px, right, cy, "mono-bold", color, anchor="midright").x - g.em(0.8)
@@ -629,7 +629,7 @@ class LoopPanel:
             draw_status_row(g, rect, "● Recording", P.DANGER, "{Space} {hints/play.png}   {Esc} {hints/stop.png}",
                             self.loop.recording_progress(), f"{int(self.loop.recording_remaining())}s")
         elif st == LOOPING:
-            draw_status_row(g, rect, f"{ICON_LOOP} Looping", P.PRIMARY, "{Esc} {hints/stop.png}",
+            draw_status_row(g, rect, f"{LOOP} Looping", P.PRIMARY, "{Esc} {hints/stop.png}",
                             self.loop.loop_progress())
 
 
@@ -671,7 +671,7 @@ class TimeTravelBar:
             when = f"{ICON_STAR}  Saved" + ("" if when == "Now" else f" {when.lower()}")
         g.draw_text(f"Hold to go fast  {LEFT} {RIGHT}", g.vh(1.8), rect.x + pad, cy, "mono", P.MUTED, anchor="midleft")
         g.draw_text(when, g.vh(2.6), rect.centerx, cy, "mono-heavy", P.TEXT, anchor="center")
-        draw_key_hint(g, "{Enter} {hints/keep.png}    {Esc} {hints/go_back.png}", g.vh(1.8), rect.right - pad, cy, anchor="midright")
+        draw_key_hint(g, f"{{Enter}} {KEEP}    {{Esc}} {BACK}", g.vh(1.8), rect.right - pad, cy, anchor="midright")
         track = pygame.Rect(rect.x + pad, rect.y + g.vh(5.2), rect.w - 2 * pad, g.vh(3))
         labels = self._draw_track(g, track, index, times, saved, stretches(times, now))
         last_left = track.right

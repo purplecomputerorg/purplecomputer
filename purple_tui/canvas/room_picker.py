@@ -14,7 +14,7 @@ from .paper import can_print
 from .rooms.family_room import room_icon
 from .library import ICON_OPEN, ICON_SAVE
 from .panels import ICON_TIME_TRAVEL
-from .ui import (DOWN, KEY_RE, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_key_hint, draw_scrim,
+from .ui import (BACK, DOWN, KEEP, KEY_RE, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_key_hint, draw_scrim,
                  key_cap, key_hint_width)
 
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
@@ -321,11 +321,11 @@ class RoomPicker(Overlay):
 
     def _cell(self, g, r, icon, label, key, disabled, lit=False, on=False):
         """The key beneath the name, "or Enter" on the picked one. Lit (code that's on) says the key closes it."""
-        enter = ("or {Enter}" if key else "" if disabled else "Press {Enter}") if on else ""
+        enter = (f"or {{Enter}} {KEEP}" if key else "" if disabled else f"{{Enter}} {KEEP}") if on else ""
         press = key and (f"{key_cap(key)} closes it" if lit else f"Press {key_cap(key)}")
         lines = [t for t in (press, enter) if t]
         if len(lines) > 1 and r.w <= 2 * r.h:   # a narrow card fits one line under its name
-            lines = ["Press {Enter}"]
+            lines = [f"{{Enter}} {KEEP}"]
         draw_card(g, r, icon, label, lines, on, disabled, lit)
 
     def _tool(self, tool):
@@ -364,7 +364,7 @@ class RoomPicker(Overlay):
 
     def _draw_footer(self, g, cx, y):
         px = g.em(0.9)
-        label = "Hold {Esc} for Parent Menu   ·   Arrows move"
+        label = f"{{Esc}} {BACK}   ·   Hold {{Esc}} for Parent Menu   ·   Arrows move"
         x = cx - (key_hint_width(g, label, px) + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
         x = draw_key_hint(g, label, px, x, y).right + g.em(0.9)
         draw_arrow_keys(g, px, x, y, color=P.ACCENT)
@@ -372,7 +372,7 @@ class RoomPicker(Overlay):
 
 class VolumeModal(Dialog):
     title = "Volume"
-    hint = f"{LEFT} {RIGHT} {UP} {DOWN} adjust   {{Enter}} close"
+    hint = f"{LEFT} {RIGHT} {UP} {DOWN} adjust   {{Enter}} {KEEP}"
     width_pct = 48
 
     def body_height(self, g):

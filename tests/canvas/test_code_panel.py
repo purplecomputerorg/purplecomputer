@@ -6,7 +6,7 @@ import asyncio
 import pytest
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.constants import ICON_LOOP
+from purple_tui.canvas.ui import LOOP
 from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name
 from purple_tui.canvas.ui import UP
 from purple_tui.keyboard import NavigationAction
@@ -449,7 +449,7 @@ def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
         app._music_looping_enabled = True
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
         await asyncio.sleep(0.3)
-        assert music.hold_progress()[1] == f"{ICON_LOOP} Record a loop"
+        assert music.hold_progress()[1] == f"{LOOP} Record a loop"
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
         app._music_looping_enabled = False
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))

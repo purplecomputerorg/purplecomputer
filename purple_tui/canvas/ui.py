@@ -488,11 +488,14 @@ class Dialog(Overlay):
             y += g.draw_markup(line or " ", px, rect.x, y, "mono", P.TEXT, rect.w, "center", P.SURFACE)
 
 
+LOOP, KEEP, BACK = "{hints/loop.png}", "{hints/keep.png}", "{hints/go_back.png}"  # keep and back always go together
+
+
 class Picker(Dialog):
     """Vertical option list: up/down wrap, Enter confirms, Esc cancels.
     Options are (value, label) or (value, label, description)."""
 
-    hint = f"{UP} {DOWN} choose   {{Enter}} {{hints/keep.png}}   {{Esc}} {{hints/go_back.png}}"
+    hint = f"{UP} {DOWN} choose   {{Enter}} {KEEP}   {{Esc}} {BACK}"
     width_pct = 44
     OPTIONS: list = []
     DESCRIPTION = ""
@@ -582,7 +585,7 @@ class Confirm(Picker):
 class Notice(Picker):
     """A message with one OK."""
 
-    hint = "{Enter} {hints/keep.png}"
+    hint = f"{{Enter}} {KEEP}"
 
     def __init__(self, app, title, body=""):
         super().__init__(app, [(True, "OK")])
@@ -884,7 +887,7 @@ def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, la
     return pill
 
 
-ABC_PICTURE = "modes/abc.png"
+ABC_PICTURE, ABC_ALERT = "modes/abc.png", "modes/abc_dark.png"  # the alert's light plate needs dark letters
 
 
 def _switch_picture(g: Gfx, px: int, label: str) -> pygame.Surface | None:
@@ -1052,6 +1055,29 @@ def hint_row_h(g: Gfx) -> int:
     return g.line_height(g.vh(1.9), "mono") + g.em(0.4)
 
 
+def _marked(g: Gfx, label: str, px: int) -> tuple:
+    """A label's leading {picture}, if it has one, and the text after it."""
+    m = KEY_RE.match(label)
+    pic = m and hint_picture(g, m[1], px)
+    return (pic, label[m.end():].lstrip()) if pic else (None, label)
+
+
+def marked_width(g: Gfx, label: str, px: int, face: str = "mono-bold") -> int:
+    pic, text = _marked(g, label, px)
+    return (pic.get_width() + px // 2 if pic else 0) + g.measure(text, px, face)[0]
+
+
+def draw_marked(g: Gfx, label: str, px: int, cx: int, cy: int, ink, face: str = "mono-bold"):
+    """A label centered on (cx, cy), its leading {picture} taking the text's ink."""
+    pic, text = _marked(g, label, px)
+    x = cx - marked_width(g, label, px, face) // 2
+    if pic:
+        pic = pic.copy()
+        pic.fill(rgb(ink), special_flags=pygame.BLEND_RGB_MIN)
+        x = g.surface.blit(pic, pic.get_rect(midleft=(x, cy))).right + px // 2
+    g.draw_text(text, px, x, cy, face, ink, anchor="midleft")
+
+
 def draw_hold_bar(g: Gfx, rect: pygame.Rect, progress: float, label: str):
     """A hold gesture under way, over the bottom of the viewport: a pill that
     fills as the hold goes on, saying what a full one does."""
@@ -1060,7 +1086,7 @@ def draw_hold_bar(g: Gfx, rect: pygame.Rect, progress: float, label: str):
     g.rect(P.LINE, (rect.x + g.em(1), below.y, rect.w - g.em(2), 1))
     h = min(round(g.em(0.95) * 2.4), below.h - 2 * g.em(0.3))
     px = round(h / 2.4)
-    pill = pygame.Rect(0, 0, g.measure(label, px, "mono-bold")[0] + g.em(3), h)
+    pill = pygame.Rect(0, 0, marked_width(g, label, px) + g.em(3), h)
     pill.center = below.center
     draw_fill_pill(g, pill, progress, label)
 
@@ -1077,7 +1103,7 @@ def draw_fill_pill(g: Gfx, pill: pygame.Rect, progress: float, label: str):
     clip = g.surface.get_clip()
     for ink, area in ((P.TEXT, pill), (P.BG, fill.clip(clip))):
         g.surface.set_clip(area.clip(clip))
-        g.draw_text(label, px, pill.centerx, pill.centery, "mono-bold", ink, anchor="center")
+        draw_marked(g, label, px, pill.centerx, pill.centery, ink)
     g.surface.set_clip(clip)
 
 

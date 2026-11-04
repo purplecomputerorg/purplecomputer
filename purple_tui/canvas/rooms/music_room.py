@@ -12,7 +12,7 @@ from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
 from ...content import get_content
-from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_DRUM, ICON_KEYBOARD, ICON_LOOP, ICON_MUSIC
+from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_DRUM, ICON_KEYBOARD, ICON_MUSIC
 from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import warm_mixer
@@ -27,7 +27,7 @@ from ..gfx import is_one_emoji, mix
 from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
-from ..ui import (ABC_PICTURE, CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
+from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
                   draw_mode_switch, draw_status_row, hint_row_h, hold_status, key_hint_width, status_row_h)
 from .base import Room
 
@@ -672,7 +672,7 @@ class MusicRoom(Room):
                 (self.loop.state != IDLE or self.app._music_looping_enabled):
             doing = "record a loop" if self.loop.state == IDLE else "stop the loop"
             return hold_status(min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD),
-                               "Enter", ICON_LOOP, doing)
+                               "Enter", LOOP, doing)
         return None
 
     def footer_h(self, g) -> int:
@@ -708,7 +708,7 @@ class MusicRoom(Room):
     def _hint_text(self) -> str:
         if self.app._littles_mode:
             return "{Enter} sound"
-        return f"{{hold Enter}} {ICON_LOOP}" if self.app._music_looping_enabled else ""
+        return f"{{hold Enter}} {LOOP} to loop" if self.app._music_looping_enabled else ""
 
     def _draw_header(self, g, rect):
         """The same header as Art and Blocks: the Enter chip beside the Notes / Letters switch."""

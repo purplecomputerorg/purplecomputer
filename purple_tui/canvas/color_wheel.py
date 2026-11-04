@@ -19,7 +19,7 @@ from .. import palette as P
 from ..color_mixing import rgb_to_hex
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from .gfx import rgb
-from .ui import (AUTO, DOWN, LEFT, RIGHT, UP, Overlay, auto_inks, draw_key_hint, header_pill, hint_row_h, key_hint_width,
+from .ui import (AUTO, BACK, DOWN, KEEP, LEFT, RIGHT, UP, Overlay, auto_inks, draw_key_hint, header_pill, hint_row_h, key_hint_width,
                  keycap_size, swatch_dot)
 
 OPEN_KEY = "\\"
@@ -27,7 +27,7 @@ HUES, SHADES = 24, 6          # cell 0 is the grays, cells 1..HUES the hues
 LIGHT, DARK, SAT = 0.85, 0.22, 0.7
 GRAY_REACH = 0.88             # how far toward black the grays go
 HINT = (f"{{{LEFT}}} {{{RIGHT}}} {{hints/rainbow.png}}    {{{UP}}} {{hints/lighter.png}} {{{DOWN}}} {{hints/darker.png}}    "
-        "{Space} {hints/keep.png}    {Esc} {hints/go_back.png}")
+        f"{{Space}} {KEEP}    {{Esc}} {BACK}")
 
 
 def bar_color(cell: int, shade: int) -> str:

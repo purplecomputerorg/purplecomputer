@@ -20,13 +20,13 @@ from .. import color_recipe, paper
 from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo
-from ..ui import (ABC_PICTURE, AUTO, HINT_PICTURES, CLEAN_HINT, MOVE_HINT, PICK_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
+from ..ui import (ABC_ALERT, ABC_PICTURE, AUTO, HINT_PICTURES, CLEAN_HINT, MOVE_HINT, PICK_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,
                   status_row_h, status_row_px, swatch_dot)
 from .base import Room
 
 COLS, ROWS = ART_COLS, ART_ROWS
 BRUSH_CHAR = "█"
-MODES = (("Paint", "modes/paint.png"), ("Letters", ABC_PICTURE))  # the Tab switch's words and pictures
+MODES = (("Paint", "modes/paint.png", "modes/paint.png"), ("Letters", ABC_PICTURE, ABC_ALERT))  # word, switch, alert
 ARROW_HOLD_REPEAT_THRESHOLD = 8
 HOLD_ACCEL_MULTIPLIER = 6
 LINES_AFTER = 1.0                   # seconds of holding Backspace before it takes whole lines
@@ -423,7 +423,8 @@ class ArtRoom(Room):
 
     def _toggle_paint_mode(self):
         self._set_paint_mode(not self._paint_mode)
-        self.announce(*MODES[not self._paint_mode])
+        word, _, alert = MODES[not self._paint_mode]
+        self.announce(word, alert)
 
     def _set_pen(self, down: bool):
         if self._pen_down == down:
@@ -927,5 +928,5 @@ class ArtRoom(Room):
             draw_label(g, "Paint" if self._paint_mode else "Write", g.vh(1.9), r.centerx, r.centery, P.TEXT, anchor="center")
             return None
         icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
-        return draw_mode_switch(g, r, tuple(pic for _, pic in MODES), 0 if self._paint_mode else 1, self.brush_color,
+        return draw_mode_switch(g, r, tuple(pic for _, pic, _ in MODES), 0 if self._paint_mode else 1, self.brush_color,
                                 icon, wheel_chip(self))

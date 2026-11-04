@@ -9,7 +9,13 @@ Usage: just python scripts/instrument_icons.py"""
 import subprocess
 from pathlib import Path
 
+from fontTools.pens.boundsPen import BoundsPen
+from fontTools.pens.svgPathPen import SVGPathPen
+from fontTools.pens.transformPen import TransformPen
+from fontTools.ttLib import TTFont
+
 IMAGES = Path(__file__).resolve().parent.parent / "purple_tui" / "canvas" / "images"
+FONT = TTFont(IMAGES.parent / "fonts" / "Figtree-Bold.ttf")  # letters are real type, not hand-drawn strokes
 OUT, LETTERS, MODES, HINTS = IMAGES / "instruments", IMAGES / "letters", IMAGES / "modes", IMAGES / "hints"
 D, P3, P5, P6 = "#2a1650", "#a379e8", "#dfc9ff", "#f6efff"
 W1, W2, W3 = "#b98a72", "#e2ae8c", "#f0c9a6"  # soft wood
@@ -86,27 +92,40 @@ ROUND = 'fill="none" stroke-linecap="round" stroke-linejoin="round"'
 WAVE = f'stroke-width="8" {ROUND}'
 INK, SKIN, HAIR, CHEEK = "#3b2470", "#f6efff", "#c08a64", "#f2b8d8"  # the calm set: flat, no outlines
 TILES = ("#dfc9ff", "#f6c9e4", "#c9dcff")
-A, B, C = "M16 52 L32 12 L48 52 M21 40 H43", "M20 14 V50 H35 A9 9 0 0 0 35 32 H20 M20 14 H33 A9 9 0 0 1 33 32", \
-    "M46 21 A17 17 0 1 0 46 45"
+
+
+def glyph(ch, cx, cy, cap, fill):
+    """One letter in Figtree Bold, its capitals cap units tall, centered on (cx, cy)."""
+    glyphs = FONT.getGlyphSet()
+    shape = glyphs[FONT.getBestCmap()[ord(ch)]]
+    k, bounds = cap / FONT["OS/2"].sCapHeight, BoundsPen(glyphs)
+    shape.draw(bounds)
+    x0, y0, x1, y1 = bounds.bounds
+    pen = SVGPathPen(glyphs)
+    shape.draw(TransformPen(pen, (k, 0, 0, -k, cx - (x0 + x1) / 2 * k, cy + (y0 + y1) / 2 * k)))
+    return f'<path d="{pen.getCommands()}" fill="{fill}"/>'
 
 
 def block(x, y, size, fill, letter):
-    """An alphabet tile: a soft rounded square with a thin dark letter."""
-    return f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="{size // 4}" fill="{fill}"/>' + (
-        f'<path d="{letter}" transform="translate({x + size * 0.1} {y + size * 0.1}) scale({size * 0.8 / 64})"'
-        f' stroke="{INK}" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>')
+    """An alphabet tile: a soft rounded square with a dark letter."""
+    return (f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="{size // 4}" fill="{fill}"/>'
+            + glyph(letter, x + size / 2, y + size / 2, size * 0.5, INK))
 
 
 def names():
     """Two alphabet tiles, A in front of B, B cut back so a clear gap runs round A."""
     return svg('<mask id="gap"><rect width="128" height="128" fill="#fff"/><rect x="0" y="40" width="88" height="88" rx="26"/></mask>'
-               f'<g mask="url(#gap)">{block(50, 6, 70, TILES[1], B)}</g>' + block(8, 48, 72, TILES[0], A))
+               f'<g mask="url(#gap)">{block(50, 6, 70, TILES[1], "B")}</g>' + block(8, 48, 72, TILES[0], "A"))
 
 
-def abc():
-    """Letters in the Tab switches: A B C as light purple writing, no tiles (that's Names)."""
-    return svg("".join(f'<path d="{d}" transform="translate({x} 3)" stroke="{TILES[0]}" stroke-width="7" {ROUND}/>'
-                       for d, x in ((A, -8), (B, 32), (C, 72))), 128, 70)
+def abc(fill=TILES[0]):
+    """Letters in the Tab switches: A B C written out, all the same size, no tiles (that's Names)."""
+    return svg("".join(glyph(ch, 24 + i * 48, 35, 46, fill) for i, ch in enumerate("ABC")), 144, 70)
+
+
+def abc_dark():
+    """The same letters for the alert, whose light plate washes out the light ones."""
+    return abc("#5b3a9e")
 
 
 def paint():
@@ -161,7 +180,7 @@ def back():
 
 def sounds():
     """Letter sounds: the A tile from Names, saying its sound."""
-    return svg(block(6, 28, 72, TILES[0], A) + f'<path d="M92 50 A8 14 0 0 1 92 78" stroke="{TILES[1]}" {WAVE}/>'
+    return svg(block(6, 28, 72, TILES[0], "A") + f'<path d="M92 50 A8 14 0 0 1 92 78" stroke="{TILES[1]}" {WAVE}/>'
                f'<path d="M106 38 A13 26 0 0 1 106 90" stroke="{TILES[2]}" {WAVE}/>')
 
 
@@ -208,6 +227,12 @@ def up():
                f'<path d="M100 104 V24 M84 40 L100 24 L116 40" stroke="{RAINBOW[1]}" stroke-width="10" {ROUND}/>')
 
 
+def loop():
+    """Hold Enter in Music: two rounded arrows chasing each other round, a music player's repeat."""
+    return svg(f'<path d="M14 40 V34 Q14 14 34 14 H104 M94 2 L108 14 L94 26" stroke="{TILES[0]}" stroke-width="10" {ROUND}/>'
+               f'<path d="M122 56 V62 Q122 82 102 82 H32 M42 70 L28 82 L42 94" stroke="{TILES[0]}" stroke-width="10" {ROUND}/>', 136, 96)
+
+
 def new_line():
     """Enter in Art's writing: down and back to the start of the line."""
     return svg(f'<path d="M92 32 V68 Q92 76 84 76 H42 M56 62 L41 76 L56 90" stroke="{TILES[0]}" stroke-width="9" {ROUND}/>')
@@ -236,7 +261,7 @@ if __name__ == "__main__":
         render(draw, OUT)
     for draw in (names, sounds):
         render(draw, LETTERS)
-    for draw in (paint, notes, abc, front, back):
+    for draw in (paint, notes, abc, abc_dark, front, back):
         render(draw, MODES)
-    for draw in (rainbow, lighter, darker, keep, go_back, up, new_line, play, stop):
+    for draw in (rainbow, lighter, darker, keep, go_back, up, loop, new_line, play, stop):
         render(draw, HINTS)

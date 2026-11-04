@@ -5,8 +5,8 @@ with Up or Down moves it either way, that height carries to other columns, a
 block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab flips
-to the back with arrows still moving the way they point, rows in front of the
-cursor's row fade when they hide it, and the Esc picker reaches the room with
+to the back with arrows still moving the way they point, blocks in front of the
+cursor fade where they overlap its glass column, and the Esc picker reaches the room with
 4."""
 
 import time
@@ -326,16 +326,21 @@ def test_holding_space_while_pressing_enter_lays_a_column():
     run(go())
 
 
-def test_rows_in_front_fade_only_when_they_hide_the_landing_spot():
+def _front_alpha(room, x, z, y) -> int:
+    return room._front.get_at(room._sprite_rect(*room._view(x, z), y).center).a
+
+
+def test_only_front_blocks_over_the_glass_column_fade():
     async def go():
         app, room = _blocks()
         room._blocks.update({(15, 4, y): "#ff0000" for y in range(3)})
+        room._blocks[(2, 4, 0)] = "#00ff00"
         room._x, room._z = 15, 6
         app._draw()
-        assert room._front.get_bounding_rect().w and room._front.get_alpha() == FRONT_ALPHA
+        assert _front_alpha(room, 15, 4, 2) == FRONT_ALPHA and _front_alpha(room, 2, 4, 0) == 255
         room._x = 20                            # the same row, clear of those blocks
         app._draw()
-        assert room._front.get_alpha() == 255
+        assert not room._faded and _front_alpha(room, 15, 4, 2) == 255
         room._x, room._z = 5, 2
         app._draw()
         assert not room._front.get_bounding_rect().w
@@ -348,7 +353,7 @@ def test_building_backward_keeps_the_block_just_laid_solid():
         await press(app, "up")
         await type_text(app, "aaa")
         app._draw()
-        assert room._front.get_bounding_rect().w and room._front.get_alpha() == 255
+        assert room._front.get_bounding_rect().w and not room._faded
     run(go())
 
 
@@ -358,7 +363,7 @@ def test_a_front_block_over_only_the_thread_stays_solid():
         room._blocks.update({(6, 2, y): "#ff0000" for y in range(4)})
         room._z, room._hover = 6, 8
         app._draw()
-        assert room._front.get_bounding_rect().w and room._front.get_alpha() == 255
+        assert room._front.get_bounding_rect().w and not room._faded
     run(go())
 
 

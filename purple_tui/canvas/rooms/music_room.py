@@ -36,7 +36,6 @@ PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
 PITCH_TRANSITION_DURATION = 0.25
 NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
-TAB_ICON = 0.75               # the key tab's music note, against its letter
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past the end it's silent
 LETTER_FADE_REST_S = 1.0      # a rest this long, or another letter, brings it back to full
@@ -696,8 +695,8 @@ class MusicRoom(Room):
         else:
             head_h = status_row_h(g) + em(1.2)
             draw_status_row(g, pygame.Rect(rect.x, rect.y + em(0.4), rect.w, status_row_h(g)), self._code_status(g))
-        left = self.app._frame_rect(self.app._viewport_rect()).x
-        grid = pygame.Rect(left, rect.y + head_h, rect.right - pad - left, rect.h - head_h - hint_h)
+        side = em(0.6)
+        grid = pygame.Rect(rect.x + side, rect.y + head_h, rect.w - 2 * side, rect.h - head_h - hint_h)
         self._draw_grid(g, grid)
         if self.app._panel is None:
             cy = rect.bottom - em(1.4) - g.line_height(em(0.92), "mono") // 2
@@ -753,11 +752,11 @@ class MusicRoom(Room):
         return s
 
     def _draw_grid(self, g, r, on_paper=False):
-        """Ten by four gapless blocks, as wide as fit after the key tab at r's left edge: a quiet key is just
-        its letter, a sounding key fills its whole block with color."""
+        """Ten by four gapless blocks, as wide as fit with room for the key tab either side: a quiet key is
+        just its letter, a sounding key fills its whole block with color."""
         rows_h = r.h / (4 + NOTE_STRIP)
         tab_w = self._key_tab_width(g, rows_h)
-        w = (r.w - tab_w) / 10
+        w = (r.w - 2 * tab_w) / 10
         size = min(rows_h, w)
         top = r.centery - (4 + NOTE_STRIP) * size / 2
         xs = [round(r.x + tab_w + i * w) for i in range(11)]
@@ -785,7 +784,7 @@ class MusicRoom(Room):
         bar.centery = round(ys[4] + size * NOTE_STRIP / 2 + size * 0.08)
         px = self._strip_px(size)
         if not self.letters_mode:
-            self._draw_note_strip(g, r.x, xs, bar, px, on_paper)
+            self._draw_note_strip(g, tab_w, xs, bar, px, on_paper)
         elif self.word and not on_paper:
             self._draw_word_strip(g, bar, px)
 
@@ -793,18 +792,15 @@ class MusicRoom(Room):
     def _strip_px(size) -> int:
         return max(10, int(size * 0.17))
 
-    def _key_tab_text(self) -> tuple:
-        return ICON_MUSIC, FRIENDLY_KEY_NAMES[self.root_index]
-
     @staticmethod
     def _bar_h(size) -> int:
         return round(size * NOTE_STRIP * 0.62)
 
     def _key_tab_width(self, g, size) -> int:
-        """The key tab's visible width: its note, its letter, and half a bar height either side."""
-        icon, name, px, h = *self._key_tab_text(), self._strip_px(size), self._bar_h(size)
-        return (g.measure(icon, round(px * TAB_ICON), "mono-heavy-italic", tr=False)[0]
-                + g.measure(f" {name}", px, "mono-heavy-italic", tr=False)[0] + h)
+        """The key tab's visible width, the same in every key so the grid holds still: the longest name
+        and half a bar height either side."""
+        px = self._strip_px(size)
+        return max(g.measure(name, px, "mono-heavy-italic", tr=False)[0] for name in FRIENDLY_KEY_NAMES) + self._bar_h(size)
 
     def _draw_word_strip(self, g, bar, px):
         """The word the letters spell, with its picture if it has one, and Space to hear it."""
@@ -815,23 +811,20 @@ class MusicRoom(Room):
         g.draw_text(text, word_px, x, bar.centery, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
         draw_key_hint(g, WORD_HINT, px, x + text_w + gap, bar.centery)
 
-    def _draw_note_strip(self, g, left, xs, bar, px, on_paper):
+    def _draw_note_strip(self, g, tab_w, xs, bar, px, on_paper):
         """Every letter row plays the same note in a column, so each column is named once, on a ledge
-        as wide as the grid, with a tab naming the key running from the frame to behind its left end. Played names go bold so the eye stays on the
+        as wide as the grid, with a tab naming the key, its note above, tucked behind its left end. Played names go bold so the eye stays on the
         keys; the key-change sweep gets the selection plate."""
         size = xs[1] - xs[0]
         h = bar.h
-        tab = pygame.Rect(left, bar.y, xs[0] + h - left, h)
+        tab = pygame.Rect(xs[0] - tab_w, bar.y, tab_w + h, h)
         ink = paper.INK_MUTED if on_paper else P.MUTED
         ground = mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE
-        g.rect(mix(ground, ink, 0.2), tab, radius=h // 2, left=0)
+        g.rect(mix(ground, ink, 0.2), tab, radius=h // 2)
         g.rect(ground, bar, radius=h // 2)
-        icon, name = self._key_tab_text()
-        icon_px, face, color = round(px * TAB_ICON), "mono-heavy-italic", paper.INK if on_paper else P.TEXT
-        icon_w = g.measure(icon, icon_px, face, tr=False)[0]
-        x = (left + xs[0] - icon_w - g.measure(f" {name}", px, face, tr=False)[0]) // 2
-        g.draw_text(icon, icon_px, x, bar.centery, face, color, anchor="midleft", tr=False)
-        g.draw_text(f" {name}", px, x + icon_w, bar.centery, face, color, anchor="midleft", tr=False)
+        face, color, cx = "mono-heavy-italic", paper.INK if on_paper else P.TEXT, xs[0] - tab_w // 2
+        g.draw_text(FRIENDLY_KEY_NAMES[self.root_index], px, cx, bar.centery, face, color, anchor="center", tr=False)
+        g.draw_text(ICON_MUSIC, px, cx, tab.y - h // 6, face, ink, anchor="midbottom", tr=False)
         plate = pygame.Rect(0, 0, round(size * 0.8), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
             root_idx, sweeping = self._transition_state_for_col(col)

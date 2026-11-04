@@ -911,7 +911,7 @@ class ArtRoom(Room):
         self._draw_brush(g, x, y, c)
 
     def draw_over_bar(self, g):
-        """The brush stays on top of the open color bar, as it does over the header."""
+        """The brush stays above the color bar's strip, as it does over the header; the shade column covers it."""
         ox, oy = self._origin
         self._draw_brush(g, ox + self._cursor_x * self._cell, oy + self._cursor_y * self._cell, self._cell)
 

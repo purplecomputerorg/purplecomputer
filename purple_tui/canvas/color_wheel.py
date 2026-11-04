@@ -175,9 +175,10 @@ class ColorBar(Overlay):
         if row is None:
             vp = self.app._viewport_rect()
             row = pygame.Rect(vp.x + g.em(0.7), vp.y + g.em(0.7), vp.w // 2, hint_row_h(g))
-        bar = self._draw_bar(g, px, row)
+        bar, picked = self._draw_bar(g, px, row)
         if over := getattr(self.room, "draw_over_bar", None):
             over(g)
+        self._draw_shades(g, px, picked)
         foot = getattr(self.room, "bar_foot", None)
         if foot is None:
             box = pygame.Rect(bar.x, bar.bottom + g.em(0.3), key_hint_width(g, HINT, px) + g.em(1.2),
@@ -189,7 +190,7 @@ class ColorBar(Overlay):
         g.rect(P.SURFACE, foot.inflate(0, g.em(0.6)))
         draw_key_hint(g, HINT, px, foot.x, foot.centery)
 
-    def _draw_bar(self, g, px: int, row: pygame.Rect) -> pygame.Rect:
+    def _draw_bar(self, g, px: int, row: pygame.Rect) -> tuple:
         """'< hues >' in one pill the chip's height; the picked hue's shades hang
         below its cell, so Up and Down move up and down the colors they pick from."""
         gap = px // 2
@@ -200,21 +201,22 @@ class ColorBar(Overlay):
         cw = (right - x) / (HUES + 1)
         _strip(g, [self._color(cell, self._shade) for cell in range(HUES + 1)], pygame.Rect(x, inner.y, right - x, inner.h))
         picked = pygame.Rect(round(x + self._cell * cw), inner.y, max(1, round(cw)), inner.h).inflate(round(px * 0.5), round(px * 0.7))
-        self._draw_shades(g, px, picked)
         _ring(g, picked, self.room.brush_color, px)
-        return pill
+        return pill, picked
 
     def _draw_shades(self, g, px: int, picked: pygame.Rect):
-        """The picked hue's shades as dots in a column no wider than its cell, the one in use ringed."""
-        gap = max(2, round(px * 0.2))
-        size = picked.w - 2 * gap
-        col = pygame.Rect(0, picked.bottom + gap, picked.w, SHADES * (size + gap) + gap)
+        """The picked hue's shades as dots between Up and Down arrows, in a column
+        no wider than its cell; the one in use fills the column inside a thick ring."""
+        w, rh, ah = picked.w, round(picked.w * 0.85), round(px * 1.2)
+        col = pygame.Rect(0, picked.bottom + px // 4, w, 2 * ah + SHADES * rh)
         col.centerx = picked.centerx
-        g.rect(P.SURFACE, col, radius=col.w // 2)
-        g.rect(P.LINE, col, width=1, radius=col.w // 2)
+        g.rect(P.SURFACE, col, radius=w // 2)
+        g.rect(P.LINE, col, width=1, radius=w // 2)
+        for glyph, y in ((UP, col.y + ah // 2), (DOWN, col.bottom - ah // 2)):
+            g.draw_text(glyph, round(ah * 0.7), col.centerx, y, "mono", P.TEXT, anchor="center")
         for s in range(SHADES):
-            center = (col.centerx, col.y + gap + s * (size + gap) + size // 2)
-            rings = ((P.ON_PRIMARY, size + 6), ("#ffffff", size + 2)) if s == self._shade else ()
-            for color, d in (*rings, (self._color(self._cell, s), size)):
-                dot = swatch_dot(color, d)
-                g.surface.blit(dot, dot.get_rect(center=center))
+            color = self._color(self._cell, s)
+            dots = ((P.ON_PRIMARY, w), ("#ffffff", w - 4), (color, w - 12)) if s == self._shade else ((color, round(w * 0.55)),)
+            for c, d in dots:
+                dot = swatch_dot(c, d)
+                g.surface.blit(dot, dot.get_rect(center=(col.centerx, col.y + ah + s * rh + rh // 2)))

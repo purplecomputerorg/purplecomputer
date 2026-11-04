@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Writes purple_tui/canvas/images/instruments/<id>.svg and a 128px .png (needs inkscape),
-and the Letters switch's names and sounds pictures to images/letters/.
+the Letters switch's names and sounds pictures to images/letters/, and the Tab
+switches' paint, notes, abc, front and back pictures to images/modes/.
 Drawn for the Music header's chips: every part at least ~3px at 24px (16 units of 128).
 Usage: just python scripts/instrument_icons.py"""
 
@@ -8,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 IMAGES = Path(__file__).resolve().parent.parent / "purple_tui" / "canvas" / "images"
-OUT, LETTERS = IMAGES / "instruments", IMAGES / "letters"
+OUT, LETTERS, MODES = IMAGES / "instruments", IMAGES / "letters", IMAGES / "modes"
 D, P1, P2, P3, P4, P5, P6 = "#2a1650", "#6a3fb0", "#8656d0", "#a379e8", "#c39cf7", "#dfc9ff", "#f6efff"
 W1, W2, W3 = "#6e3560", "#b0628f", "#cc80ab"  # plum wood
 U1, U2 = "#9a4e8e", "#dc93cf"  # orchid ukulele
@@ -17,8 +18,8 @@ O = f'stroke="{D}" stroke-width="7" stroke-linejoin="round" stroke-linecap="roun
 O5 = O.replace('"7"', '"5"')
 
 
-def svg(body):
-    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">{body}</svg>\n'
+def svg(body, width=128, height=128):
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}">{body}</svg>\n'
 
 
 def stick(x1, y1, x2, y2, color, w=7):
@@ -90,10 +91,55 @@ def block(x, y, size, fill, letter):
         ' fill="none" stroke-linecap="round" stroke-linejoin="round"/>')
 
 
+A, B = "M16 52 L32 12 L48 52 M21 40 H43", "M20 14 V50 H35 A9 9 0 0 0 35 32 H20 M20 14 H33 A9 9 0 0 1 33 32"
+
+
 def names():
     """Alphabet blocks: A in front of B."""
-    return svg(block(48, 6, 72, P3, "M20 14 V50 H35 A9 9 0 0 0 35 32 H20 M20 14 H33 A9 9 0 0 1 33 32")
-               + block(8, 46, 76, P5, "M16 52 L32 12 L48 52 M21 40 H43"))
+    return svg(block(48, 6, 72, P3, B) + block(8, 46, 76, P5, A))
+
+
+def abc():
+    """Letters: three alphabet blocks in a row."""
+    letters = (A, B, "M46 21 A17 17 0 1 0 46 45")
+    return svg("".join(block(6 + i * 82, 6, 76, (P5, P3)[i % 2], d) for i, d in enumerate(letters)), 252, 88)
+
+
+def paint():
+    """A painter's palette with blobs of paint and a thumb hole."""
+    blobs = (("#ff5a5a", 34, 46), ("#ffd23f", 62, 30), ("#4ea8ff", 92, 38), ("#5ad17a", 100, 68))
+    return svg(f'<path d="M64 10 C108 10 124 40 120 66 C116 92 96 90 84 84 C72 78 62 88 70 102 C78 116 58 120 44 116'
+               f' C18 108 4 86 6 62 C8 32 30 10 64 10 Z" fill="{W3}" {O}/>'
+               + "".join(f'<circle cx="{x}" cy="{y}" r="11" fill="{c}" {O5}/>' for c, x, y in blobs)
+               + f'<circle cx="38" cy="84" r="10" fill="{P5}" {O5}/>')
+
+
+def notes():
+    """Two eighth notes joined by a beam."""
+    heads = "".join(f'<ellipse cx="{x}" cy="{y}" rx="20" ry="15" transform="rotate(-20 {x} {y})" fill="{P5}" {O}/>'
+                    for x, y in ((36, 100), (96, 88)))
+    return svg(f'<path d="M50 96 V22 L110 10 V84" fill="none" stroke="{D}" stroke-width="17" stroke-linejoin="round"/>'
+               f'<path d="M50 96 V22 L110 10 V84" fill="none" stroke="{P5}" stroke-width="7" stroke-linejoin="round"/>'
+               f'<path d="M50 22 L110 10 V32 L50 44 Z" fill="{P5}" {O}/>' + heads)
+
+
+def head(face):
+    """A round head with ears; face draws what this side shows."""
+    ears = "".join(f'<circle cx="{x}" cy="70" r="12" fill="{P5}" {O}/>' for x in (14, 114))
+    return svg(ears + f'<circle cx="64" cy="66" r="46" fill="{P5}" {O}/>' + face)
+
+
+def front():
+    """Blocks seen from the front: a smiling face."""
+    return head(f'<path d="M18 62 C18 12 110 12 110 62 C96 42 80 36 64 38 C48 36 32 42 18 62 Z" fill="{P1}" {O}/>'
+                f'<circle cx="48" cy="70" r="7" fill="{D}"/><circle cx="80" cy="70" r="7" fill="{D}"/>'
+                f'<path d="M46 90 Q64 106 82 90" stroke="{D}" stroke-width="7" fill="none" stroke-linecap="round"/>')
+
+
+def back():
+    """Blocks seen from the back: the back of the same head, all hair."""
+    return head(f'<circle cx="64" cy="66" r="46" fill="{P1}" {O}/>'
+                f'<path d="M64 24 Q58 50 64 76 M46 30 Q38 52 44 74 M82 30 Q90 52 84 74" stroke="{P2}" stroke-width="6" fill="none" stroke-linecap="round"/>')
 
 
 def sounds():
@@ -108,7 +154,7 @@ def render(draw, folder):
     folder.mkdir(exist_ok=True)
     svg_path = folder / f"{draw.__name__}.svg"
     svg_path.write_text(draw())
-    subprocess.run(["inkscape", str(svg_path), "-w", "128", "-h", "128", "-o", str(svg_path.with_suffix(".png"))],
+    subprocess.run(["inkscape", str(svg_path), "-h", "128", "-o", str(svg_path.with_suffix(".png"))],
                    check=True, capture_output=True)
 
 
@@ -117,3 +163,5 @@ if __name__ == "__main__":
         render(draw, OUT)
     for draw in (names, sounds):
         render(draw, LETTERS)
+    for draw in (paint, notes, abc, front, back):
+        render(draw, MODES)

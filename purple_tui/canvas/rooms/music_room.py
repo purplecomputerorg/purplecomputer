@@ -27,7 +27,7 @@ from ..gfx import is_one_emoji, mix
 from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
-from ..ui import (CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
+from ..ui import (ABC_PICTURE, CODE_HINT, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
                   draw_mode_switch, draw_status_row, hint_row_h, hold_status, key_hint_width, status_row_h)
 from .base import Room
 
@@ -102,7 +102,6 @@ class MusicRoom(Room):
         self._spelled = ""
         self._typed_at: list = []  # when each letter of _spelled was typed
         self.word = None          # the real word the letters just typed end with
-        self._toast = None
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
         self._enter_down_at = None
@@ -529,15 +528,12 @@ class MusicRoom(Room):
 
     def _announce_voice(self):
         """What the keys play now, shown in a toast and heard on one sample, for kids who can't read the header."""
-        picture = None
         if self.letters_mode:
-            text = f"Letter {'sounds' if self.say_sounds else 'names'}"
-            picture = self.app.g.image(LETTER_PICTURES[self.say_sounds], self.app.g.vh(3.4))
+            self.announce(f"Letter {'sounds' if self.say_sounds else 'names'}", LETTER_PICTURES[self.say_sounds])
             self.play_letter("A")
         else:
-            text = self._instrument_label(self.instrument_index)
+            self.announce(self._instrument_label(self.instrument_index))
             self.play_sound_with_instrument("A", self.instrument_index)
-        self._toast = self.app.notify(text, picture=picture, replaces=self._toast)
 
     def _spell(self, key: str, now: float):
         """Letters typed without a long rest build words; anything else starts over."""
@@ -605,7 +601,7 @@ class MusicRoom(Room):
             if action.direction in ("left", "right"):
                 step = 1 if action.direction == "right" else -1
                 self.shift_root((self.root_index + step) % len(FRIENDLY_KEYS), step)
-                self._toast = self.app.notify(f"{ICON_MUSIC}  {key_label(self.root_index)}", replaces=self._toast)
+                self.announce(f"{ICON_MUSIC}  {key_label(self.root_index)}")
             return
         if isinstance(action, CharacterAction):
             if action.is_repeat or not action.char:
@@ -722,7 +718,7 @@ class MusicRoom(Room):
             return
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
         bar.h = hint_row_h(g)
-        draw_mode_switch(g, bar, (f"{ICON_MUSIC} Notes", f"{ICON_KEYBOARD} Letters"), 1 if self.letters_mode else 0,
+        draw_mode_switch(g, bar, ("modes/notes.png", ABC_PICTURE), 1 if self.letters_mode else 0,
                          chips=self._header_chips(),
                          also=(self._header_chips(not self.letters_mode),))
 

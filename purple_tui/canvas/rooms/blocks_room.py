@@ -41,6 +41,7 @@ TURN_S = 0.5
 TURN_DETAIL_BLOCKS = 600     # visible blocks; past this the half turn drops seams and shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed turn frame slower than this lowers that limit to its block count
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
+SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab switch's words and pictures
 FRONT_ALPHA = 85              # rows nearer than the cursor's row fade to this when they hide the landing block
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the floor color
@@ -344,6 +345,7 @@ class BlocksRoom(Room):
         if self._fade_progress() is not None:
             return
         self._back = not self._back
+        self.announce(*SIDES[self._back])
         self._fade_start = time.monotonic()
         if self._fade_timer is None:
             self._fade_timer = self.app.timers.every(1 / 60, self._fade_tick)
@@ -651,7 +653,7 @@ class BlocksRoom(Room):
             self._draw_hold_badge(g, ox, oy, area)
         else:
             self._draw_turning(g, ox, oy, p)
-        self.bar_row = draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), ("Front", "Back"),
+        self.bar_row = draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), tuple(pic for _, pic in SIDES),
                                         1 if self._back else 0, self._color, wheel=None if self.code_panel else wheel_chip(self))
         self.bar_foot = None
         if foot_h and self.app._panel is None:

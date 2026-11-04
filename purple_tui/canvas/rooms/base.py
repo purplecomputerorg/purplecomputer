@@ -20,6 +20,13 @@ class Room:
 
     def __init__(self, app):
         self.app = app
+        self._toast = None
+
+    def announce(self, text: str, picture: str | None = None):
+        """A switch's toast, with an images/ picture, for kids who can't read the header; replaces the last
+        so quick switches don't stack."""
+        pic = picture and self.app.g.image(picture, self.app.g.vh(3.4))
+        self._toast = self.app.notify(text, picture=pic, replaces=self._toast)
 
     def on_enter(self):
         pass

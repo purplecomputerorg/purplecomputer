@@ -836,39 +836,58 @@ def header_pill(g: Gfx, px: int, content_w: int, right: int, cy: int, on: bool) 
 def _draw_key_chip(g: Gfx, px: int, right: int, cy: int, key_name: str, mark, label: str, on: bool,
                    noun: str = "") -> pygame.Rect:
     """'[key] noun mark label' in one pill: noun says what the key changes, label
-    is what it's on now; mark is a surface, an icon glyph or None; on = lit."""
+    is what it's on now (or "" for the mark alone); mark is a surface, an icon glyph or None; on = lit."""
     gap = px // 2
-    key_w = keycap_size(g, key_name, px)[0]
-    noun_w = g.measure(noun, px, "mono")[0] + gap if noun else 0
-    mark_w = (mark.get_width() if isinstance(mark, pygame.Surface) else g.measure(mark, px, "mono")[0]) + gap if mark else 0
-    label_w = g.measure(label, px, "mono-bold" if on else "mono")[0]
-    pill, pad = header_pill(g, px, key_w + gap + noun_w + mark_w + label_w + px - round(px * 0.35), right, cy, on)
     ink, cap = (P.ON_PRIMARY, P.PRIMARY) if on else (P.TEXT, P.SURFACE)
-    x = draw_key(g, key_name, px, pill.x + pad, cy, fill=ink, ink=cap).right + gap
-    if noun:
-        x = g.draw_text(noun, px, x, cy, "mono", ink if on else P.MUTED, anchor="midleft").right + gap
-    if isinstance(mark, pygame.Surface):
-        x = g.surface.blit(mark, mark.get_rect(midleft=(x, cy))).right + gap
-    elif mark:
-        x = g.draw_text(mark, px, x, cy, "mono", ink, anchor="midleft").right + gap
-    g.draw_text(label, px, x, cy, "mono-bold" if on else "mono", ink, anchor="midleft")
+    texts = ((noun, "mono", ink if on else P.MUTED), (mark, "mono", ink), (label, "mono-bold" if on else "mono", ink))
+    parts = [t for t in texts if t[0]]
+    widths = [m.get_width() if isinstance(m, pygame.Surface) else g.measure(m, px, face)[0] for m, face, _ in parts]
+    content = keycap_size(g, key_name, px)[0] + sum(widths) + gap * len(parts) + px - round(px * 0.35)
+    pill, pad = header_pill(g, px, content, right, cy, on)
+    x = draw_key(g, key_name, px, pill.x + pad, cy, fill=ink, ink=cap).right
+    for (m, face, color), w in zip(parts, widths):
+        x += gap
+        if isinstance(m, pygame.Surface):
+            g.surface.blit(m, m.get_rect(midleft=(x, cy)))
+        else:
+            g.draw_text(m, px, x, cy, face, color, anchor="midleft")
+        x += w
     return pill
+
+
+ABC_PICTURE = "modes/abc.png"
+
+
+def _switch_picture(g: Gfx, px: int, label: str) -> pygame.Surface | None:
+    """A switch label that names an images/ PNG is drawn as that picture, filling the selection plate."""
+    return g.image(label, keycap_size(g, "X", px)[1] + round(px * 0.1)) if label.endswith(".png") else None
 
 
 def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple) -> tuple:
     """Label plate widths and the content width."""
-    widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for t in labels]
+    widths = [(pic.get_width() if (pic := _switch_picture(g, px, t)) else g.measure(t, px, "mono-bold")[0])
+              + round(px * 1.4) for t in labels]
     return widths, keycap_size(g, key_name, px)[0] + (px // 2) * len(labels) + sum(widths)
 
 
 def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int) -> pygame.Rect:
-    """'[key] One Two' in one pill, the active label on the selection plate."""
+    """'[key] One Two' in one pill, the active label on the selection plate; a picture label
+    off the plate is dimmed."""
     gap = px // 2
     widths, content = _switch_widths(g, px, key_name, labels)
     pill, pad = header_pill(g, px, content, right, cy, False)
     x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
     for i, (label, w) in enumerate(zip(labels, widths)):
-        draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
+        pic = _switch_picture(g, px, label)
+        if not pic:
+            draw_label(g, label, px, x + w // 2, cy, anchor="center", on=i == active)
+        elif i == active:
+            plate = pygame.Rect(x, pill.y + pad // 2, w, pill.h - pad)
+            g.rect(P.PRIMARY, plate, radius=plate.h // 2)
+        else:
+            pic = _faded(pic)
+        if pic:
+            g.surface.blit(pic, pic.get_rect(center=(x + w // 2, cy)))
         x += w + gap
     return pill
 
@@ -906,16 +925,16 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
                      icon=None, wheel: str | None = None, chips: tuple = (), also: tuple = ()):
     """The room's header: the Tab switch starting at the middle, the brush
     swatch (or an icon standing in for it) left of it, then key chips further
-    left: '[\\] Colors' when wheel (from color_wheel.chip) is set, and each of
+    left: '[\\] (color wheel)' when wheel (from color_wheel.chip) is set, and each of
     chips = (key, mark, label, on, noun), or (key, labels, active) for a stepper.
     Slides right when the chips would run past r's left edge, as far as the
     widest of chips and the other chip sets in also, so it holds still when a
     room swaps its chips. Returns the color bar's row: r from its left edge
-    to the Colors chip's right, or None without the chip."""
+    to the color wheel chip's right, or None without the chip."""
     px = g.vh(1.9)
     if wheel:
         from .color_wheel import OPEN_KEY, disc
-        chips = ((OPEN_KEY, disc(round(px * 1.3)), "Colors", wheel == "open"), *chips)
+        chips = ((OPEN_KEY, disc(round(px * 1.6)), "", wheel == "open"), *chips)
     start = r.centerx - keycap_size(g, "Tab", px)[0]
     with g.drawing_on(pygame.Surface((1, 1))):
         left = min(_draw_mode_switch_at(g, px, start, r.centery, labels, active, swatch, icon, c).x for c in (chips, *also))

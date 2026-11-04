@@ -21,6 +21,7 @@ from ..gfx import FONT_DIR
 from ...audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volume_step
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
+from ...input import KeyCode, PowerButtonEvent, RawKeyEvent
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_key_hint,
                   draw_key_lines, draw_meter, draw_scrim, draw_text_caret, draw_window, field_height, window_title_height)
@@ -395,6 +396,26 @@ def _second_language_menu_label() -> str:
 
 def _voice_menu_label(pref: str) -> str:
     return f"Voice: {VOICE_NAMES.get(pref, VOICE_NAMES[VOICE_NATURAL])}"
+
+
+class FakeKeyScreen(Picker):
+    """Dev and debug only: hardware keys a VM can't pass through (UTM drops Mac media keys)."""
+    title = "Press a Key"
+    DESCRIPTION = "Sent to Purple once this menu closes"
+    OPTIONS = [(KeyCode.KEY_VOLUMEUP, "Volume Up"), (KeyCode.KEY_VOLUMEDOWN, "Volume Down"), (KeyCode.KEY_MUTE, "Mute"),
+               (KeyCode.KEY_BRIGHTNESSUP, "Brightness Up"), ("tap", "Power Button")]
+    escape_value = CANCELLED
+
+
+def send_fake_key(app, key):
+    async def send():
+        if key == "tap":
+            await app._handle_power_button_event(PowerButtonEvent(key, time.monotonic()))
+            return
+        for down in (True, False):
+            await app._handle_raw_key_event(RawKeyEvent(key, down, time.monotonic()))
+    # Wait out the Enter release so the key lands on the room, not mid-chord.
+    app.timers.after(0.4, lambda: asyncio.ensure_future(send()))
 
 
 class PinActionScreen(Picker):
@@ -1250,6 +1271,8 @@ def _get_menu_items(app) -> list:
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
         items.append(("menu-bash", "Exit to Bash"))
+    if is_debug() or _is_dev_environment():
+        items.append(("menu-fake-key", "Press a Key"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
     items.append(("menu-shutdown", "Shut Down"))
@@ -1355,6 +1378,7 @@ class ParentMenu(Overlay):
                 self._relabel("menu-kids", _kids_label()), self._relabel("menu-rename", _rename_label(self.app)))),
             "menu-export": lambda: self.app.push(__import__("purple_tui.canvas.rooms.save_export", fromlist=["SaveExportScreen"]).SaveExportScreen(self.app)),
             "menu-shell": lambda: (self.close(), self.app.push(TerminalScreen(self.app))),
+            "menu-fake-key": self._open_fake_key,
             "menu-demo": lambda: (self.close(), self.app.start_demo()),
             "menu-bash": lambda: (self.close(), self.app.exit()), "menu-system": lambda: (self.close(), self.app.exit()),
             "menu-help": lambda: self.app.push(__import__("purple_tui.canvas.rooms.help_videos", fromlist=["HelpVideosScreen"]).HelpVideosScreen(self.app)),
@@ -1469,6 +1493,13 @@ class ParentMenu(Overlay):
         self._relabel("menu-language", _language_menu_label())
         self._relabel("menu-second-language", _second_language_menu_label())
         self.app.invalidate()
+
+    def _open_fake_key(self):
+        def apply(key):
+            if key is not CANCELLED:
+                self.close()
+                send_fake_key(self.app, key)
+        self.app.push(FakeKeyScreen(self.app), on_close=apply)
 
     def _open_voice(self):
         def apply(v):

@@ -889,7 +889,7 @@ def _draw_stepper(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: t
     pics = [pic if i == active else _faded(pic) for i, pic in enumerate(pics)]
     step = pics[active].get_width() + gap
     text_w = max(g.measure(t, px, "mono-bold")[0] for t in labels)
-    content = keycap_size(g, key_name, px)[0] + 3 * gap + text_w + px + step * len(pics) - gap
+    content = keycap_size(g, key_name, px)[0] + 3 * gap + text_w + px + step * len(pics)
     pill, pad = header_pill(g, px, content, right, cy, False)
     x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
     g.draw_text(labels[active], px, x + gap + text_w // 2, cy, "mono-bold", P.TEXT, anchor="center")
@@ -988,14 +988,15 @@ def draw_meter(g: Gfx, rect: pygame.Rect, filled: int, steps: int, color=None):
     g.rect(P.LINE, rect, width=1, radius=r)
 
 
-def draw_level(g: Gfx, px: int, cx: int, cy: int, icon: str, filled: int, steps: int, label: str) -> pygame.Rect:
+def draw_level(g: Gfx, px: int, cx: int, cy: int, icon: str, filled: int, steps: int, label: str, ink=None) -> pygame.Rect:
     """Icon, meter, label; the meter is centered so a long label never slides it over."""
     h = round(px * 1.1)
     meter = pygame.Rect(0, 0, h * steps, h)
     meter.center = (cx, cy)
     draw_meter(g, meter, filled, steps)
-    icon_r = g.draw_text(icon, px, meter.x - px, cy, "mono-bold", P.TEXT, anchor="midright")
-    return icon_r.union(g.draw_text(label, px, meter.right + px, cy, "mono-bold", P.TEXT, anchor="midleft"))
+    ink = ink or P.TEXT
+    icon_r = g.draw_text(icon, px, meter.x - px, cy, "mono-bold", ink, anchor="midright")
+    return icon_r.union(g.draw_text(label, px, meter.right + px, cy, "mono-bold", ink, anchor="midleft"))
 
 
 HOLD_QUIET = 0.35  # of a hold: before this, nothing shows, so a tap never flashes the bar

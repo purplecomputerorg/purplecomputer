@@ -1244,15 +1244,15 @@ class PurpleApp:
     def _volume_badge(self) -> tuple[str, str, str]:
         return volume_badge(self._effective_volume(), self._volume_lock)
 
-    def draw_volume(self, g, px: int, cx: int, cy: int) -> pygame.Rect:
+    def draw_volume(self, g, px: int, cx: int, cy: int, ink=None) -> pygame.Rect:
         icon, _, label = self._volume_badge()
-        return draw_level(g, px, cx, cy, icon, volume_step(self._effective_volume()), VOLUME_TOP, label)
+        return draw_level(g, px, cx, cy, icon, volume_step(self._effective_volume()), VOLUME_TOP, label, ink)
 
     def _notify_volume(self):
         g = self.g
         sheet = pygame.Surface((g.w, g.vh(8)), pygame.SRCALPHA)
         with g.drawing_on(sheet):
-            drawn = self.draw_volume(g, g.vh(2.4), g.w // 2, sheet.get_height() // 2)
+            drawn = self.draw_volume(g, g.vh(2.4), g.w // 2, sheet.get_height() // 2, P.ON_PRIMARY)
         self.clear_notifications()
         self.notify("", picture=sheet.subsurface(drawn.clip(sheet.get_rect())).copy())
 

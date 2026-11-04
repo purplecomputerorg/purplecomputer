@@ -13,7 +13,7 @@ import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
 // source: the photo Studio crops from, kept for reopening; Purple never reads it.
 export interface PackPicture { name: string; title?: string; ops: PaintOp[]; letters?: LetterOp[]; png?: Uint8Array; source?: Uint8Array }
 // notes: its WAVs already rendered, in SAMPLE_PITCHES order (Studio renders them off the page).
-export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params; notes?: Uint8Array[] }
+export interface PackInstrument { name: string; title?: string; base: BaseName; params: Params; icon?: string; notes?: Uint8Array[] }
 // content/rooms/<name>.py: Python run as a guest (guides/family-rooms.md); its emoji and the Studio rules or form it was made from ride beside it.
 export interface PackRoom { name: string; source: string; made?: unknown; icon?: string }
 // content/images/<name>.png and content/sounds/<name>.wav: what rooms draw with picture() and play with sound().
@@ -145,7 +145,7 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   }
 
   for (const inst of spec.instruments) {
-    entries.push(json(`content/instruments/${inst.name}.json`, { name: inst.title ?? inst.name, base: inst.base, params: inst.params }));
+    entries.push(json(`content/instruments/${inst.name}.json`, { name: inst.title ?? inst.name, base: inst.base, params: inst.params, ...(inst.icon ? { icon: inst.icon } : {}) }));
     const notes = inst.notes ?? (await renderNotes(inst, onProgress));
     SAMPLE_PITCHES.forEach((pitch, i) => entries.push({ path: `content/${inst.name}/${pitch.file}.wav`, data: notes[i] }));
   }

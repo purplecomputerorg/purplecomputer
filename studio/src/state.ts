@@ -22,7 +22,8 @@ export interface SynonymEntry extends Keepable { alias: string; word: string }
 export interface Phrase extends Keepable { text: string; clip: Clip; said?: string }
 export interface Letter extends Keepable { clip: Clip; said?: string }
 // title: the name as the family typed it, which Purple shows as is; name is its file name in the pack.
-export interface Instrument extends Keepable { name: string; title?: string; base: BaseName; params: Params }
+// icon: the emoji the family picked for it; without one Purple shows its base's picture.
+export interface Instrument extends Keepable { name: string; title?: string; base: BaseName; params: Params; icon?: string }
 // What a room's Python is generated from, kept so it reopens: rules, blocks (Blockly's saved workspace), or a form.
 // Null when the Python is the room's own.
 export type Made = { kind: "rules"; rules: Rule[] } | { kind: "blocks"; workspace: object } | TemplateDraft;

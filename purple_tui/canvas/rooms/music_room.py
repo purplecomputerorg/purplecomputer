@@ -23,7 +23,7 @@ from ...music_constants import (
 )
 from ...palette import KEY_COLORS, text_color_for
 from .. import paper
-from ..gfx import mix
+from ..gfx import is_one_emoji, mix
 from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
@@ -65,12 +65,10 @@ def note_label(note: str) -> str:
     return f"♪ {note}"
 
 
-def initials(names: list) -> list:
-    """Each name's shortest start that no other name shares: M, U, A, G; Ma and Mo for Marimba and Mom."""
-    def short(name):
-        others = [n.lower() for n in names if n != name]
-        return next((name[:k] for k in range(1, len(name)) if not any(o.startswith(name[:k].lower()) for o in others)), name)
-    return [short(n) for n in names]
+def instrument_icon(instrument_id: str) -> str:
+    """Its picture, or a pack's emoji; anything that isn't one emoji gets the music glyph, as rooms do."""
+    icon = get_content().instrument_icon(instrument_id)
+    return icon if is_one_emoji(icon) else ICON_MUSIC
 
 
 class MusicRoom(Room):
@@ -263,6 +261,11 @@ class MusicRoom(Room):
         """(id, name); an index saved before a pack was removed wraps instead of failing."""
         available = instruments()
         return available[index % len(available)]
+
+    @classmethod
+    def _instrument_label(cls, index: int) -> str:
+        inst_id, name = cls._instrument(index)
+        return f"{instrument_icon(inst_id)} {name}"
 
     @staticmethod
     def _instrument_index(instrument_id: str) -> int:
@@ -529,7 +532,7 @@ class MusicRoom(Room):
             text = f"{ICON_KEYBOARD}  Letter {'sounds' if self.say_sounds else 'names'}"
             self.play_letter("A")
         else:
-            text = f"{ICON_MUSIC}  {self._instrument(self.instrument_index)[1]}"
+            text = self._instrument_label(self.instrument_index)
             self.play_sound_with_instrument("A", self.instrument_index)
         self._toast = self.app.notify(text, replaces=self._toast)
 
@@ -709,9 +712,8 @@ class MusicRoom(Room):
 
     def _draw_header(self, g, rect):
         """The same header as Art and Blocks: the Enter chip beside the Notes / Letters switch."""
-        instrument = self._instrument(self.instrument_index)[1]
         if self.app._littles_mode:
-            plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {instrument}"
+            plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else self._instrument_label(self.instrument_index)
             draw_label(g, plate, g.em(1.0), rect.centerx, rect.y + g.em(1.9), P.TEXT, anchor="center", on=True)
             return
         bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
@@ -728,18 +730,18 @@ class MusicRoom(Room):
 
     def _header_chips(self, index: int, letters: bool, sounds: bool) -> tuple:
         """Enter as a switch like Tab's. Instruments show the current one on the plate and the others,
-        in order, by their initials, so it's clear Enter steps through all of them (pack ones too)."""
+        in order, by their pictures, so it's clear Enter steps through all of them (pack ones too)."""
         if letters:
             return ("Enter", ("Names", "Sounds"), int(sounds)),
-        names = [name for _, name in instruments()]
-        i = index % len(names)
-        short = initials(names)
-        labels = [part for part in (" ".join(short[:i]), names[i], " ".join(short[i + 1:])) if part]
-        return ("Enter", tuple(labels), labels.index(names[i])),
+        icons = [instrument_icon(inst_id) for inst_id, _ in instruments()]
+        i = index % len(icons)
+        labels = [part for part in (" ".join(icons[:i]), self._instrument_label(i), " ".join(icons[i + 1:])) if part]
+        return ("Enter", tuple(labels), int(i > 0)),
 
     def _code_status(self, g) -> tuple:
         """What code can change, in its own words: choose, letters, key."""
-        return ((ICON_MUSIC, self._instrument(self.instrument_index)[1]),
+        inst_id, name = self._instrument(self.instrument_index)
+        return ((instrument_icon(inst_id), name),
                 (ICON_KEYBOARD, f"Letter {'sounds' if self.say_sounds else 'names'}" if self.letters_mode else "Letters off"),
                 (None, key_label(self.root_index)))
 

@@ -27,6 +27,7 @@ from .constants import ART_COLS, ART_ROWS, OLD_ART_GRID
 # old steps). The canvas draws it.
 WORD_PICTURE_FIRST = 0x100000
 WORD_PICTURE_SPAN = 0xFFFE
+INSTRUMENT_PICTURES = Path(__file__).parent / "canvas" / "images" / "instruments"
 
 
 def is_word_picture(char: str) -> bool:
@@ -46,6 +47,8 @@ class Instrument:
     id: str
     name: str
     path: Path
+    base: str = ""  # the Purple instrument its sliders start from
+    icon: str = ""  # its JSON's "icon", an emoji
 
 
 @dataclass(frozen=True)
@@ -223,6 +226,7 @@ class ContentManager:
         self.packs_dir = packs_dir or Path.home() / ".purple" / "packs"
         self.emojis: dict[str, str] = {}           # word -> emoji
         self.word_pictures: dict[str, Path] = {}   # word picture character -> its PNG
+        self.instrument_pictures: dict[str, str] = {}  # Purple's instrument id -> its picture character
         self.meanings: dict[str, str] = {}         # word -> what Play says it is
         self.colors: dict[str, str] = {}           # color name -> hex code
         self.sounds: dict[str, Path] = {}          # sound_id -> file path
@@ -263,6 +267,7 @@ class ContentManager:
                 self._load_pack(pack_dir, user=True)
 
         self._load_language_words()
+        self._load_instrument_pictures()
         self._loaded = True
         self._build_prefix_indexes()
         self._build_fuzzy_forms()
@@ -419,7 +424,24 @@ class ContentManager:
             samples = content_dir / spec.stem
             if not samples.is_dir():
                 continue
-            self.instruments.append(Instrument(spec.stem, typed_name(_read_json(spec), spec.stem) or display_name(spec.stem), samples))
+            data = _read_json(spec)
+            base = data.get("base") if isinstance(data, dict) else None
+            self.instruments.append(Instrument(spec.stem, typed_name(data, spec.stem) or display_name(spec.stem), samples,
+                                               base if isinstance(base, str) else "", json_icon(data)))
+
+    def _load_instrument_pictures(self) -> None:
+        """Purple's own instruments' pictures, drawn like word pictures; after the packs so their words keep their characters."""
+        if os.environ.get("PURPLE_UX") == "tui":
+            return
+        for path in sorted(INSTRUMENT_PICTURES.glob("*.png")):
+            char = self._free_picture_char(f"instrument:{path.stem}")
+            self.word_pictures[char] = path
+            self.instrument_pictures[path.stem] = char
+
+    def instrument_icon(self, instrument_id: str) -> str:
+        """A pack instrument's own emoji, else the picture of the Purple instrument it's made from."""
+        inst = next((i for i in reversed(self.instruments) if i.id == instrument_id), None)
+        return (inst and inst.icon) or self.instrument_pictures.get((inst and inst.base) or instrument_id, "")
 
     def _load_pictures(self, content_dir: Path) -> None:
         for spec in sorted((content_dir / "pictures").glob("*.json")):
@@ -873,7 +895,10 @@ def room_files(content_dir: Path) -> list[Path]:
 
 
 def room_icon(path: Path) -> str:
-    data = _read_json(path.with_suffix(".json"))
+    return json_icon(_read_json(path.with_suffix(".json")))
+
+
+def json_icon(data) -> str:
     icon = data.get("icon") if isinstance(data, dict) else None
     return icon if isinstance(icon, str) and len(icon) <= ROOM_ICON_MAX else ""
 

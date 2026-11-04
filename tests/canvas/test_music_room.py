@@ -100,10 +100,26 @@ def test_note_names_use_flats_in_flat_keys():
     assert scale["D"] == ["D", "E", "F♯", "G", "A", "B", "C♯"]
 
 
-def test_instrument_initials_stay_short_and_tell_names_apart():
-    from purple_tui.canvas.rooms.music_room import initials
-    assert initials(["Marimba", "Ukulele", "Accordion", "Glockenspiel"]) == ["M", "U", "A", "G"]
-    assert initials(["Marimba", "Ukulele", "Mom"]) == ["Ma", "U", "Mo"]
+def test_instruments_show_their_picture_a_packs_emoji_or_their_bases_picture(tmp_path, monkeypatch):
+    import json
+    from purple_tui import content as content_mod
+    from purple_tui.canvas.rooms.music_room import instrument_icon
+    from purple_tui.constants import ICON_MUSIC
+    from purple_tui.content import ContentManager, is_word_picture
+    content = tmp_path / "family" / "content"
+    (content / "instruments").mkdir(parents=True)
+    (content.parent / "manifest.json").write_text(json.dumps({"id": "family", "name": "F", "version": "1.0.0", "type": "emoji"}))
+    for name, spec in (("kazoo", {"base": "accordion", "icon": "🎺"}), ("harp", {"base": "ukulele"}), ("odd", {"base": "marimba", "icon": "no"})):
+        (content / name).mkdir()
+        (content / "instruments" / f"{name}.json").write_text(json.dumps({"name": name, "params": {}, **spec}))
+    cm = ContentManager(packs_dir=tmp_path)
+    cm.load_all()
+    monkeypatch.setattr(content_mod, "_content", cm)
+    marimba = instrument_icon("marimba")
+    assert is_word_picture(marimba) and cm.word_pictures[marimba].stem == "marimba"
+    assert instrument_icon("kazoo") == "🎺"
+    assert instrument_icon("harp") == instrument_icon("ukulele") != marimba
+    assert instrument_icon("odd") == ICON_MUSIC
 
 
 def test_arrows_toast_the_new_key_and_code_does_not():

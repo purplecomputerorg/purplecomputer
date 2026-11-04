@@ -47,9 +47,9 @@
   }
  ],
  "fingerprint": {
-  "studio/sdk/src/pack.ts": "10d215b546a97052",
+  "studio/sdk/src/pack.ts": "f079f2cfe343728b",
   "studio/src/pack.ts": "944ae929ddac7e14",
-  "purple_tui/content.py": "dcd131563a09b714",
+  "purple_tui/content.py": "4d473eff67a1e3e7",
   "purple_tui/pack_manager.py": "41f6ab779c96aafd",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
   "purple_tui/canvas/rooms/family_room.py": "e3a6f6d6fd03f3ec",

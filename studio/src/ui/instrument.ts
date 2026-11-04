@@ -4,21 +4,23 @@ import { playGridKey } from "../sounds";
 import { changed, draft, freeName, isTheirs, mine, titleOf, withSample, type Instrument } from "../state";
 import { tryBar, yoursList } from "./trybar";
 import { field, go, h } from "./dom";
+import { emojiCell } from "./emojipicker";
+import { purpleEmoji } from "./icons";
 import { liveScreen } from "./live";
 import type { View } from "./view";
 
 // Sounds to try first: Purple's four instruments with their sliders moved toward something familiar.
-const SOUNDS: { title: string; blurb: string; base: BaseName; params: Params }[] = [
-  { title: "Bells", blurb: "Long and ringing", base: "glockenspiel", params: { duration: 2.6, ring: 2.4, shimmer: 1.6 } },
+const SOUNDS: { title: string; icon?: string; blurb: string; base: BaseName; params: Params }[] = [
+  { title: "Bells", icon: "🔔", blurb: "Long and ringing", base: "glockenspiel", params: { duration: 2.6, ring: 2.4, shimmer: 1.6 } },
   { title: "Music box", blurb: "Small and tinkly", base: "glockenspiel", params: { duration: 0.6, ring: 0.5, fundamental: 0.3, ping: 0.15 } },
   { title: "Harp", blurb: "Soft, slow plucks", base: "ukulele", params: { duration: 1.8, damping: 0.998, warmth: 0.3, softness: 5, pluck_pos: 0.4, body_mix: 0.15 } },
-  { title: "Twangy guitar", blurb: "Bright and twangy", base: "ukulele", params: { warmth: 0.9, softness: 0, pluck_pos: 0.12, body_freq: 250, body_mix: 0.6 } },
+  { title: "Twangy guitar", icon: "🎸", blurb: "Bright and twangy", base: "ukulele", params: { warmth: 0.9, softness: 0, pluck_pos: 0.12, body_freq: 250, body_mix: 0.6 } },
   { title: "Xylophone", blurb: "Short, knocky wood", base: "marimba", params: { duration: 0.35, bar_decay: 9, wood: 1, sparkle: 0.2, tube: 0, mallet: 0.5 } },
   { title: "Soft marimba", blurb: "Round, with a long hum", base: "marimba", params: { duration: 1.5, attack_ms: 20, bar_decay: 1.5, wood: 0, sparkle: 0, tube: 0.6, tube_decay: 2, mallet: 0 } },
-  { title: "Organ", blurb: "Big and steady", base: "accordion", params: { attack_ms: 40, detune: 0.5, harmonics: 14, rolloff: 1800, trem_rate: 6, trem_depth: 0.06 } },
+  { title: "Organ", icon: "🎹", blurb: "Big and steady", base: "accordion", params: { attack_ms: 40, detune: 0.5, harmonics: 14, rolloff: 1800, trem_rate: 6, trem_depth: 0.06 } },
   { title: "Harmonica", blurb: "Breathy, with a hand wobble", base: "accordion", params: { duration: 0.8, attack_ms: 50, detune: 0, harmonics: 14, rolloff: 2200, trem_rate: 5.5, trem_depth: 0.14, breath: 1, scoop: 40 } },
   { title: "Kazoo", blurb: "Buzzy and silly", base: "accordion", params: { attack_ms: 10, detune: 0, harmonics: 20, rolloff: 4000, trem_depth: 0, breath: 0.4, scoop: 100 } },
-  { title: "Robot", blurb: "Beep boop", base: "accordion", params: { duration: 0.3, attack_ms: 10, detune: 0, harmonics: 3, rolloff: 4000, trem_rate: 10, trem_depth: 0.2 } },
+  { title: "Robot", icon: "🤖", blurb: "Beep boop", base: "accordion", params: { duration: 0.3, attack_ms: 10, detune: 0, harmonics: 3, rolloff: 4000, trem_rate: 10, trem_depth: 0.2 } },
 ];
 
 // Sounds made from the same Purple instrument share a color.
@@ -27,11 +29,11 @@ export const SWATCH: Record<BaseName, string> = { glockenspiel: "#f2c94c", ukule
 const taken = (n: string, except?: Instrument) => (INSTRUMENTS as readonly string[]).includes(n) || draft.instruments.some((i) => i !== except && i.name === n);
 
 // Trying a sound replaces the last one tried, unless it was changed or added.
-function tryOut(title: string, base: BaseName, params: Params) {
+function tryOut(title: string, base: BaseName, params: Params, icon?: string) {
   const others = draft.instruments.filter(isTheirs);
   const name = freeName(title, (n) => (INSTRUMENTS as readonly string[]).includes(n) || others.some((i) => i.name === n));
   const n = name.match(/-(\d+)$/)?.[1];
-  draft.instruments = withSample(draft.instruments, { name, title: n && !title.endsWith(n) ? `${title} ${n}` : title, base, params: { ...defaults(base), ...params } });
+  draft.instruments = withSample(draft.instruments, { name, title: n && !title.endsWith(n) ? `${title} ${n}` : title, base, params: { ...defaults(base), ...params }, icon });
   changed();
   location.hash = `#instruments/${encodeURIComponent(name)}`;
 }
@@ -49,12 +51,12 @@ function chooser(): View {
       "section",
       {},
       h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, then change how it sounds."),
-      yoursList(draft.instruments, (i) => ({ href: `#instruments/${encodeURIComponent(i.name)}`, title: titleOf(i), face: h("span", { class: "pick-swatch", style: `background:${SWATCH[i.base]}` }) }), drop),
+      yoursList(draft.instruments, (i) => ({ href: `#instruments/${encodeURIComponent(i.name)}`, title: titleOf(i), face: i.icon ? purpleEmoji(i.icon, "pick-icon") : h("span", { class: "pick-swatch", style: `background:${SWATCH[i.base]}` }) }), drop),
       h("h3", {}, "Try a sound"),
       h("p", { class: "swatch-legend" }, "Made from:", ...[...new Set(SOUNDS.map((snd) => snd.base))].map((b) =>
         h("span", {}, h("span", { class: "pick-swatch", style: `background:${SWATCH[b]}` }), BASES[b].label))),
       h("div", { class: "cards" }, ...SOUNDS.map((snd) =>
-        h("button", { class: "pick", onclick: () => tryOut(snd.title, snd.base, snd.params) }, h("span", { class: "pick-swatch", style: `background:${SWATCH[snd.base]}` }), h("b", {}, snd.title), h("span", {}, snd.blurb)))),
+        h("button", { class: "pick", onclick: () => tryOut(snd.title, snd.base, snd.params, snd.icon) }, h("span", { class: "pick-swatch", style: `background:${SWATCH[snd.base]}` }), h("b", {}, snd.title), h("span", {}, snd.blurb)))),
       h("h3", {}, "Or a plain one from Purple"),
       h("div", { class: "row" }, ...BASE_NAMES.map((b) =>
         h("button", { class: "btn secondary small", onclick: () => tryOut(`My ${BASES[b].label.toLowerCase()}`, b, {}) }, BASES[b].label))),
@@ -77,6 +79,12 @@ function editor(inst: Instrument): View {
     changed();
     location.hash = `#instruments/${encodeURIComponent(inst.name)}`;
   };
+
+  const iconCell = h("span", { class: "emoji-wrap" }, emojiCell(inst.icon ?? "", () => "", (e) => {
+    inst.icon = e || undefined;
+    mine(inst);
+    changed();
+  }, { empty: "Pick", clear: `Use Purple's ${base.label.toLowerCase()} picture`, title: "Its emoji in Purple's Music room" }));
 
   const sliders = h("div", { class: "sliders" });
   const groups = [...new Set(base.params.map((s) => s.group))];
@@ -114,7 +122,7 @@ function editor(inst: Instrument): View {
       "section",
       {},
       tryBar(inst),
-      h("div", { class: "card" }, field("Name", nameIn), h("p", { class: "dim small" }, `Made from Purple's ${base.label}.`)),
+      h("div", { class: "card" }, h("div", { class: "editor-head" }, iconCell, field("Name", nameIn)), h("p", { class: "dim small" }, `Made from Purple's ${base.label}.`)),
       h("div", { class: "card" }, h("p", { class: "dim small", style: "margin-top:0" }, "Type on your keyboard to play it. Moving a slider plays the last note again."), sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to a plain ${base.label}`))),
     ),
     live: { room: "music", instrument: inst.name },

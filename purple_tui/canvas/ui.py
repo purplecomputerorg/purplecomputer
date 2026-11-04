@@ -22,7 +22,7 @@ LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"
 TURN = "\U000F0467"   # nf-md-rotate_right
 MOVE_HINT = f"Arrows move  {LEFT} {UP} {DOWN} {RIGHT}"
 CLEAN_HINT = f"Arrows clean  {LEFT} {UP} {DOWN} {RIGHT}"
-PICK_HINT = "Type a letter to pick its color."  # while a tap of Shift waits: Shift+letter picks without painting
+PICK_HINT = "Type to pick {hints/rainbow.png}"  # while a tap of Shift waits: Shift+letter picks without painting
 KID_MATH_REMAP = {"=": "+", "/": "÷", "*": "×"}
 KID_MATH_KEYS = {v: k for k, v in KID_MATH_REMAP.items() if k != "="}  # + is also its own key
 
@@ -717,7 +717,7 @@ def swatch_dot(color: str, d: int) -> pygame.Surface:
     return _dot(auto_inks() if color == AUTO else (color,), d)
 
 
-@functools.lru_cache(maxsize=8)
+@functools.lru_cache(maxsize=32)
 def _dot(colors: tuple, d: int) -> pygame.Surface:
     """Drawn 4x and smoothed down so the edge stays clean; two colors split it left and right."""
     s = 4

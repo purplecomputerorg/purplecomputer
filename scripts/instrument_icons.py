@@ -223,9 +223,9 @@ def go_back():
 
 def up():
     """Enter in Blocks: a block goes on top of a block."""
-    return svg(f'<rect x="20" y="70" width="52" height="52" rx="12" fill="{TILES[2]}"/>'
-               f'<rect x="20" y="10" width="52" height="52" rx="12" fill="{TILES[0]}" opacity="0.55"/>'
-               f'<path d="M100 104 V24 M84 40 L100 24 L116 40" stroke="{RAINBOW[1]}" stroke-width="10" {ROUND}/>')
+    return svg(f'<rect x="8" y="70" width="52" height="52" rx="12" fill="{TILES[2]}"/>'
+               f'<rect x="8" y="10" width="52" height="52" rx="12" fill="{TILES[0]}" opacity="0.55"/>'
+               f'<path d="M104 104 V24 M88 40 L104 24 L120 40" stroke="{RAINBOW[4]}" stroke-width="10" {ROUND}/>')
 
 
 def loop():

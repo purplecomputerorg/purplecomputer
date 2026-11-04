@@ -773,7 +773,7 @@ def draw_key(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", fill=
     return key
 
 
-GLASS_FILL, GLASS_LIP = 40, 22   # alpha of the ink tint on a glass keycap's face and lip
+GLASS_FILL, GLASS_LIP = 40, 72   # alpha of the ink tint on a glass keycap's face and its brighter lip
 
 
 def _draw_glass_cap(g: Gfx, key: pygame.Rect, lip: int, ink, px: int) -> None:

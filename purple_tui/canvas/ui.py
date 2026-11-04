@@ -874,18 +874,14 @@ def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tu
 
 
 def _draw_stepper(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int,
-                  marks: tuple = ()) -> pygame.Rect:
-    """'[key] Current  a b c': one value at a time, then a mark per value (a dot, or
-    marks' icons) with only the current one lit, so it reads as stepping through
-    a list, unlike Tab's side by side switch. Sized to its widest label."""
+                  marks: tuple) -> pygame.Rect:
+    """'[key] Current  a b c': the current value's name, then a picture per value
+    (an emoji, word picture or images/ PNG) with only the current one lit, so every
+    choice shows yet it reads differently from Tab's switch. Pictures fill the
+    pill's height; sized to the widest label."""
     gap = px // 2
-    dot = round(px * 0.75)
-    if marks:
-        pics = [g.text(m, px, "mono", P.TEXT).copy() for m in marks]
-    else:
-        pics = [pygame.Surface((dot, dot), pygame.SRCALPHA) for _ in labels]
-        for pic in pics:
-            pygame.draw.circle(pic, rgb(P.PRIMARY), (dot // 2, dot // 2), dot // 2)
+    h = keycap_size(g, key_name, px)[1] + round(px * 0.35)
+    pics = [g.image(m, h) if m.endswith(".png") else g.text(m, round(h / 1.2), "mono", P.TEXT) for m in marks]
     pics = [pic if i == active else _faded(pic) for i, pic in enumerate(pics)]
     step = pics[active].get_width() + gap
     text_w = max(g.measure(t, px, "mono-bold")[0] for t in labels)
@@ -900,9 +896,9 @@ def _draw_stepper(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: t
 
 
 def _faded(pic: pygame.Surface) -> pygame.Surface:
-    """A stepper's mark for a value it isn't on: smaller and dim."""
-    small = pygame.transform.smoothscale(pic, (max(1, pic.get_width() * 3 // 4), max(1, pic.get_height() * 3 // 4)))
-    small.set_alpha(150)
+    """A stepper's picture for a value it isn't on: a bit smaller and dim."""
+    small = pygame.transform.smoothscale(pic, (max(1, pic.get_width() * 4 // 5), max(1, pic.get_height() * 4 // 5)))
+    small.set_alpha(170)
     return small
 
 

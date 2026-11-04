@@ -726,7 +726,7 @@ class MusicRoom(Room):
     def _header_chips(self, letters: bool | None = None) -> tuple:
         """Enter steps through instruments, shown by their pictures, or in Letters, names and sounds."""
         if self.letters_mode if letters is None else letters:
-            return ("Enter", ("Names", "Sounds"), int(self.say_sounds), ("🔤", "🗣️")),
+            return ("Enter", ("Names", "Sounds"), int(self.say_sounds), ("letters/names.png", "letters/sounds.png")),
         available = instruments()
         return ("Enter", tuple(name for _, name in available), self.instrument_index % len(available),
                 tuple(instrument_icon(inst_id) for inst_id, _ in available)),

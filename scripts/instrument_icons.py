@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Writes purple_tui/canvas/images/instruments/<id>.svg and a 128px .png (needs inkscape).
+"""Writes purple_tui/canvas/images/instruments/<id>.svg and a 128px .png (needs inkscape),
+and the Letters switch's names and sounds pictures to images/letters/.
 Drawn for the Music header's chips: every part at least ~3px at 24px (16 units of 128).
 Usage: just python scripts/instrument_icons.py"""
 
 import subprocess
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent.parent / "purple_tui" / "canvas" / "images" / "instruments"
+IMAGES = Path(__file__).resolve().parent.parent / "purple_tui" / "canvas" / "images"
+OUT, LETTERS = IMAGES / "instruments", IMAGES / "letters"
 D, P1, P2, P3, P4, P5, P6 = "#2a1650", "#6a3fb0", "#8656d0", "#a379e8", "#c39cf7", "#dfc9ff", "#f6efff"
 W1, W2, W3 = "#6e3560", "#b0628f", "#cc80ab"  # plum wood
 U1, U2 = "#9a4e8e", "#dc93cf"  # orchid ukulele
@@ -20,8 +22,13 @@ def svg(body):
 
 
 def stick(x1, y1, x2, y2, color, w=7):
-    return (f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{D}" stroke-width="{w + 8}" stroke-linecap="round"/>'
-            f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="{w}" stroke-linecap="round"/>')
+    return stroke(f"M{x1} {y1} L{x2} {y2}", color, w)
+
+
+def stroke(d, color, w):
+    """A path drawn as a thick line with the dark outline around it."""
+    line = 'fill="none" stroke-linecap="round" stroke-linejoin="round"'
+    return f'<path d="{d}" stroke="{D}" stroke-width="{w + 8}" {line}/><path d="{d}" stroke="{color}" stroke-width="{w}" {line}/>'
 
 
 def marimba():
@@ -76,10 +83,32 @@ def glockenspiel():
     return svg("".join(out))
 
 
+def names():
+    """A B C in capitals, a little staggered like blocks."""
+    return svg(stroke("M6 98 L21 38 L36 98 M11 80 H31", P5, 11)
+               + stroke("M48 30 V90 H60 A15 15 0 0 0 60 60 H48 M48 30 H58 A14 14 0 0 1 58 58", P4, 11)
+               + stroke("M120 50 A18 26 0 1 0 120 88", P5, 11))
+
+
+def sounds():
+    """A head in profile saying something: open mouth and sound arcs."""
+    head = ("M22 124 V100 C6 90 2 70 4 54 C6 24 30 6 56 8 C80 10 92 28 90 48 L100 64 C102 68 100 70 96 70 H90"
+            " L92 78 L84 80 L90 86 C90 94 86 96 80 96 H66 V124 Z")
+    return svg(f'<g transform="translate(2 8) scale(0.88)"><path d="{head}" fill="{P3}" {O}/>'
+               f'<circle cx="54" cy="44" r="6" fill="{D}"/></g>'
+               + stroke("M98 60 A7 13 0 0 1 98 86", P6, 7) + stroke("M108 48 A12 25 0 0 1 108 98", P5, 7))
+
+
+def render(draw, folder):
+    folder.mkdir(exist_ok=True)
+    svg_path = folder / f"{draw.__name__}.svg"
+    svg_path.write_text(draw())
+    subprocess.run(["inkscape", str(svg_path), "-w", "128", "-h", "128", "-o", str(svg_path.with_suffix(".png"))],
+                   check=True, capture_output=True)
+
+
 if __name__ == "__main__":
-    OUT.mkdir(exist_ok=True)
     for draw in (marimba, ukulele, accordion, glockenspiel):
-        svg_path = OUT / f"{draw.__name__}.svg"
-        svg_path.write_text(draw())
-        subprocess.run(["inkscape", str(svg_path), "-w", "128", "-h", "128", "-o", str(svg_path.with_suffix(".png"))],
-                       check=True, capture_output=True)
+        render(draw, OUT)
+    for draw in (names, sounds):
+        render(draw, LETTERS)

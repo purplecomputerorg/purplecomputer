@@ -32,6 +32,7 @@ from .. import old_install
 from ..old_install import PAYLOAD_PATH
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
+CREDITS = "Credits: purplecomputer.org/licenses"
 
 # ---------------------------------------------------------------------------
 # Display settings (xrandr brightness / gamma)
@@ -1592,4 +1593,5 @@ class ParentMenu(Overlay):
         draw_key_hint(g, f"{UP} {DOWN} choose   {{Enter}} open   {{Esc}} close", em(0.92), box.centerx, foot + em(1.3), anchor="center")
         g.draw_markup("Purple is keyboard only, on purpose.\nKids explore by typing.", em(0.85), box.x, foot + em(2.8),
                       "mono", P.DIM, box.w, "center", P.SURFACE)
-        g.draw_text(diagnostics.get_version_label() or "", em(0.8), box.centerx, foot + em(5.8), "mono", P.DIM, anchor="center")
+        version = diagnostics.get_version_label()
+        g.draw_text(f"{version} · {CREDITS}" if version else CREDITS, em(0.8), box.centerx, foot + em(5.8), "mono", P.DIM, anchor="center")

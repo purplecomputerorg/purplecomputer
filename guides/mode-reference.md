@@ -31,7 +31,7 @@ Each cell displays its key character and can be colored.
 
 ## Other Controls
 
-- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [nemophones](https://github.com/tavinathanson/nemophones) in `packs/core-sounds/content/letter-sounds/`). Hold Enter to record a loop.
+- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds) in `packs/core-sounds/content/letter-sounds/`). Hold Enter to record a loop.
 - **Tab**: switch between Notes and Letters, which says each pressed letter aloud.
 - **Left/Right**: shift the musical key (B♭ / F / C / G / D).
 - **Space**: in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop records or plays, drives the loop station instead.

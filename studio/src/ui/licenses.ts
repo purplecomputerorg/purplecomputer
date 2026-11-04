@@ -21,6 +21,7 @@ const purple = (): Credit[] => [
   ["pygame-ce", "https://pyga.me", "Rendering and audio.", "LGPL-2.1"],
   ["Piper voice", "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/libritts_r/medium", "Text to speech model, run on device.", "CC BY 4.0"],
   ["espeak-ng", "https://github.com/espeak-ng/espeak-ng", "Phonemizer for the Piper voice.", "GPL-3.0", espeakSource()],
+  ["Open Letter Sounds", "https://github.com/purplecomputerorg/openlettersounds", "The letter sounds in the Music room. Made by Purple and free for anyone to use.", "CC0"],
   ["spectral.js", "https://github.com/rvanwijnen/spectral.js", "Paint mixing in the Art room.", "MIT"],
   ["Noto Color Emoji", "https://github.com/googlefonts/noto-emoji", "Emoji font.", "OFL-1.1"],
   ["Twemoji", "https://github.com/jdecked/twemoji", "Source art for some stickers and Studio's icons.", "CC BY 4.0"],

@@ -15,7 +15,7 @@ from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
 
 IMAGES = Path(__file__).resolve().parent.parent / "purple_tui" / "canvas" / "images"
-FONT = TTFont(IMAGES.parent / "fonts" / "Figtree-Bold.ttf")  # letters are real type, not hand-drawn strokes
+FONTS = {w: TTFont(IMAGES.parent / "fonts" / f"Figtree-{w}.ttf") for w in ("Bold", "SemiBold")}  # real type, not hand-drawn strokes
 OUT, LETTERS, MODES, HINTS = IMAGES / "instruments", IMAGES / "letters", IMAGES / "modes", IMAGES / "hints"
 D, P3, P5, P6 = "#2a1650", "#a379e8", "#dfc9ff", "#f6efff"
 W1, W2, W3 = "#b98a72", "#e2ae8c", "#f0c9a6"  # soft wood
@@ -94,11 +94,12 @@ INK, SKIN, HAIR, CHEEK = "#3b2470", "#f6efff", "#c08a64", "#f2b8d8"  # the calm 
 TILES = ("#dfc9ff", "#f6c9e4", "#c9dcff")
 
 
-def glyph(ch, cx, cy, cap, fill):
-    """One letter in Figtree Bold, its capitals cap units tall, centered on (cx, cy)."""
-    glyphs = FONT.getGlyphSet()
-    shape = glyphs[FONT.getBestCmap()[ord(ch)]]
-    k, bounds = cap / FONT["OS/2"].sCapHeight, BoundsPen(glyphs)
+def glyph(ch, cx, cy, cap, fill, weight="Bold"):
+    """One letter in Figtree, its capitals cap units tall, centered on (cx, cy)."""
+    font = FONTS[weight]
+    glyphs = font.getGlyphSet()
+    shape = glyphs[font.getBestCmap()[ord(ch)]]
+    k, bounds = cap / font["OS/2"].sCapHeight, BoundsPen(glyphs)
     shape.draw(bounds)
     x0, y0, x1, y1 = bounds.bounds
     pen = SVGPathPen(glyphs)
@@ -120,7 +121,7 @@ def names():
 
 def abc(fill=TILES[0]):
     """Letters in the Tab switches: A B C written out, all the same size, no tiles (that's Names)."""
-    return svg("".join(glyph(ch, 24 + i * 48, 35, 46, fill) for i, ch in enumerate("ABC")), 144, 70)
+    return svg("".join(glyph(ch, 22 + i * 32, 35, 36, fill, "SemiBold") for i, ch in enumerate("ABC")), 108, 70)
 
 
 def abc_dark():

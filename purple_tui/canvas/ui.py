@@ -800,9 +800,10 @@ def _chord_pad(t: str, px: int) -> int:
 HINT_PICTURES: dict = {}  # {name} -> fn(height) -> surface, for a picture a room draws itself
 
 
-def hint_picture(g: Gfx, t: str, px: int) -> pygame.Surface | None:
-    """A {hints/name.png} or a HINT_PICTURES name in a hint line is a picture standing in for words."""
-    h = round(keycap_size(g, "X", px)[1] * 1.2)
+def hint_picture(g: Gfx, t: str, px: int, h: int | None = None) -> pygame.Surface | None:
+    """A {hints/name.png} or a HINT_PICTURES name in a hint line is a picture standing in for words;
+    beside keycaps it's a bit taller than one, in a line of text (h) about the letters' height."""
+    h = h or round(keycap_size(g, "X", px)[1] * 1.2)
     if t in HINT_PICTURES:
         return HINT_PICTURES[t](h)
     return g.image(t, h) if t.endswith(".png") else None
@@ -1062,7 +1063,7 @@ def hint_row_h(g: Gfx) -> int:
 def _marked(g: Gfx, label: str, px: int) -> tuple:
     """A label's leading {picture}, if it has one, and the text after it."""
     m = KEY_RE.match(label)
-    pic = m and hint_picture(g, m[1], px)
+    pic = m and hint_picture(g, m[1], px, round(px * 0.9))
     return (pic, label[m.end():].lstrip()) if pic else (None, label)
 
 

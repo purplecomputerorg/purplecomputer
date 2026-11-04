@@ -938,6 +938,10 @@ def _draw_stepper(g: Gfx, px: int, right: int, cy: int, key_name: str, active: i
     x = draw_key(g, key_name, px, pill.x + pad, cy).right + gap
     for i, pic in enumerate(pics):
         g.surface.blit(pic, pic.get_rect(center=(x + i * step + step // 2, cy)))
+    d = max(4, round(px * 0.3))
+    dot = pygame.Rect(0, 0, d, d)
+    dot.midtop = (x + active * step + step // 2, pill.bottom + d // 2)
+    g.rect(P.PRIMARY, dot, radius=d // 2)
     return pill
 
 

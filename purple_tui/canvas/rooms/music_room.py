@@ -486,7 +486,7 @@ class MusicRoom(Room):
         if self.loop.state == RECORDING:
             self._advance_loop_state()
         elif self.loop.state == LOOPING:
-            self.loop.start_new_cycle()
+            self._start_loop_playback()  # from the top: the sound and the bar start over together
         elif self.letters_mode and self.word:
             from ...tts import speak_many
             speak_many([self.word])

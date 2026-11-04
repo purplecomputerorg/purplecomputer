@@ -110,6 +110,24 @@ def test_a_saved_loop_keeps_looping_after_the_replay():
     run(go())
 
 
+def test_space_while_looping_starts_the_sound_over_with_the_bar():
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        room._advance_loop_state()
+        await type_text(app, "as")
+        await asyncio.sleep(0.2)
+        room._advance_loop_state()
+        await asyncio.sleep(0.1)
+        playing = room._loop_task
+        room._space_tap()
+        await asyncio.sleep(0)
+        assert room._loop_task is not playing and playing.done()
+        assert room.loop.loop_progress() < 0.1
+        room._stop_loop()
+    run(go())
+
+
 def test_time_travel_never_plays_music_back():
     async def go():
         app, save = await _music_with_a_save()

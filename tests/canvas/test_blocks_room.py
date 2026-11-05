@@ -142,8 +142,8 @@ def test_enter_walks_up_and_starts_over_from_the_floor():
             assert room._cursor_y() == y
         await press(app, "enter", is_repeat=True)   # held: sticks at the top
         assert room._cursor_y() == HEIGHT - 1
-        await press(app, "enter")                   # pressed again: the lowest free level
-        assert room._cursor_y() == 3 and len(room._blocks) == 3
+        await press(app, "enter")                   # pressed again: the floor, inside the block there
+        assert room._cursor_y() == 0 and len(room._blocks) == 3
     run(go())
 
 
@@ -156,11 +156,33 @@ def test_shift_up_and_down_held_stop_at_the_ends_and_a_fresh_press_wraps():
         assert room._cursor_y() == HEIGHT - 1 and (room._x, room._z) == (5, 5)
         for i in range(HEIGHT + 2):
             await press(app, "down", shift_held=True, is_repeat=i > 0)
-        assert room._cursor_y() == 1                # rests on the block at 0
+        assert room._cursor_y() == 0                # on the block at 0
         await press(app, "down", shift_held=True)
         assert room._cursor_y() == HEIGHT - 1
         await press(app, "up", shift_held=True)
-        assert room._cursor_y() == 1
+        assert room._cursor_y() == 0
+    run(go())
+
+
+def test_a_tap_of_shift_then_up_or_down_moves_the_height():
+    async def go():
+        app, room = _blocks()
+        await press(app, "up", shifted=True)
+        assert room._cursor_y() == 1 and (room._x, room._z) == (5, 5)
+        await press(app, "down", shifted=True)
+        assert room._cursor_y() == 0
+    run(go())
+
+
+def test_enter_stops_on_blocks_in_the_way_and_typing_mixes_into_them():
+    async def go():
+        app, room = _blocks()
+        room._blocks[(5, 5, 2)] = room._blocks[(5, 5, HEIGHT - 1)] = "#ff0000"
+        for y in range(1, HEIGHT):
+            await press(app, "enter")
+            assert room._cursor_y() == y
+        await press(app, "a")
+        assert len(room._blocks) == 2 and room._blocks[(5, 5, HEIGHT - 1)] != "#ff0000"
     run(go())
 
 

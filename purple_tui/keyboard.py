@@ -656,6 +656,11 @@ class NavigationAction(KeyAction):
     char_held: str | None = None  # Character key held when this action fired
     shift_held: bool = False  # Was physical shift held?
     ctrl_held: bool = False  # Ctrl or Cmd held (jump to the start or end)
+    shifted: bool = False  # A tap of Shift (sticky) was waiting when this arrow went down
+
+    @property
+    def with_shift(self) -> bool:
+        return self.shift_held or self.shifted
 
 
 @dataclass
@@ -734,6 +739,7 @@ class KeyboardStateMachine:
         # Sticky shift
         self._sticky_shift_active = False
         self._sticky_shift_time = 0.0
+        self._arrow_shifted = False  # the held arrow's press used up a sticky Shift
         self._shift_used_for_char = False  # Track if physical shift was used for a character
 
         # Double-tap Shift key for caps lock
@@ -842,6 +848,9 @@ class KeyboardStateMachine:
         if keycode in arrow_directions:
             direction = arrow_directions[keycode]
             other_arrows = self.all_held_arrows() - {direction}
+            if not is_repeat:
+                self._arrow_shifted = self.sticky_shift
+                self._consume_sticky_shift()
             actions.append(NavigationAction(
                 direction=direction,
                 space_held=self._space_held,
@@ -850,6 +859,7 @@ class KeyboardStateMachine:
                 char_held=self._held_char,
                 shift_held=self._shift_held,
                 ctrl_held=self._ctrl_held or self._cmd_held,
+                shifted=self._arrow_shifted,
             ))
             self._shift_used_for_char |= self._shift_held
             return actions
@@ -914,11 +924,8 @@ class KeyboardStateMachine:
             if self._shift_held and not is_repeat:
                 self._shift_used_for_char = True
 
-            # Consume sticky shift (only on fresh press)
-            if not is_repeat and self._sticky_shift_active:
-                self._sticky_shift_active = False
-                if self._on_sticky_shift_change:
-                    self._on_sticky_shift_change(False)
+            if not is_repeat:
+                self._consume_sticky_shift()
 
         return actions
 
@@ -991,20 +998,17 @@ class KeyboardStateMachine:
 
         return actions
 
+    def _consume_sticky_shift(self):
+        if self._sticky_shift_active:
+            self._sticky_shift_active = False
+            if self._on_sticky_shift_change:
+                self._on_sticky_shift_change(False)
+
     def _apply_shift(self, char: str) -> str:
         """Apply shift/caps transformations to a character."""
-        should_shift = self._shift_held
-
-        # Check sticky shift with grace period
-        if self._sticky_shift_active:
-            elapsed = time.time() - self._sticky_shift_time
-            if elapsed <= self.STICKY_SHIFT_GRACE:
-                should_shift = True
-            else:
-                self._sticky_shift_active = False
-                if self._on_sticky_shift_change:
-                    self._on_sticky_shift_change(False)
-
+        should_shift = self.shift_active
+        if not self.sticky_shift:
+            self._consume_sticky_shift()    # the grace ran out
         if should_shift and char in SHIFT_MAP:
             return SHIFT_MAP[char]
 

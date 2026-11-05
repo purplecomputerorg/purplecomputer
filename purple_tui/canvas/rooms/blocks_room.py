@@ -2,8 +2,9 @@
 Space, in the current color) drops a block of its sticker color into the
 cursor's column, then moves on the way the cursor last went: along an arrow,
 or up after Enter or Shift+Up/Down. Enter (once already going up) walks the
-cursor up a level at a time, starting over at the floor after a pause at the
-top, and Shift with Up or Down moves it either way; that height stays put as
+cursor up a level at a time, onto blocks too (typing there mixes into
+them), starting over at the floor after a pause at the top, and Shift with
+Up or Down moves it either way; that height stays put as
 the arrows move, for building sideways. At the top, letters mix into the top
 block.
 Every block goes in the first free spot at or above the cursor's height, so
@@ -29,7 +30,7 @@ from .. import color_recipe, paper
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo
-from ..ui import MOVE_HINT, PICK_HINT, draw_key_hint, draw_mode_switch, hint_row_h
+from ..ui import DOWN, MOVE_HINT, PICK_HINT, UP, draw_key_hint, draw_mode_switch, hint_row_h
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
@@ -60,11 +61,18 @@ WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), (
         "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
         RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
 HINT = "Type to build!  {Enter} {hints/up.png}"
+SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
 
 
 @cache
 def haze(color, row: int) -> tuple:
     return mix(color, art_room.CANVAS_BG, DEPTH_FADE * row / (DEPTH - 1))
+
+
+@cache
+def metrics(c: int) -> tuple:
+    """(row depth, block rise, row skew, slab) in pixels for cell width c."""
+    return round(c * ROW_DEPTH), round(c * BLOCK_RISE), round(c * ROW_SKEW), round(c * SLAB)
 
 
 @cache
@@ -109,6 +117,7 @@ class BlocksRoom(Room):
         self._floor = self._scene = None
         self._front = self._solid_front = self._scene_row = None
         self._front_blocks, self._faded, self._fade_key = [], frozenset(), None
+        self._rects, self._fade_area, self._redo = {}, None, None
         self._composed = self._layer = None
         self._sprites: dict = {}
         self.echo = Echo()
@@ -288,13 +297,11 @@ class BlocksRoom(Room):
         return True
 
     def _step_height(self, rise: int, wrap: bool = False):
-        """The next free level up or down; with `wrap`, past the end starts over from the other one."""
-        y, self._next = self._cursor_y(), None
-        free = self._free(range(y + rise, HEIGHT if rise > 0 else -1, rise))
-        if not free and wrap:
-            free = self._free(range(HEIGHT)[::rise])
-        if free:
-            self._hover = free[0]
+        """One level up or down, onto a block if one is there; with `wrap`, past the end starts over from the other one."""
+        y = self._cursor_y() + rise
+        if 0 <= y < HEIGHT or wrap:
+            self._hover = y % HEIGHT
+            self._next = (self._x, self._z, self._hover, True)
 
     def _erase(self):
         """Backspace: the highest block at or below the cursor goes, and the cursor
@@ -441,7 +448,7 @@ class BlocksRoom(Room):
             self.turn_around()
 
     def _navigate(self, action):
-        if action.shift_held and action.direction in ("up", "down"):
+        if action.with_shift and action.direction in ("up", "down"):
             self.echo.flush()
             self._step_height(STEPS[action.direction][1], wrap=not action.is_repeat)
             self._face(RISE if action.direction == "up" else SINK)
@@ -466,8 +473,7 @@ class BlocksRoom(Room):
 
     # ---------------------------------------------------------------- geometry
     def _metrics(self):
-        c = self._c
-        return round(c * ROW_DEPTH), round(c * BLOCK_RISE), round(c * ROW_SKEW), round(c * SLAB)
+        return metrics(self._c)
 
     def _base(self) -> int:
         dz, hy, _, _ = self._metrics()
@@ -587,26 +593,40 @@ class BlocksRoom(Room):
             behind = self._stack(self._mark_row(self._floor_surface().copy(), row), [b for b in placed if b[1] > row])
             self._scene = self._stack(self._frame_row(behind, row), [b for b in placed if b[1] == row])
             self._front_blocks = [b for b in placed if b[1] < row]
+            self._rects = {b: self._sprite_rect(*b[:3]) for b in self._front_blocks}
             self._front = self._solid_front = self._stack(pygame.Surface(self._scene_size(), pygame.SRCALPHA), self._front_blocks)
-            self._faded, self._fade_key = frozenset(), None
+            self._faded, self._fade_key, self._fade_area = frozenset(), None, None
         key = (vx, self._cursor_y())
         if key != self._fade_key:
             self._fade_key = key
             faded = self._hiding(vx, row, key[1])
             if faded != self._faded:
-                self._faded, self._front = faded, self._fade(faded)
+                area = self._area(faded)
+                self._redo = self._area(faded, [self._fade_area] if self._fade_area else [])
+                self._faded, self._fade_area, self._front = faded, area, self._fade(faded, area)
         return self._scene, self._front
+
+    def _area(self, blocks, rects=()) -> pygame.Rect | None:
+        rects = [*rects, *(self._rects[b] for b in blocks)]
+        return rects[0].unionall(rects[1:]) if rects else None
 
     def _scene_with_front(self, scene, front) -> pygame.Surface:
         """The scene with the front rows over it, as the cursor's layer
-        would composite them, kept until either changes so a frame only blends near the cursor."""
-        if self._composed is None or self._composed[0] is not scene or self._composed[1] is not front:
-            layer = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
-            layer.blit(front, (0, 0))
-            out = scene.copy()
-            out.blit(layer, (0, 0))
-            self._composed = (scene, front, out)
-        return self._composed[2]
+        would composite them, kept until either changes so a frame only blends near the cursor.
+        A new fade redoes only the area it and the last one cover."""
+        if self._composed is None or self._composed[0] is not scene:
+            self._composed = [scene, front, scene.copy()]
+            redo = scene.get_rect()
+        elif self._composed[1] is not front:
+            self._composed[1], redo = front, self._redo.clip(scene.get_rect())
+        else:
+            return self._composed[2]
+        layer = pygame.Surface(redo.size, pygame.SRCALPHA)
+        layer.blit(front, (0, 0), redo)
+        out = self._composed[2]
+        out.blit(scene, redo, redo)
+        out.blit(layer, redo)
+        return out
 
     def _hiding(self, vx, vz, y) -> frozenset:
         """Every block of each front tower that has a block whose picture overlaps the glass
@@ -615,7 +635,7 @@ class BlocksRoom(Room):
         polys = [*self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT - 1 - y), *self._faces(*self._corner(vx, vz, y + 1))]
         xs, ys = zip(*(p for poly in polys for p in poly))
         box = pygame.Rect(min(xs), min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1)
-        near = [b for b in self._front_blocks if self._sprite_rect(*b[:3]).colliderect(box)]
+        near = [b for b in self._front_blocks if self._rects[b].colliderect(box)]
         if not near:
             return frozenset()
         s = pygame.Surface(box.size, pygame.SRCALPHA)
@@ -625,7 +645,7 @@ class BlocksRoom(Room):
         for poly in polys:      # trimmed by a pixel: a block just in front shares an edge with them without hiding them
             pygame.draw.polygon(s, (0, 0, 0, 0), poly, 1)
         spot, block = pygame.mask.from_surface(s), self._block_mask()
-        at = {b: self._sprite_rect(*b[:3]).move(-box.x, -box.y).topleft for b in near}
+        at = {b: self._rects[b].move(-box.x, -box.y).topleft for b in near}
         laid = self._last and (*self._view(*self._last[0][:2]), self._last[0][2])
         solid = next((b for b in near if b[:3] == laid and laid[:2] == (vx, vz - 1)), None)
         if solid:
@@ -639,24 +659,23 @@ class BlocksRoom(Room):
             self._sprites[key] = pygame.mask.from_surface(self._sprite(DEFAULT_BRUSH_COLOR))
         return self._sprites[key]
 
-    def _fade(self, faded) -> pygame.Surface:
-        """The front rows with `faded` see-through, multiplied by a picture of
-        each block's alpha so a solid block nearer than a faded one stays solid."""
+    def _fade(self, faded, area) -> pygame.Surface:
+        """The front rows with `faded` see-through, multiplied by a picture of each
+        block's alpha over `area` so a solid block nearer than a faded one stays solid."""
         if not faded:
             return self._solid_front
-        rects = [self._sprite_rect(*b[:3]) for b in faded]
-        area = rects[0].unionall(rects[1:])
-        alpha = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
+        alpha = pygame.Surface(area.size, pygame.SRCALPHA)
         alpha.fill((255, 255, 255, 255))
 
         def silhouette(*b):
             for poly in self._faces(*self._corner(b[0], b[1], b[2] + 1)):
+                poly = [(x - area.x, y - area.y) for x, y in poly]
                 for width in (0, 1):    # the outline too, as the sprite draws it
                     pygame.draw.polygon(alpha, (255, 255, 255, FRONT_ALPHA if b in faded else 255), poly, width)
 
-        self._stack(alpha, [b for b in self._front_blocks if self._sprite_rect(*b[:3]).colliderect(area)], block=silhouette, shadows=False)
+        self._stack(alpha, [b for b in self._front_blocks if self._rects[b].colliderect(area)], block=silhouette, shadows=False)
         front = self._solid_front.copy()
-        front.blit(alpha, area, area, special_flags=pygame.BLEND_RGBA_MULT)
+        front.blit(alpha, area, special_flags=pygame.BLEND_RGBA_MULT)
         return front
 
     def _cursor_box(self, vx, vz) -> pygame.Rect:
@@ -739,7 +758,7 @@ class BlocksRoom(Room):
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
-            draw_key_hint(g, PICK_HINT if self.app._keyboard_state_machine.shift_active else HINT, g.vh(1.9), foot.x, foot.centery)
+            draw_key_hint(g, SHIFT_HINT if self.app._keyboard_state_machine.shift_active else HINT, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
 
     def _draw_hold_badge(self, g, ox, oy, area):

@@ -216,3 +216,18 @@ class TestStickyIntentionSequences:
 
         # Should NOT activate sticky (hold was > 0.3s from press to release)
         assert sticky_changes == []
+
+
+class TestStickyShiftArrows:
+    """A tap of Shift carries to the next arrow, and to that arrow's repeats while it's held."""
+
+    def test_arrow_uses_up_sticky_and_keeps_it_while_held(self):
+        from purple_tui.keyboard import NavigationAction
+        sm = KeyboardStateMachine()
+        sm.process(shift_down(0.0))
+        sm.process(shift_up(0.1))
+        first = get_action(sm.process(key_down(KeyCode.KEY_UP, 0.5)), NavigationAction)
+        repeat = get_action(sm.process(RawKeyEvent(keycode=KeyCode.KEY_UP, is_down=True, timestamp=T + 1.0, is_repeat=True)), NavigationAction)
+        assert first.with_shift and repeat.with_shift and not sm.sticky_shift
+        sm.process(key_up(KeyCode.KEY_UP, 1.1))
+        assert not get_action(sm.process(key_down(KeyCode.KEY_UP, 1.5)), NavigationAction).with_shift

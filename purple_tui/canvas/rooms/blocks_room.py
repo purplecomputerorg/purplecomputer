@@ -42,6 +42,7 @@ TURN_DETAIL_BLOCKS = 600     # visible blocks; past this the half turn drops sea
 TURN_FRAME_BUDGET_S = 0.012  # a detailed turn frame slower than this lowers that limit to its block count
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
 SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab switch's words and pictures
+FRAME_ALPHA = 90              # the outline standing up around the cursor's row
 FRONT_ALPHA = 40              # front towers in the way of the cursor's glass column or landing block fade to this
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the floor color
@@ -586,7 +587,8 @@ class BlocksRoom(Room):
         if self._scene is None or self._scene.get_size() != self._scene_size() or row != self._scene_row:
             self._scene_row = row
             placed = self._placed()
-            self._scene = self._stack(self._mark_row(self._floor_surface().copy(), row), [b for b in placed if b[1] >= row])
+            behind = self._stack(self._mark_row(self._floor_surface().copy(), row), [b for b in placed if b[1] > row])
+            self._scene = self._stack(self._frame_row(behind, row), [b for b in placed if b[1] == row])
             self._front_blocks = [b for b in placed if b[1] < row]
             self._front = self._solid_front = self._stack(pygame.Surface(self._scene_size(), pygame.SRCALPHA), self._front_blocks)
             self._faded, self._fade_key = frozenset(), None
@@ -672,6 +674,15 @@ class BlocksRoom(Room):
             top, _, _ = self._faces(*self._corner(x, row, 0))
             pygame.draw.polygon(stripe, (*rgb(P.TEXT), 22), top)
         s.blit(stripe, (0, 0))
+        return s
+
+    def _frame_row(self, s, row) -> pygame.Surface:
+        """An upright frame on the back of the cursor's row, floor to ceiling, wall to wall,
+        so the row reads as one slice; the row's own blocks cover it."""
+        frame = pygame.Surface(s.get_size(), pygame.SRCALPHA)
+        corners = [self._corner(x, row + 1, y) for x, y in ((0, 0), (WIDTH, 0), (WIDTH, HEIGHT), (0, HEIGHT))]
+        pygame.draw.polygon(frame, (*rgb(P.TEXT), FRAME_ALPHA), corners, 2)
+        s.blit(frame, (0, 0))
         return s
 
     def _stack(self, s, placed, haze: bool = True, block=None, shadows: bool = True) -> pygame.Surface:

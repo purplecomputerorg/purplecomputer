@@ -15,6 +15,7 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **Bold wire box** around the landing block: white over a dark edge, width scaled with the cell size, so it reads over any color.
 - **Shadow square** under a floating landing spot, the same mark every floating block gets.
 - **Rings** around each run of blocks in the cursor's column, hidden by blocks in front.
+- **Frame around the cursor's row**: a faint upright rectangle on the back of the row, floor to ceiling and wall to wall, so the row reads as one slice of the world rather than a line of unrelated blocks. Drawn behind the row's blocks, so it never crosses over them.
 - **Cross-hatching on the cursor's row**: blocks in that row get light cross-hatching over every face, their color showing between the lines, so you can tell a block beside the landing spot from one a row in front or behind. Built into the scene, which already rebuilds only when the cursor changes rows.
 - **Faded towers** in the way, at `FRONT_ALPHA`.
 

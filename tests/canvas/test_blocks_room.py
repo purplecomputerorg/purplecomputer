@@ -14,8 +14,10 @@ import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.rooms import blocks_room
-from purple_tui.canvas.rooms.blocks_room import (DEPTH, HEIGHT, PEEK, REST, RISE, SINK, TILT_S, TURN_DETAIL_BLOCKS,
+from purple_tui import palette as P
+from purple_tui.canvas.rooms.blocks_room import (DEPTH, HEIGHT, RISE, SINK, TILT_S, TURN_DETAIL_BLOCKS,
                                                  TURN_S, WIDTH)
+from purple_tui.canvas.rooms.blocks_view import RIBBON_ALPHA, TOP, tint
 from purple_tui.constants import HOLD_OR_TAP_THRESHOLD
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
@@ -377,8 +379,15 @@ def test_blocks_in_the_cursor_row_get_a_ribbon():
         app, room = _blocks()
         room._blocks.update({(8, 5, 0): "#ff0000", (8, 7, 0): "#00ff00"})
         app._draw()
-        ribboned = {k[0] for k in room._sprites if len(k) == 5 and k[4]}
-        assert ribboned == {"#ff0000"}
+        painter = room._painter
+
+        def top_center(x, z, color):
+            top = painter.face(painter.base(x, z, color), TOP, 0)
+            return tuple(room._composed.get_at(tuple(map(int, room._cam.at(x + 0.5, 1, z + 0.5))))[:3]), top
+        seen, top = top_center(8, 5, "#ff0000")
+        assert seen == tint(top, P.TEXT, RIBBON_ALPHA / 255)
+        seen, top = top_center(8, 7, "#00ff00")
+        assert seen == top
     run(go())
 
 
@@ -426,25 +435,51 @@ def _at(room, seconds):
     room._motion = (time.monotonic() - seconds, *room._motion[1:])
 
 
-def test_holding_tab_looks_down_and_letting_go_looks_back_without_turning():
+async def _real_tab(app, sm, is_down):
+    """Tab as the keyboard reports it, through the same state machine as real keys."""
+    for action in sm.process(RawKeyEvent(keycode=KeyCode.KEY_TAB, is_down=is_down, timestamp=0.0)):
+        await app._dispatch_keyboard_action(action)
+
+
+def test_tapping_real_tab_turns_once_and_leaves_no_hold_behind():
     async def go():
         app, room = _blocks()
+        sm = KeyboardStateMachine()
+        await _real_tab(app, sm, True)
+        assert room.hold_progress() is not None and not room._back
+        await _real_tab(app, sm, False)
+        assert room._back and not room._peek and room.hold_progress() is None
+    run(go())
+
+
+def test_holding_real_tab_looks_down_and_letting_go_looks_back_without_turning():
+    async def go():
+        app, room = _blocks()
+        sm = KeyboardStateMachine()
         await type_text(app, "abc")
-        await press(app, "tab", hold=HOLD_OR_TAP_THRESHOLD + 0.1)
-        assert not room._back and room._shape == REST and room._camera() is not None
-        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=True))
-        assert room.hold_progress() is not None
+        await _real_tab(app, sm, True)
         await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.1)
-        assert room._shape == PEEK and room.hold_progress() is None
+        assert room._peek and room.hold_progress() is None
         room._motion = None
         app._draw()
         await press(app, "right")              # arrows still move while looking down
         assert room._x == 6
-        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=False))
-        assert room._shape == REST and not room._back
+        await _real_tab(app, sm, False)
+        assert not room._peek and not room._back
         for p in (0.3, 0.6):
             _at(room, TILT_S * p)
             app._draw()
+    run(go())
+
+
+def test_a_lost_tab_release_does_not_leave_the_view_looking_down():
+    async def go():
+        app, room = _blocks()
+        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=True))
+        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.1)
+        assert room._peek              # its release went to an overlay, say
+        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=True))
+        assert not room._peek
     run(go())
 
 
@@ -472,7 +507,7 @@ def test_big_builds_still_turn():
         await press(app, "tab")
         _at(room, TURN_S * 0.5)
         app._draw()
-        assert room._camera() is not None
+        assert room._moving() is not None
     run(go())
 
 

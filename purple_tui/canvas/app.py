@@ -40,7 +40,7 @@ from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from ..timeline import RoomTimeline
 from ..audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
-from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
+from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_BAR_EM, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
                  draw_key, draw_keycap, draw_label, draw_level)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
@@ -1771,9 +1771,10 @@ class PurpleApp:
         bar = ((hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1]) if hold and hold[0] > HOLD_QUIET else \
             (0, self._hold_nudge) if self._hold_nudge and not hold else None
         if bar:
-            # over the open panel, or the room's whole footer, so nothing peeks out around it
-            top = content.bottom if self.viewport_panel() else vp.bottom - self.room.footer_h(g)
-            strip = pygame.Rect(vp.x, top, vp.w, vp.bottom - top)
+            # over the open panel, or the room's whole footer (at least the bar's own height, so it is one size in every
+            # room), down to the frame's border so it sits centered between its line and the border
+            top = content.bottom if self.viewport_panel() else vp.bottom - max(self.room.footer_h(g), g.em(HOLD_BAR_EM))
+            strip = pygame.Rect(vp.x, top, vp.w, frame.inflate(-4, -4).bottom - top)
             draw_hold_bar(g, strip, *bar)
         self._draw_save_flash(frame)
         g.surface.set_clip(None)

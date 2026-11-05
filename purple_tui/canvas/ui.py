@@ -1088,6 +1088,7 @@ def draw_level(g: Gfx, px: int, cx: int, cy: int, icon: str, filled: int, steps:
 
 
 HOLD_QUIET = 0.35  # of a hold: before this, nothing shows, so a tap never flashes the bar
+HOLD_BAR_EM = 3.9  # the strip the hold bar covers, at least: the same size bar in every room
 HOLD_NUDGE_SECONDS = 1.5
 
 

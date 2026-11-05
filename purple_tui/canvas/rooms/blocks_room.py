@@ -521,9 +521,9 @@ class BlocksRoom(Room):
             dz, hy, sx, _ = self._metrics()
             w, h = self._c + sx + 1, dz + hy + 1
             s = pygame.Surface((w, h), pygame.SRCALPHA)
-            for k in range(-h, w + h, max(4, self._c // 5)):
-                pygame.draw.line(s, (*rgb(P.TEXT), 90), (k, h), (k + h, 0))
-                pygame.draw.line(s, (*rgb(P.TEXT), 90), (k, 0), (k + h, h))
+            for k in range(-h, w + h, max(4, self._c // 4)):
+                pygame.draw.line(s, (*rgb(P.TEXT), 170), (k, h), (k + h, 0), 2)
+                pygame.draw.line(s, (*rgb(P.TEXT), 170), (k, 0), (k + h, h), 2)
             shape = pygame.Surface((w, h), pygame.SRCALPHA)
             for poly in self._faces(0, dz):
                 pygame.draw.polygon(shape, (255, 255, 255), poly)

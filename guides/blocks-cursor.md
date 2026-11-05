@@ -16,7 +16,7 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **Shadow square** under a floating landing spot, the same mark every floating block gets.
 - **Rings** around each run of blocks in the cursor's column, hidden by blocks in front.
 - **Frame around the cursor's row**: a faint upright rectangle on the back of the row, floor to ceiling and wall to wall, so the row reads as one slice of the world rather than a line of unrelated blocks. Drawn behind the row's blocks, so it never crosses over them.
-- **Cross-hatching on the cursor's row**: blocks in that row get light cross-hatching over every face, their color showing between the lines, so you can tell a block beside the landing spot from one a row in front or behind. Built into the scene, which already rebuilds only when the cursor changes rows.
+- **Stripes on the cursor's row**: blocks in that row get two light lines across the top and front faces, running along the row like the frame's edges, their color showing between them, so you can tell a block beside the landing spot from one a row in front or behind. Built into the scene, which already rebuilds only when the cursor changes rows.
 - **Faded towers** in the way, at `FRONT_ALPHA`.
 
 ## Tried and dropped
@@ -30,3 +30,4 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **Tint rows other than the cursor's:** a good depth cue, but it changes colors most of the time (rule 1).
 - **Light edges on the cursor's row:** lost among the edges every block already has.
 - **A dot on each block in the row:** clear, but a tower in the row becomes a column of dots.
+- **Cross-hatching on the row:** drawn flat on the screen rather than on the faces, so it reads as the blocks' own texture.

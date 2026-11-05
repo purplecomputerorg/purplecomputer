@@ -495,10 +495,10 @@ class BlocksRoom(Room):
         return pygame.Rect(px, py - dz, self._c + sx + 1, dz + hy + 1)
 
     # ---------------------------------------------------------------- drawing
-    def _sprite(self, color: str, alpha: int = 255, row=None, hatch: bool = False) -> pygame.Surface:
+    def _sprite(self, color: str, alpha: int = 255, row=None, striped: bool = False) -> pygame.Surface:
         """A block; with `row`, hazed toward the floor color the farther back it sits;
-        with `hatch`, light cross-hatching that marks the cursor's row and leaves its color showing."""
-        key = (color, self._c, alpha, row, hatch)
+        with `striped`, light lines along the row that mark the cursor's row and leave its color showing."""
+        key = (color, self._c, alpha, row, striped)
         if key not in self._sprites:
             if alpha < 255:
                 s = self._sprite(color, row=row).copy()
@@ -511,24 +511,20 @@ class BlocksRoom(Room):
                 for poly, shade in zip(self._faces(0, dz), (mix(color, "#ffffff", 0.22), rgb(color), mix(color, "#000000", 0.32))):
                     pygame.draw.polygon(s, shade, poly)
                     pygame.draw.polygon(s, rgb(P.LINE), poly, 1)
-                if hatch:
-                    s.blit(self._hatching(), (0, 0))
+                if striped:
+                    s.blit(self._stripes(), (0, 0))
             self._sprites[key] = s
         return self._sprites[key]
 
-    def _hatching(self) -> pygame.Surface:
-        key = ("hatch", self._c)
+    def _stripes(self) -> pygame.Surface:
+        """Two light lines across the top face and two down the front, running along the row."""
+        key = ("stripes", self._c)
         if key not in self._sprites:
             dz, hy, sx, _ = self._metrics()
-            w, h = self._c + sx + 1, dz + hy + 1
-            s = pygame.Surface((w, h), pygame.SRCALPHA)
-            for k in range(-h, w + h, max(8, self._c // 2)):
-                pygame.draw.line(s, (*rgb(P.TEXT), 170), (k, h), (k + h, 0), 2)
-                pygame.draw.line(s, (*rgb(P.TEXT), 170), (k, 0), (k + h, h), 2)
-            shape = pygame.Surface((w, h), pygame.SRCALPHA)
-            for poly in self._faces(0, dz):
-                pygame.draw.polygon(shape, (255, 255, 255), poly)
-            s.blit(shape, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            s = pygame.Surface((self._c + sx + 1, dz + hy + 1), pygame.SRCALPHA)
+            for t in (1 / 3, 2 / 3):
+                for x, y in ((t * sx, dz - t * dz), (0, dz + t * hy)):
+                    pygame.draw.line(s, (*rgb(P.TEXT), 170), (x, y), (x + self._c, y), 2)
             self._sprites[key] = s
         return self._sprites[key]
 
@@ -688,7 +684,7 @@ class BlocksRoom(Room):
     def _stack(self, s, placed, haze: bool = True, block=None, shadows: bool = True) -> pygame.Surface:
         """Far rows first, left to right, bottom up, so nearer faces paint over
         farther ones. A floating block's shadow goes right after whatever it falls on."""
-        block = block or (lambda vx, vz, y, color: s.blit(self._sprite(color, row=vz if haze else None, hatch=haze and vz == self._scene_row),
+        block = block or (lambda vx, vz, y, color: s.blit(self._sprite(color, row=vz if haze else None, striped=haze and vz == self._scene_row),
                                                           self._sprite_rect(vx, vz, y)))
         occupied = {b[:3] for b in placed}
         items = []

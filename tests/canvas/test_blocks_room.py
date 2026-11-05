@@ -347,13 +347,13 @@ def test_front_towers_in_the_way_of_the_landing_spot_fade_whole():
     run(go())
 
 
-def test_blocks_in_the_cursor_row_are_cross_hatched():
+def test_blocks_in_the_cursor_row_are_striped():
     async def go():
         app, room = _blocks()
         room._blocks.update({(8, 5, 0): "#ff0000", (8, 7, 0): "#00ff00"})
         app._draw()
-        hatched = {k[0] for k in room._sprites if len(k) == 5 and k[4]}
-        assert hatched == {"#ff0000"}
+        striped = {k[0] for k in room._sprites if len(k) == 5 and k[4]}
+        assert striped == {"#ff0000"}
     run(go())
 
 

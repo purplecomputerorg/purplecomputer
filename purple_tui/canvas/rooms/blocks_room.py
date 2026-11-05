@@ -238,10 +238,6 @@ class BlocksRoom(Room):
             self._blocks[pos] = old
         self._changed(pos)
 
-    def chord_settled(self):
-        if self._stamps.settle():
-            self.app.invalidate()
-
     def _build(self, keep_height: bool = False):
         """A typed block, then on to the next cell the way the cursor last went."""
         y = self._cursor_y()
@@ -473,7 +469,7 @@ class BlocksRoom(Room):
             self.echo.letter(WORDS[self._dir], char)
         else:
             self.echo.flush()       # a digit would read as a count
-        self._stamps.press(chord, action.chord_meant)
+        self._stamps.press(chord and action.chord_meant)
 
     def _lay(self, way: str):
         """A block in the brush color, written down as code too."""

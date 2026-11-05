@@ -1,16 +1,14 @@
-import asyncio
-import time
+import random
 
 import pytest
 
 from purple_tui.canvas.harness import make_app, run
 from purple_tui.color_mixing import mix_colors_paint
-from purple_tui.constants import CHORD_HOLD
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import KeyboardStateMachine
 from purple_tui.palette import get_key_color
 
-F, V, B = KeyCode.KEY_F, KeyCode.KEY_V, KeyCode.KEY_B
+F, V, B, G = KeyCode.KEY_F, KeyCode.KEY_V, KeyCode.KEY_B, KeyCode.KEY_G
 FV = mix_colors_paint([get_key_color("f"), get_key_color("v")])
 
 
@@ -20,49 +18,61 @@ def _colors(room) -> list:
     return [room._grid[p][2] for p in sorted(room._painted_positions)]
 
 
-def _play(name, events, settle=0.0):
-    """Squares' colors after (seconds, key, down) events, then waiting `settle` seconds."""
+def _play(name, events) -> list:
+    """Square count after each (seconds, key, down) event, and the colors at the end."""
     async def go():
         app = make_app()
         app.action_switch_room(name)
-        t0 = time.monotonic()
+        room, counts = app.rooms[name], []
         for at, code, down in events:
-            await app._handle_raw_key_event(RawKeyEvent(keycode=code, is_down=down, timestamp=t0 + at))
-        await asyncio.sleep(settle)
-        return _colors(app.rooms[name])
+            await app._handle_raw_key_event(RawKeyEvent(keycode=code, is_down=down, timestamp=100 + at))
+            counts.append(len(_colors(room)))
+        return counts, _colors(room)
     return run(go())
 
 
-def test_chord_wait_counts_from_the_longest_held_key():
+def test_a_chord_is_meant_unless_another_key_just_went_down():
     sm = KeyboardStateMachine()
     down = lambda code, t: sm.process(RawKeyEvent(keycode=code, is_down=True, timestamp=t))[0]
-    assert down(F, 0.0).chord_wait is None
-    assert down(V, 0.1).chord_wait == pytest.approx(CHORD_HOLD - 0.1)
-    assert down(B, 2.0).chord_meant
-    assert sm.chord_held()
-    sm.process(RawKeyEvent(keycode=F, is_down=False, timestamp=2.1))
-    assert not sm.chord_held()
+    up = lambda code, t: sm.process(RawKeyEvent(keycode=code, is_down=False, timestamp=t))
+    assert not down(F, 0.0).chord_meant
+    assert down(V, 0.02).chord_meant
+    up(F, 0.05), up(V, 0.06)
+    down(G, 1.0), up(G, 1.05)
+    down(F, 1.1)
+    assert not down(V, 1.15).chord_meant      # G just before: mashing
 
 
 @pytest.mark.parametrize("name", ["art", "blocks"])
-def test_mashing_keeps_every_square(name):
-    events = [(0, F, True), (0.05, V, True), (0.08, F, False), (0.12, V, False)]
-    assert len(_play(name, events, settle=CHORD_HOLD + 0.1)) == 2
+def test_a_quick_tap_of_both_keys_makes_one_mixed_square(name):
+    assert _play(name, [(0, F, True), (0.02, V, True), (0.06, F, False), (0.08, V, False)])[1] == [FV]
 
 
 @pytest.mark.parametrize("name", ["art", "blocks"])
-def test_a_key_held_a_while_then_another_mixes_into_one_square(name):
-    assert _play(name, [(0, F, True), (1.0, V, True)]) == [FV]
-
-
-@pytest.mark.parametrize("name", ["art", "blocks"])
-def test_keys_pressed_together_fold_into_one_square_once_held(name):
-    events = [(0, F, True), (0.01, V, True)]
-    assert len(_play(name, events)) == 2
-    assert _play(name, events, settle=CHORD_HOLD + 0.1) == [FV]
+def test_a_key_held_a_while_then_another_makes_one_mixed_square(name):
+    assert _play(name, [(0, F, True), (1.0, V, True)])[1] == [FV]
 
 
 @pytest.mark.parametrize("name", ["art", "blocks"])
 def test_more_keys_while_holding_mix_into_the_same_square(name):
-    colors = _play(name, [(0, F, True), (1.0, V, True), (1.5, B, True)])
+    colors = _play(name, [(0, F, True), (1.0, V, True), (1.5, B, True)])[1]
     assert colors == [mix_colors_paint([FV, get_key_color("b")])]
+
+
+@pytest.mark.parametrize("name", ["art", "blocks"])
+def test_mashing_keeps_the_plain_square_before_the_mixed_one(name):
+    counts, colors = _play(name, [(0, G, True), (0.04, G, False), (0.08, F, True), (0.12, V, True)])
+    assert counts[-1] == 3 and colors[-1] == FV
+
+
+@pytest.mark.parametrize("name", ["art", "blocks"])
+def test_mashing_never_takes_a_square_back(name):
+    rng = random.Random(7)
+    keys = [KeyCode.KEY_A, KeyCode.KEY_S, KeyCode.KEY_D, F, G, V, B, KeyCode.KEY_R]
+    events, t = [], 0.0
+    for _ in range(60):
+        k = rng.choice(keys)
+        events += [(t, k, True), (t + rng.uniform(0.03, 0.15), k, False)]
+        t += rng.uniform(0.02, 0.09)
+    counts = _play(name, sorted(events, key=lambda e: e[0]))[0]
+    assert counts == sorted(counts)

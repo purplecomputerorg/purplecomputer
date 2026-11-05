@@ -174,35 +174,19 @@ def draw_hold_badge(g, terms, result, px: int, target: pygame.Rect, bounds: pyga
 
 
 class ChordStamps:
-    """The squares a run of color keys stamped since its first key's, so keys held
-    together on purpose fold into one square of their mix while mashing keeps every square.
-    `save()` moves onto the next stamp spot and returns what `restore` needs to undo the stamp there."""
+    """Undo for the last key's square, so a key pressed with it can mix into that square
+    instead of stamping another. `save()` moves onto the next stamp spot and returns
+    what `restore` needs to put it back."""
 
     def __init__(self, save, restore, stamp):
         self._save, self._restore, self._stamp = save, restore, stamp
-        self._run = []
+        self._undo = None
 
     def clear(self):
-        self._run = []
+        self._undo = None
 
-    def press(self, chord: bool, meant: bool, *args):
-        """Stamp a key's square; a chord held on purpose first takes back the run's squares."""
-        if chord and meant:
-            self._rewind()
-        start = not chord or meant
-        self._run = [*([] if start else self._run), (self._save(), args)]
+    def press(self, mix_in: bool, *args):
+        if mix_in and self._undo is not None:
+            self._restore(self._undo)
+        self._undo = self._save()
         self._stamp(*args)
-
-    def settle(self) -> bool:
-        """The chord's keys stayed down: its squares become one, where the first one was."""
-        if len(self._run) < 2:
-            return False
-        args = self._run[0][1]
-        self._rewind()
-        self.press(False, False, *args)
-        return True
-
-    def _rewind(self):
-        for undo, _ in reversed(self._run):
-            self._restore(undo)
-        self._run = []

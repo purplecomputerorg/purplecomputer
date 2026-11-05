@@ -527,10 +527,6 @@ class ArtRoom(Room):
         self._paint_at_cursor()
         self._advance_after_stamp(direction)
 
-    def chord_settled(self):
-        if self._stamps.settle():
-            self.app.invalidate()
-
     def paint_char(self, char: str, direction: str = "right"):
         self._to_stamp_spot()
         self._last_key_char = char.lower()
@@ -782,7 +778,7 @@ class ArtRoom(Room):
                 return
             chord = bool(action.char_held) and not action.with_shift and self._chord_brush(action.char_held, char)
             if (chord or self._select_brush(char, hold=action.is_repeat)) and not action.with_shift:
-                self._stamps.press(chord, action.chord_meant, direction)
+                self._stamps.press(chord and action.chord_meant, direction)
                 if char.isalpha():
                     self.echo.letter(direction, char)
                 else:

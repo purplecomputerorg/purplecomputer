@@ -694,6 +694,7 @@ class LongHoldAction(KeyAction):
 
 EDIT_KEYS = {KeyCode.KEY_HOME: 'home', KeyCode.KEY_END: 'end',
              KeyCode.KEY_PAGEUP: 'page_up', KeyCode.KEY_PAGEDOWN: 'page_down'}
+RELEASED_CONTROLS = {KeyCode.KEY_ENTER: 'enter', KeyCode.KEY_TAB: 'tab', KeyCode.KEY_BACKSPACE: 'backspace'}
 
 
 class KeyboardStateMachine:
@@ -980,15 +981,9 @@ class KeyboardStateMachine:
             actions.append(ControlAction(action='space', is_down=False))
             return actions
 
-        # Handle Enter release (needed by music room's hold-Enter loop control).
-        # All other enter consumers gate on action.is_down.
-        if keycode == KeyCode.KEY_ENTER:
-            actions.append(ControlAction(action='enter', is_down=False))
-            return actions
-
-        # Handle other control key releases
-        if keycode == KeyCode.KEY_BACKSPACE:
-            actions.append(ControlAction(action='backspace', is_down=False))
+        # Rooms with a tap-or-hold key (Music's Enter, Blocks' Tab) need its release; other consumers gate on is_down.
+        if keycode in RELEASED_CONTROLS:
+            actions.append(ControlAction(action=RELEASED_CONTROLS[keycode], is_down=False))
             return actions
 
         # Clear backslash hold tracking on release

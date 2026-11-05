@@ -276,6 +276,14 @@ class PlaybackPlayer:
             delay += self._rng.uniform(0.1, 0.3)
         return max(0.02, delay)
 
+    async def _press_control(self, key: str, hold: float = 0.0, is_repeat: bool = False) -> None:
+        """A control key down, then up as a real key comes up, so rooms waiting on a tap or hold see it end."""
+        await self._dispatch(_control(key, is_repeat=is_repeat))
+        if hold > 0:
+            await self._sleep(hold)
+        if hold > 0 or not is_repeat:
+            await self._dispatch(_control(key, is_down=False))
+
     async def _press_key(self, action: PressKey) -> None:
         """Press a special key."""
         key = action.key.lower()
@@ -284,11 +292,7 @@ class PlaybackPlayer:
             await self._dispatch(NavigationAction(direction=key, is_repeat=action.is_repeat))
 
         elif key in ('enter', 'backspace', 'escape', 'tab', 'space'):
-            await self._dispatch(_control(key, is_repeat=action.is_repeat))
-
-            if action.hold_duration > 0:
-                await self._sleep(action.hold_duration)
-                await self._dispatch(_control(key, is_down=False))
+            await self._press_control(key, action.hold_duration, action.is_repeat)
 
         elif len(key) == 1:
             await self._dispatch(CharacterAction(char=key))
@@ -329,28 +333,28 @@ class PlaybackPlayer:
                 self._is_play_letters_mode and self._is_play_letters_mode()
             )
             if not in_letters:
-                await self._dispatch(_control('tab'))
+                await self._press_control('tab')
                 await self._sleep(0.05)
         elif main_room == "music" and mode == "music":
             in_letters = (
                 self._is_play_letters_mode and self._is_play_letters_mode()
             )
             if in_letters:
-                await self._dispatch(_control('tab'))
+                await self._press_control('tab')
                 await self._sleep(0.05)
         elif main_room == "art" and mode == "paint":
             in_paint = (
                 self._is_art_paint_mode and self._is_art_paint_mode()
             )
             if not in_paint:
-                await self._dispatch(_control('tab'))
+                await self._press_control('tab')
                 await self._sleep(0.05)
         elif main_room == "art" and mode == "text":
             in_paint = (
                 self._is_art_paint_mode and self._is_art_paint_mode()
             )
             if in_paint:
-                await self._dispatch(_control('tab'))
+                await self._press_control('tab')
                 await self._sleep(0.05)
 
         # Set instrument if specified
@@ -361,7 +365,7 @@ class PlaybackPlayer:
 
     async def _clear(self, action: Clear) -> None:
         """Clear the current room's content."""
-        await self._dispatch(_control('escape'))
+        await self._press_control('escape')
         await self._sleep(action.pause_after)
 
     async def _clear_all_state(self, action: ClearAll) -> None:
@@ -407,7 +411,7 @@ class PlaybackPlayer:
             self._is_art_paint_mode and self._is_art_paint_mode()
         )
         if not in_paint_mode:
-            await self._dispatch(_control('tab'))
+            await self._press_control('tab')
             await self._sleep(0.1)
 
         if action.color_key:
@@ -467,7 +471,7 @@ class PlaybackPlayer:
             await self._sleep(action.delay_per_step)
 
         if found and action.activate:
-            await self._dispatch(_control('enter'))
+            await self._press_control('enter')
         await self._sleep(action.pause_after)
 
     def _emit_cursor_at(self) -> None:

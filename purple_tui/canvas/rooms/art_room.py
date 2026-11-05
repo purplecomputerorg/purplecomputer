@@ -232,6 +232,7 @@ class ArtRoom(Room):
                               for way, lift in (("down", 0.0), ("up", 1.0))})
         self._last_key_char = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
+        self._stamps = color_recipe.ChordStamps(self._stamp_spot, self._unstamp, self._stamp)
         self._badge = color_recipe.HoldBadge()
         self._mixed = None                # (keycaps, color) of the last dab that mixed
         self._ink = None              # Letters mode: the letters' color from the wheel; None: light, or black/white over paint
@@ -333,6 +334,7 @@ class ArtRoom(Room):
         self._grid.clear()
         self._painted_positions.clear()
         self._last_paint_pos = self._mixed = None
+        self._stamps.clear()
         dx, dy = shift_from(state.get("grid", OLD_ART_GRID))
         for key, val in state.items():
             if key.startswith("c:"):
@@ -359,6 +361,7 @@ class ArtRoom(Room):
         self._repaint_all()
         self._painted_positions.clear()
         self._last_paint_pos = self._mixed = None
+        self._stamps.clear()
         self._cursor_x = self._cursor_y = 0
         self._paint_mode = True
         self._set_pen(False)
@@ -504,6 +507,29 @@ class ArtRoom(Room):
     def _to_stamp_spot(self):
         if self._wrap_at == (self._cursor_x, self._cursor_y):
             self._new_line()
+
+    def _stamp_spot(self):
+        self._to_stamp_spot()
+        pos = (self._cursor_x, self._cursor_y)
+        return pos, self._grid.get(pos), pos in self._painted_positions
+
+    def _unstamp(self, undo):
+        pos, cell, painted = undo
+        if cell:
+            self._set_cell(pos, *cell)
+        else:
+            self._del_cell(pos)
+        (self._painted_positions.add if painted else self._painted_positions.discard)(pos)
+        self._cursor_x, self._cursor_y = pos
+        self._wrap_at = None
+
+    def _stamp(self, direction: str):
+        self._paint_at_cursor()
+        self._advance_after_stamp(direction)
+
+    def chord_settled(self):
+        if self._stamps.settle():
+            self.app.invalidate()
 
     def paint_char(self, char: str, direction: str = "right"):
         self._to_stamp_spot()
@@ -700,6 +726,8 @@ class ArtRoom(Room):
             self.echo.flush()
 
     async def handle(self, action):
+        if not isinstance(action, CharacterAction):
+            self._stamps.clear()
         if self._fade and not (isinstance(action, ControlAction) and action.action == "backspace"):
             self._stop_fade()
         if isinstance(action, ControlAction) and action.action == "space":
@@ -754,9 +782,7 @@ class ArtRoom(Room):
                 return
             chord = bool(action.char_held) and not action.with_shift and self._chord_brush(action.char_held, char)
             if (chord or self._select_brush(char, hold=action.is_repeat)) and not action.with_shift:
-                self._to_stamp_spot()
-                self._paint_at_cursor()
-                self._advance_after_stamp(direction)
+                self._stamps.press(chord, action.chord_meant, direction)
                 if char.isalpha():
                     self.echo.letter(direction, char)
                 else:

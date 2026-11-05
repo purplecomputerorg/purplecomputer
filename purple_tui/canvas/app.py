@@ -146,7 +146,7 @@ class PurpleApp:
         self._escape_down_at = None
         self._backslash_hold_timer = None
         self._lit_arrow = self._lit_arrow_timer = None
-        self._held_char = self.held_letter = self._letter_hold_timer = None
+        self._held_char = self.held_letter = self._letter_hold_timer = self._chord_timer = None
         self._sticky_shift_timer = None
         self._evdev_reader = self._power_button_reader = self._lid_switch_reader = None
         self._frame_stats = FrameStats(self.g)
@@ -575,6 +575,8 @@ class PurpleApp:
             if self._input_flood_guard.should_drop(action):
                 continue
             await self._dispatch_keyboard_action(action)
+            if getattr(action, "chord_wait", None):
+                self._arm_chord_timer(action.chord_wait)
         if not event.is_down and (key := event.char or (event.name if event.name in ARROWS else None)):
             self.release_key(key)
         sm = self._keyboard_state_machine
@@ -585,6 +587,16 @@ class PurpleApp:
             self._backslash_hold_timer = None
         if sm.held_char != self._held_char:
             self._track_letter_hold(sm.held_char)
+
+    def _arm_chord_timer(self, wait: float):
+        if self._chord_timer:
+            self._chord_timer.stop()
+        self._chord_timer = self.timers.after(wait, self._chord_settled)
+
+    def _chord_settled(self):
+        self._chord_timer = None
+        if self._keyboard_state_machine.chord_held() and not self._overlays:
+            self.room.chord_settled()
 
     def release_key(self, key: str):
         if self.top:

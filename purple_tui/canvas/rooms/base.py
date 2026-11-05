@@ -62,6 +62,9 @@ class Room:
     def hold_progress(self):
         return None
 
+    def chord_settled(self):
+        """Color keys pressed together are still down after CHORD_HOLD."""
+
     def footer_h(self, g) -> int:
         """Height under the room's canvas: the hold bar covers exactly this."""
         return hint_row_h(g) + g.em(1.1)   # Art and Blocks: pad, hint row, gap

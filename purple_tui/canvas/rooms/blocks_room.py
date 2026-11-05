@@ -91,6 +91,7 @@ class BlocksRoom(Room):
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
+        self._stamps = color_recipe.ChordStamps(self._stamp_spot, self._unstamp, self._build)
         self._badge = color_recipe.HoldBadge()
         self._mixed = None                # (keycaps, color) of the last block that mixed
         self._last = None             # (pos, key) of the block just dropped
@@ -170,6 +171,7 @@ class BlocksRoom(Room):
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
         self._last = self._next = self._mixed = None
+        self._stamps.clear()
         self._dir = "right"
         self.echo.reset()
         self._changed()
@@ -223,6 +225,22 @@ class BlocksRoom(Room):
         self._badge.dabbed()
         self._changed(pos)
         return bool(old)
+
+    def _stamp_spot(self):
+        pos = (self._x, self._z, self._cursor_y())
+        return self._x, self._z, self._next, pos, self._blocks.get(pos)
+
+    def _unstamp(self, undo):
+        self._x, self._z, self._next, pos, old = undo
+        if old is None:
+            self._blocks.pop(pos, None)
+        else:
+            self._blocks[pos] = old
+        self._changed(pos)
+
+    def chord_settled(self):
+        if self._stamps.settle():
+            self.app.invalidate()
 
     def _build(self, keep_height: bool = False):
         """A typed block, then on to the next cell the way the cursor last went."""
@@ -394,6 +412,8 @@ class BlocksRoom(Room):
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
+        if not isinstance(action, CharacterAction):
+            self._stamps.clear()
         if self.code_panel is None and isinstance(action, ControlAction) and action.action == "space":
             return self._space(action)
         if isinstance(action, ControlAction) and action.action == "tab" and (self.code_panel is None or self._tab.fired):
@@ -453,7 +473,7 @@ class BlocksRoom(Room):
             self.echo.letter(WORDS[self._dir], char)
         else:
             self.echo.flush()       # a digit would read as a count
-        self._build()
+        self._stamps.press(chord, action.chord_meant)
 
     def _lay(self, way: str):
         """A block in the brush color, written down as code too."""

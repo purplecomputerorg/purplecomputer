@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL
+from .constants import SUPPORT_EMAIL, CHORD_HOLD
 
 
 # ============================================================================
@@ -639,11 +639,16 @@ class CharacterAction(KeyAction):
     ctrl_held: bool = False  # Was a Ctrl key held? (the secret-menu unlock, editing shortcuts)
     cmd_held: bool = False  # Was Cmd (Meta) held? (editing shortcuts)
     char_held: str | None = None  # Another character key still held when this one went down (chords)
+    chord_wait: float | None = None  # Seconds until the chord counts as held together on purpose (0: it already does)
 
     @property
     def with_shift(self) -> bool:
         """Shift was down for this key, or a tap of Shift (sticky) made it a capital."""
         return self.shift_held or self.shifted
+
+    @property
+    def chord_meant(self) -> bool:
+        return self.chord_wait == 0
 
 
 @dataclass
@@ -753,6 +758,8 @@ class KeyboardStateMachine:
         # Held character tracking (for painting while navigating)
         self._held_char: str | None = None
         self._held_char_keycode: int | None = None
+        self._chars_down: dict[int, float] = {}   # character keycode -> press time
+        self._chord: tuple = ()                    # (first key, latest key) of the last chord
 
         # Long-hold tracking for Escape
         self._escape_hold_triggered = False
@@ -906,6 +913,7 @@ class KeyboardStateMachine:
             # Apply shift/caps
             final_char = self._apply_shift(char)
             chord_with = self._held_char if not is_repeat and keycode != self._held_char_keycode else None
+            chord_wait = None if is_repeat else self._chord_wait(keycode, timestamp)
             # Track held character (so NavigationAction can carry it)
             if not is_repeat:
                 self._held_char = final_char
@@ -919,6 +927,7 @@ class KeyboardStateMachine:
                 ctrl_held=self._ctrl_held,
                 cmd_held=self._cmd_held,
                 char_held=chord_with,
+                chord_wait=chord_wait if chord_with else None,
             ))
 
             # Track if physical shift was used for this character (prevents sticky activation)
@@ -938,6 +947,7 @@ class KeyboardStateMachine:
         # Remove from pressed state
         press_time = self._pressed.pop(keycode, None)
 
+        self._chars_down.pop(keycode, None)
         # Clear held character if this keycode was the held one
         if keycode == self._held_char_keycode:
             self._held_char = None
@@ -992,6 +1002,21 @@ class KeyboardStateMachine:
             self._backslash_hold_triggered = False
 
         return actions
+
+    def _chord_wait(self, keycode: int, timestamp: float) -> float | None:
+        """Seconds until the character keys down with this one count as held together
+        on purpose, timed from the longest held; None when it went down alone."""
+        others = {k: t for k, t in self._chars_down.items() if k != keycode}
+        self._chars_down[keycode] = timestamp
+        if not others:
+            return None
+        first = min(others, key=others.get)
+        self._chord = (first, keycode)
+        return max(0.0, others[first] + CHORD_HOLD - timestamp)
+
+    def chord_held(self) -> bool:
+        """Both keys of the last chord are still down."""
+        return bool(self._chord) and all(k in self._chars_down for k in self._chord)
 
     def _consume_sticky_shift(self):
         if self._sticky_shift_active:
@@ -1110,6 +1135,7 @@ class KeyboardStateMachine:
     def reset(self) -> None:
         """Reset all state."""
         self._pressed.clear()
+        self._chars_down.clear()
         self._shift_held = False
         self._space_held = False
         self._sticky_shift_active = False

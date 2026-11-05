@@ -22,7 +22,7 @@
 ]
 #gap
 #room(4, [Blocks])[
-  Every letter stacks a block. #key("Enter") builds up. #key("Tab") turns the room around.
+  Every letter stacks a block. #key("Enter") builds up. #key("Tab") turns the room around. Hold it to look from above.
 ]
 
 #gap

@@ -28,7 +28,7 @@
 #gap
 #try([Talking],
   ("cat!", [add #mono("!") and Purple says it]),
-  ("say hello", [or start with #mono("say")]),
+  ("say 5 x 5 apples", [or start with #mono("say")]),
 )
 #gap
 #flip[Write code]
@@ -53,7 +53,7 @@
 #panel(title: [Music])[
   #examples(comments: true,
     ("asdf", [each letter is a note]),
-    ("fast qwertyuiop", [quick notes, or use #mono("slow")]),
+    ("fast asdf slow jkl", [quick notes, then slow]),
     ("choose ukulele zxcvbnm", [play a ukulele]),
     ("letters", [keys say letters, #mono("notes") goes back]),
   )
@@ -61,7 +61,7 @@
 #gap
 #panel(title: [Blocks])[
   #examples(comments: true,
-    ("red up 5", [a tower]),
+    ("red up 3 blue up 2", [a two-color tower]),
     ("right hello", [each letter is a block]),
     ("green repeat 4 right 1 up 1", [stairs]),
   )

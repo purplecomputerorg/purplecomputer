@@ -74,6 +74,8 @@ red + blue             # Color mixing (= purple)
 purple truck           # Color swatch + emoji in free text
 1234                   # Big numbers show as an abacus
 I love cat!            # Speaks "I love cat" aloud (! triggers speech)
+say 5 x 5 apples       # Shows 25 apples and says "5 times 5 apples equals 25 apples"
+red + yellow!          # Shows orange and says "red plus yellow equals orange"
 ```
 
 ### For Installation (Old Laptop)
@@ -137,7 +139,7 @@ See [MANUAL.md](docs/MANUAL.md) for complete build/customization details.
 | **Art** | Paint and write on a grid with colors that mix like real paint. Each letter paints its sticker color; hold two letters to mix them. Purple starts here. |
 | **Music** | Every key plays a note or a drum and lights up. Enter changes the instrument, hold Enter to record a loop, arrows change the key. Tab says letters, and a word they spell shows up with its picture. Even a 2-year-old can have fun here. |
 | **Play** | Type a word, see an emoji, hear it spoken, mix colors, do math. Pre-readers can use it with just numbers (2 + 3). See [guides/play-room-design.md](guides/play-room-design.md) |
-| **Blocks** | Every letter stacks a block of its sticker color on a 3D floor. Enter builds up, Tab turns the room around. |
+| **Blocks** | Every letter stacks a block of its sticker color on a 3D floor. Enter builds up, Tab turns the room around, and holding Tab looks down from above. |
 | **Write** | A quiet page for stories and letters, for older kids. Off until a parent turns it on in Parent Menu, Rooms. |
 
 Families can add their own rooms (games, stories, worlds) from [Purple Studio](#purple-studio). They show as extra rooms on keys 6 to 0 in the Esc menu once a parent turns them on.
@@ -146,7 +148,7 @@ Families can add their own rooms (games, stories, worlds) from [Purple Studio](#
 - **Esc (tap):** the Esc menu: rooms on top (press a number), then tools for the room you're in: **Code** (Space), **Colors** (\\), **Time Travel** (T), **Save** (S), **Open** (O), **Print** (P, when a USB printer is plugged in), **Clear** (C), and **Volume** (V)
 - **Hold Esc (1s):** Parent Menu
 - **Hold \\ (3s):** Parent Menu (alternate, works on all keyboards)
-- **Tab:** the room's switch: Paint/Letters in Art, Notes/Letters in Music, Front/Back in Blocks, `say` on or off in Play
+- **Tab:** the room's switch: Paint/Letters in Art, Notes/Letters in Music, Front/Back in Blocks (hold it to look down from above), `say` on or off in Play
 - **Space** (Art, Blocks): put the brush down or lift it; hold it with the arrows to paint a trail or lay a line
 - **Enter** (Music): the next instrument; in Letters, whether letters say their names ("bee") or their sounds ("b")
 - **Space** (Music, in Letters): say the word the letters just spelled, shown under the grid
@@ -163,11 +165,12 @@ red repeat 4 forward 6 turn       # Art: a red square
 right 2 brush up right 3          # Art: a line with a gap
 write hi                          # Art: letters on the grid
 choose ukulele zxcvbnm            # Music: pick a sound, then play keys
-fast qwertyuiop                   # Music: quick notes
+fast asdf slow jkl                # Music: quick notes, then slow
 key g                             # Music: same keys, new notes
 letters sounds                    # Music: keys say their letter sounds
 green repeat 4 right 1 up 1       # Blocks: stairs
 right hello                       # Blocks: a block per letter
+red up 3 blue right 2             # Blocks: a new color as you go
 ```
 
 `repeat N` repeats the rest of the line, commas split it into steps, and misspellings are fixed and shown.

@@ -6,7 +6,7 @@ block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab flips
 to the back with arrows still moving the way they point, blocks in front of the
-cursor turn to glass where they hide the landing spot or the blocks beside it, and the Esc picker reaches the room with
+cursor fade, a whole tower at a time, where they hide its glass column or landing block, and the Esc picker reaches the room with
 4."""
 
 import time
@@ -326,20 +326,19 @@ def test_holding_space_while_pressing_enter_lays_a_column():
     run(go())
 
 
-def _glass(room) -> set:
+def _faded(room) -> set:
     return {b[:3] for b in room._faded}
 
 
-def test_front_blocks_in_the_way_of_the_landing_spot_turn_to_glass():
+def test_front_towers_in_the_way_of_the_landing_spot_fade_whole():
     async def go():
         app, room = _blocks()
         room._blocks.update({(15, 4, y): "#ff0000" for y in range(3)})
-        room._blocks.update({(x, 5, 0): "#00ff00" for x in (2, 14)})
-        room._blocks[(14, 6, 0)] = "#0000ff"   # beside the landing spot, behind (14, 5, 0)
+        room._blocks[(2, 5, 0)] = "#00ff00"
         room._x, room._z = 15, 6
         app._draw()
-        assert {(15, 4, 2), (14, 5, 0)} <= _glass(room) and (2, 5, 0) not in _glass(room)
-        room._x = 20                            # the same row, clear of those blocks
+        assert _faded(room) == {(15, 4, y) for y in range(3)}
+        room._x = 20                            # the same row, clear of that tower
         app._draw()
         assert not room._faded
         room._x, room._z = 5, 2

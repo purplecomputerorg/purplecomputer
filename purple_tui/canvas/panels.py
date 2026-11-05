@@ -74,14 +74,14 @@ _GLOSS_FACE = "sans-italic"
 GUIDE = {
     'art': [
         ("Colors", [(COLORS, "")]),
-        ("Move", [("right 5", RIGHT), ("up 3", UP)]),
+        ("Move", [("right 5", RIGHT), ("up 3 blue", f"{UP} in blue")]),
         ("Turn", [("turn", TURN), ("forward 6", "where it points")]),
         ("Again", [("repeat 4 right 2 up 2", "")]),
         ("Letters", [("write hi", "")]),
     ],
     'music': [
         ("Notes", [("asdf", "play those keys"), ("1234", "drums")]),
-        ("Speed", [("fast asdf", "quick"), ("slow asdf", "slow")]),
+        ("Speed", [("fast asdf", "quick"), ("fast asdf slow jkl", "")]),
         ("Sound", [("choose ukulele", "or marimba, accordion, glockenspiel")]),
         ("Key", [("key g", "same keys, new notes")]),
         ("Again", [("repeat 3 asdf", "three times")]),
@@ -89,19 +89,21 @@ GUIDE = {
     ],
     'blocks': [
         ("Colors", [(COLORS, "")]),
-        ("Build", [("right 5", f"a row {RIGHT}"), ("up 4", f"a tower {UP}"), ("back 3", "away from you"), ("front 3", "toward you")]),
+        ("Build", [("right 5", f"a row {RIGHT}"), ("up 4 blue", f"a blue tower {UP}"), ("back 3", "away from you"), ("front 3", "toward you")]),
         ("Letters", [("right hi", "a block per letter")]),
         ("Again", [("repeat 4 right 1 up 1", "stairs")]),
     ],
 }
 # What the side column shows instead while the code holds one of a topic's
 # words: (words, heading, rows). COLORS stands for any color word.
-_COLOR_TOPIC = ("Colors", [(ALL_COLORS, ""), ("color mint", "switch colors"), ("dark blue", "or light, bright, pale, neon")])
+_COLOR_TOPIC = ("Colors", [(ALL_COLORS, ""), ("color mint", "switch colors"), ("dark blue", "or light, bright, pale, neon"),
+                           ("red up 3 blue right 2", "a new color as you go")])
 _AGAIN_ROWS = [("repeat 3 right 2, up 1", "commas: both, each time"), ("repeat right 1", "with no number: twice")]
 TOPICS = {
     'art': [
         ("right left up down", "Move", [("right 5", f"{RIGHT} five steps"), ("left 5", f"{LEFT} five steps"), ("up 3", f"{UP} three steps"),
-                                        ("down 3", f"{DOWN} three steps"), ("right", "one step"), ("red right 5 blue down 3", "")]),
+                                        ("down 3", f"{DOWN} three steps"), ("right", "one step"), ("up 3 blue", f"{UP} in blue"),
+                                        ("red right 5 blue down 3", "keep going")]),
         ("turn spin rotate face forward go move walk step back backward around", "Turn and go",
          [("forward 6", "the way it points"), ("turn left", ""), ("turn right", ""), ("turn around", ""), ("turn", "a turn to the right"),
           ("face up", "point up"), ("back 3", "go backwards"), ("go 4", "same as forward")]),
@@ -116,7 +118,8 @@ TOPICS = {
         ("choose select use instrument play marimba ukulele uke accordion glockenspiel", "Sound",
          [("choose marimba", ""), ("choose ukulele", ""), ("choose accordion", ""), ("choose glockenspiel", ""),
           ("play uke", "same as choose"), ("choose ukulele zxcv", "then play")]),
-        ("fast slow", "Speed", [("fast asdf", "quick"), ("slow asdf", "slow"), ("fast 1234", "quick drums")]),
+        ("fast slow", "Speed", [("fast asdf", "quick"), ("slow asdf", "slow"), ("fast 1234", "quick drums"),
+                                ("fast asdf slow jkl", "quick, then slow")]),
         ("key", "Key", [("key c", "where you start"), ("key g", "brighter"), ("key d", "brighter still"),
                         ("key f", "warmer"), ("key b flat", "warmer still")]),
         ("repeat", "Again", [("repeat 3 asdf", "three times"), ("repeat 2 asdf, jkl", "commas: both, each time"), ("repeat asdf", "with no number: twice")]),
@@ -126,9 +129,11 @@ TOPICS = {
     'blocks': [
         ("right left up down back front forward go", "Build",
          [("right 5", f"a row {RIGHT}"), ("left 5", f"a row {LEFT}"), ("up 4", f"a tower {UP}"), ("down 2", f"{DOWN} again"),
-          ("back 3", "away from you"), ("front 3", "toward you"), ("forward 3", "keep going that way"), ("red up 3 blue right 2", "")]),
+          ("back 3", "away from you"), ("front 3", "toward you"), ("forward 3", "keep going that way"), ("up 4 blue", "a blue tower"),
+          ("red up 3 blue right 2", "keep building")]),
         ("repeat", "Again", [("repeat 4 right 1 up 1", "stairs")] + _AGAIN_ROWS),
-        (COLORS, "Colors", [(ALL_COLORS, ""), ("red up 5", "a red tower"), ("dark blue", "or light, bright, pale, neon")]),
+        (COLORS, "Colors", [(ALL_COLORS, ""), ("red up 5", "a red tower"), ("dark blue", "or light, bright, pale, neon"),
+                            ("red up 3 blue right 2", "a new color as you go")]),
     ],
 }
 _TAKES_A_WAY = {"turn", "face", "brush", "pen"}

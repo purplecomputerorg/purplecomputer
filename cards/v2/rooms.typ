@@ -46,12 +46,12 @@
 #gap
 
 #tiles(pad: 12pt,
-  ([Colors mix like paint.], [Hold two letters in Art or Blocks: #sticker("F", "#E6CE55") + #sticker("V", "#4C7FE5") makes green. #key("\\") opens every color.]),
   ([Purple talks.], [In Play, add #mono("!") or start with #mono("say"): #typed("I love you!"). #key("Tab") turns talking on.]),
   ([Loop like a DJ.], [In Music, *hold* #key("Enter") to record a tune, then play along with it.]),
-  ([No wrong notes.], [Every key sounds good together. Arrows change the key.]),
-  ([Nothing gets lost.], [Every room is kept. #key("Esc") #key("T") rewinds to any moment, even after a big erase.]),
-  ([Keys match stickers.], [Each letter paints the color on its sticker.]),
+  ([Colors mix like paint.], [Hold two letters in Art or Blocks: #sticker("F", "#E6CE55") + #sticker("V", "#4C7FE5") makes green. #key("\\") opens every color.]),
+  ([Spell a word.], [In Music, press #key("Tab"), then type #mono("cat"). The cat shows up, and #key("Space") says it.]),
+  ([Rewind anything.], [Press #key("Esc") #key("T"), then hold #key("←") to watch the room go backward. #key("Enter") keeps that moment, even after a big erase.]),
+  ([See your own code.], [Paint or build something, then hold #key("Esc") and press #key("Space"). Purple shows the code for what you just did. More on card 3.]),
   ([Made for little hands.], [Tap #key("Shift"), then a letter, for a capital. No need to hold two keys.]),
 )
 

@@ -15,7 +15,7 @@
 #let big-step(n, body) = numbered(n, r: 9pt, text(size: 11.5pt, body))
 #big-step(1)[Turn off the laptop.]
 #v(1pt)
-#big-step(2)[Plug in the Purple Key.]
+#big-step(2)[Plug in the #text(weight: "bold", fill: purple)[Purple Key].]
 #v(1pt)
 // Step 3's badge runs a rail down to the Mac and PC ways it owns
 #let way(title, keys, body) = panel(title: title)[

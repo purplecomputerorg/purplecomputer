@@ -16,8 +16,8 @@
   ([Parent PIN], [Keep this menu for grown-ups.]),
 )
 #gap
-#panel(title: [The Write room])[
-A quiet page for stories, letters and school reports, for kids who can type. It starts off: turn it on in *Rooms*.
+#panel(title: [The Write room #h(3pt) #tag[Off by default]])[
+A quiet page for stories, letters and school reports, for kids who can type. Enable in the Parent Menu #sym.arrow.r *Rooms*.
 ]
 #gap
 #panel(title: [Printing #h(3pt) #tag[Experimental]])[

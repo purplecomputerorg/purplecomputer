@@ -42,7 +42,7 @@ TURN_DETAIL_BLOCKS = 600     # visible blocks; past this the half turn drops sea
 TURN_FRAME_BUDGET_S = 0.012  # a detailed turn frame slower than this lowers that limit to its block count
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
 SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab switch's words and pictures
-FRONT_ALPHA = 85              # nearer blocks that overlap the cursor's glass column fade to this
+GLASS_ALPHA, GLASS_EDGE = 55, 150   # nearer blocks in the way of the cursor turn to glass: faint faces, bright edges
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the floor color
 SHADOW_ALPHA = 140
@@ -78,7 +78,7 @@ class BlocksRoom(Room):
     room shows its back. The floor and blocks render into two cached surfaces
     split at the cursor's row, rebuilt when a block changes, the room flips or
     the cursor changes rows: the rows from the cursor's back, then the cursor,
-    then the rows in front of it, with the blocks over its glass column faded."""
+    then the rows in front of it, with the blocks in the way turned to glass."""
 
     name, label, icon = "blocks", "Blocks", ICON_CUBE
     LANDSCAPE = True
@@ -107,7 +107,7 @@ class BlocksRoom(Room):
         self._origin = (0, 0)
         self._floor = self._scene = None
         self._front = self._solid_front = self._scene_row = None
-        self._front_blocks, self._faded, self._fade_key = [], frozenset(), None
+        self._front_blocks, self._occupied, self._faded, self._fade_key = [], set(), frozenset(), None
         self._composed = self._layer = None
         self._sprites: dict = {}
         self.echo = Echo()
@@ -569,6 +569,7 @@ class BlocksRoom(Room):
             placed = self._placed()
             self._scene = self._stack(self._mark_row(self._floor_surface().copy(), row), [b for b in placed if b[1] >= row])
             self._front_blocks = [b for b in placed if b[1] < row]
+            self._occupied = {b[:3] for b in placed}
             self._front = self._solid_front = self._stack(pygame.Surface(self._scene_size(), pygame.SRCALPHA), self._front_blocks)
             self._faded, self._fade_key = frozenset(), None
         key = (vx, self._cursor_y())
@@ -591,8 +592,13 @@ class BlocksRoom(Room):
         return self._composed[2]
 
     def _hiding(self, vx, vz, y) -> frozenset:
-        """Front blocks whose picture overlaps the glass column or the landing block's top by a pixel or more."""
-        polys = (*self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT - 1 - y), self._faces(*self._corner(vx, vz, y + 1))[0])
+        """Front blocks whose picture overlaps, by a pixel or more, the glass column, the
+        landing block, or the blocks beside it in its row: a cell to either side, a level up or down.
+        The block just laid stays solid while the cursor sits right behind it, and what it hides doesn't count."""
+        cells = [(vx, y)] + [(cx, cy) for cx in range(vx - 1, vx + 2) for cy in range(y - 1, y + 2) if (cx, vz, cy) in self._occupied]
+        polys = [*self._faces(*self._corner(vx, vz, HEIGHT), levels=HEIGHT - 1 - y)]
+        for cx, cy in cells:
+            polys += self._faces(*self._corner(cx, vz, cy + 1))
         xs, ys = zip(*(p for poly in polys for p in poly))
         box = pygame.Rect(min(xs), min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1)
         near = [b for b in self._front_blocks if self._sprite_rect(*b[:3]).colliderect(box)]
@@ -602,10 +608,15 @@ class BlocksRoom(Room):
         polys = [[(px - box.x, py - box.y) for px, py in poly] for poly in polys]
         for poly in polys:
             pygame.draw.polygon(s, (255, 255, 255), poly)
-        for poly in polys:      # trimmed by a pixel: a block just in front shares an edge with the column without hiding it
+        for poly in polys:      # trimmed by a pixel: a block just in front shares an edge with them without hiding them
             pygame.draw.polygon(s, (0, 0, 0, 0), poly, 1)
-        column, block = pygame.mask.from_surface(s), self._block_mask()
-        return frozenset(b for b in near if column.overlap(block, self._sprite_rect(*b[:3]).move(-box.x, -box.y).topleft))
+        spot, block = pygame.mask.from_surface(s), self._block_mask()
+        at = {b: self._sprite_rect(*b[:3]).move(-box.x, -box.y).topleft for b in near}
+        laid = self._last and (*self._view(*self._last[0][:2]), self._last[0][2])
+        solid = next((b for b in near if b[:3] == laid and laid[:2] == (vx, vz - 1)), None)
+        if solid:
+            spot.erase(block, at[solid])
+        return frozenset(b for b in near if b is not solid and spot.overlap(block, at[b]))
 
     def _block_mask(self) -> pygame.mask.Mask:
         key = ("mask", self._c)
@@ -614,24 +625,25 @@ class BlocksRoom(Room):
         return self._sprites[key]
 
     def _fade(self, faded) -> pygame.Surface:
-        """The front rows with `faded` see-through, multiplied by a picture of
-        each block's alpha so a solid block nearer than a faded one stays solid."""
+        """The front rows with `faded` in glass, repainted only where those blocks are."""
         if not faded:
             return self._solid_front
         rects = [self._sprite_rect(*b[:3]) for b in faded]
-        area = rects[0].unionall(rects[1:])
-        alpha = pygame.Surface(self._scene_size(), pygame.SRCALPHA)
-        alpha.fill((255, 255, 255, 255))
-
-        def silhouette(*b):
-            for poly in self._faces(*self._corner(b[0], b[1], b[2] + 1)):
-                for width in (0, 1):    # the outline too, as the sprite draws it
-                    pygame.draw.polygon(alpha, (255, 255, 255, FRONT_ALPHA if b in faded else 255), poly, width)
-
-        self._stack(alpha, [b for b in self._front_blocks if self._sprite_rect(*b[:3]).colliderect(area)], block=silhouette, shadows=False)
         front = self._solid_front.copy()
-        front.blit(alpha, area, area, special_flags=pygame.BLEND_RGBA_MULT)
+        front.set_clip(rects[0].unionall(rects[1:]))
+        front.fill((0, 0, 0, 0))
+        self._stack(front, self._front_blocks, glass=faded)
+        front.set_clip(None)
         return front
+
+    def _glass(self, color, row) -> pygame.Surface:
+        key = ("glass", color, self._c, row)
+        if key not in self._sprites:
+            s = self._sprite(color, GLASS_ALPHA, row).copy()
+            for poly in self._faces(0, self._metrics()[0]):
+                pygame.draw.polygon(s, (*rgb(P.TEXT), GLASS_EDGE), poly, 1)
+            self._sprites[key] = s
+        return self._sprites[key]
 
     def _cursor_box(self, vx, vz) -> pygame.Rect:
         """Scene pixels the cursor can touch: its column and the ceiling cells
@@ -647,16 +659,16 @@ class BlocksRoom(Room):
         s.blit(stripe, (0, 0))
         return s
 
-    def _stack(self, s, placed, haze: bool = True, block=None, shadows: bool = True) -> pygame.Surface:
+    def _stack(self, s, placed, haze: bool = True, glass=frozenset()) -> pygame.Surface:
         """Far rows first, left to right, bottom up, so nearer faces paint over
         farther ones. A floating block's shadow goes right after whatever it falls on."""
-        block = block or (lambda vx, vz, y, color: s.blit(self._sprite(color, row=vz if haze else None), self._sprite_rect(vx, vz, y)))
         occupied = {b[:3] for b in placed}
         items = []
         for b in placed:
             vx, vz, y, color = b
-            items.append(((-vz, vx, y, 1), lambda b=b: block(*b)))
-            if shadows and y and (vx, vz, y - 1) not in occupied:
+            sprite = self._glass(color, vz) if b in glass else self._sprite(color, row=vz if haze else None)
+            items.append(((-vz, vx, y, 1), lambda sprite=sprite, rect=self._sprite_rect(vx, vz, y): s.blit(sprite, rect)))
+            if y and (vx, vz, y - 1) not in occupied:
                 ground = max((h + 1 for h in range(y) if (vx, vz, h) in occupied), default=0)
                 items.append(((-vz, vx, ground - 1, 2), lambda vx=vx, vz=vz, g=ground, y=y, c=color: self._shadow(s, vx, vz, g, y, c)))
         for _, paint in sorted(items, key=lambda i: i[0]):

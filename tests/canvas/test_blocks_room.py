@@ -6,14 +6,14 @@ block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab flips
 to the back with arrows still moving the way they point, blocks in front of the
-cursor fade where they overlap its glass column, and the Esc picker reaches the room with
+cursor turn to glass where they hide the landing spot or the blocks beside it, and the Esc picker reaches the room with
 4."""
 
 import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.rooms import blocks_room
-from purple_tui.canvas.rooms.blocks_room import DEPTH, FRONT_ALPHA, HEIGHT, RISE, SINK, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
+from purple_tui.canvas.rooms.blocks_room import DEPTH, HEIGHT, RISE, SINK, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction
@@ -326,21 +326,22 @@ def test_holding_space_while_pressing_enter_lays_a_column():
     run(go())
 
 
-def _front_alpha(room, x, z, y) -> int:
-    return room._front.get_at(room._sprite_rect(*room._view(x, z), y).center).a
+def _glass(room) -> set:
+    return {b[:3] for b in room._faded}
 
 
-def test_only_front_blocks_over_the_glass_column_fade():
+def test_front_blocks_in_the_way_of_the_landing_spot_turn_to_glass():
     async def go():
         app, room = _blocks()
         room._blocks.update({(15, 4, y): "#ff0000" for y in range(3)})
-        room._blocks[(2, 4, 0)] = "#00ff00"
+        room._blocks.update({(x, 5, 0): "#00ff00" for x in (2, 14)})
+        room._blocks[(14, 6, 0)] = "#0000ff"   # beside the landing spot, behind (14, 5, 0)
         room._x, room._z = 15, 6
         app._draw()
-        assert _front_alpha(room, 15, 4, 2) == FRONT_ALPHA and _front_alpha(room, 2, 4, 0) == 255
+        assert {(15, 4, 2), (14, 5, 0)} <= _glass(room) and (2, 5, 0) not in _glass(room)
         room._x = 20                            # the same row, clear of those blocks
         app._draw()
-        assert not room._faded and _front_alpha(room, 15, 4, 2) == 255
+        assert not room._faded
         room._x, room._z = 5, 2
         app._draw()
         assert not room._front.get_bounding_rect().w

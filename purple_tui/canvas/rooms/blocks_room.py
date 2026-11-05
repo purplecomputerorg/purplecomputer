@@ -495,10 +495,10 @@ class BlocksRoom(Room):
         return pygame.Rect(px, py - dz, self._c + sx + 1, dz + hy + 1)
 
     # ---------------------------------------------------------------- drawing
-    def _sprite(self, color: str, alpha: int = 255, row=None, dashed: bool = False) -> pygame.Surface:
+    def _sprite(self, color: str, alpha: int = 255, row=None, ribbon: bool = False) -> pygame.Surface:
         """A block; with `row`, hazed toward the floor color the farther back it sits;
-        with `dashed`, light dashes along the row that mark the cursor's row and leave its color showing."""
-        key = (color, self._c, alpha, row, dashed)
+        with `ribbon`, a soft band along the row that marks the cursor's row and leaves its color showing."""
+        key = (color, self._c, alpha, row, ribbon)
         if key not in self._sprites:
             if alpha < 255:
                 s = self._sprite(color, row=row).copy()
@@ -511,21 +511,21 @@ class BlocksRoom(Room):
                 for poly, shade in zip(self._faces(0, dz), (mix(color, "#ffffff", 0.22), rgb(color), mix(color, "#000000", 0.32))):
                     pygame.draw.polygon(s, shade, poly)
                     pygame.draw.polygon(s, rgb(P.LINE), poly, 1)
-                if dashed:
-                    s.blit(self._dashes(), (0, 0))
+                if ribbon:
+                    s.blit(self._ribbon(), (0, 0))
             self._sprites[key] = s
         return self._sprites[key]
 
-    def _dashes(self) -> pygame.Surface:
-        """A light dashed line across the middle of the top face and of the front, running along the row."""
-        key = ("dashes", self._c)
+    def _ribbon(self) -> pygame.Surface:
+        """A soft light band across the middle of the top face and of the front, running along the row."""
+        key = ("ribbon", self._c)
         if key not in self._sprites:
             dz, hy, sx, _ = self._metrics()
-            s = pygame.Surface((self._c + sx + 1, dz + hy + 1), pygame.SRCALPHA)
-            dash = max(3, self._c // 6)
-            for x, y in ((sx / 2, dz / 2), (0, dz + hy / 2)):
-                for start in range(0, self._c, 2 * dash):
-                    pygame.draw.line(s, (*rgb(P.TEXT), 200), (x + start, y), (x + min(start + dash, self._c), y), 3)
+            c, lo, hi = self._c, 0.38, 0.62
+            s = pygame.Surface((c + sx + 1, dz + hy + 1), pygame.SRCALPHA)
+            for (ox, oy), (vx, vy) in (((0, dz), (sx, -dz)), ((0, dz), (0, hy))):
+                band = [(ox + vx * lo, oy + vy * lo), (ox + vx * hi, oy + vy * hi)]
+                pygame.draw.polygon(s, (*rgb(P.TEXT), 70), [band[0], (band[0][0] + c, band[0][1]), (band[1][0] + c, band[1][1]), band[1]])
             self._sprites[key] = s
         return self._sprites[key]
 
@@ -685,7 +685,7 @@ class BlocksRoom(Room):
     def _stack(self, s, placed, haze: bool = True, block=None, shadows: bool = True) -> pygame.Surface:
         """Far rows first, left to right, bottom up, so nearer faces paint over
         farther ones. A floating block's shadow goes right after whatever it falls on."""
-        block = block or (lambda vx, vz, y, color: s.blit(self._sprite(color, row=vz if haze else None, dashed=haze and vz == self._scene_row),
+        block = block or (lambda vx, vz, y, color: s.blit(self._sprite(color, row=vz if haze else None, ribbon=haze and vz == self._scene_row),
                                                           self._sprite_rect(vx, vz, y)))
         occupied = {b[:3] for b in placed}
         items = []

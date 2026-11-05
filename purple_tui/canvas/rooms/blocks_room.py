@@ -54,8 +54,8 @@ SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), ("y", 1)),
         "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
         RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
-PEEK_PIC = "{hints/peek.png}"
-HINT = f"Type to build!  {{Enter}} {{hints/up.png}}   {{hold Tab}} {PEEK_PIC}"
+PEEK_PIC = "hints/peek.png"
+HINT = "Type to build!  {Enter} {hints/up.png}"
 SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
 
 
@@ -100,7 +100,7 @@ class BlocksRoom(Room):
         self._peek = False
         self._motion = None           # (start, seconds, (half turns, tilt) from, to) while the view moves
         self._motion_timer = None
-        self._tab = HeldKey(app, lambda: self._tilt(True))
+        self._tab = HeldKey(app, lambda: self._tilt(not self._peek))
         self._turn_detail_limit = TURN_DETAIL_BLOCKS
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
@@ -124,7 +124,8 @@ class BlocksRoom(Room):
 
     def hold_progress(self):
         held = self._tab.progress()
-        return None if held is None else hold_status(held, "Tab", PEEK_PIC, "look from above")
+        verb = "look from the front" if self._peek else "look from above"
+        return None if held is None else hold_status(held, "Tab", f"{{{PEEK_PIC}}}", verb)
 
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
@@ -414,6 +415,8 @@ class BlocksRoom(Room):
             return self._space(action)
         if isinstance(action, ControlAction) and action.action == "tab" and (self.code_panel is None or self._tab.fired):
             return self._tab_key(action)
+        if self._escape_from_above(action):
+            return
         stacking = isinstance(action, ControlAction) and action.action == "enter" and action.space_held
         if stacking and self.code_panel is None:
             self._dir = RISE    # Space + Enter lays a column, as Space + arrows lay a line
@@ -442,15 +445,21 @@ class BlocksRoom(Room):
             self._lay_pending()
 
     def _tab_key(self, action):
-        """A tap of Tab turns around once it is let go; a hold looks down until then.
-        A fresh press always starts from the resting view, so a release lost to an overlay can't leave it looking down."""
+        """A tap of Tab turns around once it is let go; a hold switches between looking from
+        the front and from above, which stays until the next hold or Esc."""
         if action.is_down and not action.is_repeat:
-            self._tilt(False)
             self._tab.down()
-        elif not action.is_down:
-            if self._tab.up():
-                self.turn_around()
-            self._tilt(False)
+        elif not action.is_down and self._tab.up():
+            self.turn_around()
+
+    def _escape_from_above(self, action) -> bool:
+        """Esc from above goes back to the front view instead of opening the menu, as it stops Music's loop."""
+        if not (self._peek and self.code_panel is None and isinstance(action, ControlAction)
+                and action.action == "escape" and action.is_down and not action.is_repeat):
+            return False
+        self._tilt(False)
+        self.app._escape_consumed_by_mode = True
+        return True
 
     def _lay_pending(self):
         if self._space_pending:
@@ -643,7 +652,8 @@ class BlocksRoom(Room):
         else:
             self._draw_moving(g, area, *moving)
         self.bar_row = draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), tuple(pic for _, pic in SIDES),
-                                        1 if self._back else 0, self._color, wheel=None if self.code_panel else wheel_chip(self))
+                                        1 if self._back else 0, self._color, wheel=None if self.code_panel else wheel_chip(self),
+                                        after=("hold Tab", PEEK_PIC, self._peek))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)

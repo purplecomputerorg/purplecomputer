@@ -452,34 +452,44 @@ def test_tapping_real_tab_turns_once_and_leaves_no_hold_behind():
     run(go())
 
 
-def test_holding_real_tab_looks_down_and_letting_go_looks_back_without_turning():
+async def _hold_real_tab(app, sm):
+    await _real_tab(app, sm, True)
+    await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.1)
+    await _real_tab(app, sm, False)
+
+
+def test_holding_tab_looks_from_above_until_the_next_hold_and_both_hands_can_build():
     async def go():
         app, room = _blocks()
         sm = KeyboardStateMachine()
-        await type_text(app, "abc")
-        await _real_tab(app, sm, True)
-        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.1)
-        assert room._peek and room.hold_progress() is None
+        await _hold_real_tab(app, sm)
+        assert room._peek and not room._back and room.hold_progress() is None
         room._motion = None
+        await press(app, "right")
+        await type_text(app, "a")
         app._draw()
-        await press(app, "right")              # arrows still move while looking down
-        assert room._x == 6
-        await _real_tab(app, sm, False)
-        assert not room._peek and not room._back
+        assert room._x == 7 and (6, 5, 0) in room._blocks and room._peek
+        await press(app, "tab")                 # a tap still turns around, staying above
+        assert room._back and room._peek
+        room._motion = None
+        await _hold_real_tab(app, sm)
+        assert not room._peek
         for p in (0.3, 0.6):
             _at(room, TILT_S * p)
             app._draw()
     run(go())
 
 
-def test_a_lost_tab_release_does_not_leave_the_view_looking_down():
+def test_esc_from_above_goes_back_to_the_front_view_without_the_menu():
     async def go():
         app, room = _blocks()
-        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=True))
-        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.1)
-        assert room._peek              # its release went to an overlay, say
-        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=True))
-        assert not room._peek
+        await _hold_real_tab(app, KeyboardStateMachine())
+        room._motion = None
+        await press(app, "escape")
+        assert not room._peek and app.room is room and not app._overlays
+        room._motion = None
+        await press(app, "escape")              # back in front, Esc opens the menu as usual
+        assert app._overlays
     run(go())
 
 

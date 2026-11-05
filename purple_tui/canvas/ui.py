@@ -960,14 +960,15 @@ def _faded(pic: pygame.Surface) -> pygame.Surface:
 
 
 def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch: str | None = None,
-                     icon=None, wheel: str | None = None, chips: tuple = (), also: tuple = ()):
+                     icon=None, wheel: str | None = None, chips: tuple = (), also: tuple = (), after: tuple = ()):
     """The room's header: the Tab switch starting at the middle, the brush
     swatch (or an icon standing in for it) left of it, then key chips further
     left: '[\\] (color wheel)' when wheel (from color_wheel.chip) is set, and each of
     chips = (key, mark, label, on, noun), or (key, active, pictures) for a stepper.
     Slides right when the chips would run past r's left edge, as far as the
     widest of chips and the other chip sets in also, so it holds still when a
-    room swaps its chips. Returns the color bar's row: r from its left edge
+    room swaps its chips. `after` = (key, picture, on) is a chip right of the switch
+    for what else Tab does, lit while that is on. Returns the color bar's row: r from its left edge
     to the color wheel chip's right, or None without the chip."""
     px = g.vh(1.9)
     if wheel:
@@ -976,15 +977,21 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     start = r.centerx - keycap_size(g, "Tab", px)[0]
     with g.drawing_on(pygame.Surface((1, 1))):
         left = min(_draw_mode_switch_at(g, px, start, r.centery, labels, active, swatch, icon, c).x for c in (chips, *also))
-    first = _draw_mode_switch_at(g, px, start + max(0, r.x - left), r.centery, labels, active, swatch, icon, chips)
+    first = _draw_mode_switch_at(g, px, start + max(0, r.x - left), r.centery, labels, active, swatch, icon, chips, after)
     return pygame.Rect(r.x, r.y, first.right - r.x, r.h) if wheel else None
 
 
-def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, swatch, icon, chips) -> pygame.Rect:
+def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, swatch, icon, chips, after=()) -> pygame.Rect:
     """Draws the header with the Tab switch at start; returns its leftmost piece."""
     gap = round(px * 1.2)
     piece = _draw_switch(g, px, start + _switch_widths(g, px, "Tab", labels)[1] + 2 * round(px * 0.35), cy, "Tab", labels,
                          active)
+    if after:
+        key, picture, on = after
+        chip = (key, _switch_picture(g, px, picture), "", on)
+        with g.drawing_on(pygame.Surface((1, 1))):
+            w = _draw_key_chip(g, px, 0, cy, *chip).w
+        _draw_key_chip(g, px, piece.right + gap + w, cy, *chip)
     mark = icon or (swatch_dot(swatch, round(px * 2.1)) if swatch else None)
     if mark:
         piece = mark.get_rect(midright=(piece.x - gap, cy))

@@ -42,7 +42,7 @@ TURN_DETAIL_BLOCKS = 600     # visible blocks; past this the half turn drops sea
 TURN_FRAME_BUDGET_S = 0.012  # a detailed turn frame slower than this lowers that limit to its block count
 ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
 SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab switch's words and pictures
-FRONT_ALPHA = 85              # front towers in the way of the cursor's glass column or landing block fade to this
+FRONT_ALPHA = 40              # front towers in the way of the cursor's glass column or landing block fade to this
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the floor color
 SHADOW_ALPHA = 140
@@ -494,9 +494,10 @@ class BlocksRoom(Room):
         return pygame.Rect(px, py - dz, self._c + sx + 1, dz + hy + 1)
 
     # ---------------------------------------------------------------- drawing
-    def _sprite(self, color: str, alpha: int = 255, row=None) -> pygame.Surface:
-        """A block; with `row`, hazed toward the floor color the farther back it sits."""
-        key = (color, self._c, alpha, row)
+    def _sprite(self, color: str, alpha: int = 255, row=None, rim: bool = False) -> pygame.Surface:
+        """A block; with `row`, hazed toward the floor color the farther back it sits;
+        with `rim`, light edges that mark the cursor's row without changing its color."""
+        key = (color, self._c, alpha, row, rim)
         if key not in self._sprites:
             if alpha < 255:
                 s = self._sprite(color, row=row).copy()
@@ -508,7 +509,7 @@ class BlocksRoom(Room):
                     color = haze(color, row)
                 for poly, shade in zip(self._faces(0, dz), (mix(color, "#ffffff", 0.22), rgb(color), mix(color, "#000000", 0.32))):
                     pygame.draw.polygon(s, shade, poly)
-                    pygame.draw.polygon(s, rgb(P.LINE), poly, 1)
+                    pygame.draw.polygon(s, (*rgb(P.TEXT), 200) if rim else rgb(P.LINE), poly, 1)
             self._sprites[key] = s
         return self._sprites[key]
 
@@ -658,7 +659,8 @@ class BlocksRoom(Room):
     def _stack(self, s, placed, haze: bool = True, block=None, shadows: bool = True) -> pygame.Surface:
         """Far rows first, left to right, bottom up, so nearer faces paint over
         farther ones. A floating block's shadow goes right after whatever it falls on."""
-        block = block or (lambda vx, vz, y, color: s.blit(self._sprite(color, row=vz if haze else None), self._sprite_rect(vx, vz, y)))
+        block = block or (lambda vx, vz, y, color: s.blit(self._sprite(color, row=vz if haze else None, rim=haze and vz == self._scene_row),
+                                                          self._sprite_rect(vx, vz, y)))
         occupied = {b[:3] for b in placed}
         items = []
         for b in placed:
@@ -830,12 +832,12 @@ class BlocksRoom(Room):
 
     def _draw_cursor(self, g, ox, oy, scene, front):
         """A blinking glass column from the ceiling down onto the see-through
-        landing block, with its shadow on whatever it would land on; then the
-        faded rows in front; then a patch of ceiling fading out around the
-        column, the column's edges faint through it, its outline on down to the
-        floor through any blocks below, a ring around each block in it, and a
-        wire box around the landing block on top of everything. Only the
-        patch around the column is redrawn; Gfx.blink swaps it bright and dim."""
+        landing block, with its shadow on whatever it would land on and a ring
+        around each run of blocks in its column; then the rows in front, which
+        hide those rings like any block; then a patch of ceiling fading out around
+        the column, the column's edges faint through it, and a bold wire box around
+        the landing block on top of everything. Only the patch around the column
+        is redrawn; Gfx.blink swaps it bright and dim. guides/blocks-cursor.md"""
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
         box = self._cursor_box(vx, vz)
@@ -852,16 +854,14 @@ class BlocksRoom(Room):
             self._outline(layer, column, edge, fill)
             self._shadow(layer, vx, vz, self._ground(y), y, self._color)
             layer.blit(self._sprite(self._color, 170 if bright else 100, vz), self._sprite_rect(vx, vz, y))
+            for lo, hi in self._stacks():       # its blocks, ringed so they read as part of it among many columns
+                for poly in self._faces(*self._corner(vx, vz, hi + 1), levels=hi + 1 - lo):
+                    pygame.draw.polygon(layer, (*rgb(P.TEXT), 220 if bright else 120), poly, 2)
             layer.blit(front, box, box)
             g.surface.blit(layer, at, box)
             layer.fill((0, 0, 0, 0), box)       # draw calls replace pixels rather than blend, so the see-through top goes on fresh
             self._ceiling_patch(layer, vx, vz, 0.3 if y == HEIGHT - 1 else 1)   # faint when the box is up against it
             self._outline(layer, column, edge // 3)
-            if y:                               # the column carries on down through whatever is below, to the floor
-                self._outline(layer, self._faces(*self._corner(vx, vz, y), levels=y)[1:], edge * 3 // 4, fill)
-            for lo, hi in self._stacks():       # its blocks, ringed so they read as part of it among many columns
-                for poly in self._faces(*self._corner(vx, vz, hi + 1), levels=hi + 1 - lo):
-                    pygame.draw.polygon(layer, (*rgb(P.TEXT), 220 if bright else 120), poly, 2)
             self._cage(layer, vx, vz, y)
             self._pointer(layer, vx, vz, y)
             g.surface.blit(layer, at, box)
@@ -884,15 +884,19 @@ class BlocksRoom(Room):
             pygame.draw.polygon(layer, (*rgb(P.TEXT), round(CEILING_ALPHA[dx * dx + dz * dz] * strength)), top)
 
     def _cage(self, layer, vx, vz, y):
-        """Twelve wire edges a little outside the landing block, the three hidden ones fainter."""
+        """Twelve wire edges a little outside the landing block: the three hidden ones
+        thin and faint, the rest bold over a dark edge so they read against any block."""
         lo, hi = -CAGE_PAD, 1 + CAGE_PAD
         corners = [(a, b, h) for a in (lo, hi) for b in (lo, hi) for h in (lo, hi)]
         hidden = (lo, hi, lo)                           # back, left, bottom: behind the block
-        for i, p in enumerate(corners):
-            for q in corners[i + 1:]:
-                if sum(m != n for m, n in zip(p, q)) == 1:
-                    ends = [self._corner(vx + a, vz + b, y + h) for a, b, h in (p, q)]
-                    pygame.draw.line(layer, (*rgb(P.TEXT), 90 if hidden in (p, q) else 230), *ends, 1 if hidden in (p, q) else 2)
+        edges = [[self._corner(vx + a, vz + b, y + h) for a, b, h in (p, q)] + [hidden in (p, q)]
+                 for i, p in enumerate(corners) for q in corners[i + 1:] if sum(m != n for m, n in zip(p, q)) == 1]
+        w = max(2, self._c // 10)
+        for color, width, back in (((*rgb(art_room.CANVAS_BG), 220), w + 4, False), ((*rgb(P.TEXT), 90), 1, True),
+                                   ((*rgb(P.TEXT), 240), w, False)):
+            for start, end, behind in edges:
+                if behind == back:
+                    pygame.draw.line(layer, color, start, end, width)
 
     def _step(self) -> dict:
         axis, step = WRAP[self._dir][0]

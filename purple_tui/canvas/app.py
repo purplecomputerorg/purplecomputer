@@ -606,7 +606,7 @@ class PurpleApp:
         before = self.hold_progress()
         await self._dispatch_action(action)
         if before and before[0] > HOLD_QUIET and self.hold_progress() is None and \
-                isinstance(action, ControlAction) and action.action in ("space", "enter") and not action.is_down:
+                isinstance(action, ControlAction) and action.action in ("space", "enter", "tab") and not action.is_down:
             self._show_hold_nudge(before[2])
 
     def _show_hold_nudge(self, text):

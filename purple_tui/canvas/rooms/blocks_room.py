@@ -13,13 +13,13 @@ blocks; only the code line keeps the height it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
-opens the color bar, Tab flips to the back side, and the code line opens
-from the Esc menu."""
+opens the color bar, Tab flips to the back side and holding it tilts the view
+to look down from above, and the code line opens from the Esc menu."""
 
 import asyncio
 import math
 import time
-from functools import cache
+from functools import cache, lru_cache
 
 import pygame
 
@@ -30,7 +30,7 @@ from .. import color_recipe, paper
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo
-from ..ui import DOWN, MOVE_HINT, PICK_HINT, UP, draw_key_hint, draw_mode_switch, hint_row_h
+from ..ui import DOWN, MOVE_HINT, PICK_HINT, UP, HeldKey, draw_key_hint, draw_mode_switch, hint_row_h, hold_status
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
@@ -38,10 +38,11 @@ from .blocks_code import WORDS, BlocksCodeRunner
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 WIDTH, DEPTH, HEIGHT = 30, 12, 12
-TURN_S = 0.5
+TURN_S, TILT_S = 0.5, 0.3
 TURN_DETAIL_BLOCKS = 600     # visible blocks; past this the half turn drops seams and shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed turn frame slower than this lowers that limit to its block count
-ROW_DEPTH, BLOCK_RISE, ROW_SKEW, SLAB = 0.5, 0.7, 0.3, 0.35   # in cell widths
+SLAB = 0.35                   # in cell widths
+REST, PEEK = (0.5, 0.7, 0.3), (0.9, 0.25, 0.1)   # (row depth, block rise, row skew) in cell widths: held Tab looks down
 SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab switch's words and pictures
 FRAME_ALPHA = 90              # the outline standing up around the cursor's row
 FRONT_ALPHA = 40              # front towers in the way of the cursor's glass column or landing block fade to this
@@ -60,7 +61,8 @@ SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), ("y", 1)),
         "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
         RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
-HINT = "Type to build!  {Enter} {hints/up.png}"
+PEEK_PIC = "{hints/peek.png}"
+HINT = f"Type to build!  {{Enter}} {{hints/up.png}}   {{hold Tab}} {PEEK_PIC}"
 SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
 
 
@@ -69,10 +71,28 @@ def haze(color, row: int) -> tuple:
     return mix(color, art_room.CANVAS_BG, DEPTH_FADE * row / (DEPTH - 1))
 
 
-@cache
-def metrics(c: int) -> tuple:
+@lru_cache(maxsize=256)
+def metrics(c: int, shape: tuple = REST) -> tuple:
     """(row depth, block rise, row skew, slab) in pixels for cell width c."""
-    return round(c * ROW_DEPTH), round(c * BLOCK_RISE), round(c * ROW_SKEW), round(c * SLAB)
+    return *(round(c * k) for k in shape), round(c * SLAB)
+
+
+def scene_size(c: int, shape: tuple) -> tuple:
+    dz, hy, sx, slab = metrics(c, shape)
+    return WIDTH * c + DEPTH * sx + 1, DEPTH * dz + HEIGHT * hy + slab + 1
+
+
+def fit(w: int, h: int, shape: tuple) -> int:
+    row_depth, rise, skew = shape
+    return max(6, int(min(w / (WIDTH + DEPTH * skew), h / (DEPTH * row_depth + HEIGHT * rise + SLAB))))
+
+
+def centered(area, size) -> tuple:
+    return area.x + (area.w - size[0]) // 2, area.y + (area.h - size[1]) // 2
+
+
+def ease(p: float) -> float:
+    return p * p * (3 - 2 * p)
 
 
 @cache
@@ -108,7 +128,10 @@ class BlocksRoom(Room):
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where a run up or down the column (or a code run) goes on from
         self._dir = "right"           # the way typing builds: a key of WRAP
-        self._fade_start = self._fade_timer = None
+        self._shape = REST
+        self._motion = None           # (start, seconds, (half turns, tilt) from, to) while the view moves
+        self._motion_timer = None
+        self._tab = HeldKey(app, lambda: self._tilt(True))
         self._turn_detail_limit = TURN_DETAIL_BLOCKS
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
@@ -130,6 +153,12 @@ class BlocksRoom(Room):
 
     def on_leave(self):
         self.code_panel = None
+        self._tab.other_key()
+        self._tilt(False)
+
+    def hold_progress(self):
+        held = self._tab.progress()
+        return None if held is None else hold_status(held, "Tab", PEEK_PIC, "look from above")
 
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
@@ -353,34 +382,51 @@ class BlocksRoom(Room):
     # ---------------------------------------------------------------- flipping
     def turn_around(self):
         """Tab, here or in Time Travel: a live half turn, one at a time."""
-        if self._fade_progress() is not None:
+        if self._camera() is not None:
             return
+        self._move_camera(TURN_S, lambda half, tilt: (half + 1, tilt))
         self._back = not self._back
         self.announce(*SIDES[self._back])
-        self._fade_start = time.monotonic()
-        if self._fade_timer is None:
-            self._fade_timer = self.app.timers.every(1 / 60, self._fade_tick)
+
+    def _tilt(self, peek: bool):
+        """Held Tab eases the view up to look down from above; letting go eases it back."""
+        if peek == (self._shape == PEEK):
+            return
+        self._move_camera(TILT_S, lambda half, tilt: (self._motion[3][0] if self._motion else half, float(peek)))
+        self._shape = PEEK if peek else REST
+        self._sprites, self._scene, self._floor = {}, None, None
+
+    def _move_camera(self, seconds: float, to):
+        """From wherever the view is now, even mid-move, to `to` of it."""
+        start = self._camera() or (float(self._back), float(self._shape == PEEK))
+        self._motion = (time.monotonic(), seconds, start, to(*start))
+        if self._motion_timer is None:
+            self._motion_timer = self.app.timers.every(1 / 60, self._motion_tick)
         self._changed()
 
-    def _fade_tick(self):
-        if self._fade_progress() is None:
-            self._fade_timer.stop()
-            self._fade_timer = None
+    def _motion_tick(self):
+        if self._camera() is None:
+            self._motion_timer.stop()
+            self._motion_timer = None
         self.app.invalidate()
 
-    def _fade_progress(self):
-        if self._fade_start is None:
+    def _camera(self):
+        """(half turns, tilt) while the view is moving, else None."""
+        if self._motion is None:
             return None
-        p = (time.monotonic() - self._fade_start) / TURN_S
+        start, seconds, frm, to = self._motion
+        p = (time.monotonic() - start) / seconds
         if p >= 1:
-            self._fade_start = None
+            self._motion = None
             return None
-        return p
+        return tuple(a + (b - a) * ease(p) for a, b in zip(frm, to))
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
         if self.code_panel is None and isinstance(action, ControlAction) and action.action == "space":
             return self._space(action)
+        if isinstance(action, ControlAction) and action.action == "tab" and (self.code_panel is None or self._tab.fired):
+            return self._tab_key(action)
         stacking = isinstance(action, ControlAction) and action.action == "enter" and action.space_held
         if stacking and self.code_panel is None:
             self._dir = RISE    # Space + Enter lays a column, as Space + arrows lay a line
@@ -407,6 +453,15 @@ class BlocksRoom(Room):
             self._space_pending = True
         elif not action.is_down:
             self._lay_pending()
+
+    def _tab_key(self, action):
+        """A tap of Tab turns around once it is let go; a hold looks down until then."""
+        if action.is_down and not action.is_repeat:
+            self._tab.down()
+        elif not action.is_down:
+            if self._tab.up():
+                self.turn_around()
+            self._tilt(False)
 
     def _lay_pending(self):
         if self._space_pending:
@@ -444,8 +499,6 @@ class BlocksRoom(Room):
             self._step_height(1, wrap=not is_repeat)    # a held Enter stops at the top
         elif name == "backspace":
             self._erase()
-        elif name == "tab":
-            self.turn_around()
 
     def _navigate(self, action):
         if action.with_shift and action.direction in ("up", "down"):
@@ -473,7 +526,7 @@ class BlocksRoom(Room):
 
     # ---------------------------------------------------------------- geometry
     def _metrics(self):
-        return metrics(self._c)
+        return metrics(self._c, self._shape)
 
     def _base(self) -> int:
         dz, hy, _, _ = self._metrics()
@@ -553,8 +606,7 @@ class BlocksRoom(Room):
         s.blit(self._shadow_sprite(y - ground, color), (r.x, r.y - (y - ground) * self._metrics()[1]))
 
     def _scene_size(self) -> tuple:
-        dz, hy, sx, slab = self._metrics()
-        return WIDTH * self._c + DEPTH * sx + 1, self._base() + slab + 1
+        return scene_size(self._c, self._shape)
 
     def _floor_surface(self) -> pygame.Surface:
         """Checkerboard floor on a slab, built once per cell size."""
@@ -718,20 +770,17 @@ class BlocksRoom(Room):
             paint()
         return s
 
-    def _fit(self, w, h) -> int:
-        return max(6, int(min(w / (WIDTH + DEPTH * ROW_SKEW), h / (DEPTH * ROW_DEPTH + HEIGHT * BLOCK_RISE + SLAB))))
-
     def paper(self, g, size, on_screen=False):
         """The build for printing, on a pale floor (the screen's floor on screen), nothing see-through and no cursor."""
         if not self._blocks:
             return None
-        screen = self._c, self._sprites
-        self._c, self._sprites = self._fit(*size), {}
+        screen = self._c, self._sprites, self._shape
+        self._c, self._sprites, self._shape = fit(*size, REST), {}, REST
         try:
             floor = self._build_floor(on_screen)
             return self._stack(floor, self._placed(), haze=False)
         finally:
-            self._c, self._sprites = screen
+            self._c, self._sprites, self._shape = screen
 
     def draw(self, g, rect):
         pad, gap = g.em(0.7), g.em(0.5)
@@ -739,20 +788,18 @@ class BlocksRoom(Room):
         chrome_h = hint_row_h(g)
         foot_h = 0 if self.app.viewport_panel() is not None else chrome_h + gap
         area = pygame.Rect(inner.x, inner.y + chrome_h + gap, inner.w, inner.h - chrome_h - gap - foot_h)
-        c = self._fit(area.w, area.h)
+        c = fit(area.w, area.h, self._shape)
         if c != self._c:
             self._c, self._sprites, self._scene = c, {}, None
-        scene, front = self._scene_surfaces()
-        ox = area.x + (area.w - scene.get_width()) // 2
-        oy = area.y + (area.h - scene.get_height()) // 2
-        self._origin = (ox, oy)
-        p = self._fade_progress()
-        if p is None:
+        ox, oy = self._origin = centered(area, self._scene_size())
+        camera = self._camera()
+        if camera is None:
+            scene, front = self._scene_surfaces()
             g.surface.blit(self._scene_with_front(scene, front), (ox, oy))
             self._draw_cursor(g, ox, oy, scene, front)
             self._draw_hold_badge(g, ox, oy, area)
         else:
-            self._draw_turning(g, ox, oy, p)
+            self._draw_moving(g, area, *camera)
         self.bar_row = draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), tuple(pic for _, pic in SIDES),
                                         1 if self._back else 0, self._color, wheel=None if self.code_panel else wheel_chip(self))
         self.bar_foot = None
@@ -768,16 +815,20 @@ class BlocksRoom(Room):
             top = pygame.Rect(ox + x, oy + y - self._metrics()[0], self._c, self._metrics()[0])
             self._badge.draw(g, self.app, self._last[1], self._mix, self._color, top, area)
 
-    def _draw_turning(self, g, ox, oy, p):
-        """One frame of the half turn: the world spun about the floor's center
-        and drawn through the same slanted projection as the resting view, so
-        both ends land exactly on the front and back pictures, checkerboard,
+    def _draw_moving(self, g, area, half_turns, tilt):
+        """One frame of the view moving: the world spun about the floor's center
+        and drawn through the slanted projection tilted that far toward looking
+        down, so both ends land exactly on the resting pictures, checkerboard,
         haze, shadows and all; only the cursor sits it out. Zooms out mid-turn
         so the long floor, end-on, still fits."""
         start = time.monotonic()
-        dz, hy, sx, slab = self._metrics()
-        c = self._c
-        angle = math.pi * ((p * p * (3 - 2 * p)) + (0 if self._back else 1))
+        shape = tuple(a + (b - a) * tilt for a, b in zip(REST, PEEK))
+        row_depth, rise, skew = shape
+        c = fit(area.w, area.h, shape)
+        dz, hy, sx, slab = metrics(c, shape)
+        base = DEPTH * dz + HEIGHT * hy
+        ox, oy = centered(area, scene_size(c, shape))
+        angle = math.pi * half_turns
         cos, sin = math.cos(angle), math.sin(angle)
         ex = (cos * c + sin * sx, -sin * dz)            # one world step in x, on screen
         ez = (-sin * c + cos * sx, -cos * dz)           # one world step in z
@@ -789,7 +840,7 @@ class BlocksRoom(Room):
                 (half_d + HEIGHT * hy) / (-min(ys) + HEIGHT * hy))
         ex, ez, hy = (ex[0] * k, ex[1] * k), (ez[0] * k, ez[1] * k), hy * k
         cx, cz = WIDTH / 2, DEPTH / 2
-        center = (ox + cx * c + cz * sx, oy + self._base() - cz * dz)
+        center = (ox + cx * c + cz * sx, oy + base - cz * dz)
 
         def at(x, y, z):
             return (center[0] + (x - cx) * ex[0] + (z - cz) * ez[0],
@@ -799,10 +850,10 @@ class BlocksRoom(Room):
         for nx, nz, quad in ((0, -1, ((0, 0), (1, 0))), (1, 0, ((1, 0), (1, 1))),
                              (0, 1, ((1, 1), (0, 1))), (-1, 0, ((0, 1), (0, 0)))):
             rnx, rnz = nx * cos - nz * sin, nx * sin + nz * cos
-            if rnz - ROW_SKEW * rnx < 0:
+            if rnz - skew * rnx < 0:
                 sides.append(((nx, nz), quad, round(0.32 * max(0.0, rnx), 2)))   # rounded so `tint` remembers few shades
 
-        def shape(w, h, d):
+        def solid(w, h, d):
             """A w by h by d box's visible faces as (normal, screen offsets from its low corner, darkness); (0, 0) is the top."""
             def off(x, y, z):
                 return x * ex[0] + z * ez[0], x * ex[1] + z * ez[1] - y * hy
@@ -819,7 +870,7 @@ class BlocksRoom(Room):
                         pygame.draw.polygon(g.surface, seam, poly, 1)
 
         slab_bg, seam = mix(art_room.CANVAS_BG, "#000000", 0.4), rgb(P.LINE)
-        box(0, -SLAB / BLOCK_RISE, 0, shape(WIDTH, SLAB / BLOCK_RISE, DEPTH), rgb(art_room.CANVAS_BG), lambda dark: tint(slab_bg, "#000000", dark))
+        box(0, -SLAB / rise, 0, solid(WIDTH, SLAB / rise, DEPTH), rgb(art_room.CANVAS_BG), lambda dark: tint(slab_bg, "#000000", dark))
         tiles = rgb(art_room.CANVAS_BG), rgb(art_room.CANVAS_ALT)
         grid = [[at(x, 0, z) for z in range(DEPTH + 1)] for x in range(WIDTH + 1)]
         for x in range(WIDTH):
@@ -828,7 +879,7 @@ class BlocksRoom(Room):
 
         def depth(x, z, y):
             dx, dz_ = x + 0.5 - cx, z + 0.5 - cz
-            return (dx * sin + dz_ * cos) - ROW_SKEW * (dx * cos - dz_ * sin) - y * ROW_DEPTH / BLOCK_RISE
+            return (dx * sin + dz_ * cos) - skew * (dx * cos - dz_ * sin) - y * row_depth / rise
 
         def row(x, z):
             """The view row a world cell is passing through, for its haze."""
@@ -839,7 +890,7 @@ class BlocksRoom(Room):
             below = self._blocks.get((x, z, y - 1))
             return tint(haze(below, row(x, z)), "#ffffff", 0.22) if below else tiles[(x + z) % 2]
 
-        cube = shape(1, 1, 1)
+        cube = solid(1, 1, 1)
 
         def block(x, z, y, color, shown):
             hazed = haze(color, row(x, z))

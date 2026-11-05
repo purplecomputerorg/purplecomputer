@@ -5,15 +5,18 @@ with Up or Down moves it either way, that height carries to other columns, a
 block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab flips
-to the back with arrows still moving the way they point, blocks in front of the
+to the back with arrows still moving the way they point and held looks down from above, blocks in front of the
 cursor fade, a whole tower at a time, where they hide its glass column or landing block, and the Esc picker reaches the room with
 4."""
 
+import asyncio
 import time
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.rooms import blocks_room
-from purple_tui.canvas.rooms.blocks_room import DEPTH, HEIGHT, RISE, SINK, TURN_DETAIL_BLOCKS, TURN_S, WIDTH
+from purple_tui.canvas.rooms.blocks_room import (DEPTH, HEIGHT, PEEK, REST, RISE, SINK, TILT_S, TURN_DETAIL_BLOCKS,
+                                                 TURN_S, WIDTH)
+from purple_tui.constants import HOLD_OR_TAP_THRESHOLD
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.input import KeyCode, RawKeyEvent
 from purple_tui.keyboard import CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction
@@ -412,9 +415,36 @@ def test_flip_keeps_blocks_and_arrows_follow_the_screen():
         assert room._x == 4
         await press(app, "tab")                 # mid-turn: ignored
         assert room._back
-        room._fade_start = None
+        room._motion = None
         await press(app, "tab")
         assert not room._back
+    run(go())
+
+
+def _at(room, seconds):
+    """The view's move as if it started `seconds` ago."""
+    room._motion = (time.monotonic() - seconds, *room._motion[1:])
+
+
+def test_holding_tab_looks_down_and_letting_go_looks_back_without_turning():
+    async def go():
+        app, room = _blocks()
+        await type_text(app, "abc")
+        await press(app, "tab", hold=HOLD_OR_TAP_THRESHOLD + 0.1)
+        assert not room._back and room._shape == REST and room._camera() is not None
+        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=True))
+        assert room.hold_progress() is not None
+        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.1)
+        assert room._shape == PEEK and room.hold_progress() is None
+        room._motion = None
+        app._draw()
+        await press(app, "right")              # arrows still move while looking down
+        assert room._x == 6
+        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=False))
+        assert room._shape == REST and not room._back
+        for p in (0.3, 0.6):
+            _at(room, TILT_S * p)
+            app._draw()
     run(go())
 
 
@@ -425,12 +455,12 @@ def test_turn_draws_and_stops_its_timer():
         app._draw()
         await press(app, "tab")
         for p in (0.25, 0.5, 0.75):
-            room._fade_start = time.monotonic() - TURN_S * p
+            _at(room, TURN_S * p)
             app._draw()
-        room._fade_start = time.monotonic() - TURN_S - 0.05
+        _at(room, TURN_S + 0.05)
         app._draw()
-        room._fade_tick()
-        assert room._fade_timer is None
+        room._motion_tick()
+        assert room._motion_timer is None
     run(go())
 
 
@@ -440,9 +470,9 @@ def test_big_builds_still_turn():
         room._blocks = {(x, z, y): "#ff0000" for x in range(WIDTH) for z in range(DEPTH) for y in range(HEIGHT)}
         assert len(room._blocks) > TURN_DETAIL_BLOCKS
         await press(app, "tab")
-        room._fade_start = time.monotonic() - TURN_S * 0.5
+        _at(room, TURN_S * 0.5)
         app._draw()
-        assert room._fade_progress() is not None
+        assert room._camera() is not None
     run(go())
 
 
@@ -453,7 +483,7 @@ def test_slow_turn_frames_lower_the_detail_limit(monkeypatch):
         app, room = _blocks()
         await type_text(app, "abc")
         await press(app, "tab")
-        room._fade_start = time.monotonic() - TURN_S * 0.5
+        _at(room, TURN_S * 0.5)
         app._draw()
         assert room._turn_detail_limit == 2     # three blocks went over budget, so three now turn plain
     run(go())

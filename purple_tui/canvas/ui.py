@@ -13,9 +13,9 @@ import pygame
 
 from .. import i18n
 from .. import palette as P
-from ..constants import ICON_ROBOT
+from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_ROBOT
 from .gfx import Gfx, mix, rgb
-from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 
 # nf-md-arrow_*_bold: big heads stay readable at hint size, unlike Plex's or DejaVu's arrows.
 LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"
@@ -1087,6 +1087,50 @@ HOLD_NUDGE_SECONDS = 1.5
 def hold_status(fraction: float, key: str, icon: str, verb: str) -> tuple:
     """(fraction, bar label, hint left up when the hold is let go early)."""
     return fraction, f"{icon} {verb[0].upper()}{verb[1:]}", f"Hold {key} longer to {verb}"
+
+
+class HeldKey:
+    """A tap-or-hold key that redraws while it is down, so the hold bar fills."""
+
+    def __init__(self, app, on_hold):
+        self.app, self.on_hold = app, on_hold
+        self.hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
+        self._down_at = self._ring = None
+
+    @property
+    def fired(self) -> bool:
+        return self.hold.fired
+
+    def down(self):
+        self._down_at = time.monotonic()
+        self.hold.on_down(self.app.timers.after, self._fired)
+        self._ring = self.app.timers.every(1 / 30, self.app.invalidate)
+
+    def up(self) -> bool:
+        """True for a tap."""
+        self._stop()
+        return self.hold.on_up()
+
+    def other_key(self):
+        self.hold.on_other_key()
+        self._stop()
+
+    def progress(self):
+        """How far toward a hold, while one is pending, else None."""
+        if self._down_at is None or not self.hold.is_pending:
+            return None
+        return min(1.0, (time.monotonic() - self._down_at) / self.hold.hold_seconds)
+
+    def _fired(self):
+        self._stop()
+        self.on_hold()
+
+    def _stop(self):
+        self._down_at = None
+        if self._ring:
+            self._ring.stop()
+            self._ring = None
+        self.app.invalidate()
 
 
 def hint_row_h(g: Gfx) -> int:

@@ -12,8 +12,8 @@ from ... import palette as P
 from ...audio import play_safe
 from ...code_runner import MusicCodeRunner
 from ...content import get_content
-from ...constants import HOLD_OR_TAP_THRESHOLD, ICON_DRUM, ICON_KEYBOARD, ICON_MUSIC
-from ...keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
+from ...constants import ICON_DRUM, ICON_KEYBOARD, ICON_MUSIC
+from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ...mixer import warm_mixer
 from ...speech_filter import is_clean
@@ -28,7 +28,7 @@ from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
 from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
-                  draw_mode_switch, draw_status_row, hint_row_h, hold_status, key_hint_width, status_row_h)
+                  draw_mode_switch, draw_status_row, hint_row_h, HeldKey, hold_status, key_hint_width, status_row_h)
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -103,9 +103,7 @@ class MusicRoom(Room):
         self._typed_at: list = []  # when each letter of _spelled was typed
         self.word = None          # the real word the letters just typed end with
         self.echo = Echo(pause=ECHO_PAUSE_S)
-        self.enter_hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
-        self._enter_down_at = None
-        self._enter_ring = None
+        self.enter_hold = HeldKey(app, self._enter_hold_fired)
         self.code_panel = None
         self._noscreen_dot = None
         self._noscreen_timer = None
@@ -623,16 +621,12 @@ class MusicRoom(Room):
     def _handle_enter(self, action):
         if self.enter_hold.fired:
             if not action.is_down:
-                self.enter_hold.on_up()
-                self._enter_down_at = None
+                self.enter_hold.up()
             return
         if action.is_down and not action.is_repeat:
-            self._enter_down_at = time.monotonic()
-            self.enter_hold.on_down(self.app.timers.after, self._enter_hold_fired)
-            self._enter_ring = self.app.timers.every(1 / 30, self.app.invalidate)
+            self.enter_hold.down()
         elif not action.is_down:
-            self._stop_enter_ring()
-            if self.enter_hold.on_up():
+            if self.enter_hold.up():
                 self._next_voice()
                 self.app.invalidate()
 
@@ -647,18 +641,9 @@ class MusicRoom(Room):
         self._announce_voice()
 
     def _flush_enter(self):
-        self.enter_hold.on_other_key()
-        self._stop_enter_ring()
-
-    def _stop_enter_ring(self):
-        self._enter_down_at = None
-        if self._enter_ring:
-            self._enter_ring.stop()
-            self._enter_ring = None
-        self.app.invalidate()
+        self.enter_hold.other_key()
 
     def _enter_hold_fired(self):
-        self._stop_enter_ring()
         if self.app._littles_mode or self.code_panel is not None:
             return
         if self.loop.state == IDLE:
@@ -668,11 +653,10 @@ class MusicRoom(Room):
             self._stop_loop()
 
     def hold_progress(self):
-        if self._enter_down_at is not None and self.enter_hold.is_pending and \
-                (self.loop.state != IDLE or self.app._music_looping_enabled):
+        held = self.enter_hold.progress()
+        if held is not None and (self.loop.state != IDLE or self.app._music_looping_enabled):
             doing = "record a loop" if self.loop.state == IDLE else "stop the loop"
-            return hold_status(min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD),
-                               "Enter", LOOP, doing)
+            return hold_status(held, "Enter", LOOP, doing)
         return None
 
     def footer_h(self, g) -> int:

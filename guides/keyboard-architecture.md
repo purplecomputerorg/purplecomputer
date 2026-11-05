@@ -113,6 +113,21 @@ class KeyboardStateMachine:
                 # Check for long-press, etc.
 ```
 
+### Color chords vs. mashing (Art, Blocks)
+
+A letter pressed while another is held is a chord (`char_held`). Two cases have to feel right with no delay on either:
+
+- **Pressed together on purpose** (a quick tap of both, or holding V while finding F): one square of the mix.
+- **Mashing:** every key keeps moving the cursor.
+
+The rule, one constant (`MASH_GAP`, 0.4s): a chord is `chord_meant` unless some *third* key (not this one, not the held one) went down in the last `MASH_GAP`. A meant chord repaints the held key's square with the mix (`ChordStamps` in `canvas/color_recipe.py` keeps the undo for just that one square). Otherwise the chord paints a new mixed square after the plain one.
+
+Choices behind it:
+
+- **Decide at the key press, never later.** An earlier version timed how long both keys stayed down and merged the squares afterward. A quick tap of both didn't overlap long enough, and during fast mashing a late merge jumped the cursor back several squares. Now at most one square changes color, at the moment of the press, and nothing is ever taken back.
+- **The first two keys of a mash streak merge** into one square: nothing came before them, so they look like a chord. From the third key on, the streak counts as mashing.
+- **Drumming two keys (`fvfvfv`) mixes in place** and the cursor moves slowly, since there is never a third key. Real mashing uses more keys, and drumming one chord reads as deliberate. If that turns out wrong, stop excluding the pressed key in `_calm()` so a key repeating within `MASH_GAP` also counts as mashing.
+
 ---
 
 ## UX Considerations

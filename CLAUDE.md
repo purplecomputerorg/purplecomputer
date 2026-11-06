@@ -118,6 +118,10 @@ Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). `PUR
 
 ---
 
+## Box Cards (`cards/v2/`)
+
+After `just cards`, run `drop cards/v2/out/all-pad.pdf` so the user sees every card together.
+
 ## Studio (`studio/`)
 
 Studio is one website that changes on every deploy; families keep the Purple build they downloaded. Early access may break, but only on purpose: `studio/PACK_FORMAT.md`, Format versions.

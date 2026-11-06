@@ -5,7 +5,7 @@
 #header()
 
 #note[
-  #set par(spacing: 7pt)
+  #set par(spacing: 10pt)
   #text(size: 8.8pt)[*Trying Purple changes nothing on the laptop.* Take out the Purple Key and restart to exit Purple.]
 
   #text(size: 7.6pt)[*Like it?* Hold #key("Esc") for the Parent Menu, then choose *Install* to keep it.]
@@ -14,21 +14,19 @@
 
 #let big-step(n, body) = numbered(n, r: 9pt, text(size: 11.5pt, body))
 #big-step(1)[Turn off the laptop.]
-#v(1pt)
 #big-step(2)[Plug in the #text(weight: "bold", fill: purple)[Purple Key].]
-#v(1pt)
 // Step 3's badge runs a rail down to the Mac and PC ways it owns
 #let way(title, keys, body) = panel(title: title)[
   #set text(size: 8.6pt)
   #box(height: 1.36in, width: 100%)[
     #v(2pt)
     #keys
-    #v(7pt)
+    #v(5pt)
     #body
   ]
 ]
 #grid(
-  columns: (9pt, 9pt, 1fr), column-gutter: (0pt, 10pt), row-gutter: 6pt,
+  columns: (9pt, 9pt, 1fr), column-gutter: (0pt, 10pt), row-gutter: 5pt,
   align: (x, y) => if y == 0 { horizon } else { top },
   grid.cell(colspan: 2, badge(3, r: 9pt)), text(size: 11.5pt)[Turn it on:],
   grid.vline(x: 1, start: 1, stroke: (paint: purple.lighten(76%), thickness: 1.6pt, cap: "round")),
@@ -36,10 +34,12 @@
   grid(
     columns: (1fr, 1fr), column-gutter: 6pt,
     way([Mac], keyrow(gap: 3pt, bigkey("Option", width: 0.55in, size: 10.5pt), "+", bigkey("Power", width: 0.53in, size: 10.5pt)))[
-      Hold *Option* and press *Power*. Keep holding, then pick the orange drive #box(baseline: 30%, image("orange-drive.svg", height: 1.9em))
+      Hold *Option* and press *Power*. Keep holding, then pick the orange drive #box(width: 1.9em, height: 0.75em, place(horizon, dy: 0.15em, image("orange-drive.svg", height: 1.6em)))
     ],
     way([PC], keyrow(bigkey("F12", width: 0.52in), bigkey("Esc", width: 0.52in)))[
-      Press *Power*, then *mash these keys*: tap them fast, again and again. Pick the USB drive from the menu.
+      Press *Power*, then *mash these keys*. When menu appears, pick the USB drive.
+      #v(1fr)
+      #text(size: 7.2pt, fill: ink-med)[*Mash* = tap fast, nonstop]
     ],
   ),
 )
@@ -74,7 +74,8 @@
   #ruled(columns: (0.9in, 1fr), pad: 6.5pt, ..brands.map(((b, k)) => (text(weight: "semibold", b), k)))
 ]
 #gap
-#panel(title: [Another way, from Windows])[
+#panel(title: [Or try another way, from inside Windows])[
+  #v(3pt)
   #steps(spacing: 13pt,
     [Click *Start*, then the *Power* icon],
     [Hold #key("Shift") and click *Restart*],

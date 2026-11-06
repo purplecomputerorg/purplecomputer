@@ -139,7 +139,7 @@ See [MANUAL.md](docs/MANUAL.md) for complete build/customization details.
 | **Art** | Paint and write on a grid with colors that mix like real paint. Each letter paints its sticker color; hold two letters to mix them. Purple starts here. |
 | **Music** | Every key plays a note or a drum and lights up. Enter changes the instrument, hold Enter to record a loop, arrows change the key. Tab says letters, and a word they spell shows up with its picture. Even a 2-year-old can have fun here. |
 | **Play** | Type a word, see an emoji, hear it spoken, mix colors, do math. Pre-readers can use it with just numbers (2 + 3). See [guides/play-room-design.md](guides/play-room-design.md) |
-| **Blocks** | Every letter stacks a block of its sticker color on a 3D floor. Enter builds up, Tab turns the room around, and holding Tab looks down from above. |
+| **Blocks** | Every letter places a block of its sticker color on a 3D floor. Enter builds up, Tab turns the room around, and holding Tab looks down from above. |
 | **Write** | A quiet page for stories and letters, for older kids. Off until a parent turns it on in Parent Menu, Rooms. |
 
 Families can add their own rooms (games, stories, worlds) from [Purple Studio](#purple-studio). They show as extra rooms on keys 6 to 0 in the Esc menu once a parent turns them on.

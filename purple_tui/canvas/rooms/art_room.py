@@ -184,7 +184,8 @@ def _brush_hint(h: int, color: str, lift: float) -> pygame.Surface:
 class _RoomBrushRunner(ArtCodeRunner):
     """The brush lives on the room, so `brush up` holds across lines and shows on
     the cursor; `_paint_on` is Paint (not Letters) with that brush down. A color
-    puts the brush down unless its own line lifted it: `brush up red right 3`."""
+    puts the brush down unless its own line lifted it: `brush up red right 3`.
+    Letters always paint and put it down: `brush up right 5 hi`."""
 
     _lifted_this_line = False
 
@@ -195,6 +196,15 @@ class _RoomBrushRunner(ArtCodeRunner):
     @_paint_on.setter
     def _paint_on(self, on: bool):
         self._painting = on
+
+    @property
+    def _letters_paint(self) -> bool:
+        return self._painting
+
+    async def _emit_text(self, text: str, paint: bool) -> None:
+        if paint:
+            self.canvas.set_code_brush(True)
+        await super()._emit_text(text, paint)
 
     def _split_brush_words(self, text: str) -> list[str]:
         self._lifted_this_line = False

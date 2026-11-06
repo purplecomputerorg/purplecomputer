@@ -98,17 +98,19 @@ GUIDE = {
 # words: (words, heading, rows). COLORS stands for any color word.
 _COLOR_TOPIC = ("Colors", [(ALL_COLORS, ""), ("color mint", "switch colors"), ("dark blue", "or light, bright, pale, neon"),
                            ("red up 3 blue right 2", "a new color as you go")])
-_AGAIN_ROWS = [("repeat 3 right 2, up 1", "commas: both, each time"), ("repeat right 1", "with no number: twice")]
+_AGAIN_ROWS = [("repeat 3 right 2, up 1", "both, each time"), ("repeat right 1", "with no number: twice")]
 TOPICS = {
     'art': [
         ("right left up down", "Move", [("right 5", f"{RIGHT} five steps"), ("left 5", f"{LEFT} five steps"), ("up 3", f"{UP} three steps"),
                                         ("down 3", f"{DOWN} three steps"), ("right", "one step"), ("up 3 blue", f"{UP} in blue"),
-                                        ("red right 5 blue down 3", "keep going")]),
+                                        ("red right 5 blue down 3", "keep going"),
+                                        ("red right 5, blue down 3", "commas and ; work too")]),
         ("turn spin rotate face forward go move walk step back backward around", "Turn and go",
          [("forward 6", "the way it points"), ("turn left", ""), ("turn right", ""), ("turn around", ""), ("turn", "a turn to the right"),
           ("face up", "point up"), ("back 3", "go backwards"), ("go 4", "same as forward")]),
         ("brush pen lift penup pendown", "Brush", [("brush up", "move without painting"), ("brush down", "paint again"),
-                                                   ("lift", "brush up, or down again"), ("right 2 brush up right 3", "leaves a gap")]),
+                                                   ("lift", "brush up, or down again"), ("right 2 brush up right 3", "leaves a gap"),
+                                                   ("brush up right 3 hi", "letters paint anyway")]),
         ("repeat", "Again", [("repeat 4 forward 6 turn", "a square")] + _AGAIN_ROWS),
         ("paint draw write type letters", "Letters", [("asdf", "a color per key"), ("paint hi", "the same"), ("write hi", "real letters"),
                                                       ("write", "keep typing letters"), ("paint", "back to colors")]),
@@ -119,10 +121,11 @@ TOPICS = {
          [("choose marimba", ""), ("choose ukulele", ""), ("choose accordion", ""), ("choose glockenspiel", ""),
           ("play uke", "same as choose"), ("choose ukulele zxcv", "then play")]),
         ("fast slow", "Speed", [("fast asdf", "quick"), ("slow asdf", "slow"), ("fast 1234", "quick drums"),
-                                ("fast asdf slow jkl", "quick, then slow")]),
+                                ("fast asdf slow jkl", "quick, then slow"),
+                                ("fast asdf, slow jkl", "commas and ; work too")]),
         ("key", "Key", [("key c", "where you start"), ("key g", "brighter"), ("key d", "brighter still"),
                         ("key f", "warmer"), ("key b flat", "warmer still")]),
-        ("repeat", "Again", [("repeat 3 asdf", "three times"), ("repeat 2 asdf, jkl", "commas: both, each time"), ("repeat asdf", "with no number: twice")]),
+        ("repeat", "Again", [("repeat 3 asdf", "three times"), ("repeat 2 asdf, jkl", "both, each time"), ("repeat asdf", "with no number: twice")]),
         ("letters notes music sounds", "Letters", [("letters", "keys say letters"), ("letters names", "a says ay"),
                                                    ("letters sounds", "a says ah"), ("notes", "keys play notes again")]),
     ],
@@ -130,7 +133,7 @@ TOPICS = {
         ("right left up down back front forward go", "Build",
          [("right 5", f"a row {RIGHT}"), ("left 5", f"a row {LEFT}"), ("up 4", f"a tower {UP}"), ("down 2", f"{DOWN} again"),
           ("back 3", "away from you"), ("front 3", "toward you"), ("forward 3", "keep going that way"), ("up 4 blue", "a blue tower"),
-          ("red up 3 blue right 2", "keep building")]),
+          ("red up 3 blue right 2", "keep building"), ("red up 3, blue right 2", "commas and ; work too")]),
         ("repeat", "Again", [("repeat 4 right 1 up 1", "stairs")] + _AGAIN_ROWS),
         (COLORS, "Colors", [(ALL_COLORS, ""), ("red up 5", "a red tower"), ("dark blue", "or light, bright, pale, neon"),
                             ("red up 3 blue right 2", "a new color as you go")]),

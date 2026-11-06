@@ -603,7 +603,7 @@ class ArtCodeRunner:
                 return
 
         # Stage 5: paint mode paints each character (like interactive mode).
-        if self._paint_on:
+        if self._letters_paint:
             await self._emit_text(text, paint=True)
 
     # ------------------------------------------------------------------
@@ -816,8 +816,12 @@ class ArtCodeRunner:
                 action = "paint" if self._paint_on else "move"
                 self.canvas.execute_logo_command(action, move_dir, distance)
             if leftover:
-                await self._emit_text(leftover, paint=self._paint_on)
+                await self._emit_text(leftover, paint=self._letters_paint)
             await asyncio.sleep(0.05)
+
+    @property
+    def _letters_paint(self) -> bool:
+        return self._paint_on
 
     async def _emit_text(self, text: str, paint: bool) -> None:
         """Emit each character in the current heading direction. When painting,

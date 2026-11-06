@@ -280,6 +280,34 @@ def test_a_color_after_brush_up_in_one_run_puts_it_down():
     _run(_test())
 
 
+def test_letters_paint_even_after_brush_up_on_their_line():
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code(["brush up right 5 asdf"])
+        assert canvas._painted_positions == {(10, 5), (11, 5), (12, 5), (13, 5)}
+        assert canvas._code_brush_down
+    _run(_test())
+
+
+def test_letters_on_a_later_line_put_the_brush_down():
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code(["brush up"])
+        await canvas.run_code(["hi"])
+        await canvas.run_code(["right 2"])
+        assert canvas._painted_positions == {(5, 5), (6, 5), (7, 5), (8, 5)}
+    _run(_test())
+
+
+def test_write_still_types_letters():
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code(["brush up write hi"])
+        assert not canvas._painted_positions
+        assert canvas._grid[(5, 5)][0] == "h"
+    _run(_test())
+
+
 def test_code_cursor_shows_the_code_brush():
     async def _test():
         app, canvas = _code_art()

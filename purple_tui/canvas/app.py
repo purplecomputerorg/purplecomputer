@@ -138,7 +138,6 @@ class PurpleApp:
         self._code_panel_enabled = True
         self._code_panel_active = False
         self._music_looping_enabled = True
-        self._music_key_switching_enabled = True
         self._escape_consumed_by_mode = False
         self._escape_triggered_long_hold = False
         self._escape_pressed_on = None  # the overlay on top when Esc went down
@@ -195,8 +194,8 @@ class PurpleApp:
 
     # ------------------------------------------------------------------ settings
     def _load_settings(self):
-        from ..settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
-                               get_music_looping, get_rooms_off, get_volume_level, get_volume_lock)
+        from ..settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_looping, get_rooms_off,
+                               get_volume_level, get_volume_lock)
         self.g.all_caps = get_all_caps()
         self._rooms_off = set(get_rooms_off(tuple(c.name for c in ROOM_CLASSES if c.STARTS_OFF)))
         saved_volume = get_volume_level()
@@ -206,12 +205,11 @@ class PurpleApp:
         saved = get_littles_mode()
         if saved:
             self._littles_mode = saved
-            self._code_panel_enabled = self._music_looping_enabled = self._music_key_switching_enabled = False
+            self._code_panel_enabled = self._music_looping_enabled = False
             self.active_room = {"music": "music", "music_noscreen": "music", "art": "art"}.get(saved, "music")
         else:
             self._code_panel_enabled = get_code_panel()
             self._music_looping_enabled = get_music_looping()
-            self._music_key_switching_enabled = get_music_key_switching()
             self.active_room = self.kid_rooms[0]
 
     # ------------------------------------------------------------------ lifecycle
@@ -977,16 +975,15 @@ class PurpleApp:
     def _apply_littles_mode(self, mode):
         self._littles_mode = mode
         if mode:
-            self._code_panel_enabled = self._music_looping_enabled = self._music_key_switching_enabled = False
+            self._code_panel_enabled = self._music_looping_enabled = False
             self._code_panel_active = False
             room = {"music": "music", "music_noscreen": "music", "art": "art"}.get(mode, "music")
             self.action_switch_room(room)
             self.room.close_code_panel()
         else:
-            from ..settings import get_code_panel, get_music_key_switching, get_music_looping
+            from ..settings import get_code_panel, get_music_looping
             self._code_panel_enabled = get_code_panel()
             self._music_looping_enabled = get_music_looping()
-            self._music_key_switching_enabled = get_music_key_switching()
             self._leave_closed_room()
         self.rooms["music"].on_littles_change()
         self.invalidate()

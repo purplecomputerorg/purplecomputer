@@ -95,7 +95,7 @@ def test_littles_mode_is_picked_in_rooms_and_the_parent_menu_follows():
         await press(app, "escape")
         assert app.top is menu
         assert dict(menu.items)["menu-rooms"] == "Rooms: Littles Mode, Art"
-        assert "menu-code-panel" not in dict(menu.items)
+        assert "menu-features" not in dict(menu.items)
     run(go())
 
 

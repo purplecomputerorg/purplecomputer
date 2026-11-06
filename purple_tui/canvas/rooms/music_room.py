@@ -330,7 +330,7 @@ class MusicRoom(Room):
         self.app.invalidate()
 
     def set_key(self, root_index: int):
-        if self.app._music_key_switching_enabled and root_index != self.root_index:
+        if root_index != self.root_index:
             self.shift_root(root_index, 1 if root_index > self.root_index else -1)
 
     def _transition_tick(self):
@@ -595,7 +595,7 @@ class MusicRoom(Room):
                         self._toggle_letters()
             return
         if isinstance(action, NavigationAction):
-            if action.is_repeat or self.app._littles_mode or not self.app._music_key_switching_enabled:
+            if action.is_repeat or self.app._littles_mode:
                 return
             self._flush_enter()
             if action.direction in ("left", "right"):
@@ -720,7 +720,7 @@ class MusicRoom(Room):
                 (None, key_label(self.root_index)))
 
     def arrow_hint(self) -> str:
-        if not self.app._music_key_switching_enabled:
+        if self.app._littles_mode:
             return key_label(DEFAULT_ROOT_INDEX)
         return f"Arrows change key: {FRIENDLY_KEY_NAMES[self.root_index]}  {LEFT} {RIGHT}"
 

@@ -224,14 +224,50 @@ class _YesNo(Picker):
         self.selected = 0 if self.getter() else 1
 
 
-class CodePanelScreen(_YesNo):
-    title = "Allow Code Space"
-    DESCRIPTION = "Allow older kids to write code in Music, Art and Blocks from the Esc menu"
+FEATURES = {  # key: (name, what it does, setting, app flag, undo when turned off)
+    "code": ("Code Space", "Write code in Music, Art and Blocks",
+             "code_panel", "_code_panel_enabled", lambda app: app.room.close_code_panel()),
+    "looping": ("Music Looping", "Hold Enter in Music to record a loop",
+                "music_looping", "_music_looping_enabled", lambda app: app.rooms["music"].stop_sound()),
+}
 
-    @staticmethod
-    def getter():
-        from ...settings import get_code_panel
-        return get_code_panel()
+
+def _feature_on(key) -> bool:
+    from ... import settings
+    return getattr(settings, f"get_{FEATURES[key][2]}")()
+
+
+def _yes(on) -> str:
+    return "Yes" if on else "No"
+
+
+def _features_label() -> str:
+    return f"Features: Code {_yes(_feature_on('code'))}, Looping {_yes(_feature_on('looping'))}"
+
+
+class FeaturesScreen(Picker):
+    title = "Features"
+    DESCRIPTION = "Extras for older kids"
+    hint = f"{UP} {DOWN} choose   {{Enter}} turn on or off   {{Esc}} back"
+
+    def __init__(self, app):
+        super().__init__(app, self._options())
+
+    def _options(self) -> list:
+        return [(k, f"{name}: {_yes(_feature_on(k))}", desc) for k, (name, desc, *_) in FEATURES.items()] + [(None, "Done")]
+
+    def _on_confirm(self, key):
+        if key is None:
+            return self.close(True)
+        from ... import settings
+        _, _, setting, flag, undo = FEATURES[key]
+        on = not _feature_on(key)
+        getattr(settings, f"set_{setting}")(on)
+        setattr(self.app, flag, on)
+        if not on:
+            undo(self.app)
+        self.options = self._options()
+        self.app.invalidate()
 
 
 class PurplePacksScreen(Picker):
@@ -300,26 +336,6 @@ def _kids_label() -> str:
     if is_live_boot():
         return "Kid Profiles (install Purple first)"
     return f"Kid Profiles: {len(get_kids())}" if many() else "Kid Profiles"
-
-
-class MusicLoopingScreen(_YesNo):
-    title = "Allow Music Looping"
-    DESCRIPTION = "Allow recording loops in Music by holding the enter button"
-
-    @staticmethod
-    def getter():
-        from ...settings import get_music_looping
-        return get_music_looping()
-
-
-class MusicKeySwitchingScreen(_YesNo):
-    title = "Allow Music Key Switching"
-    DESCRIPTION = "Allow changing the musical key in Music with the arrow keys"
-
-    @staticmethod
-    def getter():
-        from ...settings import get_music_key_switching
-        return get_music_key_switching()
 
 
 class AllCapsScreen(_YesNo):
@@ -1221,8 +1237,7 @@ def _rename_label(app) -> str:
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
     from ...pack_manager import get_installer
-    from ...settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
-                            get_music_looping, get_parent_pin, get_voice, get_volume_lock)
+    from ...settings import get_all_caps, get_littles_mode, get_parent_pin, get_voice, get_volume_lock
     items = [("menu-help", "Help & Videos")]
     if is_live_boot():
         items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
@@ -1232,9 +1247,7 @@ def _get_menu_items(app) -> list:
     items.append(("sec-kid", "Activities"))
     items.append(("menu-rooms", rooms_label(app)))
     if not get_littles_mode():
-        items.append(("menu-code-panel", "Allow Code Space: Yes" if get_code_panel() else "Allow Code Space: No"))
-        items.append(("menu-music-looping", "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"))
-        items.append(("menu-music-key-switching", "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"))
+        items.append(("menu-features", _features_label()))
     if get_installer().list_installed():
         items.append(("menu-purple-packs", _purple_packs_label()))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
@@ -1349,9 +1362,9 @@ class ParentMenu(Overlay):
         if self._disabled(item_id):
             return
         handler = {
-            "menu-code-panel": self._open_code_panel, "menu-rooms": self._open_rooms,
+            "menu-features": lambda: self.app.push(FeaturesScreen(self.app), on_close=lambda _: self._relabel("menu-features", _features_label())),
+            "menu-rooms": self._open_rooms,
             "menu-purple-packs": lambda: self.app.push(PurplePacksScreen(self.app), on_close=lambda _: self._relabel("menu-purple-packs", _purple_packs_label())),
-            "menu-music-looping": self._open_music_looping, "menu-music-key-switching": self._open_music_key_switching,
             "menu-all-caps": self._open_all_caps,
             "menu-parent-pin": self._open_parent_pin, "menu-display": lambda: self.app.push(DisplaySettingsScreen(self.app)),
             "menu-volume": self._open_volume, "menu-voice": self._open_voice,
@@ -1372,18 +1385,6 @@ class ParentMenu(Overlay):
             handler()
 
     # --- item handlers ---
-    def _open_code_panel(self):
-        def apply(v):
-            if v is CANCELLED:
-                return
-            from ...settings import set_code_panel
-            set_code_panel(v)
-            self.app._code_panel_enabled = v
-            if not v:
-                self.app.room.close_code_panel()
-            self._relabel("menu-code-panel", "Allow Code Space: Yes" if v else "Allow Code Space: No")
-        self.app.push(CodePanelScreen(self.app), on_close=apply)
-
     def _open_rooms(self):
         self.app.push(RoomsScreen(self.app), on_close=lambda _: self._refresh_items())
 
@@ -1393,31 +1394,6 @@ class ParentMenu(Overlay):
         self.items = _get_menu_items(self.app)
         self.selected = next(i for i, (iid, _) in enumerate(self.items) if iid == current)
         self.app.invalidate()
-
-    def _open_music_looping(self):
-        def apply(v):
-            if v is CANCELLED:
-                return
-            from ...settings import set_music_looping
-            set_music_looping(v)
-            self.app._music_looping_enabled = v
-            if not v:
-                self.app.rooms["music"].stop_sound()
-            self._relabel("menu-music-looping", "Allow Music Looping: Yes" if v else "Allow Music Looping: No")
-        self.app.push(MusicLoopingScreen(self.app), on_close=apply)
-
-    def _open_music_key_switching(self):
-        def apply(v):
-            if v is CANCELLED:
-                return
-            from ...music_constants import DEFAULT_ROOT_INDEX
-            from ...settings import set_music_key_switching
-            set_music_key_switching(v)
-            self.app._music_key_switching_enabled = v
-            if not v:
-                self.app.rooms["music"].root_index = DEFAULT_ROOT_INDEX
-            self._relabel("menu-music-key-switching", "Allow Music Key Switching: Yes" if v else "Allow Music Key Switching: No")
-        self.app.push(MusicKeySwitchingScreen(self.app), on_close=apply)
 
     def _open_all_caps(self):
         def apply(v):

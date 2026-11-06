@@ -158,7 +158,7 @@ Families can add their own rooms (games, stories, worlds) from [Purple Studio](#
 
 ### Code
 
-Older kids can write code in Art, Music and Blocks: hold Esc and press Space (or pick Code in the Esc menu). The code line opens holding the code for what they just did by hand, with a guide of words beside it and example cards below. Esc + Space closes it. Parents can turn it off (Parent Menu, Allow Code Space).
+Older kids can write code in Art, Music and Blocks: hold Esc and press Space (or pick Code in the Esc menu). The code line opens holding the code for what they just did by hand, with a guide of words beside it and example cards below. Esc + Space closes it. Parents can turn it off (Parent Menu, Features).
 
 ```
 red repeat 4 forward 6 turn       # Art: a red square

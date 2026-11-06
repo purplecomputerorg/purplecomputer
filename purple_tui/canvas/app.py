@@ -931,6 +931,9 @@ class PurpleApp:
         if wait:
             self.notify("That's lots of printing for today" if wait == float("inf") else "The printer is still busy", timeout=3)
             return
+        if printing.FAKE:
+            from .print_preview import PrintPreview
+            self.push(PrintPreview(self, made[0]))
         asyncio.ensure_future(printing.print_pages(*made, lambda text: self.notify(text, timeout=4)))
 
     def action_parent_menu(self):

@@ -8,4 +8,4 @@ set -e
 cd "${1:-$HOME/purplecomputer}"
 git pull
 just example-rooms
-just run-dev
+PURPLE_FAKE_PRINTER=1 just run-dev  # Print shows the page on screen instead of printing

@@ -34,7 +34,7 @@ PROBLEMS = (
     ("offline", "The printer is turned off"),
 )
 
-_FAKE = os.environ.get("PURPLE_FAKE_PRINTER") == "1"
+FAKE = os.environ.get("PURPLE_FAKE_PRINTER") == "1"
 _last_at = -COOLDOWN_S
 _count = 0
 
@@ -52,7 +52,7 @@ WHY_NOT = {
 def status() -> str:
     """NONE, SETTING_UP, BROKEN or READY, from the file the setup script writes.
     On a live boot the print stack is read from the stick, so a pulled stick can't print."""
-    if _FAKE:
+    if FAKE:
         return READY
     state = _state()
     if not state:
@@ -76,7 +76,7 @@ def why_not():
 
 def printer():
     """The ready printer's state, or None."""
-    if _FAKE:
+    if FAKE:
         return {"ready": True, "model": "Pretend Printer", "via": "fake"}
     return _state() if status() == READY else None
 
@@ -145,7 +145,7 @@ async def print_pages(surfaces, landscape: bool, notify) -> bool:
         return False
     _last_at, _count = time.monotonic(), _count + 1
     import pygame
-    if _FAKE:  # previews and tests: the pages land next to the screenshots
+    if FAKE:  # previews and tests: the pages land next to the screenshots
         folder = os.environ.get("PURPLE_SCREENSHOT_DIR", tempfile.gettempdir())
         for i, surface in enumerate(surfaces):
             pygame.image.save(surface, os.path.join(folder, f"print{i + 1 if i else ''}.png"))

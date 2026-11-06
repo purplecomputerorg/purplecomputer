@@ -16,7 +16,7 @@ READY = {"ready": True, "model": "Brother HL-L2420DW", "via": "ipp-usb"}
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
     monkeypatch.setattr(printing, "STATE", str(tmp_path / "printer.json"))
-    monkeypatch.setattr(printing, "_FAKE", False)
+    monkeypatch.setattr(printing, "FAKE", False)
     monkeypatch.setattr(printing, "is_live_boot", lambda: False)
     monkeypatch.setattr(printing, "_last_at", -printing.COOLDOWN_S)
     monkeypatch.setattr(printing, "_count", 0)
@@ -123,6 +123,24 @@ def test_p_in_the_esc_menu_sends_the_art_page(plugged_in, lp_calls):
         (argv,) = lp_calls
         assert argv[:3] == ("lp", "-d", "purple") and "landscape" in argv
         assert app._toasts[-1].text == "Printing!"
+    run(go())
+
+
+def test_a_pretend_printer_shows_the_page_until_a_key(monkeypatch, tmp_path):
+    from purple_tui.canvas.print_preview import PrintPreview
+    monkeypatch.setattr(printing, "FAKE", True)
+    monkeypatch.setenv("PURPLE_SCREENSHOT_DIR", str(tmp_path))
+
+    async def go():
+        app = make_app()
+        app.action_switch_room("art")
+        await type_text(app, "qwerty")
+        await _menu(app)
+        await press(app, "p")
+        await asyncio.sleep(0)
+        assert isinstance(app.top, PrintPreview) and (tmp_path / "print.png").exists()
+        await press(app, "a")
+        assert not app.has_overlay(PrintPreview)
     run(go())
 
 

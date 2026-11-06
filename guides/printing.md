@@ -79,7 +79,9 @@ boot the print stack is read from the stick, so Print hides once it's pulled.
 
 - `PURPLE_FAKE_PRINTER=1 just preview art type:qwerty key:escape type:p` shows
   the card and writes the page to `print.png` next to the screenshots (later
-  pages of a Write print as `print2.png`, `print3.png`, ...).
+  pages of a Write print as `print2.png`, `print3.png`, ...). The app also
+  shows the pages full-screen until a key (arrows turn pages); the test VM's
+  `run` turns this pretend printer on.
 - `tests/canvas/test_printing.py` covers the card, the pages and the pacing.
 - On a Linux machine with CUPS, `ippeveprinter -p 8631 -d jobs ...` stands in
   for a printer: `lpadmin -p purple -E -v ipp://localhost:8631/ipp/print -m everywhere`,

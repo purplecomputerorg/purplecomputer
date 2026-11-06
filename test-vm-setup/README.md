@@ -90,7 +90,7 @@ just setup
 just run
 ```
 
-After that, type `run` (installed by `setup.sh`) to pull the latest code, reinstall Example Rooms (Studio's starter rooms, turned on in the Esc menu) from it, and start `just run-dev`. It runs `test-vm-setup/dev.sh` from `~/purplecomputer`; pass a path to use another checkout, e.g. `run /mnt/share`.
+After that, type `run` (installed by `setup.sh`) to pull the latest code, reinstall Example Rooms (Studio's starter rooms, turned on in the Esc menu) from it, and start `just run-dev`. It runs `test-vm-setup/dev.sh` from `~/purplecomputer`; pass a path to use another checkout, e.g. `run /mnt/share`. It runs with a pretend printer: Print shows the page on screen (and saves it as `/tmp/print.png`) instead of printing.
 
 `bash ~/purplecomputer/test-vm-setup/debug-letters.sh` lists which clip Music's Say Letters plays for each key, with a short fingerprint, the folders it searched and any stray or untracked clips.
 

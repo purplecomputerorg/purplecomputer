@@ -14,6 +14,7 @@ from functools import cache
 import pygame
 
 from .. import palette as P
+from ..code_runner import _COMMAND_VOCAB, _MODE_WORDS, _TURN_VOCAB, MusicCodeRunner
 from ..constants import ICON_MUSIC
 from ..content import get_content
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
@@ -140,17 +141,32 @@ TOPICS = {
     ],
 }
 _TAKES_A_WAY = {"turn", "face", "brush", "pen"}
+# An example led by one of these sets the mode itself.
+_SWITCHES = {'art': set(_MODE_WORDS), 'music': set(MusicCodeRunner._KEYWORD_VOCAB) - {'fast', 'slow'} | {'key'}}
+_ART_WORDS = set(_COMMAND_VOCAB + _TURN_VOCAB)
+
+
+def _is_color_word(word: str) -> bool:
+    from ..color_mixing import COLOR_ADJECTIVES
+    return word in COLOR_ADJECTIVES or bool(get_content().exact_color(word))
+
+
+def presses_keys(room: str, code: str) -> bool:
+    """Whether an example's letters are keys, which paint or play only in the room's first mode."""
+    words = re.sub(f"[{re.escape(SEPARATORS)}]", " ", code.lower()).split()
+    if code in (COLORS, ALL_COLORS) or not words or room not in _SWITCHES or words[0] in _SWITCHES[room]:
+        return False
+    return room == 'music' or any(w.isalpha() and w not in _ART_WORDS and not _is_color_word(w) for w in words)
 
 
 def guide_topic(room: str, text: str):
     """(heading, rows, word) for the last word in `text` that has a topic, else None.
     The way after turn, face or brush belongs to that word: "brush up" is Brush."""
-    from ..color_mixing import COLOR_ADJECTIVES
     words = text.lower().split()
     for i, word in reversed(list(enumerate(words))):
         if i and words[i - 1] in _TAKES_A_WAY:
             continue
-        is_color = word in COLOR_ADJECTIVES or get_content().exact_color(word)
+        is_color = _is_color_word(word)
         for triggers, heading, rows in TOPICS[room]:
             if word in triggers.split() or (is_color and triggers == COLORS):
                 return heading, rows, word
@@ -442,7 +458,12 @@ class CodePanel:
 
     def _choose(self, i: int):
         self.card = i
-        self.field.set(self.recipes[i][0])
+        self.field.set(self._shown(self.recipes[i][0]))
+
+    def _shown(self, code: str) -> str:
+        """An example as it would run from here: led by the word that puts keys back, when its letters need that."""
+        word = self.app.rooms[self.room].keys_word
+        return f"{word} {code}" if word and presses_keys(self.room, code) else code
 
     def _pick(self, direction: str):
         """In the cards: ← → pick one or Close, ↑ goes back to the line with it."""
@@ -509,6 +530,7 @@ class CodePanel:
         gap = g.em(0.6)
         cw = (area.w - (n - 1) * gap) // n
         for i, (code, color, rows) in enumerate(self.recipes):
+            code = self._shown(code)
             card = pygame.Rect(area.x + i * (cw + gap), area.y, cw, area.h)
             picked = i == self.card
             g.rect(P.FIELD, card, radius=g.em(0.4))
@@ -538,7 +560,7 @@ class CodePanel:
         word = topic[2] if topic else None
         sections = [topic[:2]] if topic else GUIDE[self.room]
         for i, (heading, rows) in enumerate(sections):
-            code, gloss = rows[0]
+            code, gloss = self._shown(rows[0][0]), rows[0][1]
             first_h = g.line_height(px, "mono") if code in (COLORS, ALL_COLORS) else _example_height(g, code, gloss, px, w)
             if y + g.line_height(head_px, "mono-heavy") + g.em(0.35) + first_h > bottom:
                 if not topic:
@@ -546,6 +568,7 @@ class CodePanel:
                 break
             y += g.draw_text(heading, head_px, x, y, "mono-heavy", P.ACCENT).h + g.em(0.35)
             for code, gloss in rows:
+                code = self._shown(code)
                 if code in (COLORS, ALL_COLORS):
                     h = g.draw_markup(self.colors if code == COLORS else self.all_colors, px, x, y, "mono", P.TEXT, w, dim_to=P.SURFACE)
                 elif y + (h := _example_height(g, code, gloss, px, w)) > bottom:

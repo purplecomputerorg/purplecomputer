@@ -165,6 +165,16 @@ def parse_lines(lines: list[str], split_commands: bool = True,
     return result
 
 
+def peel_before_repeat(words: list[str], lead: int, corrections: list) -> list[str]:
+    """Split the first `lead` words into a line of their own when the rest is a
+    loop, since `repeat` only loops at the start of a line."""
+    if lead and lead < len(words):
+        rest = correct_repeat_typo(" ".join(words[lead:]), corrections)
+        if rest.split()[0].lower() == 'repeat':
+            return [" ".join(words[:lead]), rest]
+    return [" ".join(words)]
+
+
 def is_repeat_line(text: str) -> bool:
     """True when a submitted line is a `repeat N ...` loop."""
     return any(c['type'] == 'repeat' for c in parse_lines([text]))
@@ -228,8 +238,8 @@ class MusicCodeRunner:
 
     # Command table: (compiled_regex, handler_method_name)
     _COMMANDS = [
-        (re.compile(r'^letters(?:\s+(\S+))?\s*$', re.I), '_do_letters'),
-        (re.compile(r'^(?:notes|music|sounds)\s*$', re.I), '_do_notes'),
+        (re.compile(r'^letters(?:\s+(.+?))?\s*$', re.I), '_do_letters'),
+        (re.compile(r'^(?:notes|music|sounds)(?:\s+(.+?))?\s*$', re.I), '_do_notes'),
         (re.compile(r'^(?:choose|instrument|select|use)\s+(.+)$', re.I), '_do_instrument'),
         (re.compile(r'^play\s+(.+)$', re.I), '_do_play'),
         (re.compile(r'^key\s+(?:of\s+)?(.+?)\s*$', re.I), '_do_key'),
@@ -237,6 +247,7 @@ class MusicCodeRunner:
 
     # Command keywords for fuzzy matching
     _KEYWORD_VOCAB = ['letters', 'notes', 'music', 'sounds', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
+    _MODE_WORDS = ('letters', 'notes', 'music', 'sounds')
 
     def __init__(self, play_key_fn, set_instrument_fn=None,
                  color_fn=None, flash_fn=None, set_letters_fn=None, set_key_fn=None, set_letter_sounds_fn=None):
@@ -293,12 +304,17 @@ class MusicCodeRunner:
         """Run music code. Corrections stored in self.corrections."""
         from .music_constants import ALL_KEYS
 
-        cmds = parse_lines(lines, corrections=self.corrections)
-        flat = flatten_commands(cmds)
         self._mode = mode
         self._all_keys = ALL_KEYS
+        await self._run_lines([part for line in lines for part in self._peel_mode_before_repeat(line)])
 
-        for cmd in flat:
+    def _peel_mode_before_repeat(self, line: str) -> list[str]:
+        """`notes repeat 2 asdf, jkl` loops both, as it would without `notes`."""
+        words = line.split()
+        return peel_before_repeat(words, int(bool(words) and words[0].lower() in self._MODE_WORDS), self.corrections)
+
+    async def _run_lines(self, lines: list[str]) -> None:
+        for cmd in flatten_commands(parse_lines(lines, corrections=self.corrections)):
             if cmd['type'] != 'line':
                 continue
             try:
@@ -351,29 +367,43 @@ class MusicCodeRunner:
     # Command handlers
     # ------------------------------------------------------------------
 
-    async def _do_letters(self, m) -> bool | None:
-        """letters (on), letters off, or letters names / sounds to turn letters on saying that."""
+    async def _do_letters(self, m) -> bool:
+        """letters (on), letters off, letters names / sounds to turn letters on saying
+        that, or letters then keys: Letters stays on and the keys say their letters."""
         arg = (m.group(1) or 'on').lower()
-        choices = ['on', 'off', 'names', 'sounds'] if self.set_letter_sounds else ['on', 'off']
-        if arg not in choices:
-            from .fuzzy import fuzzy_match_small
-            corrected = fuzzy_match_small(arg, choices, cutoff=0.7)
-            if not corrected:
-                return None
-            self.corrections.append((f'letters {arg}', f'letters {corrected}'))
-            arg = corrected
-        letters_on = arg != 'off'
-        self._mode = "letters" if letters_on else "music"
+        choice = self._letters_choice(arg)
+        self._mode = "music" if choice == 'off' else "letters"
         if self.set_letters:
-            self.set_letters(letters_on)
-        if arg in ('names', 'sounds'):
-            self.set_letter_sounds(arg == 'sounds')
+            self.set_letters(choice != 'off')
+        if choice in ('names', 'sounds'):
+            self.set_letter_sounds(choice == 'sounds')
+        if not choice:
+            await self._run_rest(m.group(1))
         return True
 
+    def _letters_choice(self, arg: str) -> str | None:
+        """on, off, names or sounds, fixing a typo; None when `arg` is keys to say."""
+        choices = ['on', 'off', 'names', 'sounds'] if self.set_letter_sounds else ['on', 'off']
+        if arg in choices or ' ' in arg:
+            return arg if arg in choices else None
+        from .fuzzy import fuzzy_match_small
+        if corrected := fuzzy_match_small(arg, choices, cutoff=0.7):
+            self.corrections.append((f'letters {arg}', f'letters {corrected}'))
+        return corrected
+
     async def _do_notes(self, m) -> bool:
-        """notes, music or sounds on their own: keys play notes again, like letters off."""
+        """notes, music or sounds: keys play notes again, like letters off, then any code after it."""
         self._to_music()
+        if m.group(1):
+            await self._run_rest(m.group(1))
         return True
+
+    async def _run_rest(self, text: str) -> None:
+        """Run what follows a command as code of its own, so a loop in it loops.
+        The per-line correction fields are the caller's, so they're kept."""
+        saved = (self._original_text, self._fix_at)
+        await self._run_lines([text])
+        self._original_text, self._fix_at = saved
 
     def _to_music(self) -> None:
         self._mode = "music"
@@ -404,13 +434,8 @@ class MusicCodeRunner:
             self._record_fix(f'{keyword} {resolved.lower()}')
         self._choose_instrument(resolved.lower())
         await asyncio.sleep(0.1)
-        remainder = " ".join(words[used:])
-        if remainder:
-            # Re-dispatch resets the per-line correction fields, so save and
-            # restore them for the caller.
-            saved = (self._original_text, self._fix_at)
-            await self._dispatch(remainder)
-            self._original_text, self._fix_at = saved
+        if remainder := " ".join(words[used:]):
+            await self._run_rest(remainder)
         return True
 
     async def _do_play(self, m) -> bool | None:
@@ -560,16 +585,10 @@ class ArtCodeRunner:
             log.debug("Art command failed: %s", text, exc_info=True)
 
     def _peel_color_before_repeat(self, line: str) -> list[str]:
-        """Split a leading color off when it precedes `repeat` so the loop body
-        paints in that color: "purple repeat 4 forward 8 spin". `repeat` is only
-        a loop at the start of a line, so the color must become its own line."""
+        """A leading color or mode word before `repeat` paints the whole loop: "purple repeat 4 forward 8 spin"."""
         words = line.split()
-        _, used = self._resolve_leading_color(words)
-        if used and used < len(words):
-            rest = correct_repeat_typo(" ".join(words[used:]), self.corrections)
-            if rest.split()[0].lower() == 'repeat':
-                return [" ".join(words[:used]), rest]
-        return [line]
+        lead = 1 if words and words[0].lower() in _MODE_WORDS else self._resolve_leading_color(words)[1]
+        return peel_before_repeat(words, lead, self.corrections)
 
     async def _dispatch(self, text: str, _resolving: bool = False) -> None:
         """Try explicit commands, then motion classifier, then resolution."""
@@ -611,22 +630,25 @@ class ArtCodeRunner:
     # ------------------------------------------------------------------
 
     async def _do_mode(self, m) -> bool:
-        painting = _MODE_WORDS[m.group(1).lower()] != ((m.group(2) or 'on').lower() == 'off')
-        self._paint_on, self._write_on = painting, not painting
-        self.canvas._set_paint_mode(painting)
+        self._switch_mode(_MODE_WORDS[m.group(1).lower()] != ((m.group(2) or 'on').lower() == 'off'))
         return True
 
     async def _do_inline(self, m) -> bool:
-        """One line in the other mode, without switching: a lone color paints one block."""
+        """A mode word then code: the mode stays switched, and a lone color paints one block."""
         arg, painting = m.group(2).strip(), _MODE_WORDS[m.group(1).lower()]
+        self._switch_mode(painting)
         hex_color = painting and get_content().get_color(arg.lower())
         if hex_color:
             self._apply_color(hex_color)
             self.canvas.paint_char('█', direction=self.canvas._heading)
             await asyncio.sleep(0.05)
         else:
-            await self._emit_text(arg, paint=painting)
+            await self._run_lines([arg])
         return True
+
+    def _switch_mode(self, painting: bool) -> None:
+        self._paint_on, self._write_on = painting, not painting
+        self.canvas._set_paint_mode(painting)
 
     async def _do_color(self, m) -> bool | None:
         """color <name/adj+name/key>: switch brush color, then run whatever follows it."""
@@ -813,11 +835,13 @@ class ArtCodeRunner:
                 heading = self.canvas._heading
                 move_dir = _OPPOSITE[heading] if move_opposite else heading
                 self.canvas._use_heading_cursor = True
-                action = "paint" if self._paint_on else "move"
-                self.canvas.execute_logo_command(action, move_dir, distance)
+                self.canvas.execute_logo_command(self._stroke_action(), move_dir, distance)
             if leftover:
                 await self._emit_text(leftover, paint=self._letters_paint)
             await asyncio.sleep(0.05)
+
+    def _stroke_action(self) -> str:
+        return "paint" if self._paint_on else "move"
 
     @property
     def _letters_paint(self) -> bool:
@@ -919,12 +943,15 @@ class ArtCodeRunner:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _apply_color(self, hex_color: str) -> None:
-        """Switch brush to given color and enter paint mode."""
-        self.canvas._last_key_color = hex_color
+    def _enter_paint(self) -> None:
         self.canvas._paint_mode = True
         self._paint_on = True
         self._write_on = False
+
+    def _apply_color(self, hex_color: str) -> None:
+        """Switch brush to given color and enter paint mode."""
+        self.canvas._last_key_color = hex_color
+        self._enter_paint()
         self.canvas._mark_cursor_dirty()
         self.canvas._post_paint_mode_changed()
         self.canvas.refresh()

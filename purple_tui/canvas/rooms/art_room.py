@@ -185,7 +185,9 @@ class _RoomBrushRunner(ArtCodeRunner):
     """The brush lives on the room, so `brush up` holds across lines and shows on
     the cursor; `_paint_on` is Paint (not Letters) with that brush down. A color
     puts the brush down unless its own line lifted it: `brush up red right 3`.
-    Letters always paint and put it down: `brush up right 5 hi`."""
+    Letters always paint and put it down: `brush up right 5 hi`. Moves paint
+    whenever the brush is down, switching to Paint as a color does, so a line
+    draws the same from either mode; only bare letters follow the mode."""
 
     _lifted_this_line = False
 
@@ -205,6 +207,12 @@ class _RoomBrushRunner(ArtCodeRunner):
         if paint:
             self.canvas.set_code_brush(True)
         await super()._emit_text(text, paint)
+
+    def _stroke_action(self) -> str:
+        if not self.canvas._code_brush_down:
+            return "move"
+        self._enter_paint()
+        return "paint"
 
     def _split_brush_words(self, text: str) -> list[str]:
         self._lifted_this_line = False
@@ -300,6 +308,10 @@ class ArtRoom(Room):
     @property
     def is_painting(self) -> bool:
         return self._paint_mode
+
+    @property
+    def keys_word(self):
+        return None if self._paint_mode else "paint"
 
     def set_pen(self, down: bool):
         self._set_pen(down)

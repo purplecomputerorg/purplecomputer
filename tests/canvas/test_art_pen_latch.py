@@ -308,6 +308,25 @@ def test_write_still_types_letters():
     _run(_test())
 
 
+def test_moves_paint_from_write_and_switch_to_paint():
+    async def _test():
+        app, canvas = _code_art()
+        canvas._set_paint_mode(False)
+        await canvas.run_code(["right 2 hi"])
+        assert canvas.paint_mode and canvas._painted_positions == {(5, 5), (6, 5), (7, 5), (8, 5)}
+    _run(_test())
+
+
+def test_lifted_moves_and_letters_follow_write():
+    async def _test():
+        app, canvas = _code_art()
+        canvas._set_paint_mode(False)
+        await canvas.run_code(["brush up", "right 2", "hi"])
+        assert not canvas.paint_mode and not canvas._painted_positions
+        assert canvas._grid[(7, 5)][0] == "h"
+    _run(_test())
+
+
 def test_code_cursor_shows_the_code_brush():
     async def _test():
         app, canvas = _code_art()

@@ -17,6 +17,7 @@ class Room:
     STARTS_OFF = False   # hidden from the Esc menu until a parent turns it on
     about = ""           # the Parent Menu's line about it
     edits_text = False   # gets Ctrl or Cmd letters, Home and End, and = / * as typed
+    keys_word = None     # the code word that puts keys back in the room's first mode, while they're in another
 
     def __init__(self, app):
         self.app = app

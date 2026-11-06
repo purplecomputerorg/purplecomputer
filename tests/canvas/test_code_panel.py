@@ -7,7 +7,7 @@ import pytest
 
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.ui import LOOP
-from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name, color_spans
+from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name, color_spans, presses_keys
 from purple_tui.canvas.ui import UP
 from purple_tui.keyboard import NavigationAction
 from purple_tui.palette import get_key_color
@@ -218,6 +218,33 @@ def test_up_leaves_the_cards_and_typing_edits_the_recipe():
         await press(app, "backspace")
         assert panel.card is None and panel.field.value == RECIPES["art"][0][0][:-1]
     run(go())
+
+
+@pytest.mark.parametrize("room, word, set_mode", [
+    ("art", "paint", lambda r: r._set_paint_mode(False)),
+    ("music", "notes", lambda r: setattr(r, "letters_mode", True)),
+])
+def test_a_card_whose_keys_need_the_first_mode_says_so_and_switches_back(room, word, set_mode):
+    async def go():
+        app, r = await _room(room)
+        set_mode(r)
+        r.open_code_panel()
+        await press(app, "down")
+        assert r.code_panel.field.value == f"{word} {RECIPES[room][0][0]}"
+        await press(app, "enter")
+        await asyncio.sleep(1)
+        assert r.keys_word is None
+    run(go())
+
+
+@pytest.mark.parametrize("room, code, needs", [
+    ("art", "asdf", True), ("art", "brush up right 3 hi", True), ("art", "red repeat 4 forward 6 turn", False),
+    ("art", "turn around", False), ("art", "write hi", False), ("art", "dark blue", False),
+    ("music", "repeat 3 asdf", True), ("music", "1234", True), ("music", "choose ukulele zxcv", False),
+    ("music", "key g", False), ("music", "letters", False), ("blocks", "hello", False),
+])
+def test_presses_keys(room, code, needs):
+    assert presses_keys(room, code) is needs
 
 
 def test_left_of_the_first_card_is_close_and_enter_closes():

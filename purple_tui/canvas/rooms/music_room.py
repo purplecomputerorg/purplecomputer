@@ -134,6 +134,10 @@ class MusicRoom(Room):
     def _current_mode(self) -> str:
         return MODE_LETTERS if self.letters_mode else MODE_MUSIC
 
+    @property
+    def keys_word(self):
+        return "notes" if self.letters_mode else None
+
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
         colors = self._replay[1] if self._replay else self.color_state

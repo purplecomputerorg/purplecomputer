@@ -597,7 +597,7 @@ class TestFreeOrderArgs:
 
 class TestModeWords:
     """paint/draw switch to Paint, write/type/letters to Letters; on/off, with or
-    without a space; "paint hi" and "write hi" do one line and keep the mode."""
+    without a space; "paint hi" and "write hi" switch, then do the rest."""
 
     def _run(self, lines, paint=True):
         from purple_tui.code_runner import ArtCodeRunner
@@ -618,10 +618,14 @@ class TestModeWords:
         assert c._paint_mode is True
         assert c._typed == [] and len(c._painted_positions) == 2
 
-    def test_inline_keeps_mode(self):
+    def test_inline_switches_and_stays(self):
         c = self._run(["paint hi", "ok"], paint=False)
-        assert c._paint_mode is False
-        assert len(c._painted_positions) == 2 and "".join(c._typed) == "ok"
+        assert c._paint_mode is True
+        assert len(c._painted_positions) == 4 and c._typed == []
+
+    def test_mode_word_before_repeat_loops(self):
+        c = self._run(["write repeat 3 hi"])
+        assert c._paint_mode is False and "".join(c._typed) == "hihihi"
 
 
 class TestColorBeforeRepeat:

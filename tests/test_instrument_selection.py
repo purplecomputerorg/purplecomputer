@@ -103,13 +103,13 @@ class TestCodeRunnerInstrumentChange:
         assert instruments == ["ukulele"]
         assert played == ["A", "S", "D", "F"]
 
-    def test_letters_with_bad_argument_plays_no_notes(self):
+    def test_letters_then_keys_says_them(self):
         played = []
         runner = MusicCodeRunner(
-            play_key_fn=lambda k, m: played.append(k),
+            play_key_fn=lambda k, m: played.append((k, m)),
         )
         asyncio.run(runner.run(["letters banana"]))
-        assert played == []
+        assert played == [(k, "letters") for k in "BANANA"]
 
 
 def _make_runner():
@@ -191,6 +191,28 @@ class TestLettersToggle:
         runner, state = _make_runner()
         asyncio.run(runner.run(["letters onn"]))
         assert state["letters"] == [True]
+
+
+class TestModeWordThenKeys:
+    """A mode word then keys switches for good and plays them in that mode."""
+
+    def _run(self, lines, mode):
+        played, letters = [], []
+        runner = MusicCodeRunner(play_key_fn=lambda k, m: played.append((k, m)), set_letters_fn=letters.append)
+        asyncio.run(runner.run(lines, mode))
+        return played, letters
+
+    def test_notes_then_keys_from_letters(self):
+        played, letters = self._run(["notes fast asd"], "letters")
+        assert played == [(k, "music") for k in "ASD"] and letters == [False]
+
+    def test_notes_before_repeat_loops_every_clause(self):
+        played, _ = self._run(["notes repeat 2 as, d"], "letters")
+        assert [k for k, _ in played] == list("ASDASD")
+
+    def test_mode_stays_for_the_next_line(self):
+        played, _ = self._run(["letters ab", "cd"], "music")
+        assert {m for _, m in played} == {"letters"}
 
 
 class TestSpeedPrefix:

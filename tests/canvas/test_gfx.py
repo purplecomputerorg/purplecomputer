@@ -139,3 +139,8 @@ def test_centered_text_centers_its_capitals(g, px):
     g.draw_text("HHH", px, 10, 100, "mono", "#ffffff", anchor="midleft", tr=False)
     ink = [y for y in range(60, 140) if any(g.surface.get_at((x, y))[0] > 128 for x in range(10, 10 + 3 * px))]
     assert abs((100 - ink[0]) - (ink[-1] + 1 - 100)) <= 1
+
+
+def test_fallback_glyph_does_not_grow_a_line(g):
+    plain, mixed = g.layout("apple", 20, "mono"), g.layout("apple [#ff0000]██[/]", 20, "mono")
+    assert plain[0][1] == mixed[0][1] == g.line_height(20, "mono")

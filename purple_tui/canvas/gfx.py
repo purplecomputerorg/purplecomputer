@@ -511,7 +511,8 @@ class Gfx:
 
         def flush():
             nonlocal cur, cur_w
-            h = max([line_h] + [s.get_height() for s, _, _ in cur])
+            # A taller fallback glyph or emoji must not grow the line and nudge its text down.
+            h = max([line_h] + [s.get_height() for s, _, bg in cur if bg])
             lines.append((cur_w, h, cur))
             cur, cur_w = [], 0
 

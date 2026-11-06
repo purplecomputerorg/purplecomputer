@@ -9,7 +9,7 @@
 
 #tiles(cols: 2,
   ([Install], [Put Purple on the laptop for good.]),
-  ([Kid Profiles], [Each kid's own name, work and Time Travel.]),
+  ([Kid Profiles], [Each kid's name, saved work and Time Travel.]),
   ([Rooms], [Turn any room off, or turn on your own custom rooms.]),
   ([Littles Mode], [In *Rooms*: one focused activity, including a screen-free option.]),
   ([Sound], [Set a volume limit. 0 is always silent.]),
@@ -43,7 +43,7 @@ Connect a printer with a USB-B cable. Most printers have the port, even wireless
   ([Words.], [The dog's name, with a picture.]),
   ([Letters.], [Grandma, every time they press G.]),
   ([Instruments.], [Like a kazoo or a harp.]),
-  ([Colors.], [Purple, but green, or any color.]),
+  ([Colors.], [An ocean-blue screen, or new colors on the keys.]),
   ([New Rooms.], [Like a world for them to walk around.]),
 )
 

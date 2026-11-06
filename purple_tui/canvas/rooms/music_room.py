@@ -427,6 +427,8 @@ class MusicRoom(Room):
             pass
 
     def _hit(self, key: str, mode: str, instrument: int | None = None):
+        if mode == MODE_LETTERS:
+            self._spell(key, time.monotonic())
         self.next_color(key)
         self._play_key(key, mode, instrument)
         if self.app.active_room == self.name:
@@ -608,11 +610,8 @@ class MusicRoom(Room):
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
             if lookup not in ALL_KEYS:
                 return
-            now = time.monotonic()
-            if self.letters_mode:
-                if self._letters_mash_drop(now):
-                    return
-                self._spell(lookup, now)
+            if self.letters_mode and self._letters_mash_drop(time.monotonic()):
+                return
             mode = self._current_mode()
             self.loop.record_event(lookup, mode, instrument=self.instrument_index)
             self._hit(lookup, mode)

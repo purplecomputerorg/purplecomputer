@@ -254,3 +254,19 @@ def test_the_same_letter_over_and_over_fades_out_but_still_spells(monkeypatch):
         await type_text(app, "ccccccat")
         assert room.word == "cat"
     run(go())
+
+
+def test_a_looping_word_shows_each_time_it_comes_around(monkeypatch):
+    import asyncio
+    from purple_tui.canvas.rooms.music_room import MODE_LETTERS
+
+    async def go():
+        room = _letters_room(monkeypatch).room
+        seen = []
+        monkeypatch.setattr(room, "next_color", lambda key: seen.append(room.word))
+        room.loop.play([(k, MODE_LETTERS, i * 0.01, 0) for i, k in enumerate("CATDOG")], 0.1)
+        room._start_loop_playback()
+        await asyncio.sleep(0.08)
+        room._stop_loop()
+        assert seen[2] == "cat" and seen[5] == "dog"
+    run(go())

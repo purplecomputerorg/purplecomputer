@@ -42,9 +42,15 @@
   text(font: "Figtree", weight: "semibold", size: size, fill: purple-dk, k),
 )
 #let key(k) = keycap(k, size: 0.86em)
+// The app's own Nerd Font icons (purple_tui/constants.py), so the card matches the screen
+#let icon(cp, fill: purple) = text(font: "Symbols Nerd Font Mono", fill: fill, cp)
+#let ICONS = (
+  art: "\u{F03D8}", music: "\u{F001}", play: "\u{F0B79}", blocks: "\u{F01A7}",
+  time-travel: "\u{F02DA}", save: "\u{F0193}", open: "\u{F0770}", code: "\u{F06A9}",
+)
 // A key wearing its real sticker color (purple_tui/palette.py KEY_COLORS)
-#let sticker(k, hex) = box(inset: (x: 0.36em), outset: (y: 0.24em), radius: 2.6pt, fill: rgb(hex),
-  text(font: "Figtree", weight: "bold", size: 0.86em, fill: purple-dk, k))
+#let sticker(k, hex, ink: purple-dk) = box(inset: (x: 0.36em), outset: (y: 0.24em), radius: 2.6pt, fill: rgb(hex),
+  text(font: "Figtree", weight: "bold", size: 0.86em, fill: ink, k))
 
 // What a kid types, like Purple's code line
 #let typed(s, color: purple) = box(

@@ -270,3 +270,16 @@ def test_a_looping_word_shows_each_time_it_comes_around(monkeypatch):
         room._stop_loop()
         assert seen[2] == "cat" and seen[5] == "dog"
     run(go())
+
+
+def test_choosing_an_instrument_or_key_in_code_leaves_letters(monkeypatch):
+    async def go():
+        app = _letters_room(monkeypatch)
+        played = []
+        monkeypatch.setattr(app.room, "_play_key", lambda key, mode, instrument=None: played.append(mode))
+        await app.room.run_code(["choose ukulele asd"])
+        assert not app.room.letters_mode and played == ["music"] * 3
+        app.room.letters_mode = True
+        await app.room.run_code(["key g"])
+        assert not app.room.letters_mode
+    run(go())

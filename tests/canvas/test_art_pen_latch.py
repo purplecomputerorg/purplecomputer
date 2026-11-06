@@ -254,11 +254,29 @@ def test_code_brush_holds_across_lines():
     _run(_test())
 
 
-def test_a_color_keeps_the_code_brush_up():
+def test_a_color_keeps_the_brush_up_on_its_own_line():
     async def _test():
         app, canvas = _code_art()
         await canvas.run_code(["brush up red right 3"])
         assert not canvas._painted_positions
+    _run(_test())
+
+
+def test_a_color_on_a_later_line_puts_the_brush_down():
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code(["brush up"])
+        await canvas.run_code(["red 2"])
+        assert canvas._painted_positions == {(5, 5), (6, 5)}
+        assert canvas._code_brush_down
+    _run(_test())
+
+
+def test_a_color_after_brush_up_in_one_run_puts_it_down():
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code(["brush up", "right 2", "red right 2"])
+        assert canvas._painted_positions == {(7, 5), (8, 5)}
     _run(_test())
 
 

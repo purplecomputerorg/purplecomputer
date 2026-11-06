@@ -1,5 +1,5 @@
 """Code for the Blocks room, in Art's words: a color, a way, a count.
-`red up 5` stacks a tower, `blue right 6` lays a row, `right hello` builds
+`red up 5` stacks a tower, `blue right 6` lays a row, `hello` builds
 the letters, each in its own color, and `repeat 4 right 1 up 1` makes
 stairs. Like typing, every block lands at the cursor, which then moves on
 that way, so lines run on from where the last one ended."""

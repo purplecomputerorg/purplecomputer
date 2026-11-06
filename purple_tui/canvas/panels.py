@@ -63,7 +63,7 @@ RECIPES = {
         ("red up 5", "#ED1C24", ["#", "#", "#", "#", "#"]),
         ("blue right 6", "#1F75FE", ["######"]),
         ("green repeat 4 right 1 up 1", "#48D370", ["...##", "..##.", ".##..", "##..."]),
-        ("right hello", "", ["hello"]),
+        ("hello", "", ["hello"]),
     ],
 }
 # The side column: words to use, a section at a time, each an example and a

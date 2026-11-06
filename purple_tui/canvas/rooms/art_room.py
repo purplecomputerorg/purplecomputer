@@ -183,7 +183,10 @@ def _brush_hint(h: int, color: str, lift: float) -> pygame.Surface:
 
 class _RoomBrushRunner(ArtCodeRunner):
     """The brush lives on the room, so `brush up` holds across lines and shows on
-    the cursor; `_paint_on` is Paint (not Letters) with that brush down."""
+    the cursor; `_paint_on` is Paint (not Letters) with that brush down. A color
+    puts the brush down unless its own line lifted it: `brush up red right 3`."""
+
+    _lifted_this_line = False
 
     @property
     def _paint_on(self) -> bool:
@@ -193,17 +196,28 @@ class _RoomBrushRunner(ArtCodeRunner):
     def _paint_on(self, on: bool):
         self._painting = on
 
-    async def _do_lift(self, m) -> bool:
-        self.canvas.set_code_brush(not self.canvas._code_brush_down)
+    def _split_brush_words(self, text: str) -> list[str]:
+        self._lifted_this_line = False
+        return super()._split_brush_words(text)
+
+    def _set_brush(self, down: bool) -> bool:
+        self._lifted_this_line = not down
+        self.canvas.set_code_brush(down)
         return True
+
+    async def _do_lift(self, m) -> bool:
+        return self._set_brush(not self.canvas._code_brush_down)
 
     async def _do_pen_up(self, m) -> bool:
-        self.canvas.set_code_brush(False)
-        return True
+        return self._set_brush(False)
 
     async def _do_pen_down(self, m) -> bool:
-        self.canvas.set_code_brush(True)
-        return True
+        return self._set_brush(True)
+
+    def _apply_color(self, hex_color: str) -> None:
+        super()._apply_color(hex_color)
+        if not self._lifted_this_line:
+            self.canvas.set_code_brush(True)
 
 
 class ArtRoom(Room):

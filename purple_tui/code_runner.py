@@ -372,10 +372,18 @@ class MusicCodeRunner:
 
     async def _do_notes(self, m) -> bool:
         """notes, music or sounds on their own: keys play notes again, like letters off."""
+        self._to_music()
+        return True
+
+    def _to_music(self) -> None:
         self._mode = "music"
         if self.set_letters:
             self.set_letters(False)
-        return True
+
+    def _choose_instrument(self, name: str) -> None:
+        """Instruments only sound in music, so choosing one leaves Letters."""
+        self._to_music()
+        self.set_instrument(name)
 
     def _resolve_leading_instrument(self, words: list[str]) -> tuple[str | None, int]:
         """Resolve an instrument from the first word. Instrument names and
@@ -394,7 +402,7 @@ class MusicCodeRunner:
             return None
         if resolved.lower() != words[0].lower():
             self._record_fix(f'{keyword} {resolved.lower()}')
-        self.set_instrument(resolved.lower())
+        self._choose_instrument(resolved.lower())
         await asyncio.sleep(0.1)
         remainder = " ".join(words[used:])
         if remainder:
@@ -411,7 +419,7 @@ class MusicCodeRunner:
         if resolved and self.set_instrument:
             if resolved.lower() != arg.lower():
                 self._record_fix(f'play {resolved.lower()}')
-            self.set_instrument(resolved.lower())
+            self._choose_instrument(resolved.lower())
             await asyncio.sleep(0.1)
             return True
         # Not an instrument: play as notes
@@ -428,6 +436,7 @@ class MusicCodeRunner:
         name = re.sub(r'^bb$|\s*flat$', lambda f: 'b♭' if f.group(0) == 'bb' else '♭', m.group(1).lower())
         names = [n.lower() for n in FRIENDLY_KEY_NAMES]
         if name in names:
+            self._to_music()
             self.set_key(names.index(name))
         return True
 

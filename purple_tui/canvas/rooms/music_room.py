@@ -787,13 +787,15 @@ class MusicRoom(Room):
         return max(g.measure(text, text_px, "mono-heavy-italic", tr=False)[0] for text, text_px in labels) + self._bar_h(size)
 
     def _draw_word_strip(self, g, bar, px):
-        """The word the letters spell, with its picture if it has one, and Space to hear it."""
+        """The word the letters spell, with its picture if it has one, and Space to hear it unless Space is the loop's."""
         picture = get_content().exact_emoji(self.word)
-        text, word_px, gap = f"{self.word} {picture}" if picture else self.word, round(px * 1.4), px * 2
+        hint = WORD_HINT if self.loop.state == IDLE else ""
+        text, word_px, gap = f"{self.word} {picture}" if picture else self.word, round(px * 1.4), px * 2 if hint else 0
         text_w = g.measure(text, word_px, "mono-heavy", tr=False)[0]
-        x = bar.centerx - (text_w + gap + key_hint_width(g, WORD_HINT, px)) // 2
+        x = bar.centerx - (text_w + gap + key_hint_width(g, hint, px)) // 2
         g.draw_text(text, word_px, x, bar.centery, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
-        draw_key_hint(g, WORD_HINT, px, x + text_w + gap, bar.centery)
+        if hint:
+            draw_key_hint(g, hint, px, x + text_w + gap, bar.centery)
 
     def _draw_note_strip(self, g, tab_w, xs, bar, px, on_paper):
         """Every letter row plays the same note in a column, so each column is named once, on a ledge

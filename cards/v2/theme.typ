@@ -48,6 +48,8 @@
   art: "\u{F03D8}", music: "\u{F001}", play: "\u{F0B79}", blocks: "\u{F01A7}",
   time-travel: "\u{F02DA}", save: "\u{F0193}", open: "\u{F0770}", code: "\u{F06A9}",
 )
+// Studio's own section icons (studio/src/main.ts SECTIONS, drawn from studio/src/icons)
+#let studio-icon(code) = box(baseline: 15%, image("/studio/src/icons/" + code + ".svg", height: 1em))
 // A key wearing its real sticker color (purple_tui/palette.py KEY_COLORS)
 #let sticker(k, hex, ink: purple-dk) = box(inset: (x: 0.36em), outset: (y: 0.24em), radius: 2.6pt, fill: rgb(hex),
   text(font: "Figtree", weight: "bold", size: 0.86em, fill: ink, k))
@@ -176,7 +178,8 @@
 // small cards, title above text, each row as tall as its tallest card.
 #let tip-title(t) = text(font: "Sora", weight: "semibold", size: 9pt, fill: purple.darken(8%), t)
 #let tiles(cols: 1, gutter: 6pt, pad: 9pt, ..items) = if cols == 1 {
-  panel(ruled(pad: pad, ..items.pos().map(((t, body)) => ([#tip-title(t) #h(2pt) #body],))))
+  panel(ruled(pad: pad, ..items.pos().map(((t, body, ..icon)) =>
+    (grid(columns: (1fr, auto), column-gutter: 6pt, align: horizon, [#tip-title(t) #h(2pt) #body], ..icon),))))
 } else { layout(size => {
   let w = (size.width - gutter * (cols - 1)) / cols
   let tile((t, body), tall) = block(

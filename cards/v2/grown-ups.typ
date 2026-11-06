@@ -35,24 +35,24 @@ Connect a printer with a USB-B cable. Most printers have the port, even wireless
 // Wording from Studio itself: its home page (studio/src/ui/home.ts) and section cards (studio/src/main.ts)
 #text(size: 11pt, weight: "semibold", fill: purple-dk)[Make Purple your own.]
 #v(-2pt)
-#text(fill: ink-med)[Everything happens in your web browser. Nothing you add is uploaded, and nothing is tracked.]
+#text(fill: ink-med)[Everything happens in your web browser. Nothing you add is uploaded anywhere or tracked.]
 #gap
 
 #tiles(
-  ([Pictures.], [The dog, ready to paint on.]),
-  ([Words.], [The dog's name, with a picture.]),
-  ([Letters.], [Grandma, every time they press G.]),
-  ([Instruments.], [Like a kazoo or a harp.]),
-  ([Colors.], [An ocean-blue screen, or new colors on the keys.]),
-  ([New Rooms.], [Like a world for them to walk around.]),
+  ([Pictures.], [The dog, ready to paint on.], studio-icon("1f5bc")),
+  ([Words.], [The dog's name, with a picture.], studio-icon("1f5e8")),
+  ([Letters.], [Grandma, every time they press G.], sticker("Z", "#A5BFF2")),
+  ([Instruments.], [Like a kazoo or a harp.], studio-icon("1f3b9")),
+  ([Colors.], [An ocean-blue screen, or new key colors.], studio-icon("1f3a8")),
+  ([New Rooms.], [Like a world for them to walk around.], studio-icon("1f9e9")),
 )
 
 #gap
 #panel(title: [How it works])[
   #steps(spacing: 12pt,
-    [A real Purple runs right on the page as you work],
-    [Download your Purple Pack],
-    [Put it on Purple with a USB drive],
+    [Try out your changes from within Studio],
+    [Download your Purple Pack from Studio],
+    [Put your Purple Pack on any USB drive and plug it into your Purple Computer],
   )
 ]
 

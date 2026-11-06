@@ -44,7 +44,7 @@ def paper_color(pdf: Path) -> str:
 
 def build(name: str, png_dir: Path | None) -> None:
     pdf = OUT / f"{name}.pdf"
-    typst.compile(str(HERE / f"{name}.typ"), output=str(pdf), root=str(HERE), font_paths=[str(FONTS), str(HERE / "fonts")])
+    typst.compile(str(HERE / f"{name}.typ"), output=str(pdf), root=str(ROOT), font_paths=[str(FONTS), str(HERE / "fonts")])
     add_bleed(pdf, OUT / f"{name}-pad.pdf", 0.0, 0.125, paper_color(pdf), "none", "#5c2d91", 0.12)
     if png_dir:
         for i, page in enumerate(fitz.open(pdf)):

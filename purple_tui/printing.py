@@ -8,20 +8,31 @@ costs one small file read and no process. Design: guides/printing.md.
 import asyncio
 import json
 import os
+import re
 import tempfile
 import time
+from dataclasses import dataclass
 
 from . import boot_log
 from .constants import is_live_boot, is_usb_present
 
 STATE = "/run/purple-printer.json"
+HEAL = "/run/purple-printer.heal"  # the setup script rebuilds everything when it finds this
 QUEUE = "purple"
+CUPS = "ipp://localhost"
 COOLDOWN_S = 20
 SESSION_LIMIT = 20
-WATCH_S, WATCH_EVERY_S = 180, 3
-STUCK_S = 60  # a job still waiting this long means the printer isn't taking it
+# Only Purple's own link to the printer is timed tightly: how long a printer
+# takes to print varies too much between models to judge (guides/printing.md).
+WATCH_EVERY_S = 3
+ANSWER_S = 10  # for one "are you there?" to the printer
+LOST_S = 45  # nothing answers this long: cancel and rebuild the print stack
+SLOW_S = 45  # still not done this long: say so
+STALL_S = 600  # nothing about the job changes this long: cancel and rebuild
+HEALS = 2  # rebuilds in a row before asking for the printer's power button
 NOT_PRINTED = "The printer didn't print that"
-NOT_ANSWERING = "The printer isn't answering. Is it turned on?"
+STILL_WORKING = "The printer is still working on it"
+NOT_ANSWERING = "The printer isn't answering. Try turning it off and on"
 # printer-state-reasons prefixes, most specific first, with what the screen says
 PROBLEMS = (
     ("media-jam", "Paper is stuck in the printer"),
@@ -31,12 +42,15 @@ PROBLEMS = (
     ("toner-empty", "The printer is out of ink"),
     ("door-open", "A printer door is open"),
     ("cover-open", "A printer door is open"),
-    ("offline", "The printer is turned off"),
 )
+COMPLETED, CANCELED, STUCK, GONE = "completed", "canceled", "stuck", "gone with its queue"
 
 FAKE = os.environ.get("PURPLE_FAKE_PRINTER") == "1"
 _last_at = -COOLDOWN_S
 _count = 0
+_heals = 0
+_healed_stamp = None
+_now, _sleep = time.monotonic, asyncio.sleep  # the watcher's clock, for tests
 
 
 NONE, SETTING_UP, BROKEN, READY = "none", "setting up", "broken", "ready"
@@ -128,11 +142,16 @@ def problem(reasons: str):
     return next((msg for key, msg in PROBLEMS if key in reasons), None)
 
 
-async def _run(*argv) -> str:
+async def _run(*argv, check=True, timeout=30) -> str:
     proc = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE,
                                                 stderr=asyncio.subprocess.DEVNULL)
-    out, _ = await proc.communicate()
-    if proc.returncode:
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise OSError(f"{argv[0]} took over {timeout}s")
+    if check and proc.returncode:
         raise OSError(f"{argv[0]} exited {proc.returncode}")
     return out.decode(errors="replace")
 
@@ -151,7 +170,7 @@ async def print_pages(surfaces, landscape: bool, notify) -> bool:
             pygame.image.save(surface, os.path.join(folder, f"print{i + 1 if i else ''}.png"))
         notify("Printing!")
         return True
-    paths = []
+    stamp, paths = state_stamp(), []
     try:
         for surface in surfaces:
             fd, path = tempfile.mkstemp(prefix="purple-print-", suffix=".png")
@@ -162,14 +181,15 @@ async def print_pages(surfaces, landscape: bool, notify) -> bool:
         job = _job_id(await _run("lp", "-d", QUEUE, "-t", "Purple Computer", *opts, *paths))
     except Exception as e:
         boot_log.heartbeat(f"print: failed to send ({e})")
-        notify("The printer didn't answer. Try again soon")
+        await _give_up(None, notify, heal=True)
         return False
     finally:
         for path in paths:
             os.unlink(path)  # lp has copied them into the spool
     boot_log.heartbeat(f"print: {len(surfaces)} page(s) sent as job {job}")
     notify("Printing!")
-    asyncio.ensure_future(_watch(job, notify))
+    if job:
+        asyncio.ensure_future(_watch(job, stamp, notify))
     return True
 
 
@@ -188,38 +208,121 @@ def _attr(ipp_out: str, name: str) -> str:
     return ""
 
 
-async def _watch(job, notify):
-    """Until the job finishes, say once per problem what's wrong: no paper, a
-    jam, a job CUPS gave up on, or a printer that never takes it."""
-    said = set()
+@dataclass(frozen=True)
+class Look:
+    """One check on a sent job. The default is what a check that got no answer from CUPS sees."""
+    state: str = ""  # job-state
+    news: tuple = ()  # all CUPS says about the job, to notice it moving
+    alerts: str = ""  # the queue's printer-state-reasons
+    answers: bool = False  # CUPS knows the job and the printer answers
 
-    def say(msg, why=""):
-        if msg and msg not in said:
-            said.add(msg)
-            boot_log.heartbeat(f"print: job {job} {msg} {why}".rstrip())
-            notify(msg)
 
-    for tick in range(1, WATCH_S // WATCH_EVERY_S + 1):
-        await asyncio.sleep(WATCH_EVERY_S)
-        try:
-            info = await _run("ipptool", "-tv", f"ipp://localhost/jobs/{job}", "get-job-attributes.test")
-            reasons = await _run("lpstat", "-l", "-p", QUEUE)
-        except Exception as e:
-            boot_log.heartbeat(f"print: job {job} can't be checked ({e})")
-            return
-        state, why = _attr(info, "job-state"), f"({_attr(info, 'job-printer-state-message')})"
-        if state in ("completed", "aborted", "canceled"):
-            boot_log.heartbeat(f"print: job {job} {state} {why}")
-            if state != "completed":
-                say(NOT_PRINTED, why)
-            return
-        msg = problem(reasons)
-        say(msg)
-        if tick * WATCH_EVERY_S >= STUCK_S and not msg:
-            say(NOT_ANSWERING, f"(still {state} {why})")
-    # A job that never finishes holds up every page after it, since CUPS prints one at a time.
-    boot_log.heartbeat(f"print: job {job} cancelled after {WATCH_S}s")
+async def _look(job) -> Look:
     try:
-        await _run("cancel", f"{QUEUE}-{job}")
-    except Exception:
-        pass
+        info = await _run("ipptool", "-tv", f"{CUPS}/jobs/{job}", "get-job-attributes.test")
+        queue = await _run("lpstat", "-l", "-p", QUEUE)
+    except OSError:
+        return Look()
+    news = tuple(_attr(info, name) for name in ("job-state", "job-printer-state-message",
+                                                "job-impressions-completed", "job-media-sheets-completed"))
+    alerts = next((line.strip() for line in queue.splitlines() if "Alerts:" in line), "")
+    done = news[0] in (COMPLETED, CANCELED, "aborted")
+    return Look(news[0], news, alerts, done or await _printer_answers())
+
+
+async def _printer_answers() -> bool:
+    """Whether the printer answers a status query. A printer that stops
+    responding behind ipp-usb shows nothing wrong in CUPS: the job just sits."""
+    uri = _state().get("uri", "")
+    if not uri.startswith("ipp://"):
+        return True  # the USB backend's route has no address to ask
+    try:
+        out = await _run("ipptool", "-T", str(ANSWER_S), "-tv", uri, "get-printer-attributes.test",
+                         check=False, timeout=ANSWER_S + 5)
+    except OSError:
+        return False
+    # Any reply counts: the stock test also fails on attributes a printer may lack. A timeout
+    # still prints "status-code = successful-ok", so only the bytes received tell.
+    return re.search(r"RECEIVED: [1-9]\d* bytes", out) is not None
+
+
+class _Clocks:
+    """A sent job's timers: each look at it says what happens next."""
+
+    def __init__(self, now):
+        self.started = self.changed = now
+        self.lost_since = None
+        self.last = None
+
+    def next(self, look: Look, now: float):
+        """COMPLETED, CANCELED or STUCK when the job is over; else a line for the screen, or None."""
+        if look.state in (COMPLETED, CANCELED):
+            return look.state
+        if look.state == "aborted":
+            return STUCK
+        trouble = problem(look.alerts)  # a paper or ink wait is the family's to fix: never time it out
+        if trouble or (look.news, look.alerts) != self.last:
+            self.last, self.changed = (look.news, look.alerts), now
+        self.lost_since = None if look.answers else (now if self.lost_since is None else self.lost_since)
+        lost = self.lost_since is not None and now - self.lost_since >= LOST_S
+        if lost or now - self.changed >= STALL_S:
+            return STUCK
+        slow = now - self.started >= SLOW_S and self.lost_since is None
+        return trouble or (STILL_WORKING if slow else None)
+
+
+async def _watch(job, stamp, notify):
+    """Follow a sent job until it's over, saying once per problem what's wrong."""
+    global _heals
+    clocks, said, seen = _Clocks(_now()), set(), None
+    while True:
+        await _sleep(WATCH_EVERY_S)
+        look = await _look(job)
+        if look != seen:
+            seen = look
+            boot_log.heartbeat(f"print: job {job} {look.news or 'unknown to CUPS'} {look.alerts} answers={look.answers}")
+        verdict = clocks.next(look, _now())
+        if verdict != COMPLETED and state_stamp() != stamp:
+            verdict = GONE  # unplugged or rebuilt: the job went with the old queue
+        if verdict in (COMPLETED, CANCELED, STUCK, GONE):
+            break
+        if verdict and verdict not in said:
+            said.add(verdict)
+            boot_log.heartbeat(f"print: job {job} {verdict}")
+            notify(verdict)
+    boot_log.heartbeat(f"print: job {job} {verdict}")
+    if verdict == COMPLETED:
+        _heals = 0
+    else:
+        await _give_up(job, notify, heal=verdict == STUCK)
+
+
+async def _give_up(job, notify, heal: bool):
+    """The pages won't print: let the kid try again right away, and when Purple
+    lost the printer, rebuild the print stack the way a restart would."""
+    global _last_at, _count
+    _last_at, _count = -COOLDOWN_S, max(0, _count - 1)
+    if job:  # a stuck job blocks every page behind it
+        try:
+            await _run("cancel", f"{QUEUE}-{job}")
+        except OSError:
+            pass  # already over
+    if heal and _heals >= HEALS:
+        notify(NOT_ANSWERING)
+        return
+    notify(NOT_PRINTED)
+    if heal:
+        await _heal()
+
+
+async def _heal():
+    global _heals, _healed_stamp
+    stamp = state_stamp()
+    if stamp == _healed_stamp:
+        return  # another job already asked for this rebuild
+    _heals, _healed_stamp = _heals + 1, stamp
+    boot_log.heartbeat(f"print: rebuilding the print stack ({_heals} of {HEALS})")
+    try:
+        await _run("sudo", "-n", "sh", "-c", f"touch {HEAL} && systemctl --no-block restart purple-printer.service")
+    except OSError as e:
+        boot_log.heartbeat(f"print: couldn't rebuild ({e})")

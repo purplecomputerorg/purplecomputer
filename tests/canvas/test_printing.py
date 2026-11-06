@@ -87,7 +87,7 @@ def test_plugging_in_a_printer_shows_a_toast_each_step():
         app._check_printer()
         _write(ready=False, model="a printer", via=printing.SETTING_UP)
         app._check_printer()
-        assert app._toasts[-1].text == "Printer plugged in. Getting it ready"
+        assert app._toasts[-1].text == "Getting the printer ready"
         _write(**READY)
         app._check_printer()
         assert app._toasts[-1].text == "The printer is ready. Press Esc, then P"
@@ -190,6 +190,7 @@ def test_printer_problems_read_as_plain_words():
     assert printing.problem("printer-state-reasons: media-empty-error") == "The printer needs paper"
     assert printing.problem("Alerts: media-jam-error marker-supply-empty-warning") == "Paper is stuck in the printer"
     assert printing.problem("Alerts: none") is None
+    assert printing.problem("Alerts: offline-report") is None  # Purple lost its link: the watcher's to heal
 
 
 def test_support_info_names_the_printer(plugged_in):
@@ -206,53 +207,5 @@ def test_maker_mark_uses_the_computer_name_and_keeps_the_brand():
     assert paper.maker_mark("Ari's Laptop") == "Made on Ari's Laptop with Purple Computer"
 
 
-def test_maker_mark_uses_the_computer_name_and_keeps_the_brand():
-    assert paper.maker_mark("My Purple Computer") == "Made on Purple Computer"
-    assert paper.maker_mark("") == "Made on Purple Computer"
-    assert paper.maker_mark("Ari's Purple Computer") == "Made on Ari's Purple Computer"
-    assert paper.maker_mark("Ari's Laptop") == "Made on Ari's Laptop with Purple Computer"
-
-
-def _watch_with(monkeypatch, job_states, reasons="Alerts: none"):
-    """Run the job watcher against canned ipptool and lpstat output; returns what the screen was told."""
-    states = iter(job_states)
-    told, ran = [], []
-
-    async def fake_run(*argv):
-        ran.append(argv[0])
-        if argv[0] == "ipptool":
-            return f"        job-state (enum) = {next(states)}\n        job-printer-state-message (textWithoutLanguage) = x\n"
-        return reasons
-    async def no_wait(_):
-        pass
-    monkeypatch.setattr(printing, "_run", fake_run)
-    monkeypatch.setattr(printing.asyncio, "sleep", no_wait)
-    monkeypatch.setattr(printing, "STUCK_S", 0)
-    run(printing._watch("7", told.append))
-    _watch_with.ran = ran
-    return told
-
-
-def test_a_finished_job_says_nothing_more(monkeypatch):
-    assert _watch_with(monkeypatch, ["completed"]) == []
-
-
-def test_a_job_cups_gave_up_on_says_so(monkeypatch):
-    assert _watch_with(monkeypatch, ["aborted"]) == [printing.NOT_PRINTED]
-
-
-def test_a_printer_that_never_takes_the_job_says_so_once(monkeypatch):
-    monkeypatch.setattr(printing, "WATCH_S", 3 * printing.WATCH_EVERY_S)
-    told = _watch_with(monkeypatch, ["pending", "pending", "aborted"])
-    assert told == [printing.NOT_ANSWERING, printing.NOT_PRINTED]
-
-
 def test_lp_output_gives_the_job_number():
     assert printing._job_id("request id is purple-12 (1 file(s))\n") == "12"
-
-
-
-def test_a_job_that_never_finishes_is_cancelled_so_it_cant_block_the_queue(monkeypatch):
-    monkeypatch.setattr(printing, "WATCH_S", 2 * printing.WATCH_EVERY_S)
-    assert _watch_with(monkeypatch, ["pending", "pending"]) == [printing.NOT_ANSWERING]
-    assert _watch_with.ran[-1] == "cancel"

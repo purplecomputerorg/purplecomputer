@@ -29,7 +29,7 @@ and Support info names the printer and the technical reason.
      lasers it doesn't name (one protocol for the family), then Gutenprint's
      generic PCL 6, PCL 5e and PostScript drivers and cups-filters' PWG raster,
      each only when the ID lists that language.
-3. It writes `/run/purple-printer.json` (`{"ready", "model", "via"}`), with
+3. It writes `/run/purple-printer.json` (`{"ready", "model", "via", "uri"}`), with
    `via` "setting up" while it works. The app stats that file every 2 s, so
    watching for a printer costs no process.
 
@@ -67,13 +67,39 @@ adding "with Purple Computer" when the name doesn't already say Purple. The app 
 with `lp -o fit-to-page` and CUPS rasterizes it for the printer.
 
 `purple_tui/printing.py` paces prints (one per 20 s, 20 per boot, for the ink)
-and follows each job by its number until CUPS says it finished, turning
-`printer-state-reasons` (no paper, a jam, no ink, a door open), a job CUPS
-gave up on, and a job still waiting after a minute into one short line on
-screen. A job that dies leaves no other trace, since the queue aborts it, and
-one that never finishes is cancelled after three minutes so it can't block the
-pages behind it. On a live
-boot the print stack is read from the stick, so Print hides once it's pulled.
+and follows each job by its number until it's over. Problems the family can fix
+(no paper, a jam, no ink, a door open) show as one short line and are never
+timed out. On a live boot the print stack is read from the stick, so Print hides
+once it's pulled.
+
+## Self-healing
+
+Printers differ too much in speed to time how long printing takes: a laser
+finishes in seconds, an inkjet waking from cold takes minutes. So the watcher
+only times Purple's own link to the printer:
+
+- **Lost printer:** every check also asks the printer itself for its status at
+  the `uri` in the state file. A printer that stops answering behind `ipp-usb`
+  shows nothing wrong in CUPS (the job sits at "Connected to printer." forever,
+  and every job after it waits), so this probe is the only reliable sign. A
+  timed-out `ipptool` still prints `status-code = successful-ok`; only
+  `RECEIVED: N bytes` with N above 0 means a reply. No answer for 45 s
+  (`LOST_S`), or CUPS not knowing the job, means stuck. The USB driver route
+  has no address to ask.
+- **Stalled job:** nothing CUPS says about the job changes for 10 minutes
+  (`STALL_S`), the backstop for the driver route and anything the probe misses.
+- **Aborted job:** CUPS gave up on it.
+
+A stuck or aborted job is cancelled (it would block every page behind it), the
+kid's 20 s wait and print count are given back, the screen says "The printer
+didn't print that", and the app asks for a rebuild: it touches
+`/run/purple-printer.heal` and restarts `purple-printer.service`, and the
+setup script restarts CUPS and `ipp-usb` and builds the queue again, which is
+everything a restart did for printing. The card says Starting Up, then the
+printer is ready again. After two rebuilds without a printed page it says "The
+printer isn't answering. Try turning it off and on" instead; a printed page
+resets the count. A job lost because its queue was rebuilt or the printer was
+unplugged says it didn't print, without a rebuild.
 
 ## Testing
 
@@ -82,7 +108,13 @@ boot the print stack is read from the stick, so Print hides once it's pulled.
   pages of a Write print as `print2.png`, `print3.png`, ...). The app also
   shows the pages full-screen until a key (arrows turn pages); the test VM's
   `run` turns this pretend printer on.
-- `tests/canvas/test_printing.py` covers the card, the pages and the pacing.
+- `tests/canvas/test_printing.py` covers the card, the pages and the pacing;
+  `tests/canvas/test_print_healing.py` the watcher's clocks and what it does;
+  `tests/test_printer_setup.py` the setup script, heal path included, against a
+  fake `/run` and `/sys` (`PURPLE_PRINTER_ROOT`).
+- `tests/canvas/test_print_healing_cups.py` runs a real CUPS whose printer is a
+  second cupsd the test freezes (`SIGSTOP`, how a wedged `ipp-usb` looks) or
+  kills. It copies CUPS's helper programs so a non-root CUPS trusts them.
 - On a Linux machine with CUPS, `ippeveprinter -p 8631 -d jobs ...` stands in
   for a printer: `lpadmin -p purple -E -v ipp://localhost:8631/ipp/print -m everywhere`,
   then the same `lp` line the app runs.

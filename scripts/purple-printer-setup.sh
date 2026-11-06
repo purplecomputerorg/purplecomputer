@@ -6,16 +6,19 @@
 # drivers for the printer's IEEE 1284 ID. The Esc menu's Print card reads STATE.
 # Design: guides/printing.md
 set -u
-STATE=/run/purple-printer.json  # printing.STATE
+ROOT=${PURPLE_PRINTER_ROOT:-}  # tests run the script against a fake /run, /sys and /etc
+STATE=$ROOT/run/purple-printer.json  # printing.STATE
+HEAL=$ROOT/run/purple-printer.heal  # printing.HEAL: the app found a job stuck
 QUEUE=purple
-LOG=/tmp/purple-printer.log
+LOG=$ROOT/tmp/purple-printer.log
 SETTING_UP="setting up"  # printing.SETTING_UP
 
 log() { echo "[$(date +%H:%M:%S)] $*" >> "$LOG"; }
 
-write_state() {  # ready model via
-    local model=${2//[^A-Za-z0-9 ._+-]/}
-    printf '{"ready": %s, "model": "%s", "via": "%s"}\n' "$1" "$model" "$3" > "$STATE.tmp"
+write_state() {  # ready model via [uri]
+    local model=${2//[^A-Za-z0-9 ._+-]/} uri=${4:-}
+    uri=${uri//[\"\\]/}
+    printf '{"ready": %s, "model": "%s", "via": "%s", "uri": "%s"}\n' "$1" "$model" "$3" "$uri" > "$STATE.tmp"
     chmod 644 "$STATE.tmp"
     mv "$STATE.tmp" "$STATE"
 }
@@ -23,7 +26,7 @@ write_state() {  # ready model via
 # Interface class 07 is a printer; subclass 01 protocol 04 is IPP-over-USB.
 usb_printer() {
     local d any=1
-    for d in /sys/bus/usb/devices/*:*; do
+    for d in $ROOT/sys/bus/usb/devices/*:*; do
         [ "$(cat "$d/bInterfaceClass" 2>/dev/null)" = 07 ] || continue
         any=0
         [ "$(cat "$d/bInterfaceProtocol" 2>/dev/null)" = 04 ] && IPP_USB=1
@@ -31,10 +34,10 @@ usb_printer() {
     return $any
 }
 
-finish() {
+finish() {  # model via uri
     lpadmin -p "$QUEUE" -o printer-error-policy=abort-job -o printer-is-shared=false
     cupsenable "$QUEUE" && cupsaccept "$QUEUE" && lpadmin -d "$QUEUE"
-    write_state true "$1" "$2"
+    write_state true "$1" "$2" "$3"
     log "ready: $1 via $2"
     exit 0
 }
@@ -49,7 +52,7 @@ try_ipp_usb() {
                     sed -n 's/^ *printer-make-and-model (textWithoutLanguage) = //p' | head -1)
             [ -n "$model" ] || continue
             lpadmin -p "$QUEUE" -E -v "ipp://localhost:$port/ipp/print" -m everywhere 2>>"$LOG" &&
-                finish "$model" ipp-usb
+                finish "$model" ipp-usb "ipp://localhost:$port/ipp/print"
         done
         sleep 1
     done
@@ -91,7 +94,7 @@ try_driver() {  # [driver]: only that one
     log "device: $URI ($ID)"
     for ppd in ${1:-$(drivers_for "$ID" | awk '!seen[$0]++')}; do
         log "driver: $ppd"
-        lpadmin -p "$QUEUE" -E -v "$URI" -m "$ppd" 2>>"$LOG" && finish "$MODEL" "$ppd"
+        lpadmin -p "$QUEUE" -E -v "$URI" -m "$ppd" 2>>"$LOG" && finish "$MODEL" "$ppd" "$URI"
     done
     log "no driver for: $MODEL ($ID)"
     write_state false "${MODEL:-a printer}" "no driver for this model"
@@ -107,16 +110,25 @@ if [ "$ROUTE" = drivers ]; then
     [ -z "$held" ] || systemctl start ipp-usb.service
     exit 0
 fi
-IPP_USB=0
+IPP_USB=0 HEALING=0
+[ -e "$HEAL" ] && rm -f "$HEAL" && HEALING=1
 # Some other USB device came or went: leave a working queue (and its job) alone.
-[ "$ROUTE" = auto ] && usb_printer && grep -qs '"ready": true' "$STATE" && exit 0
-rm -f "$STATE"
-grep -qs "<Printer $QUEUE>\|<DefaultPrinter $QUEUE>" /etc/cups/printers.conf && lpadmin -x "$QUEUE"
+[ "$ROUTE$HEALING" = auto0 ] && usb_printer && grep -qs '"ready": true' "$STATE" && exit 0
+if [ "$HEALING" = 1 ]; then
+    # What restarting the computer would do for printing: fresh CUPS and ipp-usb, a new queue.
+    log "a job got stuck: restarting CUPS and ipp-usb"
+    write_state false "a printer" "$SETTING_UP"
+    systemctl restart cups.service
+else
+    rm -f "$STATE"
+fi
+grep -qs "<Printer $QUEUE>\|<DefaultPrinter $QUEUE>" $ROOT/etc/cups/printers.conf && lpadmin -x "$QUEUE"
 # The plug event fires before the kernel has listed the printer's interfaces;
 # read them too early and an IPP-over-USB printer looks like a plain one.
 udevadm settle --timeout=10
-usb_printer || exit 0
+usb_printer || { rm -f "$STATE"; exit 0; }
 pgrep -x ipp-usb >/dev/null && IPP_USB=1
+[ "$HEALING$IPP_USB" = 11 ] && systemctl restart ipp-usb.service
 case $ROUTE in
     ipp) IPP_USB=1; systemctl start ipp-usb.service ;;
     usb) IPP_USB=0 ;;

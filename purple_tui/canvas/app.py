@@ -44,7 +44,7 @@ from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_BAR_EM, HOLD_NUDGE_SECON
                  draw_key, draw_keycap, draw_label, draw_level)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
-PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Printer plugged in. Getting it ready",
+PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Getting the printer ready",
                 printing.READY: "The printer is ready. Press Esc, then P"}
 ARROW_GLYPHS = {"left": LEFT, "up": UP, "down": DOWN, "right": RIGHT}
 ARROW_LIT_S = 0.35            # outlasts the 250ms key-repeat delay, so a held arrow stays lit

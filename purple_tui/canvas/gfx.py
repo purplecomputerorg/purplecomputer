@@ -241,6 +241,7 @@ class Gfx:
         self.dirty = True
         self.caret = None             # [rect, pixels without, pixels with, shown, since] for the frame on screen
         self._fonts = {}
+        self._cap_drops = {}
         self._text = _Cache()
         self._emoji = _Cache()
         self._images = _Cache()
@@ -307,10 +308,13 @@ class Gfx:
             f = self._fonts[key] = pygame.font.Font(str(FONT_DIR / FACES[face]), px)
         return f
 
-    def cap_drop(self, px: int, face: str = "sans") -> float:
-        """How far below its box middle a line's capitals are centered, so mixed sizes can share a visual center."""
-        f = self.font(face, px)
-        return f.get_ascent() - f.metrics("H")[0][3] / 2 - f.get_height() / 2
+    def cap_drop(self, px: int, face: str = "sans") -> int:
+        """How far below its box middle a line's capitals are centered."""
+        key = (face, px)
+        if key not in self._cap_drops:
+            f = self.font(face, px)
+            self._cap_drops[key] = round(f.get_ascent() - f.metrics("H")[0][3] / 2 - f.get_height() / 2)
+        return self._cap_drops[key]
 
     def _load_emoji_font(self):
         for path in EMOJI_FONT_PATHS:
@@ -460,9 +464,13 @@ class Gfx:
     def draw_text(self, text, px, x, y, face="sans", color="#ffffff", anchor="topleft", bg=None, pad=0, track: float = 0,
                   tr: bool = True) -> pygame.Rect:
         """Blit one line. anchor is any pygame.Rect attribute name (topleft,
-        center, midtop, topright, midleft, ...). bg paints a box behind it."""
+        center, midtop, topright, midleft, ...). bg paints a box behind it.
+        A vertically centered line centers its capitals on y, not its box,
+        whose descender room would leave more space above the text than below."""
         s = self.text(text, px, face, color, track=track, tr=tr)
         r = s.get_rect(**{anchor: (x, y)})
+        if anchor in ("center", "midleft", "midright") and face.startswith(("sans", "mono")):
+            r.y -= self.cap_drop(px, face)
         if bg is not None:
             self.rect(bg, r.inflate(pad * 2, pad * 2))
         self.surface.blit(s, r)

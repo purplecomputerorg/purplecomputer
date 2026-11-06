@@ -413,9 +413,14 @@ def set_voice(pref: str) -> None:
         preload()
 
 
+def natural_voice_available() -> bool:
+    """False where Piper cannot speak, like the 32-bit image that ships without it."""
+    return _piper_available is not False and find_voice_model() is not None
+
+
 def _engine() -> str:
     """Piper unless the parent picked Quick or Piper cannot speak on this machine."""
-    if voice_preference() == VOICE_QUICK or _piper_available is False or find_voice_model() is None:
+    if voice_preference() == VOICE_QUICK or not natural_voice_available():
         return VOICE_QUICK
     return VOICE_NATURAL
 

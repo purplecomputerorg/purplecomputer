@@ -19,7 +19,7 @@ from ...backlight import set_level as set_backlight_level
 from ... import palette as P
 from ..gfx import FONT_DIR, mix
 from ...audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volume_step
-from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK
+from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK, natural_voice_available
 from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
 from ...input import KeyCode, PowerButtonEvent, RawKeyEvent
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
@@ -1257,7 +1257,8 @@ def _get_menu_items(app) -> list:
     items.append(("menu-export", "Copy Saved Work to USB"))
     items.append(("sec-av", "Sound & Display"))
     items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
-    items.append(("menu-voice", _voice_menu_label(get_voice())))
+    if natural_voice_available():
+        items.append(("menu-voice", _voice_menu_label(get_voice())))
     if display_control_available():
         items.append(("menu-display", "Display"))
     items.append(("sec-advanced", "Advanced"))

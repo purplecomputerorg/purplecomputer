@@ -145,10 +145,8 @@ def draw_pill(g, r, parts, on):
              for t, px, face, color in parts if t]
     space = g.em(0.7)
     x = r.centerx - (sum(_part_width(g, t, px, face) for t, px, face, _ in parts) + space * (len(parts) - 1)) // 2
-    label_drop = g.cap_drop(g.em(0.95), "mono-bold")
     for text, px, face, color in parts:
-        y = r.centery if face != "mono-bold" else round(r.centery + label_drop - g.cap_drop(px, face))
-        x = _draw_part(g, text, px, face, color, x, y, "midleft", on).right + space
+        x = _draw_part(g, text, px, face, color, x, r.centery, "midleft", on).right + space
 
 
 class RoomPicker(Overlay):

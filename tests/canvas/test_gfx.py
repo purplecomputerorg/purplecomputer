@@ -131,3 +131,11 @@ def test_dim_caret_is_painted_at_the_first_blink_then_swapped():
         g.blink(0)
         assert g.surface.get_at((12, 12))[:3] == (shade,) * 3
     assert dims == [1]
+
+
+@pytest.mark.parametrize("px", [12, 16, 22])
+def test_centered_text_centers_its_capitals(g, px):
+    g.surface.fill((0, 0, 0))
+    g.draw_text("HHH", px, 10, 100, "mono", "#ffffff", anchor="midleft", tr=False)
+    ink = [y for y in range(60, 140) if any(g.surface.get_at((x, y))[0] > 128 for x in range(10, 10 + 3 * px))]
+    assert abs((100 - ink[0]) - (ink[-1] + 1 - 100)) <= 1

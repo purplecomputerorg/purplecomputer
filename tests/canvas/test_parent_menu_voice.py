@@ -9,6 +9,7 @@ def test_voice_row_picks_quick(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
     monkeypatch.setattr(tts, "_voice_pref", None)
     monkeypatch.setattr(tts, "preload", lambda: None)
+    monkeypatch.setattr(tts, "find_voice_model", lambda model=None: "model")
 
     async def go():
         app = make_app()
@@ -24,4 +25,15 @@ def test_voice_row_picks_quick(tmp_path, monkeypatch):
         assert settings.get_voice() == tts.VOICE_QUICK
         assert tts._engine() == tts.VOICE_QUICK
         assert ("menu-voice", "Voice: Quick") in menu.items
+    run(go())
+
+
+def test_voice_row_hidden_without_piper(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
+    monkeypatch.setattr(tts, "find_voice_model", lambda model=None: None)
+
+    async def go():
+        app = make_app()
+        app.action_parent_menu()
+        assert all(item_id != "menu-voice" for item_id, _ in app.top.items)
     run(go())

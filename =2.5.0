@@ -1,0 +1,6 @@
+Collecting pygame
+  Downloading pygame-2.6.1-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl.metadata (12 kB)
+Downloading pygame-2.6.1-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl (14.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.3/14.3 MB 36.7 MB/s  0:00:00
+Saved /tmp/claude-1001/pgw/pygame-2.6.1-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl
+Successfully downloaded pygame

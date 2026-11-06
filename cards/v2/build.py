@@ -1,7 +1,8 @@
 """Build the Purple 2.0 box cards from Typst: one 2-page PDF per card, plus PNG previews.
 
   python cards/v2/build.py            # every card -> cards/v2/out/<card>.pdf and <card>-pad.pdf,
-                                      # plus all.pdf and all-pad.pdf with every card in order
+                                      # plus all.pdf and all-pad.pdf with every card in order,
+                                      # and print-sheets.pdf for FedEx Office (see print_sheets)
   python cards/v2/build.py rooms      # just one card
   python cards/v2/build.py --png      # also write PNG previews to /tmp/screenshots
 
@@ -27,7 +28,7 @@ QRS = {"help-qr.svg": "https://purplecomputer.org/help", "studio-qr.svg": "https
 QR_COLOR = "#3b1a5c"
 
 sys.path.insert(0, str(HERE.parent))
-from add_bleed import add_bleed  # noqa: E402
+from add_bleed import _rgb, add_bleed  # noqa: E402
 
 
 def write_qrs() -> None:
@@ -60,6 +61,43 @@ def combine(suffix: str) -> None:
     doc.save(OUT / f"all{suffix}.pdf")
 
 
+PT = 72
+SHEET = fitz.Rect(0, 0, 8.5 * PT, 11 * PT)
+BLEED = 0.125 * PT
+MARK_GAP, MARK_LEN = 0.1875 * PT, 0.25 * PT
+# Two cards per sheet, turned sideways (6x4 trim) and stacked with a 1" gap for crop marks
+SLOTS = [fitz.Rect(1.25 * PT, y * PT, 7.25 * PT, (y + 4) * PT) for y in (1, 6)]
+
+
+def crop_marks(page: fitz.Page, trim: fitz.Rect) -> None:
+    for x, y, sx, sy in ((trim.x0, trim.y0, -1, -1), (trim.x1, trim.y0, 1, -1),
+                         (trim.x0, trim.y1, -1, 1), (trim.x1, trim.y1, 1, 1)):
+        page.draw_line((x, y + sy * MARK_GAP), (x, y + sy * (MARK_GAP + MARK_LEN)), color=(0, 0, 0), width=0.25)
+        page.draw_line((x + sx * MARK_GAP, y), (x + sx * (MARK_GAP + MARK_LEN), y), color=(0, 0, 0), width=0.25)
+
+
+def print_sheets() -> None:
+    """FedEx Office: 8.5x11 portrait, 100 lb matte cover, double-sided, long-edge flip; trim to 4x6.
+
+    Pages go front, back, front, back: two cards per sheet. A long-edge flip mirrors left and
+    right, so each back turns the other way to keep its top on the same edge as its front's top.
+    """
+    out = fitz.open()
+    for sheet in (CARDS[:2], CARDS[2:]):
+        for side, rotate in (("FRONT", 270), ("BACK", 90)):
+            page = out.new_page(width=SHEET.width, height=SHEET.height)
+            page.insert_font(fontname="figtree", fontfile=str(FONTS / "Figtree-Regular.ttf"))
+            for slot, name, letter in zip(SLOTS, sheet, "AB"):
+                pdf = OUT / f"{name}.pdf"
+                page.draw_rect(slot + (-BLEED, -BLEED, BLEED, BLEED), color=None, fill=_rgb(paper_color(pdf)), width=0)
+                with fitz.open(pdf) as src:
+                    page.show_pdf_page(slot, src, 0 if side == "FRONT" else 1, rotate=rotate)
+                crop_marks(page, slot)
+                page.insert_text((slot.x0 + 12, slot.y0 - BLEED - 4), f"{letter} {side}: {name}".upper(), fontname="figtree",
+                                 fontsize=6, color=(0.55, 0.55, 0.55))
+    out.save(OUT / "print-sheets.pdf", garbage=3, deflate=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("cards", nargs="*", default=CARDS)
@@ -74,6 +112,8 @@ def main() -> None:
         build(name, png_dir)
     for suffix in ("", "-pad"):
         combine(suffix)
+    if all((OUT / f"{name}.pdf").exists() for name in CARDS):
+        print_sheets()
 
 
 if __name__ == "__main__":

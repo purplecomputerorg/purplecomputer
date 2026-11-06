@@ -120,7 +120,7 @@ Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). `PUR
 
 ## Box Cards (`cards/v2/`)
 
-After `just cards`, run `drop cards/v2/out/all-pad.pdf` so the user sees every card together.
+After `just cards`, run `drop cards/v2/out/all-pad.pdf cards/v2/out/print-sheets.pdf` so the user sees every card together and the print file.
 
 ## Studio (`studio/`)
 

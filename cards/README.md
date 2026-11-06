@@ -83,4 +83,4 @@ The box cards for Purple 2.0 are Typst sources, so an LLM can edit them and you 
 just cards          # or: just cards rooms
 ```
 
-Each card becomes `v2/out/<card>.pdf` (4x6 trim) and `<card>-pad.pdf` (0.125" safety pad, via `add_bleed.py`); `all.pdf` and `all-pad.pdf` hold the whole set in order for review. The QR codes are generated on every build.
+Each card becomes `v2/out/<card>.pdf` (4x6 trim) and `<card>-pad.pdf` (0.125" safety pad, via `add_bleed.py`); `all.pdf` and `all-pad.pdf` hold the whole set in order for review. `print-sheets.pdf` is for FedEx Office: two cards per 8.5x11 sheet with bleed and crop marks, uploaded as Full Color, Matte Cover 100 lb, Double-Sided (long-edge flip), then trimmed to 4x6. The QR codes are generated on every build.

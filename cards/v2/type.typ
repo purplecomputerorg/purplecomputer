@@ -8,7 +8,7 @@
 
 #let try(title, ..rows) = panel(title: title, examples(..rows))
 
-#try([Words become pictures],
+#try([Words become little pictures],
   ("cat", [a cat]),
   ("3 cats", [three of them]),
   ("pink fish", [colors and pictures together]),
@@ -23,7 +23,7 @@
 #gap
 #try([Colors],
   ("red + blue", [mix like paint]),
-  ("2 dark red", [two dark red squares]),
+  ("2 dark burgundy", [two dark burgundy squares]),
 )
 #gap
 #try([Talking],
@@ -38,13 +38,14 @@
 // ── Back: code in Art, Music and Blocks ──
 #header(title: [Write Code])
 #note[
-  In *Art*, *Music* or *Blocks*, hold #key("Esc") and press #key("Space"). #key("↓") shows ideas. Typos get fixed for you.
+  In *Art*, *Music* or *Blocks*, hold #key("Esc") and press #key("Space"). \
+  Press #key("↓") for ideas. Typos get fixed for you.
 ]
 #gap
 #panel(title: [Art])[
   #examples(comments: true,
-    ("right 5", [paint 5 squares]),
-    ("right 2 brush up right 3", [leaves a gap]),
+    ("red right 5", [paint 5 red squares]),
+    ("brush up right 5 asdf", [a gap, then colors]),
     ("write hi", [write letters]),
     ("red repeat 4 forward 6 turn", [a square!]),
   )

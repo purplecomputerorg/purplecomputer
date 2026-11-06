@@ -4,7 +4,7 @@
 // ── Front: the rooms ──
 #header()
 
-#intro[Tap #key("Esc") to pick a room, then press its number.]
+#intro[Tap #key("Esc") or #key("~") to pick a room, then press its number.]
 #gap
 
 #let room(n, name, body) = panel(title: grid(columns: (1fr, auto), name, icon(ICONS.at(lower(name.text)))), n: n, body)

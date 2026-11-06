@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from .constants import ART_COLS, ART_ROWS, OLD_ART_GRID
+from .i18n import read_words
 
 
 # Play shows a word mapped to one of a pack's pictures as a character from Supplementary Private Use Area-B
@@ -202,10 +203,13 @@ def _no_correct_words() -> frozenset[str]:
     common_words.txt. Plurals come from pluralize() rather than a bare "+s" so
     "womans" stays a typo of "woman" while "things" is a real word. Operator
     words are not pluralized: "timess" is a typo of "times", not a word."""
-    path = Path(__file__).parent / "common_words.txt"
-    lines = (line.strip().lower() for line in path.read_text().splitlines())
-    words = {w for w in lines if w and not w.startswith("#")}
+    words = read_words(Path(__file__).parent / "common_words.txt")
     return frozenset(words | {pluralize(w) for w in words} | set(DIGIT_OPERATOR_WORDS))
+
+
+@cache
+def _music_words() -> frozenset[str]:
+    return read_words(Path(__file__).parent / "music_words.txt")
 
 
 def is_real_word(word: str) -> bool:
@@ -859,8 +863,8 @@ class ContentManager:
         return bool(self.exact_emoji(word) or self.exact_color(word))
 
     def is_known_word(self, word: str) -> bool:
-        """A real word: a picture or color word, or an everyday one."""
-        return self.is_exact_word(word) or is_real_word(word)
+        """A word Music says back: a picture or color word, or one on music_words.txt."""
+        return self.is_exact_word(word) or word.lower() in _music_words()
 
 
 ROOM_NAME = re.compile(r"^(?!purple$)[a-z0-9][a-z0-9-]{0,39}$")  # purple.py is the pack's room library

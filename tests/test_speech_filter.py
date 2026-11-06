@@ -347,3 +347,22 @@ class TestEdgeCases:
     def test_math_expressions_pass(self):
         assert filter_speech("2 plus 3 equals 5") == "2 plus 3 equals 5"
         assert filter_speech("10 times 4 equals 40") == "10 times 4 equals 40"
+
+
+class TestGraphicWords:
+    @pytest.mark.parametrize("text, spoken", zip(_decode("bXVyZGVyfFN0YWJiaW5nfHNheSB0b3J0dXJlIG5vdw=="), ["", "", "say now"]))
+    def test_whole_word_blocked(self, text, spoken):
+        assert filter_speech(text) == spoken
+
+    @pytest.mark.parametrize("word", ["grape", "drape", "stable", "goreng", "kill", "gun", "dead"])
+    def test_neighbors_and_play_words_pass(self, word):
+        assert filter_speech(word) == word
+
+    @pytest.mark.parametrize("word", ["spoonful", "classes", "scrapbook", "seashore", "assistant", "titled"])
+    def test_clean_words_with_blocked_letters_pass(self, word):
+        assert filter_speech(word) == word
+
+
+def test_no_allowed_word_is_a_blocked_word():
+    from purple_tui.speech_filter import _ALLOWED_WORDS, _BLOCKED_WORDS
+    assert not _ALLOWED_WORDS & _BLOCKED_WORDS

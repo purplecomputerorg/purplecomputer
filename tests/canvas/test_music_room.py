@@ -236,12 +236,14 @@ def test_a_blocked_word_is_never_shown(monkeypatch):
     run(go())
 
 
-def test_short_everyday_words_are_known_and_clean():
-    from purple_tui.content import get_content, is_real_word
+def test_music_words_are_known_and_every_one_is_spoken():
+    import base64
+    from purple_tui.content import _music_words, get_content
     from purple_tui.speech_filter import is_clean
-    assert all(get_content().is_known_word(w) for w in ("the", "go", "run", "cat", "blue", "jump"))
-    short = [w for w in open("purple_tui/common_words.txt").read().split() if len(w) < 5 and is_real_word(w)]
-    assert short and all(is_clean(w) for w in short)
+    known = get_content().is_known_word
+    assert all(known(w) for w in ("the", "go", "run", "cat", "blue", "hog", "judge", "spoonful", "classes"))
+    assert not any(known(w) for w in ("thy", "ans", "ofs", base64.b64decode("bXVyZGVy").decode()))
+    assert [w for w in _music_words() if not is_clean(w)] == []
 
 
 def test_the_same_letter_over_and_over_fades_out_but_still_spells(monkeypatch):

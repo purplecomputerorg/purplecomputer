@@ -17,6 +17,10 @@ explicit list gives zero false positives with comprehensive coverage.
 
 import base64
 import re
+from functools import cache
+from pathlib import Path
+
+from .i18n import read_blocked, read_words
 
 # Blocked words and common misspellings, base64-encoded to keep plaintext
 # profanity out of source code. Decoded at import time.
@@ -43,50 +47,8 @@ _BLOCKED_WORDS = frozenset(
     .split(",")
 )
 
-# Words that are legitimate despite containing blocked substrings.
-# For example, "class" contains a blocked word, "hello" contains another.
-_ALLOWED_WORDS = frozenset({
-    # Contains short blocked substrings (3-4 letter roots cause most collisions)
-    "class", "pass", "grass", "glass", "bass", "mass", "brass", "lass",
-    "classic", "classify", "passage", "passenger", "passion", "passive",
-    "assist", "assemble", "assert", "assign", "assume", "associate",
-    "cassette", "lasso", "molasses", "sassy", "ambassador", "compass",
-    "embarrass", "harass", "sass", "assessment", "assess", "asset",
-    "assets", "association", "massive", "bassoon", "hassle", "crass",
-    "amass", "carcass", "morass", "trespass", "grasshopper",
-    "arsenal",
-    "hello", "shell", "seashell", "shelling", "nutshell", "eggshell",
-    "shellfish", "bombshell",
-    "damnation",
-    "kitten", "title", "titan", "little", "glitter", "litter", "bitter",
-    "butter", "twitter", "sitting", "hitting", "fitting", "knitting",
-    "mittens", "appetite", "petite", "titanic", "altitude", "attitude",
-    "constitution", "competition", "repetition", "partition",
-    "stitch", "stitching",
-    "peacock", "cockpit", "cocktail", "cockatoo", "cockroach",
-    "dictionary",
-    "mississippi",
-    "shiitake",
-    "scunthorpe",
-    "flag",
-    "swank", "swanky",
-    "butt", "button", "butter", "butterfly", "butterscotch", "rebuttal",
-    # Contains "poo"
-    "pool", "poor", "poodle", "spoon", "spook", "spooky", "scoop",
-    "shampoo", "harpoon", "cartoon", "drool",
-    # Contains "suck"
-    "honeysuckle", "sucker",
-    # Contains "crap"
-    "scrap", "scrappy", "scrape",
-    # Contains "horn" (from "horny")
-    "horn", "hornet", "unicorn", "acorn",
-    # Contains "fluc" / "fluk"
-    "fluctuate", "fluctuates", "fluctuated", "fluctuating",
-    "fluctuation", "fluctuations",
-    "fluke", "flukes", "fluky",
-    # Spanish colors and words in Play (language packs)
-    "fucsia",
-})
+# Words that are legitimate despite containing blocked substrings ("class", "hello").
+_ALLOWED_WORDS = read_words(Path(__file__).with_name("speech_allowed.txt"))
 
 
 def _normalize(text: str) -> str:
@@ -149,12 +111,18 @@ def is_clean(text: str) -> bool:
     return filter_speech(text) == text
 
 
+@cache
+def _english_blocked() -> frozenset:
+    """Whole words never spoken: graphic violence, where a substring would also catch "grape" or "stable"."""
+    return read_blocked(Path(__file__).with_name("blocked_en.txt"))
+
+
 def _filter_languages(text: str) -> str:
-    """Drop words on a language pack's list, whatever the language settings: a kid can type
-    Spanish with Spanish off. Chinese entries match anywhere (no spaces between words);
-    others match a whole word, with or without accents."""
+    """Drop words on English's whole-word list or a language pack's, whatever the language
+    settings: a kid can type Spanish with Spanish off. Chinese entries match anywhere (no
+    spaces between words); others match a whole word, with or without accents."""
     from .i18n import fold, has_cjk, languages
-    blocked = frozenset().union(*(lang.blocked for lang in languages().values()))
+    blocked = _english_blocked().union(*(lang.blocked for lang in languages().values()))
     if not text or not blocked:
         return text
     out = text

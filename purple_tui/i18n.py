@@ -128,6 +128,12 @@ def load_language(pack_dir: Path) -> Language | None:
     return lang
 
 
+def read_words(path: Path) -> frozenset:
+    """One lowercase word per line; lines starting with # are comments."""
+    lines = (line.strip().lower() for line in path.read_text().splitlines())
+    return frozenset(w for w in lines if w and not w.startswith("#"))
+
+
 def read_blocked(path: Path) -> frozenset:
     """Words never spoken: base64 of one word per line, so the repo holds no plaintext profanity."""
     try:

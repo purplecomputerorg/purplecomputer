@@ -152,7 +152,7 @@ def test_art_page_is_the_paint_on_white(plugged_in):
         await type_text(app, "q")
         [surface], landscape = paper.pages(app.room, app.g)
         assert landscape and surface.get_size() == paper.PAGE
-        colors = {surface.get_at((x, y))[:3] for x in range(0, paper.PAGE[0], 25) for y in range(0, paper.PAGE[1], 25)}
+        colors = {surface.get_at((x, y))[:3] for x in range(0, paper.PAGE[0], 25) for y in range(0, paper.PAGE[1] - paper.MARGIN, 25)}
         assert paper.WHITE in colors and len(colors) == 2
     run(go())
 
@@ -200,11 +200,11 @@ def test_support_info_names_the_printer(plugged_in):
     assert printing.status_line() == "Printer: Canon TS3520 can't print yet (Technical: no driver for this model)"
 
 
-def test_maker_mark_uses_the_computer_name_and_keeps_the_brand():
-    assert paper.maker_mark("My Purple Computer") == "Made on Purple Computer"
-    assert paper.maker_mark("") == "Made on Purple Computer"
-    assert paper.maker_mark("Ari's Purple Computer") == "Made on Ari's Purple Computer"
-    assert paper.maker_mark("Ari's Laptop") == "Made on Ari's Laptop with Purple Computer"
+def test_maker_mark_signs_with_the_computer_name_and_keeps_the_brand():
+    assert paper.maker_mark("My Purple Computer") == ("", "Purple Computer")
+    assert paper.maker_mark("") == ("", "Purple Computer")
+    assert paper.maker_mark("Ari's Purple Computer") == ("Ari's Purple Computer", "")
+    assert paper.maker_mark("Lily") == ("Lily", "Purple Computer")
 
 
 def test_lp_output_gives_the_job_number():

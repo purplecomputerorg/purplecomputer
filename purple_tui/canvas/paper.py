@@ -1,6 +1,6 @@
 """The printed page: what the kid made, on white, without cursor or hints.
 
-Every page carries a small maker's mark built from the computer's name.
+Every page is signed in its corner with the computer's name, over the Purple bot and brand.
 A room that can print has paper(g, size, on_screen=False), which returns its work
 drawn to fit size on a white ground (or None when there is nothing yet), and
 LANDSCAPE. on_screen draws it in the screen's colors instead; screen_artwork is that
@@ -19,20 +19,40 @@ WHITE = (255, 255, 255)
 # Ink for chrome-colored text (the screen's light-on-dark tokens) on paper
 INK, INK_MUTED = "#1a1a1a", "#6b6b6b"
 MARK_PX = 20  # about 10 pt
+SIGN_PX = 26
 
 
 def can_print(room) -> bool:
     return hasattr(room, "paper")
 
 
-def maker_mark(computer_name: str) -> str:
-    """The line in the page's corner. The brand is always in it: each print on a fridge is how another family hears of Purple."""
+def maker_mark(computer_name: str) -> tuple:
+    """(signature, brand line) for the page's corner; either may be empty. The brand always shows: each print on a fridge is how another family hears of Purple."""
     from .rooms.parent_menu import DEFAULT_COMPUTER_NAME
     if not computer_name or computer_name == DEFAULT_COMPUTER_NAME:
-        return "Made on Purple Computer"
+        return "", "Purple Computer"
     if "purple" in computer_name.lower():
-        return f"Made on {computer_name}"
-    return f"Made on {computer_name} with Purple Computer"
+        return computer_name, ""
+    return computer_name, "Purple Computer"
+
+
+def _mark(g, computer_name: str) -> pygame.Surface:
+    """The signature over the bot and brand, right-aligned; the bot leads the last line."""
+    sign, brand = maker_mark(computer_name)
+    lines = [s for s in (sign and g.text(sign, SIGN_PX, "sans", INK, tr=False),
+                         brand and g.text(brand, MARK_PX, "sans", INK_MUTED)) if s]
+    last = lines[-1]
+    bot = g.image("bot.png", last.get_height())
+    gap = last.get_height() // 3
+    lines[-1] = pygame.Surface((bot.get_width() + gap + last.get_width(), last.get_height()), pygame.SRCALPHA)
+    lines[-1].blit(bot, (0, 0))
+    lines[-1].blit(last, (bot.get_width() + gap, 0))
+    out = pygame.Surface((max(s.get_width() for s in lines), sum(s.get_height() for s in lines)), pygame.SRCALPHA)
+    y = 0
+    for s in lines:
+        out.blit(s, (out.get_width() - s.get_width(), y))
+        y += s.get_height()
+    return out
 
 
 def page_size(landscape: bool) -> tuple:
@@ -69,8 +89,8 @@ def compose(work, landscape: bool, g, computer_name: str = ""):
     out = pygame.Surface(size)
     out.fill(WHITE)
     out.blit(work, work.get_rect(center=out.get_rect().center))
-    mark = g.text(maker_mark(computer_name), MARK_PX, "mono", INK_MUTED)
-    out.blit(mark, mark.get_rect(bottomright=(size[0] - MARGIN, size[1] - MARGIN // 3)))
+    mark = _mark(g, computer_name)
+    out.blit(mark, mark.get_rect(bottomright=(size[0] - MARGIN, size[1] - MARGIN // 6)))
     return out, landscape
 
 

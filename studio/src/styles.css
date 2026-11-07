@@ -1027,3 +1027,9 @@ span.emoji > img { display: inline !important; width: auto !important; height: 1
   .note-in { grid-column: 3; }
   .sheet-row > .x { grid-column: 4; grid-row: 1; }
 }
+
+/* try.html: the stage alone, inside purplecomputer.org's page. It keeps --bg, the same warm white as that
+   page, since browsers won't always let a frame from another site show the page behind it. */
+.embed .stage { position: static; height: auto; overflow: visible; padding: 0 0 12px; background: none; view-transition-name: none; }
+.embed .stage-inner { max-width: none; }
+.embed .stage .laptop { max-width: none; }

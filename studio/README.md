@@ -50,7 +50,7 @@ Or from `studio/`: `npm install`, `npm run dev`, `npm test`, `npm run build` (st
 
 The dev server uses a self-signed certificate, so your browser warns once; accept it to continue. It has to be https: the live Purple needs a cross-origin isolated page, which browsers only allow in a secure context. Recording from the microphone needs it too.
 
-**Rooms are switched off for now:** `features.rooms = false` in `src/state.ts` hides the Rooms page and the Room guide. Set it to `true` to turn them back on.
+**New Rooms can be switched off:** `features.rooms` in `src/state.ts` (on today) shows or hides the New Rooms page and the Room guide.
 
 ## Hosting
 
@@ -60,6 +60,8 @@ Studio is static files, but the host has to send three headers on every file (`v
 - The `Content-Security-Policy` from the same file, which keeps every page and room worker off the network. Pages also carry it as a meta tag; workers only get it from the header.
 
 `purple.html` alone needs `'unsafe-eval'` in its policy, because pygame's WebAssembly build evaluates JavaScript. Every other page keeps the strict one.
+
+`try.html` and `purple.html` can be embedded by purplecomputer.org (its Vercel previews and dev server too): their policy adds a `frame-ancestors` list, also in `vite.config.ts`. Inside another site's page they aren't cross-origin isolated, so family rooms don't run there and the voice uses one thread, which is all the landing page needs.
 
 ## How it's built
 
@@ -74,6 +76,10 @@ Vite, TypeScript, and plain DOM, with no backend. Two runtime dependencies: Pyod
 - `src/live/live.py` installs a pack, restarts the app, and opens the room a page asks for.
 - **Voice:** Piper, with the same model, speaker, and settings as Purple, phonemized by espeak-ng built to WebAssembly (`vendor/espeak-ng/`, GPL-3.0, source linked under the screen) and run in `src/live/piper.worker.ts`. Purple's own `tts` then trims, levels, and caches the audio, so a phrase sounds the way it does on Purple. The model is cached with the browser's Cache API.
 - **Room voice:** a room's fixed `say("...")` lines are spoken ahead of time in Kokoro (Apache-2.0, `af_heart`, the int8 model `studio_bundle.py` fetches into `voice/kokoro/`), in `src/roomvoice.worker.ts` on the same espeak-ng, and ride in the pack as `content/room-voice/`, which only that pack's rooms play. Too slow for Purple's laptops to run live, quick enough here. Each line is kept in the Cache API; a download waits for every line, the preview speaks the rest in Piper until they're ready.
+
+### Try Purple on purplecomputer.org
+
+`try.html` is the live Purple alone, the same stage Studio shows beside its editor (`src/ui/stage.ts`: the laptop, the room buttons, and a phone's few keys), for purplecomputer.org's rooms section to embed. `src/try.ts` talks to the landing page over `postMessage`, only with purplecomputer.org's origins: the landing page says hello, and hears back the page's height, the room Purple is in, and when Purple is ready. It can ask for a room (`purple-try-room`) or type a line (`purple-try-type`). `?room=play` picks the first room. It starts empty: nothing a family made in Studio shows up there.
 
 ### Room code is untrusted
 

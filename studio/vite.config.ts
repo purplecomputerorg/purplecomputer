@@ -21,11 +21,13 @@ const blocklyMedia = resolve(here, "node_modules/blockly/media");
 const cacheDir = resolve(here, ".cache");
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
 
-// pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval.
-const liveCsp: Connect.NextHandleFunction = (req, res, next) => {
-  if (req.url?.startsWith("/purple.html")) {
+// pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval. It and
+// try.html can also sit inside purplecomputer.org's page (FRAMED).
+const pageCsp: Connect.NextHandleFunction = (req, res, next) => {
+  const csp = PAGE_CSP.find(([page]) => req.url?.startsWith(`/${page}`))?.[1];
+  if (csp) {
     const set = res.setHeader.bind(res);
-    res.setHeader = (k: string, v: number | string | readonly string[]) => set(k, k.toLowerCase() === "content-security-policy" ? LIVE_CSP : v);
+    res.setHeader = (k: string, v: number | string | readonly string[]) => set(k, k.toLowerCase() === "content-security-policy" ? csp : v);
   }
   next();
 };
@@ -44,7 +46,7 @@ function pyodideAssets(): Plugin {
         for (const [k, v] of Object.entries(HEADERS)) res.setHeader(k, v);
         createReadStream(file).pipe(res);
       });
-      server.middlewares.use(liveCsp);
+      server.middlewares.use(pageCsp);
       serve("/pyodide", [pyodideDir, join(cacheDir, "pyodide")]);
       serve("/purple", [cacheDir]);
       serve("/ort", [ortDir], (f) => ORT_FILES.includes(f));
@@ -53,7 +55,7 @@ function pyodideAssets(): Plugin {
       serve("/voice", [join(cacheDir, "voice")]);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(liveCsp);
+      server.middlewares.use(pageCsp);
     },
     closeBundle() {
       const copyAll = (from: string, to: string, keep: (f: string) => boolean) => {
@@ -71,7 +73,7 @@ function pyodideAssets(): Plugin {
       // Vercel's Build Output API config, so `just studio-deploy` sends the same headers as vite.
       const routes = [
         { src: "/(.*)", headers: HEADERS, continue: true },
-        { src: "/purple\\.html", headers: { "Content-Security-Policy": LIVE_CSP }, continue: true },
+        ...PAGE_CSP.map(([page, csp]) => ({ src: `/${page.replace(".", "\\.")}`, headers: { "Content-Security-Policy": csp }, continue: true })),
         // Each font version's pictures sit in a folder of their own (scripts/studio_bundle.py), so they never change.
         { src: "/purple/emoji/[^/]+/.*\\.png", headers: { "Cache-Control": "public, max-age=31536000, immutable" }, continue: true },
       ];
@@ -98,6 +100,11 @@ export const CSP = [
   "form-action 'none'",
 ].join("; ");
 const LIVE_CSP = CSP.replace("'wasm-unsafe-eval'", "'wasm-unsafe-eval' 'unsafe-eval'");
+// The pages purplecomputer.org embeds (try.html, and the live Purple inside it), and who may embed
+// them: the site, its Vercel previews (CSP can't narrow *.vercel.app further; try.ts only talks to
+// the landing project's), and its dev server.
+const FRAMED = "; frame-ancestors 'self' https://purplecomputer.org https://www.purplecomputer.org https://*.vercel.app http://localhost:3002 http://simba:3002";
+const PAGE_CSP: [page: string, csp: string][] = [["purple.html", LIVE_CSP + FRAMED], ["try.html", CSP + FRAMED]];
 const TYPES: Record<string, string> = { svg: "image/svg+xml", mp3: "audio/mpeg", gif: "image/gif", png: "image/png", cur: "image/x-icon", wasm: "application/wasm", json: "application/json", zip: "application/zip", whl: "application/zip", js: "text/javascript", mjs: "text/javascript", md: "text/plain; charset=utf-8", c: "text/plain; charset=utf-8", sh: "text/plain; charset=utf-8" };
 const HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
@@ -117,7 +124,7 @@ export default defineConfig({
   preview: { headers: HEADERS },
   worker: { format: "es" },
   // Drum clips stay files: a data: URL fetch would fall outside connect-src.
-  build: { target: "es2022", rollupOptions: { input: { main: resolve(here, "index.html"), purple: resolve(here, "purple.html") } }, assetsInlineLimit: (file) => (file.endsWith(".ogg") ? false : undefined) },
+  build: { target: "es2022", rollupOptions: { input: { main: resolve(here, "index.html"), purple: resolve(here, "purple.html"), try: resolve(here, "try.html") } }, assetsInlineLimit: (file) => (file.endsWith(".ogg") ? false : undefined) },
   optimizeDeps: { exclude: ["pyodide"] },
   test: { environment: "node" },
 });

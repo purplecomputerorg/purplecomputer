@@ -13,15 +13,12 @@ import { formatView, installView } from "./ui/install";
 import { instrumentsView } from "./ui/instrument";
 import { picturesView } from "./ui/pictures";
 import { licensesView } from "./ui/licenses";
-import { privacyView, staysHere } from "./ui/privacy";
+import { privacyView } from "./ui/privacy";
+import { createStage } from "./ui/stage";
 import { EXAMPLES } from "./examples";
 import { guideView } from "./ui/guide";
 import { homeView, rainbow, type HomeSection } from "./ui/home";
 import { purpleEmoji } from "./ui/icons";
-import { typingKeys } from "./keys";
-import type { Room } from "./live/boot";
-import { Laptop } from "./ui/laptop";
-import { liveScreen } from "./ui/live";
 import { roomsView } from "./ui/rooms";
 import { keysView } from "./ui/keys";
 import { wordsView } from "./ui/words";
@@ -62,36 +59,10 @@ const top = h("header", { class: "topbar" });
 new ResizeObserver(() => document.documentElement.style.setProperty("--topbar",
   `${getComputedStyle(top).position === "sticky" ? top.offsetHeight : 0}px`)).observe(top);
 const main = h("main", { class: "main" });
-const live = liveScreen();
-// The laptop and the live Purple inside it stay put for the whole visit (moving an iframe reloads it).
-let tapTarget: ((key: string) => void) | null = null;
-const engage = () => current?.live && live.engage();
-const laptop = new Laptop((key) => { tapTarget?.(key); engage(); });
-laptop.screen.append(live.element);
-
-// On a phone, under the laptop: Purple's rooms to switch between, and a few keys for the room it's in.
-const ROOMS: [Room, string][] = [["art", "🎨 Art"], ["music", "🎵 Music"], ["play", "💬 Play"], ["blocks", "🧊 Blocks"]];
-const TRAY: Record<Room, string[]> = { play: typingKeys("cat"), music: [..."asdfg"], art: ["q", "a", "z", "space"], blocks: ["q", "a", "z", "enter"] };
-const ARROWS = ["left", "up", "down", "right"];
-const roomButtons = h("div", { class: "room-buttons" });
-const phoneBar = h("div", { class: "phone-bar" }, roomButtons, laptop.tray, h("p", { class: "phone-hint" }, "Or tap the laptop to type with your phone's keyboard."));
-function renderPhoneBar() {
-  const v = current;
-  const page = v?.live;
-  roomButtons.hidden = !page;
-  roomButtons.replaceChildren(...ROOMS.map(([room, label]) => h("button", {
-    type: "button", "aria-pressed": String(live.place.room === room),
-    onclick: () => { live.show(room === page?.room ? page : { room }); engage(); },
-  }, label)));
-  const { room, menu } = live.place;
-  const keys = !page ? [] : menu ? [...ARROWS, "enter"] : (room === page.room && v?.keys?.()) || TRAY[room];
-  laptop.paint(page ? [...keys, "escape"] : keys);
-}
-live.onMove = renderPhoneBar;
-const stageTitle = h("h3", {}, "This little computer is a real Purple Computer for you to try");
-const stageCaption = h("p", { class: "caption" });
-const stageStays = staysHere("This Purple runs in your browser. What you type into it stays on your device.");
-const stage = h("aside", { class: "stage" }, h("div", { class: "stage-inner" }, stageTitle, laptop.element, phoneBar, stageCaption, stageStays));
+// The live Purple beside the editor, set up for each page's room.
+const theStage = createStage();
+const { live } = theStage;
+const stage = theStage.element;
 // Which side the live Purple sits on, and how wide, are per-browser choices kept until changed back.
 const SWAPPED = "studio-swapped";
 const WIDTH = "studio-live-width";
@@ -187,14 +158,9 @@ function renderTop() {
 }
 
 function renderStage() {
-  const v = current;
-  body.classList.toggle("no-stage", !v?.live);
+  body.classList.toggle("no-stage", !current?.live);
   body.classList.toggle("at-home", !parseHash()[0]);
-  live.element.hidden = !v?.live;
-  stageCaption.textContent = v?.caption ?? "";
-  if (v?.live) live.show(v.live);
-  renderPhoneBar();
-  tapTarget = v?.live ? (key) => live.key(key) : null;
+  theStage.show(current);
 }
 
 function route() {
@@ -223,7 +189,7 @@ if (features.rooms && new URLSearchParams(location.search).has("sample")) {
   changed();
 }
 
-onChange(() => { renderTop(); renderClear(); renderPhoneBar(); live.changed(); remember(); });
+onChange(() => { renderTop(); renderClear(); theStage.refresh(); live.changed(); remember(); });
 window.addEventListener("hashchange", route);
 Promise.all([recall(), loadShelf()]).then(([saved]) => {
   if (saved) {

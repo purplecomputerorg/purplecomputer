@@ -45,7 +45,8 @@ const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
 
 class LiveScreen {
   readonly element: HTMLElement;
-  private frame = h("iframe", { class: "live-frame", src: "purple.html", title: "Purple", tabindex: -1 });
+  // autoplay: so Purple can make sounds even when Studio's own page is embedded in another site's.
+  private frame = h("iframe", { class: "live-frame", src: "purple.html", title: "Purple", tabindex: -1, allow: "autoplay" });
   private status = h("span", {}, "Loading Purple Computer in your browser");
   private hint = tryHint("then it's keyboard only, on purpose");
   private voiceNote = h("div", { class: "voice-loading", hidden: true });
@@ -59,6 +60,8 @@ class LiveScreen {
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
   // Set by Studio: Purple moved to another room, or opened or closed a menu.
   onMove = () => {};
+  // Set by try.html: Purple is up and taking keys for the first time.
+  onReady = () => {};
   // Set by the Rooms page: a family room's print() output, and why one stopped.
   onPrint = (_text: string) => {};
   onProblem = (_p: RoomProblem) => {};
@@ -251,6 +254,7 @@ class LiveScreen {
       this.element.classList.add("ready");
       warmRoomVoice();
       void this.enter();
+      this.onReady();
     }
     if (m.type === "focus") this.element.classList.toggle("focused", m.on);
     if (m.type === "focus" && m.on) this.element.classList.add("tried");

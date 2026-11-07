@@ -237,3 +237,30 @@ def test_printer_check_prints_a_test_page_and_says_how_it_went(ready, lp_calls, 
         assert page.heard == ["Printing!" if ready else "Plug in a printer with its USB cable"]
         assert f"Test page: {page.heard[0]}" in page.lines and "USB printers:" in page.lines
     run(go())
+
+
+def _play_paper(size, ems=None, monkeypatch=None):
+    from purple_tui.canvas.rooms import play_room
+    if ems:
+        monkeypatch.setattr(play_room, "PAPER_EMS", ems)
+
+    async def go():
+        app = make_app(size=size)
+        app.action_switch_room("play")
+        await type_text(app, "3021932123", enter=True)
+        return paper.artwork(app.room, app.g)
+    return run(go())
+
+
+def _inked_columns(s):
+    return [x for x in range(s.get_width()) if any(s.get_at((x, y))[:3] != paper.WHITE for y in range(0, s.get_height(), 3))]
+
+
+def test_play_prints_the_same_on_every_screen():
+    small, big = (_inked_columns(_play_paper(size)) for size in [(1366, 768), (2560, 1600)])
+    assert abs(small[-1] - big[-1]) < 30
+
+
+def test_play_page_widens_for_an_abacus_rather_than_cutting_it(monkeypatch):
+    s = _play_paper((2560, 1600), ems=20, monkeypatch=monkeypatch)
+    assert _inked_columns(s)[-1] < s.get_width() - 5

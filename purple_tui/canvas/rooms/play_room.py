@@ -18,7 +18,7 @@ from ...play_eval import SimpleEvaluator, _escape_markup, pair_speakables, parse
 from ..ui import DOWN, MATH_OPERATORS, UP, HintRotator, TextField
 from .base import Room
 
-PAPER_ZOOM = 1.6
+PAPER_EMS = 32  # the printed page's width in screen ems, so it prints the same on every screen
 PLAY_IDEAS = [
     ("cat", "2 + 2", "trex!"),
     ("say hi", "red sun"),
@@ -84,6 +84,16 @@ def abacus_size(g, n: int) -> tuple:
     return slot, bar, len(str(n)) * slot + 2 * bar + (len(str(n)) - 1) // 3 * abacus_group_gap(g)
 
 
+def abacus_label_w(g, rows) -> int:
+    return max(g.measure(name, g.em(1.0), "mono-bold")[0] for name, _, _ in rows)
+
+
+def abacus_width(g, n: int) -> int:
+    """Labels, rods and the digit after them; an abacus never wraps."""
+    return (abacus_label_w(g, abacus_rows(n)) + 2 * g.em(0.9) + ABACUS_SLOTS * g.em(1.35)
+            + g.measure("9", g.em(1.3), "mono-bold")[0])
+
+
 def abacus_group_gap(g) -> int:
     """Space between each three places, where a written number puts its comma."""
     return g.em(0.5)
@@ -95,7 +105,7 @@ def draw_abacus(g, n: int, bead: str, x: int, y: int, frame, ground):
     rows = abacus_rows(n)
     slot, bar, h = abacus_size(g, n)
     px, label_px, step = g.em(1.3), g.em(1.0), g.em(1.35)
-    label_w = max(g.measure(name, label_px, "mono-bold")[0] for name, _, _ in rows)
+    label_w = abacus_label_w(g, rows)
     box = pygame.Rect(x + label_w + g.em(0.9), y, ABACUS_SLOTS * step, h)
     rod_h, bead_h = max(2, g.em(0.12)), g.em(0.85)
     top = len(rows) - 1
@@ -547,17 +557,33 @@ class PlayRoom(Room):
                               dim_to=ground, line_gap=self._row_gap(g), tr=False)
             y += self._part_height(g, e, part, width) + self._row_gap(g)
 
-    def paper(self, g, size, on_screen=False):
-        """The newest asks and answers that fit the page, oldest at the top,
-        drawn at screen size and enlarged so they read from across a room."""
-        w, h = (round(n / PAPER_ZOOM) for n in size)
+    def _entry_width(self, g, e) -> int:
+        """The width an entry can't wrap below: its widest abacus."""
+        parts = answer_parts(e.markup) if e.kind == "answer" else []
+        return max((abacus_width(g, p[0]) for p in parts if isinstance(p, tuple)), default=0)
+
+    def _paper_rows(self, g, w, h) -> list:
+        """(entry, height) for the newest entries that fit w by h, newest first."""
         rows, used = [], 0
         for e in reversed(self.history):
-            eh, gap = self._entry_height(g, e, w), self._gap_above(g, e)
+            eh = self._entry_height(g, e, w)
             if used + eh > h:
                 break
             rows.append((e, eh))
-            used += eh + gap
+            used += eh + self._gap_above(g, e)
+        return rows
+
+    def paper(self, g, size, on_screen=False):
+        """The newest asks and answers that fit the page, oldest at the top, laid
+        out PAPER_EMS wide and enlarged to the page; wider when an abacus needs it."""
+        w = g.em(PAPER_EMS)
+        while True:
+            h = round(w * size[1] / size[0])
+            rows = self._paper_rows(g, w, h)
+            need = max((self._entry_width(g, e) for e, _ in rows), default=0)
+            if need <= w:
+                break
+            w = need + g.em(1)
         if not rows:
             return None
         s = paper.blank((w, h), on_screen)

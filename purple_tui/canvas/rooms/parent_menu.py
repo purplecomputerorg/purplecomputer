@@ -20,7 +20,10 @@ from ... import palette as P
 from ..gfx import FONT_DIR, mix
 from ...audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volume_step
 from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK, natural_voice_available
-from ...constants import PAYLOAD_DIR, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present
+from ...constants import (
+    DISK_BY_LABEL_DIR, PAYLOAD_DIR, SUPPORT_EMAIL, USB_LABELS,
+    is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present, is_usb_reinserted,
+)
 from ...input import KeyCode, PowerButtonEvent, RawKeyEvent
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_key_hint,
@@ -1173,7 +1176,6 @@ class TerminalScreen(FullScreen):
 # ---------------------------------------------------------------------------
 # Menu
 # ---------------------------------------------------------------------------
-_USB_LABELS = ("PURPLE_INSTALLER", "PURPLE_DEBUG")
 _KEEP_DIR = "/run/purple-keep"
 _CONFIRM_SCREENS = {None: InstallConfirmScreen, "found": ReinstallConfirmScreen, "unreadable": UnreadableReinstallScreen}
 
@@ -1185,10 +1187,12 @@ def _boot_mode_hint() -> str:
     if old_install.known()[0] == "found":
         return "Running from USB.\nPurple is also on this laptop.\nInstall to update it."
     if key_save.active() and is_usb_cached():
+        if is_usb_reinserted():
+            return "Running from USB. Not yet installed.\nUSB was unplugged: restart to save again.\nInstall to keep it without the USB."
         if not is_usb_present():
             return "Running from USB. Not yet installed.\nUSB removed: new work won't be kept.\nInstall to keep it without the USB."
         return "Running from USB. Not yet installed.\nKeep the USB in to save your kid's work.\nInstall to keep it without the USB."
-    if is_usb_cached() and not is_usb_present():
+    if is_usb_cached() and not (is_usb_present() or is_usb_reinserted()):
         return "Running from USB. Not yet installed.\nReinsert after restart.\nInstall to keep it without the USB."
     if is_usb_cached():
         return "Running from USB. Not yet installed.\nOK to remove USB. Reinsert after restart.\nInstall to keep it without the USB."
@@ -1198,8 +1202,8 @@ def _boot_mode_hint() -> str:
 
 
 def _find_usb_device():
-    for label in _USB_LABELS:
-        link = Path(f"/dev/disk/by-label/{label}")
+    for label in USB_LABELS:
+        link = Path(DISK_BY_LABEL_DIR, label)
         if link.exists():
             try:
                 return str(link.resolve())

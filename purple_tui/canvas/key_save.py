@@ -11,7 +11,7 @@ import os
 import subprocess
 import threading
 
-from ..constants import is_live_boot, is_usb_present
+from ..constants import is_live_boot, is_usb_present, is_usb_reinserted
 
 MARKER = os.environ.get("PURPLE_KEY_SAVE_MARKER", "/run/purple/key-save")
 WRITER = ["sudo", "-n", "ionice", "-c3", "/usr/local/bin/purple-key-save", "--write"]
@@ -31,7 +31,9 @@ def unavailable() -> str | None:
         return None
     if not os.path.exists(MARKER):
         return "Needs Install"
-    return None if is_usb_present() else "Needs USB"
+    if is_usb_present():
+        return None
+    return "Needs Restart" if is_usb_reinserted() else "Needs USB"
 
 
 class KeySave:

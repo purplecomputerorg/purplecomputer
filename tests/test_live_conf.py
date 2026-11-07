@@ -47,3 +47,16 @@ def test_squashfs_off_a_block_device_falls_back_to_the_file(tmp_path, monkeypatc
     _fake_mounts(tmp_path, monkeypatch, "tmpfs")
     monkeypatch.setattr(constants, "SQUASHFS_PATH", str(tmp_path / "filesystem.squashfs"))
     assert not constants.is_usb_present()
+
+
+def test_a_stick_put_back_reads_as_reinserted_not_present(tmp_path, monkeypatch):
+    sys_block = _fake_mounts(tmp_path, monkeypatch, "/dev/sdb1")
+    by_label = tmp_path / "by-label"
+    by_label.mkdir()
+    monkeypatch.setattr(constants, "DISK_BY_LABEL_DIR", str(by_label))
+    (by_label / "PURPLE_INSTALLER").touch()
+    assert constants.is_usb_present() and not constants.is_usb_reinserted()
+    (sys_block / "sdb1").rmdir()
+    assert not constants.is_usb_present() and constants.is_usb_reinserted()
+    (by_label / "PURPLE_INSTALLER").unlink()
+    assert not constants.is_usb_reinserted()

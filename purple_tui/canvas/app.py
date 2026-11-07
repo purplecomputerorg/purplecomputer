@@ -26,7 +26,7 @@ from ..constants import (
     ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_COMPUTER, ICON_MENU,
     ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, STICKY_SHIFT_GRACE,
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
-    is_usb_cached, is_usb_needed, is_usb_present,
+    is_usb_cached, is_usb_needed, is_usb_present, is_usb_reinserted,
 )
 from .gfx import Gfx, _Cache, rgb
 from .press import ARROWS
@@ -1696,14 +1696,19 @@ class PurpleApp:
         if not is_live_boot():
             return f"{ICON_COMPUTER} {self.computer_name()}"
         if is_usb_needed():
-            return f"{ICON_USB} USB  Keep it in" if is_usb_present() \
+            if is_usb_present():
+                return f"{ICON_USB} USB  Keep it in"
+            return f"{ICON_USB} USB was unplugged  Turn off, then on" if is_usb_reinserted() \
                 else f"{ICON_USB} USB removed  Turn off, put it back"
         if not is_usb_cached():
             return f"{ICON_USB} USB" if int(time.monotonic()) % 2 else "USB"
         from . import key_save
         if key_save.active():
-            return f"{ICON_USB} USB  Keep it in to save" if is_usb_present() else f"{ICON_USB} USB removed · Not saving"
-        return f"{ICON_USB} USB  OK to remove • If restart, reinsert" if is_usb_present() \
+            if is_usb_present():
+                return f"{ICON_USB} USB  Keep it in to save"
+            return f"{ICON_USB} USB was unplugged · Restart to save" if is_usb_reinserted() \
+                else f"{ICON_USB} USB removed · Not saving"
+        return f"{ICON_USB} USB  OK to remove • If restart, reinsert" if is_usb_present() or is_usb_reinserted() \
             else f"{ICON_USB} USB  If restart, reinsert"
 
     def _battery_text(self) -> str:

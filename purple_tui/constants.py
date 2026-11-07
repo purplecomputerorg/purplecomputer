@@ -193,7 +193,8 @@ LIVE_AUDIO_MARKER = "/var/log/purple/audio-worked-in-live"
 
 # PURPLE_FAKE_USB env var simulates USB boot states for testing.
 # Values: "caching" (USB blinking), "cached" (safe to remove), "removed" (USB pulled out),
-# "keep" (too little RAM, must stay in), "keep-removed" (pulled out anyway)
+# "reinserted" (pulled out, then plugged back in), "keep" (too little RAM, must stay in),
+# "keep-removed" (pulled out anyway)
 _FAKE_USB = os.environ.get("PURPLE_FAKE_USB", "")
 
 
@@ -220,7 +221,7 @@ def is_live_boot() -> bool:
 def is_usb_cached() -> bool:
     """Check if the USB squashfs has been cached to RAM."""
     if _FAKE_USB:
-        return _FAKE_USB in ("cached", "removed")
+        return _FAKE_USB in ("cached", "removed", "reinserted")
     return os.path.exists(USB_CACHE_MARKER)
 
 
@@ -233,6 +234,8 @@ def is_usb_needed() -> bool:
 
 MOUNTS_PATH = "/proc/self/mounts"
 SYS_BLOCK_DIR = "/sys/class/block"
+DISK_BY_LABEL_DIR = "/dev/disk/by-label"
+USB_LABELS = ("PURPLE_INSTALLER", "PURPLE_DEBUG")
 
 
 def _usb_block_device(path: str) -> str | None:
@@ -251,13 +254,24 @@ def _usb_block_device(path: str) -> str | None:
 def is_usb_present() -> bool:
     """Check if the USB drive is still physically connected."""
     if _FAKE_USB:
-        return not _FAKE_USB.endswith("removed")
+        return not _FAKE_USB.endswith(("removed", "reinserted"))
     # The mount and the squashfs inode outlive a pulled stick; its sysfs entry does not.
     if not getattr(is_usb_present, "_dev", None):
         is_usb_present._dev = _usb_block_device(SQUASHFS_PATH)
     if is_usb_present._dev:
         return os.path.exists(os.path.join(SYS_BLOCK_DIR, is_usb_present._dev))
     return os.path.exists(SQUASHFS_PATH)
+
+
+def is_usb_reinserted() -> bool:
+    """A Purple USB is plugged in again after the one this session booted from was pulled.
+
+    It comes back under a new kernel name, and this session's mounts and save
+    stay tied to the old one, so nothing reads from it until a restart.
+    """
+    if _FAKE_USB:
+        return _FAKE_USB == "reinserted"
+    return not is_usb_present() and any(os.path.exists(os.path.join(DISK_BY_LABEL_DIR, label)) for label in USB_LABELS)
 
 # Room titles with icons (uses room name constants)
 ROOM_TITLES = {

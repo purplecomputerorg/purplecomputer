@@ -219,6 +219,9 @@ def test_save_card_greys_out_on_a_key_that_cannot_keep_work(monkeypatch, tmp_pat
     (tmp_path / "key-save").write_text("/dev/x 0 0\n")
     assert key_save.unavailable() is None and key_save.active()
     present[0] = False
+    monkeypatch.setattr(key_save, "is_usb_reinserted", lambda: True)
+    assert key_save.unavailable() == "Needs Restart"
+    monkeypatch.setattr(key_save, "is_usb_reinserted", lambda: False)
     assert key_save.unavailable() == "Needs USB"
 
     async def go():

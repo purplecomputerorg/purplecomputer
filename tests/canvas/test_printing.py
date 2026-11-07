@@ -201,10 +201,10 @@ def test_support_info_names_the_printer(plugged_in):
 
 
 def test_maker_mark_signs_with_the_computer_name_and_keeps_the_brand():
-    assert paper.maker_mark("My Purple Computer") == ("", "Purple Computer")
-    assert paper.maker_mark("") == ("", "Purple Computer")
+    assert paper.maker_mark("My Purple Computer") == ("", paper.BRAND)
+    assert paper.maker_mark("") == ("", paper.BRAND)
     assert paper.maker_mark("Ari's Purple Computer") == ("Ari's Purple Computer", "")
-    assert paper.maker_mark("Lily") == ("Lily", "Purple Computer")
+    assert paper.maker_mark("Lily") == ("Lily", paper.BRAND)
 
 
 def test_lp_output_gives_the_job_number():

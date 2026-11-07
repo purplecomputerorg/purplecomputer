@@ -62,9 +62,10 @@ the build on a pale floor, Play prints the newest asks and answers that fit,
 Music prints the key grid in the colors the kid gave it, and Write prints
 every page of its text (`paper_pages`), all sent as one job. A room with nothing
 made yet prints nothing. The bottom corner
-is signed with the computer's name (Parent Menu, Name this Computer), often a
-kid's name, over the Purple bot and "Purple Computer" (left out when the name
-already says Purple; the bot then sits by the name). The app sends a PNG
+is signed in handwriting (Caveat) with the computer's name (Parent Menu, Name
+this Computer), often a kid's name, over the Purple bot and "made with Purple
+Computer" (left out when the name already says Purple; the bot then sits by the
+name). The app sends a PNG
 with `lp -o fit-to-page` and CUPS rasterizes it for the printer.
 
 `purple_tui/printing.py` paces prints (one per 20 s, 20 per boot, for the ink)

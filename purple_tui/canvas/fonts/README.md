@@ -12,6 +12,8 @@ Vendored from IBM's Plex release and Google Fonts, all under the SIL Open Font L
   and Picker option lists). Plex is IBM's own face, so the DOS-era callback is literal, and
   it stays calm at small sizes. The italics set the Parent Menu's section headers
   and Music's note names.
+- Caveat (Regular 400): the handwritten name that signs printed pages. Static instance of the
+  Google Fonts variable build, cut with `fonttools varLib.instancer Caveat[wght].ttf wght=400`.
 - Martian Mono Art (Bold): letters written on the Art grid. Martian Mono at
   wdth 112.5 / wght 700, instanced and widened 1.15x with fontTools so a normal
   lowercase fills a square cell without gaps. Press Start 2P is the old Art face.

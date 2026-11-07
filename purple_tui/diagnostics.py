@@ -187,6 +187,44 @@ def collect_device_info() -> str:
     return "\n".join(lines)
 
 
+def _indented(text: str, last: int = 0) -> list:
+    lines = text.splitlines()[-last:] if last else text.splitlines()
+    return [f"  {ln}" for ln in lines] or ["  (none)"]
+
+
+def _usb_printers() -> list:
+    """One line per USB device with a printer interface (class 07), read from sysfs."""
+    out = []
+    for dev in sorted(Path("/sys/bus/usb/devices").glob("*-*")):
+        protos = {_read(str(i / "bInterfaceProtocol"), "") for i in dev.glob("*:*")
+                  if _read(str(i / "bInterfaceClass"), "") == "07"}
+        if not protos or ":" in dev.name:
+            continue
+        name = " ".join(_read(str(dev / f), "") for f in ("manufacturer", "product")).strip() or "(no name)"
+        ids = f"{_read(str(dev / 'idVendor'), '?')}:{_read(str(dev / 'idProduct'), '?')}"
+        out.append(f"  {name} [{ids}] port {dev.name}, IPP-over-USB: {'yes' if '04' in protos else 'no'}")
+    return out or ["  (none)"]
+
+
+def collect_printer_info() -> str:
+    """Everything support needs about printing, most useful first, for Printer check."""
+    from . import boot_log, printing
+    boot = _read(boot_log._BOOT_LOG_TMP, "")
+    return "\n".join([
+        "USB printers:", *_usb_printers(),
+        "",
+        "Purple's setup:", *_indented(_read(printing.STATE, "(nothing plugged in)")),
+        "",
+        "Setup log:", *_indented(_read("/tmp/purple-printer.log", ""), 15),
+        "",
+        "Queue:", *_indented(_run("lpstat", "-l", "-p", printing.QUEUE), 8),
+        "",
+        "Recent jobs:", *_indented(_run("lpstat", "-W", "all", "-o", printing.QUEUE), 5),
+        "",
+        "Print log:", *_indented("\n".join(ln for ln in boot.splitlines() if "print:" in ln), 12),
+    ])
+
+
 def collect_audio_info(audio_ok) -> str:
     """Focused audio dump for the Audio info sub-screen."""
     if audio_ok is True:

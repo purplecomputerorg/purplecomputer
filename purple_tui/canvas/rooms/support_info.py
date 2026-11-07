@@ -1,15 +1,19 @@
 """Support info: version, model, audio status, scrollable device and audio
-reports a parent can read out to support, and a Sound check that plays the
-startup chime and shows what first boot would decide."""
+reports a parent can read out to support, a Sound check that plays the
+startup chime and shows what first boot would decide, and a Printer check
+laid out for a photo or a scrolling video sent to support."""
 
 import textwrap
 import threading
+
+import pygame
 
 from ... import diagnostics
 from ... import palette as P
 from ... import printing
 from ...constants import SUPPORT_EMAIL
 from ...keyboard import ControlAction, NavigationAction
+from ...palette import rgb
 from ..ui import DOWN, UP, Dialog, Picker
 
 SCROLL_LINES = 5
@@ -101,10 +105,62 @@ class SoundCheckScreen(_ScrollablePage):
         self.app.invalidate()
 
 
+def _test_page(g, computer_name: str):
+    """A Purple circle and a line saying what it is, on a printed page."""
+    from ..paper import INK, compose
+    work = pygame.Surface((900, 700), pygame.SRCALPHA)
+    pygame.draw.circle(work, rgb(P.PRIMARY), (450, 280), 260)
+    label = g.text("Purple Computer printer test", 48, "sans", INK)
+    work.blit(label, label.get_rect(midbottom=(450, 700)))
+    return compose(work, True, g, computer_name)[0]
+
+
+class PrinterCheckScreen(_ScrollablePage):
+    title = "Printer check"
+    hint = f"{{Enter}} print a test page   {UP} {DOWN} scroll   {{Esc}} back"
+
+    def __init__(self, app):
+        self.heard = []  # what the test page did, newest last
+        super().__init__(app)
+
+    def _collect_text(self):
+        return "Checking the printer..."
+
+    def on_open(self):
+        threading.Thread(target=self._run, daemon=True, name="printer-check").start()
+
+    def body_height(self, g):
+        return self.body_limit(g)  # as much as fits in one photo
+
+    def _run(self):
+        report = "\n".join([diagnostics.get_version_label() or "Dev build", diagnostics.get_product_name(), "",
+                            diagnostics.collect_printer_info(), "", f"Contact: {SUPPORT_EMAIL}"])
+        self.app.call_from_thread(self._show, report)
+
+    def _show(self, report: str):
+        """Keeps the scroll where it is: the report refreshes while a test page prints."""
+        self.text = "\n".join([printing.advice(SUPPORT_EMAIL), *(f"Test page: {line}" for line in self.heard), "", report])
+        self.app.invalidate()
+
+    def _hear(self, text: str):
+        self.heard.append(text)
+        self.on_open()  # the report changes with the job
+
+    async def handle(self, action):
+        if isinstance(action, ControlAction) and action.is_down and not action.is_repeat and action.action == "enter":
+            why = printing.why_not()
+            if why:
+                return self._hear(why)
+            self.app._print_pages(([_test_page(self.app.g, self.app.computer_name())], True), self._hear)
+            return
+        await super().handle(action)
+
+
 class SupportInfoScreen(Picker):
     title = "Support info"
     hint = f"{UP} {DOWN} choose   {{Enter}} open   {{Esc}} back"
-    OPTIONS = [(DeviceInfoScreen, "Device info"), (AudioInfoScreen, "Audio info"), (SoundCheckScreen, "Sound check")]
+    OPTIONS = [(DeviceInfoScreen, "Device info"), (AudioInfoScreen, "Audio info"), (SoundCheckScreen, "Sound check"),
+               (PrinterCheckScreen, "Printer check")]
 
     def __init__(self, app):
         super().__init__(app)

@@ -88,6 +88,20 @@ def why_not():
     return WHY_NOT.get(now)
 
 
+def advice(support_email: str) -> str:
+    """What Printer check says first: where printing stands and what to do next."""
+    now, model = status(), _state().get("model") or "The printer"
+    if now == READY:
+        return f"{model} is ready. Press Enter to print a test page."
+    if now == SETTING_UP:
+        return "Getting the printer ready. This can take a minute."
+    if now == NONE:
+        return "No printer found. Plug the printer into this computer with its USB cable and turn it on."
+    if why_not() != WHY_NOT[BROKEN]:
+        return why_not() + "."
+    return f"{model} doesn't print yet. Please send a photo of this screen to {support_email}."
+
+
 def printer():
     """The ready printer's state, or None."""
     if FAKE:

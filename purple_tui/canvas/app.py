@@ -922,17 +922,19 @@ class PurpleApp:
     def save_text(self, save) -> str:
         return self._from_save(save, lambda room: room.plain_text()) or ""
 
-    def _print_pages(self, made):
+    def _print_pages(self, made, tell=None):
+        """tell(text) hears what happens; toasts by default."""
         if made is None:
             return
+        tell = tell or (lambda text: self.notify(text, timeout=4))
         wait = printing.ready_in()
         if wait:
-            self.notify("That's lots of printing for today" if wait == float("inf") else "The printer is still busy", timeout=3)
+            tell("That's lots of printing for today" if wait == float("inf") else "The printer is still busy")
             return
         if printing.FAKE:
             from .print_preview import PrintPreview
             self.push(PrintPreview(self, made[0]))
-        asyncio.ensure_future(printing.print_pages(*made, lambda text: self.notify(text, timeout=4)))
+        asyncio.ensure_future(printing.print_pages(*made, tell))
 
     def action_parent_menu(self):
         self._cancel_escape_hold_timer()

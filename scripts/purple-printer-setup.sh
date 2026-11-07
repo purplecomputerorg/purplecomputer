@@ -12,13 +12,14 @@ HEAL=$ROOT/run/purple-printer.heal  # printing.HEAL: the app found a job stuck
 QUEUE=purple
 LOG=$ROOT/tmp/purple-printer.log
 SETTING_UP="setting up"  # printing.SETTING_UP
+ID=""  # the printer's IEEE 1284 ID, once the driver route reads it: Printer check shows it to support
 
 log() { echo "[$(date +%H:%M:%S)] $*" >> "$LOG"; }
 
 write_state() {  # ready model via [uri]
-    local model=${2//[^A-Za-z0-9 ._+-]/} uri=${4:-}
+    local model=${2//[^A-Za-z0-9 ._+-]/} uri=${4:-} id=${ID//[\"\\]/}
     uri=${uri//[\"\\]/}
-    printf '{"ready": %s, "model": "%s", "via": "%s", "uri": "%s"}\n' "$1" "$model" "$3" "$uri" > "$STATE.tmp"
+    printf '{"ready": %s, "model": "%s", "via": "%s", "uri": "%s", "id": "%s"}\n' "$1" "$model" "$3" "$uri" "$id" > "$STATE.tmp"
     chmod 644 "$STATE.tmp"
     mv "$STATE.tmp" "$STATE"
 }

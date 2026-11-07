@@ -102,7 +102,7 @@ def test_a_heal_restarts_cups_and_ipp_usb_then_rebuilds_the_queue(tmp_path):
     assert '"via": "setting up"' in calls[cups]  # the card says Starting Up, not No Printer
     assert cups < index(calls, "lpadmin -x purple") < index(calls, "systemctl restart ipp-usb.service")
     assert state == {"ready": True, "model": "Brother HL-L2420DW", "via": "ipp-usb",
-                     "uri": "ipp://localhost:60000/ipp/print"}
+                     "uri": "ipp://localhost:60000/ipp/print", "id": ""}
 
 
 def test_a_heal_after_the_printer_was_unplugged_leaves_no_printer(tmp_path):
@@ -115,3 +115,4 @@ def test_the_usb_driver_route_records_its_device_address(tmp_path):
     assert not any("restart" in call for call in calls)
     assert state["ready"] and state["uri"] == "usb://Acme/Laser?serial=1"
     assert state["via"] == "gutenprint.5.3://pcl-g_6/expert"
+    assert state["id"] == "MFG:Acme;CMD:PCLXL;MDL:Laser;"  # Printer check shows it to support

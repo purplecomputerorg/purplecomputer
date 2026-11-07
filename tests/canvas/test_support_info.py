@@ -7,7 +7,7 @@ from purple_tui.canvas.rooms.support_info import SoundCheckScreen, SupportInfoSc
 
 
 def test_support_info_offers_a_sound_check():
-    assert [label for _, label in SupportInfoScreen.OPTIONS] == ["Device info", "Audio info", "Sound check"]
+    assert [label for _, label in SupportInfoScreen.OPTIONS] == ["Device info", "Audio info", "Sound check", "Printer check"]
 
 
 def test_sound_check_screen_shows_the_report(monkeypatch):

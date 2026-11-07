@@ -209,3 +209,31 @@ def test_maker_mark_signs_with_the_computer_name_and_keeps_the_brand():
 
 def test_lp_output_gives_the_job_number():
     assert printing._job_id("request id is purple-12 (1 file(s))\n") == "12"
+
+
+def test_printer_check_says_what_to_do_next():
+    assert printing.advice("help@x").startswith("No printer found")
+    _write(**READY)
+    assert printing.advice("help@x") == "Brother HL-L2420DW is ready. Press Enter to print a test page."
+    _write(ready=False, model="Canon TS3520", via="no driver for this model")
+    assert printing.advice("help@x") == "Canon TS3520 doesn't print yet. Please send a photo of this screen to help@x."
+
+
+@pytest.mark.parametrize("ready", [True, False])
+def test_printer_check_prints_a_test_page_and_says_how_it_went(ready, lp_calls, monkeypatch):
+    from purple_tui.canvas.rooms import support_info
+    monkeypatch.setattr(support_info.PrinterCheckScreen, "on_open", lambda self: self._show("USB printers:"))
+    if ready:
+        _write(**READY)
+
+    async def go():
+        app = make_app()
+        page = support_info.PrinterCheckScreen(app)
+        app.push(page)
+        await press(app, "enter")
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert len(lp_calls) == ready
+        assert page.heard == ["Printing!" if ready else "Plug in a printer with its USB cable"]
+        assert f"Test page: {page.heard[0]}" in page.lines and "USB printers:" in page.lines
+    run(go())

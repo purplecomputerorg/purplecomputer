@@ -29,7 +29,7 @@ and Support info names the printer and the technical reason.
      lasers it doesn't name (one protocol for the family), then Gutenprint's
      generic PCL 6, PCL 5e and PostScript drivers and cups-filters' PWG raster,
      each only when the ID lists that language.
-3. It writes `/run/purple-printer.json` (`{"ready", "model", "via", "uri"}`), with
+3. It writes `/run/purple-printer.json` (`{"ready", "model", "via", "uri", "id"}`, `id` the 1284 ID once the driver route reads it), with
    `via` "setting up" while it works. The app stats that file every 2 s, so
    watching for a printer costs no process.
 
@@ -122,6 +122,12 @@ unplugged says it didn't print, without a rebuild.
   then the same `lp` line the app runs.
 
 ## On real hardware
+
+For a family: Parent Menu, Support Info, Printer check. It opens with what to
+do next, then a report sized for one photo (the USB printer's IDs, Purple's
+setup state and log, the queue, recent jobs, the `print:` log lines); arrows
+scroll the rest for a video. Enter prints a test page through the same path as
+a kid's print, so self-healing and paper or ink messages show up there.
 
 From the Parent Menu terminal, `printer-test` shows what Purple set up and the
 last jobs; `printer-test help` lists the rest: print a test circle, rebuild the

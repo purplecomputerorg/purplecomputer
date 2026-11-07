@@ -169,8 +169,8 @@ def _patch_present():
 
     present = gfx.Gfx.present
 
-    def presented(self):
-        present(self)
+    def presented(self, *args, **kwargs):
+        present(self, *args, **kwargs)
         purplePresented()
 
     gfx.Gfx.present = presented

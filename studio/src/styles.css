@@ -1028,8 +1028,10 @@ span.emoji > img { display: inline !important; width: auto !important; height: 1
   .sheet-row > .x { grid-column: 4; grid-row: 1; }
 }
 
-/* try.html: the stage alone, inside purplecomputer.org's page. It keeps --bg, the same warm white as that
+/* try.html and cards.html: the stage or the cards alone, inside purplecomputer.org's page. It keeps --bg, the same warm white as that
    page, since browsers won't always let a frame from another site show the page behind it. */
 .embed .stage { position: static; height: auto; overflow: visible; padding: 0 0 12px; background: none; view-transition-name: none; }
 .embed .stage-inner { max-width: none; }
 .embed .stage .laptop { max-width: none; }
+/* Room for the tape above the top row and the shadow under the last */
+.embed .home-cards { margin: 12px 4px 24px; }

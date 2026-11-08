@@ -22,7 +22,7 @@ const cacheDir = resolve(here, ".cache");
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
 
 // pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval. It and
-// try.html can also sit inside purplecomputer.org's page (FRAMED).
+// try.html and cards.html can also sit inside purplecomputer.org's page (FRAMED).
 const pageCsp: Connect.NextHandleFunction = (req, res, next) => {
   const csp = PAGE_CSP.find(([page]) => req.url?.startsWith(`/${page}`))?.[1];
   if (csp) {
@@ -100,11 +100,11 @@ export const CSP = [
   "form-action 'none'",
 ].join("; ");
 const LIVE_CSP = CSP.replace("'wasm-unsafe-eval'", "'wasm-unsafe-eval' 'unsafe-eval'");
-// The pages purplecomputer.org embeds (try.html, and the live Purple inside it), and who may embed
-// them: the site, its Vercel previews (CSP can't narrow *.vercel.app further; try.ts only talks to
+// The pages purplecomputer.org embeds (try.html, the live Purple inside it, and cards.html), and who may
+// embed them: the site, its Vercel previews (CSP can't narrow *.vercel.app further; src/embed.ts only talks to
 // the landing project's), and its dev server.
 const FRAMED = "; frame-ancestors 'self' https://purplecomputer.org https://www.purplecomputer.org https://*.vercel.app http://localhost:3002 http://simba:3002";
-const PAGE_CSP: [page: string, csp: string][] = [["purple.html", LIVE_CSP + FRAMED], ["try.html", CSP + FRAMED]];
+const PAGE_CSP: [page: string, csp: string][] = [["purple.html", LIVE_CSP + FRAMED], ["try.html", CSP + FRAMED], ["cards.html", CSP + FRAMED]];
 const TYPES: Record<string, string> = { svg: "image/svg+xml", mp3: "audio/mpeg", gif: "image/gif", png: "image/png", cur: "image/x-icon", wasm: "application/wasm", json: "application/json", zip: "application/zip", whl: "application/zip", js: "text/javascript", mjs: "text/javascript", md: "text/plain; charset=utf-8", c: "text/plain; charset=utf-8", sh: "text/plain; charset=utf-8" };
 const HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
@@ -124,7 +124,7 @@ export default defineConfig({
   preview: { headers: HEADERS },
   worker: { format: "es" },
   // Drum clips stay files: a data: URL fetch would fall outside connect-src.
-  build: { target: "es2022", rollupOptions: { input: { main: resolve(here, "index.html"), purple: resolve(here, "purple.html"), try: resolve(here, "try.html") } }, assetsInlineLimit: (file) => (file.endsWith(".ogg") ? false : undefined) },
+  build: { target: "es2022", rollupOptions: { input: { main: resolve(here, "index.html"), purple: resolve(here, "purple.html"), try: resolve(here, "try.html"), cards: resolve(here, "cards.html") } }, assetsInlineLimit: (file) => (file.endsWith(".ogg") ? false : undefined) },
   optimizeDeps: { exclude: ["pyodide"] },
   test: { environment: "node" },
 });

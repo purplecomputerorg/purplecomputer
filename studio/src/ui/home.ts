@@ -2,7 +2,7 @@
 // there. Purple only ever appears inside a screen; the paper around it is Studio.
 import { CELL_ASPECT, KEY_COLORS } from "@sdk/purple/art";
 import { EXAMPLES, examplePicture } from "../photo";
-import { countOf, hasWork, notInPieces, onChange, pieces, type Count } from "../state";
+import { countOf, features, hasWork, notInPieces, onChange, pieces, type Count } from "../state";
 import { h } from "./dom";
 import { clearEverythingButton, openPackButton } from "./packfile";
 import { staysHere } from "./privacy";
@@ -11,10 +11,21 @@ import { sticker } from "./stickers";
 import type { View } from "./view";
 
 // voice: takes the family's recorded voice, so its card says so.
-export interface HomeSection { id: string; label: string; icon: string; blurb: string | (() => (string | Node)[]); voice?: boolean }
+// clears: what "Clear all" names on its pages; colors has its own undo instead.
+export interface HomeSection { id: string; label: string; icon: string; blurb: string | (() => (string | Node)[]); voice?: boolean; clears?: string }
 
 const RAINBOW = ["#5c2d91", "#c0392b", "#2f5bb5", "#a86f00", "#9b59d0", "#2e7d32"];
 export const rainbow = (text: string) => h("span", {}, ...[...text].map((c, i) => h("span", { style: `color:${RAINBOW[i % RAINBOW.length]}` }, c)));
+
+// Studio's sections, as its tabs and home cards name them (cards.html shows the cards on purplecomputer.org).
+export const SECTIONS: HomeSection[] = ([
+  { id: "pictures", clears: "pictures", label: "Pictures", icon: "🖼️", blurb: "The dog, ready to paint on" },
+  { id: "words", clears: "words", label: "Words", icon: "🗨️", blurb: "The dog's name, with a picture", voice: true },
+  { id: "keys", clears: "letters", label: "Letters", icon: "z", blurb: "Grandma, every time they press G", voice: true },
+  { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "Like a kazoo or a harp" },
+  { id: "colors", label: "Colors", icon: "🎨", blurb: () => ["Purple, but green, or ", rainbow("any color")] },
+  { id: "rooms", clears: "rooms", label: "New Rooms", icon: "🧩", blurb: "Like a world for them to walk around", voice: true },
+] satisfies HomeSection[]).filter((s) => features.rooms || s.id !== "rooms");
 
 const svg = (viewBox: string, inner: string, cls: string) => {
   const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -72,12 +83,16 @@ const SCREENS: Record<string, () => Node[]> = {
 
 const micIcon = () => { const el = h("span", { class: "mic", "aria-hidden": "true" }); el.innerHTML = MIC; return el; };
 
-const card = (s: HomeSection) =>
-  h("a", { class: "home-card", href: `#${s.id}` },
+// onOpen: the card is on another site's page, so it opens its Studio page in a new tab.
+const card = (s: HomeSection, onOpen?: (id: string) => void) =>
+  h("a", { class: "home-card", href: `${onOpen ? "./" : ""}#${s.id}`, ...(onOpen && { target: "_blank", rel: "noopener", onclick: () => onOpen(s.id) }) },
     h("div", { class: "bezel" }, h("div", { class: `mini ${s.id}` }, ...SCREENS[s.id]()),
       s.voice ? h("span", { class: "voice-badge", title: "Can use your recorded voice" }, micIcon()) : null),
     h("b", {}, s.label),
     h("span", {}, ...(typeof s.blurb === "string" ? [s.blurb] : s.blurb())));
+
+export const homeCards = (sections: HomeSection[], onOpen?: (id: string) => void) =>
+  h("div", { class: "home-cards" }, ...sections.map((s) => card(s, onOpen)));
 
 // What's in the family's Purple Pack, and what isn't, as the download page counts them.
 const packLine = h("div");
@@ -106,7 +121,7 @@ export function homeView(sections: HomeSection[]): View {
       h("h1", {}, "Make Purple ", h("span", { class: "stroke" }, "your own.")),
       h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
       h("p", { class: "home-note" }, h("b", {}, "For Purple Computer customers: "), "Purple Studio lets you customize the experience for your family. Make changes here and transfer them to your Purple Computer with a USB drive."),
-      h("div", { class: "home-cards" }, ...sections.map(card)),
+      homeCards(sections),
       packLine,
     ),
     live: { room: "art" },

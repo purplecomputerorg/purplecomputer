@@ -61,7 +61,7 @@ Studio is static files, but the host has to send three headers on every file (`v
 
 `purple.html` alone needs `'unsafe-eval'` in its policy, because pygame's WebAssembly build evaluates JavaScript. Every other page keeps the strict one.
 
-`try.html` and `purple.html` can be embedded by purplecomputer.org (its Vercel previews and dev server too): their policy adds a `frame-ancestors` list, also in `vite.config.ts`. Inside another site's page they aren't cross-origin isolated, so family rooms don't run there and the voice uses one thread, which is all the landing page needs.
+`try.html`, `cards.html`, and `purple.html` can be embedded by purplecomputer.org (its Vercel previews and dev server too): their policy adds a `frame-ancestors` list, also in `vite.config.ts`. Inside another site's page they aren't cross-origin isolated, so family rooms don't run there and the voice uses one thread, which is all the landing page needs.
 
 ## How it's built
 
@@ -79,7 +79,7 @@ Vite, TypeScript, and plain DOM, with no backend. Two runtime dependencies: Pyod
 
 ### Try Purple on purplecomputer.org
 
-`try.html` is the live Purple alone, the same stage Studio shows beside its editor (`src/ui/stage.ts`: the laptop, the room buttons, and a phone's few keys), for purplecomputer.org's rooms section to embed. `src/try.ts` talks to the landing page over `postMessage`, only with purplecomputer.org's origins: the landing page says hello, and hears back the page's height, the room Purple is in, and when Purple is ready. It can ask for a room (`purple-try-room`) or type a line (`purple-try-type`). `?room=play` picks the first room. It starts empty: nothing a family made in Studio shows up there.
+`try.html` is the live Purple alone, the same stage Studio shows beside its editor (`src/ui/stage.ts`: the laptop, the room buttons, and a phone's few keys), for purplecomputer.org's rooms section to embed. `cards.html` is the home page's six cards alone, for the landing page's Studio section; each opens its Studio page in a new tab. Both talk to the landing page over `postMessage` through `src/embed.ts`, only with purplecomputer.org's origins: the landing page says hello, and hears back the page's height. `try.html` adds the room Purple is in and when Purple is ready, and `cards.html` adds which card was opened. The landing page can ask `try.html` for a room (`purple-try-room`) or type a line (`purple-try-type`). `?room=play` picks the first room. It starts empty: nothing a family made in Studio shows up there.
 
 ### Room code is untrusted
 

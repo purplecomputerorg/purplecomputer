@@ -17,7 +17,7 @@ import { privacyView } from "./ui/privacy";
 import { createStage } from "./ui/stage";
 import { EXAMPLES } from "./examples";
 import { guideView } from "./ui/guide";
-import { homeView, rainbow, type HomeSection } from "./ui/home";
+import { homeView, SECTIONS as HOME_SECTIONS, type HomeSection } from "./ui/home";
 import { purpleEmoji } from "./ui/icons";
 import { roomsView } from "./ui/rooms";
 import { keysView } from "./ui/keys";
@@ -26,19 +26,11 @@ import { WIDER, type View } from "./ui/view";
 import { startEmojiPictures } from "./emoji";
 
 interface Section extends HomeSection {
-  // What "Clear all" names on this section's pages; colors has its own undo instead.
-  clears?: string;
   view: (item: string | null) => View;
 }
 
-const SECTIONS: Section[] = [
-  { id: "pictures", clears: "pictures", label: "Pictures", icon: "🖼️", blurb: "The dog, ready to paint on", view: picturesView },
-  { id: "words", clears: "words", label: "Words", icon: "🗨️", blurb: "The dog's name, with a picture", voice: true, view: wordsView },
-  { id: "keys", clears: "letters", label: "Letters", icon: "z", blurb: "Grandma, every time they press G", voice: true, view: keysView },
-  { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "Like a kazoo or a harp", view: instrumentsView },
-  { id: "colors", label: "Colors", icon: "🎨", blurb: () => ["Purple, but green, or ", rainbow("any color")], view: colorsView },
-  { id: "rooms", clears: "rooms", label: "New Rooms", icon: "🧩", blurb: "Like a world for them to walk around", voice: true, view: roomsView },
-].filter((s) => features.rooms || s.id !== "rooms");
+const VIEWS: Record<string, Section["view"]> = { pictures: picturesView, words: wordsView, keys: keysView, instruments: instrumentsView, colors: colorsView, rooms: roomsView };
+const SECTIONS: Section[] = HOME_SECTIONS.map((s) => ({ ...s, view: VIEWS[s.id] }));
 // Old links to pages that moved.
 const MOVED: Record<string, string> = { voice: "keys", "voice/phrases": "words", "words/phrases": "words", python: "rooms" };
 

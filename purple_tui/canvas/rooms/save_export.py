@@ -21,11 +21,19 @@ from ..ui import Dialog
 MOUNT = "/run/purple-export"
 FOLDER = "Purple Computer"
 _FILESYSTEMS = {"vfat", "exfat", "ntfs"}
+PACK_FILESYSTEMS = _FILESYSTEMS | {"hfsplus"}  # read-only is enough; config/udev/99-purple-update.rules
 _EFI_TYPES = {"c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "0xef"}  # GPT and MBR; a Purple Key's EFI partition is FAT too
 
 
-def find_stick() -> tuple:
-    """(device, mountpoint or None) for a data partition on a plugged-in USB drive, a Purple Key's PURPLEUSB included, else (None, None)."""
+def _is_sd_card(disk: str) -> bool:
+    try:
+        return Path("/sys/block", Path(disk).name, "device", "type").read_text().strip() == "SD"
+    except OSError:
+        return False
+
+
+def find_stick(filesystems=_FILESYSTEMS) -> tuple:
+    """(device, mountpoint or None) for a data partition on a plugged-in USB drive or SD card, a Purple Key's PURPLEUSB included, else (None, None)."""
     try:
         out = subprocess.run(["lsblk", "-J", "-p", "-o", "NAME,TRAN,FSTYPE,PARTTYPE,MOUNTPOINT"],
                              capture_output=True, text=True, timeout=10).stdout
@@ -33,10 +41,10 @@ def find_stick() -> tuple:
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return None, None
     for disk in disks:
-        if disk.get("tran") != "usb":
+        if disk.get("tran") != "usb" and not _is_sd_card(disk["name"]):
             continue
         for p in disk.get("children") or [disk]:
-            if p.get("fstype") in _FILESYSTEMS and (p.get("parttype") or "").lower() not in _EFI_TYPES:
+            if p.get("fstype") in filesystems and (p.get("parttype") or "").lower() not in _EFI_TYPES:
                 return p["name"], p.get("mountpoint")
     return None, None
 

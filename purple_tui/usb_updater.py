@@ -1,4 +1,4 @@
-"""Set aside every .purplepack at the top level of a USB drive, for Purple to offer.
+"""Set aside every .purplepack on a USB drive or SD card, for Purple to offer.
 
 Run by config/systemd/purple-usb-update@.service, as root, with the drive
 already mounted read-only at the path given on the command line. Each pack
@@ -29,6 +29,7 @@ APP_USER = "purple"
 LOG_PATH = Path("/var/log/purple/usb-update.log")
 WAITING = Path(".purple") / "packs-waiting"
 READING = ".reading"  # there while a drive's packs are being unpacked, so the app can say so
+PATTERNS = ("*.purplepack", "*/*.purplepack")  # the service's find -maxdepth 2 matches these
 SKIPPED = ".skipped.json"  # the packs the last drive brought that Purple couldn't take, and why, for the app to say
 
 
@@ -96,6 +97,15 @@ def stage(pack: Path, waiting: Path, seen: set, skipped: list) -> tuple[bool, st
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def find_packs(mount: Path) -> list[Path]:
+    """The packs at the top of the drive or in a folder there (a Downloads folder copied whole),
+    newest first, so two downloads of one pack offer the newer and skip the other. Dot names
+    skipped: a Mac leaves a ._<name> metadata file beside each pack it copies, and hides its own folders."""
+    found = (p for pattern in PATTERNS for p in mount.glob(pattern)
+             if not any(part.startswith(".") for part in p.relative_to(mount).parts))
+    return sorted(found, key=lambda p: (-p.stat().st_mtime, p.name))
+
+
 def update_from(mount: Path, waiting: Path | None = None) -> list[tuple[str, bool, str]]:
     """Stage each pack on the drive. Returns (filename, ok, message) per pack."""
     waiting = waiting or app_user_waiting_dir()
@@ -103,10 +113,7 @@ def update_from(mount: Path, waiting: Path | None = None) -> list[tuple[str, boo
     reading = waiting / READING
     reading.touch()
     try:
-        # Newest file first, so two downloads of one pack offer the newer and skip the other.
-        # Dot names skipped: a Mac leaves a ._<name> metadata file beside each pack it copies.
-        packs = sorted((p for p in mount.glob("*.purplepack") if not p.name.startswith(".")),
-                       key=lambda p: (-p.stat().st_mtime, p.name))
+        packs = find_packs(mount)
         seen: set = set()
         skipped: list = []
         results = sorted((p.name, *stage(p, waiting, seen, skipped)) for p in packs)

@@ -169,6 +169,19 @@ def test_export_finds_a_purple_keys_data_partition_not_its_efi(monkeypatch):
     assert save_export.find_stick() == ("/dev/sdb3", None)
 
 
+def test_an_sd_card_counts_as_a_drive_but_a_built_in_emmc_disk_does_not(monkeypatch):
+    import json
+    import subprocess
+    from purple_tui.canvas.rooms import save_export
+    emmc = {"name": "/dev/mmcblk0", "tran": None, "children": [{"name": "/dev/mmcblk0p1", "fstype": "vfat", "parttype": "0x0c"}]}
+    sd = {"name": "/dev/mmcblk1", "tran": None, "children": [{"name": "/dev/mmcblk1p1", "fstype": "hfsplus", "parttype": "0xaf"}]}
+    out = json.dumps({"blockdevices": [emmc, sd]})
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, out, ""))
+    monkeypatch.setattr(save_export, "_is_sd_card", lambda disk: disk == "/dev/mmcblk1")
+    assert save_export.find_stick() == (None, None)  # Linux can't write a Mac drive, so saves don't go there
+    assert save_export.find_stick(save_export.PACK_FILESYSTEMS) == ("/dev/mmcblk1p1", None)
+
+
 def test_reinstall_keeps_by_default_and_start_fresh_asks_again():
     async def go():
         from purple_tui.canvas.rooms.parent_menu import ReinstallConfirmScreen, StartFreshConfirmScreen

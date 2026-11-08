@@ -180,7 +180,7 @@ class PurpleApp:
         from .. import pack_arrivals
         pack_arrivals.settle()
         self._arrivals_seen = None
-        self._offering_packs = self._reading_packs = False
+        self._offering_packs = self._reading_packs = self._looking_for_packs = False
         from . import theme
         theme.apply(theme.find())
         self.rooms = {c.name: c(self) for c in ROOM_CLASSES}
@@ -796,7 +796,7 @@ class PurpleApp:
     def _check_pack_arrivals(self):
         from .. import pack_arrivals
         stamp = pack_arrivals.stamp()
-        if stamp == self._arrivals_seen or self._offering_packs:
+        if stamp == self._arrivals_seen or self._offering_packs or self._looking_for_packs:
             return
         self._arrivals_seen = stamp
         if pack_arrivals.reading():
@@ -819,6 +819,37 @@ class PurpleApp:
             self.notify("Already added. You can unplug the USB drive now." if known
                         else "Couldn't read that Purple Pack. Try downloading it from Purple Studio again.", timeout=4)
 
+    def look_for_packs(self, then):
+        """Read a plugged-in drive's Purple Packs again, as plugging it in does, for when that
+        didn't offer them. then(note) on the UI thread: what to tell the parent, or None."""
+        if self._looking_for_packs:
+            return
+        self._looking_for_packs = True
+        threading.Thread(target=self._look_for_packs, args=(then,), daemon=True, name="pack-look").start()
+
+    def _look_for_packs(self, then):
+        import subprocess
+        from .. import pack_arrivals
+        from .rooms.save_export import PACK_FILESYSTEMS, find_stick
+        dev = find_stick(PACK_FILESYSTEMS)[0] if pack_arrivals.UPDATE_SERVICE.exists() else None
+        before, failed = pack_arrivals.stamp(), False
+        if dev:
+            self.call_from_thread(then, "Looking at the USB drive...")
+            try:
+                failed = subprocess.run(["sudo", "systemctl", "start", f"purple-usb-update@{os.path.basename(dev)}.service"],
+                                        capture_output=True, timeout=90).returncode != 0
+            except (OSError, subprocess.SubprocessError):
+                failed = True
+        self.call_from_thread(self._looked_for_packs, then, dev, failed, pack_arrivals.stamp() != before)
+
+    def _looked_for_packs(self, then, dev, failed, read):
+        self._looking_for_packs = False
+        if read:
+            self._reading_packs, self._arrivals_seen = True, None
+            self._check_pack_arrivals()
+        then(None if read or not dev else "Couldn't read the USB drive. Try another one." if failed
+             else "No Purple Pack on the USB drive. Copy the .purplepack file from Purple Studio onto it, not inside a folder.")
+
     def _tell_skipped(self, notes, offer):
         """Each kind of pack the drive brought that Purple couldn't take, then the ones it can."""
         from .ui import Notice
@@ -839,7 +870,10 @@ class PurpleApp:
                   on_close=lambda yes: self._answer_packs(waiting, yes))
 
     def _answer_packs(self, waiting, yes):
-        if yes:
+        from .rooms.parent_menu import ParentMenu
+        if yes and self.has_overlay(ParentMenu):
+            self._settle_offer(waiting, True)
+        elif yes:
             self.with_parent_pin(lambda: self._settle_offer(waiting, True), cancelled=lambda: self._settle_offer(waiting, False))
         else:
             self._settle_offer(waiting, False)
@@ -859,7 +893,8 @@ class PurpleApp:
         from ..settings import set_pack_kid
         self._offering_packs = False
         if kid is CANCELLED:
-            return pack_arrivals.decline(waiting)
+            pack_arrivals.decline(waiting)
+            return self._packs_changed()
         failed = pack_arrivals.add(waiting)
         added = [m for _, m in waiting if m["name"] not in failed]
         for m in added:
@@ -867,7 +902,15 @@ class PurpleApp:
                 set_pack_kid(m["id"], kid)
         self.refresh_packs()
         self.notify(f"Couldn't add {', '.join(failed)}" if failed else f"Added {', '.join(m['name'] for m in added)}", timeout=3)
+        self._packs_changed()
         self._pick_new_rooms({m["id"] for m in added})
+
+    def add_waiting_packs(self, waiting):
+        self._settle_offer(waiting, True)
+
+    def _packs_changed(self):
+        for overlay in list(self._overlays):
+            overlay.on_packs_changed()
 
     def _pick_new_rooms(self, packs):
         from ..content import get_content

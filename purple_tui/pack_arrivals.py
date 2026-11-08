@@ -2,7 +2,8 @@
 
 purple_tui/usb_updater.py unpacks each into WAITING_DIR/<sha256 of its file>. One added before
 (same id, same file) goes back in without asking: the Purple Key's own packs on a live boot, where
-installed packs don't outlast a restart. The rest wait for the app to offer them.
+installed packs don't outlast a restart. The rest wait for the app to offer them; Not now moves one
+to LATER_DIR, where the Parent Menu's Purple Packs list still offers it.
 """
 
 import json
@@ -17,6 +18,8 @@ from .settings import get_packs_added, set_pack_added
 from .usb_updater import READING, SKIPPED
 
 WAITING_DIR = Path.home() / ".purple" / "packs-waiting"
+LATER_DIR = WAITING_DIR / ".later"
+UPDATE_SERVICE = Path("/etc/systemd/system/purple-usb-update@.service")  # only on a Purple image
 
 
 def stamp() -> tuple:
@@ -33,15 +36,17 @@ def reading() -> bool:
     return (WAITING_DIR / READING).exists()
 
 
-def _waiting() -> list[tuple[Path, dict]]:
-    if not WAITING_DIR.is_dir():
+def _waiting(folder: Path | None = None) -> list[tuple[Path, dict]]:
+    folder = folder or WAITING_DIR
+    if not folder.is_dir():
         return []
-    return [(d, m) for d in sorted(WAITING_DIR.iterdir()) if not d.name.startswith(".") and (m := read_manifest(d))]
+    return [(d, m) for d in sorted(folder.iterdir()) if not d.name.startswith(".") and (m := read_manifest(d))]
 
 
 def _install(pack_dir: Path) -> bool:
     ok = get_installer().install_dir(pack_dir, replace=True)[0]
-    shutil.rmtree(pack_dir, ignore_errors=True)
+    for d in (pack_dir, LATER_DIR / pack_dir.name):
+        shutil.rmtree(d, ignore_errors=True)
     return ok
 
 
@@ -75,8 +80,22 @@ def add(waiting: list) -> list[str]:
 
 
 def decline(waiting: list) -> None:
+    LATER_DIR.mkdir(parents=True, exist_ok=True)
     for d, _ in waiting:
-        shutil.rmtree(d, ignore_errors=True)
+        if d.parent != LATER_DIR:
+            shutil.rmtree(LATER_DIR / d.name, ignore_errors=True)
+            d.rename(LATER_DIR / d.name)
+
+
+def later() -> list[tuple[Path, dict]]:
+    """The packs someone said Not now to, but not ones whose pack has been added since."""
+    packs_dir, offer = get_installer().packs_dir, []
+    for d, m in _waiting(LATER_DIR):
+        if (packs_dir / m["id"]).exists():
+            shutil.rmtree(d, ignore_errors=True)
+        else:
+            offer.append((d, m))
+    return offer
 
 
 def has_rooms(waiting: list) -> bool:

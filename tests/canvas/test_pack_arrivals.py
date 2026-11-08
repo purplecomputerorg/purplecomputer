@@ -1,15 +1,18 @@
 """A USB drive with a Purple Pack plugged into a running Purple: it is offered, Add (after the
-parent PIN when one is set) puts it in use without a restart, Not now drops it, and one added
-before goes back in without asking."""
+parent PIN when one is set) puts it in use without a restart, Not now leaves it in the Parent Menu's
+Purple Packs list, and one added before goes back in without asking."""
 
+import subprocess
 import tarfile
+import threading
 
 import pytest
 
 from purple_tui import content, pack_arrivals, settings
 from purple_tui.canvas.harness import make_app, press, run, type_text
 from purple_tui.canvas.room_picker import family_rooms
-from purple_tui.canvas.rooms.parent_menu import PinEntry
+from purple_tui.canvas.rooms import save_export
+from purple_tui.canvas.rooms.parent_menu import PinEntry, PurplePacksScreen, _get_menu_items
 from purple_tui.canvas.rooms.rooms_screen import RoomsScreen
 from purple_tui.canvas.ui import Confirm, Notice
 from purple_tui.usb_updater import sha256, update_from
@@ -25,6 +28,7 @@ def drive(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
     monkeypatch.setattr(pack_arrivals, "WAITING_DIR", tmp_path / "waiting")
+    monkeypatch.setattr(pack_arrivals, "LATER_DIR", tmp_path / "waiting" / ".later")
     monkeypatch.setattr(content, "_content", None)
     (tmp_path / "stick").mkdir()
     pack = build_pack(make_pack(tmp_path / "src", ID), tmp_path / "stick" / f"{ID}.purplepack")
@@ -75,15 +79,82 @@ def test_after_add_the_parent_picks_which_rooms_to_turn_on(drive):
     run(go())
 
 
-def test_not_now_drops_it(drive):
+def test_not_now_leaves_it_in_purple_packs_to_add_later(drive):
     async def go():
         app = make_app()
         offered(app, drive)
         await press(app, "down")
         await press(app, "enter")
         assert zorb() is None and app.top is None
-        assert not any(pack_arrivals.WAITING_DIR.iterdir())
+        app._check_pack_arrivals()
+        assert app.top is None
+        assert "menu-purple-packs" in dict(_get_menu_items(app))
+
+        screen = PurplePacksScreen(app)
+        app.push(screen)
+        assert [o[1:] for o in screen.options] == [("The Tests' Purple", "Not added yet · {Enter} to add"), ("Done",)]
+        await press(app, "enter")
+        assert zorb() == "🐙" and isinstance(app.top, RoomsScreen)
+        assert [o[1] for o in screen.options] == ["The Tests' Purple", "Done"] and pack_arrivals.later() == []
     run(go())
+
+
+@pytest.fixture
+def looking(monkeypatch, tmp_path):
+    """Purple Packs reads a plugged-in drive again, at once: returns open(effect, code), which opens
+    Purple Packs with the drive's service run doing effect() and exiting with code."""
+    service = tmp_path / "purple-usb-update@.service"
+    service.touch()
+    monkeypatch.setattr(pack_arrivals, "UPDATE_SERVICE", service)
+    monkeypatch.setattr(save_export, "find_stick", lambda fs: ("/dev/sdz1", None))
+
+    class Now:
+        def __init__(self, target, args=(), **_):
+            self.start = lambda: target(*args)
+
+    def fake_run(effect, code):
+        def run_(cmd, **_):
+            assert cmd == ["sudo", "systemctl", "start", "purple-usb-update@sdz1.service"]
+            effect()
+            return subprocess.CompletedProcess(cmd, code)
+        return run_
+
+    def open_(effect=lambda: None, code=0):
+        app = make_app()
+        monkeypatch.setattr(app, "call_from_thread", lambda fn, *a: fn(*a))
+        monkeypatch.setattr(threading, "Thread", Now)
+        monkeypatch.setattr(subprocess, "run", fake_run(effect, code))
+        screen = PurplePacksScreen(app)
+        app.push(screen)
+        return app, screen
+    return open_
+
+
+def test_purple_packs_offers_a_pack_on_a_drive_that_wasnt_offered(drive, looking):
+    async def go():
+        app, _ = looking(drive)
+        assert isinstance(app.top, Confirm) and "The Tests' Purple" in app.top.DESCRIPTION
+    run(go())
+
+
+@pytest.mark.parametrize("code,note", [(0, "No Purple Pack on the USB drive"), (1, "Couldn't read the USB drive")])
+def test_purple_packs_says_when_the_drive_has_no_pack(looking, code, note):
+    async def go():
+        app, screen = looking(code=code)
+        assert app.top is screen and screen.DESCRIPTION.startswith(note)
+    run(go())
+
+
+def test_a_pack_in_a_folder_on_the_drive_is_found_but_not_a_hidden_one(drive, tmp_path):
+    stick = tmp_path / "stick"
+    pack = next(stick.glob("*.purplepack"))
+    (stick / "Downloads").mkdir()
+    (stick / ".Trashes").mkdir()
+    pack.rename(stick / "Downloads" / pack.name)
+    (stick / ".Trashes" / "old.purplepack").write_bytes(b"not a pack")
+    update_from(stick, pack_arrivals.WAITING_DIR)
+    assert [m["id"] for _, m in pack_arrivals.settle()[2]] == [ID]
+    assert pack_arrivals.take_skipped() == []
 
 
 def test_with_a_parent_pin_add_asks_for_it(drive):
@@ -96,7 +167,7 @@ def test_with_a_parent_pin_add_asks_for_it(drive):
         assert isinstance(app.top, PinEntry)
         await press(app, "escape")  # PinEntry lets go of an Esc that may still be held from the parent menu
         await press(app, "escape")
-        assert app.top is None and zorb() is None and not any(pack_arrivals.WAITING_DIR.iterdir())
+        assert app.top is None and zorb() is None and pack_arrivals.settle()[2] == []
 
         offered(app, drive)
         await press(app, "enter")

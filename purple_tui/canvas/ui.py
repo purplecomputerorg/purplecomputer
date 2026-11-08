@@ -430,6 +430,9 @@ class Overlay:
     def on_close(self):
         pass
 
+    def on_packs_changed(self):
+        """A Purple Pack was added, or put off for later."""
+
     async def handle(self, action):
         pass
 

@@ -1,5 +1,15 @@
-# Purple Computer: family packs from any USB drive, the Purple Key included.
-# Each FAT, exFAT or NTFS partition on a USB drive starts the update service,
-# which installs any .purplepack files at its top level and leaves everything
-# else alone. PURPLE_BOOT and PURPLE_EFI are Purple's own system partitions.
-ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_FS_TYPE}=="vfat|exfat|ntfs", ENV{ID_FS_LABEL}!="PURPLE_BOOT|PURPLE_EFI", TAG+="systemd", ENV{SYSTEMD_WANTS}+="purple-usb-update@%k.service"
+# Purple Computer: family packs from any USB drive or SD card, the Purple Key included.
+# Each FAT, exFAT, NTFS or Mac (HFS+) partition starts the update service, which
+# sets aside any .purplepack files on it and leaves everything else alone.
+# PURPLE_BOOT and PURPLE_EFI are Purple's own system partitions. SD cards match by
+# type: a laptop's built-in eMMC disk is an mmc device too, but of type MMC.
+ACTION!="add", GOTO="purple_update_end"
+SUBSYSTEM!="block", GOTO="purple_update_end"
+ENV{ID_FS_TYPE}!="vfat|exfat|ntfs|hfsplus", GOTO="purple_update_end"
+ENV{ID_FS_LABEL}=="PURPLE_BOOT|PURPLE_EFI", GOTO="purple_update_end"
+ENV{ID_BUS}=="usb", GOTO="purple_update_run"
+SUBSYSTEMS=="mmc", ATTRS{type}=="SD", GOTO="purple_update_run"
+GOTO="purple_update_end"
+LABEL="purple_update_run"
+TAG+="systemd", ENV{SYSTEMD_WANTS}+="purple-usb-update@%k.service"
+LABEL="purple_update_end"

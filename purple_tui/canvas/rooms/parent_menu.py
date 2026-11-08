@@ -274,21 +274,37 @@ class FeaturesScreen(Picker):
 
 
 class PurplePacksScreen(Picker):
-    """Each Purple Pack added from a USB drive."""
+    """Each Purple Pack added from a USB drive, and the ones put off for later. Opening it reads a
+    plugged-in drive again, for a pack that wasn't offered when the drive went in."""
     title = "Purple Packs"
     DESCRIPTION = "Pictures, words, and sounds from Purple Studio."
 
     def __init__(self, app):
         super().__init__(app, self._options())
 
+    def on_open(self):
+        self.app.look_for_packs(self._looked)
+
+    def _looked(self, note):
+        self.DESCRIPTION = note or type(self).DESCRIPTION
+        self.app.invalidate()
+
+    def on_packs_changed(self):
+        self.options = self._options()
+        self.selected = min(self.selected, len(self.options) - 1)
+        self.app.invalidate()
+
     def _options(self) -> list:
+        from ...pack_arrivals import later
         from ...pack_manager import get_installer
-        return [(p["id"], p["name"], _pack_for(p["id"]) if many() else "{Enter} to remove")
-                for p in get_installer().list_installed()] + [(None, "Done")]
+        return ([(p["id"], p["name"], _pack_for(p["id"]) if many() else "{Enter} to remove") for p in get_installer().list_installed()]
+                + [(("add", d, m), m["name"], "Not added yet · {Enter} to add") for d, m in later()] + [(None, "Done")])
 
     def _on_confirm(self, pack_id):
         if pack_id is None:
             return self.close(True)
+        if isinstance(pack_id, tuple):
+            return self.app.add_waiting_packs([pack_id[1:]])
         name = self.options[self.selected][1]
         if not many():
             return self._ask_remove(pack_id, name)
@@ -326,6 +342,12 @@ class PurplePacksScreen(Picker):
 def _purple_packs_label() -> str:
     from ...pack_manager import get_installer
     return f"Purple Packs: {len(get_installer().list_installed())}"
+
+
+def _has_purple_packs() -> bool:
+    from ...pack_arrivals import later
+    from ...pack_manager import get_installer
+    return bool(get_installer().list_installed() or later())
 
 
 def _pack_for(pack_id: str) -> str:
@@ -1240,7 +1262,6 @@ def _rename_label(app) -> str:
 
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
-    from ...pack_manager import get_installer
     from ...settings import get_all_caps, get_littles_mode, get_parent_pin, get_voice, get_volume_lock
     items = [("menu-help", "Help & Videos")]
     if is_live_boot():
@@ -1252,7 +1273,7 @@ def _get_menu_items(app) -> list:
     items.append(("menu-rooms", rooms_label(app)))
     if not get_littles_mode():
         items.append(("menu-features", _features_label()))
-    if get_installer().list_installed():
+    if _has_purple_packs():
         items.append(("menu-purple-packs", _purple_packs_label()))
     items.append(("menu-all-caps", "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"))
     if i18n.languages():

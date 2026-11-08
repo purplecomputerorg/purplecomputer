@@ -134,6 +134,7 @@ class PurpleApp:
         self._hold_nudge = None
         self._hold_nudge_timer = None
         self._overlays: list[Overlay] = []
+        self._family_rooms: dict = {}  # room key -> its FamilyRoom, kept running while hidden
         self._littles_mode = None
         self._code_panel_enabled = True
         self._code_panel_active = False
@@ -413,7 +414,7 @@ class PurpleApp:
         return self._overlays[-1] if self._overlays else None
 
     def push(self, overlay: Overlay, on_close=None):
-        overlay._on_close = on_close
+        overlay._on_close, overlay.closed = on_close, False
         self._overlays.append(overlay)
         overlay.on_open()
         self.invalidate()
@@ -781,7 +782,16 @@ class PurpleApp:
         if here:
             here.close()
         self._silence_music()
-        self.push(FamilyRoom(self, room))
+        if room.key not in self._family_rooms:
+            self._family_rooms[room.key] = FamilyRoom(self, room)
+        self.push(self._family_rooms[room.key])
+
+    def _end_family_rooms(self):
+        """The packs changed: hidden family rooms end now, the one on screen when the kid leaves it."""
+        rooms, self._family_rooms = self._family_rooms, {}
+        for room in rooms.values():
+            if room.closed:
+                room._stop()
 
     def _check_pack_arrivals(self):
         from .. import pack_arrivals
@@ -875,6 +885,7 @@ class PurpleApp:
             i18n.reload()
             reload_content()
         theme.apply(theme.find())
+        self._end_family_rooms()
         self.rooms["art"]._repaint_all()  # its cached canvas only repaints cells that changed
         self.save_pictures.clear()
         for room in self.rooms.values():

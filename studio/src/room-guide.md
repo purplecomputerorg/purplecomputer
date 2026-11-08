@@ -69,7 +69,7 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `every(seconds, fn)`, `after(seconds, fn)` | Call `fn` over and over, or once, at least 0.1 seconds apart. Both give back a timer you can `.stop()`. |
 | `game_over(text)` | Stops the timers and shows the text. A new key press, a moment later, starts the room over from the top, with fresh variables; `keep` stays. |
 | `state(score=0)` | A place for what changes as the room plays: `game = state(score=0)` at the top, then `game.score += 1` in any function, with no `global` needed. |
-| `keep` | A dict Purple remembers for next time: `keep["best"] = 12`. Words, numbers, lists, and dicts, up to 4 KB. Purple saves it when your kid leaves the room. |
+| `keep` | A dict Purple remembers even after it turns off: `keep["best"] = 12`. Words, numbers, lists, and dicts, up to 4 KB. Purple saves it when your kid leaves the room. Leaving only pauses a room, so everything else is still there when your kid comes back, until Purple turns off. |
 | `images`, `sounds` | The pack's picture names (each with its size in pixels) and sound names. |
 
 A mistake, like `drum("snar")` or a picture the pack doesn't have, stops the room with a message saying which line it's on.

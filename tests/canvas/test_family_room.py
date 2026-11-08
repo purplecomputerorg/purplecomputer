@@ -122,7 +122,44 @@ def test_snake_moves_on_its_timer_and_turns_with_arrows(pack):
         await until(lambda: next(iter(cells(room)))[1] >= 7)
         assert room.fault is None
         room.close()
-        assert app.top is None and room._guest is None
+    run(go())
+
+
+def test_a_room_left_for_another_waits_as_it_was(pack):
+    for name in ("snake", "worm"):
+        pack(name, SNAKE)
+
+    async def go():
+        app = make_app()
+        snake = _open(app, "snake")
+        await until(lambda: cells(snake) and next(iter(cells(snake)))[0] >= 7)
+        guest = snake._guest
+        app._on_room_picked({"room": "art"})
+        assert app.top is None and snake._surface is None and not snake._audible()
+        await asyncio.sleep(0.3)
+        assert snake._woke_hidden and snake._wake is None
+        where = cells(snake)
+        worm = _open(app, "worm")
+        await until(lambda: cells(worm))
+        assert _open(app, "snake") is snake and snake._guest is guest and cells(snake) == where
+        await until(lambda: cells(snake) != where)
+        assert _open(app, "worm") is worm and worm._guest is not None
+    run(go())
+
+
+def test_a_pack_change_ends_hidden_rooms_and_the_open_one_once_left(pack):
+    for name in ("snake", "worm"):
+        pack(name, SNAKE)
+
+    async def go():
+        app = make_app()
+        snake = _open(app, "snake")
+        worm = _open(app, "worm")
+        app.refresh_packs(reread=False)
+        assert snake._guest is None and worm._guest is not None
+        worm.close()
+        assert worm._guest is None
+        assert _open(app, "worm") is not worm
     run(go())
 
 
@@ -149,7 +186,7 @@ def test_esc_picks_a_room_like_any_room(pack):
         assert app.top is room and room._guest is not None
         await press(app, "escape")
         await press(app, "6")
-        assert app.top.room.name == "snake" and room._guest is None
+        assert app.top.room.name == "snake" and room.closed and room._guest is not None
         await press(app, "escape")
         await press(app, "2")
         assert app.top is None and app.active_room == app.kid_rooms[1]
@@ -334,7 +371,7 @@ def test_a_room_remembers_what_it_keeps(pack):
         room = _open(app, "visits")
         await until(lambda: texts(room) == ["1"])
         room.close()
-        room = _open(app, "visits")
+        room = _open(make_app(), "visits")
         await until(lambda: texts(room) == ["2"])
         room.close()
     run(go())

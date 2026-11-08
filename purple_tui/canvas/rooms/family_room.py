@@ -5,6 +5,7 @@ whole scene as shapes, sounds, when to tick next, and what to remember. All
 the room ideas (text, the grid, ask, timers) live in the guest library,
 roomkit/purple.py, which the pack carries, so this side never needs to grow.
 It opens over the built-in room, which waits as it was; Esc opens the room picker, as in any room.
+Leaving hides it: the app keeps it running, paused, until the kid comes back or its pack changes.
 Protocol and safety: guides/family-rooms.md."""
 
 import json
@@ -235,6 +236,7 @@ class FamilyRoom(Overlay):
         self._last_flash = -math.inf
         self._busy, self._queue = True, []
         self._held: set = set()      # keys the room was told went down and not yet up
+        self._woke_hidden = False
         self._t0, self._paused, self._paused_at = time.monotonic(), 0.0, None
 
     @property
@@ -244,10 +246,21 @@ class FamilyRoom(Overlay):
 
     # ---------------------------------------------------------------- process
     def on_open(self):
-        self._start()
+        if self._guest is None:
+            self._start()
+        elif self._woke_hidden:
+            self._woke_hidden = False
+            self._tick()
 
     def on_close(self):
-        self._stop()
+        if self.app._family_rooms.get(self.room.key) is not self:
+            return self._stop()  # its pack changed, or Studio opened it to try
+        self._release_all()
+        if self._paused_at is None:
+            self._paused_at = time.monotonic()
+        self._surface = None
+        self._scaled.clear()
+        self._save_keep()
 
     def _start(self):
         self._stop()
@@ -279,6 +292,9 @@ class FamilyRoom(Overlay):
         guest, self._guest, self._token = self._guest, None, None
         if guest:
             guest.stop()
+        self._save_keep()
+
+    def _save_keep(self):
         if self._keep_dirty:
             save_keep(self.room, self._keep)
             self._keep_dirty = False
@@ -315,8 +331,8 @@ class FamilyRoom(Overlay):
         return True
 
     def _tick(self):
-        """The room's wake time came. Its clock stops while a menu covers it or the kid has
-        stepped away; it looks again shortly, without drawing anything."""
+        """The room's wake time came. Its clock stops while a menu covers it, the kid has stepped
+        away, or it's hidden; it looks again shortly, or when it's shown, without drawing anything."""
         self._wake = None
         idle = time.monotonic() - self._last_key > IDLE_PAUSE_S
         if idle and not self._resting:
@@ -326,7 +342,10 @@ class FamilyRoom(Overlay):
             self._release_all()  # its releases went to whatever covers it
             if self._paused_at is None:
                 self._paused_at = time.monotonic()
-            self._wake = self.app.timers.after(PAUSED_RECHECK_S, self._tick)
+            if self.closed:
+                self._woke_hidden = True
+            else:
+                self._wake = self.app.timers.after(PAUSED_RECHECK_S, self._tick)
             return
         self._send({"ev": "tick"})
 
@@ -518,7 +537,7 @@ class FamilyRoom(Overlay):
         return img
 
     def _audible(self) -> bool:
-        return self.app._effective_volume() > 0
+        return not self.closed and self.app._effective_volume() > 0
 
     def _play(self, sounds: list):
         """One reply's sounds; its say()s are spoken one after another, and cut off what's still being said."""

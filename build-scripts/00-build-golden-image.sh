@@ -964,6 +964,8 @@ LAUNCHER
     # Parent Menu terminal: `check-room` lists the family rooms on this computer and says why one stopped
     printf '#!/bin/sh\nPYTHONPATH=/opt/purple exec python3 -m purple_tui.roomkit.check "$@"\n' > "$MOUNT_DIR/usr/local/bin/check-room"
     chmod +x "$MOUNT_DIR/usr/local/bin/check-room"
+    printf '#!/bin/sh\nPYTHONPATH=/opt/purple exec python3 -m purple_tui.stay_awake "$@"\n' > "$MOUNT_DIR/usr/local/bin/stay-awake"
+    chmod +x "$MOUNT_DIR/usr/local/bin/stay-awake"
 
     # Mask getty@tty1: the purple-x11 service owns tty1 directly (no login shell needed)
     chroot "$MOUNT_DIR" systemctl mask getty@tty1.service

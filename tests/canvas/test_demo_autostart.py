@@ -84,3 +84,33 @@ def test_away_skips_sleep_face_and_shuts_down_on_its_own_timer(monkeypatch):
         app._check_idle_state()
         assert shown == ["bye"]
     run(go())
+
+
+def test_stay_awake_skips_sleep_and_shutdown(tmp_path, monkeypatch):
+    """`stay-awake` in the terminal holds off idle sleep and shutdown, even
+    while away, and turning it off doesn't count the held time as idle."""
+    from types import SimpleNamespace
+
+    from purple_tui import power_manager, stay_awake
+    from purple_tui.power_manager import get_power_manager
+    monkeypatch.setattr(power_manager, "can_power_back_on", lambda: True)
+    monkeypatch.setattr(stay_awake, "FLAG", tmp_path / "flag")
+
+    async def go():
+        app = make_app()
+        shown = []
+        monkeypatch.setattr(app, "_show_sleep_screen", lambda: shown.append("sleep"))
+        monkeypatch.setattr(app, "_show_bye_screen", lambda: shown.append("bye"))
+        app._evdev_reader = SimpleNamespace(away=True)
+        pm = get_power_manager()
+        assert stay_awake.main([]) == 0
+        pm._last_activity -= 100_000
+        app._check_idle_state()
+        assert shown == []
+        assert stay_awake.main(["off"]) == 0
+        app._check_idle_state()
+        assert shown == []
+        pm._last_activity -= 100_000
+        app._check_idle_state()
+        assert shown == ["bye"]
+    run(go())

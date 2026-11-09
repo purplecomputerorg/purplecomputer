@@ -8,6 +8,7 @@
 echo ""
 echo "  Purple Computer terminal"
 echo "  Type check-room to see why a family room stopped."
+echo "  Type stay-awake to keep Purple from sleeping or turning off (events, demos)."
 echo "  Type exit and press Enter to go back to Purple."
 echo ""
 

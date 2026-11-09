@@ -20,7 +20,7 @@ import pygame
 from .. import boot_log
 from .frame_stats import FrameStats
 from .. import palette as P
-from .. import printing
+from .. import printing, stay_awake
 from ..constants import (
     CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
     ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_COMPUTER, ICON_MENU,
@@ -156,6 +156,7 @@ class PurpleApp:
         self._bye_screen_active = False
         self._app_suspended = False
         self._idle_inhibitors: set = set()
+        self._stay_awake = False
         self._idle_timer = self._audio_idle_timer = None
         self._demo_player = self._demo_task = None
         self._code_task = None
@@ -1460,6 +1461,12 @@ class PurpleApp:
                     self._show_bye_screen()
                 elif int(elapsed) % 30 == 0:
                     _power_log(f"TICK: lid closed {elapsed:.0f}s/{LID_SHUTDOWN_DELAY}s, charger={charger}")
+                return
+            if stay_awake.is_on() != self._stay_awake:
+                self._stay_awake = not self._stay_awake
+                _power_log(f"STAY AWAKE: {'on' if self._stay_awake else 'off'}")
+            if self._stay_awake:
+                pm.record_activity()
                 return
             if self._is_sleep_or_bye_active() or self._idle_inhibitors:
                 return

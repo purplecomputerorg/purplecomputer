@@ -147,7 +147,7 @@ trap cleanup_build EXIT
 fetch_pinned() {
     local url="$1" sha="$2" name="${3:-$(basename "$1")}"
     # Cached only once the hash matches, so a dropped transfer never wedges later builds
-    if ! echo "$sha  $BUILD_DIR/$name" | sha256sum -c --quiet 2>/dev/null; then
+    if ! echo "$sha  $BUILD_DIR/$name" | sha256sum -c --quiet &>/dev/null; then
         curl -fsSL "$url" -o "$BUILD_DIR/$name.part"
         echo "$sha  $BUILD_DIR/$name.part" | sha256sum -c --quiet
         mv "$BUILD_DIR/$name.part" "$BUILD_DIR/$name"

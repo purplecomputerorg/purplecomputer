@@ -249,9 +249,9 @@ release *args:
 # The shipping branch's worktree; see guides/release-guide.md, Release Branch
 release_dir := env_var("HOME") / "purplecomputer-release"
 
-# What main has that the 2.0 download or live Studio doesn't, and what to run for each (1.x: release-status)
-ship-status:
-    @./build-scripts/ship-status.sh
+# One line each for the ISO build, both downloads, Studio and purplecomputer.org: behind main? what to run (-v lists commits)
+ship-status *args:
+    @./build-scripts/ship-status.sh {{args}}
 
 # Show what ships vs what waits (= on release/1.x, + main only)
 release-status *args:

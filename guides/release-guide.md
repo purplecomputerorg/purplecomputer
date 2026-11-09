@@ -125,7 +125,7 @@ just flash-debug    # debug ISO
 
 `purple2.purplecomputer.org` offers a main build to people granted 2.0 access on the landing admin's downloads access page (or holding the `?key=PURPLE2_ACCESS_KEY` link). An order email alone doesn't unlock it. Build on main (`just build`), then `just ship-2 [commit]` uploads standard + debug to `purple2/<version>/` on the files host, writes `purple2/latest.json` (same shape as `latest.json`), and prunes `purple2/` to that version plus the one it replaced. It never touches `releases/`, `latest.json` or the redirects, so `release-status` and `release-check` keep reading 1.x. It tags the commit with its `v2.0.N` version (see Versioning) and pushes the tag. The page links the versioned paths straight from `purple2/latest.json`, so there are no redirects to maintain.
 
-`just ship-status` shows what main has that the 2.0 download or live Studio doesn't, what to run for each, and whether Studio's live Purple is ahead of the download (its demo and packs then show Purple families can't get yet). `just ship-2` and `just studio-deploy` print it when they finish.
+`just ship-status` gives one line each for the newest ISO build, the 2.0 and 1.x downloads, Studio, and purplecomputer.org: whether it's behind main and what to run (`-v` lists the missing commits). It also flags Studio running Purple the 2.0 download doesn't have yet, since its demo and packs then show Purple families can't get. `just ship-2` and `just studio-deploy` print it when they finish.
 
 ---
 

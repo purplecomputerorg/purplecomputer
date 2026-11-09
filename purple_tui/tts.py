@@ -86,7 +86,7 @@ LETTER_PRONUNCIATION = {
     "A": "ehh", "B": "bee", "C": "see", "D": "dee", "E": "ee",
     "F": "ef.", "G": "jee", "H": "aitch", "I": "eye", "J": "jay",
     "K": "kay", "L": "el", "M": "em", "N": "en", "O": "oh",
-    "P": "pee", "Q": "cue", "R": "ar", "S": "es", "T": "tee",
+    "P": "pee", "Q": "cue", "R": "ar", "S": "ess", "T": "tee",
     "U": "you", "V": "vee", "W": "double you", "X": "ex",
     "Y": "why", "Z": "zee",
     "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
@@ -356,11 +356,12 @@ def _get_voice_clip(text: str, room_voice: Path | None = None, family: bool = Tr
     if len(filename.encode()) > 255:
         return None
     from .content import get_content
-    packs = get_content().pack_dirs("voice") if family else []
-    for clips_dir in ([room_voice] if room_voice else []) + packs + [VOICE_CLIPS_DIR]:
-        if (clips_dir / filename).exists():
-            return clips_dir / filename
-    return None
+    content = get_content()
+    dirs = ([room_voice] if room_voice else []) + (content.pack_dirs("voice") if family else []) + [VOICE_CLIPS_DIR]
+    # A lone key says its name like Music's Letters; packs' letters/ are names, not family messages
+    if text.strip().upper() in LETTER_PRONUNCIATION:
+        dirs += content.pack_dirs("letters") + [VOICE_CLIPS_DIR.parent / "letters"]
+    return next((d / filename for d in dirs if (d / filename).exists()), None)
 
 def _get_voice_search_paths(kind: str = "piper") -> list[Path]:
     """Where a voice of this kind may live: real and overridden $HOME, then the image path."""

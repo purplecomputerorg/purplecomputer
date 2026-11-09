@@ -58,6 +58,18 @@ class TestVoiceClipLookup:
         long_text = " ".join(["divided by"] * 24) + " 2"
         assert tts._get_voice_clip(long_text) is None
 
+    @pytest.mark.parametrize("text, clip", [("s", "s.wav"), (" A ", "a.wav"), ("5", "5.wav")])
+    def test_a_lone_key_plays_its_letters_clip(self, text, clip):
+        assert tts._get_voice_clip(text) == tts.VOICE_CLIPS_DIR.parent / "letters" / clip
+
+    @pytest.mark.parametrize("text", ["aaa", "as", "a b", "55"])
+    def test_longer_text_never_plays_a_letters_clip(self, text):
+        assert tts._get_voice_clip(text) is None
+
+    def test_ess_is_spoken_as_the_letter(self):
+        from piper.phonemize_espeak import EspeakPhonemizer
+        assert EspeakPhonemizer().phonemize("en-us", tts._prepare_text("s")) == [["ˈ", "ɛ", "s", "."]]
+
 
 def _write_tone(wav_path, seconds=0.2, rate=16000):
     import math

@@ -10,11 +10,11 @@
 #let room(n, name, body) = panel(title: grid(columns: (1fr, auto), name, icon(ICONS.at(lower(name.text)))), n: n, body)
 
 #room(1, [Art])[
-  Every letter paints its sticker color. #key("Space") puts the brush down so arrows paint. #key("Tab") switches to letters.
+  Every letter paints its color. #key("Space") puts the brush down so arrows paint. #key("Tab") switches between colors and letters.
 ]
 #gap
 #room(2, [Music])[
-  Every key plays a note and lights up. #key("Enter") changes the instrument. #key("Tab") switches to saying letters.
+  Every key plays a note. #key("Enter") changes the instrument. #key("Tab") switches between music and saying letters.
 ]
 #gap
 #room(3, [Play])[
@@ -46,14 +46,14 @@
 #header(title: [Cool things to try], qr: none, note: none)
 #gap
 
-#tiles(pad: 12pt,
-  ([Purple talks.], [In Play, add #mono("!") or start with #mono("say"): #typed("hello!") or #typed("say I love you"). #key("Tab") also turns talking on.]),
-  ([Loop like a DJ.], [In Music, *hold* #key("Enter") to record a tune, then play along with it.]),
-  ([Colors mix like paint.], [Hold two letters in Art or Blocks: #sticker("F", "#E6CE55") + #sticker("V", "#4C7FE5", ink: white) makes green. #key("\\") opens every color.]),
-  ([Spell a word.], [In Music, press #key("Tab"), then type #mono("cat"). The cat shows up, and #key("Space") says it.]),
-  ([Rewind anything.], [Press #key("Esc") #key("T") for *Time Travel*, then hold #key("←") to watch the room go backward. #key("Enter") keeps that moment, even after a big erase.]),
-  ([See your own code.], [Paint or build something, then hold #key("Esc") and press #key("Space"). Purple shows the code for what you just did. More on card 3.]),
-  ([Made for little hands.], [Tap #key("Shift"), then a letter, for a capital. No need to hold two keys. Typos are OK: #typed("2 plsu 3") or #typed("2++3") still makes 5.]),
+#tiles(pad: 10pt,
+  ([Purple talks.], [In *Play*, add #mono("!") or start with #mono("say"): #typed("hello!") or #typed("say I love you"). #key("Tab") also turns talking on.]),
+  ([Loop like a DJ.], [In *Music*, *hold* #key("Enter") to record a tune, then play along with it.]),
+  ([Colors mix like paint.], [Hold two letters in *Art* or *Blocks*: #sticker("F", "#E6CE55") + #sticker("V", "#4C7FE5", ink: white) makes green. #key("\\") opens every color.]),
+  ([Letter sounds.], [In *Music*, press #key("Tab") and keys say their letters. #key("Enter") switches between letter names and sounds. Type #mono("cat"), then #key("Space") to hear the word.]),
+  ([Rewind anything.], [Press #key("Esc") #key("T") for *Time Travel*, then hold #key("←") to watch the room go backward. #key("Enter") restores to that moment.]),
+  ([See your own code.], [Paint or build something, then hold #key("Esc") and press #key("Space"). Purple shows the code for what you just did.]),
+  ([Made for little hands.], [Tap #key("Shift"), then a letter, for a capital. No need to hold two keys. Typos are okay: #typed("2 plsu 3") or #typed("2++3") still makes 5.]),
 )
 
 

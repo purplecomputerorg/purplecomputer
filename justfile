@@ -249,6 +249,10 @@ release *args:
 # The shipping branch's worktree; see guides/release-guide.md, Release Branch
 release_dir := env_var("HOME") / "purplecomputer-release"
 
+# What main has that the 2.0 download or live Studio doesn't, and what to run for each (1.x: release-status)
+ship-status:
+    @./build-scripts/ship-status.sh
+
 # Show what ships vs what waits (= on release/1.x, + main only)
 release-status *args:
     @./build-scripts/release-status.sh {{args}}
@@ -303,6 +307,7 @@ link-iso *args:
 # just ship-2 [commit], default HEAD (offers the newest main build when HEAD has none).
 ship-2 *args:
     ./build-scripts/upload-purple2.sh {{args}}
+    @echo && ./build-scripts/ship-status.sh
 
 # Host a built commit's ISO for one customer at files.purplecomputer.org/oneoff/<name>.iso, outside the release paths.
 # just ship-oneoff <commit> [name] [--debug|--standard|--backup]; asks for the name when omitted, debug ISO by default
@@ -438,6 +443,7 @@ studio-deploy *args: studio-bundle
     cd studio && rm -rf .vercel/output/static && cp -r dist .vercel/output/static
     cd studio && vercel deploy --prebuilt {{args}}
     @case " {{args}} " in *" --prod "*) ;; *) printf '\n\033[1;33m%s\n%s\033[0m\n\n' "  PREVIEW ONLY: studio.purplecomputer.org did not change." "  To go live: just studio-deploy --prod  (or: cd studio && vercel promote <preview-url>)" ;; esac
+    @echo && ./build-scripts/ship-status.sh
 
 # Purple Studio: every page and room at every editor width; lists anything sticking out of its card (needs Firefox)
 studio-layout *args:

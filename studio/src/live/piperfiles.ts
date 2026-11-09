@@ -4,4 +4,5 @@ import exported from "@sdk/purple/export.json";
 
 export const { speaker: SPEAKER, scales: SCALES, word_gap: WORD_GAP, espeak_data: ESPEAK_DATA } = exported.voice.piper;
 export const MODEL = `${exported.voice.piper.model}.onnx`;
-export const CACHE = "purple-voice-1";
+// A new name for each new model, so a visitor's browser drops the old one (cached() in espeak.ts).
+export const CACHE = "purple-voice-2";

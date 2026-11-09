@@ -27,7 +27,7 @@ from purple_tui.canvas.rooms.family_room import TEXT_MAX  # noqa: E402
 from purple_tui.palette import KEY_COLORS  # noqa: E402
 from purple_tui.canvas.sounds import CLIP_NAMES, SAMPLE_VOLUME  # noqa: E402
 from purple_tui.roomkit.purple import H as ROOM_H, W as ROOM_W  # noqa: E402
-from purple_tui.tts import VOICE_MODEL, VOICE_SPEAKER, _SYNTH_PARAMS, voice_clip_filename  # noqa: E402
+from purple_tui.tts import VOICE_MODEL, VOICE_NOISE, VOICE_SPEAKER, _SYNTH_PARAMS, voice_clip_filename  # noqa: E402
 from tools.photo_to_art import fit_to_canvas  # noqa: E402
 
 EXPORT_PATH = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
@@ -94,7 +94,7 @@ def build_export() -> dict:
             "clip_filenames": {text: voice_clip_filename(text) for text in CLIP_EXAMPLES},
             # Studio's Piper: the model input "scales" is noise, length, noise_w.
             "piper": {"model": VOICE_MODEL, "speaker": VOICE_SPEAKER,
-                      "scales": [_SYNTH_PARAMS[k] for k in ("noise_scale", "length_scale", "noise_w")],
+                      "scales": [VOICE_NOISE, _SYNTH_PARAMS["length_scale"], _SYNTH_PARAMS["noise_w"]],
                       "word_gap": _SYNTH_PARAMS["word_gap"],
                       "espeak_data": ESPEAK_DATA},
         },

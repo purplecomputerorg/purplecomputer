@@ -19,7 +19,7 @@ const purple = (): Credit[] => [
   ["Debian", "https://www.debian.org/legal/licenses/", "The base OS on 32-bit machines.", "Various"],
   ["Python", "https://www.python.org", "Purple's language and runtime.", "PSF"],
   ["pygame-ce", "https://pyga.me", "Rendering and audio.", "LGPL-2.1"],
-  ["Piper voice", "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/libritts_r/medium", "Text to speech model, run on device.", "CC BY 4.0"],
+  ["Piper voice", "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/libritts_r/medium", "Text to speech model, run on device. Purple changed its random noise to a fixed table, so a word always sounds the same.", "CC BY 4.0"],
   ["espeak-ng", "https://github.com/espeak-ng/espeak-ng", "Phonemizer for the Piper voice.", "GPL-3.0", espeakSource()],
   ["Open Letter Sounds", "https://github.com/purplecomputerorg/openlettersounds", "The letter sounds in the Music room. Made by Purple and free for anyone to use.", "CC0"],
   ["spectral.js", "https://github.com/rvanwijnen/spectral.js", "Paint mixing in the Art room.", "MIT"],

@@ -38,6 +38,7 @@ async function download(url: string, progress: Progress): Promise<Uint8Array<Arr
 
 // A model is the one big file, kept so a later visit doesn't download it again.
 export async function cached(url: string, progress: Progress): Promise<Uint8Array> {
+  void caches.keys().then((names) => names.filter((n) => n.startsWith("purple-voice-") && n !== CACHE).forEach((n) => caches.delete(n)));
   const cache = await caches.open(CACHE);
   const hit = await cache.match(url);
   if (hit) return new Uint8Array(await hit.arrayBuffer());

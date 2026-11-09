@@ -644,7 +644,7 @@
    "model": "en_US-libritts_r-medium",
    "speaker": 166,
    "scales": [
-    0.0,
+    0.333,
     1.6,
     0.0
    ],

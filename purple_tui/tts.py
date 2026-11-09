@@ -4,7 +4,8 @@ Text-to-Speech module: Piper (the Natural voice) or flite (the Quick voice).
 Piper is a fast, local, neural TTS system: https://github.com/rhasspy/piper
 flite is CMU's small synthesizer, no ML runtime: http://cmuflite.org
 
-Deterministic synthesis: fixed _SYNTH_PARAMS, so identical input produces identical WAV output.
+Deterministic synthesis: fixed _SYNTH_PARAMS, and an English model whose noise is a fixed table
+(scripts/steady_voice.py), so identical input produces identical WAV output.
 """
 
 import array
@@ -49,6 +50,9 @@ def _dbg(msg: str) -> None:
 # Voice model configuration
 VOICE_MODEL = "en_US-libritts_r-medium"
 VOICE_SPEAKER = 166  # speaker 6006
+# Noise gives s, z and f their hiss (at 0 they come out tinny). Only the English model's noise is a
+# fixed table (scripts/voice_model.sh); the language models' is random, so theirs stays 0.
+VOICE_NOISE = 0.333
 
 # The Quick voice is what the parent menu can pick, and what speaks when Piper
 # is absent (32-bit builds have no onnxruntime).
@@ -58,7 +62,7 @@ FLITE_VOICE = "cmu_us_lnh"
 _FLITE = "flite"
 _FLITE_STRETCH = 1.3  # slower than flite's default, short of drawly; flite has no word-gap control
 
-# Noise 0: any other value gives a different take each render, and each machine caches its own.
+# Noise 0 except VOICE_NOISE for the English model: a random model gives a different take each render.
 # Parameter names vary across piper-tts versions, so we try all known variants.
 _SYNTH_PARAMS = {
     "noise_scale": 0.0,
@@ -251,7 +255,7 @@ _MAX_CACHE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 _SYNTH_SIGNATURES = {
-    VOICE_NATURAL: repr((VOICE_MODEL, VOICE_SPEAKER, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB)),
+    VOICE_NATURAL: repr((VOICE_MODEL, VOICE_SPEAKER, VOICE_NOISE, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB)),
     VOICE_QUICK: repr((FLITE_VOICE, _FLITE_STRETCH, SPEECH_RMS_DB, SPEECH_CEILING_DB)),
 }
 _LANG_ENGINE = "natural:"  # + a language pack's Piper model
@@ -571,12 +575,13 @@ def _ensure_mixer() -> bool:
 
 def _make_synth_config(model: str = VOICE_MODEL):
     """Build a SynthesisConfig using only parameters the installed version accepts.
-    Language voices have one speaker; only the English model picks one."""
+    Language voices have one speaker and random noise, so only the English model sets either."""
     from piper.config import SynthesisConfig
     import dataclasses
     valid = {f.name for f in dataclasses.fields(SynthesisConfig)}
     kwargs = {k: v for k, v in _SYNTH_PARAMS.items() if k in valid}
-    kwargs["speaker_id"] = VOICE_SPEAKER if model == VOICE_MODEL else None
+    if model == VOICE_MODEL:
+        kwargs.update(speaker_id=VOICE_SPEAKER, noise_scale=VOICE_NOISE)
     return SynthesisConfig(**kwargs)
 
 

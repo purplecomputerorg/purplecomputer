@@ -172,3 +172,24 @@ def test_preload_talks_to_the_worker_and_falls_back_when_it_dies(monkeypatch):
     assert tts._worker_synthesize("banana.", "/tmp/y.wav") is None
     assert tts._worker is None
     os.close(r_req)
+
+
+class TestSteadyVoice:
+    """The English voice's noise is a fixed table (scripts/steady_voice.py), so it can be on and still
+    say the same text the same way every time; the language voices' noise is random, so it stays off."""
+
+    def test_only_the_english_voice_has_noise(self):
+        pytest.importorskip("piper")
+        assert tts._make_synth_config().noise_scale == tts.VOICE_NOISE > 0
+        assert tts._make_synth_config("es_MX-ald-medium").noise_scale == 0
+
+    def test_the_same_text_sounds_the_same(self, tmp_path):
+        pytest.importorskip("piper")
+        if tts.find_voice_model() is None:
+            pytest.skip("no English voice model here")
+        voice, wavs = tts.load_voice(), []
+        for n in range(2):  # one load, as Purple keeps: a random model restarts alike but differs on the next call
+            wav = tmp_path / f"{n}.wav"
+            assert tts.synthesize_to_file(voice, tts._prepare_text("Let's mix colors."), str(wav))
+            wavs.append(wav.read_bytes())
+        assert wavs[0] == wavs[1], "the voice model isn't the steady one: run scripts/install_piper_voice.sh"

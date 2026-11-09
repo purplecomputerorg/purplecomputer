@@ -908,15 +908,16 @@ TMPFILES
 
     chroot "$MOUNT_DIR" apt-get remove --purge -y --no-auto-remove gcc make linux-libc-dev python3-dev 2>/dev/null || true
 
-    # Download Piper TTS voice model (LibriTTS-R medium - American English, speaker 6006)
-    # Medium is ~4.5x faster than high on CPUs without AVX (Celeron N3060/N4000).
-    # The i386 image has no onnxruntime, so it gets only the flite voice below.
-    # The Spanish and Mandarin voices belong to packs/lang-es and packs/lang-zh.
+    # Download Piper TTS voice models. English is LibriTTS-R medium (American English, speaker 6006)
+    # with its noise fixed, from R2 (scripts/voice_model.sh). Medium is ~4.5x faster than high on CPUs
+    # without AVX (Celeron N3060/N4000). The i386 image has no onnxruntime, so it gets only the flite
+    # voice below. The Spanish and Mandarin voices belong to packs/lang-es and packs/lang-zh.
     if [ "$PIPER" = 1 ]; then
         log_info "Downloading Piper TTS voice models..."
         VOICE_DIR="$MOUNT_DIR/opt/purple/piper-voices"
-        mkdir -p "$VOICE_DIR"
-        for VOICE_PATH in en/en_US/libritts_r/medium/en_US-libritts_r-medium es/es_MX/ald/medium/es_MX-ald-medium zh/zh_CN/huayan/medium/zh_CN-huayan-medium; do
+        source /purple-src/scripts/voice_model.sh
+        fetch_en_voice "$VOICE_DIR"
+        for VOICE_PATH in es/es_MX/ald/medium/es_MX-ald-medium zh/zh_CN/huayan/medium/zh_CN-huayan-medium; do
             for EXT in onnx onnx.json; do
                 curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/${VOICE_PATH}.${EXT}" -o "$VOICE_DIR/$(basename "$VOICE_PATH").${EXT}"
             done

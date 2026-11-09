@@ -25,7 +25,10 @@ echo_step() {
 
 echo_step "Setting up Piper TTS voices (English, and the Spanish and Mandarin language packs)..."
 PIPER_VOICES_DIR="$HOME/.local/share/piper-voices"
-for VOICE_PATH in en/en_US/libritts_r/medium/en_US-libritts_r-medium es/es_MX/ald/medium/es_MX-ald-medium zh/zh_CN/huayan/medium/zh_CN-huayan-medium; do
+# English replaces any older copy (scripts/voice_model.sh pins the one Purple uses).
+source "$(dirname "$0")/voice_model.sh"
+fetch_en_voice "$PIPER_VOICES_DIR" || echo_warn "Could not download $VOICE_EN (speech may not work)"
+for VOICE_PATH in es/es_MX/ald/medium/es_MX-ald-medium zh/zh_CN/huayan/medium/zh_CN-huayan-medium; do
     VOICE_MODEL="$(basename "$VOICE_PATH")"
     if [ -f "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx" ]; then
         echo_info "✓ $VOICE_MODEL already downloaded"

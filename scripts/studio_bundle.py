@@ -38,7 +38,8 @@ SKIP = ("purple_tui/tests/",)
 WHEELS = ["pygame-ce", "fonttools", "rich", "wcwidth"]
 LOCK = ROOT / "studio" / "node_modules" / "pyodide" / "pyodide-lock.json"
 EXPORT = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
-VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium"
+# Purple's voice, pinned where the shell builds read it: the VOICE_EN lines of scripts/voice_model.sh.
+VOICE_PINS = dict(line.split("=", 1) for line in (ROOT / "scripts" / "voice_model.sh").read_text().splitlines() if line.startswith("VOICE_EN"))
 # The room voice (studio/src/roomvoice.ts): Kokoro, Apache-2.0. int8 is the faster build under WebAssembly.
 # Slowed by stretching (tempo) rather than Kokoro's speed: below 1.0 its first word gains a leading "a" ("a blue").
 KOKORO_FILES = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
@@ -68,21 +69,23 @@ def fetch_wheels() -> None:
 
 
 def fetch_voice() -> None:
-    """The model from this machine's Purple voice when it has one, else from Piper's voices; the espeak-ng data from the piper package."""
+    """Purple's model with float16 weights (half the download, the same voice) and its config, from R2;
+    the espeak-ng data from the piper package."""
     import piper
-    from purple_tui.tts import find_voice_model
     spec = json.loads(EXPORT.read_text())["voice"]["piper"]
     out = OUT.parent / "voice"
-    local = find_voice_model()
-    for name in (f"{spec['model']}.onnx", f"{spec['model']}.onnx.json"):
+    out.mkdir(parents=True, exist_ok=True)
+    model = VOICE_PINS["VOICE_EN"]
+    for name, hosted, sha in ((f"{model}.onnx", f"{model}.half.onnx", VOICE_PINS["VOICE_EN_HALF_SHA256"]),
+                              (f"{model}.onnx.json", f"{model}.onnx.json", VOICE_PINS["VOICE_EN_JSON_SHA256"])):
         dest = out / name
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        if dest.exists():
+        if dest.exists() and hashlib.sha256(dest.read_bytes()).hexdigest() == sha:
             continue
-        if local:
-            shutil.copyfile(local.parent / name, dest)
-        else:
-            urllib.request.urlretrieve(f"{VOICES_URL}/{name}", dest)
+        # Cloudflare turns away urllib's own user agent.
+        request = urllib.request.Request(f"{VOICE_PINS['VOICE_EN_BASE']}/{hosted}", headers={"User-Agent": "purple-studio-bundle"})
+        dest.write_bytes(urllib.request.urlopen(request).read())
+        if hashlib.sha256(dest.read_bytes()).hexdigest() != sha:
+            sys.exit(f"{hosted} doesn't match scripts/voice_model.sh")
     data = Path(piper.__file__).parent / "espeak-ng-data"
     for name in spec["espeak_data"]:
         (out / "espeak-ng-data" / name).parent.mkdir(parents=True, exist_ok=True)

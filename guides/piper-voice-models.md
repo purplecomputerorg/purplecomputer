@@ -9,6 +9,15 @@ Purple Computer uses [Piper](https://github.com/rhasspy/piper) for local text-to
 - Speaker 166 (id 6006 in the LibriTTS dataset)
 - 22.05 kHz sample rate
 - 904 speakers available (multi-speaker model)
+- Noise fixed, from R2 rather than Hugging Face (see below)
+
+## Steady Noise
+
+Piper's `noise_scale` adds randomness that gives s, z and f their hiss. At 0 they come out as a tinny buzz (the end of "colors"); above 0, each render of the same text differs, and Purple wants a word to sound the same every time and on every machine, recorded clips included.
+
+So Purple ships the model with its noise fixed: `scripts/steady_voice.py` replaces each `RandomNormalLike` with one stored table of normal noise, repeated and cut to the length asked for, and `VOICE_NOISE` (0.333, the model's own default) applies to the English voice only. Timing noise (`noise_w`) stays 0. The edited model is the original plus 0.8 MB of table, rebuilds identically, and lives on R2 pinned by hash in `scripts/voice_model.sh`, which the image build, the Chromebook bundle, dev setup and Studio all read. Studio's copy also stores its weights as float16 (`--half`): 40 MB instead of 79, the same voice.
+
+To change the model: run `steady_voice.py` (and `--half`) on the new original, upload both with the config under a new `voices/steady-<hash>/` folder, update the hashes in `voice_model.sh`, bump `CACHE` in `studio/src/live/piperfiles.ts`, and regenerate the clips (`scripts/generate_voice_clips.py`, `scripts/generate_letter_clips.py`).
 
 ## Why Medium Over High
 

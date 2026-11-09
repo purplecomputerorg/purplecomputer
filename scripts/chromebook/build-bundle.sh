@@ -7,8 +7,7 @@ set -euo pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)"
 REPO="$SRC/../.."
 DEST="${1:-$HOME/purple-chromebook}"
-VOICE=en_US-libritts_r-medium.onnx
-VOICE_URL=https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/$VOICE
+source "$REPO/scripts/voice_model.sh"
 EMOJI_URL=https://github.com/googlefonts/noto-emoji/raw/main/2D/fonts/NotoColorEmoji.ttf
 # Same voice and pinned hash as the golden image (festvox serves plain http only).
 FLITE_VOICE=cmu_us_lnh.flitevox
@@ -56,7 +55,5 @@ fetch "$DEST/NotoColorEmoji.ttf" "$EMOJI_URL"
 fetch "$DEST/voice/$FLITE_VOICE" "$FLITE_VOICE_URL"
 echo "$FLITE_VOICE_SHA  $DEST/voice/$FLITE_VOICE" | sha256sum -c --quiet -
 [ -x "$DEST/flite" ] || build_flite
-for suffix in "" .json; do
-    fetch "$DEST/voice/$VOICE$suffix" "$VOICE_URL$suffix"
-done
+fetch_en_voice "$DEST/voice"
 du -sh "$DEST"

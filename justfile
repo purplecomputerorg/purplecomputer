@@ -341,6 +341,10 @@ clean-isos *args:
 build *args:
     ./build-scripts/build-in-docker.sh {{args}}
 
+# Stop a running build (Ctrl+C does the same) so the next one starts as if it never ran.
+build-stop:
+    ./build-scripts/build-in-docker.sh --stop
+
 # Build the Raspberry Pi card image (Pi 4, 400, 5, 500): /opt/purple-installer/output/purple-pi-<date>-<commit>.img.xz
 build-pi *args:
     ./build-scripts/build-in-docker.sh --pi {{args}}

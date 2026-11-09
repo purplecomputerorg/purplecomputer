@@ -25,6 +25,7 @@ while [ $# -gt 0 ]; do
         --pi) PI_BUILD=1 ;;
         --force) FORCE_BUILD=1 ;;
         --ref) BUILD_REF="$2"; shift ;;
+        --stop) STOP=1 ;;
         *) START_STEP="$1" ;;
     esac
     shift
@@ -107,8 +108,35 @@ resolve_and_log_source() {
     log_info "Version: $PURPLE_VERSION"
 }
 
+BUILD_LABEL="purple-build"
+
+running_builds() {
+    docker ps -q --filter "label=$BUILD_LABEL${1:+=$1}"
+}
+
+# SIGTERM reaches every build process (tini, see docker run below), so each
+# script's EXIT trap unmounts and frees its loop devices before the timeout.
+stop_builds() {
+    local ids
+    ids="$(running_builds)"
+    [ -n "$ids" ] || { log_info "No build is running."; return 0; }
+    log_info "Stopping the running build (cleanup can take a minute)..."
+    docker stop -t 120 $ids >/dev/null
+    log_info "Stopped. The next build starts clean."
+}
+
+refuse_if_already_running() {
+    [ -z "$(running_builds "$HOST_INSTALLER_DIR")" ] && return 0
+    echo "A build is already running in $HOST_INSTALLER_DIR. Stop it first: just build-stop" >&2
+    exit 1
+}
+
 main() {
     cd "$SCRIPT_DIR"
+    if [ "${STOP:-0}" = "1" ]; then
+        stop_builds
+        return
+    fi
 
     PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
     HOST_INSTALLER_DIR="$INSTALLER_BASE"
@@ -116,6 +144,7 @@ main() {
     if [ -n "$BUILD_REF" ]; then
         setup_ref_build
     fi
+    refuse_if_already_running
     resolve_and_log_source
     if [ "$PI_BUILD" = "1" ]; then
         log_info "Build plan: Raspberry Pi card image (arm64, emulated, the slow step)"
@@ -143,7 +172,10 @@ main() {
     log_info "  - We inject a hook script into the initramfs"
     log_info "  - Squashfs and boot stack remain untouched"
 
-    docker run --rm --privileged \
+    # Bash as PID 1 ignores Ctrl+C; tini forwards it to the whole build so it stops cleanly.
+    docker run --rm --privileged --init \
+        -e TINI_KILL_PROCESS_GROUP=1 \
+        --label "$BUILD_LABEL=$HOST_INSTALLER_DIR" \
         -v "$BUILD_CTX:/build" \
         -v "$PROJECT_DIR:/purple-src" \
         -v "$HOST_INSTALLER_DIR:$INSTALLER_BASE" \

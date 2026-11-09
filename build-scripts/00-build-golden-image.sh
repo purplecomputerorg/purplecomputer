@@ -1533,12 +1533,14 @@ AUTOLOGIN
     # stream only because zstd errors on an unterminated frame; a truncation
     # landing on a frame boundary would decompress cleanly as a partial image.
     log_info "Compressing golden image..."
-    zstd -${ZSTD_LEVEL} -T0 -f "$GOLDEN_IMAGE" -o "$GOLDEN_COMPRESSED"
+    # Via .part so a stopped build never leaves a truncated image beside the old .commit
+    zstd -${ZSTD_LEVEL} -T0 -f "$GOLDEN_IMAGE" -o "$GOLDEN_COMPRESSED.part"
 
     # Stamp the exact decompressed byte size so install.sh can feed pv an
     # accurate total (zstd -l output columns aren't a reliable byte count).
     stat -c%s "$GOLDEN_IMAGE" > "${GOLDEN_COMPRESSED}.size"
     echo "$git_hash" > "${GOLDEN_COMPRESSED}.commit"
+    mv -f "$GOLDEN_COMPRESSED.part" "$GOLDEN_COMPRESSED"
 
     log_info "✓ Golden image ready: $GOLDEN_COMPRESSED"
     log_info "  Original size: $(du -h $GOLDEN_IMAGE | cut -f1)"

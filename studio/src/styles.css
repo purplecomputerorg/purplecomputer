@@ -1037,5 +1037,6 @@ html.embed { color-scheme: normal; background: none; overflow: hidden; }
 .embed .stage { position: static; height: auto; overflow: visible; padding: 0 0 12px; background: none; view-transition-name: none; }
 .embed .stage-inner { max-width: none; }
 .embed .stage .laptop { max-width: none; }
-/* Room for the tape above the top row and the shadow under the last */
-.embed .home-cards { margin: 12px 4px 24px; }
+/* Room for the tape above the top row and the hover shadow on every side. The landing page widens
+   the frame by its 24px gutter, so the side margins keep the cards in line with its column. */
+.embed .home-cards { margin: 12px 24px 48px; }

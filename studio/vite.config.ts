@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { execSync } from "node:child_process";
 import { copyFileSync, cpSync, mkdirSync, readdirSync, createReadStream, existsSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,6 +72,10 @@ function pyodideAssets(): Plugin {
       if (existsSync(join(cacheDir, "emoji"))) cpSync(join(cacheDir, "emoji"), resolve(here, "dist/purple/emoji"), { recursive: true });
       if (existsSync(join(cacheDir, "core-sounds"))) cpSync(join(cacheDir, "core-sounds"), resolve(here, "dist/purple/core-sounds"), { recursive: true });
       copyAll(espeakDir, resolve(here, "dist/voice/espeak-ng"), (f) => ESPEAK_SOURCE.includes(f));
+      // The commit this build is from, so purplecomputer.org's pre-push check can tell whether a change it
+      // needs is live (landing's scripts/check-studio.mjs). "dirty" when built with uncommitted changes.
+      const git = (a: string) => { try { return execSync(`git ${a}`, { cwd: here }).toString().trim(); } catch { return ""; } };
+      writeFileSync(resolve(here, "dist/version.json"), JSON.stringify({ commit: git("rev-parse HEAD"), dirty: git("status --porcelain -- .") !== "", built: new Date().toISOString() }));
       // Vercel's Build Output API config, so `just studio-deploy` sends the same headers as vite.
       const routes = [
         { src: "/(.*)", headers: HEADERS, continue: true },

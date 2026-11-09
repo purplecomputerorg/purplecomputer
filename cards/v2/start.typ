@@ -5,10 +5,9 @@
 #header()
 
 #note[
-  #set par(spacing: 10pt)
-  #text(size: 8.8pt)[*Trying Purple changes nothing on the laptop.* Take out the Purple Key and restart to exit Purple.]
-
-  #text(size: 7.6pt)[*Like it?* Hold #key("Esc") for the Parent Menu, then choose *Install* to keep it.]
+  #text(size: 9pt)[*Trying Purple changes nothing on the laptop.*]
+  #v(-3pt)
+  #text(size: 8pt)[Take out the Purple Key and restart to exit Purple.]
 ]
 #gap
 
@@ -45,12 +44,16 @@
 )
 
 #gap
-#block(width: 100%, inset: (x: 11pt, y: 9pt), radius: 8pt, fill: white, stroke: 1.2pt + magenta.lighten(35%))[
+#block(width: 100%, inset: (x: 11pt, y: 7pt), radius: 8pt, fill: white, stroke: 1.2pt + magenta.lighten(35%))[
   #grid(columns: (1fr, auto), column-gutter: 8pt, align: (left + horizon, right + horizon),
     [
-      #text(font: "Sora", weight: "semibold", size: 10.5pt, fill: purple-dk)[Laptop started like normal?]
+      #text(font: "Sora", weight: "semibold", size: 10.5pt, fill: purple-dk)[Purple didn't appear?]
       #v(-3pt)
       #text(size: 8.8pt)[Some laptops use a different key, like *HP* and *Surface* laptops. Find yours on the back.]
+      #v(-1pt)
+      #line(length: 100%, stroke: 0.6pt + hair)
+      #v(-4pt)
+      #text(size: 8.4pt, fill: ink-med)[To install Purple for good, see the back.]
     ],
     text(font: "Sora", weight: "extrabold", size: 13pt, fill: magenta)[Flip #sym.arrow.r],
   )
@@ -66,21 +69,31 @@
 
 #panel[
   #let brands = (
-    ("Dell", key("F12")), ("Lenovo", key("F12")), ("Acer", key("F12")),
+    ("Dell, Lenovo, Acer", key("F12")),
+    ("Samsung, LG", key("F10")),
+    ("Sony", key("F11")),
+    ("ASUS", key("Esc")),
     ("HP", [#key("Esc"), then #key("F9")]),
-    ("ASUS", key("Esc")), ("Samsung", key("F10")), ("LG", key("F10")), ("Sony", key("F11")),
     ("Surface", [Hold *Volume Down*, press *Power*. Keep Volume Down pressed.]),
+    ("Mac, 2018 to 2020", [Needs a one-time security setting first: #box(text(fill: purple)[purplecomputer.org/mac])]),
   )
-  #ruled(columns: (0.9in, 1fr), pad: 6.5pt, ..brands.map(((b, k)) => (text(weight: "semibold", b), k)))
+  #ruled(columns: (1.25in, 1fr), pad: 5pt, ..brands.map(((b, k)) => (text(weight: "semibold", b), k)))
 ]
 #gap
 #panel(title: [Or try another way, from inside Windows])[
   #v(3pt)
-  #steps(spacing: 13pt,
+  #steps(spacing: 10pt,
     [Click *Start*, then the *Power* icon],
     [Hold #key("Shift") and click *Restart*],
     [Choose *Use a device*, then the USB drive],
   )
+]
+
+#gap
+#panel(title: [Like it? Install it])[
+  Hold #key("Esc") for the Parent Menu, then choose *Install*. Purple then starts without the Purple Key.
+  #v(1pt)
+  #text(fill: ink-med)[Installing erases everything else on the laptop.]
 ]
 
 #gap

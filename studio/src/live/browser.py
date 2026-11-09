@@ -203,8 +203,8 @@ def _patch_speech():
         tts._write_wav(wav, tts.postprocess_samples(array.array("h", voice.pcm.to_bytes()), voice.rate), voice.rate)
         return tts._store_cache(prepared, wav, tts.VOICE_NATURAL) or wav
 
-    async def say(text, speech_id, room_voice):
-        clip = tts._get_voice_clip(text, room_voice) or await piper(text)
+    async def say(text, speech_id, room_voice, family):
+        clip = tts._get_voice_clip(text, room_voice, family) or await piper(text)
         if speech_id != tts._speech_id:
             return
         if not clip:
@@ -215,7 +215,7 @@ def _patch_speech():
         if tts._current_channel is channel:
             tts._current_channel = None
 
-    async def sequence(items, speech_id, gap, on_playing, on_done, room_voice):
+    async def sequence(items, speech_id, gap, on_playing, on_done, room_voice, family):
         try:
             for n, (index, text) in enumerate(items):
                 if n:
@@ -224,19 +224,21 @@ def _patch_speech():
                     return
                 if on_playing:
                     on_playing(index)
-                await say(text, speech_id, room_voice)
+                await say(text, speech_id, room_voice, family)
         finally:
             if on_done:
                 on_done()
 
-    def speak_many(texts, gap=0.5, on_playing=None, on_done=None, room_voice=None):
+    # tts.speak_many's signature: a text may come as (text, language), and the language goes unused here.
+    def speak_many(texts, gap=0.5, on_playing=None, on_done=None, room_voice=None, family=True):
         if tts._muted:
             return False
+        texts = [t[0] if isinstance(t, tuple) else t for t in texts]
         items = [(i, f) for i, t in enumerate(texts) if t and t.strip() and (f := filter_speech(t)) and f.strip()]
         if not items:
             return False
         tts.stop()
-        asyncio.ensure_future(sequence(items, tts._speech_id, gap, on_playing, on_done, room_voice))
+        asyncio.ensure_future(sequence(items, tts._speech_id, gap, on_playing, on_done, room_voice, family))
         return True
 
     stop = tts.stop

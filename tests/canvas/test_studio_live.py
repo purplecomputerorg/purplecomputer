@@ -125,3 +125,15 @@ def test_a_room_partway_written_is_caught_before_it_runs(live):
     assert live.check('say("hi)\n', names)[0] == "the words need a closing quote"
     assert live.check('def on_key(key)\n    pass\n', names)[0] == "the line needs a : at the end"
     assert live.check('from random import *\nshuffle([1])\n', names) is None
+
+
+def test_the_browser_speaks_with_purples_own_arguments():
+    """browser.py replaces tts.speak_many; a call Purple makes with an argument it lacks would stop Purple."""
+    import ast
+    import inspect
+
+    from purple_tui import tts
+
+    shim = ast.parse((LIVE.parent / "browser.py").read_text())
+    ours = next(n for n in ast.walk(shim) if isinstance(n, ast.FunctionDef) and n.name == "speak_many")
+    assert [a.arg for a in ours.args.args] == list(inspect.signature(tts.speak_many).parameters)

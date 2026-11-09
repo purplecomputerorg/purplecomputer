@@ -4,20 +4,19 @@
 // ── Front: starting Purple from the Purple Key ──
 #header()
 
-#note[
-  #text(size: 9pt)[*Trying Purple changes nothing on the laptop.*]
-  #v(-3pt)
-  #text(size: 8pt)[Take out the Purple Key and restart to exit Purple.]
-]
+#text(size: 11.5pt)[*Trying Purple doesn't change the laptop. Steps:*]
 #gap
 
 #let big-step(n, body) = numbered(n, r: 9pt, text(size: 11.5pt, body))
-#big-step(1)[Turn off the laptop.]
-#big-step(2)[Plug in the #text(weight: "bold", fill: purple)[Purple Key].]
+#stack(spacing: 7pt,
+  big-step(1)[Turn off the laptop.],
+  big-step(2)[Plug in the #text(weight: "bold", fill: purple)[Purple Key].],
+)
+#v(-2pt)
 // Step 3's badge runs a rail down to the Mac and PC ways it owns
 #let way(title, keys, body) = panel(title: title)[
   #set text(size: 8.6pt)
-  #box(height: 1.36in, width: 100%)[
+  #box(height: 1.40in, width: 100%)[
     #v(2pt)
     #keys
     #v(5pt)
@@ -50,10 +49,10 @@
       #text(font: "Sora", weight: "semibold", size: 10.5pt, fill: purple-dk)[Purple didn't appear?]
       #v(-3pt)
       #text(size: 8.8pt)[Some laptops use a different key, like *HP* and *Surface* laptops. Find yours on the back.]
-      #v(-1pt)
+      #v(2pt)
       #line(length: 100%, stroke: 0.6pt + hair)
-      #v(-4pt)
-      #text(size: 8.4pt, fill: ink-med)[To install Purple for good, see the back.]
+      #v(-1pt)
+      #text(size: 8.6pt)[To *install Purple for good*, see the back.]
     ],
     text(font: "Sora", weight: "extrabold", size: 13pt, fill: magenta)[Flip #sym.arrow.r],
   )
@@ -74,15 +73,15 @@
     ("Sony", key("F11")),
     ("ASUS", key("Esc")),
     ("HP", [#key("Esc"), then #key("F9")]),
-    ("Surface", [Hold *Volume Down*, press *Power*. Keep Volume Down pressed.]),
+    ("Surface", [Hold *Volume Down*, press *Power*. Let go when the logo appears.]),
+    ("Mac", [Hold #key("Option"), press *Power*. Let go when the drives appear.]),
     ("Mac, 2018 to 2020", [Needs a one-time security setting first: #box(text(fill: purple)[purplecomputer.org/mac])]),
   )
-  #ruled(columns: (1.25in, 1fr), pad: 5pt, ..brands.map(((b, k)) => (text(weight: "semibold", b), k)))
+  #ruled(columns: (1.25in, 1fr), pad: 4pt, ..brands.map(((b, k)) => (text(weight: "semibold", b), k)))
 ]
 #gap
 #panel(title: [Or try another way, from inside Windows])[
-  #v(3pt)
-  #steps(spacing: 10pt,
+  #steps(spacing: 6pt,
     [Click *Start*, then the *Power* icon],
     [Hold #key("Shift") and click *Restart*],
     [Choose *Use a device*, then the USB drive],

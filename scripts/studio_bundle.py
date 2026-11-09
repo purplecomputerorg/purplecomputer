@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Zip Purple itself for Studio's in-browser Purple: purple_tui, its fonts, the core packs, and
-Noto's emoji as pictures. Unpacked into Pyodide's file system as is.
+Noto's emoji as pictures (the ones Purple's own words use). Unpacked into Pyodide's file system as is.
+The core sounds go beside it in studio/.cache/core-sounds/, leaving empty files of the same names in the zip,
+and studio/scripts/pyc.mjs adds Pyodide's bytecode for purple_tui.
 
 The emoji come from the Noto Color Emoji package Purple's ISO installs (Ubuntu noble-updates), pulled
 out of the font as PNGs (purple_tui/canvas/emoji_pictures.py) since no emoji font format draws in
@@ -51,6 +53,8 @@ CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/pack_m
            "purple_tui/constants.py", "purple_tui/roomkit/purple.py", "purple_tui/roomkit/runner.py",
            "purple_tui/roomkit/limits.py", "purple_tui/roomkit/check.py"]
 EMOJI = OUT.parent / "emoji"
+SOUNDS = "packs/core-sounds/content/"
+CORE_SOUNDS = OUT.parent / "core-sounds"
 UBUNTU = "http://archive.ubuntu.com/ubuntu"
 # The pockets 00-build-golden-image.sh installs from, newest first.
 NOTO_POCKETS = ["noble-updates", "noble"]
@@ -172,6 +176,18 @@ def build_emoji() -> None:
     build(font, EMOJI, sequences, version)
 
 
+def bundled_emoji(files: list[str]) -> list[Path]:
+    """map.json and the pictures for the emoji Purple's vocabulary and its own files use; the browser
+    fetches any other emoji's pictures the first time it draws one (studio/src/live/browser.py)."""
+    from purple_tui.canvas.emoji_pictures import EmojiPictures
+    from purple_tui.canvas.gfx import _ONE_EMOJI_RE
+
+    pictures = EmojiPictures(EMOJI)
+    text = "".join((ROOT / f).read_text(errors="ignore") for f in files if f.endswith((".py", ".json", ".txt")))
+    glyphs = {g for m in _ONE_EMOJI_RE.finditer(text) for g in pictures.glyphs_for(m[0]) if len(pictures.glyphs[g]) == 3}
+    return [EMOJI / "map.json", *(pictures.dir / f"{g}.png" for g in sorted(glyphs))]
+
+
 def main() -> None:
     build_checker(OUT.parent / "purple-room-check.pyz")
     fetch_wheels()
@@ -180,13 +196,21 @@ def main() -> None:
     build_emoji()
     files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
     OUT.parent.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(CORE_SOUNDS, ignore_errors=True)
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
         for f in files:
-            if not f.startswith(SKIP) and (ROOT / f).is_file():
+            if f.startswith(SKIP) or not (ROOT / f).is_file():
+                continue
+            if f.startswith(SOUNDS) and f.endswith((".ogg", ".wav")):
+                # Served on its own and played by the page (studio/src/live/sound.ts); the zip keeps the name.
+                (CORE_SOUNDS / f.removeprefix(SOUNDS)).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / f, CORE_SOUNDS / f.removeprefix(SOUNDS))
+                z.writestr(f, b"")
+            else:
                 z.write(ROOT / f, f)
-        for f in sorted(EMOJI.rglob("*")):
-            if f.is_file():
-                z.write(f, f.relative_to(OUT.parent).as_posix())
+        for f in bundled_emoji(files):
+            z.write(f, f.relative_to(OUT.parent).as_posix())
+    subprocess.run(["node", "scripts/pyc.mjs", str(OUT)], cwd=ROOT / "studio", check=True)
     print(f"{OUT} ({OUT.stat().st_size // 1024} KB)", file=sys.stderr)
 
 

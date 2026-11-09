@@ -4,6 +4,8 @@ import type { ArtPicture } from "@sdk/purple/art";
 import browserShim from "./browser.py?raw";
 import controller from "./live.py?raw";
 import { piperHush, piperSay, startIfCached } from "./piper";
+import { purpleSound, warmSounds } from "./sound";
+import { trace } from "./trace";
 
 const ROOT = "/home/pyodide/purple";
 
@@ -11,8 +13,6 @@ interface Pyodide {
   loadPackage(names: string | string[]): Promise<void>;
   unpackArchive(buffer: ArrayBuffer, format: string, options: { extractDir: string }): void;
   runPythonAsync(code: string): Promise<unknown>;
-  setStdout(o: { batched: (s: string) => void }): void;
-  setStderr(o: { batched: (s: string) => void }): void;
   canvas: { setCanvas2D(canvas: HTMLCanvasElement): void };
   FS: { readFile(path: string): Uint8Array; writeFile(path: string, data: Uint8Array): void };
   globals: { get(name: string): unknown };
@@ -67,27 +67,31 @@ export interface LivePurple {
 }
 
 export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) => void): Promise<LivePurple> {
+  // With ?trace, how long each step of the start took, from the start.
+  const started = performance.now();
+  const mark = (step: string) => trace(`[boot] ${step} at ${Math.round(performance.now() - started)} ms`);
+  // Everything downloads at once: Purple's files and the wheels come in while Python starts.
+  const purpleZip = fetch(new URL("purple/purple.zip", document.baseURI)).then((r) => r.arrayBuffer());
   const indexURL = new URL("pyodide/", document.baseURI).href;
-  const { loadPyodide } = (await import(/* @vite-ignore */ `${indexURL}pyodide.mjs`)) as { loadPyodide: (o: { indexURL: string }) => Promise<Pyodide> };
+  const { loadPyodide } = (await import(/* @vite-ignore */ `${indexURL}pyodide.mjs`)) as { loadPyodide: (o: { indexURL: string; packages: string[]; stdout: (s: string) => void; stderr: (s: string) => void }) => Promise<Pyodide> };
   log("Loading Python…");
-  const py = await loadPyodide({ indexURL });
-  py.setStdout({ batched: log });
-  py.setStderr({ batched: log });
-  log("Loading pygame…");
-  await py.loadPackage(["pygame-ce", "fonttools", "rich", "wcwidth"]);
+  const py = await loadPyodide({ indexURL, packages: ["pygame-ce", "fonttools", "rich", "wcwidth"], stdout: log, stderr: log });
+  mark("python");
   log("Loading Purple…");
-  py.unpackArchive(await (await fetch(new URL("purple/purple.zip", document.baseURI))).arrayBuffer(), "zip", { extractDir: ROOT });
+  py.unpackArchive(await purpleZip, "zip", { extractDir: ROOT });
+  mark("purple.zip");
   py.canvas.setCanvas2D(canvas);
-  Object.assign(globalThis, { purpleSay: say, purplePiper: piperSay, purpleHush: () => (speechSynthesis.cancel(), piperHush()) });
+  Object.assign(globalThis, { purpleSay: say, purplePiper: piperSay, purpleHush: () => (speechSynthesis.cancel(), piperHush()), purpleSound });
   void startIfCached();
   log("Starting Purple…");
   await py.runPythonAsync(`
 import os, sys
-os.environ.update(PURPLE_NO_EVDEV="1", PURPLE_DEV_MODE="1", PURPLE_TEST_BATTERY="1", PYGAME_HIDE_SUPPORT_PROMPT="1")
+os.environ.update(PURPLE_NO_EVDEV="1", PURPLE_DEV_MODE="1", PURPLE_TEST_BATTERY="1", PYGAME_HIDE_SUPPORT_PROMPT="1", SDL_AUDIODRIVER="dummy")
 sys.path.insert(0, "${ROOT}")
 `);
   await py.runPythonAsync(browserShim);
   await py.runPythonAsync(controller);
+  mark("imports");
   const call = (code: string) => py.runPythonAsync(code);
   const install = py.globals.get("install") as (id: string | undefined, files: unknown, removed: string[], fresh: boolean) => boolean;
   const arg = (v: unknown) => `__import__("json").loads(${JSON.stringify(JSON.stringify(v))})`;
@@ -109,5 +113,7 @@ sys.path.insert(0, "${ROOT}")
     check: async (source, names) => JSON.parse(String(await call(`__import__("json").dumps(check(${arg(source)}, ${arg(names)}))`))),
   };
   await live.load(null);
+  mark("started");
+  warmSounds();
   return live;
 }

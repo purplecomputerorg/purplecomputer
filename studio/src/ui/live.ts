@@ -66,6 +66,9 @@ class LiveScreen {
   onPrint = (_text: string) => {};
   onProblem = (_p: RoomProblem) => {};
   place: Place = { room: "art", menu: false, at: null };
+  // The room asked for that Purple hasn't opened yet (its room button looks busy); onOpening hears it change.
+  opening: Room | null = null;
+  onOpening = () => {};
   private ready = false;
   private setup: RoomSetup = { room: "art" };
   private timer = 0;
@@ -150,6 +153,7 @@ class LiveScreen {
     this.setup = setup;
     this.queueSync();
     this.wanted = null;
+    this.opening = setup.room;
     if (this.ready) this.status.textContent = "Opening the room";
     else this.moved({ room: setup.room, menu: false, at: null });
     this.element.classList.add("entering");
@@ -247,6 +251,7 @@ class LiveScreen {
     if (m.type === "failed") this.last.id = "";  // the next pack goes whole, since this one may not have landed
     if (m.type === "failed") [...this.asking].forEach(([id, a]) => this.answered(id, a.fallback));
     if (m.type === "answer") this.answered(m.id, m.value);
+    if (m.type === "failed") this.opened();
     if (m.type === "failed") { this.status.textContent = "Purple Computer couldn't start in this browser"; this.element.classList.add("failed"); console.warn("Purple failed:", m.text); }
     if (m.type === "restarting") this.busy(true);
     if (m.type === "loaded") { this.busy(false); this.updating.hidden = true; }
@@ -264,9 +269,14 @@ class LiveScreen {
     if (m.type === "keydown") announceKey(m.key);
     if (m.type === "click") this.nudge();
     if (m.type === "place" && this.ready) this.moved(m.place);  // before then, the room asked for stands
-    if (m.type === "place" && m.place.setup && m.place.room === this.wanted) this.element.classList.remove("entering");
+    if (m.type === "place" && m.place.setup && m.place.room === this.wanted) { this.element.classList.remove("entering"); this.opened(); }
     if (m.type === "print") this.onPrint(m.text);
     if (m.type === "problem") this.onProblem({ text: m.text, line: m.line });
+  }
+
+  private opened(): void {
+    this.opening = null;
+    this.onOpening();
   }
 
   private busy(on: boolean): void {

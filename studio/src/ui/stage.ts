@@ -24,8 +24,6 @@ const ARROWS = ["left", "up", "down", "right"];
 export function createStage({ stays = true, onMove = () => {} }: { stays?: boolean; onMove?: () => void } = {}) {
   const live = liveScreen();
   let page: StagePage | null = null;
-  // The room button last tapped, looking busy until Purple is there.
-  let tapped: Room | null = null;
   // The laptop and the live Purple inside it stay put for the whole visit (moving an iframe reloads it).
   const engage = () => page?.live && live.engage();
   const laptop = new Laptop((key) => { if (page?.live) live.key(key); engage(); });
@@ -42,16 +40,16 @@ export function createStage({ stays = true, onMove = () => {} }: { stays?: boole
   function refresh() {
     const setup = page?.live;
     roomButtons.hidden = !setup;
-    if (tapped === live.place.room) tapped = null;
     roomButtons.replaceChildren(...ROOMS.map(([room, label]) => h("button", {
-      type: "button", "aria-pressed": String(live.place.room === room), "aria-busy": String(tapped === room),
-      onclick: () => { tapped = room; live.show(room === setup?.room ? setup : { room }); engage(); refresh(); },
+      type: "button", "aria-pressed": String(live.place.room === room), "aria-busy": String(live.opening === room),
+      onclick: () => { live.show(room === setup?.room ? setup : { room }); engage(); refresh(); },
     }, label)));
     const { room, menu } = live.place;
     const keys = !setup ? [] : menu ? [...ARROWS, "enter"] : (room === setup.room && page?.keys?.()) || TRAY[room];
     laptop.paint(setup ? [...keys, "escape"] : keys);
   }
   live.onMove = () => { refresh(); onMove(); };
+  live.onOpening = refresh;
 
   function show(next: StagePage | null) {
     page = next;

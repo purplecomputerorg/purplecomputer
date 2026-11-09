@@ -1,0 +1,6 @@
+# 12" MacBook on the patched driver: Pulse scales the speakers in software
+# (config/pulse/purple-softvol.conf). Master is the headphone amp alone, so it is
+# unmuted below full gain. On "change", which follows alsa-restore's "add".
+# guides/mac-audio.md
+SUBSYSTEM=="sound", ACTION=="change", KERNEL=="card*", IMPORT{program}="/usr/local/sbin/purple-mac-audio softvol %n"
+SUBSYSTEM=="sound", ACTION=="change", KERNEL=="card*", ENV{PURPLE_SOFTVOL}=="1", ENV{PULSE_PROFILE_SET}="purple-softvol.conf", RUN+="/usr/bin/amixer -q -c %n sset Master 80%% unmute"

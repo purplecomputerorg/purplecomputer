@@ -271,6 +271,8 @@ The timeout guard above assumes broken audio *hangs*. That assumption broke once
 
 No software probe can observe this, because ALSA reports success whether or not the amp is alive. A test tone gives the same false confidence as `init()`. So detection gates on **codec identity**, not topology: `output_is_known_silent()` (in `rooms/music_room.py`) reads `/sys/class/sound/hwC*D*/chip_name`, and if a codec in `_SILENT_HDA_CODECS` is present with no USB audio adapter, `warm_mixer()` returns False up front (no probe, no retry) and `audio_ok` becomes False, so the parent gets the "plug in a USB speaker" path.
 
+The 2016-2017 MacBook Pros now load a patched CS8409 driver that does power the amps (`guides/mac-audio.md`); the veto skips a codec whose module is that out-of-tree build.
+
 Why not gate on `speaker_outs=0`? It both over- and under-fires: plenty of working machines (headphone/line-out-only, HDMI, USB) report `speaker_outs=0`, and on this very MBP the internal speaker pins were filed under `line_outs` anyway. It also only lives in privilege-gated dmesg. Codec name from sysfs is unprivileged and stable. A USB adapter clears the veto (it's a real output Pulse routes to), and the hotplug re-probe re-evaluates, so plugging a speaker in flips audio back on without a restart.
 
 ---

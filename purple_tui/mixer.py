@@ -4,6 +4,7 @@ Moved out of the Music room unchanged; nothing here draws.
 """
 from pathlib import Path
 import os
+import re
 import subprocess
 import sys
 import threading as _threading
@@ -70,8 +71,39 @@ AUDIO_IDLE_SECONDS = 60.0
 # side-channel the generic HDA driver never powers on, so ALSA accepts frames
 # into a dead amp and mixer.init() "succeeds" while nothing is audible. No
 # software probe (not even a test tone) can observe this, so we gate on codec
-# identity. See guides/boot-hang-debugging.md.
-_SILENT_HDA_CODECS = ("CS8409",)
+# identity. See guides/boot-hang-debugging.md. Each maps to the module whose
+# patched build (guides/mac-audio.md) does power the amp.
+_SILENT_HDA_CODECS = {"CS8409": "snd_hda_codec_cs8409"}
+_VARIANTS = "/boot/grub/purple-variants.cfg"
+
+
+def _patched_driver(module: str, sys_module: str = "/sys/module") -> bool:
+    """purple-mac-audio loaded an out-of-tree build, which the kernel taints O."""
+    try:
+        return "O" in (Path(sys_module) / module / "taint").read_text()
+    except OSError:
+        return False
+
+
+def _variant(name: str, path: str = _VARIANTS) -> str:
+    try:
+        m = re.search(rf"^set {name}='(.*)'$", Path(path).read_text(), re.MULTILINE)
+    except OSError:
+        return ""
+    return m.group(1) if m else ""
+
+
+def speakers_need_jack(product_file: str = "/sys/class/dmi/id/product_name", variants: str = _VARIANTS,
+                       sys_module: str = "/sys/module", sound_root: str = "/sys/class/sound") -> bool:
+    """A 12" MacBook on the stock driver with no USB output: the jack plays, the speakers never do."""
+    models = _variant("purple_cs4208mac_models", variants)
+    try:
+        product = Path(product_file).read_text().strip()
+    except OSError:
+        return False
+    return (bool(models and re.search(models, product))
+            and not _patched_driver("snd_hda_codec_cirrus", sys_module)
+            and not any(_is_usb_card(c) for c in Path(sound_root).glob("card*")))
 
 
 def _is_usb_card(card: Path) -> bool:
@@ -82,14 +114,14 @@ def _is_usb_card(card: Path) -> bool:
         return False
 
 
-def _silence_reason(sound_root: str = "/sys/class/sound") -> str | None:
+def _silence_reason(sound_root: str = "/sys/class/sound", sys_module: str = "/sys/module") -> str | None:
     """Why the output can't make sound, or None if it might.
 
     'no-card': no sound card at all (e.g. DSP firmware missing). Must be
     vetoed because Pulse's module-always-sink fabricates a dummy sink, so
     mixer.init() "succeeds" while everything plays into the void. Transient:
     the card may still probe late in boot, so callers keep retrying.
-    'silent-codec': an HDA codec on the denylist. Permanent.
+    'silent-codec': an HDA codec on the denylist, on its stock driver. Permanent.
     A plugged-in USB device clears both: Pulse routes to it. The hotplug
     re-probe and retry poll re-evaluate this, so plugging in a speaker flips
     audio back on without a restart.
@@ -105,7 +137,8 @@ def _silence_reason(sound_root: str = "/sys/class/sound") -> str | None:
             name = chip.read_text().strip()
         except OSError:
             continue
-        if any(silent in name for silent in _SILENT_HDA_CODECS):
+        if any(silent in name and not _patched_driver(module, sys_module)
+               for silent, module in _SILENT_HDA_CODECS.items()):
             return "silent-codec"
     return None
 

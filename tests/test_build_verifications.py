@@ -618,3 +618,26 @@ def test_pi_overlay_root_is_mounted_read_write():
     assert line, "Pi cmdline.txt not written"
     assert "overlayroot=tmpfs:recurse=0 rw ${PURPLE_CMDLINE#ro }" in line.group(1)
     assert re.search(r'^PURPLE_CMDLINE="ro ', src, re.M), "the shared line no longer starts with ro, so #ro strips nothing"
+
+
+def test_mac_speaker_drivers_are_built_pinned_and_checked():
+    """2016-2017 Macs: patched codec modules built against the image's own kernel
+    from Ubuntu's source, outside /lib/modules so only purple-mac-audio loads them."""
+    src = _build_source()
+    assert '[ "$PURPLE_ARCH" != amd64 ] || install_mac_audio' in src
+    for pin in ("CS4208_DRIVER", "CS8409_DRIVER"):
+        assert re.search(rf'{pin}_URL="https://codeload\.github\.com/[^"]+/tar\.gz/[0-9a-f]{{40}}"', src)
+        assert re.search(rf'{pin}_SHA256="[0-9a-f]{{64}}"', src)
+    body = re.search(r"install_mac_audio\(\) \{\n(.*?)\n\}", src, re.DOTALL).group(1)
+    assert '"$src_pkg=$src_ver"' in body, "kernel source must match the installed kernel exactly"
+    assert "modinfo -F vermagic" in body and "exit 1" in body
+    assert '/opt/purple/modules/$KVER/' in src and "lib/modules/$KVER/updates" not in body
+    for dest in ("/usr/local/sbin/purple-mac-audio", "/etc/modprobe.d/", "/etc/udev/rules.d/",
+                 "/usr/share/pulseaudio/alsa-mixer/profile-sets/"):
+        assert dest in body
+    keyd = src.index("log_info \"keyd installed")
+    assert keyd < src.index("|| install_mac_audio") < src.index("--no-auto-remove gcc make"), \
+        "must build while gcc is installed"
+    assert "snd-hda-codec-(cirrus|cs8409)" in src, "initrd must not load the codec before the hook can"
+    assert "s/struct snd_pci_quirk\\b/struct hda_quirk/g" in src, \
+        "Ubuntu 6.8 backports hda_quirk; without the rewrite the CS4208 driver does not compile"

@@ -76,6 +76,12 @@ T2_KERNEL_URL="https://github.com/t2linux/T2-Debian-and-Ubuntu-Kernel/releases/d
 T2_KERNEL_SHA256="f56b1d5811cd251fcafde74129377b8f8c6450817a31022a13bcd700b102e8ba"
 T2_AUDIO_URL="https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/noble/apple-t2-audio-config_0.5.2-noble_amd64.deb"
 T2_AUDIO_SHA256="8a981f1b2c39504174c8b6d778bdcd40d3d2bec5c7f7157e18fa018421d5edb6"
+# Patched speaker drivers for 2016-2017 Macs, built against the image's kernel.
+# scripts/purple-mac-audio.sh loads them only on the models in purple-variants.cfg.
+CS4208_DRIVER_URL="https://codeload.github.com/leifliddy/macbook12-audio-driver/tar.gz/4cdfcdbac2db3f300cc45d9679cfd21df6590a8a"
+CS4208_DRIVER_SHA256="1da62e4a80332240977fb37424853b7992516d00236cc3b86b0809efbd6d92e3"
+CS8409_DRIVER_URL="https://codeload.github.com/davidjo/snd_hda_macbookpro/tar.gz/89b22ff90b86468b186706861dd18663562defa7"
+CS8409_DRIVER_SHA256="da831e4616f69af02b09d0d938f9ea1bc26f2a0dd16010c6004cc512b0619110"
 RPI_KEYRING_URL="http://archive.raspberrypi.com/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2025.1+rpt1_all.deb"
 RPI_KEYRING_SHA256="2e727149d7acb8cc7f604e66d0049161039c8aa1eaf1175e54f9e69d963d60e4"
 
@@ -137,9 +143,9 @@ cleanup_build() {
 # Clean up on exit (success or failure) so failed builds never leave stale state
 trap cleanup_build EXIT
 
-install_pinned_deb() {
-    local url="$1" sha="$2" name
-    name="$(basename "$url")"
+# Copies a sha256-pinned download into the chroot's /tmp as $3 (default: the URL's basename).
+fetch_pinned() {
+    local url="$1" sha="$2" name="${3:-$(basename "$1")}"
     # Cached only once the hash matches, so a dropped transfer never wedges later builds
     if ! echo "$sha  $BUILD_DIR/$name" | sha256sum -c --quiet 2>/dev/null; then
         curl -fsSL "$url" -o "$BUILD_DIR/$name.part"
@@ -147,8 +153,58 @@ install_pinned_deb() {
         mv "$BUILD_DIR/$name.part" "$BUILD_DIR/$name"
     fi
     cp "$BUILD_DIR/$name" "$MOUNT_DIR/tmp/$name"
+}
+
+install_pinned_deb() {
+    local name
+    name="$(basename "$1")"
+    fetch_pinned "$1" "$2"
     chroot "$MOUNT_DIR" dpkg -i "/tmp/$name"
     rm -f "$MOUNT_DIR/tmp/$name"
+}
+
+# Builds one patched codec module ($3, e.g. snd-hda-codec-cirrus) from a pinned
+# driver tarball whose $4 prepares build/hda from Ubuntu's kernel source.
+build_mac_audio_module() {
+    local url="$1" sha="$2" module="$3" prepare="$4" dir="/tmp/mac-audio-$3"
+    fetch_pinned "$url" "$sha" "$module.tar.gz"
+    mkdir -p "$MOUNT_DIR$dir"
+    tar -xzf "$MOUNT_DIR/tmp/$module.tar.gz" -C "$MOUNT_DIR$dir" --strip-components=1
+    chroot "$MOUNT_DIR" bash -c "cd $dir && $prepare"
+    # Ubuntu's 6.8 backports 6.12's struct hda_quirk; the drivers pick their type by version number
+    ! grep -q '^struct hda_quirk {' "$MOUNT_DIR$dir/build/hda/hda_local.h" || sed -i \
+        's/struct snd_pci_quirk\b/struct hda_quirk/g' "$MOUNT_DIR$dir"/build/hda/patch_cirrus*.[ch] "$MOUNT_DIR$dir"/build/hda/patch_cs8409*.[ch]
+    chroot "$MOUNT_DIR" make -C "$dir" KERNELRELEASE="$KVER"
+    install -D -m 0644 "$MOUNT_DIR$dir/build/hda/$module.ko" "$MOUNT_DIR/opt/purple/modules/$KVER/${module//-/_}.ko"
+    rm -rf "$MOUNT_DIR$dir" "$MOUNT_DIR/tmp/$module.tar.gz"
+}
+
+# 2016-2017 Macs: guides/mac-audio.md. Fails the build rather than ship without them.
+install_mac_audio() {
+    local src_pkg="linux-source-${KVER%%-*}" src_ver ko
+    log_info "Building patched Mac speaker drivers for $KVER..."
+    src_ver=$(chroot "$MOUNT_DIR" dpkg-query -W -f='${Version}' "linux-modules-$KVER")
+    chroot "$MOUNT_DIR" apt-get install -y "linux-headers-$KVER" "$src_pkg=$src_ver" patch bzip2
+    # The drivers look for the tarball at the top of /usr/src
+    [ -e "$MOUNT_DIR/usr/src/$src_pkg.tar.bz2" ] || ln -s "$src_pkg/$src_pkg.tar.bz2" "$MOUNT_DIR/usr/src/$src_pkg.tar.bz2"
+    build_mac_audio_module "$CS4208_DRIVER_URL" "$CS4208_DRIVER_SHA256" snd-hda-codec-cirrus \
+        "./prepare.cirrus.driver.sh $KVER"
+    build_mac_audio_module "$CS8409_DRIVER_URL" "$CS8409_DRIVER_SHA256" snd-hda-codec-cs8409 \
+        "./install.cirrus.driver.pre617.sh -k $KVER -d"
+    for ko in "$MOUNT_DIR/opt/purple/modules/$KVER"/*.ko; do
+        if [ "$(chroot "$MOUNT_DIR" modinfo -F vermagic "${ko#"$MOUNT_DIR"}" | cut -d' ' -f1)" != "$KVER" ]; then
+            echo "ERROR: $(basename "$ko") was not built for $KVER" >&2
+            exit 1
+        fi
+    done
+    rm -rf "$MOUNT_DIR/usr/src/$src_pkg.tar.bz2" "$MOUNT_DIR/var/cache/macbook12-audio-driver"
+    chroot "$MOUNT_DIR" apt-get remove --purge -y --no-auto-remove "$src_pkg" "linux-headers-$KVER" \
+        "linux-headers-${KVER%-generic}"
+    install -m 0755 /purple-src/scripts/purple-mac-audio.sh "$MOUNT_DIR/usr/local/sbin/purple-mac-audio"
+    cp /purple-src/config/modprobe/purple-mac-audio.conf "$MOUNT_DIR/etc/modprobe.d/"
+    cp /purple-src/config/udev/91-purple-mac-audio.rules "$MOUNT_DIR/etc/udev/rules.d/"
+    cp /purple-src/config/pulse/purple-softvol.conf "$MOUNT_DIR/usr/share/pulseaudio/alsa-mixer/profile-sets/"
+    log_info "  Mac speaker drivers: $(ls "$MOUNT_DIR/opt/purple/modules/$KVER" | tr '\n' ' ')"
 }
 
 # Verify the lean hook actually ran, against the artifact: the first version
@@ -771,6 +827,12 @@ LEANINITRD
         chroot "$MOUNT_DIR" update-initramfs -u -k "$kver"
         verify_lean_initrd "$kver"
     done
+    # A Cirrus codec module loaded from the initrd would bypass purple-mac-audio, which lives in the rootfs
+    if [ "$PURPLE_ARCH" = amd64 ] && chroot "$MOUNT_DIR" lsinitramfs "/boot/initrd.img-$KVER" \
+        | grep -qE 'snd-hda-codec-(cirrus|cs8409)'; then
+        echo "ERROR: initrd.img-$KVER carries a Cirrus codec module; Mac speaker drivers would be skipped" >&2
+        exit 1
+    fi
 
     if [ "$PURPLE_ARCH" = "i386" ]; then
         # The Key's boot script (casper's stand-in) and its hook: the hook only
@@ -900,6 +962,8 @@ TMPFILES
         exit 1
     fi
     log_info "keyd installed: $(chroot "$MOUNT_DIR" /usr/bin/keyd -v 2>&1 || echo 'keyd -v failed')"
+
+    [ "$PURPLE_ARCH" != amd64 ] || install_mac_audio
 
     # Remove build deps (only needed for compilation).
     # --no-auto-remove prevents apt from cascading into unrelated packages.

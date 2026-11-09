@@ -98,6 +98,10 @@ def get_product_name() -> str:
 
 def get_audio_status_line(audio_ok) -> str:
     if audio_ok is True:
+        from .mixer import speakers_need_jack
+        if speakers_need_jack():
+            return ("Audio: headphone jack only. Purple can't use this computer's built-in speakers yet. "
+                    "Plug a speaker or headphones into the headphone jack.")
         return "Audio: working"
     if audio_ok is False:
         return "Audio not working. Plug in a USB speaker or USB audio adapter. Sound should start within a few seconds."

@@ -1,7 +1,7 @@
 """Tests for output_is_known_silent: outputs that let mixer.init() succeed
 while nothing is audible.
 
-Two ways this happens: a CS8409 (Apple T2 bridge) opens fine but drives no
+Two ways this happens: a CS8409 (Apple HDA-to-I2C bridge) opens fine on its stock driver but drives no
 speakers, and a machine with no sound card at all (e.g. missing SOF DSP
 firmware) still gets a dummy sink from Pulse's module-always-sink. Both are
 vetoed, unless a USB adapter is present (a real output Pulse can route to).
@@ -90,3 +90,39 @@ def test_no_card_veto_is_transient_and_retryable(monkeypatch):
 
 def test_silent_codec_veto_is_permanent(monkeypatch):
     assert _veto_then_reset(monkeypatch, "silent-codec") is False
+
+
+def _taint(root, module, flags):
+    (root / module).mkdir(parents=True, exist_ok=True)
+    (root / module / "taint").write_text(flags + "\n")
+
+
+def test_silent_codec_on_patched_driver_is_allowed(tmp_path):
+    sound, sysmod = tmp_path / "sound", tmp_path / "module"
+    _make_card(sound, 0, "pci0000:00/0000:00:1f.3")
+    _make_codec(sound, 0, 0, "Cirrus Logic CS8409")
+    _taint(sysmod, "snd_hda_codec_cs8409", "OE")
+    assert music_room._silence_reason(str(sound), str(sysmod)) is None
+    _taint(sysmod, "snd_hda_codec_cs8409", "")
+    assert music_room._silence_reason(str(sound), str(sysmod)) == "silent-codec"
+
+
+def test_twelve_inch_macbook_on_stock_driver_needs_the_jack(tmp_path):
+    from pathlib import Path
+    variants = Path(__file__).resolve().parent.parent / "config" / "grub" / "purple-variants.cfg"
+    product, sysmod, sound = tmp_path / "product", tmp_path / "module", tmp_path / "sound"
+    _make_card(sound, 0, "pci0000:00/0000:00:1f.3")
+
+    def check(model):
+        product.write_text(model + "\n")
+        return music_room.speakers_need_jack(str(product), str(variants), str(sysmod), str(sound))
+
+    assert check("MacBook10,1") and check("MacBook9,1")
+    assert not check("MacBookAir7,2") and not check("MacBook8,1")
+    _make_card(sound, 1, "pci0000:00/usb1/1-2/1-2:1.0")
+    assert not check("MacBook10,1"), "a USB speaker is already the fix"
+    (sound / "card1" / "device").unlink()
+    (sound / "card1").rmdir()
+    _taint(sysmod, "snd_hda_codec_cirrus", "OE")
+    assert not check("MacBook10,1")
+    assert not music_room.speakers_need_jack(str(tmp_path / "missing"), str(variants), str(sysmod))

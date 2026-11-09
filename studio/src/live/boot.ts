@@ -4,6 +4,7 @@ import type { ArtPicture } from "@sdk/purple/art";
 import browserShim from "./browser.py?raw";
 import controller from "./live.py?raw";
 import { piperHush, piperSay, startIfCached } from "./piper";
+import { purpleSound, warmSounds } from "./sound";
 import { trace } from "./trace";
 
 const ROOT = "/home/pyodide/purple";
@@ -80,12 +81,12 @@ export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) 
   py.unpackArchive(await purpleZip, "zip", { extractDir: ROOT });
   mark("purple.zip");
   py.canvas.setCanvas2D(canvas);
-  Object.assign(globalThis, { purpleSay: say, purplePiper: piperSay, purpleHush: () => (speechSynthesis.cancel(), piperHush()) });
+  Object.assign(globalThis, { purpleSay: say, purplePiper: piperSay, purpleHush: () => (speechSynthesis.cancel(), piperHush()), purpleSound });
   void startIfCached();
   log("Starting Purple…");
   await py.runPythonAsync(`
 import os, sys
-os.environ.update(PURPLE_NO_EVDEV="1", PURPLE_DEV_MODE="1", PURPLE_TEST_BATTERY="1", PYGAME_HIDE_SUPPORT_PROMPT="1")
+os.environ.update(PURPLE_NO_EVDEV="1", PURPLE_DEV_MODE="1", PURPLE_TEST_BATTERY="1", PYGAME_HIDE_SUPPORT_PROMPT="1", SDL_AUDIODRIVER="dummy")
 sys.path.insert(0, "${ROOT}")
 `);
   await py.runPythonAsync(browserShim);
@@ -113,5 +114,6 @@ sys.path.insert(0, "${ROOT}")
   };
   await live.load(null);
   mark("started");
+  warmSounds();
   return live;
 }

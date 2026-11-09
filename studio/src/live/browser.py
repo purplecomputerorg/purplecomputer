@@ -110,22 +110,68 @@ def _patch_emoji():
 _patch_emoji()
 
 
-# The mixer probe runs a subprocess to catch audio hardware that hangs; a browser has neither, so
-# the mixer opens in process (SDL plays through Web Audio).
+# Purple's sounds play through the page's Web Audio (studio/src/live/sound.ts) instead of SDL's mixer:
+# the browser decodes them off Python's thread. pygame.mixer keeps its names, as Purple uses them.
 def _patch_mixer():
+    import itertools
+    from pathlib import Path
     import pygame
-    import pygame.mixer  # noqa: F401
+    import pygame.mixer
+    from js import purpleSound
+    from pyodide.ffi import to_js
     from purple_tui import mixer
+    from purple_tui.canvas.sounds import core_sounds
 
-    def warm(timeout_seconds=10.0):
-        if mixer._MIXER_READY is None or mixer._IDLE_RELEASED:
-            mixer._init_mixer()
-        return mixer._MIXER_READY
+    ids = itertools.count(1)
+    core = core_sounds()
+    # purple.zip's core sounds are empty files standing in for the ones Studio serves.
+    url = lambda path: f"purple/core-sounds/{path.relative_to(core).as_posix()}"
 
+    class Channel:
+        def __init__(self, id):
+            self.id = id
+
+        def get_busy(self):
+            return purpleSound.busy(self.id)
+
+        def set_volume(self, volume, *_):
+            purpleSound.volume(self.id, volume)
+
+        def stop(self):
+            purpleSound.end(self.id)
+
+    class Sound:
+        def __init__(self, file):
+            path, self.id, self.volume = Path(file), next(ids), 1.0
+            data = path.read_bytes()
+            purpleSound.load(self.id, to_js(data) if data else url(path))
+
+        def __del__(self):
+            purpleSound.drop(self.id)
+
+        def play(self, *_, **__):
+            return Channel(purpleSound.play(self.id, self.volume))
+
+        def set_volume(self, volume):
+            self.volume = volume
+
+        def get_volume(self):
+            return self.volume
+
+        def stop(self):
+            purpleSound.stopSound(self.id)
+
+        def get_length(self):
+            return purpleSound.length(self.id)
+
+    m = pygame.mixer
+    m.Sound, m.stop, m.get_busy = Sound, purpleSound.stopAll, purpleSound.anyBusy
+    m.init = m.quit = m.set_num_channels = lambda *_, **__: None
+    m.get_init = lambda: (48000, -16, 2)
     mixer.pygame = pygame
-    mixer.warm_mixer = mixer._ensure_mixer = warm
-    warm()
-    print(f"[studio] mixer ready={mixer._MIXER_READY} {pygame.mixer.get_init()}")
+    mixer.warm_mixer = mixer._ensure_mixer = lambda timeout_seconds=10.0: mixer._MIXER_READY or mixer._init_mixer()
+    mixer._init_mixer()
+    purpleSound.warm(to_js([url(p) for p in sorted(core.rglob("*")) if p.suffix in (".ogg", ".wav") and not p.stat().st_size]))
 
 
 _patch_mixer()
@@ -150,7 +196,7 @@ def _patch_speech():
         if cached := tts._get_cached(prepared, tts.VOICE_NATURAL):
             return cached
         voice = await purplePiper(prepared)
-        if voice is None:
+        if not voice:  # JS null arrives as JsNull, which is falsy
             return None
         fd, wav = tempfile.mkstemp(suffix=".wav")
         os.close(fd)

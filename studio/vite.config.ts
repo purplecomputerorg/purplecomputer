@@ -17,7 +17,7 @@ const ESPEAK_SOURCE = ["README.md", "espeak_bridge.c", "build.sh"];
 // Blockly's cursors and icons, which it would otherwise fetch from Blockly's own site.
 const blocklyMedia = resolve(here, "node_modules/blockly/media");
 // Files fetched or built for the in-browser Purple by scripts/studio_bundle.py: Pyodide's pygame-ce
-// wheel, purple.zip, Purple's voice (voice/), and the room checker the Room guide links to.
+// wheel, purple.zip, its core sounds (core-sounds/), Purple's voice (voice/), and the room checker the Room guide links to.
 const cacheDir = resolve(here, ".cache");
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
 
@@ -69,6 +69,7 @@ function pyodideAssets(): Plugin {
       copyAll(blocklyMedia, resolve(here, "dist/blockly"), () => true);
       if (existsSync(join(cacheDir, "voice"))) cpSync(join(cacheDir, "voice"), resolve(here, "dist/voice"), { recursive: true });
       if (existsSync(join(cacheDir, "emoji"))) cpSync(join(cacheDir, "emoji"), resolve(here, "dist/purple/emoji"), { recursive: true });
+      if (existsSync(join(cacheDir, "core-sounds"))) cpSync(join(cacheDir, "core-sounds"), resolve(here, "dist/purple/core-sounds"), { recursive: true });
       copyAll(espeakDir, resolve(here, "dist/voice/espeak-ng"), (f) => ESPEAK_SOURCE.includes(f));
       // Vercel's Build Output API config, so `just studio-deploy` sends the same headers as vite.
       const routes = [
@@ -105,7 +106,7 @@ const LIVE_CSP = CSP.replace("'wasm-unsafe-eval'", "'wasm-unsafe-eval' 'unsafe-e
 // the landing project's), and its dev server.
 const FRAMED = "; frame-ancestors 'self' https://purplecomputer.org https://www.purplecomputer.org https://*.vercel.app http://localhost:3002 http://simba:3002";
 const PAGE_CSP: [page: string, csp: string][] = [["purple.html", LIVE_CSP + FRAMED], ["try.html", CSP + FRAMED], ["cards.html", CSP + FRAMED]];
-const TYPES: Record<string, string> = { svg: "image/svg+xml", mp3: "audio/mpeg", gif: "image/gif", png: "image/png", cur: "image/x-icon", wasm: "application/wasm", json: "application/json", zip: "application/zip", whl: "application/zip", js: "text/javascript", mjs: "text/javascript", md: "text/plain; charset=utf-8", c: "text/plain; charset=utf-8", sh: "text/plain; charset=utf-8" };
+const TYPES: Record<string, string> = { svg: "image/svg+xml", mp3: "audio/mpeg", ogg: "audio/ogg", gif: "image/gif", png: "image/png", cur: "image/x-icon", wasm: "application/wasm", json: "application/json", zip: "application/zip", whl: "application/zip", js: "text/javascript", mjs: "text/javascript", md: "text/plain; charset=utf-8", c: "text/plain; charset=utf-8", sh: "text/plain; charset=utf-8" };
 const HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",

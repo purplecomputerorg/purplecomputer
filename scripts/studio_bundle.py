@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Zip Purple itself for Studio's in-browser Purple: purple_tui, its fonts, the core packs, and
 Noto's emoji as pictures (the ones Purple's own words use). Unpacked into Pyodide's file system as is.
-The core sounds go beside it in studio/.cache/core-sounds/, leaving empty files of the same names in the zip.
+The core sounds go beside it in studio/.cache/core-sounds/, leaving empty files of the same names in the zip,
+and studio/scripts/pyc.mjs adds Pyodide's bytecode for purple_tui.
 
 The emoji come from the Noto Color Emoji package Purple's ISO installs (Ubuntu noble-updates), pulled
 out of the font as PNGs (purple_tui/canvas/emoji_pictures.py) since no emoji font format draws in
@@ -206,6 +207,7 @@ def main() -> None:
                 z.write(ROOT / f, f)
         for f in bundled_emoji(files):
             z.write(f, f.relative_to(OUT.parent).as_posix())
+    subprocess.run(["node", "scripts/pyc.mjs", str(OUT)], cwd=ROOT / "studio", check=True)
     print(f"{OUT} ({OUT.stat().st_size // 1024} KB)", file=sys.stderr)
 
 

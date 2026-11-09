@@ -67,17 +67,44 @@ _patch_glyph_coverage()
 
 
 # SDL_ttf here can't draw Noto Color Emoji's bitmaps, so Purple draws the same pictures from the
-# ones studio_bundle.py pulled out of the ISO's font (purple.zip's emoji/).
+# ones studio_bundle.py pulled out of the ISO's font. purple.zip carries the ones Purple's own words
+# use; any other is fetched from Studio the first time it's drawn, blank until it lands.
 def _patch_emoji():
+    import asyncio
     from pathlib import Path
+    import pygame
     import purple_tui
+    from js import URL, document
+    from pyodide.http import pyfetch
     from purple_tui.canvas import gfx
     from purple_tui.canvas.emoji_pictures import EmojiPictures
 
     root = Path(purple_tui.__file__).parent.parent / "emoji"
-    if (root / "map.json").exists():
-        pictures = EmojiPictures(root)
-        gfx.Gfx._emoji_native = lambda self, text: pictures.render(text)
+    if not (root / "map.json").exists():
+        return
+    pictures = EmojiPictures(root)
+    load = EmojiPictures._picture
+    asked = set()
+
+    async def fetch(gid):
+        r = await pyfetch(URL.new(f"purple/emoji/{pictures.dir.name}/{gid}.png", document.baseURI).href)
+        if not r.ok or not (app := globals().get("_app")):
+            return
+        (pictures.dir / f"{gid}.png").write_bytes(await r.bytes())
+        for cache in (app.g._emoji, app.g._text, app.g._layouts):
+            cache.clear()
+        app.invalidate()
+
+    def picture(self, gid):
+        if gid in self._loaded or (self.dir / f"{gid}.png").exists():
+            return load(self, gid)
+        if gid not in asked:
+            asked.add(gid)
+            asyncio.ensure_future(fetch(gid))
+        return pygame.Surface((1, 1), pygame.SRCALPHA)
+
+    EmojiPictures._picture = picture
+    gfx.Gfx._emoji_native = lambda self, text: pictures.render(text)
 
 
 _patch_emoji()

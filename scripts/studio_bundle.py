@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Zip Purple itself for Studio's in-browser Purple: purple_tui, its fonts, the core packs, and
-Noto's emoji as pictures. Unpacked into Pyodide's file system as is.
+Noto's emoji as pictures (the ones Purple's own words use). Unpacked into Pyodide's file system as is.
 
 The emoji come from the Noto Color Emoji package Purple's ISO installs (Ubuntu noble-updates), pulled
 out of the font as PNGs (purple_tui/canvas/emoji_pictures.py) since no emoji font format draws in
@@ -169,6 +169,18 @@ def build_emoji() -> None:
     build(font, EMOJI, sequences, version)
 
 
+def bundled_emoji(files: list[str]) -> list[Path]:
+    """map.json and the pictures for the emoji Purple's vocabulary and its own files use; the browser
+    fetches any other emoji's pictures the first time it draws one (studio/src/live/browser.py)."""
+    from purple_tui.canvas.emoji_pictures import EmojiPictures
+    from purple_tui.canvas.gfx import _ONE_EMOJI_RE
+
+    pictures = EmojiPictures(EMOJI)
+    text = "".join((ROOT / f).read_text(errors="ignore") for f in files if f.endswith((".py", ".json", ".txt")))
+    glyphs = {g for m in _ONE_EMOJI_RE.finditer(text) for g in pictures.glyphs_for(m[0]) if len(pictures.glyphs[g]) == 3}
+    return [EMOJI / "map.json", *(pictures.dir / f"{g}.png" for g in sorted(glyphs))]
+
+
 def main() -> None:
     build_checker(OUT.parent / "purple-room-check.pyz")
     fetch_wheels()
@@ -181,9 +193,8 @@ def main() -> None:
         for f in files:
             if not f.startswith(SKIP) and (ROOT / f).is_file():
                 z.write(ROOT / f, f)
-        for f in sorted(EMOJI.rglob("*")):
-            if f.is_file():
-                z.write(f, f.relative_to(OUT.parent).as_posix())
+        for f in bundled_emoji(files):
+            z.write(f, f.relative_to(OUT.parent).as_posix())
     print(f"{OUT} ({OUT.stat().st_size // 1024} KB)", file=sys.stderr)
 
 

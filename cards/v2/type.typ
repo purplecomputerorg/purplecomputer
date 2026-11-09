@@ -38,7 +38,7 @@
 // ── Back: code in Art, Music and Blocks ──
 #header(title: [Write Code])
 #note[
-  In *Art*, *Music* or *Blocks*, hold #key("Esc") and press #key("Space"). \
+  In *Art*, *Music* or *Blocks*, tap #key("Esc"), then press #key("Space"). \
   Press #key("↓") for ideas. Typos get fixed for you.
 ]
 #gap

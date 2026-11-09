@@ -72,8 +72,8 @@ class LiveScreen {
   private sent = "";
   // Which show() is current: a room still waiting on its lines gives way to the next one.
   private entering = 0;
-  // The show() whose room Purple was last asked for; the screen stays covered until Purple shows it.
-  private asked = 0;
+  // The room Purple was last asked for by the current show(); the screen stays covered until Purple says it's there.
+  private wanted: Room | null = null;
   // What Purple has now, so the next pack sends only what changed.
   private last: Sent = { id: "", files: new Map() };
   private syncing = Promise.resolve();
@@ -149,7 +149,7 @@ class LiveScreen {
   show(setup: RoomSetup): void {
     this.setup = setup;
     this.queueSync();
-    this.moved({ room: setup.room, menu: false, at: null });
+    this.wanted = null;
     if (this.ready) this.status.textContent = "Opening the room";
     this.element.classList.add("entering");
     void this.enter();
@@ -165,7 +165,7 @@ class LiveScreen {
       await this.syncing;
     }
     if (turn !== this.entering || !this.ready) return;
-    this.asked = turn;
+    this.wanted = this.setup.room;
     this.post({ type: "setup", setup: this.withRooms() });
   }
 
@@ -263,7 +263,7 @@ class LiveScreen {
     if (m.type === "keydown") announceKey(m.key);
     if (m.type === "click") this.nudge();
     if (m.type === "place") this.moved(m.place);
-    if (m.type === "place" && this.asked === this.entering) this.element.classList.remove("entering");
+    if (m.type === "place" && m.place.room === this.wanted) this.element.classList.remove("entering");
     if (m.type === "print") this.onPrint(m.text);
     if (m.type === "problem") this.onProblem({ text: m.text, line: m.line });
   }

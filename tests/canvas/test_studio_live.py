@@ -75,20 +75,24 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
         live.install(ID, files(tmp_path / "pack"))
         live._app = app = make_app()
 
-        assert live.setup("music", letters=True, instrument="kitchen")[:2] == ["music", False]
+        live.setup("music", letters=True, instrument="kitchen")
+        assert live.place()["room"] == "music" and not live.place()["menu"]
         music = app.rooms["music"]
         assert music.letters_mode
         assert instruments()[music.instrument_index][0].endswith("kitchen")
 
-        room, menu, at = live.setup("art", picture={"ops": [[3, 2, "#ff0000"]], "letters": [[4, 2, "H", "#ffffff"]]})
+        live.setup("art", picture={"ops": [[3, 2, "#ff0000"]], "letters": [[4, 2, "H", "#ffffff"]]})
+        room, menu, at = live.place().values()
         art = app.rooms["art"]
         assert (room, menu) == ("art", False) and art._paint_mode
         dx, dy = shift_from(OLD_ART_GRID)
         assert art._grid[(3 + dx, 2 + dy)][2] == "#ff0000" and art._grid[(4 + dx, 2 + dy)][0] == "H"
         assert all(0 <= v <= 1 for v in at)
 
-        assert (await live.key("escape"))[1]
-        assert live.setup("play")[:2] == ["play", False]
+        await live.key("escape")
+        assert live.place()["menu"]
+        live.setup("play")
+        assert live.place()["room"] == "play" and not live.place()["menu"]
     run(go())
 
 

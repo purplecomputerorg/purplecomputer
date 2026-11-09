@@ -14,6 +14,20 @@ def _no_thread(self):
 threading.Thread.start = _no_thread
 
 
+# Pyodide's event loop refuses a time that passed while it was being set, where CPython's runs it at once;
+# a frame's idle wait that ends a hair early would otherwise stop Purple's frame loop for good.
+def _patch_loop():
+    from pyodide.webloop import WebLoop
+
+    def call_at(self, when, callback, *args, context=None):
+        return self.call_later(max(0, when - self.time()), callback, *args, context=context)
+
+    WebLoop.call_at = call_at
+
+
+_patch_loop()
+
+
 # No users in a browser: tts looks up its own home directory.
 def _stub_pwd():
     import sys
@@ -162,16 +176,25 @@ _patch_speech()
 
 
 # Each finished frame is copied by the page onto the canvas people see, scaled down smoothly
-# (frame.ts); the browser's own scaling of SDL's canvas leaves small text jagged.
+# (frame.ts); the browser's own scaling of SDL's canvas leaves small text jagged. Whenever a frame
+# leaves Purple somewhere new, the page hears where (place(), from live.py, run in these same globals).
+_placed = None
+
+
 def _patch_present():
-    from js import purplePresented
+    import json
+    from js import purpleMoved, purplePresented
     from purple_tui.canvas import gfx
 
     present = gfx.Gfx.present
 
     def presented(self, *args, **kwargs):
+        global _placed
         present(self, *args, **kwargs)
         purplePresented()
+        if globals().get("_app") and (now := place()) != _placed:
+            _placed = now
+            purpleMoved(json.dumps(now))
 
     gfx.Gfx.present = presented
 

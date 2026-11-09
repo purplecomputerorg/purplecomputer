@@ -92,8 +92,9 @@ def setup(room, letters=False, instrument=None, picture=None, family=None):
     if family:
         from purple_tui.canvas.rooms.family_room import FamilyRoom
         _app.push(FamilyRoom(_app, _try(family)))
+    global _placed  # browser.py's: the page hears where this left Purple, even where it already was
+    _placed = None
     _app.invalidate()
-    return place()
 
 
 def _try(family):
@@ -120,7 +121,6 @@ async def key(name):
     """A key from the Studio page (typed there, or tapped on the pretend keyboard): a character,
     or space, enter, backspace, escape, tab, or an arrow."""
     await press(_app, name)
-    return place()
 
 
 def hush():
@@ -138,7 +138,7 @@ def place():
     room's cursor as fractions of the screen, if it has one (a phone zooms in around it)."""
     vp, cursor = _app._viewport_rect(), _app._get_cursor_position()
     at = [(vp.x + cursor[0] * vp.w) / _app.g.w, (vp.y + cursor[1] * vp.h) / _app.g.h] if cursor else None
-    return [_app.active_room, bool(_app.top), at]
+    return {"room": _app.active_room, "menu": bool(_app.top), "at": at}
 
 
 # Python's words for a line that isn't finished, as a parent would put them.

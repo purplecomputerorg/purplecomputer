@@ -55,12 +55,9 @@ export interface LivePurple {
   // Installs the pack (null: none) into the running Purple, first calling restarting when Purple
   // has to start again to read it.
   load(pack: PackFiles | null, restarting?: () => void): Promise<void>;
-  // Both resolve to where Purple is afterwards: Esc opens the room picker, picking one changes the
-  // room, and keys move the cursor.
-  setup(room: RoomSetup): Promise<Place>;
-  key(char: string): Promise<Place>;
-  // Where Purple is now, after keys it got straight from the browser.
-  place(): Promise<Place>;
+  // Where either leaves Purple comes back through purpleMoved (browser.py), as every frame's does.
+  setup(room: RoomSetup): Promise<void>;
+  key(char: string): Promise<void>;
   // Stops Purple's speech and sounds.
   hush(): Promise<void>;
   // The words as Purple would say them: its speech filter drops words it never says ("" when nothing's left).
@@ -94,12 +91,6 @@ sys.path.insert(0, "${ROOT}")
   const call = (code: string) => py.runPythonAsync(code);
   const install = py.globals.get("install") as (id: string | undefined, files: unknown, removed: string[], fresh: boolean) => boolean;
   const arg = (v: unknown) => `__import__("json").loads(${JSON.stringify(JSON.stringify(v))})`;
-  const place = async (code: string): Promise<Place> => {
-    const proxy = (await call(code)) as { toJs(): [Room, boolean, [number, number] | null]; destroy(): void };
-    const [room, menu, at] = proxy.toJs();
-    proxy.destroy();
-    return { room, menu, at };
-  };
   const live: LivePurple = {
     async load(pack, restarting) {
       // As Python objects first: Python reading a JS array copies it a byte at a time.
@@ -111,9 +102,8 @@ sys.path.insert(0, "${ROOT}")
         await call("await restart()");
       } else await call("refresh()");
     },
-    setup: (room) => place(`setup(**${arg(room)})`),
-    key: (char) => place(`await key(${arg(char)})`),
-    place: () => place("place()"),
+    setup: async (room) => void (await call(`setup(**${arg(room)})`)),
+    key: async (char) => void (await call(`await key(${arg(char)})`)),
     hush: async () => void (await call("hush()")),
     filter: async (text) => String(await call(`__import__("purple_tui.speech_filter", fromlist=["_"]).filter_speech(${arg(text)})`)),
     check: async (source, names) => JSON.parse(String(await call(`__import__("json").dumps(check(${arg(source)}, ${arg(names)}))`))),

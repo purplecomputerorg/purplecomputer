@@ -51,14 +51,6 @@ addEventListener("keydown", (e) => {
   const key = browserKey(e);
   if (key) post({ type: "keydown", key });
 });
-// Purple reads these keys itself, on its next frame, so ask it a moment later where they left it
-// (Esc opens the room picker on release, hence keyup).
-const SETTLE_MS = 120;
-let asking = 0;
-addEventListener("keyup", () => {
-  clearTimeout(asking);
-  asking = window.setTimeout(() => run((live) => live.place().then(placed)), SETTLE_MS);
-});
 
 let view: View = [0, 0, 1, 1];
 let target: View = view;
@@ -82,14 +74,15 @@ function glide(): void {
   gliding = view.some((v, i) => v !== target[i]);
   if (gliding) requestAnimationFrame(glide);
 }
-Object.assign(globalThis, { purplePresented: copyFrame });
+// Purple says where it is after each frame that leaves it somewhere new (browser.py).
+const moved = (json: string) => post({ type: "place", place: JSON.parse(json) as Place });
+Object.assign(globalThis, { purplePresented: copyFrame, purpleMoved: moved });
 new ResizeObserver(copyFrame).observe(canvas);
 
-const placed = (place: Place) => post({ type: "place", place });
 const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
-  if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(async () => m.setup && placed(await live.setup(m.setup))).then(() => post({ type: "loaded" }));
-  if (m.type === "setup") return live.setup(m.setup).then(placed);
-  if (m.type === "key") return live.key(m.char).then(placed);
+  if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(() => m.setup && live.setup(m.setup)).then(() => post({ type: "loaded" }));
+  if (m.type === "setup") return live.setup(m.setup);
+  if (m.type === "key") return live.key(m.char);
   if (m.type === "hush") return live.hush();
   if (m.type === "filter") return live.filter(m.text).then((value) => post({ type: "answer", id: m.id, value }));
   if (m.type === "check") return live.check(m.source, m.names).then((value) => post({ type: "answer", id: m.id, value }));

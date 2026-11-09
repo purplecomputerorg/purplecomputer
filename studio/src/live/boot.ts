@@ -40,8 +40,8 @@ function say(text: string): Promise<void> {
 
 // The room a Studio page shows; see setup() in live.py.
 export type Room = "art" | "music" | "play" | "blocks";
-// at: the room's cursor, as fractions of the screen (see place() in live.py).
-export interface Place { room: Room; menu: boolean; at: [number, number] | null }
+// at: the room's cursor, as fractions of the screen; setup: the first report after a setup ran (see moved() in live.py).
+export interface Place { room: Room; menu: boolean; at: [number, number] | null; setup?: boolean }
 // letters: Music in Letters.
 // picture: painted on the Art canvas as Art's Open paints a pack picture.
 // family: a family room opened over the room, as the Esc menu opens one, with its pack's pictures and

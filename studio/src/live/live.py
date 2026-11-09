@@ -20,6 +20,8 @@ PACKS = Path.home() / ".purple" / "packs"
 TRYING = Path("/tmp/studio-trying/content/rooms")
 _app = None
 _task = None
+# Where the page last heard Purple was, or "setup" once setup() has run and the page hasn't heard since.
+_placed = None
 
 
 def _rooms():
@@ -92,8 +94,8 @@ def setup(room, letters=False, instrument=None, picture=None, family=None):
     if family:
         from purple_tui.canvas.rooms.family_room import FamilyRoom
         _app.push(FamilyRoom(_app, _try(family)))
-    global _placed  # browser.py's: the page hears where this left Purple, even where it already was
-    _placed = None
+    global _placed
+    _placed = "setup"
     _app.invalidate()
 
 
@@ -139,6 +141,17 @@ def place():
     vp, cursor = _app._viewport_rect(), _app._get_cursor_position()
     at = [(vp.x + cursor[0] * vp.w) / _app.g.w, (vp.y + cursor[1] * vp.h) / _app.g.h] if cursor else None
     return {"room": _app.active_room, "menu": bool(_app.top), "at": at}
+
+
+def moved():
+    """place() when the page hasn't heard it yet, else None; setup is True on the first one after setup()."""
+    global _placed
+    now = place()
+    if now == _placed:
+        return None
+    news = {**now, "setup": _placed == "setup"}
+    _placed = now
+    return news
 
 
 # Python's words for a line that isn't finished, as a parent would put them.

@@ -204,6 +204,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .room-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 .room-buttons button { font: 600 13px var(--sans); padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; }
 .room-buttons button:hover { background: var(--fill); }
+.room-buttons button[aria-busy="true"] { border-color: var(--purple); color: var(--purple); cursor: progress; }
 .room-buttons button[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
 .card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .card-head h2 { font-size: 17px; }

@@ -2,13 +2,17 @@
 # Purple's threads are side work (mixer warmup, volume commands, power polling), so they don't start.
 import threading
 
-_skipped = set()
+_said = set()
+
+
+def _once(text):
+    if text not in _said:
+        _said.add(text)
+        print(text)
 
 
 def _no_thread(self):
-    if self.name not in _skipped:
-        _skipped.add(self.name)
-        print(f"[studio] skipped thread {self.name}")
+    _once(f"[studio] skipped thread {self.name}")
 
 
 threading.Thread.start = _no_thread
@@ -177,10 +181,8 @@ _patch_speech()
 
 # Each finished frame is copied by the page onto the canvas people see, scaled down smoothly
 # (frame.ts); the browser's own scaling of SDL's canvas leaves small text jagged. Whenever a frame
-# leaves Purple somewhere new, the page hears where (place(), from live.py, run in these same globals).
-_placed = None
-
-
+# leaves Purple somewhere new, the page hears where (moved(), from live.py, run in these same globals).
+# A report that fails is logged and skipped: raising here would stop Purple's frame loop for good.
 def _patch_present():
     import json
     from js import purpleMoved, purplePresented
@@ -189,12 +191,13 @@ def _patch_present():
     present = gfx.Gfx.present
 
     def presented(self, *args, **kwargs):
-        global _placed
         present(self, *args, **kwargs)
         purplePresented()
-        if globals().get("_app") and (now := place()) != _placed:
-            _placed = now
-            purpleMoved(json.dumps(now))
+        try:
+            if globals().get("_app") and (now := moved()):
+                purpleMoved(json.dumps(now))
+        except Exception as e:
+            _once(f"[studio] couldn't say where Purple is: {e!r}")
 
     gfx.Gfx.present = presented
 

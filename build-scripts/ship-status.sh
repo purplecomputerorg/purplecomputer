@@ -24,24 +24,34 @@ fetch_json() { curl -fsS --max-time 10 "$1?t=$(date +%s)" 2>/dev/null; }
 field() { sed -n "s/.*\"$2\": *\"\([^\"]*\)\".*/\1/p" <<<"$1" | head -1; }
 known() { [ -n "$1" ] && git cat-file -e "$1^{commit}" 2>/dev/null; }
 short() { known "$1" && git rev-parse --short=8 "$1"; }
-# behind <commit> <tip> <paths...>: commits on tip since commit that touch the paths.
-behind() { git rev-list --count --no-merges "$1..$2" -- "${@:3}"; }
 details=""
 # row <name> <commit> <version> <ok?> <state> [fix] [commits to list with -v]
 row() {
     printf '%-14s %-9s %-17s %s %-36s %s\n' "$1" "$(short "$2")" "$3" "$([ "$4" = 1 ] && echo ✓ || echo ✗)" "$5" "${6:-}"
     [ -z "${7:-}" ] || details+=$'\n'"$1:"$'\n'"$7"
 }
-# log_since <commit> <paths...>: main's commits since commit that touch the paths, for -v.
-log_since() { git log --oneline --no-merges "$1..$main" -- "${@:2}" | cut -c1-100 | sed 's/^/  /'; }
+# same <from> <to> <paths...>: the paths' files are identical, so rebuilding would change nothing (a
+# change and its revert, or commits elsewhere, don't count).
+same() { git diff --quiet "$1" "$2" -- "${@:3}"; }
+# compare <name> <commit> <version> <tip> <tip's name> <fix> <paths...>: one row, ✓ when the commit's
+# copy of the paths is the tip's.
+compare() {
+    local name=$1 from=$2 version=$3 tip=$4 tipname=$5 fix=$6 n
+    shift 6
+    if same "$from" "$tip" "$@"; then
+        row "$name" "$from" "$version" 1 "same as $tipname"
+    else
+        n=$(git rev-list --count --no-merges "$from..$tip" -- "$@")
+        row "$name" "$from" "$version" 0 "behind $tipname ($n change(s))" "$fix" \
+            "$(git log --oneline --no-merges "$from..$tip" -- "$@" | cut -c1-100 | sed 's/^/  /')"
+    fi
+}
 
 # The ISO build: the newest one built here from main.
 build_iso=$(BUILD_BRANCH_FILTER=main list_build_isos | filter_variant | head -1)
 build=$([ -n "$build_iso" ] && iso_commit "$build_iso")
 if known "$build"; then
-    n=$(behind "$build" "$main" "${IMAGE_PATHS[@]}")
-    [ "$n" = 0 ] && row "ISO build" "$build" "$(cat "$build_iso.version" 2>/dev/null)" 1 "has main" \
-        || row "ISO build" "$build" "$(cat "$build_iso.version" 2>/dev/null)" 0 "$n behind main" "just build" "$(log_since "$build" "${IMAGE_PATHS[@]}")"
+    compare "ISO build" "$build" "$(cat "$build_iso.version" 2>/dev/null)" "$main" main "just build" "${IMAGE_PATHS[@]}"
 else
     row "ISO build" "" "" 0 "none from main here" "just build"
 fi
@@ -50,40 +60,28 @@ fi
 json=$(fetch_json https://files.purplecomputer.org/purple2/latest.json)
 iso=$(field "$json" commit)
 if known "$iso"; then
-    n=$(behind "$iso" "$main" "${IMAGE_PATHS[@]}")
-    fix=$(known "$build" && [ "$(behind "$build" "$main" "${IMAGE_PATHS[@]}")" = 0 ] && echo "just ship-2" || echo "just build, then just ship-2")
-    [ "$n" = 0 ] && row "2.0 download" "$iso" "$(field "$json" version)" 1 "has main" \
-        || row "2.0 download" "$iso" "$(field "$json" version)" 0 "$n behind main" "$fix" "$(log_since "$iso" "${IMAGE_PATHS[@]}")"
+    fix=$(known "$build" && same "$build" "$main" "${IMAGE_PATHS[@]}" && echo "just ship-2" || echo "just build, then just ship-2")
+    compare "2.0 download" "$iso" "$(field "$json" version)" "$main" main "$fix" "${IMAGE_PATHS[@]}"
 else
-    row "2.0 download" "$iso" "" 0 "couldn't read purple2/latest.json"
+    row "2.0 download" "" "" 0 "couldn't read purple2/latest.json"
 fi
 
 # The 1.x download (purplecomputer.org's download page), against release/1.x.
 check=$(bash build-scripts/release-check.sh 2>/dev/null)
 v1=$(sed -n 's/^Commit: *\([0-9a-f]\{40\}\).*/\1/p' <<<"$check")
 if known "$v1"; then
-    n=$(git rev-list --count "$v1..origin/release/1.x")
-    version=$(sed -n 's/^Download: *\([^,]*\).*/\1/p' <<<"$check")
-    [ "$n" = 0 ] && row "1.x download" "$v1" "$version" 1 "has release/1.x" \
-        || row "1.x download" "$v1" "$version" 0 "$n unshipped on release/1.x" "just release-status"
+    compare "1.x download" "$v1" "$(sed -n 's/^Download: *\([^,]*\).*/\1/p' <<<"$check")" origin/release/1.x release/1.x "just release-status" "${IMAGE_PATHS[@]}"
 else
     row "1.x download" "" "" 0 "couldn't read latest.json" "just release-status"
 fi
 
-# Studio (studio.purplecomputer.org, from its version.json).
+# Studio (studio.purplecomputer.org, from its version.json), and whether its demo and packs run
+# Purple the 2.0 download doesn't have yet.
 json=$(fetch_json https://studio.purplecomputer.org/version.json)
 studio=$(field "$json" commit)
 if known "$studio"; then
-    n=$(behind "$studio" "$main" "${STUDIO_PATHS[@]}")
-    note=$(grep -q '"dirty": *true' <<<"$json" && echo ", uncommitted build")
-    [ "$n" = 0 ] && row "Studio" "$studio" "" 1 "has main$note" \
-        || row "Studio" "$studio" "" 0 "$n behind main$note" "just studio-deploy --prod" "$(log_since "$studio" "${STUDIO_PATHS[@]}")"
-    # Studio's demo and packs running Purple the 2.0 download doesn't have yet.
-    if known "$iso" && git merge-base --is-ancestor "$iso" "$studio"; then
-        n=$(behind "$iso" "$studio" "${PURPLE_PATHS[@]}")
-        [ "$n" = 0 ] && row "Studio vs 2.0" "" "" 1 "same Purple as the download" \
-            || row "Studio vs 2.0" "" "" 0 "Purple $n ahead of the download" "just ship-2 (just compat-check)"
-    fi
+    compare "Studio" "$studio" "$(grep -q '"dirty": *true' <<<"$json" && echo "uncommitted build")" "$main" main "just studio-deploy --prod" "${STUDIO_PATHS[@]}"
+    known "$iso" && compare "2.0 vs Studio" "$iso" "Purple in each" "$studio" Studio "just ship-2 (just compat-check)" "${PURPLE_PATHS[@]}"
 else
     row "Studio" "" "" 0 "couldn't read version.json"
 fi

@@ -77,6 +77,8 @@ function pyodideAssets(): Plugin {
         ...PAGE_CSP.map(([page, csp]) => ({ src: `/${page.replace(".", "\\.")}`, headers: { "Content-Security-Policy": csp }, continue: true })),
         // Each font version's pictures sit in a folder of their own (scripts/studio_bundle.py), so they never change.
         { src: "/purple/emoji/[^/]+/.*\\.png", headers: { "Cache-Control": "public, max-age=31536000, immutable" }, continue: true },
+        // A wheel's name carries its version.
+        { src: "/pyodide/.*\\.whl", headers: { "Cache-Control": "public, max-age=31536000, immutable" }, continue: true },
       ];
       mkdirSync(resolve(here, ".vercel/output"), { recursive: true });
       writeFileSync(resolve(here, ".vercel/output/config.json"), JSON.stringify({ version: 3, routes }, null, 2));

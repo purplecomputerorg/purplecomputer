@@ -4,7 +4,12 @@
 
 // A sound still loading this long after it was played is skipped rather than heard late.
 const LATE_MS = 500;
+// A stopped sound fades out this fast instead of cutting mid-wave, which clicks.
+const FADE_S = 0.02;
 const ctx = new AudioContext();
+// Fast typing stacks notes past full scale; this limiter keeps them from clipping.
+const out = new DynamicsCompressorNode(ctx, { threshold: -6, knee: 6, ratio: 12, attack: 0.002, release: 0.12 });
+out.connect(ctx.destination);
 const files = new Map<string, Promise<ArrayBuffer | null>>();
 const sounds = new Map<number, { buffer: Promise<AudioBuffer | null>; length: number }>();
 const channels = new Map<number, { sound: number; gain: GainNode; source?: AudioBufferSourceNode }>();
@@ -18,9 +23,11 @@ const fetchFile = (url: string) => {
 
 function end(id: number): void {
   const ch = channels.get(id);
+  if (!ch) return;
   channels.delete(id);
-  try { ch?.source?.stop(); } catch { /* never started */ }
-  ch?.gain.disconnect();
+  if (!ch.source) return ch.gain.disconnect();
+  ch.gain.gain.setTargetAtTime(0, ctx.currentTime, FADE_S / 4);
+  ch.source.stop(ctx.currentTime + FADE_S);
 }
 
 export const warmSounds = () => toWarm.forEach(fetchFile);
@@ -38,7 +45,7 @@ export const purpleSound = {
   play(id: number, volume: number): number {
     const channel = ++lastChannel;
     const gain = new GainNode(ctx, { gain: volume });
-    gain.connect(ctx.destination);
+    gain.connect(out);
     channels.set(channel, { sound: id, gain });
     const asked = performance.now();
     void (sounds.get(id)?.buffer ?? Promise.resolve(null)).then((buffer) => {
@@ -46,7 +53,7 @@ export const purpleSound = {
       if (!ch) return;
       if (!buffer || performance.now() - asked > LATE_MS) return end(channel);
       ch.source = new AudioBufferSourceNode(ctx, { buffer });
-      ch.source.onended = () => end(channel);
+      ch.source.onended = () => (channels.delete(channel), gain.disconnect());
       ch.source.connect(gain);
       ch.source.start();
     });
@@ -55,7 +62,7 @@ export const purpleSound = {
   },
   busy: (channel: number) => channels.has(channel),
   anyBusy: () => channels.size > 0,
-  volume: (channel: number, v: number) => void (channels.get(channel)?.gain.gain.setValueAtTime(v, ctx.currentTime)),
+  volume: (channel: number, v: number) => void (channels.get(channel)?.gain.gain.setTargetAtTime(v, ctx.currentTime, FADE_S / 4)),
   end,
   stopSound: (id: number) => [...channels].forEach(([channel, ch]) => ch.sound === id && end(channel)),
   stopAll: () => [...channels.keys()].forEach(end),

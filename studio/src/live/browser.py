@@ -128,14 +128,14 @@ def _patch_mixer():
     url = lambda path: f"purple/core-sounds/{path.relative_to(core).as_posix()}"
 
     class Channel:
-        def __init__(self, id):
-            self.id = id
+        def __init__(self, id, sound_volume):
+            self.id, self.sound_volume = id, sound_volume
 
         def get_busy(self):
             return purpleSound.busy(self.id)
 
-        def set_volume(self, volume, *_):
-            purpleSound.volume(self.id, volume)
+        def set_volume(self, volume, *_):  # pygame scales a channel by its sound's volume too
+            purpleSound.volume(self.id, volume * self.sound_volume)
 
         def stop(self):
             purpleSound.end(self.id)
@@ -150,7 +150,7 @@ def _patch_mixer():
             purpleSound.drop(self.id)
 
         def play(self, *_, **__):
-            return Channel(purpleSound.play(self.id, self.volume))
+            return Channel(purpleSound.play(self.id, self.volume), self.volume)
 
         def set_volume(self, volume):
             self.volume = volume

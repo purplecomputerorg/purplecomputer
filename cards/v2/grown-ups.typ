@@ -53,7 +53,7 @@ Connect a printer with a USB-B cable. Most printers have the port, even wireless
 ]
 
 #gap
-#section[What you can add][
+#section[Use Purple Studio to make:][
   #tiles(pad: 7pt,
     ([Pictures.], [Upload a photo for them to paint in *Art*.], studio-icon("1f5bc")),
     ([Words.], [Add your family's names and silly phrases.], studio-icon("1f5e8")),

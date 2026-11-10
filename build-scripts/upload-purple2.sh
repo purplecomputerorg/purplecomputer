@@ -15,6 +15,8 @@ source "$SCRIPT_DIR/r2-helpers.sh"
 PREFIX=purple2
 REF="${1:-HEAD}"
 use_build_of_ref "$REF" || { log_error "Cannot resolve git commit '$REF'"; exit 1; }
+# Cards come from the commit asked for, even when an older build ships
+CARDS_COMMIT="$(git -C "$PROJECT_DIR" rev-parse "$REF^{commit}")"
 
 find_isos() {
     local isos
@@ -64,15 +66,27 @@ git -C "$PROJECT_DIR" merge-base --is-ancestor "$COMMIT" origin/main 2>/dev/null
     || echo "Note: $SHORT is not on origin/main yet; the page's commit link 404s until it's pushed."
 
 r2_init
+STANDARD_SHA="$(sha256sum "$STANDARD_ISO" | cut -d' ' -f1)"
+DEBUG_SHA="$(sha256sum "$DEBUG_ISO" | cut -d' ' -f1)"
+# Read before latest.json is overwritten: the previous version is kept as the rollback
+LIVE="$(aws s3 cp "s3://${R2_BUCKET}/${PREFIX}/latest.json" - --endpoint-url "$R2_ENDPOINT" 2>/dev/null || echo '{}')"
+PREVIOUS="$(jq -r '.version // empty' <<< "$LIVE")"
+# Same ISOs already live: keep their version and only refresh the cards
+ISOS_LIVE=false
+if [[ "$(jq -r '"\(.standard.sha256) \(.debug.sha256)"' <<< "$LIVE")" == "$STANDARD_SHA $DEBUG_SHA" ]]; then
+    ISOS_LIVE=true VERSION="$PREVIOUS"
+fi
+
 echo ""
 echo "  $(basename "${STANDARD_ISO%.iso}")  standard + debug, commit $SHORT"
-echo "  -> purple2.purplecomputer.org as $VERSION"
+if $ISOS_LIVE; then
+    echo "  ISOs already live as $VERSION: updating the cards only, from ${CARDS_COMMIT:0:7}"
+else
+    echo "  -> purple2.purplecomputer.org as $VERSION"
+fi
 echo ""
 read -p "Upload? Type 'yes' to continue: " answer
 [[ "$answer" == "yes" ]] || { log_info "Aborted."; exit 0; }
-
-# Remembered before latest.json is overwritten, kept as the rollback
-PREVIOUS="$(aws s3 cp "s3://${R2_BUCKET}/${PREFIX}/latest.json" - --endpoint-url "$R2_ENDPOINT" 2>/dev/null | jq -r '.version // empty' || true)"
 
 upload_variant() {
     local iso="$1" name="$2" sha="$3" key="${PREFIX}/${VERSION}/$2.iso"
@@ -81,18 +95,18 @@ upload_variant() {
         --content-disposition "attachment; filename=\"purple-computer-2-${VERSION}${4:-}.iso\""
     echo "$sha  $name.iso" | r2_upload - "${key}.sha256" text/plain
 }
-STANDARD_SHA="$(sha256sum "$STANDARD_ISO" | cut -d' ' -f1)"
-DEBUG_SHA="$(sha256sum "$DEBUG_ISO" | cut -d' ' -f1)"
-upload_variant "$STANDARD_ISO" standard "$STANDARD_SHA"
-upload_variant "$DEBUG_ISO" debug "$DEBUG_SHA" -debug
+if ! $ISOS_LIVE; then
+    upload_variant "$STANDARD_ISO" standard "$STANDARD_SHA"
+    upload_variant "$DEBUG_ISO" debug "$DEBUG_SHA" -debug
+fi
 
-# The box cards as committed at this build, so the page matches the software
-CARDS='[]'
+CARDS='[]' CARD_PATHS=()
 for card in "Start:start" "Rooms:rooms" "Code:code" "Grown-ups:grown-ups"; do
-    label="${card%%:*}" src="$COMMIT:cards/v2/out/${card#*:}.pdf" key="${PREFIX}/${VERSION}/cards/${card#*:}.pdf"
-    git -C "$PROJECT_DIR" cat-file -e "$src" 2>/dev/null || { echo "No $label card at $SHORT, skipped"; continue; }
+    label="${card%%:*}" src="$CARDS_COMMIT:cards/v2/out/${card#*:}.pdf" key="${PREFIX}/${VERSION}/cards/${card#*:}.pdf"
+    git -C "$PROJECT_DIR" cat-file -e "$src" 2>/dev/null || { echo "No $label card at ${CARDS_COMMIT:0:7}, skipped"; continue; }
     git -C "$PROJECT_DIR" show "$src" | r2_upload - "$key" application/pdf
     CARDS="$(jq -c --arg l "$label" --arg p "$key" '. + [{label: $l, path: $p}]' <<< "$CARDS")"
+    CARD_PATHS+=("/$key")
 done
 
 jq -n --arg v "$VERSION" --arg c "$COMMIT" --arg p "$PREFIX/$VERSION" \
@@ -104,7 +118,11 @@ jq -n --arg v "$VERSION" --arg c "$COMMIT" --arg p "$PREFIX/$VERSION" \
       debug: {path: "\($p)/debug.iso", sha256: $ds, size: $dz},
       cards: $cards}' \
     | r2_upload - "${PREFIX}/latest.json" application/json
-purge_cache "/${PREFIX}/latest.json"
+purge_cache "/${PREFIX}/latest.json" "${CARD_PATHS[@]}"
+if $ISOS_LIVE; then
+    echo -e "${GREEN}Updated cards${NC} for $VERSION: https://purple2.purplecomputer.org"
+    exit 0
+fi
 
 # Keep this version and the one it replaced
 for old in $(aws s3 ls "s3://${R2_BUCKET}/${PREFIX}/" --endpoint-url "$R2_ENDPOINT" | awk '$1 == "PRE" {print $2}' | tr -d /); do

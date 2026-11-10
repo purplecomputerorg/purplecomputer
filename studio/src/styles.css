@@ -1037,6 +1037,8 @@ html.embed { color-scheme: normal; background: none; overflow: hidden; }
 .embed .stage { position: static; height: auto; overflow: visible; padding: 0 0 12px; background: none; view-transition-name: none; }
 .embed .stage-inner { max-width: none; }
 .embed .stage .laptop { max-width: none; }
+/* On the embedded Purple, the note saying what to type sits in the middle of the screen, where eyes already are */
+.embed .screen-note { top: 50%; transform: translate(-50%, -50%) rotate(-2deg); padding: 4px 22px 6px; font-size: clamp(22px, 4.5cqw, 36px); }
 /* In a frame, vh is the frame's own height, which the landing page sets from the height we report:
    sizing the title by vh made each report nudge the next, so the frame jiggled a pixel on room changes. */
 .embed .stage h3 { font-size: clamp(22px, 5.5vw, 30px); margin: min(24px, 3vw) 0 min(16px, 3vw); }

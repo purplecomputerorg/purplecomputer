@@ -15,8 +15,18 @@ const isRoom = (r: unknown): r is Room => ROOMS.some(([room]) => room === r);
 
 const app = document.getElementById("app")!;
 let ready = false;
-const stage = createStage({ stays: false, onMove: () => tell() });
-stage.live.onReady = () => { ready = true; tell(); };
+const stage = createStage({ stays: false, onMove: () => { hint(); tell(); } });
+stage.live.onReady = () => { ready = true; hint(); tell(); };
+
+// What to do in each room, handwritten on the screen once it's been clicked, until the next key.
+const TYPE: Record<Room, string> = { art: "Type some letters!", music: "Press any keys!", play: "Type a word, then Enter!", blocks: "Type some letters!" };
+let hinted: Room | null = null;
+const hint = () => {
+  const { room, menu } = stage.live.place;
+  if (!ready || menu || room === hinted) return;
+  hinted = room;
+  stage.live.prompt(TYPE[room]);
+};
 
 const tell = embed(app, (data) => {
   const m = data as ToTry;

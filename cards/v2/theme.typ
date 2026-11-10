@@ -143,21 +143,28 @@
 #let flip(body) = footer(end: [#body #h(3pt) #text(fill: magenta, weight: "bold", sym.arrow.r)])
 #let support = footer(end: text(size: 7.4pt, fill: purple, weight: "semibold")[support\@purplecomputer.org])
 
+// The Play room's real answer to a line, drawn by cards/v2/play_results.py at its true size
+#let result(code) = box(baseline: 20%, image("results/" + lower(code).replace(regex("[^a-z0-9]+"), "-") + ".png"))
+// An example row that shows its answer
+#let ex(code) = (code, result(code))
+
 // Code examples: a typed line beside what it does; long lines take the whole row.
 // `comments` styles the "what it does" as a code comment.
-#let examples(color: purple, comments: false, ..rows) = {
+#let examples(color: purple, comments: false, first: auto, gutter: 10pt, ..rows) = {
   let say(d) = if comments {
     text(font: "IBM Plex Mono", style: "italic", size: 0.84em, fill: ink-dim)[\# #d]
   } else { text(fill: ink-med, d) }
+  // An array is ways of typing the same thing
+  let code(c) = if type(c) == array { c.map(typed.with(color: color)).join[ #text(fill: ink-dim)[or] ] } else { typed(c, color: color) }
   grid(
-    columns: (auto, 1fr),
+    columns: (first, 1fr),
     column-gutter: 8pt,
-    row-gutter: 10pt,
+    row-gutter: gutter,
     align: (left + horizon, left + horizon),
-    ..rows.pos().map(((c, d)) => if comments or c.len() > 16 {
-      (grid.cell(colspan: 2)[#typed(c, color: color) #h(5pt) #say(d)],)
+    ..rows.pos().map(((c, d)) => if comments or (type(c) == str and c.len() > 16) {
+      (grid.cell(colspan: 2)[#code(c) #h(5pt) #say(d)],)
     } else {
-      (typed(c, color: color), say(d))
+      (code(c), say(d))
     }).flatten(),
   )
 }

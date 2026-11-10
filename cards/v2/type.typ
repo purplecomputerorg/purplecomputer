@@ -6,30 +6,14 @@
 #intro[In the *Play* room, type anything, then press #key("Enter").]
 #gap
 
-#let try(title, ..rows) = panel(title: title, examples(..rows))
+#let try(title, ..rows) = panel(title: title, examples(first: 1.25in, gutter: 8pt, ..rows))
 
-#try([Words become little pictures],
-  ("cat", [a cat]),
-  ("3 cats", [three of them]),
-  ("pink fish", [colors and pictures together]),
-)
+#let says(code, ..also) = ((code, ..also.pos()), [#result(code) #h(3pt) #icon("\u{F057E}") #h(2pt) #text(fill: ink-med)[and says "#code.trim("!")" out loud]])
+#try([Words become little pictures], ex("unicorn"), ex("3 trex"), ex("pink fish"), says("cat!", "say cat"))
 #gap
-#try([Numbers],
-  ("2 + 3", [the answer, with dots to count]),
-  ("3 x 4 bananas", [twelve bananas]),
-  ("1234", [an abacus]),
-  ("2 4 6 8...", [keep a pattern going]),
-)
+#try([Numbers], ex("2 + 3"), ex("2 x 3 bananas"), ex("1234"), ex("2 4 6 8..."))
 #gap
-#try([Colors],
-  ("red + blue", [mix like paint]),
-  ("2 dark burgundy", [two dark burgundy squares]),
-)
-#gap
-#try([Talking],
-  ("cat!", [add #mono("!") and Purple says it]),
-  ("say 5 x 5 apples", [or start with #mono("say")]),
-)
+#try([Colors], ex("bright red + blue"), ex("2 burgundy"))
 #gap
 #flip[Write code]
 

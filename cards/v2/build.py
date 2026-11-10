@@ -8,6 +8,7 @@
 
 Needs the `typst`, `qrcode` and `pymupdf` pip packages. Fonts come from the app's own
 font folder (Figtree, IBM Plex Mono) plus Sora in cards/v2/fonts, the landing site's headline font.
+Play answers on the cards (ex("...") in a .typ) are drawn by the app itself, see play_results.py.
 """
 
 import argparse
@@ -29,6 +30,8 @@ QR_COLOR = "#3b1a5c"
 
 sys.path.insert(0, str(HERE.parent))
 from add_bleed import _rgb, add_bleed  # noqa: E402
+sys.path.insert(0, str(ROOT))
+from play_results import render as render_results  # noqa: E402
 
 
 def write_qrs() -> None:
@@ -108,6 +111,7 @@ def main() -> None:
     if png_dir:
         png_dir.mkdir(parents=True, exist_ok=True)
     write_qrs()
+    render_results([HERE / f"{name}.typ" for name in CARDS], HERE / "results")
     for name in args.cards:
         build(name, png_dir)
     for suffix in ("", "-pad"):

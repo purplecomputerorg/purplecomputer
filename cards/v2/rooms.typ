@@ -18,8 +18,8 @@
 ]
 #gap
 #room(3, [Play])[
-  Type words, math and colors, then #key("Enter"). #h(2pt) #typed("red + blue") \
-  #typed("cat * 5") #h(2pt) #typed("dog + cat") #h(2pt) #typed("2 + 3") #h(2pt) #typed("say I love cat")
+  Type words, math and colors, then #key("Enter"). Examples: \
+  #typed("red + blue") #h(2pt) #typed("cat * 5") #h(2pt) #typed("2 + 3") #h(2pt) #typed("say I love cat")
 ]
 #gap
 #room(4, [Blocks])[

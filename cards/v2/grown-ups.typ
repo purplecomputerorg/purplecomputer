@@ -32,7 +32,7 @@ Connect a printer with a USB-B cable. Most printers have the port, even wireless
 // ── Back: Purple Studio ──
 #header(title: [Purple Studio], qr: "studio-qr.svg", note: text(size: 9pt, weight: "semibold", fill: purple-dk)[Make Purple your own.])
 
-#intro[Studio is a website for adding your family's own pictures, words and sounds to Purple.]
+#intro[Studio is a website for adding your family's own pictures, words, sounds and whole new rooms to Purple.]
 #gap
 
 // Section headings sit above their panels, a step up from the purple item titles inside
@@ -47,7 +47,7 @@ Connect a printer with a USB-B cable. Most printers have the port, even wireless
       [Personalize and build at #text(fill: purple)[studio.purplecomputer.org]],
       [Download your unique Purple Pack from Studio],
       [Plug in your Purple Key (or any USB drive) and drag your Purple Pack onto it
-       #v(1pt) #text(size: 7.6pt, fill: ink-med)[Your Purple Key still holds the Purple system too.]],
+       #v(1pt) #text(size: 7.6pt, fill: ink-med)[Your Purple Key can transfer files and still runs Purple.]],
     )
   ]
 ]

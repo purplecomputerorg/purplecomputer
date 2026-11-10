@@ -46,7 +46,10 @@
 #let icon(cp, fill: purple) = text(font: "Symbols Nerd Font Mono", fill: fill, cp)
 #let ICONS = (
   art: "\u{F03D8}", music: "\u{F001}", play: "\u{F0B79}", blocks: "\u{F01A7}",
-  time-travel: "\u{F02DA}", save: "\u{F0193}", open: "\u{F0770}", code: "\u{F06A9}",
+  time-travel: "\u{F02DA}", save: "\u{F0193}", open: "\u{F0770}", code: "\u{F06A9}", write: "\u{F03EA}",
+  // The Parent Menu has no icons on screen; these are picked from the same font
+  install: "\u{F02CA}", kids: "\u{F000E}", rooms: "\u{F003B}", littles: "\u{F18FB}",
+  sound: "\u{F057E}", pin: "\u{F033E}", printing: "\u{F042A}",
 )
 // Studio's own section icons (studio/src/main.ts SECTIONS, drawn from studio/src/icons)
 #let studio-icon(code) = box(baseline: 15%, image("/studio/src/icons/" + code + ".svg", height: 1em))
@@ -108,7 +111,7 @@
 }
 
 // A white card with a hairline; an optional accent title row
-#let panel(title: none, color: purple, n: none, fill: white, body) = block(
+#let panel(title: none, color: purple, n: none, icon: none, fill: white, body) = block(
   width: 100%,
   inset: (x: 9pt, top: 8pt, bottom: 9pt),
   radius: 8pt,
@@ -118,7 +121,8 @@
   {
     if title != none {
       let t = text(font: "Sora", weight: "semibold", size: 10pt, fill: color.darken(12%), title)
-      if n != none { numbered(n, color: color, t) } else { t }
+      let t = if n != none { numbered(n, color: color, t) } else { t }
+      if icon != none { grid(columns: (1fr, auto), align: horizon, t, text(size: 10pt, fill: color, icon)) } else { t }
       v(1pt)
     }
     body
@@ -192,9 +196,9 @@
     (grid(columns: (1fr, auto), column-gutter: 6pt, align: horizon, [#tip-title(t) #h(2pt) #body], ..icon),))))
 } else { layout(size => {
   let w = (size.width - gutter * (cols - 1)) / cols
-  let tile((t, body), tall) = block(
+  let tile((t, body, ..icon), tall) = block(
     width: w, height: tall, inset: (x: 9pt, top: 7pt, bottom: 9pt), radius: 7pt, fill: white, stroke: 0.6pt + hair,
-    [#tip-title(t) #v(2pt) #text(fill: ink-med, body)],
+    [#grid(columns: (1fr, auto), align: horizon, tip-title(t), ..icon) #v(2pt) #text(fill: ink-med, body)],
   )
   grid(columns: (w,) * cols, gutter: gutter, ..items.pos().chunks(cols).map(row => {
     let tall = calc.max(..row.map(i => measure(tile(i, auto)).height))

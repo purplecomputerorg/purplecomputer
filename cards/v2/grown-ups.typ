@@ -8,19 +8,19 @@
 #gap
 
 #tiles(cols: 2,
-  ([Install], [Put Purple on the laptop for good.]),
-  ([Kid Profiles], [Each kid's name, saved work and Time Travel.]),
-  ([Rooms], [Turn any room off, or turn on your own custom rooms.]),
-  ([Littles Mode], [In *Rooms*: one focused activity, including a screen-free option.]),
-  ([Sound], [Set a volume limit. 0 is always silent.]),
-  ([Parent PIN], [Keep this menu for grown-ups.]),
+  ([Install], [Put Purple on the laptop for good.], icon(ICONS.install)),
+  ([Kid Profiles], [Each kid's name, saved work and Time Travel.], icon(ICONS.kids)),
+  ([Rooms], [Turn any room off, or turn on your own custom rooms.], icon(ICONS.rooms)),
+  ([Littles Mode], [In *Rooms*: one focused activity, including a screen-free option.], icon(ICONS.littles)),
+  ([Sound], [Set a volume limit. 0 is always silent.], icon(ICONS.sound)),
+  ([Parent PIN], [Keep this menu for grown-ups.], icon(ICONS.pin)),
 )
 #gap
-#panel(title: [The Write room #h(3pt) #tag[Off by default]])[
+#panel(title: [The Write room #h(3pt) #tag[Off by default]], icon: icon(ICONS.write))[
 A quiet page for stories, letters and school reports, for kids who can type. Enable in the Parent Menu #sym.arrow.r *Rooms*.
 ]
 #gap
-#panel(title: [Printing #h(3pt) #tag[Experimental]])[
+#panel(title: [Printing #h(3pt) #tag[Experimental]], icon: icon(ICONS.printing))[
 Connect a printer with a USB-B cable. Most printers have the port, even wireless ones. Then press #key("Esc") #key("P").
 ]
 

@@ -11,7 +11,7 @@
 #let says(code, ..also) = ((code, ..also.pos()), [#result(code) #h(3pt) #icon("\u{F057E}") #h(2pt) #text(fill: ink-med)[and says "#code.trim("!")" out loud]])
 #try([Words become little pictures], ex("unicorn"), ex("3 trex"), ex("pink fish"), says("cat!", "say cat"))
 #gap
-#try([Numbers], ex("2 + 3"), ex("2 x 3 bananas"), ex("1234"), ex("2 4 6 8..."))
+#try([Numbers], ex("2 + 3"), ex("2 x 3 apples"), ex("1234"), ex("2 4 6 8..."))
 #gap
 #try([Colors], ex("bright red + blue"), ex("2 burgundy"))
 #gap

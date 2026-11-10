@@ -7,7 +7,7 @@
 #intro[Tap #key("Esc") or #key("~") to pick a room, then press its number.]
 #gap
 
-#let room(n, name, body) = panel(title: grid(columns: (1fr, auto), name, icon(ICONS.at(lower(name.text)))), n: n, body)
+#let room(n, name, body) = panel(title: name, icon: icon(ICONS.at(lower(name.text))), n: n, body)
 
 #room(1, [Art])[
   Every letter paints its color. #key("Space") puts the brush down so arrows paint. #key("Tab") switches between colors and letters.

@@ -72,13 +72,14 @@
 )
 
 // A badge beside its content, centered on a one-line body; every numbered row goes through here
+// Top-aligned, the badge is raised to center on the body's first 9pt line
 #let numbered(n, color: purple, r: 6.2pt, valign: horizon, body) = grid(
   columns: (2 * r, 1fr), column-gutter: r + 1pt, align: (center + valign, left + valign),
-  badge(n, color: color, r: r), body,
+  if valign == top { move(dy: 3.1pt - r, badge(n, color: color, r: r)) } else { badge(n, color: color, r: r) }, body,
 )
-#let steps(color: purple, spacing: 9pt, r: 6.2pt, ..items) = stack(
+#let steps(color: purple, spacing: 9pt, r: 6.2pt, valign: horizon, ..items) = stack(
   spacing: spacing,
-  ..items.pos().enumerate().map(((i, b)) => numbered(i + 1, color: color, r: r, b)),
+  ..items.pos().enumerate().map(((i, b)) => numbered(i + 1, color: color, r: r, valign: valign, b)),
 )
 
 // The card's number in its color; every header and the set strip draw it
@@ -191,8 +192,8 @@
 // Titled tips. One column is a single ruled list, title then text on a line. More columns are
 // small cards, title above text, each row as tall as its tallest card.
 #let tip-title(t) = text(font: "Sora", weight: "semibold", size: 9pt, fill: purple.darken(8%), t)
-#let tiles(cols: 1, gutter: 6pt, pad: 9pt, ..items) = if cols == 1 {
-  panel(ruled(pad: pad, ..items.pos().map(((t, body, ..icon)) =>
+#let tiles(cols: 1, gutter: 6pt, pad: 9pt, title: none, ..items) = if cols == 1 {
+  panel(title: title, ruled(pad: pad, ..items.pos().map(((t, body, ..icon)) =>
     (grid(columns: (1fr, auto), column-gutter: 6pt, align: horizon, [#tip-title(t) #h(2pt) #body], ..icon),))))
 } else { layout(size => {
   let w = (size.width - gutter * (cols - 1)) / cols

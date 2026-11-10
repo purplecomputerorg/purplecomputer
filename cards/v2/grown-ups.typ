@@ -30,29 +30,37 @@ Connect a printer with a USB-B cable. Most printers have the port, even wireless
 #pagebreak()
 
 // ── Back: Purple Studio ──
-#header(title: [Purple Studio], qr: "studio-qr.svg", note: text(fill: purple)[studio.purplecomputer.org])
+#header(title: [Purple Studio], qr: "studio-qr.svg", note: text(size: 9pt, weight: "semibold", fill: purple-dk)[Make Purple your own.])
 
-// Wording from Studio itself: its home page (studio/src/ui/home.ts) and section cards (studio/src/main.ts)
-#text(size: 11pt, weight: "semibold", fill: purple-dk)[Make Purple your own.]
-#v(-2pt)
-#text(fill: ink-med)[Everything happens in your web browser. Nothing you add is uploaded anywhere or tracked.]
+#intro[Studio is a website for adding your family's own pictures, words and sounds to Purple.]
 #gap
 
-#tiles(
-  ([Pictures.], [The dog, ready to paint on.], studio-icon("1f5bc")),
-  ([Words.], [The dog's name, with a picture.], studio-icon("1f5e8")),
-  ([Letters.], [Grandma, every time they press G.], sticker("Z", "#A5BFF2")),
-  ([Instruments.], [Like a kazoo or a harp.], studio-icon("1f3b9")),
-  ([Colors.], [An ocean-blue screen, or new key colors.], studio-icon("1f3a8")),
-  ([New Rooms.], [Like a world for them to walk around.], studio-icon("1f9e9")),
-)
+// Section headings sit above their panels, a step up from the purple item titles inside
+#let section(title, body) = [
+  #text(font: "Sora", weight: "bold", size: 11pt, fill: purple-dk, title)
+  #v(-3pt)
+  #body
+]
+#section[How it works][
+  #panel[
+    #steps(spacing: 9pt, valign: top,
+      [Personalize and build at #text(fill: purple)[studio.purplecomputer.org]],
+      [Download your unique Purple Pack from Studio],
+      [Plug in your Purple Key (or any USB drive) and drag your Purple Pack onto it
+       #v(1pt) #text(size: 7.6pt, fill: ink-med)[Your Purple Key still holds the Purple system too.]],
+    )
+  ]
+]
 
 #gap
-#panel(title: [How it works])[
-  #steps(spacing: 12pt,
-    [Try out your changes from within Studio],
-    [Download your Purple Pack from Studio],
-    [Put your Purple Pack on any USB drive and plug it into your Purple Computer],
+#section[What you can add][
+  #tiles(pad: 7pt,
+    ([Pictures.], [Upload a photo for them to paint in *Art*.], studio-icon("1f5bc")),
+    ([Words.], [Add your family's names and silly phrases.], studio-icon("1f5e8")),
+    ([Letters.], [Audio from Grandma when they press "G".], sticker("G", "#E2C63A")),
+    ([Instruments.], [Invent instruments to play in *Music*.], studio-icon("1f3b9")),
+    ([Colors.], [Change Purple's theme and letter colors.], studio-icon("1f3a8")),
+    ([New Rooms.], [Build rooms, like a world to explore.], studio-icon("1f9e9")),
   )
 ]
 

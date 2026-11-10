@@ -88,7 +88,7 @@ upload_variant "$DEBUG_ISO" debug "$DEBUG_SHA" -debug
 
 # The box cards as committed at this build, so the page matches the software
 CARDS='[]'
-for card in "Start:start" "Rooms:rooms" "Type:type" "Grown-ups:grown-ups"; do
+for card in "Start:start" "Rooms:rooms" "Code:code" "Grown-ups:grown-ups"; do
     label="${card%%:*}" src="$COMMIT:cards/v2/out/${card#*:}.pdf" key="${PREFIX}/${VERSION}/cards/${card#*:}.pdf"
     git -C "$PROJECT_DIR" cat-file -e "$src" 2>/dev/null || { echo "No $label card at $SHORT, skipped"; continue; }
     git -C "$PROJECT_DIR" show "$src" | r2_upload - "$key" application/pdf

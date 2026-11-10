@@ -24,7 +24,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 FONTS = ROOT / "purple_tui" / "canvas" / "fonts"
 OUT = HERE / "out"
-CARDS = ("start", "rooms", "type", "grown-ups")
+CARDS = ("start", "rooms", "code", "grown-ups")
 QRS = {"help-qr.svg": "https://purplecomputer.org/help", "studio-qr.svg": "https://studio.purplecomputer.org/"}
 QR_COLOR = "#3b1a5c"
 

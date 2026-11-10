@@ -77,7 +77,7 @@ lists, and the `PURPLE_RAMP` auto-recolor palette.
 
 ## Purple 2.0 box cards (`v2/`)
 
-The box cards for Purple 2.0 are Typst sources, so an LLM can edit them and you can too. Four numbered two-sided 4x6 cards: 1 `start.typ` (booting from the Purple Key), 2 `rooms.typ` (the rooms, then cool things to try), 3 `type.typ` (things to type in Play, then code in Art, Music and Blocks), and 4 `grown-ups.typ` (the Parent Menu, then Purple Studio). Each card has its own color and number (`SET` in `theme.typ`), and every side's footer lists the whole set with that card filled in. A back is any side whose `header()` gets a `title:`; it says Back and wears a softer number. They share `theme.typ` for colors, keycaps and panels, in the landing site's palette. Text is Purple's own Figtree and IBM Plex Mono from `purple_tui/canvas/fonts/`; titles are Sora, from `v2/fonts/`.
+The box cards for Purple 2.0 are Typst sources, so an LLM can edit them and you can too. Four numbered two-sided 4x6 cards: 1 `start.typ` (booting from the Purple Key), 2 `rooms.typ` (the rooms, then cool things to try), 3 `code.typ` (things to type in Play, then code in Art, Music and Blocks), and 4 `grown-ups.typ` (the Parent Menu, then Purple Studio). Each card has its own color and number (`SET` in `theme.typ`), and every side's footer lists the whole set with that card filled in. A back is any side whose `header()` gets a `title:`; it says Back and wears a softer number. They share `theme.typ` for colors, keycaps and panels, in the landing site's palette. Text is Purple's own Figtree and IBM Plex Mono from `purple_tui/canvas/fonts/`; titles are Sora, from `v2/fonts/`.
 
 ```bash
 just cards          # or: just cards rooms

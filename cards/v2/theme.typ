@@ -15,7 +15,7 @@
 #let SET = (
   (name: "Start", color: purple),
   (name: "Rooms", color: rgb("#E44444")),
-  (name: "Type", color: rgb("#2E6AE1")),
+  (name: "Code", color: rgb("#2E6AE1")),
   (name: "Grown-ups", color: rgb("#C4A81C")),
 )
 #let card-n = state("card-n", 1)
@@ -90,9 +90,9 @@
 }
 
 // Fronts leave the title out to use the card's name; a titled header is a back, with a softer dot
-#let header(title: none, qr: "help-qr.svg", note: [Videos and help: #text(fill: purple)[purplecomputer.org/help]]) = context {
+#let header(title: none, front: auto, qr: "help-qr.svg", note: [Videos and help: #text(fill: purple)[purplecomputer.org/help]]) = context {
   let n = card-n.get()
-  let front = title == none
+  let front = if front == auto { title == none } else { front }
   grid(
     columns: (0.46in, 1fr, auto),
     column-gutter: 8pt,

@@ -2,25 +2,25 @@
 #show: card.with(3)
 
 // ── Front: things to type in Play ──
-#header()
-#intro[In the *Play* room, type anything, then press #key("Enter").]
+#header(title: [Code in Play], front: true)
+#intro[In *Play*: type anything, press #key("Enter"). Nothing breaks!]
 #gap
 
 #let try(title, ..rows) = panel(title: title, examples(first: 1.25in, gutter: 8pt, ..rows))
 
 #let says(code, ..also) = ((code, ..also.pos()), [#result(code) #h(3pt) #icon("\u{F057E}") #h(2pt) #text(fill: ink-med)[and says "#code.trim("!")" out loud]])
-#try([Words become little pictures], ex("unicorn"), ex("3 trex"), ex("pink fish"), says("cat!", "say cat"))
+#try([Words make pictures], ex("unicorn"), ex("3 trex"), ex("pink fish"), says("cat!", "say cat"))
 #gap
-#try([Numbers], ex("2 + 3"), ex("2 x 3 apples"), ex("1234"), ex("2 4 6 8..."))
+#try([Numbers come alive], ex("2 + 3"), ex("2 x 3 apples"), ex("1234"), ex("2 4 6 8..."))
 #gap
-#try([Colors], ex("bright red + blue"), ex("2 burgundy"))
+#try([Colors mix], ex("bright red + blue"), ex("2 burgundy"))
 #gap
-#flip[Write code]
+#flip[Code everywhere]
 
 #pagebreak()
 
 // ── Back: code in Art, Music and Blocks ──
-#header(title: [Write Code])
+#header(title: [Code Everywhere])
 #note[
   In *Art*, *Music* or *Blocks*, tap #key("Esc"), then press #key("Space"). \
   Press #key("↓") for ideas. Typos get fixed for you.

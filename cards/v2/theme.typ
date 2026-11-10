@@ -143,10 +143,13 @@
 #let flip(body) = footer(end: [#body #h(3pt) #text(fill: magenta, weight: "bold", sym.arrow.r)])
 #let support = footer(end: text(size: 7.4pt, fill: purple, weight: "semibold")[support\@purplecomputer.org])
 
-// The Play room's real answer to a line, drawn by cards/v2/play_results.py at its true size
-#let result(code) = box(baseline: 20%, image("results/" + lower(code).replace(regex("[^a-z0-9]+"), "-") + ".png"))
-// An example row that shows its answer
+// A room's real result for a line, drawn by cards/v2/room_results.py at its true size
+// Pictures center on the code line beside them; Play answers sit on it
+#let result(code, room: "play") = box(baseline: if room == "play" { 20% } else { 50% - 0.3em }, image("results/" + room + "/" + lower(code).replace(regex("[^a-z0-9]+"), "-") + ".png"))
+// Example rows that show their result: a Play line, or code in Art or Blocks
 #let ex(code) = (code, result(code))
+#let art(code) = (code, result(code, room: "art"))
+#let blocks(code) = (code, result(code, room: "blocks"))
 
 // Code examples: a typed line beside what it does; long lines take the whole row.
 // `comments` styles the "what it does" as a code comment.

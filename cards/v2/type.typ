@@ -27,28 +27,27 @@
 ]
 #gap
 #panel(title: [Art])[
-  #examples(comments: true,
-    ("red right 5", [paint 5 red squares]),
-    ("brush up right 5 asdf", [a gap, then colors]),
-    ("write hi", [write letters]),
-    ("red repeat 4 forward 6 turn", [a square!]),
+  #examples(first: 1.05in, gutter: 4pt,
+    art("brush up right 3 ujmmm"),
+    art("red repeat 4 forward 4 turn"),
+    art("write repeat 3 hello"),
   )
 ]
 #gap
 #panel(title: [Music])[
   #examples(comments: true,
-    ("asdf", [each letter is a note]),
+    ("asdf", [4 notes, one per letter]),
     ("fast asdf slow jkl", [quick notes, then slow]),
-    ("choose ukulele zxcvbnm", [play a ukulele]),
-    ("letters", [keys say letters, #mono("notes") goes back]),
+    ("choose ukulele zxcvbnm", [zxcvbnm on a ukulele]),
+    ("letters", [switch to saying letter names]),
   )
 ]
 #gap
 #panel(title: [Blocks])[
-  #examples(comments: true,
-    ("red up 3 blue up 2", [a two-color tower]),
-    ("right hello", [each letter is a block]),
-    ("green repeat 4 right 1 up 1", [stairs]),
+  #examples(first: 1.05in, gutter: 4pt,
+    blocks("right qazwsx"),
+    blocks("red up 3 blue up 2"),
+    blocks("green repeat 4 right 1 up 1"),
   )
 ]
 #gap

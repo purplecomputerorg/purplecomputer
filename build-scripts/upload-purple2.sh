@@ -86,12 +86,23 @@ DEBUG_SHA="$(sha256sum "$DEBUG_ISO" | cut -d' ' -f1)"
 upload_variant "$STANDARD_ISO" standard "$STANDARD_SHA"
 upload_variant "$DEBUG_ISO" debug "$DEBUG_SHA" -debug
 
+# The box cards as committed at this build, so the page matches the software
+CARDS='[]'
+for card in "Start:start" "Rooms:rooms" "Type:type" "Grown-ups:grown-ups"; do
+    label="${card%%:*}" src="$COMMIT:cards/v2/out/${card#*:}.pdf" key="${PREFIX}/${VERSION}/cards/${card#*:}.pdf"
+    git -C "$PROJECT_DIR" cat-file -e "$src" 2>/dev/null || { echo "No $label card at $SHORT, skipped"; continue; }
+    git -C "$PROJECT_DIR" show "$src" | r2_upload - "$key" application/pdf
+    CARDS="$(jq -c --arg l "$label" --arg p "$key" '. + [{label: $l, path: $p}]' <<< "$CARDS")"
+done
+
 jq -n --arg v "$VERSION" --arg c "$COMMIT" --arg p "$PREFIX/$VERSION" \
     --arg ss "$STANDARD_SHA" --arg ds "$DEBUG_SHA" \
     --arg sz "$(du -h "$STANDARD_ISO" | cut -f1)" --arg dz "$(du -h "$DEBUG_ISO" | cut -f1)" \
+    --argjson cards "$CARDS" \
     '{version: $v, commit: $c, released: (now | todate),
       standard: {path: "\($p)/standard.iso", sha256: $ss, size: $sz},
-      debug: {path: "\($p)/debug.iso", sha256: $ds, size: $dz}}' \
+      debug: {path: "\($p)/debug.iso", sha256: $ds, size: $dz},
+      cards: $cards}' \
     | r2_upload - "${PREFIX}/latest.json" application/json
 purge_cache "/${PREFIX}/latest.json"
 

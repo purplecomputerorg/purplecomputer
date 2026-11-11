@@ -1045,3 +1045,16 @@ html.embed { color-scheme: normal; background: none; overflow: hidden; }
 /* Room for the tape above the top row and the hover shadow on every side. The landing page widens
    the frame by its 24px gutter, so the side margins keep the cards in line with its column. */
 .embed .home-cards { margin: 12px 24px 48px; }
+/* try.html's demo key: above the phone keys in their box on a phone, alone where they would be on a computer.
+   The bottom padding is 3px more, for the keys' edge under them. */
+.tray-bar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: fit-content; max-width: 100%; margin: 14px auto 0; padding: 10px 10px 13px; border-radius: 16px; background: linear-gradient(#45444d, #2a2930); }
+.tray-bar .tray-keys { margin: 0; padding: 0; background: none; }
+.tray-bar:has(> .demo-key[hidden]) { display: none; }
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .tray-bar { margin-top: 0; }
+  .tray-bar:has(> .demo-key[hidden]) { display: flex; }
+}
+/* A pastel key like the stickers, so it sits with the keys instead of shouting over them */
+.demo-key { height: 46px; padding: 0 22px; border: 0; border-radius: 9px; background: #ebe2fd; color: var(--purple); font: 600 16px var(--sans); white-space: nowrap; box-shadow: 0 3px 0 #c4aee0; cursor: pointer; }
+.demo-key:hover { background: #f4eefe; }
+.demo-key:active { transform: translateY(3px); box-shadow: none; }

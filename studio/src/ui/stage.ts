@@ -21,7 +21,8 @@ const ARROWS = ["left", "up", "down", "right"];
 
 // stays: the line saying what's typed stays on the device (try.html leaves it to the page around it).
 // onMove: Purple moved to another room, or opened or closed a menu.
-export function createStage({ stays = true, onMove = () => {} }: { stays?: boolean; onMove?: () => void } = {}) {
+// trayKey: one more key (try.html's demo), above the phone keys in their box, or in their place on a computer.
+export function createStage({ stays = true, onMove = () => {}, trayKey }: { stays?: boolean; onMove?: () => void; trayKey?: HTMLElement } = {}) {
   const live = liveScreen();
   let page: StagePage | null = null;
   // The laptop and the live Purple inside it stay put for the whole visit (moving an iframe reloads it).
@@ -30,7 +31,7 @@ export function createStage({ stays = true, onMove = () => {} }: { stays?: boole
   laptop.screen.append(live.element);
 
   const roomButtons = h("div", { class: "room-buttons" });
-  const phoneBar = h("div", { class: "phone-bar" }, roomButtons, laptop.tray, h("p", { class: "phone-hint" }, "Or tap the laptop to type with your phone's keyboard."));
+  const phoneBar = h("div", { class: "phone-bar" }, roomButtons, trayKey ? h("div", { class: "tray-bar" }, trayKey, laptop.tray) : laptop.tray, h("p", { class: "phone-hint" }, "Or tap the laptop to type with your phone's keyboard."));
   const caption = h("p", { class: "caption" });
   const element = h("aside", { class: "stage" }, h("div", { class: "stage-inner" },
     h("h3", {}, "This little computer is a real Purple Computer for you to try"), laptop.element, phoneBar, caption,

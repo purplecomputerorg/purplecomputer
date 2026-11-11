@@ -19,7 +19,7 @@ Purple doesn't accept pull requests, as much as we appreciate anyone who wants t
 Two honest reasons:
 
 - **Purple Computer is a small family business.** Open source maintenance is a second full-time job, and the burnout stories are everywhere ([this HN thread](https://news.ycombinator.com/item?id=48620462) is a good sample). Every PR deserves a careful review, a thoughtful reply, and a years-long maintenance commitment. That's hard to offer while also building the product, shipping physical packages, and supporting issues people run into.
-- **Purple is fundamentally about removing things.** No internet, no apps, no points, no login, no errors, etc. The pitch on the site is literally "Calm by design: Purple never grabs for their attention. It can even be a little boring!" Nearly every contribution is an addition, and an open roadmap pulls a project toward more when the whole point is to hold the line at less.
+- **Purple is fundamentally about removing things.** No internet, no apps, no points, no login, no errors, etc. The pitch on the site is literally "Calm by design: Purple never sucks them in. It can even be a little boring!" Nearly every contribution is an addition, and an open roadmap pulls a project toward more when the whole point is to hold the line at less.
 
 Maybe at some point there will be a way to share modifications, add-ons, and so on. In the meantime, I'd love to hear about modifications you make to your own version!
 

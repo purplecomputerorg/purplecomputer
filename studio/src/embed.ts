@@ -6,6 +6,9 @@ export type FromEmbed = { type: "purple-embed"; height: number } & Record<string
 const EMBEDDER = /^(https:\/\/(www\.)?purplecomputer\.org|https:\/\/landing-[a-z0-9-]+-tavinathanson\.vercel\.app|http:\/\/(localhost|simba):3002)$/;
 
 // Returns tell(), which sends the height and state() along with anything extra.
+// Opened on its own (testing try.html or cards.html), with no frame to grow, the page scrolls.
+if (parent === window) document.documentElement.classList.add("alone");
+
 export function embed(app: HTMLElement, onMessage: (m: { type: string } & Record<string, unknown>) => void = () => {}, state: () => object = () => ({})) {
   let parentOrigin: string | null = null;
   const tell = (extra: object = {}) => {

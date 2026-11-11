@@ -1033,6 +1033,7 @@ span.emoji > img { display: inline !important; width: auto !important; height: 1
    through. A frame whose color-scheme differs from the page around it gets an opaque backdrop, so it
    takes that page's (normal). The frame grows to fit, so it never scrolls. */
 html.embed { color-scheme: normal; background: none; overflow: hidden; }
+html.embed.alone { overflow: auto; }
 .embed body { background: none; }
 .embed .stage { position: static; height: auto; overflow: visible; padding: 0 0 12px; background: none; view-transition-name: none; }
 .embed .stage-inner { max-width: none; }

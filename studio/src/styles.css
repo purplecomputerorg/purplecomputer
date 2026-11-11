@@ -662,7 +662,16 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .home-card .bezel { position: relative; margin-bottom: 8px; padding: 5px; border-radius: 10px; background: linear-gradient(#34333b, #1f1e24); container-type: inline-size; }
 .home-card .voice-badge { position: absolute; top: 9px; right: 9px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--fill); color: var(--purple); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
 .home-card b { font-family: var(--display); font-size: clamp(12px, 11.5cqi, 16px); }
-.home-card > span:last-child { font-size: 13px; color: var(--dim); }
+.home-card-words { display: flex; flex-direction: column; gap: 4px; }
+.home-card-words > span:not(.btn) { font-size: 13px; color: var(--dim); }
+.home-card.wide { grid-column: 1 / -1; --tilt: -0.4deg; }
+.home-card.wide .btn { align-self: start; margin-top: 8px; }
+@container (min-width: 500px) {
+  .home-card.wide { flex-direction: row; align-items: center; gap: 20px; padding: 10px 20px 10px 10px; }
+  .home-card.wide .bezel { flex: 0 0 min(42%, 300px); margin: 0; }
+  .home-card.wide b { font-size: 20px; }
+  .home-card.wide .home-card-words > span:not(.btn) { font-size: 14px; }
+}
 /* Sized in em off the card's width, so each screen scales as one picture instead of rewrapping */
 .mini { aspect-ratio: 16 / 10; border-radius: 4px; background: var(--tui-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.6em; padding: 0.8em; overflow: hidden; font: 5.4cqi/1.3 var(--mono); color: #d8cbef; text-align: center; }
 .mini i { font-style: normal; color: #c39cf0; }
@@ -689,6 +698,18 @@ label.row input[type="checkbox"] { accent-color: var(--purple); width: 16px; hei
 .stage h3 { font: 500 clamp(22px, min(5.5vw, 4.5vh), 30px)/1.15 Caveat, cursive; text-wrap: balance; text-transform: none; letter-spacing: 0; text-align: center; color: var(--purple); margin: min(24px, 3vw, 3vh) 0 min(16px, 3vw, 2vh); overflow: hidden; interpolate-size: allow-keywords; transition: height 0.3s, margin 0.3s, opacity 0.2s; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr)); gap: 12px; margin: 24px 0; }
+.cards.big { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container pane (width < 620px) { .cards.big { grid-template-columns: minmax(0, 1fr); } }
+.cards.big .pick { padding: 22px 22px 20px; }
+.cards.big .pick-icon { font-size: 40px; }
+.cards.big img.pick-icon { width: 42px; height: 42px; }
+.cards.big .pick b { font-size: 19px; }
+.cards.big .pick span:last-child { font-size: 14px; }
+.cards.small { grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr)); gap: 8px; margin-top: 0; }
+.cards.small .pick { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; }
+.cards.small .pick-icon { font-size: 22px; margin: 0; }
+.cards.small img.pick-icon { width: 24px; height: 24px; }
+.cards.small .pick b { font-size: 14px; }
 h3 + .cards { margin-top: 0; }
 .pick { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: inherit; text-decoration: none; background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 16px 18px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pick.featured { border-color: var(--border); background: #f6f1fe; }

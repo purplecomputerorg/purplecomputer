@@ -59,6 +59,10 @@ function tryRoom(base: string, made: Made | null, source = made && made.kind !==
 
 function list(): View {
   const template = (kind: TemplateDraft["kind"]) => ({ kind, data: TEMPLATES[kind].defaults() }) as TemplateDraft;
+  const starters = [
+    ...(Object.keys(TEMPLATES) as TemplateDraft["kind"][]).map((kind) => ({ ...TEMPLATES[kind], go: () => tryRoom(TEMPLATES[kind].name, template(kind)) })),
+    ...EXAMPLES.map((e) => ({ ...e, go: () => tryRoom(e.name, null, e.source) })),
+  ].sort((a, b) => ORDER.indexOf(a.name) - ORDER.indexOf(b.name));
   return {
     title: "New Rooms",
     editor: h(
@@ -76,11 +80,9 @@ function list(): View {
             h("button", { class: "btn", onclick: startBlocks }, "Start with blocks"))),
         wholeRoom()),
       h("h3", {}, "Or start from one of these"),
-      h("div", { class: "cards" },
-        ...[
-          ...(Object.keys(TEMPLATES) as TemplateDraft["kind"][]).map((kind) => ({ ...TEMPLATES[kind], go: () => tryRoom(TEMPLATES[kind].name, template(kind)) })),
-          ...EXAMPLES.map((e) => ({ ...e, go: () => tryRoom(e.name, null, e.source) })),
-        ].sort((a, b) => ORDER.indexOf(a.name) - ORDER.indexOf(b.name)).map((s) => choice(s, s.go))),
+      h("div", { class: "cards big" }, ...starters.slice(0, FEATURED).map((s) => choice(s, s.go))),
+      h("p", { class: "pick-label" }, "More to try"),
+      h("div", { class: "cards small" }, ...starters.slice(FEATURED).map((s) => choice(s, s.go, false))),
       h("p", { class: "dim" }, "Made a Purple Pack already? ", openPackButton("Open it here"), " to try its rooms and change them."),
       roomFilesBox(),
     ),
@@ -111,12 +113,14 @@ function wholeRoom(): HTMLElement {
       h("button", { type: "button", title: `Start with ${label.toLowerCase()}`, onclick: go }, pane, h("span", {}, label)))));
 }
 
-// The starters' order on the Rooms page: the liveliest first.
+// The starters' order on the Rooms page: the liveliest first, and the first FEATURED of them shown big.
 const ORDER = ["story", "explore", "memory", "beats", "garden", "picture-quiz", "picture-keyboard", "snake"];
+const FEATURED = 3;
 
-const choice = (s: { icon: string; label: string; about: string }, go: () => void, cls = "pick") =>
-  h("button", { class: cls, onclick: go }, purpleEmoji(s.icon, "pick-icon"),
-    h("b", {}, s.label), h("span", {}, s.about));
+// A small card names its starter, and says what it is only on hover.
+const choice = (s: { icon: string; label: string; about: string }, go: () => void, about = true) =>
+  h("button", { class: "pick", onclick: go, ...(!about && { title: s.about }) }, purpleEmoji(s.icon, "pick-icon"),
+    h("b", {}, s.label), about ? h("span", {}, s.about) : null);
 
 function problemBox(): { element: HTMLElement; show(p: RoomProblem | null): void } {
   const element = h("div", { class: "problem", hidden: true });

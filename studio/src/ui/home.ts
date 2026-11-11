@@ -12,7 +12,8 @@ import type { View } from "./view";
 
 // voice: takes the family's recorded voice, so its card says so.
 // clears: what "Clear all" names on its pages; colors has its own undo instead.
-export interface HomeSection { id: string; label: string; icon: string; blurb: string | (() => (string | Node)[]); voice?: boolean; clears?: string }
+// pitch: what the section's card says when it's the wide one on Studio's home.
+export interface HomeSection { id: string; label: string; icon: string; blurb: string | (() => (string | Node)[]); pitch?: string; voice?: boolean; clears?: string }
 
 const RAINBOW = ["#5c2d91", "#c0392b", "#2f5bb5", "#a86f00", "#9b59d0", "#2e7d32"];
 export const rainbow = (text: string) => h("span", {}, ...[...text].map((c, i) => h("span", { style: `color:${RAINBOW[i % RAINBOW.length]}` }, c)));
@@ -24,7 +25,7 @@ export const SECTIONS: HomeSection[] = ([
   { id: "keys", clears: "letters", label: "Letters", icon: "z", blurb: "Grandma, every time they press G", voice: true },
   { id: "instruments", clears: "instruments", label: "Instruments", icon: "🎹", blurb: "Like a kazoo or a harp" },
   { id: "colors", label: "Colors", icon: "🎨", blurb: () => ["Purple, but green, or ", rainbow("any color")] },
-  { id: "rooms", clears: "rooms", label: "New Rooms", icon: "🧩", blurb: "Like a world for them to walk around", voice: true },
+  { id: "rooms", clears: "rooms", label: "New Rooms", icon: "🧩", blurb: "Like a world for them to walk around", pitch: "Little games you make for your kid: a world to walk around, a story with choices, a memory game with your photos.", voice: true },
 ] satisfies HomeSection[]).filter((s) => features.rooms || s.id !== "rooms");
 
 const svg = (viewBox: string, inner: string, cls: string) => {
@@ -84,15 +85,18 @@ const SCREENS: Record<string, () => Node[]> = {
 const micIcon = () => { const el = h("span", { class: "mic", "aria-hidden": "true" }); el.innerHTML = MIC; return el; };
 
 // onOpen: the card is on another site's page, so it opens its Studio page in a new tab.
-const card = (s: HomeSection, onOpen?: (id: string) => void) =>
-  h("a", { class: "home-card", href: `${onOpen ? "./" : ""}#${s.id}`, ...(onOpen && { target: "_blank", rel: "noopener", onclick: () => onOpen(s.id) }) },
+// wide: the newest section, first and across the whole row.
+const card = (s: HomeSection, onOpen?: (id: string) => void, wide = false) =>
+  h("a", { class: wide ? "home-card wide" : "home-card", href: `${onOpen ? "./" : ""}#${s.id}`, ...(onOpen && { target: "_blank", rel: "noopener", onclick: () => onOpen(s.id) }) },
     h("div", { class: "bezel" }, h("div", { class: `mini ${s.id}` }, ...SCREENS[s.id]()),
       s.voice ? h("span", { class: "voice-badge", title: "Can use your recorded voice" }, micIcon()) : null),
-    h("b", {}, s.label),
-    h("span", {}, ...(typeof s.blurb === "string" ? [s.blurb] : s.blurb())));
+    h("div", { class: "home-card-words" },
+      h("b", {}, s.label),
+      h("span", {}, ...(wide && s.pitch ? [s.pitch] : typeof s.blurb === "string" ? [s.blurb] : s.blurb())),
+      wide ? h("span", { class: "btn small" }, "Make a room") : null));
 
-export const homeCards = (sections: HomeSection[], onOpen?: (id: string) => void) =>
-  h("div", { class: "home-cards" }, ...sections.map((s) => card(s, onOpen)));
+export const homeCards = (sections: HomeSection[], onOpen?: (id: string) => void, wide?: string) =>
+  h("div", { class: "home-cards" }, ...[...sections].sort((a, b) => +(b.id === wide) - +(a.id === wide)).map((s) => card(s, onOpen, s.id === wide)));
 
 // What's in the family's Purple Pack, and what isn't, as the download page counts them.
 const packLine = h("div");
@@ -121,7 +125,7 @@ export function homeView(sections: HomeSection[]): View {
       h("h1", {}, "Make Purple ", h("span", { class: "stroke" }, "your own.")),
       h("p", { class: "serif" }, "A photo of your dog to draw on. A message from Grandma when you press G. Custom musical instruments."),
       h("p", { class: "home-note" }, h("b", {}, "For Purple Computer customers: "), "Purple Studio lets you customize the experience for your family. Make changes here and transfer them to your Purple Computer with a USB drive."),
-      homeCards(sections),
+      homeCards(sections, undefined, "rooms"),
       packLine,
     ),
     live: { room: "art" },

@@ -5,7 +5,6 @@ import { buildEntries } from "@sdk/pack";
 import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { onHush, stopPreviews } from "../audio";
-import { handwriting } from "../fonts";
 import { roomIcon } from "../examples";
 import { KEY_EVENT, announceKey } from "../keys";
 import { manifest, packChanges, packSpec, type Sent } from "../pack";
@@ -150,8 +149,7 @@ class LiveScreen {
   private showNote(text: string | null): void {
     clearTimeout(this.nudging);
     this.note.textContent = text;
-    this.note.hidden = true;
-    void handwriting.then(() => { this.note.hidden = !this.note.textContent; });
+    this.note.hidden = !text;
   }
 
   show(setup: RoomSetup): void {

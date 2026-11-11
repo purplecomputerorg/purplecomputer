@@ -15,6 +15,6 @@ import "@fontsource/sora/800.css";
 import "@fontsource/spectral/400-italic.css";
 import "@fontsource/spectral/500-italic.css";
 
-// Browsers fetch a face only when text first needs it, so Caveat's notes would draw in a stand-in
-// font for a moment when they appear. Fetching it now has it ready long before Purple is.
-export const handwriting = Promise.all([500, 600, 700].map((w) => document.fonts.load(`${w} 1em Caveat`))).catch(() => {});
+// Until Caveat arrives the browser draws handwriting in a stand-in font, so styles.css hides it till then.
+const ready = () => document.documentElement.classList.add("handwriting");
+void Promise.all([500, 600, 700].map((w) => document.fonts.load(`${w} 1em Caveat`))).then(ready, ready);

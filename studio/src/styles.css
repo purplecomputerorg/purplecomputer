@@ -28,6 +28,8 @@
 }
 
 * { box-sizing: border-box; }
+/* Everything in Caveat, hidden until fonts.ts has it loaded. */
+:root:not(.handwriting) :is(.stage h3, .sticker-callout, .screen-note) { visibility: hidden; }
 html { color-scheme: light; }
 body {
   margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans);

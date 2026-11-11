@@ -509,6 +509,10 @@ input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
 input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
 input[type="color"]:hover { box-shadow: 0 0 0 2px var(--border); }
+/* A room draws its colors as rounded squares, so its settings show them that way */
+.knobs input[type="color"] { border-radius: 7px; }
+.knobs input[type="color"]::-webkit-color-swatch { border-radius: 7px; }
+.knobs input[type="color"]::-moz-color-swatch { border-radius: 7px; }
 .col-heads span, .sheet-head span { font-size: 11px; font-weight: 600; color: var(--dim); }
 .add-row { justify-self: start; font: 600 13px var(--sans); padding: 5px 12px; border: 1.5px dashed var(--border); border-radius: 999px; background: none; color: var(--purple); cursor: pointer; }
 .add-row:hover { background: var(--fill); border-style: solid; }
@@ -528,9 +532,11 @@ input.mono-in { font-family: var(--mono); font-size: 13px; }
 .knob-rows:has(> .knob-entry) { grid-template-columns: minmax(0, 1fr); }
 /* A row of words (who says what) gives the words the room that's left, so they wrap inside the card */
 .knob-rows:has(> .form-row > :is(textarea, .spoken)) { grid-template-columns: max-content max-content minmax(0, 1fr) max-content; }
-/* A legend's rows are short, so they flow side by side across the card */
-.knob-rows:has(> .form-row > .legend-key) { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); column-gap: 16px; }
-.knob-rows:has(> .form-row > .legend-key) > .form-row { display: flex; }
+/* Short rows, like a legend's or a word and its picture, flow side by side across the card */
+.knob-rows.flow { grid-template-columns: repeat(auto-fill, minmax(200px, 260px)); column-gap: 24px; }
+.knob-rows.flow > .form-row { display: flex; align-items: center; gap: 8px; }
+.knob-rows.flow > .form-row > input[type="text"] { flex: 1; min-width: 0; }
+.knob-rows.flow > .col-heads { display: none; }
 .x { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--dim); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 .x:hover { background: var(--fill); color: var(--purple-dark); }
 .tile { position: relative; }

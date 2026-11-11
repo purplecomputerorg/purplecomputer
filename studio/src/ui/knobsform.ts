@@ -193,9 +193,10 @@ const row = (...cells: (HTMLElement | null)[]) => h("div", { class: "form-row kn
 // An inline group's items each take a grid column, so every row's columns line up.
 const width = (r: Element) => [...r.children].reduce((n, c) => n + (c.classList.contains("knob-inline") ? c.children.length : 1), 0);
 // heads: the columns' names, shown once above the rows instead of beside every field.
-function rows(items: HTMLElement[], add: HTMLElement | null, heads: string[] = []): HTMLElement {
+// flow: rows short enough to sit side by side.
+function rows(items: HTMLElement[], add: HTMLElement | null, heads: string[] = [], flow = false): HTMLElement {
   const head = heads.some(Boolean) ? h("div", { class: "form-row col-heads" }, ...heads.map((t) => h("span", {}, sentence(t ?? "")))) : null;
-  const el = h("div", { class: "knob-rows" }, head, ...items, add);
+  const el = h("div", { class: flow ? "knob-rows flow" : "knob-rows" }, head, ...items, add);
   el.style.setProperty("--cols", String(Math.max(1, ...items.filter((r) => r.classList.contains("form-row")).map(width))));
   return el;
 }
@@ -321,7 +322,8 @@ function dict(d: Dict, ctx: Ctx, peers: Lit[], labels: string[]): HTMLElement {
       : focusIfFresh(k, keyIn(d, k, ctx, pressed)),
       h("span", { class: "dim" }, "→"), value(x), remove(ctx, drop(i)));
   const full = things && things.every(([l]) => d.entries.some(([k]) => keyText(k) === l));
-  return rows(d.entries.map(entry), template && !full ? addSlot(ctx, add) : null, entries ? [] : [labels[0], "", ...labels.slice(1)]);
+  const flow = !!legend || (!things && values.every(isFace));
+  return rows(d.entries.map(entry), template && !full ? addSlot(ctx, add) : null, entries ? [] : [labels[0], "", ...labels.slice(1)], flow);
 }
 
 function linksOf(v: Lit): Pick<Ctx, "pages" | "links" | "relink"> {

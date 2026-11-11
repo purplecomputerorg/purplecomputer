@@ -6,7 +6,7 @@ The design goal is that how rooms get built (rules, forms, Python, sprites, what
 
 ## Writing one
 
-Everything a room can call, with the starter rooms, is Studio's Room guide: `studio/src/room-guide.md`, which Studio shows as a page and copies whole for a parent to hand to an AI helper. It is the one description of the room language; keep it in step with `roomkit/purple.py` (`studio/tests/guide.test.ts` checks the drums, keys, grid size, and starters). The starters are `studio/src/examples/*.py`, each a kind of room families asked for in the 2.0 survey: a world to walk around, a garden, a beat maker, memory for two, a story with choices, and a wandering snake. What Purple ships in them stays calm and easy to walk away from: no points or streaks, rooms rest or end, and speech only where it carries the room (Story reads its pages, Trivia its questions); everything else is a short sound and a picture or status line.
+Everything a room can call, with the starter rooms, is Studio's Room guide: `studio/src/room-guide.md`, which Studio shows as a page and copies whole for a parent to hand to an AI helper. It is the one description of the room language; keep it in step with `roomkit/purple.py` (`studio/tests/guide.test.ts` checks the drums, keys, grid size, and starters). The starters are `studio/src/examples/*.py`, each a kind of room families asked for in the 2.0 survey: a world to walk around, a garden, a beat maker, memory for two, a story with choices, and a spelling snake. What Purple ships in them stays calm and easy to walk away from: no points or streaks, rooms rest or end, and speech only where it carries the room (Story reads its pages, Trivia its questions); everything else is a short sound and a picture or status line.
 
 ## The protocol
 

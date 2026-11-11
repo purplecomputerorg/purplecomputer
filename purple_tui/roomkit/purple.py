@@ -421,7 +421,7 @@ def _scene() -> list:
             w, h = _span(*_s.cells.get(_s.cursor, (None, 1)))
             shapes.append(["rect", ox + x * CELL, oy + y * CELL, w * CELL, h * CELL, "accent", CELL / 6, 1])
     if _s.big:
-        shapes.append(_big(sw, sh, _s.big, box))
+        shapes.append(_big(sw, sh, _s.big, box and {**box, "box": "field", "pad": 4, "radius": 4}))
     px = sh * 0.05
     bottom = sh - px * 1.2
     if _s.lines:

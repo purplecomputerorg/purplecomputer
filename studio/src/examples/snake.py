@@ -1,54 +1,72 @@
+import random
+
 from purple import *
 
-# A snake that crawls to whichever key you press, on keys laid out like the keyboard. Each key it reaches
-# lights up in its sticker color and plays its note. Press another key on the way and it heads there instead,
-# or hold an arrow to steer it yourself.
+# A snake that eats letters to spell words. Purple says a word and lights up its first letter, laid out like the
+# keyboard. Press that key and the snake crawls over and eats it, then the next letter lights up. Spell the whole
+# word and its picture shows. The top line says which key to press. Any other key sends the snake there too, and
+# the arrows nudge it a square.
 
-# The snake's body, square by square back from its head: colors, emoji, or both, repeated down its length.
+# The words to spell, each with its picture. Purple says each word out loud.
+# Labels: word, picture
+WORDS = {"cat": "🐱", "dog": "🐶", "sun": "☀️", "bus": "🚌", "pig": "🐷", "fish": "🐟"}
+# The snake's colors, from its head back, repeated down its length.
 BODY = ["#5ec46a", "#3e9e4c"]
-# Seconds between each square it crawls.
-SPEED = 0.15
-# The snake grows a square longer at each key it reaches.
-GROWS = False
 
-scale = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5", "G5", "A5"]
-spots = grid.keyboard()
+spots = grid.keyboard(KEY_ROWS[1:])
 keys = {spot: key for key, spot in spots.items()}
-
-
-def head(color):
-    return pixels([
-        ".SSSSSS.",
-        "SWWSSWWS",
-        "SWKSSWKS",
-        "SSSSSSSS",
-        "SSSSSSSS",
-        "SSSSSSSS",
-        "SSSSSSSS",
-        ".SSSSSS.",
-    ], {"S": color, "W": "#ffffff", "K": "#1b1b1b"})
-
-
+words = list(WORDS)
+random.shuffle(words)
 snake = [(13 - i, 10) for i in range(3)]
-game = state(target=None, steer=None, head=head(BODY[0] if str(BODY[0]).startswith("#") else "#5ec46a"))
+game = state(word="", got=0, target=None, steer=None, wait=0)
+head = pixels([
+    "..SSSSSS..",
+    ".SSSSSSSS.",
+    "SSSSSSSSSS",
+    "SWWSSSSWWS",
+    "SWKSSSSWKS",
+    "SSSSSSSSSS",
+    "SSSSSSSSSS",
+    "SSSSSSSSSS",
+    ".SSSSSSSS.",
+    "..SSSSSS..",
+], {"S": BODY[0], "W": "#ffffff", "K": "#1b1b1b"})
 
-for key, spot in spots.items():
-    grid.floor.set(spot, "tile")
-    grid.set(spot, key.upper())
+
+def letters():
+    return [c for c in game.word.lower() if c in spots]
+
+
+def wanted():
+    left = letters()[game.got:]
+    return left[0] if left else None
+
+
+def light():
+    for key, spot in spots.items():
+        grid.floor.set(spot, "primary" if key == wanted() else "tile")
+    spelled = " ".join(c.upper() if i < game.got else "_" for i, c in enumerate(letters()))
+    press = f"   Press {{{wanted().upper()}}}" if wanted() else ""
+    status(f"{WORDS[game.word]}  {spelled}{press}")
+
+
+def new_word():
+    show("")
+    game.word, game.got = words[0], 0
+    words.append(words.pop(0))
+    light()
+    say(game.word)
 
 
 def draw():
     for i in range(len(snake) - 1, 0, -1):
         grid.set(snake[i], BODY[(i - 1) % len(BODY)])
-    grid.set(snake[0], game.head)
-
-
-draw()
+    grid.set(snake[0], head)
 
 
 def on_key(key):
     if key in ARROWS:
-        game.target, game.steer = None, key
+        game.target, game.steer, game.wait = None, key, 3
         step(*ARROWS[key])
     elif key in spots:
         game.target, game.steer = spots[key], None
@@ -59,13 +77,18 @@ def toward(a, b):
 
 
 def arrive(key):
-    color = KEY_COLORS[key]
-    grid.floor.set(spots[key], color)
-    game.head = head(color)
-    column = next(row.index(key) for row in KEY_ROWS if key in row)
-    play(scale[column], "glockenspiel")
-    if GROWS and len(snake) < 20:
+    if key != wanted():
+        return
+    play(KEY_NOTES[key], "glockenspiel")
+    game.got += 1
+    if len(snake) < 20:
         snake.append(snake[-1])
+    light()
+    if wanted():
+        return
+    show(WORDS[game.word])
+    say(game.word)
+    after(2.5, new_word)
 
 
 def step(dx, dy):
@@ -87,7 +110,14 @@ def crawl():
         (x, y), (tx, ty) = snake[0], game.target
         step(*((toward(x, tx), 0) if x != tx else (0, toward(y, ty))))
     elif game.steer and held(game.steer):
-        step(*ARROWS[game.steer])
+        # A tap is one step; holding keeps it going after a moment.
+        game.wait -= 1
+        if game.wait < 0:
+            step(*ARROWS[game.steer])
 
 
-every(SPEED, crawl)
+for key, spot in spots.items():
+    grid.set(spot, key.upper())
+draw()
+new_word()
+every(0.15, crawl)

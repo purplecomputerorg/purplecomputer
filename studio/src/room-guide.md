@@ -151,11 +151,11 @@ Purple won't let the screen flash: a change that brightens or darkens a big part
 - No timers that make a kid lose by being slow, unless the game is about being quick and your kid asked for it.
 - Arrows to move, Space or Enter to act, letters and numbers as themselves: those are the keys kids know.
 - A room about picking things can lay them out like the keyboard, as Memory and the beat maker do: the key to press is the one under the square, with no cursor to steer.
-- Calm beats busy. Purple is a quiet place.
+- Calm beats busy. Purple is a quiet place. Keep sounds few: say only what a kid needs and can't see, once, like the word to spell, and don't read out what's already on the screen. A short note for something done right is plenty; most keys can be silent.
 
 ## Starter rooms
 
-Studio's New Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for any number of players, a story with choices, and a wandering snake, the smallest room. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
+Studio's New Rooms page has these to start from, each one a different kind of room: a world to walk around, a garden, a beat maker, memory for any number of players, a story with choices, and a spelling snake. Their Python is at the end of this guide; reading one is the quickest way to see how the calls fit together.
 
 ## A Purple Pack made by hand
 

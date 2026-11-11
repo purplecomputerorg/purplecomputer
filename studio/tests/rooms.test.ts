@@ -38,30 +38,33 @@ const shapes = (r: Msg) => (r.scene ?? []) as Shape[];
 const texts = (r: Msg) => shapes(r).filter((s) => s[0] === "text").map((s) => s[4] as string);
 // Grid squares a reply drew: [column, row, color] for each square that isn't the background.
 const squares = (r: Msg) => shapes(r).slice(1).filter((s) => s[0] === "rect").map((s) => [Math.floor((s[1] as number) / 10), Math.floor((s[2] as number) / 10), s[5]]);
-const GREEN = "#5ec46a";
 
 describe("family rooms in Studio's Python", () => {
-  it("runs the Snake example: it crawls a square each tick to the key pressed, which lights up in its sticker color, turning the head that color too, and plays its note", async () => {
-    const ticks = [1, 2, 3, 4].map((t) => ({ ev: "tick", t }));
-    const replies = await runRoom(example("snake"), [{ ev: "key", key: "h" }, ...ticks]);
-    expect(squares(replies[0])).toEqual(expect.arrayContaining([[11, 9, GREEN], [10, 9, "#3e9e4c"]]));
-    expect(texts(replies[0])).toEqual(expect.arrayContaining(["1", "Q", "H", "/"]));
-    expect(replies[0].wake).not.toBeNull();
-    expect(squares(replies[5])).toEqual(expect.arrayContaining([[12, 6, "#DFBF1F"], [12, 7, GREEN]]));
-    const head = (r: Msg) => (shapes(r).find((s) => s[0] === "image")?.[5] as { palette: Record<string, string> }).palette.S;
-    expect([head(replies[0]), head(replies[5])]).toEqual([GREEN, "#DFBF1F"]);
-    expect(replies[5].sounds).toEqual([["note", "C5", "glockenspiel"]]);
+  it("runs the Snake example: Purple says the word, its next letter lights up and only a right letter chimes, and the snake eats it to spell the word", async () => {
+    const source = example("snake").replace(/^WORDS = .*$/m, 'WORDS = {"at": "🐱"}');
+    const ticks = (from: number) => Array.from({ length: 30 }, (_, i) => ({ ev: "tick", t: from + i * 0.2 }));
+    const replies = await runRoom(source, [{ ev: "key", key: "a" }, ...ticks(1), { ev: "key", key: "t" }, ...ticks(8)]);
+    const said = replies.flatMap((r) => ((r.sounds ?? []) as string[][]).filter((s) => s[0] === "say").map((s) => s[1]));
+    const statuses = replies.flatMap(texts).filter((t) => t.startsWith("🐱 "));
+    expect(statuses[0]).toBe("🐱  _ _   Press A");
+    expect(statuses).toEqual(expect.arrayContaining(["🐱  A _   Press T", "🐱  A T"]));
+    expect(said).toEqual(["at", "at", "at"]);
+    expect(replies.flatMap((r) => ((r.sounds ?? []) as string[][]).filter((s) => s[0] === "note"))).toHaveLength(2);
+    expect(replies.some((r) => texts(r).includes("🐱"))).toBe(true);
     expect(replies.at(-1)).toMatchObject({ error: { text: expect.stringContaining(END) } });
   }, 60_000);
 
-  it("steers the Snake with an arrow: a step on the press, then one each tick while it's held", async () => {
-    const at = (r: Msg) => shapes(r).find((s) => s[0] === "image")?.slice(1, 3);
-    const replies = await runRoom(example("snake"), [{ ev: "key", key: "up" }, { ev: "tick", t: 1 }, { ev: "keyup", key: "up" }, { ev: "tick", t: 2 }]);
-    const ys = replies.map((r) => at(r)?.[1] as number | undefined);
+  it("steers the Snake with an arrow: a tap is one step, and holding keeps going only after a moment", async () => {
+    const at = (r: Msg) => shapes(r).find((s) => s[0] === "image")?.[2] as number | undefined;
+    const held = [1, 2, 3, 4].map((t) => ({ ev: "tick", t }));
+    const replies = await runRoom(example("snake"), [{ ev: "key", key: "up" }, ...held, { ev: "keyup", key: "up" }, { ev: "tick", t: 5 }]);
+    let last: number | undefined;
+    const ys = replies.slice(0, -1).map((r) => (last = at(r) ?? last));
     const square = ys[0]! - ys[1]!;
     expect(square).toBeGreaterThan(0);
-    expect(ys[1]! - ys[2]!).toBe(square);
-    expect(ys[4] ?? ys[2]).toBe(ys[2]);
+    expect(ys.slice(1, 5)).toEqual([ys[1], ys[1], ys[1], ys[1]]);
+    expect(ys[1]! - ys[5]!).toBe(square);
+    expect(ys.slice(5)).toEqual([ys[5], ys[5], ys[5]]);
   }, 60_000);
 
   it("walks the explore example from map to map through the doors with the same number", async () => {

@@ -60,8 +60,9 @@ class LiveScreen {
   private zoomButton = h("button", { class: "zoom-toggle", type: "button", onclick: () => { this.zoomed = !this.zoomed; this.reframe(); this.engage(); } });
   // Set by Studio: Purple moved to another room, or opened or closed a menu.
   onMove = () => {};
-  // Set by try.html: Purple is up and taking keys for the first time.
+  // Set by try.html: Purple is up and taking keys for the first time; someone typed on their own keyboard.
   onReady = () => {};
+  onTyped = () => {};
   // Set by the Rooms page: a family room's print() output, and why one stopped.
   onPrint = (_text: string) => {};
   onProblem = (_p: RoomProblem) => {};
@@ -266,7 +267,7 @@ class LiveScreen {
     if (m.type === "focus" && m.on) this.element.classList.add("tried");
     if (m.type === "focus" && m.on) this.focusedAt = performance.now();
     if (m.type === "voice") this.voiceLoading(m.text);
-    if (m.type === "keydown") announceKey(m.key);
+    if (m.type === "keydown") { announceKey(m.key); this.onTyped(); }
     if (m.type === "click") this.nudge();
     if (m.type === "place" && this.ready) this.moved(m.place);  // before then, the room asked for stands
     if (m.type === "place" && m.place.setup && m.place.room === this.wanted) { this.element.classList.remove("entering"); this.opened(); }

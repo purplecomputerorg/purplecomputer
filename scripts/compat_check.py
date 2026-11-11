@@ -3,10 +3,13 @@
 newer ones it lacks (studio/pack_formats.json), and whether today's rooms and room library run on it
 (scripts/room_compat.sh). Prints who to email when a build is behind."""
 
+import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,10 +34,38 @@ def format_at(sha: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def room_inputs_digest() -> str:
+    """What room_compat.sh brings from this checkout; a build's result holds until one of these changes."""
+    files = [ROOT / "purple_tui" / "roomkit" / "purple.py", ROOT / "tests" / "canvas" / "test_room_compat.py",
+             ROOT / "scripts" / "room_compat.sh"]
+    files += sorted((ROOT / "tests" / "rooms").glob("*.py")) + sorted((ROOT / "studio" / "src" / "examples").glob("*.py"))
+    h = hashlib.sha256()
+    for f in files:
+        h.update(f.name.encode() + b"\0" + f.read_bytes() + b"\0")
+    return h.hexdigest()[:16]
+
+
 def rooms_run(sha: str) -> bool | None:
     if git("cat-file", "-e", f"{sha}:purple_tui/canvas/harness.py").returncode:
         return None
     return subprocess.run([str(ROOT / "scripts" / "room_compat.sh"), sha], capture_output=True).returncode == 0
+
+
+def rooms_run_all(shas: list[str]) -> dict[str, bool | None]:
+    """Results are cached per build and room inputs, and uncached builds run in parallel."""
+    cache_file = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()) / "purple-room-compat.json"
+    try:
+        cache = json.loads(cache_file.read_text())
+    except (OSError, ValueError):
+        cache = {}
+    digest = room_inputs_digest()
+    todo = [s for s in shas if f"{s}:{digest}" not in cache]
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as pool:
+        for sha, ok in zip(todo, pool.map(rooms_run, todo)):
+            if ok is not False:
+                cache[f"{sha}:{digest}"] = ok
+    cache_file.write_text(json.dumps({k: v for k, v in cache.items() if k.endswith(digest)}))
+    return {s: cache.get(f"{s}:{digest}", False) for s in shas}
 
 
 def merged(builds: list[dict]) -> dict[str, dict]:
@@ -55,9 +86,11 @@ def main() -> None:
     builds = merged(json.loads(Path(sys.argv[1]).read_text())["builds"])
     quick = "--quick" in sys.argv[2:]
     newest = FORMATS[-1]["format"]
+    reads_of = {sha: format_at(sha) if git("cat-file", "-e", sha).returncode == 0 else None for sha in builds}
+    runs = {} if quick else rooms_run_all([sha for sha, r in reads_of.items() if r is not None])
     behind = []
     for sha, b in sorted(builds.items(), key=lambda kv: kv[1]["last"], reverse=True):
-        reads = format_at(sha) if git("cat-file", "-e", sha).returncode == 0 else None
+        reads = reads_of[sha]
         who = f"{len(b['emails'])} people" + (f", {b['anonymous']} unknown" if b["anonymous"] else "") + (f", {b['drives']} drives" if b["drives"] else "")
         reads_text = f"reads up to format {reads}" if reads else "doesn't read Studio packs"
         print(f"{sha[:8]}  {b['last'][:10]}  {','.join(sorted(b['channels'])) or 'flashed'}  {who}  {reads_text}")
@@ -65,7 +98,7 @@ def main() -> None:
             continue
         for f in FORMATS[reads:]:
             print(f"    lacks format {f['format']} ({f['date']}): {f['added']}")
-        ok = None if quick else rooms_run(sha)
+        ok = runs.get(sha)
         if ok is not None:
             print(f"    today's rooms: {'run' if ok else 'FAIL, see just room-compat ' + sha[:8]}")
         if reads < newest or ok is False:

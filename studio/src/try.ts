@@ -18,8 +18,13 @@ const isRoom = (r: unknown): r is Room => ROOMS.some(([room]) => room === r);
 
 const app = document.getElementById("app")!;
 let ready = false;
-// Rooms with a code line, which Esc then Space opens (or closes); in it, down picks an example and Enter runs it.
-const CODE_ROOMS: Room[] = ["art", "music", "blocks"];
+// Rooms with a code line, and the keys in it that pick an example and run it: down steps into the
+// example cards, right to the next one (Art's red square), Enter runs it.
+const EXAMPLES: Partial<Record<Room, string[]>> = {
+  art: ["down", "_", "right", "_", "enter"],
+  music: ["down", "_", "enter"],
+  blocks: ["down", "_", "enter"],
+};
 
 // The demo and code keys: under the rooms, with the phone keys, for a room that has them.
 const demoKey = h("button", { class: "demo-key", type: "button", onclick: () => demo(stage.live.place.room) });
@@ -30,7 +35,7 @@ const moved = () => {
   const d = ready ? DEMOS[room] : undefined;
   demoKey.hidden = !d;
   demoKey.textContent = d ? `▶ ${d.label}` : "";
-  codeKey.hidden = !ready || !CODE_ROOMS.includes(room);
+  codeKey.hidden = !ready || !EXAMPLES[room];
   codeKey.textContent = stage.live.place.code ? "Close code" : "Try code";
   trayKeys.hidden = demoKey.hidden && codeKey.hidden;
   hint();
@@ -104,9 +109,10 @@ function demo(room: Room) {
 }
 
 function code(after = () => {}) {
-  const opening = !stage.live.place.code;
-  if (opening) tell({ coded: stage.live.place.room });
-  play(opening ? ["escape", "_", "space", "_", "down", "_", "enter"] : ["escape", "_", "space", "_"], 250, after);
+  const { room, code: open } = stage.live.place;
+  if (!open) tell({ coded: room });
+  stage.live.code(!open);
+  play(open ? ["_"] : ["_", ...EXAMPLES[room] ?? []], 250, after);
 }
 
 const tell = embed(app, (data) => {

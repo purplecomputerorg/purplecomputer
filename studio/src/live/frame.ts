@@ -11,6 +11,7 @@ export type ToFrame =
   | { type: "load"; pack: PackFiles | null; setup: RoomSetup | null }
   | { type: "setup"; setup: RoomSetup }
   | { type: "key"; char: string }
+  | { type: "code"; on: boolean }
   | { type: "focus" }
   | { type: "hush" }
   | { type: "filter"; id: number; text: string }
@@ -83,6 +84,7 @@ const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
   if (m.type === "load") return live.load(m.pack, () => post({ type: "restarting" })).then(() => m.setup && live.setup(m.setup)).then(() => post({ type: "loaded" }));
   if (m.type === "setup") return live.setup(m.setup);
   if (m.type === "key") return live.key(m.char);
+  if (m.type === "code") return live.code(m.on);
   if (m.type === "hush") return live.hush();
   if (m.type === "filter") return live.filter(m.text).then((value) => post({ type: "answer", id: m.id, value }));
   if (m.type === "check") return live.check(m.source, m.names).then((value) => post({ type: "answer", id: m.id, value }));

@@ -195,6 +195,11 @@ class LiveScreen {
     announceKey(key);
   }
 
+  // Opens the room's code line, or closes it, without the Esc menu.
+  code(on: boolean): void {
+    if (this.ready) this.post({ type: "code", on });
+  }
+
   focus(): void {
     this.frame.focus();
     this.post({ type: "focus" });

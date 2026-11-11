@@ -95,9 +95,11 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
         await live.key("escape")
         assert live.place()["menu"]
         assert live.moved() == {**live.place(), "setup": False}
-        # Esc then Space: try.html's code key opens the code line this way.
-        await live.key("space")
+        # try.html's code key: the code line opens over the menu's place, and closes again.
+        live.code(True)
         assert live.place()["code"] and not live.place()["menu"]
+        live.code(False)
+        assert not live.place()["code"]
         live.setup("play")
         assert live.place()["room"] == "play" and not live.place()["menu"]
     run(go())

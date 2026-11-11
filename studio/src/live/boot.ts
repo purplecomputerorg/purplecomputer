@@ -58,6 +58,8 @@ export interface LivePurple {
   // Where either leaves Purple comes back through purpleMoved (browser.py), as every frame's does.
   setup(room: RoomSetup): Promise<void>;
   key(char: string): Promise<void>;
+  // Opens the room's code line (or closes it), without the Esc menu.
+  code(on: boolean): Promise<void>;
   // Stops Purple's speech and sounds.
   hush(): Promise<void>;
   // The words as Purple would say them: its speech filter drops words it never says ("" when nothing's left).
@@ -108,6 +110,7 @@ sys.path.insert(0, "${ROOT}")
     },
     setup: async (room) => void (await call(`setup(**${arg(room)})`)),
     key: async (char) => void (await call(`await key(${arg(char)})`)),
+    code: async (on) => void (await call(`code(${on ? "True" : "False"})`)),
     hush: async () => void (await call("hush()")),
     filter: async (text) => String(await call(`__import__("purple_tui.speech_filter", fromlist=["_"]).filter_speech(${arg(text)})`)),
     check: async (source, names) => JSON.parse(String(await call(`__import__("json").dumps(check(${arg(source)}, ${arg(names)}))`))),

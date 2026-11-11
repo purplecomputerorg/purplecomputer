@@ -125,6 +125,17 @@ async def key(name):
     await press(_app, name)
 
 
+def code(on):
+    """Opens the room's code line, or closes it, the way the Esc menu does, without showing the menu."""
+    while _app.top:
+        _app.pop(_app.top)
+    if on:
+        _app.room.open_code_panel()
+    else:
+        _app.room.close_code_panel()
+    _app.invalidate()
+
+
 def hush():
     """Stops whatever Purple is saying or playing: Studio is playing something, or the page changed."""
     import pygame

@@ -1,6 +1,7 @@
 // try.html: the live Purple alone, for purplecomputer.org to show in an iframe. Besides the height
 // (src/embed.ts), the landing page hears the room Purple is in, when Purple is ready, and the room whose
-// demo or code key was just pressed; it can ask for a room, or type a line into the room Purple is in.
+// demo or code key was just pressed; it can ask for a room, type a line into the room Purple is in, or
+// open a room's code line and run an example there, as the Try code key does.
 // Nothing the family made in Studio is here.
 import "./fonts";
 import "./styles.css";
@@ -11,7 +12,10 @@ import { KEY_EVENT } from "./keys";
 import { h } from "./ui/dom";
 import { createStage, ROOMS } from "./ui/stage";
 
-export type ToTry = { type: "purple-try-room"; room: Room } | { type: "purple-try-type"; text: string };
+export type ToTry =
+  | { type: "purple-try-room"; room: Room }
+  | { type: "purple-try-type"; text: string }
+  | { type: "purple-try-code"; room?: Room };
 
 const START = new URLSearchParams(location.search).get("room") as Room | null;
 const isRoom = (r: unknown): r is Room => ROOMS.some(([room]) => room === r);
@@ -40,6 +44,7 @@ const moved = () => {
   trayKeys.hidden = demoKey.hidden && codeKey.hidden;
   hint();
   tell();
+  codeWhenThere();
 };
 const stage = createStage({ stays: false, onMove: moved, trayKey: trayKeys });
 stage.live.onReady = () => { ready = true; moved(); };
@@ -121,11 +126,27 @@ function code(after = () => {}) {
   play(open ? ["_"] : ["_", ...EXAMPLES[room] ?? []], 250, after);
 }
 
+// The room the landing page asked to code in (purple-try-code). Purple says which room it's in a moment
+// after it gets there, so the code line opens on the next move that finds Purple ready in that room.
+let codeIn: Room | null = null;
+function codeWhenThere() {
+  if (!codeIn || !ready || stage.live.place.room !== codeIn) return;
+  codeIn = null;
+  if (!stage.live.place.code) code();
+}
+
 const tell = embed(app, (data) => {
   const m = data as ToTry;
   if (m.type === "purple-try-room" && isRoom(m.room)) stage.live.show({ room: m.room });
   // Pressed on the laptop's keys, so they light up as Purple gets them.
   if (m.type === "purple-try-type") play(line(m.text), TYPE_MS, () => {});
+  // The asked room if it has a code line, else this one if it does, else Art.
+  if (m.type === "purple-try-code") {
+    const here = stage.live.place.room;
+    codeIn = isRoom(m.room) && EXAMPLES[m.room] ? m.room : EXAMPLES[here] ? here : "art";
+    if (here !== codeIn) stage.live.show({ room: codeIn });
+    codeWhenThere();
+  }
 }, () => ({ room: stage.live.place.room, ready }));
 
 app.append(stage.element);

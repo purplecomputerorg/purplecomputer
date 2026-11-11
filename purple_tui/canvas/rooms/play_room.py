@@ -573,23 +573,27 @@ class PlayRoom(Room):
             used += eh + self._gap_above(g, e)
         return rows
 
-    def paper(self, g, size, on_screen=False):
-        """The newest asks and answers that fit the page, oldest at the top, laid
-        out PAPER_EMS wide and enlarged to the page; wider when an abacus needs it."""
-        w = g.em(PAPER_EMS)
+    def _paper_layout(self, g, size):
+        """(px per em, rows) for the page: PAPER_EMS across, more when an abacus needs it."""
+        ems = PAPER_EMS
         while True:
-            h = round(w * size[1] / size[0])
-            rows = self._paper_rows(g, w, h)
-            need = max((self._entry_width(g, e) for e, _ in rows), default=0)
-            if need <= w:
-                break
-            w = need + g.em(1)
+            em = size[0] / ems
+            with g.drawing_on(g.surface, em=em):
+                rows = self._paper_rows(g, *size)
+                need = max((self._entry_width(g, e) for e, _ in rows), default=0)
+            if need <= size[0]:
+                return em, rows
+            ems = need / em + 1
+
+    def paper(self, g, size, on_screen=False):
+        """The newest asks and answers that fit the page, oldest at the top, drawn at the page's size."""
+        em, rows = self._paper_layout(g, size)
         if not rows:
             return None
-        s = paper.blank((w, h), on_screen)
+        s = paper.blank(size, on_screen)
         y = 0
-        with g.drawing_on(s):
+        with g.drawing_on(s, em=em):
             for e, eh in reversed(rows):
-                self._draw_entry(g, e, 0, y, w, None if on_screen else (paper.INK, paper.INK_MUTED, paper.WHITE))
+                self._draw_entry(g, e, 0, y, size[0], None if on_screen else (paper.INK, paper.INK_MUTED, paper.WHITE))
                 y += eh + self._gap_above(g, e)
-        return pygame.transform.smoothscale(s, size)
+        return s

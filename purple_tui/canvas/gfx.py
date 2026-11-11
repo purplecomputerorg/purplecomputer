@@ -211,6 +211,7 @@ def _run_edge(pieces, i, step) -> bool:
     return a[1] + a[0].get_width() != b[1]
 
 
+EM = 0.013  # of the stage's width
 DESIGN_ASPECT = 16 / 9   # most used laptops are 16:9; why not 16:10 or between: guides/canvas-architecture.md
 
 
@@ -299,7 +300,7 @@ class Gfx:
     def em(self, n: float = 1.0) -> int:
         """The chrome unit: 1.3% of the design width, the same scale the design
         mock used, so its em-based paddings, gaps and radii port verbatim."""
-        return max(1, round(self.stage.w * 0.013 * n))
+        return max(1, round(self.stage.w * EM * n))
 
     # ----- fonts -----
     def font(self, face: str, px: int) -> pygame.font.Font:
@@ -627,13 +628,18 @@ class Gfx:
         pygame.image.save(self.surface, path)
 
     @contextmanager
-    def drawing_on(self, surface):
-        """Point the drawing calls at another surface (a printed page). Units stay the screen's."""
-        screen, self.surface = self.surface, surface
+    def drawing_on(self, surface, em: float | None = None):
+        """Point the drawing calls at another surface (a printed page). Units stay the screen's,
+        or scale so one em is em px: a page drawn at its own size rather than enlarged."""
+        saved = self.surface, self.stage
+        self.surface = surface
+        if em:
+            w = em / EM
+            self.stage = pygame.Rect(0, 0, round(w), round(w / DESIGN_ASPECT))
         try:
             yield surface
         finally:
-            self.surface = screen
+            self.surface, self.stage = saved
 
 
 # One emoji (with its modifiers/ZWJ joins), so long runs can wrap per emoji.

@@ -13,15 +13,22 @@ import pygame
 from .. import palette as P
 from ..palette import rgb
 
-PAGE = (1650, 1275)  # US Letter landscape at 150 dpi; the driver fits it to A4 too
-MARGIN = 75          # half an inch
+DPI = 300  # printers print at 300 to 600; less shows as soft text and stepped edges
+
+
+def pt(n: float) -> int:
+    return round(n * DPI / 72)
+
+
+PAGE = (pt(792), pt(612))  # US Letter landscape; the driver fits it to A4 too
+MARGIN = pt(36)
 WHITE = (255, 255, 255)
 # Ink for chrome-colored text (the screen's light-on-dark tokens) on paper
 INK, INK_MUTED = "#1a1a1a", "#6b6b6b"
-MARK_PX = 20  # about 10 pt
-SIGN_PX = 40  # Caveat runs small for its size
+MARK_PX = pt(10)
+SIGN_PX = pt(19)  # Caveat runs small for its size
 CORNER = MARGIN // 2  # the mark's inset from the right and bottom edges, inside every printer's reach
-BOTTOM = 125          # the work's bottom margin, keeping it clear of the mark
+BOTTOM = pt(60)       # the work's bottom margin, keeping it clear of the mark
 
 
 def can_print(room) -> bool:

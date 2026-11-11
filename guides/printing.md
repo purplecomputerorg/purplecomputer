@@ -55,7 +55,7 @@ driver, which Ubuntu doesn't ship.
 
 ## The page
 
-`purple_tui/canvas/paper.py` composes a US Letter page at 150 dpi; the driver
+`purple_tui/canvas/paper.py` composes a US Letter page at 300 dpi; the driver
 fits it to A4 as well. A room that prints has `paper(g, size)` and `LANDSCAPE`:
 Art prints its paint and letters with unpainted cells left white, Blocks prints
 the build on a pale floor, Play prints the newest asks and answers that fit,

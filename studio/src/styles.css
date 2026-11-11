@@ -1050,10 +1050,12 @@ html.embed.alone { overflow: auto; }
    The bottom padding is 3px more, for the keys' edge under them. */
 .tray-bar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: fit-content; max-width: 100%; margin: 14px auto 0; padding: 10px 10px 13px; border-radius: 16px; background: linear-gradient(#45444d, #2a2930); }
 .tray-bar .tray-keys { margin: 0; padding: 0; background: none; }
-.tray-bar:has(> .demo-key[hidden]) { display: none; }
+.tray-bar:has(> .demo-keys[hidden]) { display: none; }
+.demo-keys { display: flex; gap: 10px; }
+.demo-keys > .demo-key { flex: 1; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .tray-bar { margin-top: 0; }
-  .tray-bar:has(> .demo-key[hidden]) { display: flex; }
+  .tray-bar:has(> .demo-keys[hidden]) { display: flex; }
 }
 /* A pastel key like the stickers, so it sits with the keys instead of shouting over them */
 .demo-key { height: 46px; padding: 0 22px; border: 0; border-radius: 9px; background: #ebe2fd; color: var(--purple); font: 600 16px var(--sans); white-space: nowrap; box-shadow: 0 3px 0 #c4aee0; cursor: pointer; }

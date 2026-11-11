@@ -83,9 +83,10 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
         assert instruments()[music.instrument_index][0].endswith("kitchen")
 
         live.setup("art", picture={"ops": [[3, 2, "#ff0000"]], "letters": [[4, 2, "H", "#ffffff"]]})
-        room, menu, at = live.place().values()
+        now = live.place()
+        room, menu, code, at = now["room"], now["menu"], now["code"], now["at"]
         art = app.rooms["art"]
-        assert (room, menu) == ("art", False) and art._paint_mode
+        assert (room, menu, code) == ("art", False, False) and art._paint_mode
         dx, dy = shift_from(OLD_ART_GRID)
         assert art._grid[(3 + dx, 2 + dy)][2] == "#ff0000" and art._grid[(4 + dx, 2 + dy)][0] == "H"
         assert all(0 <= v <= 1 for v in at)
@@ -94,6 +95,9 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
         await live.key("escape")
         assert live.place()["menu"]
         assert live.moved() == {**live.place(), "setup": False}
+        # Esc then Space: try.html's code key opens the code line this way.
+        await live.key("space")
+        assert live.place()["code"] and not live.place()["menu"]
         live.setup("play")
         assert live.place()["room"] == "play" and not live.place()["menu"]
     run(go())

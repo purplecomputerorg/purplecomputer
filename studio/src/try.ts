@@ -1,6 +1,6 @@
 // try.html: the live Purple alone, for purplecomputer.org to show in an iframe. Besides the height
 // (src/embed.ts), the landing page hears the room Purple is in, when Purple is ready, and the room whose
-// demo key was just pressed; it can ask for a room, or type a line into the room Purple is in.
+// demo or code key was just pressed; it can ask for a room, or type a line into the room Purple is in.
 // Nothing the family made in Studio is here.
 import "./fonts";
 import "./styles.css";
@@ -18,16 +18,25 @@ const isRoom = (r: unknown): r is Room => ROOMS.some(([room]) => room === r);
 
 const app = document.getElementById("app")!;
 let ready = false;
-// The demo key: under the rooms, with the phone keys, for a room that has a demo.
-const demoKey = h("button", { class: "demo-key", type: "button", hidden: true, onclick: () => demo(stage.live.place.room) });
+// Rooms with a code line, which Esc then Space opens (or closes); in it, down picks an example and Enter runs it.
+const CODE_ROOMS: Room[] = ["art", "music", "blocks"];
+
+// The demo and code keys: under the rooms, with the phone keys, for a room that has them.
+const demoKey = h("button", { class: "demo-key", type: "button", onclick: () => demo(stage.live.place.room) });
+const codeKey = h("button", { class: "demo-key", type: "button", onclick: () => code() });
+const trayKeys = h("div", { class: "demo-keys", hidden: true }, demoKey, codeKey);
 const moved = () => {
-  const d = ready ? DEMOS[stage.live.place.room] : undefined;
+  const room = stage.live.place.room;
+  const d = ready ? DEMOS[room] : undefined;
   demoKey.hidden = !d;
   demoKey.textContent = d ? `▶ ${d.label}` : "";
+  codeKey.hidden = !ready || !CODE_ROOMS.includes(room);
+  codeKey.textContent = stage.live.place.code ? "Close code" : "Try code";
+  trayKeys.hidden = demoKey.hidden && codeKey.hidden;
   hint();
   tell();
 };
-const stage = createStage({ stays: false, onMove: moved, trayKey: demoKey });
+const stage = createStage({ stays: false, onMove: moved, trayKey: trayKeys });
 stage.live.onReady = () => { ready = true; moved(); };
 
 // What to do in each room, handwritten on the screen once it's been clicked, until the next key.
@@ -70,21 +79,34 @@ const DEMOS: Partial<Record<Room, { label: string; keys: () => string[]; ms: num
   blocks: { label: "Build a pyramid", keys: () => "down down down down left left left left right e r t y t r e left left d f g f d right right c v c left left b".split(" "), ms: 110 },
 };
 
-// Which demo is playing; a new one, typing, or another room stops it.
+// What's playing; a new one, typing, or another room stops it.
 let playing = 0;
 stage.live.onTyped = () => playing++;
-function demo(room: Room) {
-  const keys = DEMOS[room]?.keys();
-  if (!keys || stage.live.place.room !== room) return;
+function play(keys: string[], ms: number, done: () => void) {
+  const room = stage.live.place.room;
   const run = ++playing;
-  tell({ demoed: room });
   const step = (i: number) => {
     if (run !== playing || stage.live.place.room !== room) return;
-    if (i === keys.length) return stage.live.prompt("Your turn!");
+    if (i === keys.length) return done();
     if (keys[i] !== "_") stage.laptop.type(keys[i]);
-    setTimeout(() => step(i + 1), DEMOS[room]!.ms);
+    setTimeout(() => step(i + 1), ms);
   };
   step(0);
+}
+
+function demo(room: Room) {
+  const d = DEMOS[room];
+  if (!d || stage.live.place.room !== room) return;
+  // Its keys are for the room itself, not the code line.
+  if (stage.live.place.code) return code(() => demo(room));
+  tell({ demoed: room });
+  play(d.keys(), d.ms, () => stage.live.prompt("Your turn!"));
+}
+
+function code(after = () => {}) {
+  const opening = !stage.live.place.code;
+  if (opening) tell({ coded: stage.live.place.room });
+  play(opening ? ["escape", "_", "space", "_", "down", "_", "enter"] : ["escape", "_", "space", "_"], 250, after);
 }
 
 const tell = embed(app, (data) => {

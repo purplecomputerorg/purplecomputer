@@ -136,11 +136,11 @@ def hush():
 
 
 def place():
-    """Where Purple is: its room, whether a menu (the room picker, say) is open over it, the
-    room's cursor as fractions of the screen, if it has one (a phone zooms in around it)."""
+    """Where Purple is: its room, whether a menu (the room picker, say) is open over it, whether its
+    code line is open, the room's cursor as fractions of the screen, if it has one (a phone zooms in around it)."""
     vp, cursor = _app._viewport_rect(), _app._get_cursor_position()
     at = [(vp.x + cursor[0] * vp.w) / _app.g.w, (vp.y + cursor[1] * vp.h) / _app.g.h] if cursor else None
-    return {"room": _app.active_room, "menu": bool(_app.top), "at": at}
+    return {"room": _app.active_room, "menu": bool(_app.top), "code": _app._code_panel_active, "at": at}
 
 
 def moved():

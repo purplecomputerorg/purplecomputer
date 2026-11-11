@@ -42,6 +42,8 @@ const ZOOM: Record<Room, { scale: number; at?: [number, number] }> = {
 export const PHONE = matchMedia("(max-width: 700px), (max-height: 500px) and (pointer: coarse)");
 const MOUSE = matchMedia("(pointer: fine)");
 const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
+// Just arrived in a room, before Purple has said where it is.
+const arrived = (room: Room): Place => ({ room, menu: false, code: false, at: null });
 
 class LiveScreen {
   readonly element: HTMLElement;
@@ -66,7 +68,7 @@ class LiveScreen {
   // Set by the Rooms page: a family room's print() output, and why one stopped.
   onPrint = (_text: string) => {};
   onProblem = (_p: RoomProblem) => {};
-  place: Place = { room: "art", menu: false, at: null };
+  place: Place = arrived("art");
   // The room asked for that Purple hasn't opened yet (its room button looks busy); onOpening hears it change.
   opening: Room | null = null;
   onOpening = () => {};
@@ -156,7 +158,7 @@ class LiveScreen {
     this.wanted = null;
     this.opening = setup.room;
     if (this.ready) this.status.textContent = "Opening the room";
-    else this.moved({ room: setup.room, menu: false, at: null });
+    else this.moved(arrived(setup.room));
     this.element.classList.add("entering");
     void this.enter();
   }
@@ -286,7 +288,7 @@ class LiveScreen {
   }
 
   private moved(place: Place): void {
-    const same = place.room === this.place.room && place.menu === this.place.menu;
+    const same = place.room === this.place.room && place.menu === this.place.menu && place.code === this.place.code;
     this.place = place;
     this.reframe();
     if (!same) this.onMove();

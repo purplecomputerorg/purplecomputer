@@ -850,7 +850,7 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .word-field kbd, .word-example kbd, .word-examples + p kbd { font: 12px var(--mono); color: var(--purple); background: var(--card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
 .remove { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; border-radius: 8px; height: 28px; }
 .remove:hover { background: var(--fill); color: var(--text); }
-.emoji-pop-title { margin: 0 2px 8px; font-weight: 600; color: var(--purple); }
+.emoji-pop-title { margin: 0 2px 8px; font-weight: 600; color: var(--purple); overflow-wrap: anywhere; }
 .emoji-pop { position: absolute; z-index: 10; top: 48px; left: 0; width: 340px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 12px; }
 .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; margin-top: 10px; max-height: 220px; overflow-y: auto; }
 .emoji-grid button { font-size: 22px; height: 38px; border: none; background: none; border-radius: 8px; cursor: pointer; padding: 0; }

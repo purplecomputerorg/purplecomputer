@@ -19,3 +19,11 @@ export const MODIFIER_EVENT = "purple-modifier";
 export function typingKeys(word: string): string[] {
   return [...new Set([...word.toLowerCase()].filter((c) => /^[a-z0-9]$/.test(c)))].slice(0, 5).concat("enter");
 }
+
+// Accents folded away, as Purple's language packs do (purple_tui/i18n.py fold): its keyboard only types a to z.
+export const typedWord = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+const WORD = /^[a-z][a-z'-]*$/;
+const WORD_MAX = 30;
+export const wordProblem = (word: string): string | null =>
+  !WORD.test(word) ? "A word is letters a to z, no spaces. Kids type one word at a time."
+  : word.length > WORD_MAX ? `That's a long one! Keep it to ${WORD_MAX} letters, so kids can type it.` : null;

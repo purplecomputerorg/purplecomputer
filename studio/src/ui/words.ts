@@ -2,7 +2,7 @@ import { CORE_EMOJI } from "@sdk/purple/core";
 import { play, previewUrl } from "../audio";
 import { roomLine } from "../roomvoice";
 import { changed, draft, phraseFor, putPhrase, type WordEntry } from "../state";
-import { typingKeys } from "../keys";
+import { typedWord, typingKeys, wordProblem } from "../keys";
 import { h, removeButton } from "./dom";
 import { closeEmojiPicker, emojiCell, openEmojiPicker } from "./emojipicker";
 import { roomPicture } from "./roomfiles";
@@ -12,8 +12,7 @@ import box from "../assets/purple-box.jpg";
 import daddy from "../assets/daddy.mp3";
 import type { View } from "./view";
 
-const clean = (s: string) => s.trim().toLowerCase();
-const WORD = /^[a-z][a-z'-]*$/;
+const foldedNote = (typed: string, word: string) => (typedWord(typed) !== typed.trim().toLowerCase() ? `Saved as “${word}”, the way kids type it on Purple.` : "");
 // purple_tui/content.py MEANING_MAX.
 const MEANING_MAX = 200;
 
@@ -53,7 +52,8 @@ function wordTable(): HTMLElement {
   let fresh: WordEntry | null = null;
 
   const checkWord = (word: string, self: WordEntry | null): string | null => {
-    if (!WORD.test(word)) return "A word is letters only, no spaces. Kids type one word at a time.";
+    const problem = wordProblem(word);
+    if (problem) return problem;
     if (draft.words.some((w) => w !== self && w.word === word)) return `"${word}" is already in the list.`;
     return null;
   };
@@ -64,12 +64,12 @@ function wordTable(): HTMLElement {
   function newWord(): HTMLElement {
     const input = h("input", { type: "text", placeholder: "Type a new word", "aria-label": "New word", autocomplete: "off", spellcheck: false });
     const add = () => {
-      const word = clean(input.value);
+      const word = typedWord(input.value);
       status.textContent = checkWord(word, null) ?? "";
       if (status.textContent) return;
       const create = (emoji: string) => {
         draft.words.push(open = fresh = { word, emoji, kept: true });
-        status.textContent = "";
+        status.textContent = foldedNote(input.value, word);
         changed();
         render();
         focusNew();
@@ -107,11 +107,12 @@ function wordTable(): HTMLElement {
   function wordField(entry: WordEntry): HTMLElement {
     const input = h("input", { type: "text", value: entry.word, "aria-label": "Word", autocomplete: "off", spellcheck: false });
     const commit = () => {
-      const word = clean(input.value);
+      const word = typedWord(input.value);
       if (word === entry.word) return;
       status.textContent = checkWord(word, entry) ?? "";
       if (status.textContent) return void (input.value = entry.word);
       rename(entry, word);
+      status.textContent = foldedNote(input.value, word);
       changed();
       render();
     };

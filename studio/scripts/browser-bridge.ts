@@ -16,7 +16,10 @@ const [width, height] = (process.env.E2E_VIEWPORT || "1280x900").split("x").map(
 const s = await openStudio({ url, downloads, mic: files.mic, width, height });
 const { page } = s;
 const reply = (body: object) => process.stdout.write(`@@${JSON.stringify(body)}\n`);
-const now = async () => ({ url: page.url().replace(s.url, "/"), things: await things(page), errors: s.errors.splice(0) });
+// What the page says back (a saved note, a refusal), which isn't anything to click.
+const says = () => page.$$eval(".status, [role=status], [role=alert]", (els) =>
+  els.filter((e) => (e as HTMLElement).offsetParent && e.textContent!.trim()).map((e) => e.textContent!.trim().replace(/\s+/g, " ")));
+const now = async () => ({ url: page.url().replace(s.url, "/"), things: await things(page), says: await says(), errors: s.errors.splice(0) });
 
 const saved = () => readdirSync(downloads).filter((f) => !f.endsWith(".crdownload")).map((f) => join(downloads, f));
 // "pack": the Purple Pack this parent downloaded last, to open in Studio again.

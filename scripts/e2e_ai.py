@@ -63,7 +63,8 @@ REPORTS = [
 ]
 N = {"type": "integer", "description": "The thing's number from the latest list"}
 PARENT_TOOLS = [
-    tool("look", "A screenshot of the page and a numbered list of everything you can click or type in."),
+    tool("look", "A screenshot of the page and a numbered list of everything you can click or type in. Other tools only give the list "
+         "and what the page says, so look whenever you want to see what changed."),
     tool("click", "Click thing n.", n=N),
     tool("type", "Click into thing n and type text (replacing what's there).", n=N, text="",
          enter={"type": "boolean", "default": False, "description": "Press Enter after"}),
@@ -261,7 +262,8 @@ class Browser:
 
     async def act(self, name: str, args: dict) -> list:
         reply = self.ask(name, **args)
-        page = [text(f"Page: {reply['url']}\n" + "\n".join(reply["things"]) + (f"\nPage errors: {reply['errors']}" if reply["errors"] else ""))]
+        said = "".join(f"\nThe page says: {s}" for s in reply.get("says", []))
+        page = [text(f"Page: {reply['url']}\n" + "\n".join(reply["things"]) + said + (f"\nPage errors: {reply['errors']}" if reply["errors"] else ""))]
         if "shot" not in reply:
             return page
         self.n += 1

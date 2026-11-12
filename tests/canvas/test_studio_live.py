@@ -79,14 +79,17 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
         assert live.place()["room"] == "music" and not live.place()["menu"]
         assert live.moved()["setup"] and live.moved() is None
         music = app.rooms["music"]
-        assert music.letters_mode
+        assert music.letters_mode and live.place()["letters"] and not live.place()["looping"]
+        music.loop.start_recording()
+        assert live.place()["looping"]
+        music._stop_loop()
         assert instruments()[music.instrument_index][0].endswith("kitchen")
 
         live.setup("art", picture={"ops": [[3, 2, "#ff0000"]], "letters": [[4, 2, "H", "#ffffff"]]})
         now = live.place()
         room, menu, code, at = now["room"], now["menu"], now["code"], now["at"]
         art = app.rooms["art"]
-        assert (room, menu, code) == ("art", False, False) and art._paint_mode
+        assert (room, menu, code, now["letters"]) == ("art", False, False, False) and art._paint_mode
         dx, dy = shift_from(OLD_ART_GRID)
         assert art._grid[(3 + dx, 2 + dy)][2] == "#ff0000" and art._grid[(4 + dx, 2 + dy)][0] == "H"
         assert all(0 <= v <= 1 for v in at)

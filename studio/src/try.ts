@@ -5,7 +5,7 @@
 // Nothing the family made in Studio is here.
 import "./fonts";
 import "./styles.css";
-import type { Room } from "./live/boot";
+import type { Place, Room } from "./live/boot";
 import { startEmojiPictures } from "./emoji";
 import { embed } from "./embed";
 import { KEY_EVENT } from "./keys";
@@ -44,6 +44,7 @@ const moved = () => {
   codeLabel.textContent = stage.live.place.code ? "Close code" : "Try code";
   trayKeys.hidden = demoKey.hidden && codeKey.hidden;
   hint();
+  tip();
   tell();
   codeWhenThere();
 };
@@ -59,6 +60,55 @@ const hint = () => {
   hinted = room;
   stage.live.prompt(TYPE[room]);
 };
+
+// What mashing keys won't find, one at a time under the keyboard until its key is pressed; a phone can't hold a key.
+// A held key's tip waits for what the hold does (Purple's place says), since a tap presses the same key.
+type Tip = { text: string; key: string; hold?: keyof Place };
+const TIPS: Record<Room | "letters", Tip[]> = {
+  music: [
+    { text: "Press Enter for a new instrument", key: "enter" },
+    { text: "*Hold* Enter to record a loop", key: "enter", hold: "looping" },
+    { text: "Press Tab to hear the letters", key: "tab" },
+  ],
+  letters: [
+    { text: "Press Enter for letter sounds", key: "enter" },
+    { text: "Press Tab to play music again", key: "tab" },
+  ],
+  art: [
+    { text: "Press Tab to write letters", key: "tab" },
+  ],
+  play: [{ text: "Press Tab so Purple says it", key: "tab" }],
+  blocks: [
+    { text: "Press Tab to spin around", key: "tab" },
+    { text: "Press Enter to build up high", key: "enter" },
+  ],
+};
+const KEYS_BEFORE_TIP = 6;
+const HOLDS = matchMedia("(pointer: fine)");
+const told = new Set<Tip>();
+let showing: Tip | undefined;
+let [since, tipRoom, demoing] = [0, "", false];
+const done = (t: Tip) => {
+  told.add(t);
+  since = 0;
+};
+const tip = () => {
+  const place = stage.live.place;
+  const { room, menu, code, letters } = place;
+  if (room !== tipRoom) [since, tipRoom] = [0, room];
+  if (showing?.hold && place[showing.hold]) done(showing);
+  const next = ready && !menu && !code && since >= KEYS_BEFORE_TIP
+    ? TIPS[letters ? "letters" : room].find((t) => !told.has(t) && (!t.hold || HOLDS.matches)) : undefined;
+  if (next === showing) return;
+  showing = next;
+  stage.laptop.tip(next?.text ?? null, next?.key, !!next?.hold);
+};
+addEventListener(KEY_EVENT, (e) => {
+  if (demoing) return;
+  since++;
+  if (showing && !showing.hold && showing.key === (e as CustomEvent<string>).detail) done(showing);
+  tip();
+});
 
 const repeat = (n: number, key: string): string[] => Array(Math.abs(n)).fill(key);
 const line = (text: string): string[] => [...text.toLowerCase()].map((c) => c === " " ? "space" : c).concat("enter");
@@ -105,7 +155,9 @@ function play(keys: string[], ms: number, done: () => void) {
   const step = (i: number) => {
     if (run !== playing || stage.live.place.room !== room) return;
     if (i === keys.length) return done();
+    demoing = true;
     if (keys[i] !== "_") stage.laptop.type(keys[i]);
+    demoing = false;
     setTimeout(() => step(i + 1), ms);
   };
   step(0);

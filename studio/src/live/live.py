@@ -13,6 +13,7 @@ from pathlib import Path
 from purple_tui import content, i18n
 from purple_tui.canvas.app import PurpleApp
 from purple_tui.canvas.press import press
+from purple_tui.loop_station import IDLE
 from purple_tui.pack_manager import check_pack
 from purple_tui.settings import set_room_on
 
@@ -148,10 +149,13 @@ def hush():
 
 def place():
     """Where Purple is: its room, whether a menu (the room picker, say) is open over it, whether its
-    code line is open, the room's cursor as fractions of the screen, if it has one (a phone zooms in around it)."""
+    code line is open, the room's cursor as fractions of the screen, if it has one (a phone zooms in around it),
+    whether Music is in Letters, and whether it's recording or playing a loop."""
     vp, cursor = _app._viewport_rect(), _app._get_cursor_position()
     at = [(vp.x + cursor[0] * vp.w) / _app.g.w, (vp.y + cursor[1] * vp.h) / _app.g.h] if cursor else None
-    return {"room": _app.active_room, "menu": bool(_app.top), "code": _app._code_panel_active, "at": at}
+    return {"room": _app.active_room, "menu": bool(_app.top), "code": _app._code_panel_active, "at": at,
+            "letters": bool(getattr(_app.room, "letters_mode", False)),
+            "looping": getattr(getattr(_app.room, "loop", None), "state", IDLE) != IDLE}
 
 
 def moved():

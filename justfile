@@ -466,11 +466,16 @@ e2e-studio *args:
     cd studio && npm install --no-audit --no-fund
     cd studio && node_modules/.bin/vite-node scripts/e2e-studio.ts "$@"
 
-# AI parent makes a pack in Studio, AI kid uses it on a headless Purple, Opus keeps the real bugs for docs/AI_UX_BUGS.md (--budget USD, default 10; --goal, --age, --url)
+# AI parent makes a pack in Studio, AI kid uses it on a headless Purple, Opus keeps the real bugs for docs/AI_UX_BUGS.md (--budget USD, default 10; --goal, --age, --url; --scenario NAME from scripts/e2e_ai_scenarios.py)
 [positional-arguments]
 e2e-ai *args:
     cd studio && npm install --no-audit --no-fund
     @PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 scripts/e2e_ai.py "$@"
+
+# Many e2e-ai personas (breakers, grandparents, toddlers, coders, phones) until --budget USD (default 10) is spent, then Opus writes docs/E2E_AI_FIXES.md for an LLM to fix from (--parallel 3, --only a,b)
+[positional-arguments]
+e2e-ai-sweep *args: studio-bundle
+    @PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 scripts/e2e_ai_sweep.py "$@"
 
 # A built ISO in QEMU: a pack on a USB drive is added, used, and saved work copied back to the drive and read here (needs KVM)
 [positional-arguments]

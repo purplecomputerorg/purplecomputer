@@ -112,7 +112,7 @@ async def play_answer(app, line: str) -> str:
 
 
 def letter_clips(app) -> dict:
-    """Music's Letters clips, key to the file it would play (headless has no mixer to load them into)."""
+    """Music's Letters clips, key to the files it would play in turn (headless has no mixer to load them into)."""
     real = sounds._load, sounds.mixer_ready_for_play
     sounds._load, sounds.mixer_ready_for_play = (lambda path: path), (lambda: True)
     try:
@@ -153,6 +153,9 @@ async def check(app, pack: Path, shots: Path | None = None) -> list[Check]:
     def ours(path) -> bool:
         return path is not None and installed in Path(path).parents
 
+    def any_ours(paths) -> bool:
+        return any(ours(p) for p in paths or [])
+
     expect(pack_id in settings.get_packs_added(), f'"{manifest["name"]}" is added')
 
     for word, glyph in _json(files, "content/emoji.json").items():
@@ -173,7 +176,7 @@ async def check(app, pack: Path, shots: Path | None = None) -> list[Check]:
     clips = letter_clips(app)
     for name in _stems(files, "content/letters", ".wav"):
         key = next((k for k, n in sounds.CLIP_NAMES.items() if n == name), name)
-        expect(ours(clips.get(key)), f"Music's Letters plays the pack's {key}")
+        expect(any_ours(clips.get(key)), f"Music's Letters plays the pack's {key}")
     for stem in _stems(files, "content/voice", ".wav"):
         expect(ours(tts._get_voice_clip(stem.replace("_", " "))), f'Purple says "{stem.replace("_", " ")}" in the pack\'s recording')
 

@@ -7,7 +7,9 @@
 set -eo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-[[ -f "$ROOT/build-scripts/.env" ]] && source "$ROOT/build-scripts/.env"
+# The main checkout's .venv and .env, so this runs from a lane too.
+MAIN="$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")"
+[[ -f "$MAIN/build-scripts/.env" ]] && source "$MAIN/build-scripts/.env"
 if [[ -z "${FLASH_LOG_URL:-}" || -z "${ADMIN_PASSWORD_PROD:-}" ]]; then
     echo "compat-check: FLASH_LOG_URL and ADMIN_PASSWORD_PROD must be set in build-scripts/.env" >&2
     exit 1
@@ -21,4 +23,4 @@ builds="$(mktemp)"
 trap 'rm -f "$builds"' EXIT
 curl -fsS --max-time 20 -u ":$ADMIN_PASSWORD_PROD" "${CF_HEADERS[@]}" "${FLASH_LOG_URL%/flashes}/purple-builds" -o "$builds" \
     || { echo "compat-check: couldn't fetch the builds list (check the password, and that landing has /api/admin/purple-builds deployed)" >&2; exit 1; }
-"$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")/.venv/bin/python" "$ROOT/scripts/compat_check.py" "$builds" "$@"
+"$MAIN/.venv/bin/python" "$ROOT/scripts/compat_check.py" "$builds" "$@"

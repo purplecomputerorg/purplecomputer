@@ -56,7 +56,15 @@ What a word is, for Play: when the kid types "who is grandma", "what's a biscuit
 
 ### letters/<key>.wav
 
-One clip per Music grid key, any of them: `a.wav` through `z.wav` and `0.wav` through `9.wav`, lowercase, plus `semicolon.wav`, `comma.wav`, `period.wav` and `slash.wav` (the names in `canvas/sounds.CLIP_NAMES`). The clip can be anything, not just the key's name. 22050 Hz, mono, 16-bit PCM, the numbers Piper writes for the core clips. The Music room's Letters mode, saying names, searches user packs first, then the core `letters/`, per key, so a pack that records only some keys falls back for the others. Saying sounds, Purple's `letter-sounds/` clips come first, so a pack's letters play only with names. The Textual UI reads only the letters and numbers.
+One clip per Music grid key, any of them: `a.wav` through `z.wav` and `0.wav` through `9.wav`, lowercase, plus `semicolon.wav`, `comma.wav`, `period.wav` and `slash.wav` (the names in `canvas/sounds.CLIP_NAMES`). The clip can be anything, not just the key's name. 22050 Hz, mono, 16-bit PCM, the numbers Piper writes for the core clips. In the Music room's Letters mode a recorded key plays its clip in place of Purple's own, or after it when `letters.json` lists the key. The last installed pack that recorded a key wins, and keys no pack recorded play Purple's own: the core `letters/`, or with letter sounds, `letter-sounds/` for a to z. The Textual UI reads only the letters and numbers, always in place of the name.
+
+### letters.json
+
+```json
+{ "after": ["d", "semicolon"] }
+```
+
+The `letters/` clips, by file name, that play once Purple has said the key (its name, or its letter sound) instead of in its place. Studio lists every key unless the family picks "Instead of". The Textual UI skips this file, and so does a Purple from before it, which plays every clip in place of the letter's name and only while Letters says names, so a pack using it stays format 1.
 
 ### voice/<phrase>.wav
 

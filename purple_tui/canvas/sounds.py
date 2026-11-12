@@ -1,7 +1,7 @@
 """Sound files the canvas rooms play, cached per mixer generation: instrument
 notes, number-row percussion, and letter names. Family packs come first:
 a pack instrument's samples replace or join the core ones, and a pack's
-letter recordings win over Purple's own clips for the keys they cover."""
+letter recordings play after Purple's own clip or in its place."""
 
 from pathlib import Path
 
@@ -77,15 +77,41 @@ class SoundBank:
         return self.percussion().get(DRUM_KEYS.get(name.lower(), ""))
 
     def letters(self, sounds: bool = False) -> dict:
-        """Keyed by key: pack recordings, then Purple's clips. With sounds, letters
-        say their phonics sound and keys without one (digits) keep their names."""
+        """Keyed by key, the clips it plays in turn: Purple's own (with sounds, a letter's
+        phonics sound; digits keep their names), then a pack's recording, which plays
+        alone unless the pack lists it under "after" in content/letters.json."""
         def load():
-            from ..content import get_content
-            dirs = get_content().pack_dirs("letters") + [core_sounds() / "letters"]
-            if sounds:
-                dirs = [core_sounds() / "letter-sounds", *dirs]
-            found = {}
-            for d in reversed([d for d in dirs if d.exists()]):
-                found.update(_load_dir(d, CLIP_NAMES.values()))
-            return {k: found[n] for k, n in CLIP_NAMES.items() if n in found}
+            core = core_sounds()
+            own = _first_found(([core / "letter-sounds"] if sounds else []) + [core / "letters"])
+            family = _family_letters()
+
+            def plays(name):
+                mine, after = family.get(name, (None, True))
+                return [s for s in (own.get(name) if after else None, mine) if s is not None]
+            return {k: p for k, n in CLIP_NAMES.items() if (p := plays(n))}
         return self._get(("letters", sounds), load)
+
+
+def _first_found(dirs: list) -> dict:
+    """Clip name -> Sound, from the first directory that has it."""
+    found = {}
+    for d in reversed([d for d in dirs if d.exists()]):
+        found.update(_load_dir(d, CLIP_NAMES.values()))
+    return found
+
+
+def _family_letters() -> dict:
+    """Clip name -> (Sound, after), from the last installed pack that recorded it."""
+    from ..content import get_content
+    found = {}
+    for d in reversed(get_content().pack_dirs("letters")):
+        after = _after(d.parent)
+        found.update({n: (s, n in after) for n, s in _load_dir(d, CLIP_NAMES.values()).items()})
+    return found
+
+
+def _after(content_dir: Path) -> set:
+    from ..content import _read_json
+    data = _read_json(content_dir / "letters.json")
+    names = data.get("after") if isinstance(data, dict) else None
+    return {n for n in names if isinstance(n, str)} if isinstance(names, list) else set()

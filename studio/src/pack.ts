@@ -1,5 +1,5 @@
 // The app's draft, turned into the plain spec the SDK builds a pack from, and a pack turned back into a draft.
-import { buildEntries, formatOf, letterPath, skippedBy, packBlob, packFilename as filename, phrasePath, pictureSourcePath, ROOM_FILE_NAME, ROOM_NAME, roomFilePath, type PackSkipped, type PackSpec, type RoomFileKind } from "@sdk/pack";
+import { buildEntries, formatOf, letterFile, letterPath, LETTERS_PATH, skippedBy, packBlob, packFilename as filename, phrasePath, pictureSourcePath, ROOM_FILE_NAME, ROOM_NAME, roomFilePath, type PackSkipped, type PackSpec, type RoomFileKind } from "@sdk/pack";
 import { isCoreRanked } from "@sdk/purple/core";
 import { gunzip, untar, type TarEntry } from "@sdk/tar";
 import { decodeWav } from "@sdk/wav";
@@ -35,7 +35,9 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   const pictures = await Promise.all(added.map(async (p, i) => ({ name: p.name, title: p.title, ...onScreen(p), png: await previewPng(onScreen(p)), source: sources[i]?.jpg })));
   // A family's own words come first in autocomplete, after the words Purple already ranks.
   const ranked = [...new Set([...d.ranked, ...words.map((w) => w.word).filter((w) => !isCoreRanked(w))])];
-  const letters = Object.fromEntries(Object.entries(d.letters).filter(([, l]) => ok(l)).map(([k, l]) => [k, l.clip]));
+  const keptLetters = Object.entries(d.letters).filter(([, l]) => ok(l));
+  const letters = Object.fromEntries(keptLetters.map(([k, l]) => [k, l.clip]));
+  const lettersAfter = keptLetters.filter(([, l]) => l.after).map(([k]) => k);
   const phrases = d.phrases.filter(ok);
   const synonyms = d.synonyms.filter(ok);
   const instruments = d.instruments.filter(ok);
@@ -51,7 +53,7 @@ export async function packSpec(d: Draft = draft, trying = false, onProgress?: (m
   const rendered = await Promise.all(instruments.map(async (i) => ({ ...i, notes: await instrumentNotes(i) })));
   // The preview opens the room being tried from this pack's files too, added or not.
   const voiced = await roomVoice(trying ? draft.rooms : rooms, !trying, onProgress);
-  return { id: d.id, name: d.name, pictures, words, ranked, letters, phrases, synonyms, instruments: rendered, rooms, roomFiles, roomVoice: voiced, theme, studio };
+  return { id: d.id, name: d.name, pictures, words, ranked, letters, lettersAfter, phrases, synonyms, instruments: rendered, rooms, roomFiles, roomVoice: voiced, theme, studio };
 }
 
 // format: the pack format it needs (studio/pack_formats.json), which says how new a Purple it needs; skipped: what older ones leave out.
@@ -115,6 +117,7 @@ export async function openPack(file: Blob): Promise<Draft> {
     return { ...emptyDraft(), id: m.id, name: m.name, rooms, roomFiles: roomFiles(files) };
   }
   const s: Saved = { ...NO_SAVED, ...readJson("studio.json") };
+  const after = new Set<string>(files.has(LETTERS_PATH) ? readJson(LETTERS_PATH).after : []);
   return {
     ...emptyDraft(),
     id: m.id,
@@ -127,7 +130,7 @@ export async function openPack(file: Blob): Promise<Draft> {
     roomFiles: roomFiles(files).map((f) => ({ ...f, shelfId: f.kind === "images" ? s.roomShelf?.[f.name] : undefined })),
     theme: s.theme,
     colors: s.theme ? { kept: true } : {},
-    letters: Object.fromEntries(s.letters.map((k) => [k, kept({ clip: decodeWav(read(letterPath(k))) })])),
+    letters: Object.fromEntries(s.letters.map((k) => [k, kept({ clip: decodeWav(read(letterPath(k))), after: after.has(letterFile(k)) })])),
     phrases: s.phrases.map((text) => kept({ text, clip: decodeWav(read(phrasePath(text))) })),
     pictures: await Promise.all(s.pictures.map(async (p) => {
       const photo = image(pictureSourcePath(p.name), "image/jpeg");

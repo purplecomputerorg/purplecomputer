@@ -195,6 +195,13 @@ class LiveScreen {
     announceKey(key);
   }
 
+  // A key right after the edit that's settling, so Purple plays it with the change: the frame runs messages in order.
+  keyAfterEdits(key: string): void {
+    clearTimeout(this.timer);
+    this.queueSync();
+    void this.syncing.then(() => this.key(key));
+  }
+
   // Opens the room's code line, or closes it, without the Esc menu.
   code(on: boolean): void {
     if (this.ready) this.post({ type: "code", on });

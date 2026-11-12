@@ -29,6 +29,9 @@ export function field(label: string, input: HTMLElement): HTMLLabelElement {
 // The forms' shared remove and add buttons, so every list in a room's settings grows and shrinks the same way.
 export const removeButton = (onclick: () => void) => h("button", { class: "x", title: "Remove", "aria-label": "Remove", onclick }, "×");
 export const addRowButton = (label: string, onclick: () => void) => h("button", { class: "add-row", onclick }, `+ ${label}`);
+// Choices side by side, the one that's on pressed.
+export const seg = (...options: [label: Child, on: boolean, pick: () => void][]) => h("div", { class: "seg", role: "group" },
+  ...options.map(([label, on, pick]) => h("button", { type: "button", "aria-pressed": String(on), onclick: pick }, label)));
 
 // A Studio dialog; resolves with the value of the button picked, or "" for Esc.
 function dialog(question: string, buttons: Child[], extra: Child[] = []): Promise<string> {

@@ -33,6 +33,8 @@ export interface PackSpec {
   synonyms: { alias: string; word: string }[];
   ranked: string[];
   letters: Record<string, Clip>;
+  // Keys whose clip plays after Purple says the key, not in its place.
+  lettersAfter?: string[];
   phrases: { text: string; clip: Clip }[];
   pictures: PackPicture[];
   instruments: PackInstrument[];
@@ -50,6 +52,7 @@ export interface PackSkipped { date: string; added: string; older: string; needs
 export const PACK_SKIPPED: PackSkipped[] = exported.pack_skipped;
 export const WORD_PICTURES_PATH = "content/word-pictures.json";
 export const MEANINGS_PATH = "content/meanings.json";
+export const LETTERS_PATH = "content/letters.json";
 
 const enc = new TextEncoder();
 const text = (path: string, body: string): TarEntry => ({ path, data: enc.encode(body) });
@@ -113,7 +116,8 @@ export function emojiEntries(spec: PackSpec): TarEntry[] {
   return out;
 }
 
-export const letterPath = (key: string) => `content/letters/${LETTER_FILES[key] ?? key}.wav`;
+export const letterFile = (key: string) => LETTER_FILES[key] ?? key;
+export const letterPath = (key: string) => `content/letters/${letterFile(key)}.wav`;
 export const phrasePath = (text: string) => `content/voice/${voiceClipFilename(text)}`;
 export const roomLinePath = (text: string) => `content/room-voice/${voiceClipFilename(text)}`;
 export const picturePngPath = (name: string) => `content/pictures/${name}.png`;
@@ -136,6 +140,8 @@ export async function buildEntries(spec: PackSpec, onProgress?: (msg: string) =>
   const entries: TarEntry[] = emojiEntries(spec);
 
   for (const [key, clip] of Object.entries(spec.letters)) entries.push({ path: letterPath(key), data: encodeWav(clip) });
+  const after = (spec.lettersAfter ?? []).filter((k) => k in spec.letters).map(letterFile);
+  if (after.length) entries.push(json(LETTERS_PATH, { after }));
   for (const p of spec.phrases) entries.push({ path: phrasePath(p.text), data: encodeWav(p.clip) });
 
   for (const pic of spec.pictures) {

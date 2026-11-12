@@ -42,6 +42,17 @@
     ],
     "calls": []
    }
+  },
+  {
+   "date": "2026-11-11",
+   "added": "Sounds that play after their letter",
+   "older": "they play in its place, and only while Letters says names",
+   "needs": {
+    "files": [
+     "^content/letters\\.json$"
+    ],
+    "calls": []
+   }
   }
  ],
  "screen": {

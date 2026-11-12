@@ -41,6 +41,7 @@ NOTE_STRIP = 0.45             # height of the note-name row under the grid, in k
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past the end it's silent
 LETTER_FADE_REST_S = 1.0      # a rest this long, or another letter, brings it back to full
+LETTER_AFTER_GAP_S = 0.15     # between Purple saying a key and the family's recording after it
 ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
 WORD_GAP_S = 1.5              # a two-letter word counts only after a rest this long
@@ -98,6 +99,7 @@ class MusicRoom(Room):
         self._saved_loop = None
         self._last_letter_press_t = float("-inf")
         self._letter_playing = None
+        self._letter_next = None
         self._letter_streak = (None, float("-inf"), 0)   # (key, last press, presses in a row)
         self._spelled = ""
         self._typed_at: list = []  # when each letter of _spelled was typed
@@ -118,11 +120,12 @@ class MusicRoom(Room):
         self._sync_panels()
 
     def on_leave(self):
-        self._stop_loop()
+        self.stop_sound()
         self.code_panel = None
 
     def stop_sound(self):
         self._stop_loop()
+        self._stop_letter()
 
     def on_littles_change(self):
         self.app.invalidate()
@@ -244,13 +247,28 @@ class MusicRoom(Room):
         if self.app._effective_volume() == 0:
             return
         volume = self._letter_volume(key, time.monotonic())
-        if self._letter_playing is not None:
-            self._letter_playing.stop()
-        if volume and (sound := self.sounds.letters(self.say_sounds).get(key)):
-            self._letter_playing = sound
-            ch = play_safe(sound)
-            if ch is not None:
-                ch.set_volume(volume)
+        self._stop_letter()
+        if volume and (clips := self.sounds.letters(self.say_sounds).get(key)):
+            self._play_clips(clips, volume)
+
+    def _play_clips(self, clips: list, volume: float):
+        """The first now and each next once it ends; the next letter cuts them all off."""
+        first, *rest = clips
+        self._letter_playing, self._letter_next = first, None
+        if (ch := play_safe(first)) is not None:
+            ch.set_volume(volume)
+        if rest:
+            self._letter_next = self.app.timers.after(first.get_length() + LETTER_AFTER_GAP_S, lambda: self._play_clips(rest, volume))
+
+    def _stop_letter(self):
+        if self._letter_next is not None:
+            self._letter_next.stop()
+        try:
+            if self._letter_playing is not None:
+                self._letter_playing.stop()
+        except pygame.error:  # the mixer was released while idle
+            pass
+        self._letter_playing = self._letter_next = None
 
     def _letter_volume(self, key: str, now: float) -> float:
         last, at, n = self._letter_streak
@@ -281,6 +299,7 @@ class MusicRoom(Room):
                 pygame.mixer.stop()
         except pygame.error:
             pass
+        self._stop_letter()
         self.sounds.clear()
         for t in self._note_timers.values():
             t.stop()

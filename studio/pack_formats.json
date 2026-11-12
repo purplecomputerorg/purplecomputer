@@ -44,16 +44,27 @@
     ],
     "calls": []
    }
+  },
+  {
+   "date": "2026-11-11",
+   "added": "Sounds that play after their letter",
+   "older": "they play in its place, and only while Letters says names",
+   "needs": {
+    "files": [
+     "^content/letters\\.json$"
+    ],
+    "calls": []
+   }
   }
  ],
  "fingerprint": {
-  "studio/sdk/src/pack.ts": "f079f2cfe343728b",
-  "studio/src/pack.ts": "944ae929ddac7e14",
-  "purple_tui/content.py": "4d473eff67a1e3e7",
+  "studio/sdk/src/pack.ts": "4bda6eab26531484",
+  "studio/src/pack.ts": "1c116cf864839672",
+  "purple_tui/content.py": "ba84d3120e733149",
   "purple_tui/pack_manager.py": "41f6ab779c96aafd",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
-  "purple_tui/canvas/rooms/family_room.py": "e3a6f6d6fd03f3ec",
-  "purple_tui/roomkit/purple.py": "1e09564b9c8ba085",
+  "purple_tui/canvas/rooms/family_room.py": "6bab47ad736c726b",
+  "purple_tui/roomkit/purple.py": "579c13698a86002a",
   "purple_tui/roomkit/runner.py": "9e62d3413c858a5a",
   "purple_tui/roomkit/limits.py": "07347f3ac2df15ea"
  }

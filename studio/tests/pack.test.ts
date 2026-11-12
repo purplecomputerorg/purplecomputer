@@ -54,6 +54,18 @@ describe("pack assembly", () => {
     [...back.phrases[0].clip.samples].forEach((s, i) => expect(s).toBeCloseTo(clip.samples[i], 4));
   });
 
+  it("lists the letters that play after Purple says the key by file name, and reopens each choice", async () => {
+    const clip = { samples: new Float32Array([0, 0.5]), rate: 22050 };
+    const d: Draft = { ...draftBase, letters: { d: { clip, kept: true, after: true }, ";": { clip, kept: true, after: true }, e: { clip, kept: true }, f: { clip, after: true } } };
+    const entries = await buildEntries(await packSpec(d));
+    const listed = entries.find((e) => e.path === "content/letters.json")!;
+    expect(JSON.parse(new TextDecoder().decode(listed.data))).toEqual({ after: ["d", "semicolon"] });
+    expect(skippedBy(entries).map((s) => s.added)).toEqual(["Sounds that play after their letter"]);
+    const back = await openPack((await buildPack(undefined, d)).blob);
+    expect(Object.fromEntries(Object.entries(back.letters).map(([k, l]) => [k, l.after]))).toEqual({ d: true, ";": true, e: false });
+    expect((await buildEntries({ ...base, letters: { e: clip } })).some((e) => e.path === "content/letters.json")).toBe(false);
+  });
+
   it("keeps a picture's photo outside content/, where Purple never reads", async () => {
     const pic = { name: "dog", ops: [], png: new Uint8Array([1]), source: new Uint8Array([2]) };
     const paths = (await buildEntries({ ...base, pictures: [pic] })).map((e) => e.path);

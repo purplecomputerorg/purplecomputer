@@ -20,7 +20,8 @@ export interface WordEntry extends Keepable { word: string; emoji: string; means
 export interface SynonymEntry extends Keepable { alias: string; word: string }
 // said: the words Purple reads, when the family typed them instead of recording.
 export interface Phrase extends Keepable { text: string; clip: Clip; said?: string }
-export interface Letter extends Keepable { clip: Clip; said?: string }
+// after: plays once Purple has said the key, else in its place (as letters made before the choice do).
+export interface Letter extends Keepable { clip: Clip; said?: string; after?: boolean }
 // title: the name as the family typed it, which Purple shows as is; name is its file name in the pack.
 // icon: the emoji the family picked for it; without one Purple shows its base's picture.
 export interface Instrument extends Keepable { name: string; title?: string; base: BaseName; params: Params; icon?: string }

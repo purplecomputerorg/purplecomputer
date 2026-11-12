@@ -870,6 +870,8 @@ details.more-options h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px;
 .sound-picker { display: grid; gap: 10px; justify-items: start; }
 .sound-picker .type-it { justify-self: stretch; }
 .sound-picker .status:empty { display: none; }
+.letter-order { margin-top: 14px; }
+.seg .sticker { font-size: 9px; margin-left: 6px; vertical-align: middle; }
 .type-it input { flex: 1; min-width: 0; }
 /* Narrow: the key sits beside its question, and the voice choice and typing get the card's full width below */
 @container pane (width < 520px) {

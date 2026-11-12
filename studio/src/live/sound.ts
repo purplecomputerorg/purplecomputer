@@ -12,6 +12,8 @@ const out = new DynamicsCompressorNode(ctx, { threshold: -6, knee: 6, ratio: 12,
 out.connect(ctx.destination);
 const files = new Map<string, Promise<ArrayBuffer | null>>();
 const sounds = new Map<number, { buffer: Promise<AudioBuffer | null>; length: number }>();
+// A core sound's length once decoded: a new pack reloads every Sound, and Music times a family's letter clip after Purple's.
+const lengths = new Map<string, number>();
 const channels = new Map<number, { sound: number; gain: GainNode; source?: AudioBufferSourceNode }>();
 let lastChannel = 0;
 let toWarm: string[] = [];
@@ -35,8 +37,12 @@ export const warmSounds = () => toWarm.forEach(fetchFile);
 export const purpleSound = {
   load(id: number, from: string | Uint8Array): void {
     const bytes = typeof from === "string" ? fetchFile(from) : Promise.resolve(from.slice().buffer);
-    const sound = { length: 0, buffer: bytes.then((b) => (b ? ctx.decodeAudioData(b.slice(0)) : null)).catch(() => null) };
-    void sound.buffer.then((b) => (sound.length = b?.duration ?? 0));
+    const url = typeof from === "string" ? from : "";
+    const sound = { length: lengths.get(url) ?? 0, buffer: bytes.then((b) => (b ? ctx.decodeAudioData(b.slice(0)) : null)).catch(() => null) };
+    void sound.buffer.then((b) => {
+      sound.length = b?.duration ?? 0;
+      if (url && b) lengths.set(url, b.duration);
+    });
     sounds.set(id, sound);
   },
   drop: (id: number) => void sounds.delete(id),

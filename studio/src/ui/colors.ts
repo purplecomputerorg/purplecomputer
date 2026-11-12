@@ -1,6 +1,6 @@
 import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, DEFAULT_THEME, hslToHex, themePalette, type Role, type Theme } from "@sdk";
 import { changed, draft } from "../state";
-import { clear, h } from "./dom";
+import { clear, h, seg } from "./dom";
 import { PURPLE_STICKERS, sticker } from "./stickers";
 import { inPackBar, tryBar } from "./trybar";
 import type { View } from "./view";
@@ -18,8 +18,6 @@ const SCREEN_ROLES: [Role, string][] = [
   ["hair", "Thin borders"], ["line", "Outlines"], ["primary", "Highlight"], ["on_primary", "Text on highlight"],
 ];
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const seg = (...options: [label: string, on: boolean, pick: () => void][]) => h("div", { class: "seg", role: "group" },
-  ...options.map(([label, on, pick]) => h("button", { "aria-pressed": String(on), onclick: pick }, label)));
 
 // A small picture of a screen in a palette: the ground, the panel with a canvas, a line of text.
 export function miniScreen(theme: Theme): HTMLElement {

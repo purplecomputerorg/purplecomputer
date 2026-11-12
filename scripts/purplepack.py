@@ -37,6 +37,7 @@ READ_TODAY = {
     "content/synonyms.json": "nicknames for words, Play room",
     "content/rankings.txt": "autocomplete order, Play room",
     "content/letters/": "letter and number clips, Music room Letters",
+    "content/letters.json": "letter clips that play after Purple says the key, Music room Letters",
     "content/voice/": "phrase clips, spoken by Purple",
     "content/pictures/": "pictures, Art room's Open",
     "content/instruments/": "instrument definitions; samples in content/<name>/",

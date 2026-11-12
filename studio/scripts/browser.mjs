@@ -86,13 +86,14 @@ export async function upload(page, n, file) {
   await sleep(800);
 }
 
-// The numbered thing whose label matches re, listing the page again first.
-export async function find(page, re) {
+// The numbered thing whose label matches re, listing the page again first. last: the latest one, as a
+// dialog's button is when it shares its label with the button that opened it.
+export async function find(page, re, { last = false } = {}) {
   const list = await things(page);
-  const hit = list.find((t) => re.test(t));
+  const hit = last ? list.findLast((t) => re.test(t)) : list.find((t) => re.test(t));
   if (!hit) throw new Error(`nothing on the page matches ${re}`);
   return Number(hit.match(/^\[(\d+)\]/)[1]);
 }
-export const clickText = async (page, re) => click(page, await find(page, re));
+export const clickText = async (page, re, options) => click(page, await find(page, re, options));
 export const shot = (page, path) => page.screenshot({ path });
 export { sleep };

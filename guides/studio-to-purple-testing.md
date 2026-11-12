@@ -5,7 +5,7 @@ What a family does, tested end to end: make something in Studio, download it, ca
 | Tier | Run | What it drives | Cost |
 | --- | --- | --- | --- |
 | 1 | `just python -m pytest tests/canvas/test_studio_to_purple.py` | Packs built by Studio's own SDK (`studio/scripts/fixture-packs.ts`), the USB updater, the Add flow, export to a FAT image | seconds; skips without node or mtools |
-| 2 | `just e2e-studio [--url URL]` | Studio's real UI in headless Chromium: a word, a recording, a photo, a starter room, Download; then the file through tier 1's checker | about a minute |
+| 2 | `just e2e-studio [--url URL]` | Studio's real UI in headless Chromium: a word, a recording, a photo, a starter room, Download; then Clear everything, reopen the file and download again (must match), and that file through tier 1's checker. Browser errors fail it | about a minute |
 | 3 | `just e2e-vm [PACK] [--ref COMMIT]` | A built ISO in QEMU: the drive plugged in, Add, a kid's keys, Copy Saved Work to USB, the drive read back | minutes; needs KVM and `just build` |
 | 4 | `just e2e-ai [--budget 10] [--goal ...]` | An AI parent in Studio, an AI kid on Purple, an Opus judge; real findings go to `docs/AI_UX_BUGS.md` | the budget, $10 by default |
 

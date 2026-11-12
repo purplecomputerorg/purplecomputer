@@ -1,11 +1,11 @@
 // The live Purple as people see it: the handwritten title, the pretend laptop with the real Purple
-// inside, the room buttons under it, and on a phone a few big keys for the room it's in. Studio's
+// inside, the room buttons in its bezel (under it on a phone, with a few big keys for the room). Studio's
 // pages show it beside the editor; try.html shows it alone, for purplecomputer.org to embed.
 import { typingKeys } from "../keys";
 import type { Room, RoomSetup } from "../live/boot";
 import { h } from "./dom";
 import { Laptop } from "./laptop";
-import { liveScreen } from "./live";
+import { liveScreen, PHONE } from "./live";
 import { staysHere } from "./privacy";
 
 // What a page asks of the stage: the room to set Purple up in, its own few phone keys, and a caption.
@@ -31,7 +31,16 @@ export function createStage({ stays = true, onMove = () => {}, trayKey }: { stay
   laptop.screen.append(live.element);
 
   const roomButtons = h("div", { class: "room-buttons" });
-  const phoneBar = h("div", { class: "phone-bar" }, roomButtons, trayKey ? h("div", { class: "tray-bar" }, trayKey, laptop.tray) : laptop.tray, h("p", { class: "phone-hint" }, "Or tap the laptop to type with your phone's keyboard."));
+  const trayBar = trayKey ? h("div", { class: "tray-bar" }, trayKey, laptop.tray) : laptop.tray;
+  const phoneBar = h("div", { class: "phone-bar" }, roomButtons, trayBar, h("p", { class: "phone-hint" }, "Or tap the laptop to type with your phone's keyboard."));
+  // On a computer the rooms and the demo key sit in the bezel, so what they do stays in sight.
+  const place = () => {
+    if (!PHONE.matches) return laptop.bezel.append(roomButtons, ...(trayKey ? [trayKey] : []));
+    phoneBar.prepend(roomButtons);
+    if (trayKey) trayBar.prepend(trayKey);
+  };
+  place();
+  PHONE.addEventListener("change", place);
   const caption = h("p", { class: "caption" });
   const element = h("aside", { class: "stage" }, h("div", { class: "stage-inner" },
     h("h3", {}, "This little computer is a real Purple Computer for you to try"), laptop.element, phoneBar, caption,

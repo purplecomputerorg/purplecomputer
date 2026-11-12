@@ -39,6 +39,8 @@ const arched = (text: string) => {
 export class Laptop {
   readonly element: HTMLElement;
   readonly screen = h("div", { class: "laptop-screen" });
+  // The strip of lid under the screen, for controls a page wants in sight of what they do.
+  readonly bezel = h("div", { class: "laptop-bezel" });
   private keyboard = h("div", { class: "laptop-keys" });
   readonly tray = h("div", { class: "tray-keys" });
   private trayNames: string[] = [];
@@ -52,7 +54,7 @@ export class Laptop {
 
   constructor(private tap: (key: string) => void) {
     this.element = h("div", { class: "laptop" },
-      h("div", { class: "laptop-lid" }, h("i", { class: "laptop-camera" }), this.screen),
+      h("div", { class: "laptop-lid" }, h("i", { class: "laptop-camera" }), this.screen, this.bezel),
       h("div", { class: "laptop-base" }, h("div", { class: "laptop-deck" }, this.keyboard)),
       h("p", { class: "sticker-callout" }, ARROW, arched("These stickers come in the box. They go on your keyboard.")),
       this.typing,

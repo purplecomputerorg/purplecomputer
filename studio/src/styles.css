@@ -174,6 +174,17 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .laptop-screen { position: relative; aspect-ratio: 1366 / 768; overflow: hidden; background: #000; border-radius: 3px; }
 .laptop-screen > .screen-wrap { position: absolute; inset: 0; }
 .laptop-screen [hidden] { display: none !important; }
+/* The rooms and the demo keys on the lid under the screen: dark pills that sit on the bezel, the demo
+   keys still pastel so they read as the thing to press */
+.laptop-bezel { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 1.6cqw; margin: 1.6cqw 0 -0.6cqw; }
+.laptop-bezel:empty { display: none; }
+.laptop-bezel .room-buttons button { font-size: clamp(12px, 1.5cqw, 16px); padding: 0.5em 1em; border-color: #4e4a5c; background: #302e38; color: #d6d1e4; }
+.laptop-bezel .room-buttons button:hover { background: #3c3946; }
+.laptop-bezel .room-buttons button[aria-busy="true"] { border-color: #b48ce8; color: #e4d4fb; }
+.laptop-bezel .room-buttons button[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
+.laptop-bezel .demo-keys { padding-left: 1.6cqw; border-left: 1.5px solid #4e4a5c; }
+.laptop-bezel .demo-keys[hidden] { display: none; }
+.laptop-bezel .demo-key { height: auto; padding: 0.55em 1.3em; font-size: clamp(13px, 1.6cqw, 17px); }
 /* Depth is in laptop widths (cqw), so the tilt looks the same at any size. The lid is as wide as
    the keyboard's back edge, and the near edge comes out wider, as it does on a real laptop seen
    from in front. The tilt shrinks how tall the keyboard looks but not the space it takes, so the
@@ -1087,11 +1098,11 @@ html.embed.alone { overflow: auto; }
 /* Room for the tape above the top row and the hover shadow on every side. The landing page widens
    the frame by its 24px gutter, so the side margins keep the cards in line with its column. */
 .embed .home-cards { margin: 12px 24px 48px; }
-/* try.html's demo key: above the phone keys in their box on a phone, alone where they would be on a computer.
+/* try.html's demo key: above the phone keys in their box on a phone, in the laptop's bezel on a computer.
    The bottom padding is 3px more, for the keys' edge under them. */
 .tray-bar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: fit-content; max-width: 100%; margin: 14px auto 0; padding: 10px 10px 13px; border-radius: 16px; background: linear-gradient(#45444d, #2a2930); }
 .tray-bar .tray-keys { margin: 0; padding: 0; background: none; }
-.tray-bar:has(> .demo-keys[hidden]) { display: none; }
+.tray-bar:has(> .demo-keys[hidden]), .tray-bar:not(:has(> .demo-keys)) { display: none; }
 .demo-keys { display: flex; gap: 10px; }
 .demo-keys > .demo-key { flex: 1; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {

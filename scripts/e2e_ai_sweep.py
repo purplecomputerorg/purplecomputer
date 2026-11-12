@@ -5,8 +5,9 @@ real finding into one ranked list of what to fix, written for an LLM to pick up:
     just e2e-ai-sweep [--budget 10] [--parallel 3] [--only breaker,grandparent] [--each 0.4] [--url URL]
 
 A scenario starts only when its budget still fits, so the total never passes --budget. Scenarios that finish
-under budget leave room for the next; when the list runs out, it starts over (up to 3 rounds), since the
-same personas find different things each time."""
+under budget leave room for the next. Once every scenario has run, the ones that found the most real bugs per
+dollar run again (up to 3 times each), since the same personas find different things each time. Each run is
+told what earlier runs already found, so it doesn't pay to find it again."""
 
 import argparse
 import asyncio
@@ -18,10 +19,12 @@ import subprocess
 import sys
 import time
 import urllib.request
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import anthropic  # noqa: E402
@@ -91,10 +94,15 @@ def studio_server() -> subprocess.Popen:
     raise RuntimeError("Studio's dev server didn't start")
 
 
-async def run_one(sc, budget: float, out: Path, url: str) -> dict:
+def kept(report: dict) -> list[dict]:
+    return [f for f in report.get("findings", []) if f.get("keep")]
+
+
+async def run_one(sc, budget: float, out: Path, url: str, known: list[str]) -> dict:
     out.mkdir(parents=True)
+    (out / "known.json").write_text(json.dumps(known, ensure_ascii=False))
     cmd = [sys.executable, str(ROOT / "scripts" / "e2e_ai.py"), "--scenario", sc.name, "--budget", f"{budget:.2f}",
-           "--url", url, "--out", str(out), "--no-log"]
+           "--url", url, "--out", str(out), "--no-log", "--known", str(out / "known.json")]
     with open(out / "log.txt", "w") as log:
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=log, stderr=subprocess.STDOUT, cwd=ROOT,
                                                     env={**os.environ, "PYTHONPATH": str(ROOT), "PYTHONUNBUFFERED": "1"})
@@ -107,36 +115,54 @@ async def run_one(sc, budget: float, out: Path, url: str) -> dict:
 
 async def sweep(args, out: Path, url: str) -> list[dict]:
     pool = [s for s in SCENARIOS if not args.only or s.name in args.only]
-    queue = [(r, s) for r in range(1, ROUNDS + 1) for s in pool]
+    for s in [s for s in pool if s.skip_reason()]:
+        print(f"skip {s.name}: {s.skip_reason()}")
+        pool.remove(s)
     spendable = args.budget - SYNTH_RESERVE
     done, running = [], {}
 
-    def committed() -> float:
-        return sum(d["report"]["spent"] for d in done) + sum(b for _, b in running.values())
+    def spent() -> float:
+        return sum(d["report"]["spent"] for d in done)
+
+    def held() -> float:
+        return sum(b for _, b in running.values())
+
+    def per_dollar(name: str) -> float:
+        reports = [d["report"] for d in done if d["name"] == name]
+        return sum(len(kept(r)) for r in reports) / max(sum(r["spent"] for r in reports), 0.01)
+
+    def next_up():
+        """Every scenario once, in order; then whichever finished one found the most per dollar, again."""
+        busy = {sc.name for (_, sc), _ in running.values()}
+        runs = Counter(d["name"] for d in done) + Counter(busy)
+        if fresh := [s for s in pool if not runs[s.name]]:
+            return fresh[0]
+        again = [s for s in pool if s.name not in busy and runs[s.name] < ROUNDS and per_dollar(s.name) > 0]
+        return max(again, key=lambda s: per_dollar(s.name), default=None)
 
     def finished(task):
         (r, sc), budget = running.pop(task)
         report = task.result()
         done.append({"round": r, "name": sc.name, "dir": out / f"{r}-{sc.name}", "report": report})
-        kept = [f for f in report.get("findings", []) if f.get("keep")]
-        print(f"  done {sc.name} (round {r}): ${report['spent']:.2f} of ${budget:.2f}, {len(kept)} real finding(s)"
-              + (f"  CRASHED, see {out / f'{r}-{sc.name}' / 'log.txt'}" if report.get("crashed") else "") + f"; ${committed():.2f} used so far")
+        print(f"  done {sc.name} (round {r}): ${report['spent']:.2f} of ${budget:.2f}, {len(kept(report))} real finding(s)"
+              + (f"  CRASHED, see {out / f'{r}-{sc.name}' / 'log.txt'}" if report.get("crashed") else "")
+              + f"; ${spent():.2f} spent, ${held():.2f} held for running scenarios")
 
-    while queue or running:
-        while queue and len(running) < args.parallel:
-            left = spendable - committed()
-            budget = min(queue[0][1].budget, args.each or left, left)
+    while True:
+        while len(running) < args.parallel and (sc := next_up()):
+            left = spendable - spent() - held()
+            budget = min(sc.budget, args.each or left, left)
             if budget < min(SMALLEST, args.each or SMALLEST):
                 break
-            r, sc = queue.pop(0)
-            task = asyncio.create_task(run_one(sc, budget, out / f"{r}-{sc.name}", url))
+            r = 1 + sum(d["name"] == sc.name for d in done)
+            known = [f["title"] for d in done for f in kept(d["report"])]
+            task = asyncio.create_task(run_one(sc, budget, out / f"{r}-{sc.name}", url, known))
             running[task] = ((r, sc), budget)
             print(f"start {sc.name} (round {r}, {sc.model}): up to ${budget:.2f}")
         if not running:
-            break
+            return done
         for task in (await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED))[0]:
             finished(task)
-    return done
 
 
 def gather(done: list[dict], shots: Path) -> list[dict]:
@@ -145,8 +171,8 @@ def gather(done: list[dict], shots: Path) -> list[dict]:
     runs = []
     for d in done:
         rep, tag = d["report"], f"{d['round']}-{d['name']}"
-        kept = []
-        for f in (x for x in rep.get("findings", []) if x.get("keep")):
+        found = []
+        for f in kept(rep):
             paths = []
             for s in f.get("screenshots", []):
                 src = Path(s)
@@ -154,11 +180,11 @@ def gather(done: list[dict], shots: Path) -> list[dict]:
                     dst = shots / f"{tag}-{src.parent.name}-{src.name}"
                     shutil.copy2(src, dst)
                     paths.append(str(dst))
-            kept.append({**f, "screenshots": paths})
+            found.append({**f, "screenshots": paths})
         runs.append({"scenario": tag, "spent": rep.get("spent"), "crashed": rep.get("crashed"),
                      "what testers did": {k: (rep.get(k) or {}).get("summary") for k in ("parent in studio", "parent on purple", "kid")},
                      "purple checks failed": [c["what"] for c in (rep.get("purple") or {}).get("checks", []) if not c["ok"]],
-                     "findings": kept})
+                     "findings": found})
     return runs
 
 

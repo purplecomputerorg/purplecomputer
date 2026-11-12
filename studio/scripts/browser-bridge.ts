@@ -1,12 +1,12 @@
 // Studio in headless Chromium for an AI tester (scripts/e2e_ai.py): one JSON request per line on stdin,
 // one "@@" + JSON reply per line on stdout. vite-node scripts/browser-bridge.ts <out dir> [url]
 //   {"op": "look"}                        -> {url, things, shot (base64 PNG)}
-//   {"op": "click"|"type"|"upload"|"key"|"scroll"|"wait", ...} -> {url, things}
+//   {"op": "click"|"type"|"select"|"upload"|"key"|"scroll"|"wait", ...} -> {url, things}
 //   {"op": "downloads"}                   -> {files}
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { click, openStudio, sleep, things, type, upload } from "./browser.mjs";
+import { click, openStudio, pressKeys, select, sleep, things, type, upload } from "./browser.mjs";
 import { studioFiles } from "./fixtures";
 
 const [out, url] = process.argv.slice(2);
@@ -30,13 +30,14 @@ const fileFor = (file: string) => {
   return packs[0];
 };
 
-type Request = { op: string; n?: number; text?: string; enter?: boolean; file?: string; key?: string; dy?: number; seconds?: number };
+type Request = { op: string; n?: number; text?: string; option?: string; enter?: boolean; file?: string; key?: string; dy?: number; seconds?: number };
 const ops: Record<string, (r: Request) => Promise<object>> = {
   look: async () => ({ ...(await now()), shot: await page.screenshot({ encoding: "base64" }) }),
   click: async ({ n }) => (await click(page, n!), now()),
   type: async ({ n, text, enter }) => (await type(page, n!, text ?? "", { enter }), now()),
+  select: async ({ n, option }) => (await select(page, n!, option ?? ""), now()),
   upload: async ({ n, file }) => (await upload(page, n!, fileFor(file ?? "photo")), now()),
-  key: async ({ key }) => (await page.keyboard.press(key as never), await sleep(300), now()),
+  key: async ({ key }) => (await pressKeys(page, key ?? ""), await sleep(300), now()),
   scroll: async ({ dy }) => (await page.mouse.wheel({ deltaY: dy ?? 600 }), await sleep(300), now()),
   wait: async ({ seconds }) => (await sleep(Math.min(10, seconds ?? 2) * 1000), now()),
   reload: async () => (await page.reload({ waitUntil: "networkidle2" }), now()),

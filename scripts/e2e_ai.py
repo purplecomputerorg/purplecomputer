@@ -37,6 +37,7 @@ from ai_ux_config import append_findings_log, check_api_key, estimate_cost  # no
 from e2e_ai_scenarios import BY_NAME, OPUS, SONNET, Scenario  # noqa: E402
 
 JUDGE_MODEL = OPUS
+KID_MODEL = SONNET  # the kid only looks and presses keys, which Sonnet does fine at a fraction of the price
 SPLIT = {"parent": 0.5, "purple": 0.4}  # the rest is left for the judge's one call
 HANDOFF_SHARE = 0.3  # of Purple's share, for the parent adding the pack
 KEEP_SHOTS = 8  # screenshots a tester still sees; older ones become a line of text, so long sessions stay sharp and cheap
@@ -69,9 +70,12 @@ PARENT_TOOLS = [
     tool("type", "Click into thing n and type text (replacing what's there).", n=N, text="",
          enter={"type": "boolean", "default": False, "description": "Press Enter after"}),
     tool("upload", "Choose a file from your computer for thing n (a file input or a Choose button).", n=N,
-         file={"type": "string", "enum": ["photo", "pack"],
-               "description": "photo: backyard.png, a photo from your phone. pack: the Purple Pack you downloaded last"}),
-    tool("key", "Press a key on the page, like Enter, Escape or Tab.", key=""),
+         file={"type": "string", "enum": ["photo", "voice", "pack"],
+               "description": "photo: backyard.png, a photo from your phone. voice: grandma.wav, a voice memo Grandma sent you. "
+                              "pack: the Purple Pack you downloaded last"}),
+    tool("select", "Pick an option in dropdown n (a select), by the option's words.", n=N, option=""),
+    tool("key", "Press a key on the page: Enter, Escape, Tab, Backspace, Space, ArrowUp/Down/Left/Right, Home, End, "
+         "a letter, or a combination like Control+Home.", key=""),
     tool("scroll", "Scroll the page down (or up with a negative number).", dy={"type": "integer", "default": 600}),
     tool("wait", "Wait for something to finish, up to 10 seconds.", seconds={"type": "number", "default": 3}),
     tool("reload", "Reload the page, as if you closed the tab and came back."),
@@ -88,7 +92,9 @@ PURPLE_TOOLS = [
 
 FAIR = """Report bugs and confusions the moment you meet them, each once, with what you expected instead. Don't
 report things just because they're different from what you're used to, and don't guess about what you can't
-see. You have plenty of time: there's no prize for finishing fast, and the more you really try, the better."""
+see. When something looks off but you aren't sure it's wrong (a picture smaller than you expected, a word
+missing), report it as a confusion and say you're unsure; don't only mention it when you call done. You have
+plenty of time: there's no prize for finishing fast, and the more you really try, the better."""
 
 PARENT = """You are the parent of a {age}-year-old, trying Purple Studio for the first time. Purple Computer is a
 laptop for kids, and Studio is the website where parents make things for it.
@@ -97,18 +103,20 @@ laptop for kids, and Studio is the website where parents make things for it.
 
 What you want to make: {goal}
 
-You have a photo on your computer (backyard.png) and a microphone. Look at the page and work out what to do
-the way a real parent would. When it's ready, download your Purple Pack, then call done. """ + FAIR
+You have a photo on your computer (backyard.png), a voice memo Grandma sent you (grandma.wav), and a microphone. Look at the page and work out what to do
+the way a real parent would. The little Purple preview restarts for a moment after each change you make: a
+dark cover with "Updating Purple Computer" fades over it, and keys typed then are lost. That's expected, so
+wait for it to clear (the wait tool) before typing into the preview, and don't report the cover itself. When it's ready, download your Purple Pack, then call done. """ + FAIR
 
-HANDOFF = """You are the parent of a {age}-year-old. You made a Purple Pack in Purple Studio ("{summary}"), copied
-it onto a USB drive, and just plugged the drive into your kid's Purple Computer: a laptop for kids with only
-a keyboard, no mouse. The card that came with it says: to add things from a USB drive, plug it in and follow
-the screen; hold Esc for a couple of seconds for the grown-up menu.
+HANDOFF = """{who}
 
-{parent}
+The Purple Pack ("{summary}") is on a USB drive you just plugged into the kid's Purple Computer: a laptop for
+kids with only a keyboard, no mouse. The card that came with it says: to add things from a USB drive, plug
+it in and follow the screen; hold Esc for a couple of seconds for the grown-up menu.
 
-Get what you made onto Purple and ready for your kid, then look around the grown-up menu for anything about
-it. Call done when your kid could use what you made. """ + FAIR
+Get what's on the drive onto Purple and ready for the kid, then look around the grown-up menu for anything
+about it. Call done when the kid could use it. """ + FAIR
+PARENT_ADDS = "You are the parent of a {age}-year-old. You made this Purple Pack in Purple Studio.\n\n{parent}"
 
 KID = """You are {age} years old, sitting at a Purple Computer: a laptop for kids with only a keyboard, no mouse.
 Your parent just put something new on it for you and said: "{summary}"
@@ -119,6 +127,11 @@ Esc shows the rooms you can go to. Report a bug when something looks broken: a p
 word, the screen stuck, or what your parent made not being there. You can't hear, so only report a sound
 when the screen shows something should be playing. Report a confusion when a kid your age would get stuck.
 Call done when you've played with everything. """ + FAIR
+
+ALREADY = """
+
+Other testers already reported these, so don't spend time finding or reporting them again:
+{titles}"""
 
 NUDGE = ("You still have plenty of time. Look back at what you set out to do: is there anything you haven't tried, "
          "or something worth checking again? Do that first, then call done.")
@@ -301,9 +314,12 @@ class Run:
     purple: dict = field(default_factory=dict)
     pack: Path | None = None
     crash: str | None = None
+    known: list = field(default_factory=list)  # titles earlier runs in this sweep already found
 
     def tester(self, who: str, client, sc: Scenario, system: str, tools: list, budget: float) -> Tester:
-        self.testers[who] = Tester(client, who, system, tools, budget, sc.model)
+        if self.known:
+            system += ALREADY.format(titles="\n".join(f"- {t}" for t in self.known))
+        self.testers[who] = Tester(client, who, system, tools, budget, KID_MODEL if who == "kid" else sc.model)
         return self.testers[who]
 
     @property
@@ -361,7 +377,7 @@ async def handoff(client, sc: Scenario, app, drive: Path, summary: str, shots: P
     print(f"parent: adding the pack on Purple (up to ${budget:.2f})")
     update_from(drive, pack_arrivals.WAITING_DIR)
     app._check_pack_arrivals()
-    tester = run.tester("parent on purple", client, sc, HANDOFF.format(age=sc.age, summary=summary, parent=sc.parent), PURPLE_TOOLS, budget)
+    tester = run.tester("parent on purple", client, sc, HANDOFF.format(summary=summary, who=sc.adder or PARENT_ADDS.format(age=sc.age, parent=sc.parent)), PURPLE_TOOLS, budget)
     act = purple_act(app, shots, tester, "handoff", run.purple["screens"])
     await tester.run([text("Here's the screen, right after you plugged in the USB drive."), *await act("look", {})], act)
     for _ in range(6):
@@ -411,7 +427,7 @@ def judge(client, sc: Scenario, run: Run, known: list[str]) -> tuple[list, float
     shots = list(dict.fromkeys(f["screenshot"] for f in found if f.get("screenshot")))[:12]
     evidence = {
         "expected in this test setup, so not findings": known,
-        "scenario": {"name": sc.name, "parent persona": sc.parent, "goal": sc.goal, "kid persona": sc.kid, "age": sc.age,
+        "scenario": {"name": sc.name, "parent persona": sc.parent, "who adds the pack on Purple": sc.adder or "the parent", "goal": sc.goal, "kid persona": sc.kid, "age": sc.age,
                      "studio window": sc.viewport or "1280x900"},
         **{who: {"summary": t.summary or t.last_words, "steps taken": len(t.steps), "bugs": t.bugs, "confusions": t.confusions,
                  "errors when it acted (its own mistakes, or Studio or Purple crashing)": t.errors[:20]}
@@ -456,7 +472,7 @@ async def main_async(sc: Scenario, args) -> int:
         print(f"note: {known[-1]} Run it first to test the preview too.")
     budget = args.budget or sc.budget
     print(f"scenario {sc.name}: ${budget:.2f}, {sc.model}")
-    run = Run()
+    run = Run(known=json.loads(Path(args.known).read_text()) if args.known else [])
     try:
         await play(client, sc, args, out, budget, run)
     except Exception:
@@ -488,6 +504,7 @@ def main() -> int:
     ap.add_argument("--age", type=int, default=5)
     ap.add_argument("--url", help="a deployed Studio instead of this checkout's")
     ap.add_argument("--out", help="where this run's files go (default $TMPDIR/purple-e2e-ai/<time>)")
+    ap.add_argument("--known", help="a JSON list of finding titles already reported, so testers skip them")
     ap.add_argument("--no-log", action="store_true", help="leave docs/AI_UX_BUGS.md alone (the sweep writes its own report)")
     args = ap.parse_args()
     if not check_api_key():
@@ -496,6 +513,9 @@ def main() -> int:
     sc = BY_NAME[args.scenario] if args.scenario else Scenario(
         "custom", parent="You are not technical and you are a bit busy.", goal=args.goal, age=args.age, budget=10.0,
         kid=f"Try to find it and play with it the way a {args.age}-year-old would.")
+    if why := sc.skip_reason():
+        print(f"not running {sc.name}: {why}")
+        return 1
     return asyncio.run(main_async(sc, args))
 
 

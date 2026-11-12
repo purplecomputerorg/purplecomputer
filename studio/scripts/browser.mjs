@@ -65,8 +65,11 @@ function listThings() {
     el.setAttribute("data-e2e", String(i));
     const kind = el.tagName === "INPUT" ? `input ${el.type}` : el.tagName.toLowerCase();
     const label = el.type === "file" ? el.closest("label")?.textContent : "";
-    const name = (el.getAttribute("aria-label") || label || el.textContent || el.placeholder || el.title || el.value || "").replace(/\s+/g, " ").trim();
-    return `[${i}] ${kind}${name ? `: ${cut(name, 80)}` : ""}${el.value && el.tagName !== "BUTTON" ? ` (now: ${cut(String(el.value), 40)})` : ""}`;
+    const text = el.tagName === "SELECT" ? el.labels?.[0]?.textContent : el.textContent;
+    const name = (el.getAttribute("aria-label") || label || text || el.placeholder || el.title || el.value || "").replace(/\s+/g, " ").trim();
+    const now = el.tagName === "SELECT" ? el.selectedOptions[0]?.textContent : el.value;
+    const options = el.tagName === "SELECT" ? `, options: ${cut([...el.options].map((o) => o.textContent.trim()).join(" | "), 160)}` : "";
+    return `[${i}] ${kind}${name ? `: ${cut(name, 80)}` : ""}${now && el.tagName !== "BUTTON" ? ` (now: ${cut(String(now).trim(), 40)}${options})` : ""}`;
   });
 }
 
@@ -79,6 +82,32 @@ export async function type(page, n, text, { enter = false } = {}) {
   if (enter) await page.keyboard.press("Enter");
   await sleep(300);
 }
+export async function select(page, n, option) {
+  const value = await page.$eval(at(n), (el, want) => {
+    if (el.tagName !== "SELECT") throw new Error("that isn't a dropdown; click it instead");
+    const norm = (s) => s.trim().toLowerCase();
+    const hit = [...el.options].find((o) => norm(o.textContent) === norm(want) || o.value === want)
+      ?? [...el.options].find((o) => norm(o.textContent).includes(norm(want)));
+    if (!hit) throw new Error(`no option "${want}"; the options are ${[...el.options].map((o) => o.textContent.trim()).join(", ")}`);
+    return hit.value;
+  }, option);
+  await page.select(at(n), value);
+  await sleep(300);
+}
+
+// AI testers write keys the way people do ("up", "space", "ctrl+home"); Puppeteer wants its own names.
+const KEY_NAMES = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight", space: " ", spacebar: " ",
+  esc: "Escape", escape: "Escape", enter: "Enter", return: "Enter", tab: "Tab", backspace: "Backspace", delete: "Delete",
+  home: "Home", end: "End", pageup: "PageUp", pagedown: "PageDown", ctrl: "Control", control: "Control", cmd: "Meta",
+  command: "Meta", meta: "Meta", alt: "Alt", option: "Alt", shift: "Shift" };
+const keyName = (k) => KEY_NAMES[k.toLowerCase()] ?? (/^arrow/i.test(k) ? `Arrow${k[5].toUpperCase()}${k.slice(6).toLowerCase()}` : k);
+export async function pressKeys(page, combo) {
+  const keys = combo.split(/\+(?=.)/).map((k) => keyName(k.trim()));
+  const last = keys.pop();
+  for (const k of keys) await page.keyboard.down(k);
+  try { await page.keyboard.press(last); } finally { for (const k of keys.reverse()) await page.keyboard.up(k); }
+}
+
 export async function upload(page, n, file) {
   const el = await page.$(at(n));
   const [chooser] = await Promise.all([page.waitForFileChooser({ timeout: 5000 }).catch(() => null), el.evaluate((e) => e.tagName === "INPUT" || e.click())]);

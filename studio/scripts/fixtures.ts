@@ -29,10 +29,12 @@ export const solid = (w: number, h: number, rgb: number[]) => png(w, h, () => rg
 export const photo = () => png(320, 240, (x, y) => ((x - 250) ** 2 + (y - 50) ** 2 < 900 ? [255, 210, 40] : y > 160 ? [40, 150, 50] : [90, 160, 230 - y / 2]));
 
 // What a parent has on hand in Studio: a photo to choose, and what the (fake) microphone hears.
-export function studioFiles(dir: string): { photo: string; mic: string } {
+// voice: a recording someone sent the parent, to choose as a sound file.
+export function studioFiles(dir: string): { photo: string; mic: string; voice: string } {
   mkdirSync(dir, { recursive: true });
-  const files = { photo: join(dir, "backyard.png"), mic: join(dir, "mic.wav") };
+  const files = { photo: join(dir, "backyard.png"), mic: join(dir, "mic.wav"), voice: join(dir, "grandma.wav") };
   writeFileSync(files.photo, photo());
   writeFileSync(files.mic, encodeWav(tone(440, 3, 48000)));
+  writeFileSync(files.voice, encodeWav(tone(330, 2, 48000)));
   return files;
 }

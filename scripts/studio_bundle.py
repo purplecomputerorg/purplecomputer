@@ -49,7 +49,7 @@ KOKORO_CONFIG = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/config.j
 KOKORO_LICENSE = "https://www.apache.org/licenses/LICENSE-2.0.txt"
 KOKORO = {"model": "kokoro-v1.0.int8.onnx", "voice": "af_heart", "tempo": 0.75, "rate": 24000}
 # What the room checker imports: the pack rules and the room library, all standard library.
-CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/pack_manager.py", "purple_tui/synth.py",
+CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/i18n.py", "purple_tui/pack_manager.py", "purple_tui/synth.py",
            "purple_tui/constants.py", "purple_tui/roomkit/purple.py", "purple_tui/roomkit/runner.py",
            "purple_tui/roomkit/limits.py", "purple_tui/roomkit/check.py"]
 EMOJI = OUT.parent / "emoji"

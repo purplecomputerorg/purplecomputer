@@ -444,9 +444,19 @@ body .blocklyTooltipDiv { max-width: 280px; padding: 8px 11px; border: 1px solid
 .full .block-tools .fullscreen::after { content: "Exit (Esc)"; }
 .full .block-tools .wider { display: none; }
 .blocks-editor:focus { outline: none; }
-.blocks-editor.full { position: fixed; inset: 0; z-index: 60; max-height: none; border: 0; border-radius: 0; }
+/* The pane's container query contains fixed children, so it lets go while the editor covers the window */
+.main:has(.blocks-editor.full) { container-type: normal; }
+.blocks-editor.full { position: fixed; inset: 0; z-index: 60; max-height: none; border: 0; border-radius: 0;
+  display: grid; grid-template: "bar bar" auto "blocks python" minmax(0, 1fr) "help python" auto / minmax(0, 1fr) minmax(320px, 36%); }
+.full .block-bar { grid-area: bar; }
+.full .blockly { grid-area: blocks; }
+.full .block-help { grid-area: help; }
 .block-python { display: none; }
-.full .block-python { display: flex; flex-direction: column; height: 34vh; border-top: 1px solid var(--line); background: var(--card); }
+.full .block-python { grid-area: python; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--card); }
+@media (max-width: 900px) {
+  .blocks-editor.full { grid-template: "bar" auto "blocks" minmax(0, 1fr) "help" auto "python" 34vh / minmax(0, 1fr); }
+  .full .block-python { border-left: 0; border-top: 1px solid var(--line); }
+}
 .block-python-title { padding: 8px 14px 4px; font-size: 13px; font-weight: 600; color: var(--dim); }
 .block-python pre { flex: 1; margin: 0; border-radius: 0; padding: 4px 14px 12px; overflow: auto; white-space: pre; font: 13px/1.5 var(--mono); }
 .widest .block-tools .wider::after { content: "Narrower"; }

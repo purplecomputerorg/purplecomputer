@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ai_ux_config import DEFAULT_MAX_STEPS, DEFAULT_MODEL, estimate_cost
+from ai_ux_config import DEFAULT_MAX_STEPS, DEFAULT_MODEL, check_api_key, estimate_cost
 
 LAST_ARGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ai_ux_last_args.json")
 
@@ -129,22 +129,6 @@ def ask_number(prompt, default, lo, hi):
             print()
             sys.exit(0)
 
-
-def check_api_key():
-    """Check for ANTHROPIC_API_KEY."""
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return True
-    # Check .env file
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                if line.strip().startswith("ANTHROPIC_API_KEY="):
-                    key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
-                    if key:
-                        os.environ["ANTHROPIC_API_KEY"] = key
-                        return True
-    return False
 
 
 def estimate_session_cost(max_steps, model):

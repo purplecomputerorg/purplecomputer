@@ -4,6 +4,8 @@ Automated exploratory testing where a Claude agent pretends to be a kid (or pare
 
 This runs on a developer's machine against a dev build. It is a test harness, not a feature: nothing here ships. See [Does Purple use AI?](../README.md#does-purple-use-ai).
 
+`just ux` and `just hunt` drive the frozen Textual UI. For the canvas UI end to end, from a parent in Studio to a kid on Purple, use `just e2e-ai`: [studio-to-purple-testing.md](studio-to-purple-testing.md).
+
 ## Quick Start
 
 ```bash

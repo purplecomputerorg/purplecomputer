@@ -55,3 +55,28 @@ In the Music room, the bottom right shows "Hold Space: close code" even though t
 
 **Expected:** Either nothing should happen, or a friendly prompt like "Type a number or word to explore!" would guide a child to enter something new.
 
+## 2026-11-11 21:05 (e2e-ai: Studio to Purple, claude-sonnet-5-5, judged by claude-opus-5-5)
+
+### [MEDIUM] [studio] Word's photo is also counted as a room picture in the pack summary and badges
+
+The parent added only one word, "biscuit", with the photo backyard.png. The Download page lists "1 room picture or sound: backyard" in addition to the word. The New Rooms nav shows a badge of 1, and the Download button shows 2 items.
+
+The pack holds the photo once, in content/images/ where word pictures live (word-pictures.json points there), so the pack is right. But a parent who never touched rooms is told they added a room picture.
+
+**Repro:**
+1. In Studio, go to Words and add the word "biscuit" with a photo (backyard.png) and a meaning
+2. Do not touch New Rooms
+3. Open Download
+4. See "1 room picture or sound: backyard", a New Rooms badge of 1, and a Download count of 2
+
+### [LOW] [studio] Pack summary word chip shows the photo's filename "backyard" as the word label
+
+In the Download summary, the word entry reads "backyard biscuit". "backyard" is in large text and "biscuit" is small. It looks like the photo's name, or a broken thumbnail's alt text, is shown as the main label instead of the word, so the parent can't tell whether the word is called biscuit or backyard.
+
+The screenshot confirms the label. Purple's checks show the word is correctly "biscuit", so the summary is mislabeling the word and confusing the parent.
+
+**Repro:**
+1. Add the word "biscuit" with the photo backyard.png
+2. Open Download
+3. See the word chip read "backyard" in large text with "biscuit" in small text
+

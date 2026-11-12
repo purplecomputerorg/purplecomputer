@@ -20,6 +20,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import zlib
 from pathlib import Path
 
 from .content import PACK_FORMAT
@@ -90,7 +91,7 @@ def stage(pack: Path, waiting: Path, seen: set, skipped: list) -> tuple[bool, st
             return False, refused
         tmp.rename(dest)
         return _first_copy(dest, seen, "waiting to be added")
-    except (tarfile.TarError, OSError) as e:
+    except (tarfile.TarError, OSError, EOFError, zlib.error) as e:  # EOFError: a download cut short
         skipped.append(_skipped(pack, tmp, f"unreadable: {e}"))
         return False, f"unreadable: {e}"
     finally:

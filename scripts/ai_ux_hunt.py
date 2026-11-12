@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ai_ux_config import DEFAULT_MODEL, estimate_cost, MODEL_PRICING  # noqa: E402
+from ai_ux_config import DEFAULT_MODEL, MODEL_PRICING, check_api_key, estimate_cost  # noqa: E402
 
 # Set environment before app imports (same as ai_ux_test.py)
 os.environ["PURPLE_NO_EVDEV"] = "1"
@@ -501,20 +501,6 @@ async def run_hunt(budget: float = 10.0, resume: bool = False):
 # CLI
 # ---------------------------------------------------------------------------
 
-
-def check_api_key():
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return True
-    env_path = REPO_ROOT / ".env"
-    if env_path.exists():
-        with open(env_path) as f:
-            for line in f:
-                if line.strip().startswith("ANTHROPIC_API_KEY="):
-                    key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
-                    if key:
-                        os.environ["ANTHROPIC_API_KEY"] = key
-                        return True
-    return False
 
 
 def main():

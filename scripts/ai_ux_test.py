@@ -32,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ai_ux_config import DEFAULT_MAX_STEPS, DEFAULT_MODEL, estimate_cost  # noqa: E402
+from ai_ux_config import DEFAULT_MAX_STEPS, DEFAULT_MODEL, append_findings_log, estimate_cost  # noqa: E402
 
 # Set environment before any app imports
 os.environ["PURPLE_NO_EVDEV"] = "1"
@@ -750,7 +750,7 @@ async def run_agent(
             json.dump(report, f, indent=2)
 
         if harness._bugs or harness._confusions:
-            _append_findings_log(harness._bugs, harness._confusions, persona_name, model)
+            append_findings_log(harness._bugs, harness._confusions, persona_name, model)
 
         print()
         print(f"Session complete: {len(action_log)} actions, {len(harness._bugs)} bugs, {len(harness._confusions)} confusions")
@@ -771,44 +771,6 @@ async def run_agent(
         print(f"\nFull report: {report_path}")
 
     return report
-
-
-BUG_LOG_PATH = Path(__file__).resolve().parent.parent / "docs" / "AI_UX_BUGS.md"
-
-
-def _append_findings_log(bugs: list[dict], confusions: list[dict], persona: str, model: str):
-    """Append bugs and confusions to the repo-level markdown log."""
-    date = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    if not BUG_LOG_PATH.exists():
-        BUG_LOG_PATH.write_text(
-            "# AI UX Test Findings\n\n"
-            "Bugs and UX confusions discovered by automated AI UX testing (`just ux`). "
-            "Mark resolved items with ~~strikethrough~~ or delete them.\n\n"
-        )
-
-    lines = []
-    lines.append(f"## {date} ({persona}, {model})\n\n")
-
-    for bug in bugs:
-        severity = bug["severity"].upper()
-        lines.append(f"### [{severity}] {bug['title']}\n\n")
-        lines.append(f"{bug['description']}\n\n")
-        if bug.get("steps"):
-            lines.append("**Repro:**\n")
-            for i, step in enumerate(bug["steps"], 1):
-                lines.append(f"{i}. {step}\n")
-            lines.append("\n")
-
-    for confusion in confusions:
-        severity = confusion["severity"].upper()
-        lines.append(f"### [CONFUSION: {severity}] {confusion['title']}\n\n")
-        lines.append(f"**Tried:** {confusion['what_i_tried']}\n\n")
-        lines.append(f"**What happened:** {confusion['what_happened']}\n\n")
-        lines.append(f"**Expected:** {confusion['what_i_expected']}\n\n")
-
-    with open(BUG_LOG_PATH, "a") as f:
-        f.writelines(lines)
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,8 @@
 #   insert [ref] [--release] [--debug|--backup] [--cd]
 #   rooms      plug in a second USB drive holding Example Rooms
 #              (scripts/example_rooms.py, built fresh)
-#   eject | stop | key <keys...> | shot
+#   plug <image> [id]   a disk image in a USB port, writable (unplug [id] pulls it)
+#   eject | stop | key <keys...> | shot [file]
 #
 #   ref        a built commit on any branch (default: the newest build);
 #              --release means the build of release/1.x HEAD
@@ -77,10 +78,20 @@ rooms() {
     "$PROJECT_DIR/.venv/bin/python" "$SCRIPT_DIR/example_rooms.py" --out "$VM_DIR/examples.purplepack"
     mkfs.fat -C -n ROOMS "$img" 8192 >/dev/null
     mcopy -i "$img" "$VM_DIR/examples.purplepack" ::/
-    mon "device_del roomstick" >/dev/null; mon "drive_del roomdrive" >/dev/null
-    mon "drive_add 0 if=none,id=roomdrive,format=raw,file=$img" >/dev/null
-    mon "device_add usb-storage,id=roomstick,drive=roomdrive,bus=xhci.0,removable=on" >/dev/null
+    plug "$img" roomstick
     log_info "Plugged in Example Rooms. Choose Add, then turn rooms on in Parent Menu, Family Rooms."
+}
+
+# A disk image in a USB port, writable like a family's drive; id names it for unplug.
+plug() {
+    need_running
+    unplug "$2"
+    mon "drive_add 0 if=none,id=$2-drive,format=raw,file=$1" >/dev/null
+    mon "device_add usb-storage,id=$2,drive=$2-drive,bus=xhci.0,removable=on" >/dev/null
+}
+
+unplug() {
+    mon "device_del $1" >/dev/null; mon "drive_del $1-drive" >/dev/null
 }
 
 start() {
@@ -124,15 +135,20 @@ key() {
 
 shot() {
     need_running
-    local dir="${PURPLE_SCREENSHOT_DIR:-/tmp/screenshots}" out
+    local dir="${PURPLE_SCREENSHOT_DIR:-/tmp/screenshots}" out="${1:-}"
     mkdir -p "$dir"
-    out="$dir/vm-$(date +%Y%m%d-%H%M%S).png"
+    out="${out:-$dir/vm-$(date +%Y%m%d-%H%M%S).png}"
     mon "screendump $out -f png" >/dev/null
     echo "$out"
 }
 
 cmd="${1:-start}"; shift || true
-[[ "$cmd" == key ]] && { key "$@"; exit; }
+case "$cmd" in
+    key) key "$@"; exit ;;
+    shot) shot "$@"; exit ;;
+    plug) [[ $# -ge 1 ]] || { log_error "plug <image> [id]"; exit 1; }; plug "$1" "${2:-drive}"; exit ;;
+    unplug) need_running; unplug "${1:-drive}"; exit ;;
+esac
 parse_args "$@"
 case "$cmd" in
     start) start ;;
@@ -140,6 +156,5 @@ case "$cmd" in
     rooms) rooms ;;
     eject) need_running; mon "eject -f cd0" >/dev/null; mon "device_del usbstick" >/dev/null ;;
     stop) running && mon quit; kill "$(cat "$VM_DIR/viewer.pid" 2>/dev/null)" 2>/dev/null || true; rm -f "$MON" "$VM_DIR/viewer.pid" ;;
-    shot) shot ;;
-    *) sed -n '5,18p' "$0"; exit 1 ;;
+    *) sed -n '5,19p' "$0"; exit 1 ;;
 esac

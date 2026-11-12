@@ -91,6 +91,7 @@ def test_compat_check_flags_a_build_that_lacks_a_newer_format(tmp_path, monkeypa
         {"commit": head, "channels": [], "emails": [], "anonymous": 0, "drives": 2, "last": "2026-10-20"},
     ]}))
     monkeypatch.setattr(sys, "argv", ["compat_check", str(builds), "--quick"])
+    monkeypatch.setattr(compat_check, "COMMON", tmp_path)
     compat_check.main()
     out = capsys.readouterr().out
     assert out.count(head[:8]) == 1 and "1 people, 2 drives" in out and "opens everything" in out

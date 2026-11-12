@@ -127,6 +127,9 @@ export function keep(x: Keepable, kept: boolean) {
 
 export interface Piece { id: string; section: string; label: string; one: string; items: Keepable[] }
 
+// A word's photo is one of the pack's pictures, named in the word's emoji; it belongs to Words, not to New Rooms.
+const wordsPicture = (f: RoomFile) => f.kind === "images" && draft.words.some((w) => w.emoji === f.name);
+
 // Everything in the draft by kind, with the Studio section it's made on.
 export function allPieces(): Piece[] {
   return [
@@ -138,7 +141,7 @@ export function allPieces(): Piece[] {
     { id: "synonyms", section: "words", label: "nicknames", one: "nickname", items: draft.synonyms },
     { id: "instruments", section: "instruments", label: "instruments", one: "instrument", items: draft.instruments },
     { id: "rooms", section: "rooms", label: "rooms", one: "room", items: draft.rooms },
-    { id: "room_files", section: "rooms", label: "room pictures and sounds", one: "room picture or sound", items: draft.roomFiles },
+    { id: "room_files", section: "rooms", label: "room pictures and sounds", one: "room picture or sound", items: draft.roomFiles.filter((f) => !wordsPicture(f)) },
     { id: "colors", section: "colors", label: "sets of colors", one: "set of colors", items: draft.theme ? [draft.colors] : [] },
   ];
 }
@@ -149,8 +152,9 @@ const SECTION_FIELDS: Record<string, (keyof Draft)[]> = {
 };
 export const hasWork = (section?: string) => allPieces().some((p) => (!section || p.section === section) && p.items.length);
 export function clearSection(section: string) {
-  const fresh = emptyDraft();
+  const fresh = emptyDraft(), before = draft.roomFiles;
   for (const k of SECTION_FIELDS[section]) Object.assign(draft, { [k]: fresh[k] });
+  if (section === "rooms") draft.roomFiles = before.filter(wordsPicture);
   changed();
 }
 

@@ -106,3 +106,15 @@ describe("the draft", () => {
     expect(told).toBe(1);
   });
 });
+
+describe("a word's photo", () => {
+  it("counts with Words, not New Rooms, and stays when New Rooms is cleared", () => {
+    const photo = { kind: "images" as const, name: "backyard", data: new Uint8Array(1), kept: true };
+    const roomSound = { kind: "sounds" as const, name: "backyard", data: new Uint8Array(1), kept: true };
+    replaceDraft({ ...emptyDraft(), words: [{ word: "biscuit", emoji: "backyard", kept: true }], roomFiles: [photo, roomSound] });
+    expect(pieces().map((p) => [p.id, p.count])).toEqual([["words", 1], ["room_files", 1]]);
+    clearSection("rooms");
+    expect(draft.roomFiles).toEqual([photo]);
+    expect(hasWork("rooms")).toBe(false);
+  });
+});

@@ -5,7 +5,7 @@ import { changed, draft, phraseFor, putPhrase, type WordEntry } from "../state";
 import { typedWord, typingKeys, wordProblem } from "../keys";
 import { h, removeButton } from "./dom";
 import { closeEmojiPicker, emojiCell, openEmojiPicker } from "./emojipicker";
-import { roomPicture } from "./roomfiles";
+import { pictureOr } from "./roomfiles";
 import { inPackBar } from "./trybar";
 import { soundPicker, voiceStays } from "./record";
 import box from "../assets/purple-box.jpg";
@@ -59,7 +59,6 @@ function wordTable(): HTMLElement {
   };
   const focusNew = () => rows.querySelector<HTMLInputElement>(".word-new input")?.focus({ preventScroll: true });
   const showsTitle = (word: string) => `What should “${word}” show?`;
-  const face = (emoji: string) => roomPicture(emoji) ?? emoji;
 
   function newWord(): HTMLElement {
     const input = h("input", { type: "text", placeholder: "Type a new word", "aria-label": "New word", autocomplete: "off", spellcheck: false });
@@ -92,7 +91,7 @@ function wordTable(): HTMLElement {
     const phrase = phraseFor(entry.word);
     const marks = [entry.means ? "💬" : "", phrase ? (phrase.said ? "🔊" : "🎤") : ""].join(" ");
     const head = h("div", { class: "word-head", onclick: (e: Event) => (e.target as Element).closest("button") || toggle() },
-      h("b", { class: "word" }, entry.word), h("span", { class: "shows" }, face(entry.emoji)), h("span", { class: "marks", title: "Has a meaning or a sound" }, marks),
+      h("b", { class: "word" }, entry.word), h("span", { class: "shows" }, pictureOr(entry.emoji)), h("span", { class: "marks", title: "Has a meaning or a sound" }, marks),
       h("button", { type: "button", class: "x chevron", "aria-expanded": String(isOpen), "aria-label": isOpen ? "Close" : `Open ${entry.word}`, onclick: toggle }, isOpen ? "▲" : "▼"),
       removeButton(() => {
         draft.words.splice(draft.words.indexOf(entry), 1);

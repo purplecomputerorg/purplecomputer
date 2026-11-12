@@ -104,6 +104,9 @@ export function roomPicture(name: string): HTMLImageElement | null {
   return f ? thumb(f) : null;
 }
 
+// A word's or a field's picture by name, or the emoji itself.
+export const pictureOr = (v: string): Node | string => roomPicture(v) ?? v;
+
 const face = (f: RoomFile) => (f.kind === "images" ? thumb(f) : h("span", { class: "sound-face" }, "🔊"));
 
 // Plays one of the pack's sounds by name; false when the pack has none by that name.

@@ -57,7 +57,7 @@ In the Music room, the bottom right shows "Hold Space: close code" even though t
 
 ## 2026-11-11 21:05 (e2e-ai: Studio to Purple, claude-sonnet-5-5, judged by claude-opus-5-5)
 
-### [MEDIUM] [studio] Word's photo is also counted as a room picture in the pack summary and badges
+### ~~[MEDIUM] [studio] Word's photo is also counted as a room picture in the pack summary and badges~~ FIXED
 
 The parent added only one word, "biscuit", with the photo backyard.png. The Download page lists "1 room picture or sound: backyard" in addition to the word. The New Rooms nav shows a badge of 1, and the Download button shows 2 items.
 
@@ -69,7 +69,7 @@ The pack holds the photo once, in content/images/ where word pictures live (word
 3. Open Download
 4. See "1 room picture or sound: backyard", a New Rooms badge of 1, and a Download count of 2
 
-### [LOW] [studio] Pack summary word chip shows the photo's filename "backyard" as the word label
+### ~~[LOW] [studio] Pack summary word chip shows the photo's filename "backyard" as the word label~~ FIXED
 
 In the Download summary, the word entry reads "backyard biscuit". "backyard" is in large text and "biscuit" is small. It looks like the photo's name, or a broken thumbnail's alt text, is shown as the main label instead of the word, so the parent can't tell whether the word is called biscuit or backyard.
 
@@ -79,4 +79,17 @@ The screenshot confirms the label. Purple's checks show the word is correctly "b
 1. Add the word "biscuit" with the photo backyard.png
 2. Open Download
 3. See the word chip read "backyard" in large text with "biscuit" in small text
+
+## 2026-11-12 10:25 (e2e-ai: Studio to Purple, claude-sonnet-5-5, judged by claude-opus-5-5)
+
+### ~~[LOW] [studio] No confirmation after downloading the Purple Pack~~ NOT A BUG (the page says "Downloaded …"; the tester never looked after clicking)
+
+After the parent clicked download in Purple Studio, the page showed no confirmation, so they couldn't tell whether the file had saved. The file did save (purple-cozy-kitten.purplepack exists and was added to Purple), but the page gave no sign of it.
+
+The parent saw this directly. Without feedback, parents may download again or doubt the pack before carrying it to Purple on the USB drive.
+
+**Repro:**
+1. In Purple Studio, add a photo and a word to a pack
+2. Click download
+3. Look at the page for a saved or downloaded message: none appears
 

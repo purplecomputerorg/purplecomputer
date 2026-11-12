@@ -7,6 +7,7 @@ import { miniScreen } from "./colors";
 import { field, h } from "./dom";
 import { SWATCH } from "./instrument";
 import { putItOnPurple } from "./install";
+import { pictureOr } from "./roomfiles";
 import { clearEverythingButton, openPackButton } from "./packfile";
 import { staysHere } from "./privacy";
 import { sticker } from "./stickers";
@@ -20,7 +21,7 @@ const FACES: Record<string, (item: Keepable) => Node> = {
   pictures: (i) => chip(h("img", { src: (i as Picture).sourceUrl, alt: "" }), titleOf(i as Picture)),
   letter_recordings: (i) => chip(sticker(Object.keys(draft.letters).find((k) => draft.letters[k] === i) ?? "?"), "🎤"),
   phrases: (i) => chip(isQuiet((i as Phrase).clip) ? "🔇" : "🎤", `“${(i as Phrase).text}”`),
-  words: (i) => chip((i as WordEntry).emoji, (i as WordEntry).word),
+  words: (i) => chip(pictureOr((i as WordEntry).emoji), (i as WordEntry).word),
   autocomplete_picks: (i) => chip("⭐", (i as Keepable & { word: string }).word),
   synonyms: (i) => chip("↪", `${(i as SynonymEntry).alias} means ${(i as SynonymEntry).word}`),
   instruments: (i) => chip(h("span", { class: "pick-swatch", style: `background:${SWATCH[(i as Instrument).base]}` }), titleOf(i as Instrument)),

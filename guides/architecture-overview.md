@@ -1,6 +1,6 @@
 # Purple Computer Architecture Overview
 
-This document explains the Purple Computer build and boot architecture.
+This document explains how PurpleOS, the operating system on the Purple Key, is built and boots.
 
 ---
 

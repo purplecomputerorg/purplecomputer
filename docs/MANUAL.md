@@ -23,7 +23,7 @@ Complete reference for building, installing, and maintaining Purple Computer.
 Purple Computer turns old laptops into calm, creative tools for kids. The installer boots from USB, writes a pre-built Ubuntu disk image to the internal drive, and reboots into a minimal TUI environment.
 
 **Key Facts:**
-- **Installed OS:** Ubuntu 24.04 LTS (Noble Numbat) with custom TUI application
+- **Installed OS:** PurpleOS, built on Ubuntu 24.04 LTS (Noble Numbat) with custom TUI application
 - **Installer Method:** Direct disk imaging (no apt, no package installation during setup)
 - **Boot Medium:** USB stick (hybrid ISO, BIOS and UEFI compatible)
 - **Installation Time:** 10-20 minutes (mostly disk write time)

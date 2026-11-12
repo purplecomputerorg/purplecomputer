@@ -437,13 +437,17 @@ studio-bundle:
 # Purple Studio: build here and upload to its Vercel project (link once with `cd studio && vercel link`); --prod for studio.purplecomputer.org
 studio-deploy *args: studio-bundle
     @case " {{args}} " in *" --prod "*) scripts/compat_check.sh; s=$?; \
-        if [ $s = 2 ]; then printf 'Some families have a Purple that cannot open everything Studio now makes. Deploy anyway? [y/N] '; read a; [ "$a" = y ]; \
+        if [ $s = 2 ]; then printf 'A Purple out there newly cannot open everything Studio now makes. Deploy anyway? [y/N] '; read a; [ "$a" = y ]; \
         elif [ $s != 0 ]; then echo "(Couldn't check which Purples families have; deploying anyway.)"; fi ;; esac
     cd studio && npm run build
     cd studio && rm -rf .vercel/output/static && cp -r dist .vercel/output/static
     cd studio && vercel deploy --prebuilt {{args}}
     @case " {{args}} " in *" --prod "*) ;; *) printf '\n\033[1;33m%s\n%s\033[0m\n\n' "  PREVIEW ONLY: studio.purplecomputer.org did not change." "  To go live: just studio-deploy --prod  (or: cd studio && vercel promote <preview-url>)" ;; esac
     @echo && ./build-scripts/ship-status.sh
+
+# Purple Studio: deploy to studio.purplecomputer.org by itself whenever main changes (on|off|status)
+studio-autodeploy cmd="status":
+    scripts/studio_autodeploy.sh {{cmd}}
 
 # Purple Studio: every page and room at every editor width; lists anything sticking out of its card (needs Firefox)
 studio-layout *args:

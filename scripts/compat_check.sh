@@ -21,4 +21,4 @@ builds="$(mktemp)"
 trap 'rm -f "$builds"' EXIT
 curl -fsS --max-time 20 -u ":$ADMIN_PASSWORD_PROD" "${CF_HEADERS[@]}" "${FLASH_LOG_URL%/flashes}/purple-builds" -o "$builds" \
     || { echo "compat-check: couldn't fetch the builds list (check the password, and that landing has /api/admin/purple-builds deployed)" >&2; exit 1; }
-"$ROOT/.venv/bin/python" "$ROOT/scripts/compat_check.py" "$builds" "$@"
+"$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")/.venv/bin/python" "$ROOT/scripts/compat_check.py" "$builds" "$@"

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """For each Purple build out there (from scripts/compat_check.sh): which pack formats it reads, the
 newer ones it lacks (studio/pack_formats.json), and whether today's rooms and room library run on it
-(scripts/room_compat.sh). Prints who to email when a build is behind."""
+(scripts/room_compat.sh). Prints who to email when a build is behind, and exits 2 only when a build fell
+behind since the last check, so a deploy asks once per new one."""
 
 import hashlib
 import json
@@ -18,6 +19,16 @@ FORMATS = json.loads((ROOT / "studio" / "pack_formats.json").read_text())["forma
 
 def git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True)
+
+
+COMMON = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
+
+
+def load_json(path: Path, default):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return default
 
 
 def resolve(commit: str) -> str | None:
@@ -53,11 +64,8 @@ def rooms_run(sha: str) -> bool | None:
 
 def rooms_run_all(shas: list[str]) -> dict[str, bool | None]:
     """Results are cached per build and room inputs, and uncached builds run in parallel."""
-    cache_file = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()) / "purple-room-compat.json"
-    try:
-        cache = json.loads(cache_file.read_text())
-    except (OSError, ValueError):
-        cache = {}
+    cache_file = COMMON / "purple-room-compat.json"
+    cache = load_json(cache_file, {})
     digest = room_inputs_digest()
     todo = [s for s in shas if f"{s}:{digest}" not in cache]
     with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as pool:
@@ -102,14 +110,20 @@ def main() -> None:
         if ok is not None:
             print(f"    today's rooms: {'run' if ok else 'FAIL, see just room-compat ' + sha[:8]}")
         if reads < newest or ok is False:
-            behind.append(b)
+            behind.append(sha)
             if b["emails"]:
                 print(f"    on it: {', '.join(sorted(b['emails']))}")
     print()
     if not behind:
         print("Every build that reads Studio packs opens everything Studio makes today.")
-    else:
-        print(f"{len(behind)} build(s) are behind. Packs that use something newer won't open there until those families download Purple again.")
+        return
+    print(f"{len(behind)} build(s) are behind. Packs that use something newer won't open there until those families download Purple again.")
+    seen_file = COMMON / "purple-compat-behind.json"
+    seen = load_json(seen_file, [])
+    new = [sha[:8] for sha in behind if sha not in seen]
+    seen_file.write_text(json.dumps(sorted({*seen, *behind})))
+    if new:
+        print(f"Newly behind since the last check: {', '.join(new)}")
         sys.exit(2)
 
 

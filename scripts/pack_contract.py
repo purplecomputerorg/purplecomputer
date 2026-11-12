@@ -102,8 +102,9 @@ Tell the user:
   Packs that use this now say format {n}. A Purple from before today shows "Needs newer Purple
   software" instead of adding them, and Studio's download page warns the family. Other packs
   keep loading everywhere.
-  Before `just studio-deploy --prod`, run `just compat-check` to see who's on an older build,
-  and plan to email them a new download. Mention format {n} in the commit message.""")
+  Before this lands on main (which deploys Studio when `just studio-autodeploy` is on) or
+  `just studio-deploy --prod`, run `just compat-check` to see who's on an older build, and plan
+  to email them a new download. Mention format {n} in the commit message.""")
 
 
 def main() -> None:

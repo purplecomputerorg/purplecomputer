@@ -11,8 +11,6 @@ source build-scripts/flash-lib.sh
 source build-scripts/image-lib.sh
 verbose=${1:-}
 
-# What reaches Studio's deploy: Studio and the Purple it bundles (scripts/studio_bundle.py).
-STUDIO_PATHS=(studio purple_tui packs scripts/studio_bundle.py scripts/voice_model.sh)
 # Purple itself, as both the download and Studio's live Purple run it.
 PURPLE_PATHS=(purple_tui packs scripts/voice_model.sh)
 IMAGE_PATHS=($(image_paths . | sort -u))

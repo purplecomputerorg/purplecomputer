@@ -1,7 +1,7 @@
 // The page inside Studio's live preview iframe: boots Purple and does what Studio asks over
 // postMessage. Kept in its own page because pygame's WebAssembly build needs eval, which
 // Studio's own pages forbid.
-import { browserKey } from "../keys";
+import { browserKey, MODIFIERS } from "../keys";
 import { roomGuests } from "../rooms/guests";
 import { bootPurple, type LivePurple, type PackFiles, type Place, type RoomSetup } from "./boot";
 import { onVoiceNote } from "./piper";
@@ -28,6 +28,7 @@ export type FromFrame =
   | { type: "failed"; text: string }
   | { type: "focus"; on: boolean }
   | { type: "keydown"; key: string }
+  | { type: "modifier"; key: string }
   | { type: "click" }
   | { type: "place"; place: Place }
   | { type: "print"; text: string }
@@ -51,6 +52,7 @@ addEventListener("pointerdown", (e) => e.pointerType === "mouse" && post({ type:
 addEventListener("keydown", (e) => {
   const key = browserKey(e);
   if (key) post({ type: "keydown", key });
+  else if (e.key in MODIFIERS && !e.repeat) post({ type: "modifier", key: MODIFIERS[e.key] });
 });
 
 let view: View = [0, 0, 1, 1];

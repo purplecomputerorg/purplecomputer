@@ -1,11 +1,11 @@
 // The live Purple as people see it: the handwritten title, the pretend laptop with the real Purple
-// inside, the room buttons in its bezel (under it on a phone, with a few big keys for the room). Studio's
+// inside, the room buttons under it, and on a phone a few big keys for the room it's in. Studio's
 // pages show it beside the editor; try.html shows it alone, for purplecomputer.org to embed.
 import { typingKeys } from "../keys";
 import type { Room, RoomSetup } from "../live/boot";
 import { h } from "./dom";
 import { Laptop } from "./laptop";
-import { liveScreen, PHONE } from "./live";
+import { liveScreen } from "./live";
 import { staysHere } from "./privacy";
 
 // What a page asks of the stage: the room to set Purple up in, its own few phone keys, and a caption.
@@ -19,10 +19,14 @@ export const ROOMS: [Room, string][] = [["art", "🎨 Art"], ["music", "🎵 Mus
 const TRAY: Record<Room, string[]> = { play: typingKeys("cat"), music: [..."asdfg"], art: ["q", "a", "z", "space"], blocks: ["q", "a", "z", "enter"] };
 const ARROWS = ["left", "up", "down", "right"];
 
+// The keys a button stands for, shown beside it: each a keycap, chords joined by "+".
+export const keycaps = (...names: string[]) => h("span", { class: "key-hint" }, ...names.flatMap((n, i) => [i ? "+" : null, h("kbd", {}, n)]));
+
 // stays: the line saying what's typed stays on the device (try.html leaves it to the page around it).
 // onMove: Purple moved to another room, or opened or closed a menu.
 // trayKey: one more key (try.html's demo), above the phone keys in their box, or in their place on a computer.
-export function createStage({ stays = true, onMove = () => {}, trayKey }: { stays?: boolean; onMove?: () => void; trayKey?: HTMLElement } = {}) {
+// keyHints: the room buttons show and light up the keys that do the same (Esc, then the room's number).
+export function createStage({ stays = true, onMove = () => {}, trayKey, keyHints = false }: { stays?: boolean; onMove?: () => void; trayKey?: HTMLElement; keyHints?: boolean } = {}) {
   const live = liveScreen();
   let page: StagePage | null = null;
   // The laptop and the live Purple inside it stay put for the whole visit (moving an iframe reloads it).
@@ -31,16 +35,10 @@ export function createStage({ stays = true, onMove = () => {}, trayKey }: { stay
   laptop.screen.append(live.element);
 
   const roomButtons = h("div", { class: "room-buttons" });
-  const trayBar = trayKey ? h("div", { class: "tray-bar" }, trayKey, laptop.tray) : laptop.tray;
-  const phoneBar = h("div", { class: "phone-bar" }, roomButtons, trayBar, h("p", { class: "phone-hint" }, "Or tap the laptop to type with your phone's keyboard."));
-  // On a computer the rooms and the demo key sit in the bezel, so what they do stays in sight.
-  const place = () => {
-    if (!PHONE.matches) return laptop.bezel.append(roomButtons, ...(trayKey ? [trayKey] : []));
-    phoneBar.prepend(roomButtons);
-    if (trayKey) trayBar.prepend(trayKey);
-  };
-  place();
-  PHONE.addEventListener("change", place);
+  // Lights keys on the laptop without typing them, ms apart (0 for a chord).
+  const showKeys = (keys: string[], ms = 200) => keys.forEach((k, i) => setTimeout(() => laptop.press(k), i * ms));
+  const roomsHead = keyHints ? h("p", { class: "key-hint rooms-head" }, "On the laptop, press ", h("kbd", {}, "Esc"), " then a number, or just click these buttons") : null;
+  const phoneBar = h("div", { class: "phone-bar" }, roomsHead, roomButtons, trayKey ? h("div", { class: "tray-bar" }, trayKey, laptop.tray) : laptop.tray, h("p", { class: "phone-hint" }, "Or tap the laptop to type with your phone's keyboard."));
   const caption = h("p", { class: "caption" });
   const element = h("aside", { class: "stage" }, h("div", { class: "stage-inner" },
     h("h3", {}, "This little computer is a real Purple Computer for you to try"), laptop.element, phoneBar, caption,
@@ -50,10 +48,10 @@ export function createStage({ stays = true, onMove = () => {}, trayKey }: { stay
   function refresh() {
     const setup = page?.live;
     roomButtons.hidden = !setup;
-    roomButtons.replaceChildren(...ROOMS.map(([room, label]) => h("button", {
+    roomButtons.replaceChildren(...ROOMS.map(([room, label], i) => h("button", {
       type: "button", "aria-pressed": String(live.place.room === room), "aria-busy": String(live.opening === room),
-      onclick: () => { live.show(room === setup?.room ? setup : { room }); engage(); refresh(); },
-    }, label)));
+      onclick: () => { if (keyHints) showKeys(["escape", String(i + 1)]); live.show(room === setup?.room ? setup : { room }); engage(); refresh(); },
+    }, h("span", {}, label), keyHints && keycaps(String(i + 1)))));
     const { room, menu } = live.place;
     const keys = !setup ? [] : menu ? [...ARROWS, "enter"] : (room === setup.room && page?.keys?.()) || TRAY[room];
     laptop.paint(setup ? [...keys, "escape"] : keys);
@@ -69,5 +67,5 @@ export function createStage({ stays = true, onMove = () => {}, trayKey }: { stay
     refresh();
   }
 
-  return { element, live, laptop, show, refresh };
+  return { element, live, laptop, show, refresh, showKeys };
 }

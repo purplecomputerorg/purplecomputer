@@ -6,7 +6,7 @@ import type { Place, Room, RoomSetup } from "../live/boot";
 import type { FromFrame, ToFrame, View } from "../live/frame";
 import { onHush, stopPreviews } from "../audio";
 import { roomIcon } from "../examples";
-import { KEY_EVENT, announceKey } from "../keys";
+import { KEY_EVENT, MODIFIER_EVENT, announceKey } from "../keys";
 import { manifest, packChanges, packSpec, type Sent } from "../pack";
 import { onRoomVoice, roomReady, roomVoiceVersion, warmRoomVoice } from "../roomvoice";
 import { draft, type RoomDraft } from "../state";
@@ -282,6 +282,7 @@ class LiveScreen {
     if (m.type === "focus" && m.on) this.focusedAt = performance.now();
     if (m.type === "voice") this.voiceLoading(m.text);
     if (m.type === "keydown") { announceKey(m.key); this.onTyped(); }
+    if (m.type === "modifier") dispatchEvent(new CustomEvent(MODIFIER_EVENT, { detail: m.key }));
     if (m.type === "click") this.nudge();
     if (m.type === "place" && this.ready) this.moved(m.place);  // before then, the room asked for stands
     if (m.type === "place" && m.place.setup && m.place.room === this.wanted) { this.element.classList.remove("entering"); this.opened(); }

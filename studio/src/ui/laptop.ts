@@ -4,7 +4,7 @@
 // On a phone the keys are too small to hit, so a tap anywhere on the laptop opens the phone's own
 // keyboard instead, and what's typed there goes to the screen the same way. A few big keys for the
 // room (the tray) sit below for trying it without typing.
-import { KEY_EVENT } from "../keys";
+import { KEY_EVENT, MODIFIER_EVENT } from "../keys";
 import { h } from "./dom";
 import { hasSticker, sticker, stickerColors } from "./stickers";
 
@@ -19,6 +19,8 @@ const ROWS: Key[][] = [
   [["", "fn"], ["", "ctrl"], ["", "alt"], ["space", "", 6.4], ["", "alt"], ["left", "←"], ["up", "↑"], ["down", "↓"], ["right", "→"]],
 ];
 const BY_NAME = new Map(ROWS.flat().filter(([name]) => name).map((k) => [k[0], k]));
+// A shifted character presses the key it's on.
+const SHIFTED: Record<string, string> = Object.fromEntries([...'!@#$%^&*()_+{}|:"<>?~'].map((c, i) => [c, '1234567890-=[]\\;\',./`'[i]]));
 const NAMED: Record<string, string> = { Enter: "enter", Backspace: "backspace", Escape: "escape", ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Tab: "tab" };
 
 // A hand-drawn arrow from the note up into the sticker keys.
@@ -39,8 +41,6 @@ const arched = (text: string) => {
 export class Laptop {
   readonly element: HTMLElement;
   readonly screen = h("div", { class: "laptop-screen" });
-  // The strip of lid under the screen, for controls a page wants in sight of what they do.
-  readonly bezel = h("div", { class: "laptop-bezel" });
   private keyboard = h("div", { class: "laptop-keys" });
   readonly tray = h("div", { class: "tray-keys" });
   private trayNames: string[] = [];
@@ -54,7 +54,7 @@ export class Laptop {
 
   constructor(private tap: (key: string) => void) {
     this.element = h("div", { class: "laptop" },
-      h("div", { class: "laptop-lid" }, h("i", { class: "laptop-camera" }), this.screen, this.bezel),
+      h("div", { class: "laptop-lid" }, h("i", { class: "laptop-camera" }), this.screen),
       h("div", { class: "laptop-base" }, h("div", { class: "laptop-deck" }, this.keyboard)),
       h("p", { class: "sticker-callout" }, ARROW, arched("These stickers come in the box. They go on your keyboard.")),
       this.typing,
@@ -73,7 +73,7 @@ export class Laptop {
       this.typing.value = " ";
     });
     this.paint();
-    addEventListener(KEY_EVENT, (e) => this.press((e as CustomEvent<string>).detail));
+    for (const ev of [KEY_EVENT, MODIFIER_EVENT]) addEventListener(ev, (e) => this.press((e as CustomEvent<string>).detail));
   }
 
   // Redraws the stickers when the family's colors or the tray's keys change.
@@ -90,7 +90,9 @@ export class Laptop {
         onmousedown: (e: Event) => e.preventDefault(),
         onclick: () => name && this.type(name),
       }, hasSticker(name) ? sticker(name, colors) : h("span", {}, label || name));
-      if (name) this.keys.set(name, [...(this.keys.get(name) ?? []), el]);
+      // Idle keys don't type, but still press down when the real one is pressed.
+      const id = name || label;
+      this.keys.set(id, [...(this.keys.get(id) ?? []), el]);
       return el;
     };
     this.keyboard.replaceChildren(...ROWS.map((row) => h("div", { class: "laptop-row" }, ...row.map((k) => key(k, "laptop-key")))));
@@ -103,7 +105,7 @@ export class Laptop {
   }
 
   press(key: string): void {
-    for (const el of this.keys.get(key === "+" ? "=" : key) ?? []) {
+    for (const el of this.keys.get(SHIFTED[key] ?? key) ?? []) {
       el.classList.remove("down");
       void el.offsetWidth;
       el.classList.add("down");

@@ -10,6 +10,9 @@ export function browserKey(e: KeyboardEvent): string | null {
 // Every key Purple gets, from any source, is announced so the pretend keyboard can press it.
 export const KEY_EVENT = "purple-key";
 export const announceKey = (key: string) => dispatchEvent(new CustomEvent(KEY_EVENT, { detail: key }));
+// Shift and the like: Purple gets them with the next key, not on their own, so they only press the pretend keyboard.
+export const MODIFIERS: Record<string, string> = { Shift: "shift", CapsLock: "caps", Control: "ctrl", Alt: "alt" };
+export const MODIFIER_EVENT = "purple-modifier";
 
 
 // Keys that type a word, each letter once, then Enter: a phone's few keys for typing it.

@@ -10,7 +10,7 @@ import { startEmojiPictures } from "./emoji";
 import { embed } from "./embed";
 import { KEY_EVENT } from "./keys";
 import { h } from "./ui/dom";
-import { createStage, ROOMS } from "./ui/stage";
+import { createStage, keycaps, ROOMS } from "./ui/stage";
 
 export type ToTry =
   | { type: "purple-try-room"; room: Room }
@@ -32,7 +32,8 @@ const EXAMPLES: Partial<Record<Room, string[]>> = {
 
 // The demo and code keys: under the rooms, with the phone keys, for a room that has them.
 const demoKey = h("button", { class: "demo-key", type: "button", onclick: () => demo(stage.live.place.room) });
-const codeKey = h("button", { class: "demo-key", type: "button", onclick: () => code() });
+const codeLabel = h("span");
+const codeKey = h("button", { class: "demo-key", type: "button", onclick: () => { stage.showKeys(["escape", "space"], 0); code(); } }, codeLabel, keycaps("Esc", "Space"));
 const trayKeys = h("div", { class: "demo-keys", hidden: true }, demoKey, codeKey);
 const moved = () => {
   const room = stage.live.place.room;
@@ -40,13 +41,13 @@ const moved = () => {
   demoKey.hidden = !d;
   demoKey.textContent = d ? `▶ ${d.label}` : "";
   codeKey.hidden = !ready || !EXAMPLES[room];
-  codeKey.textContent = stage.live.place.code ? "Close code" : "Try code";
+  codeLabel.textContent = stage.live.place.code ? "Close code" : "Try code";
   trayKeys.hidden = demoKey.hidden && codeKey.hidden;
   hint();
   tell();
   codeWhenThere();
 };
-const stage = createStage({ stays: false, onMove: moved, trayKey: trayKeys });
+const stage = createStage({ stays: false, onMove: moved, trayKey: trayKeys, keyHints: true });
 stage.live.onReady = () => { ready = true; moved(); };
 
 // What to do in each room, handwritten on the screen once it's been clicked, until the next key.

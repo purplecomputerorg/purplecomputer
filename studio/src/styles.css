@@ -174,17 +174,6 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .laptop-screen { position: relative; aspect-ratio: 1366 / 768; overflow: hidden; background: #000; border-radius: 3px; }
 .laptop-screen > .screen-wrap { position: absolute; inset: 0; }
 .laptop-screen [hidden] { display: none !important; }
-/* The rooms and the demo keys on the lid under the screen: dark pills that sit on the bezel, the demo
-   keys still pastel so they read as the thing to press */
-.laptop-bezel { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 1.6cqw; margin: 1.6cqw 0 -0.6cqw; }
-.laptop-bezel:empty { display: none; }
-.laptop-bezel .room-buttons button { font-size: clamp(12px, 1.5cqw, 16px); padding: 0.5em 1em; border-color: #4e4a5c; background: #302e38; color: #d6d1e4; }
-.laptop-bezel .room-buttons button:hover { background: #3c3946; }
-.laptop-bezel .room-buttons button[aria-busy="true"] { border-color: #b48ce8; color: #e4d4fb; }
-.laptop-bezel .room-buttons button[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
-.laptop-bezel .demo-keys { padding-left: 1.6cqw; border-left: 1.5px solid #4e4a5c; }
-.laptop-bezel .demo-keys[hidden] { display: none; }
-.laptop-bezel .demo-key { height: auto; padding: 0.55em 1.3em; font-size: clamp(13px, 1.6cqw, 17px); }
 /* Depth is in laptop widths (cqw), so the tilt looks the same at any size. The lid is as wide as
    the keyboard's back edge, and the near edge comes out wider, as it does on a real laptop seen
    from in front. The tilt shrinks how tall the keyboard looks but not the space it takes, so the
@@ -219,6 +208,8 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .room-buttons button:hover { background: var(--fill); }
 .room-buttons button[aria-busy="true"] { border-color: var(--purple); color: var(--purple); cursor: progress; }
 .room-buttons button[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
+/* Music's note is dark grey, lost on the purple: white like the label instead */
+.room-buttons button[aria-pressed="true"] [aria-label="🎵"] { filter: brightness(0) invert(1); }
 .card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .card-head h2 { font-size: 17px; }
 .seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; min-width: 0; padding: 3px; border-radius: 18px; background: var(--fill); }
@@ -1098,17 +1089,38 @@ html.embed.alone { overflow: auto; }
 /* Room for the tape above the top row and the hover shadow on every side. The landing page widens
    the frame by its 24px gutter, so the side margins keep the cards in line with its column. */
 .embed .home-cards { margin: 12px 24px 48px; }
-/* try.html's demo key: above the phone keys in their box on a phone, in the laptop's bezel on a computer.
+/* try.html's demo key: above the phone keys in their box on a phone, alone where they would be on a computer.
    The bottom padding is 3px more, for the keys' edge under them. */
 .tray-bar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: fit-content; max-width: 100%; margin: 14px auto 0; padding: 10px 10px 13px; border-radius: 16px; background: linear-gradient(#45444d, #2a2930); }
 .tray-bar .tray-keys { margin: 0; padding: 0; background: none; }
-.tray-bar:has(> .demo-keys[hidden]), .tray-bar:not(:has(> .demo-keys)) { display: none; }
+.tray-bar:has(> .demo-keys[hidden]) { display: none; }
 .demo-keys { display: flex; gap: 10px; }
 .demo-keys > .demo-key { flex: 1; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .tray-bar { margin-top: 0; }
   .tray-bar:has(> .demo-keys[hidden]) { display: flex; }
 }
+/* try.html with room to spare: the rooms and the demo keys in a rail beside the laptop, level with the
+   screen, so pressing one and watching what it does never takes a scroll */
+@media (min-width: 900px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .embed .stage-inner { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 28px; }
+  .embed .stage-inner > :not(.laptop, .phone-bar) { grid-column: 1 / -1; }
+  .embed .phone-bar { align-self: start; display: flex; flex-direction: column; gap: 10px; width: 224px; margin: 3cqw 24px 0 0; padding: 10px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); }
+  .embed .room-buttons { flex-direction: column; align-items: stretch; gap: 2px; }
+  .embed .room-buttons button { font-size: 15px; padding: 10px 14px; border: 0; border-radius: 12px; background: none; text-align: left; }
+  .embed .room-buttons button:hover, .embed .room-buttons button[aria-busy="true"] { background: var(--fill); }
+  .embed .room-buttons button[aria-pressed="true"] { background: var(--purple); }
+  .embed .tray-bar { width: auto; margin: 0; padding: 12px 0 3px; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+  .embed .demo-keys { flex-direction: column; }
+  .embed .demo-keys > .demo-key { flex: none; height: 42px; font-size: 15px; }
+  /* Each button's keys, like a menu's shortcuts: Esc, then the room's number; Esc + Space for code */
+  .embed .room-buttons button, .embed .demo-key:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-inline: 12px; }
+  .embed .key-hint { display: inline-flex; align-items: center; gap: 3px; font: 600 12px var(--sans); color: var(--dim); }
+  .embed .key-hint kbd { min-width: 20px; padding: 1px 5px; border-radius: 6px; border: 1px solid var(--border); border-bottom-width: 2px; background: #fff; color: var(--text); font: 600 12px var(--sans); text-align: center; }
+  .embed .room-buttons button[aria-pressed="true"] kbd { border-color: rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.18); color: #fff; }
+  .embed .rooms-head { display: block; margin: 2px 6px 4px; font-weight: 500; line-height: 1.75; }
+}
+.key-hint { display: none; }
 /* A pastel key like the stickers, so it sits with the keys instead of shouting over them */
 .demo-key { height: 46px; padding: 0 22px; border: 0; border-radius: 9px; background: #ebe2fd; color: var(--purple); font: 600 16px var(--sans); white-space: nowrap; box-shadow: 0 3px 0 #c4aee0; cursor: pointer; }
 .demo-key:hover { background: #f4eefe; }

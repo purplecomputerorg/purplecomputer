@@ -381,64 +381,9 @@ purple-installer.iso
 
 The ISO is **hybrid**—bootable from USB stick or optical media, BIOS or UEFI, with Secure Boot support.
 
-### Versioning
+### Versioning and Releasing
 
-Every ISO is stamped with a version in `/etc/purple-version`, visible in the Parent Menu (hold Escape).
-
-**Version formats:**
-
-| Type | Example | Parent Menu shows | When |
-|------|---------|-------------------|------|
-| Semver | `v1.0` | Version 1.0 | Major releases (`./release-iso.sh v1.0`) |
-| Date-time | `v2026.03.30-1430` | Build: Mar 30, 2026 | Regular releases (`./release-iso.sh`) |
-| Dev build | `build-abc1234-20260330` | Dev build: abc1234 | No `PURPLE_VERSION` set at build time |
-
-**To stamp a specific version at build time:**
-
-```bash
-PURPLE_VERSION=v1.0 ./build-in-docker.sh
-```
-
-If `PURPLE_VERSION` is not set, the build uses the git short hash and date as a fallback.
-
-### Releasing
-
-**Script:** `release-iso.sh`
-
-Uploads ISOs to Cloudflare R2 and updates redirect rules so `/download.iso` points to the new version.
-
-```bash
-./release-iso.sh          # date-time version (v2026.03.30-1430)
-./release-iso.sh v1.0     # semver for major releases
-```
-
-**What it does:**
-1. Generates SHA-256 checksums
-2. Uploads standard + debug ISOs to `releases/{version}/`
-3. Updates Cloudflare redirect rules (`/download.iso` → versioned path)
-4. Writes `latest.json` with version, checksums, and sizes
-
-**Required `.env` values** (see `.env.template`): `R2_BUCKET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `CF_API_TOKEN`, `CF_ZONE_ID`, `R2_CUSTOM_DOMAIN`.
-
-**Cloudflare setup (one-time):** `setup-cloudflare-rules.sh` configures cache rules (aggressive caching for `/releases/*`, bypass for `/download*`) and redirect rules. It runs automatically as part of `release-iso.sh`, or can be run standalone to set up cache rules without releasing.
-
-### The Download Page and PDFs
-
-The customer download page lives in the landing repo (`~/landing/src/pages/downloads.tsx`) and is served by Vercel at `downloads.purplecomputer.org`; it deploys with the landing site. The files themselves (ISOs, checksums, `latest.json`, card PDFs) are served straight from R2 on a separate custom domain (`R2_CUSTOM_DOMAIN`, value in the private env file).
-
-```bash
-just upload-pdfs           # Upload the card PDFs, purge cache
-```
-
-`upload-pdfs` extracts installation (pages 1-2) and guide (pages 3-4) PDFs from `cards/purple.pdf`, uploads them to R2, then purges the Cloudflare cache for both.
-
-### Caching Strategy
-
-ISOs use versioned paths (`releases/{version}/standard.iso`), so each release has a unique URL that can be cached aggressively (1 day edge TTL). The `/download.iso` shortcut is a Cloudflare 302 redirect to the current version, with cache bypassed so it always resolves to the latest release.
-
-PDFs don't have versioned filenames, so `upload-pdfs` purges the Cloudflare cache after each upload. If the purge fails (e.g., missing CF credentials), a warning is printed but the upload still succeeds. Visitors may see stale content briefly until the cache expires naturally.
-
-The upload script shares common helpers from `r2-helpers.sh` (env loading, R2 upload, PDF extraction, cache purge).
+Every ISO is stamped with a version in `/etc/purple-version`, visible in the Parent Menu (hold Escape): `v2.0.N` for a clean commit on main, `build-<hash>-<date>` for anything else. `main` ships: `just rtbf` tests, builds and flashes customer USBs, and `just ship` publishes the build to downloads.purplecomputer.org (the landing repo serves the page; the ISOs, checksums, manifests and card PDFs come straight from R2 on the files host). v1 stays at downloads.purplecomputer.org/v1, published from `release/1.x` with `just ship-v1`. Formats, caching, credentials and the full workflow: `guides/release-guide.md`.
 
 ---
 

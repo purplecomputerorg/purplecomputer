@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One line per thing families or visitors get (the ISO build, both downloads, Studio, purplecomputer.org):
-# what's there, whether it's behind main, and what to run. Run by just ship-2 and just studio-deploy too.
+# what's there, whether it's behind main, and what to run. Run by just ship and just studio-deploy too.
 #
 # Usage: ship-status.sh [-v]    -v lists the commits each one is missing
 set -uo pipefail
@@ -13,7 +13,7 @@ verbose=${1:-}
 
 # What reaches Studio's deploy: Studio and the Purple it bundles (scripts/studio_bundle.py).
 STUDIO_PATHS=(studio purple_tui packs scripts/studio_bundle.py scripts/voice_model.sh)
-# Purple itself, as both the 2.0 download and Studio's live Purple run it.
+# Purple itself, as both the download and Studio's live Purple run it.
 PURPLE_PATHS=(purple_tui packs scripts/voice_model.sh)
 IMAGE_PATHS=($(image_paths . | sort -u))
 LANDING=${LANDING_DIR:-$HOME/landing}
@@ -56,32 +56,32 @@ else
     row "ISO build" "" "" 0 "none from main here" "just build"
 fi
 
-# The 2.0 download (purple2.purplecomputer.org, from purple2/latest.json).
+# The download (downloads.purplecomputer.org, from purple2/latest.json).
 json=$(fetch_json https://files.purplecomputer.org/purple2/latest.json)
 iso=$(field "$json" commit)
 if known "$iso"; then
-    fix=$(known "$build" && same "$build" "$main" "${IMAGE_PATHS[@]}" && echo "just ship-2" || echo "just build, then just ship-2")
-    compare "2.0 download" "$iso" "$(field "$json" version)" "$main" main "$fix" "${IMAGE_PATHS[@]}"
+    fix=$(known "$build" && same "$build" "$main" "${IMAGE_PATHS[@]}" && echo "just ship" || echo "just rtbf, then just ship")
+    compare "Download" "$iso" "$(field "$json" version)" "$main" main "$fix" "${IMAGE_PATHS[@]}"
 else
-    row "2.0 download" "" "" 0 "couldn't read purple2/latest.json"
+    row "Download" "" "" 0 "couldn't read purple2/latest.json"
 fi
 
-# The 1.x download (purplecomputer.org's download page), against release/1.x.
+# The v1 download (downloads.purplecomputer.org/v1), against release/1.x.
 check=$(bash build-scripts/release-check.sh 2>/dev/null)
 v1=$(sed -n 's/^Commit: *\([0-9a-f]\{40\}\).*/\1/p' <<<"$check")
 if known "$v1"; then
-    compare "1.x download" "$v1" "$(sed -n 's/^Download: *\([^,]*\).*/\1/p' <<<"$check")" origin/release/1.x release/1.x "just release-status" "${IMAGE_PATHS[@]}"
+    compare "v1 download" "$v1" "$(sed -n 's/^Download: *\([^,]*\).*/\1/p' <<<"$check")" origin/release/1.x release/1.x "just release-status" "${IMAGE_PATHS[@]}"
 else
-    row "1.x download" "" "" 0 "couldn't read latest.json" "just release-status"
+    row "v1 download" "" "" 0 "couldn't read latest.json" "just release-status"
 fi
 
 # Studio (studio.purplecomputer.org, from its version.json), and whether its demo and packs run
-# Purple the 2.0 download doesn't have yet.
+# Purple the download doesn't have yet.
 json=$(fetch_json https://studio.purplecomputer.org/version.json)
 studio=$(field "$json" commit)
 if known "$studio"; then
     compare "Studio" "$studio" "$(grep -q '"dirty": *true' <<<"$json" && echo "uncommitted build")" "$main" main "just studio-deploy --prod" "${STUDIO_PATHS[@]}"
-    known "$iso" && compare "2.0 vs Studio" "$iso" "Purple in each" "$studio" Studio "just ship-2 (just compat-check)" "${PURPLE_PATHS[@]}"
+    known "$iso" && compare "Studio Purple" "$iso" "Purple in each" "$studio" Studio "just ship (just compat-check)" "${PURPLE_PATHS[@]}"
 else
     row "Studio" "" "" 0 "couldn't read version.json"
 fi

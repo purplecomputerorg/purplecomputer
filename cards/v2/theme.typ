@@ -1,4 +1,4 @@
-// Shared look for the Purple 2.0 box cards: 4x6 portrait, the landing site's palette.
+// Shared look for the box cards: 4x6 portrait, the landing site's palette.
 // Sora for titles, Figtree for text, IBM Plex Mono for keys and code.
 
 #let paper = rgb("#f8f4fd")

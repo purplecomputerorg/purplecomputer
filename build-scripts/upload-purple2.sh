@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Publish a main (Purple 2.0) build for purple2.purplecomputer.org, under the
-# purple2/ prefix on R2. Never touches the 1.x paths: releases/, latest.json,
-# or the /download*.iso redirects. Tags the commit with its v2.0.N version.
+# Publish a main build to the customer download (downloads.purplecomputer.org),
+# under the purple2/ prefix on R2 (named for when it was the 2.0 preview). Never
+# touches the v1 paths: releases/, latest.json, or the /download*.iso
+# redirects. Tags the commit with its v2.0.N version.
 #
-# Usage: ./upload-purple2.sh [commit]   (default: HEAD of the main checkout)
+# Usage: ./upload-purple2.sh [commit]   (default: HEAD of the main checkout; just ship)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,11 +55,7 @@ if [[ "${STANDARD_ISO%.iso}" != "${DEBUG_ISO%.debug.iso}" ]]; then
     exit 1
 fi
 
-# A version stamped at build time wins; otherwise the build time in UTC
 VERSION="$(tr -d '[:space:]' < "$STANDARD_ISO.version" 2>/dev/null || true)"
-if [[ -z "$VERSION" || "$VERSION" == unknown || "$VERSION" == build-* ]]; then
-    VERSION="v$(date -u -r "$STANDARD_ISO" +%Y.%m.%d-%H%M)"
-fi
 
 # The page links the commit on GitHub
 git -C "$PROJECT_DIR" fetch -q origin main 2>/dev/null || true
@@ -76,13 +73,19 @@ ISOS_LIVE=false
 if [[ "$(jq -r '"\(.standard.sha256) \(.debug.sha256)"' <<< "$LIVE")" == "$STANDARD_SHA $DEBUG_SHA" ]]; then
     ISOS_LIVE=true VERSION="$PREVIOUS"
 fi
+# Families see this version in the Parent Menu; only a clean commit on main is stamped v2.0.N
+if ! $ISOS_LIVE && [[ ! "$VERSION" =~ ^v[0-9]+(\.[0-9]+)+$ ]]; then
+    log_error "$(basename "$STANDARD_ISO") is a dev build (${VERSION:-no version}): the tree wasn't a clean main when it was built."
+    echo "Build from a clean main checkout: just rtbf, or PURPLE_WITH_BACKUP_ISO=1 just build"
+    exit 1
+fi
 
 echo ""
 echo "  $(basename "${STANDARD_ISO%.iso}")  standard + debug, commit $SHORT"
 if $ISOS_LIVE; then
     echo "  ISOs already live as $VERSION: updating the cards only, from ${CARDS_COMMIT:0:7}"
 else
-    echo "  -> purple2.purplecomputer.org as $VERSION"
+    echo "  -> downloads.purplecomputer.org as $VERSION"
 fi
 echo ""
 read -p "Upload? Type 'yes' to continue: " answer
@@ -92,7 +95,7 @@ upload_variant() {
     local iso="$1" name="$2" sha="$3" key="${PREFIX}/${VERSION}/$2.iso"
     aws s3 cp "$iso" "s3://${R2_BUCKET}/${key}" --endpoint-url "$R2_ENDPOINT" \
         --content-type application/octet-stream --no-progress \
-        --content-disposition "attachment; filename=\"purple-computer-2-${VERSION}${4:-}.iso\""
+        --content-disposition "attachment; filename=\"purple-computer-${VERSION}${4:-}.iso\""
     echo "$sha  $name.iso" | r2_upload - "${key}.sha256" text/plain
 }
 if ! $ISOS_LIVE; then
@@ -120,7 +123,7 @@ jq -n --arg v "$VERSION" --arg c "$COMMIT" --arg p "$PREFIX/$VERSION" \
     | r2_upload - "${PREFIX}/latest.json" application/json
 purge_cache "/${PREFIX}/latest.json" "${CARD_PATHS[@]}"
 if $ISOS_LIVE; then
-    echo -e "${GREEN}Updated cards${NC} for $VERSION: https://purple2.purplecomputer.org"
+    echo -e "${GREEN}Updated cards${NC} for $VERSION: https://downloads.purplecomputer.org"
     exit 0
 fi
 
@@ -140,4 +143,4 @@ if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     fi
 fi
 
-echo -e "${GREEN}Published${NC} $VERSION: https://purple2.purplecomputer.org"
+echo -e "${GREEN}Published${NC} $VERSION: https://downloads.purplecomputer.org"

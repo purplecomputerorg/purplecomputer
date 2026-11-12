@@ -1,4 +1,4 @@
-"""Build the Purple 2.0 box cards from Typst: one 2-page PDF per card, plus PNG previews.
+"""Build the box cards from Typst: one 2-page PDF per card, plus PNG previews.
 
   python cards/v2/build.py            # every card -> cards/v2/out/<card>.pdf and <card>-pad.pdf,
                                       # plus all.pdf and all-pad.pdf with every card in order,

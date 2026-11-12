@@ -2,7 +2,7 @@
 
 Plan (September 2026) for running Purple on Raspberry Pi 4, Pi 400, Pi 5 and Pi 500/500+. Companion to `hardware-coverage-plan.md` (the i386 precedent this reuses) and `apple-silicon-support.md` (general ARM64 notes).
 
-**Status: built on main (`just build-pi`), awaiting first boot on a Pi 400.** Ships on `release/1.x` too, so both UIs must run on a Pi and the build and shared-script changes need picking there (the golden-image script has diverged on 1.x, so expect adaptation, see `release-pick-adaptations.md`).
+**Status: built on main (`just build-pi`), awaiting first boot on a Pi 400.** Ships from main; v1 (`release/1.x`) is frozen and gets no Pi image.
 
 ## Decisions
 

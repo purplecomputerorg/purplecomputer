@@ -242,54 +242,56 @@ apply-zoom:
 zoom-editor:
     python recording-setup/zoom_editor_server.py
 
-# Release ISOs to Cloudflare R2 (e.g., just release, just release v1.0)
-release *args:
-    ./build-scripts/release-iso.sh {{args}}
-
-# The shipping branch's worktree; see guides/release-guide.md, Release Branch
-release_dir := env_var("HOME") / "purplecomputer-release"
-
 # One line each for the ISO build, both downloads, Studio and purplecomputer.org: behind main? what to run (-v lists commits)
 ship-status *args:
     @./build-scripts/ship-status.sh {{args}}
 
-# Show what ships vs what waits (= on release/1.x, + main only)
+# Tests the main checkout (must be clean), builds it with-backup, then flashes every whitelisted drive plugged in by
+# the time the build ends, no prompt. Also aliased as purple-rtbf. just rtbf [--no-flash] [--fast] [--force]
+# Test, build, flash main in one go, for shipping
+rtbf *args:
+    ./build-scripts/purple-rtbf.sh {{args}}
+
+# just ship [commit], default HEAD (offers the newest main build when HEAD has none). Refuses dev builds.
+# Publish a main build to downloads.purplecomputer.org (purple2/ on the files host); never touches the v1 download
+ship *args:
+    ./build-scripts/upload-purple2.sh {{args}}
+    @echo && ./build-scripts/ship-status.sh
+
+# v1 (release/1.x, frozen): its worktree; see guides/release-guide.md, v1
+release_dir := env_var("HOME") / "purplecomputer-release"
+
+# v1: show what ships vs what waits (= on release/1.x, + main only)
 release-status *args:
     @./build-scripts/release-status.sh {{args}}
 
-# Cherry-pick fixes from main onto release/1.x and show what ships (run just release-test before building)
+# v1: cherry-pick fixes from main onto release/1.x and show what ships (run just release-test before building)
 release-pick +shas:
     git -C {{release_dir}} cherry-pick -x {{shas}}
     @echo && ./build-scripts/release-status.sh
     @echo && echo "Run 'just release-test' before purple-build --release."
 
-# Lint and test release/1.x in its worktree; run once after a batch of picks, before building
+# v1: lint and test release/1.x in its worktree; run once after a batch of picks, before building
 release-test:
     cd {{release_dir}} && just test
 
-# Release test, build, flash in one go: tests release/1.x, builds it (with-backup included), then flashes
-# every whitelisted drive plugged in by the time the build ends, no prompt. Also aliased as purple-rtbf.
-# just rtbf [--no-flash] [--fast] [--force]
-rtbf *args:
-    ./build-scripts/purple-rtbf.sh {{args}}
-
-# Push release/1.x to GitHub (main is pushed separately via /push)
+# v1: push release/1.x to GitHub (main is pushed separately via /push)
 release-push:
     @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
     git -C {{release_dir}} push origin release/1.x
 
-# Publish the already-built release: picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases.
-# Build first with purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.
-# just ship --commit <hash> releases an earlier release/1.x commit whose build is still in the output directory.
-ship *args:
+# Picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases. Build first with
+# purple-build --release (semver: PURPLE_VERSION=v1.x). just ship-v1 --commit <hash> releases an earlier built commit.
+# v1: publish the already-built release/1.x build to downloads.purplecomputer.org/v1
+ship-v1 *args:
     @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
     @cd {{release_dir}} && {{justfile_directory()}}/build-scripts/release-iso.sh {{args}}
 
-# Show which commit the public download is; with a hash, fail unless it matches (just release-check abc1234)
+# v1: show which commit the v1 download is; with a hash, fail unless it matches (just release-check abc1234)
 release-check *commit:
     @./build-scripts/release-check.sh {{commit}}
 
-# Upload the card PDFs to Cloudflare R2 (the files host)
+# v1: upload the two v1 card PDFs to Cloudflare R2 (the files host)
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 
@@ -303,12 +305,6 @@ read-log path *args:
 link-iso *args:
     ./build-scripts/link-iso.sh {{args}}
 
-# Publish a main build (Purple 2.0) to purple2.purplecomputer.org; never touches the 1.x download.
-# just ship-2 [commit], default HEAD (offers the newest main build when HEAD has none).
-ship-2 *args:
-    ./build-scripts/upload-purple2.sh {{args}}
-    @echo && ./build-scripts/ship-status.sh
-
 # Host a built commit's ISO for one customer at files.purplecomputer.org/oneoff/<name>.iso, outside the release paths.
 # just ship-oneoff <commit> [name] [--debug|--standard|--backup]; asks for the name when omitted, debug ISO by default
 ship-oneoff commit *args:
@@ -320,7 +316,7 @@ ship-oneoff commit *args:
 print-card *args:
     @{{venv}}/bin/python cards/add_bleed.py {{args}}
 
-# Build the Purple 2.0 box cards from Typst into cards/v2/out, with PNG previews in /tmp/screenshots.
+# Build the box cards from Typst into cards/v2/out, with PNG previews in /tmp/screenshots.
 #   just cards            -> every card
 #   just cards rooms      -> one card
 cards *args:

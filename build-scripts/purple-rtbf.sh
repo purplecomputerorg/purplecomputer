@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# purple-rtbf: release Test, Build, Flash, in one command.
+# purple-rtbf: Test, Build, Flash the shipping branch (main), in one command.
 #
-#   1. Runs the release worktree's lint and tests (just release-test).
-#   2. Builds its ISOs, full build with the with-backup variant, the same as
-#      purple-build --release.
+#   1. Runs the main checkout's lint and tests (just test).
+#   2. Builds its ISOs, full build with the with-backup variant.
 #   3. Looks for whitelisted USB drives at that moment and, if any are
 #      plugged in, runs flash-all on them with no confirmation prompt.
 #      Drives are only looked for after the build, so plug them in any time
 #      before it finishes; with none plugged in it just says so.
 #
+# The checkout must be on main and clean, so the image gets its v2.0.N version
+# and just ship takes it.
+#
 # Usage: purple-rtbf [--no-flash] [--fast] [--force]
 #   --no-flash  stop after the build
 #   --fast      minimal compression (dev iteration only, not for shipping)
-#   --force     build even if the release commit is already built
+#   --force     build even if the commit is already built
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,7 +22,6 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/config.sh"
 source "$SCRIPT_DIR/flash-lib.sh"
 CONFIG_FILE="$PROJECT_DIR/.flash-drives.conf"
-RELEASE_DIR="${PURPLE_RELEASE_DIR:-$HOME/purplecomputer-release}"
 
 FLASH=true
 BUILD_ARGS=()
@@ -35,11 +36,13 @@ done
 
 step() { echo; echo -e "${BOLD}==> $1${NC}"; }
 
-branch="$(git -C "$RELEASE_DIR" rev-parse --abbrev-ref HEAD)"
-[[ "$branch" == "release/1.x" ]] || { log_error "$RELEASE_DIR is on $branch, not release/1.x"; exit 1; }
+branch="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)"
+[[ "$branch" == main ]] || { log_error "$PROJECT_DIR is on $branch, not main"; exit 1; }
+[[ -z "$(git -C "$PROJECT_DIR" status --porcelain)" ]] \
+    || { log_error "$PROJECT_DIR has uncommitted or untracked files; ship builds come from a clean main"; exit 1; }
 
-echo -e "${BOLD}purple-rtbf${NC}: test, build, then flash release/1.x ($(git -C "$RELEASE_DIR" rev-parse --short HEAD))"
-echo "  1. lint and tests in $RELEASE_DIR"
+echo -e "${BOLD}purple-rtbf${NC}: test, build, then flash main ($(git -C "$PROJECT_DIR" rev-parse --short HEAD))"
+echo "  1. lint and tests in $PROJECT_DIR"
 echo "  2. full ISO build of it, with-backup variant included${BUILD_ARGS[*]:+ (${BUILD_ARGS[*]})}"
 if [[ "$FLASH" == true ]]; then
     echo "  3. flash every whitelisted drive plugged in by then, no prompt (plug them in any time before the build ends)"
@@ -47,11 +50,11 @@ else
     echo "  3. no flashing (--no-flash)"
 fi
 
-step "1/3 Testing release/1.x"
-(cd "$RELEASE_DIR" && just test)
+step "1/3 Testing main"
+(cd "$PROJECT_DIR" && just test)
 
-step "2/3 Building release/1.x"
-PURPLE_WITH_BACKUP_ISO=1 "$RELEASE_DIR/build-scripts/build-in-docker.sh" 0 "${BUILD_ARGS[@]}"
+step "2/3 Building main"
+PURPLE_WITH_BACKUP_ISO=1 "$SCRIPT_DIR/build-in-docker.sh" 0 "${BUILD_ARGS[@]}"
 
 [[ "$FLASH" == true ]] || { step "Done (no flash requested)"; exit 0; }
 

@@ -18,7 +18,7 @@
 
 `main` carries both UIs. The Textual UX (`purple_tui/purple_tui.py`, the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen. The TUI never imports canvas modules. The canvas UX lives under `purple_tui/canvas/` with its tests in `tests/canvas/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
 
-**No more picks to `release/1.x` (since 2026-11-02):** we are moving fully to canvas soon. Don't propose or run `release-pick` for anything, fix or feature, unless the user calls it an emergency. Don't write TUI counterparts of canvas fixes. Shared-module changes (`code_runner.py`, `audio.py`, etc.) may change TUI behavior on main; update the TUI tests to match and move on. Duplicated logic between the TUI and canvas is deliberate; don't clean it up.
+**No picks to `release/1.x` (frozen v1, see Shipping Branch):** don't propose or run `release-pick` for anything, fix or feature, unless the user calls it an emergency. Don't write TUI counterparts of canvas fixes. Shared-module changes (`code_runner.py`, `audio.py`, etc.) may change TUI behavior on main; update the TUI tests to match and move on. Duplicated logic between the TUI and canvas is deliberate; don't clean it up.
 
 ---
 
@@ -34,9 +34,7 @@ If you're unsure what message to use, propose one and ask the user to confirm be
 
 ## Shipping Branch
 
-Customer ISOs build from `release/1.x`, a fixes-only branch checked out at `~/purplecomputer-release`. Never commit or merge there directly: fixes land on main first, then flow over via `just release-pick`. Full workflow: `guides/release-guide.md`, Release Branch section.
-
-Picks are paused (see Two UIs). For an emergency pick the user asks for, show the `just release-status` output afterward.
+`main` ships: customer USBs (`just rtbf`) and downloads.purplecomputer.org (`just ship`) both come from a clean main. v1 stays frozen on `release/1.x` (`~/purplecomputer-release`, served at downloads.purplecomputer.org/v1 via `just ship-v1`). Never commit or merge there directly; an emergency fix the user asks for lands on main first, then `just release-pick`, then show `just release-status`. Full workflow: `guides/release-guide.md`.
 
 ---
 
@@ -138,7 +136,7 @@ The screen is a pygame window the app paints itself (`purple_tui/canvas/gfx.py`,
 
 ## Textual UI (`PURPLE_UX=tui`, frozen)
 
-`purple_tui/purple_tui.py` plus the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`; runs in Alacritty (`config/alacritty/`). Fixes only, picked onto `release/1.x` (see Two UIs above). Notes kept for those fixes:
+`purple_tui/purple_tui.py` plus the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`; runs in Alacritty (`config/alacritty/`). Fixes only (see Two UIs above). Notes kept for those fixes:
 
 - **Layout constants:** `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=29`, `REQUIRED_TERMINAL_ROWS=37`); `scripts/calc_font_size.py` imports from there.
 - **CSS scoping:** `CSS` is scoped to the defining class; use `DEFAULT_CSS` for inheritable styles. All modals inherit `PurpleModal` (`purple_tui/modal.py`) with the standard `#modal-dialog`, `#modal-title`, `#modal-hint` IDs.

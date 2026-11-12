@@ -1,49 +1,44 @@
 ---
-description: Review release-status with an LLM sanity check, confirm anything that looks off, then hand off the build, flash, and ship steps to the user
+description: Review what shipping main would give families with an LLM sanity check, confirm anything that looks off, then hand off the build, flash, and ship steps to the user
 ---
 
-Review a customer release before the user builds and ships it. Version argument (optional, e.g. `v1.0`): $ARGUMENTS
+Review a customer release from main before the user builds and ships it. Optional commit to ship instead of HEAD: $ARGUMENTS
 
 ## 1. Gather state
 
 Run these read-only checks first:
 
-- `just release-status`
-- `git -C ~/purplecomputer-release status --short --branch` (must be on `release/1.x` and clean)
-- `git status --short` in the main checkout (uncommitted work worth mentioning, not a blocker)
-- `git -C ~/purplecomputer-release log --oneline -5` to see what the shipped ISO will actually contain
-- `just release-test` (lint and tests on release/1.x; picks no longer run tests, so a failure here is a blocker to raise, not a nit)
+- `just ship-status -v` (what the download and the newest build are missing from main, commit by commit)
+- `git status --short --branch` in the main checkout (must be on `main` and clean: `just rtbf` refuses otherwise, and only a clean main build gets the `v2.0.N` version `just ship` accepts)
+- `git log --oneline origin/main..main` (unpushed commits: the download page links the shipped commit on GitHub, so it has to be pushed via /push)
+- `just test` (lint and tests on main; a failure here is a blocker to raise, not a nit)
 
 ## 2. Review the contents
 
-Go through the release-status output commit by commit and flag anything that warrants a question before shipping. Look for:
+Go through the commits the "Download" row is missing and flag anything that warrants a question before shipping. Look for:
 
-- `+` (waits) commits that look like fixes rather than features: bug fixes, hardware safety fixes, boot fixes. Cherry-pick decisions are the user's to confirm, so propose `just release-pick <sha>` for each candidate with a one-line reason, never pick silently.
-- `=` (ships) commits that seem wrong to ship: anything that reads like a feature, temp or debug logging awaiting removal, WIP, or one half of a multi-commit change whose other half still waits.
-- Pairs or sequences split across the line: if a `=` commit's follow-up fix is still `+`, that is exactly the kind of thing to raise.
-- Anything in the last few release/1.x commits that was never validated (check docs/TODO.md and recent commit messages for pending hardware or VM confirmations if unsure).
+- Temp or debug logging awaiting removal, WIP, or one half of a multi-commit change whose other half hasn't landed.
+- Boot, install, power or keyboard changes never validated on hardware or in a VM (check recent commit messages and Linear for pending confirmations if unsure).
+- A "Studio Purple" row behind Studio: packs or rooms Studio makes that this build can't open. Suggest `just compat-check`.
 
 ## 3. Confirm with the user
 
-Summarize your review: what ships, what waits, and each concern with a one-line reason. Then use AskUserQuestion to confirm:
+Summarize your review: what ships, and each concern with a one-line reason. Then use AskUserQuestion to confirm:
 
 - Ship as-is
-- Run proposed release-picks first (then re-run `just release-status` and `just release-test`, re-review, and confirm again)
+- Fix first (then re-run the checks, re-review, and confirm again)
 - Abort
-
-If no version was passed as an argument, also ask whether this is a semver release (version stamped at build time) or an auto date-stamped release.
 
 If nothing looks off at all, say so plainly and still ask for the final confirmation.
 
 ## 4. Hand off to the user
 
-Do not run the build or release yourself: the Docker build needs daemon socket access the sandbox blocks, and the user runs these from their own terminal. After confirmation, end by printing the pipeline for them to run:
+Do not run the build or ship yourself: the Docker build needs daemon socket access the sandbox blocks, and the user runs these from their own terminal. After confirmation, end by printing the pipeline for them to run:
 
 ```
 Review done, nothing blocking. Run:
-  purple-build --release      # build (PURPLE_VERSION=vX.Y purple-build --release for semver)
-  just flash-all              # flash customer USBs, validate one on hardware
-  just ship                   # upload the downloads and tag
+  just rtbf      # test, build (with-backup), flash the whitelisted drives plugged in; validate one on hardware
+  just ship      # publish that build to downloads.purplecomputer.org and tag it
 ```
 
-Steps they've already done can be skipped: if the release commit is already built, `purple-build --release` no-ops, and `just ship` releases the existing build. If picks landed on `release/1.x` after the build that was flashed and validated, `just ship --commit <sha>` releases that earlier commit's build and the newer picks wait for the next one. If they later report a failure, help debug from the output they paste; do not attempt the build yourself.
+Steps they've already done can be skipped: if the commit is already built, the build step no-ops. If commits landed on main after the build that was flashed and validated, `just ship <sha>` ships that earlier build. v1 (`release/1.x`) is frozen; an emergency v1 release goes through `just release-status`, `purple-build --release` and `just ship-v1` (see `guides/release-guide.md`). If they later report a failure, help debug from the output they paste; do not attempt the build yourself.

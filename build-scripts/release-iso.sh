@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Release Purple Computer ISOs to Cloudflare R2
+# Release v1 (release/1.x) ISOs to Cloudflare R2, for downloads.purplecomputer.org/v1
 #
 # Usage:
 #   ./release-iso.sh                  # version from the build time (v2026.03.30-1430)
 #   ./release-iso.sh v1.0             # semver for major releases
 #   ./release-iso.sh --commit abc1234 # an earlier commit on the current branch
 #
-# Releases the commit checked out in the current directory (just ship runs
+# Releases the commit checked out in the current directory (just ship-v1 runs
 # this inside the release worktree), or with --commit an ancestor of it whose
 # build is still around; the script and .env come from main.
 #
@@ -90,7 +90,7 @@ DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant d
 if [ -z "$STANDARD_ISO" ] || [ -z "$DEBUG_ISO" ]; then
     log_error "No standard + debug ISO built from $SHORT_COMMIT in $ISO_DIR"
     echo "  Build this checkout first: purple-build --release"
-    echo "  Or release an earlier commit that is built: just ship --commit <hash>"
+    echo "  Or release an earlier commit that is built: just ship-v1 --commit <hash>"
     exit 1
 fi
 

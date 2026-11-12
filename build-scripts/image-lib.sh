@@ -32,3 +32,8 @@ image_version() {
     major_minor=$(sed -n 's/^__version__ = "\([0-9]*\.[0-9]*\).*/\1/p' "$repo/purple_tui/__init__.py")
     echo "v$major_minor.$((base + n))"
 }
+
+# True for a version image_version stamps (vX.Y.N), false for dev builds.
+is_release_version() {
+    [[ "$1" =~ ^v[0-9]+(\.[0-9]+)+$ ]]
+}

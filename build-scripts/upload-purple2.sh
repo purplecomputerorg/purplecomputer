@@ -12,6 +12,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/config.sh"
 source "$SCRIPT_DIR/flash-lib.sh"
 source "$SCRIPT_DIR/r2-helpers.sh"
+source "$SCRIPT_DIR/image-lib.sh"
 
 PREFIX=purple2
 REF="${1:-HEAD}"
@@ -74,7 +75,7 @@ if [[ "$(jq -r '"\(.standard.sha256) \(.debug.sha256)"' <<< "$LIVE")" == "$STAND
     ISOS_LIVE=true VERSION="$PREVIOUS"
 fi
 # Families see this version in the Parent Menu; only a clean commit on main is stamped v2.0.N
-if ! $ISOS_LIVE && [[ ! "$VERSION" =~ ^v[0-9]+(\.[0-9]+)+$ ]]; then
+if ! $ISOS_LIVE && ! is_release_version "$VERSION"; then
     log_error "$(basename "$STANDARD_ISO") is a dev build (${VERSION:-no version}): the tree wasn't a clean main when it was built."
     echo "Build from a clean main checkout: just rtbf, or PURPLE_WITH_BACKUP_ISO=1 just build"
     exit 1

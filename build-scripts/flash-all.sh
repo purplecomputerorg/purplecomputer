@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/config.sh"
 source "$SCRIPT_DIR/flash-lib.sh"
+source "$SCRIPT_DIR/image-lib.sh"
 CONFIG_FILE="$PROJECT_DIR/.flash-drives.conf"
 FLASH_SCRIPT="$SCRIPT_DIR/flash-to-usb.sh"
 
@@ -42,7 +43,7 @@ Options:
   --ref <c>     Flash that commit's build: its archive from 'just build --ref <c>',
                 or the build of it still in the output dir
   --main        Flash the newest build from main
-  --release     Flash the newest build from release/1.x
+  --release     Flash the newest build from release/1.x (v1)
   --help        Show this help
 EOF
 }
@@ -179,30 +180,13 @@ if [[ "$CORRUPT_MODE" == true ]]; then
 else
     ISO_VERSION="$(tr -d '[:space:]' < "${ISO_PATH}.version" 2>/dev/null || true)"
     echo -e "${BOLD}${YELLOW}Will flash $(basename "$ISO_PATH") (version ${ISO_VERSION:-unknown}) to ${#ENTRIES[@]} drive(s) in parallel:${NC}"
-    # Shipping guard: customer batches should be release builds.
-    ISO_SRC_COMMIT="$(tr -d '[:space:]' < "${ISO_PATH}.commit" 2>/dev/null || true)"
-    RELEASE_HEAD="$(git -C "$PROJECT_DIR" rev-parse release/1.x 2>/dev/null || true)"
-    UNSHIPPABLE=""
-    if [[ -z "$ISO_SRC_COMMIT" ]]; then
-        UNSHIPPABLE="this ISO has no .commit sidecar, so its source commit is unknown"
-    elif [[ -z "$RELEASE_HEAD" ]]; then
-        UNSHIPPABLE="release/1.x was not found locally to compare against"
-    elif [[ "$RELEASE_HEAD" == "$ISO_SRC_COMMIT"* ]]; then
-        echo -e "  ${GREEN}Newest release build: commit ${ISO_SRC_COMMIT} is the tip of release/1.x.${NC}"
-    elif git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" release/1.x 2>/dev/null; then
-        BEHIND="$(git -C "$PROJECT_DIR" rev-list --count "${ISO_SRC_COMMIT}..release/1.x" 2>/dev/null || echo '?')"
-        echo -e "  ${GREEN}Release build${NC} (commit ${ISO_SRC_COMMIT}), ${BEHIND} commit(s) behind the tip of release/1.x (${RELEASE_HEAD:0:7})."
-        echo -e "  Shippable; make sure the older release is what you meant to flash."
+    # Shipping guard: only a clean main build is stamped vX.Y.N (image_version).
+    if is_release_version "$ISO_VERSION"; then
+        ISO_SRC_COMMIT="$(tr -d '[:space:]' < "${ISO_PATH}.commit" 2>/dev/null || true)"
+        BEHIND="$(git -C "$PROJECT_DIR" rev-list --count "${ISO_SRC_COMMIT}..main" -- $(image_paths "$PROJECT_DIR" | sort -u) 2>/dev/null || echo '?')"
+        echo -e "  ${GREEN}Release build${NC} ${ISO_VERSION} (commit ${ISO_SRC_COMMIT:0:7}), ${BEHIND} image-changing commit(s) behind main."
     else
-        if git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" main 2>/dev/null; then
-            ISO_LINE="a main build, not a release build"
-        else
-            ISO_LINE="from a commit on neither main nor release/1.x"
-        fi
-        UNSHIPPABLE="this ISO is $ISO_LINE (commit $ISO_SRC_COMMIT), release/1.x is at ${RELEASE_HEAD:0:7}"
-    fi
-    if [[ -n "$UNSHIPPABLE" ]]; then
-        echo -e "  ${YELLOW}${BOLD}Not a release build:${NC}${YELLOW} ${UNSHIPPABLE}.${NC}"
+        echo -e "  ${YELLOW}${BOLD}Not a release build:${NC}${YELLOW} ${ISO_VERSION:-no version} wasn't built from a clean main (just rtbf makes one).${NC}"
         echo -e "  ${YELLOW}Fine for dev sticks; do not ship these drives to customers.${NC}"
     fi
 fi

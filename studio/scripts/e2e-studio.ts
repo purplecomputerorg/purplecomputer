@@ -1,5 +1,5 @@
 // A parent's whole trip through Studio, clicked in a real (headless) browser: a word with a meaning and a
-// recording, a photo, a starter room, then Download; then Clear everything, open the downloaded file, and
+// recording, a photo renamed, a starter room, then Download; then Clear everything, open the downloaded file, and
 // download again, which must give the same pack. That file is carried to a headless Purple
 // (scripts/e2e_pack.py), which checks each part reached the kid. A browser error fails the run.
 //   just e2e-studio [--url https://preview.vercel.app/] [--out DIR] [--no-purple]
@@ -15,7 +15,7 @@ import { studioFiles } from "./fixtures";
 const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined; };
 const OUT = resolve(arg("out") ?? join(process.env.TMPDIR ?? "/tmp", "studio-e2e"));
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const WORD = "octopus", MEANING = "An octopus has eight arms and three hearts.";
+const WORD = "octopus", MEANING = "An octopus has eight arms and three hearts.", PHOTO = "Biscuit's Yard";
 const ROOM = { card: /button: .*spelling snake/i, name: "snake" };
 
 rmSync(OUT, { recursive: true, force: true });
@@ -60,6 +60,12 @@ await step("a photo", async () => {
   await page.waitForFunction(() => /#pictures\/./.test(location.hash), { timeout: 20000 });
   const add = (await things(page)).find((t) => /Add to my Purple Pack/.test(t));
   if (add) await click(page, Number(add.match(/\d+/)![0]));
+});
+await step("rename the photo", async () => {
+  await type(page, await find(page, /input text: Picture name/), PHOTO);
+  await page.keyboard.press("Tab");
+  await page.waitForFunction((t) => document.querySelector(".editor-head h2")?.textContent === t, { timeout: 5000 }, PHOTO);
+  await find(page, new RegExp(`Choose ${PHOTO}`));
 });
 await step(`the ${ROOM.name} room`, async () => {
   await go("#rooms");

@@ -308,10 +308,7 @@ class PurpleApp:
                     self.exit()
                 elif self._sdl_is_keyboard:
                     await self._handle_raw_key_event(raw)
-            now = time.monotonic()
-            live = [t for t in self._toasts if t.expires > now]
-            if len(live) != len(self._toasts):
-                self._toasts = live
+            if self._expire_toasts():
                 self.g.dirty = True
             if self._save_flash_at is not None:
                 self.g.dirty = True
@@ -439,6 +436,13 @@ class PurpleApp:
         self._toasts.append(toast)
         self.invalidate()
         return toast
+
+    def _expire_toasts(self) -> bool:
+        """Drop toasts whose time is up; True when any went."""
+        now = time.monotonic()
+        live = [t for t in self._toasts if t.expires > now]
+        gone, self._toasts = len(live) != len(self._toasts), live
+        return gone
 
     def clear_notifications(self):
         self._toasts.clear()
@@ -1729,6 +1733,7 @@ class PurpleApp:
                 pass
 
     def screenshot(self, path: str):
+        self._expire_toasts()  # headless runs have no render loop to do it
         self._draw()
         self.g.save(path)
 

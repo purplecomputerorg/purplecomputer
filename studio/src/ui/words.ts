@@ -1,7 +1,7 @@
 import { CORE_EMOJI } from "@sdk/purple/core";
 import { play, previewUrl } from "../audio";
 import { roomLine } from "../roomvoice";
-import { changed, draft, phraseFor, putPhrase, type WordEntry } from "../state";
+import { changed, draft, phraseFor, putPhrase, whileShown, type WordEntry } from "../state";
 import { typedWord, typingKeys, wordProblem } from "../keys";
 import { h, removeButton } from "./dom";
 import { closeEmojiPicker, emojiCell, openEmojiPicker } from "./emojipicker";
@@ -50,6 +50,8 @@ function wordTable(): HTMLElement {
   const status = h("div", { class: "status" });
   let open: WordEntry | null = null;
   let fresh: WordEntry | null = null;
+  // What the open word's Word field said about its rename, kept while the rows are drawn again.
+  let renamed = "";
 
   const checkWord = (word: string, self: WordEntry | null): string | null => {
     const problem = wordProblem(word);
@@ -88,10 +90,15 @@ function wordTable(): HTMLElement {
   function row(entry: WordEntry): HTMLElement {
     const isOpen = entry === open;
     const toggle = () => { open = isOpen ? null : entry; render(); };
-    const phrase = phraseFor(entry.word);
-    const marks = [entry.means ? "💬" : "", phrase ? (phrase.said ? "🔊" : "🎤") : ""].join(" ");
+    const marks = h("span", { class: "marks", title: "Has a meaning or a sound" });
+    const paintMarks = () => {
+      const phrase = phraseFor(entry.word);
+      marks.textContent = [entry.means ? "💬" : "", phrase ? (phrase.said ? "🔊" : "🎤") : ""].join(" ");
+    };
+    paintMarks();
+    whileShown(marks, paintMarks);
     const head = h("div", { class: "word-head", onclick: (e: Event) => (e.target as Element).closest("button") || toggle() },
-      h("b", { class: "word" }, entry.word), h("span", { class: "shows" }, pictureOr(entry.emoji)), h("span", { class: "marks", title: "Has a meaning or a sound" }, marks),
+      h("b", { class: "word" }, entry.word), h("span", { class: "shows" }, pictureOr(entry.emoji)), marks,
       h("button", { type: "button", class: "x chevron", "aria-expanded": String(isOpen), "aria-label": isOpen ? "Close" : `Open ${entry.word}`, onclick: toggle }, isOpen ? "▲" : "▼"),
       removeButton(() => {
         draft.words.splice(draft.words.indexOf(entry), 1);
@@ -100,24 +107,25 @@ function wordTable(): HTMLElement {
       }));
     return h("div", { class: `word-row${isOpen ? " open" : ""}${entry === fresh ? " just-added" : ""}` }, head,
       isOpen ? h("div", { class: "word-fields" }, wordField(entry), showsField(entry), meaning(entry), voice(entry),
-        inPackBar(h("button", { type: "button", class: "btn small secondary done", onclick: toggle }, "Done"))) : null);
+        inPackBar([h("button", { type: "button", class: "btn small secondary done", onclick: toggle }, "Done")], `✓ “${entry.word}” is in your Purple Pack.`)) : null);
   }
 
   function wordField(entry: WordEntry): HTMLElement {
     const input = h("input", { type: "text", value: entry.word, "aria-label": "Word", autocomplete: "off", spellcheck: false });
+    const note = h("div", { class: "word-note", role: "status" }, renamed);
+    renamed = "";
     const commit = () => {
       const word = typedWord(input.value);
-      if (word === entry.word) return;
-      status.textContent = checkWord(word, entry) ?? "";
-      if (status.textContent) return void (input.value = entry.word);
+      note.textContent = word === entry.word ? "" : checkWord(word, entry) ?? "";
+      if (word === entry.word || note.textContent) return void (input.value = entry.word);
       rename(entry, word);
-      status.textContent = foldedNote(input.value, word);
+      renamed = foldedNote(input.value, word);
       changed();
       render();
     };
     input.addEventListener("change", commit);
     input.addEventListener("keydown", (e) => e.key === "Enter" && input.blur());
-    return field("Word", input);
+    return field("Word", h("div", {}, input, note));
   }
 
   function showsField(entry: WordEntry): HTMLElement {
@@ -136,7 +144,7 @@ function wordTable(): HTMLElement {
 
   function meaning(entry: WordEntry): HTMLElement {
     const input = h("input", { type: "text", value: entry.means ?? "", maxlength: MEANING_MAX, autocomplete: "off", placeholder: "What Purple answers (optional)", "aria-label": "Meaning" });
-    input.addEventListener("change", () => {
+    input.addEventListener("input", () => {
       entry.means = input.value.trim() || undefined;
       changed();
     });
@@ -158,8 +166,8 @@ function wordTable(): HTMLElement {
   function voice(entry: WordEntry): HTMLElement {
     const p = phraseFor(entry.word);
     return field("Sound", soundPicker({ clip: p?.clip, said: p?.said, fallback: entry.word, placeholder: `Purple says “${entry.word}”`, small: true,
-      onClip: (clip, said) => { putPhrase(entry.word, clip, true, said); render(); },
-      onClear: () => { putPhrase(entry.word, null); render(); } }), `${entry.word}!`);
+      onClip: (clip, said) => draft.words.includes(entry) && putPhrase(entry.word, clip, true, said),
+      onClear: () => putPhrase(entry.word, null) }), `${entry.word}!`);
   }
 
   function render() {

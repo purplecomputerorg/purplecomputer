@@ -118,3 +118,13 @@ describe("a word's photo", () => {
     expect(hasWork("rooms")).toBe(false);
   });
 });
+
+describe("a word's sound", () => {
+  it("counts in your voice only when the family recorded it, not when Purple reads typed words", () => {
+    replaceDraft();
+    const clip = { samples: new Float32Array(1), rate: 22050 };
+    putPhrase("abuela", clip, true);
+    putPhrase("nino", clip, true, "un nino pequeno");
+    expect(pieces().map((p) => [p.id, p.items.map((i) => (i as { text: string }).text)])).toEqual([["phrases", ["abuela"]], ["said", ["nino"]]]);
+  });
+});

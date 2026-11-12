@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from .constants import ART_COLS, ART_ROWS, OLD_ART_GRID
-from .i18n import read_words
+from .i18n import fold, read_words
 
 
 # Play shows a word mapped to one of a pack's pictures as a character from Supplementary Private Use Area-B
@@ -210,6 +210,11 @@ def _no_correct_words() -> frozenset[str]:
 @cache
 def _music_words() -> frozenset[str]:
     return read_words(Path(__file__).parent / "music_words.txt")
+
+
+def typed(word: str) -> str:
+    """A word as pack words are keyed: Studio saves "niño" as "nino", Purple's keyboard can type either."""
+    return fold(word.strip())
 
 
 def is_real_word(word: str) -> bool:
@@ -511,7 +516,7 @@ class ContentManager:
                                   if isinstance(k, str) and isinstance(v, str) and v.strip()})
 
     def meaning(self, word: str) -> Optional[str]:
-        word = word.lower().strip()
+        word = typed(word)
         return self.meanings.get(word) or self.meanings.get(singularize(word) or "")
 
     def _free_picture_char(self, word: str) -> str:
@@ -538,7 +543,7 @@ class ContentManager:
 
     def exact_emoji(self, word: str) -> Optional[str]:
         """Emoji for a word by exact or singular/plural match only (no fuzzy)."""
-        word = word.lower().strip()
+        word = typed(word)
         if emoji := self.emojis.get(word):
             return emoji
         if (singular := singularize(word)) and (emoji := self.emojis.get(singular)):
@@ -575,7 +580,7 @@ class ContentManager:
         identically to a fresh lookup.
         """
         from .fuzzy import fuzzy_match, DEFAULT_MIN_LEN
-        word = word.lower().strip()
+        word = typed(word)
         # A word that is content itself still resolves; only typo corrections
         # of everyday words are suppressed ("thank" must not become 🤔 think).
         if len(word) < DEFAULT_MIN_LEN or (word not in forms and is_real_word(word)):
@@ -611,7 +616,7 @@ class ContentManager:
         then color forms; records the correction when a typo fix fires.
         Returns None for words that aren't plurals of known content.
         """
-        word = word.lower().strip()
+        word = typed(word)
         if s := singularize(word):
             return s
         if self.is_exact_word(word):
@@ -727,7 +732,7 @@ class ContentManager:
 
         Unified ranked search across emojis and colors.
         """
-        return self._word_prefix_index.get(prefix.lower(), [])
+        return self._word_prefix_index.get(fold(prefix), [])
 
     def search_emojis(self, prefix: str) -> list[tuple[str, str]]:
         """Search for emojis starting with prefix, returns [(word, emoji), ...]."""
@@ -737,7 +742,7 @@ class ContentManager:
 
     def exact_color(self, word: str) -> Optional[str]:
         """Hex color for a name by exact or singular/plural match only (no fuzzy)."""
-        word = word.lower().strip()
+        word = typed(word)
         if color := self.colors.get(word):
             return color
         if (singular := singularize(word)) and (color := self.colors.get(singular)):
@@ -839,7 +844,7 @@ class ContentManager:
         Returns (value, type) where type is 'emoji' or 'color', or None if not found.
         For plurals like 'tomatoes', 'cherries', 'wolves', returns the emoji/color.
         """
-        word = word.lower().strip()
+        word = typed(word)
 
         # Check emoji first (get_emoji handles plurals via singularize)
         emoji = self.get_emoji(word)

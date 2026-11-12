@@ -39,15 +39,15 @@ export function keysView(): View {
     // Picking one plays the key in Purple, so it's heard the way the kid will hear it.
     const plays = (after: boolean) => () => { letter!.after = after; changed(); render(); liveScreen().keyAfterEdits(current); };
     const order = (after: boolean, words: string): Parameters<typeof seg>[0] => [h("span", {}, words, sticker(current)), after === !!letter!.after, plays(after)];
-    picker.replaceChildren(soundPicker({ clip: letter?.clip, said: letter?.said, placeholder: "Hi sweetie, it's Grandma!", onClip, onClear: clear }),
+    picker.replaceChildren(soundPicker({ clip: letter?.clip, said: letter?.said, placeholder: "Hi sweetie, it's Grandma!", onClip: onClip(current), onClear: clear }),
       ...(letter ? [h("div", { class: "letter-order" }, seg(order(true, "After"), order(false, "Instead of"))), tryBar(letter)] : []));
   }
-  // A new sound plays after Purple says the key; a changed one keeps its choice.
-  const onClip = (clip: Clip, said?: string) => {
-    const was = draft.letters[current];
-    draft.letters[current] = { clip, said, kept: was?.kept ?? true, after: was ? !!was.after : true };
+  // A new sound plays after Purple says the key; a changed one keeps its choice. Typed words can land after another key is picked.
+  const onClip = (k: string) => (clip: Clip, said?: string) => {
+    const was = draft.letters[k];
+    draft.letters[k] = { clip, said, kept: was?.kept ?? true, after: was ? !!was.after : true };
     changed();
-    render();
+    if (k === current) render();
   };
   // A key typed on the page or in Purple jumps to it, and Purple says it.
   const unlisten = liveScreen().followKeys((k) => LETTER_KEYS.includes(k) && select(k));

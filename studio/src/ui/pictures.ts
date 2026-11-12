@@ -254,7 +254,7 @@ function rename(item: Shelved | undefined, pic: Picture | undefined, text: strin
     if (file) renameRoomFile(file, text);
   }
   changed();
-  history.replaceState(null, "", `#pictures/${encodeURIComponent(item?.name ?? pic!.name)}`);
+  go(`#pictures/${encodeURIComponent(item?.name ?? pic!.name)}`, true);
 }
 
 // Where a picture on the shelf is used, with taking it out of this pack and off the shelf kept apart.

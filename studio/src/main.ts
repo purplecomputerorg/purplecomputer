@@ -24,6 +24,7 @@ import { keysView } from "./ui/keys";
 import { wordsView } from "./ui/words";
 import { WIDER, type View } from "./ui/view";
 import { startEmojiPictures } from "./emoji";
+import { keepTypingEnglish } from "./english";
 
 interface Section extends HomeSection {
   view: (item: string | null) => View;
@@ -183,6 +184,7 @@ if (features.rooms && new URLSearchParams(location.search).has("sample")) {
 
 onChange(() => { renderTop(); renderClear(); theStage.refresh(); live.changed(); remember(); });
 window.addEventListener("hashchange", route);
+keepTypingEnglish();
 Promise.all([recall(), loadShelf()]).then(([saved]) => {
   if (saved) {
     shelveDraft(saved);

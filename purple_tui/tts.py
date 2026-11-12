@@ -350,18 +350,19 @@ def voice_clip_filename(text: str) -> str:
 
 def _get_voice_clip(text: str, room_voice: Path | None = None, family: bool = True) -> Path | None:
     """Check if a pre-generated voice clip exists for this text; a family room's own lines come first."""
-    filename = voice_clip_filename(text)
+    from .content import get_content, typed
+    # Studio saves a family's "niño" as nino.wav
+    names = dict.fromkeys(map(voice_clip_filename, (text, typed(text))))
     # Clips are short curated phrases; a longer name would also make
     # Path.exists() raise ENAMETOOLONG (filesystem cap is 255 bytes)
-    if len(filename.encode()) > 255:
+    if any(len(n.encode()) > 255 for n in names):
         return None
-    from .content import get_content
     content = get_content()
     dirs = ([room_voice] if room_voice else []) + (content.pack_dirs("voice") if family else []) + [VOICE_CLIPS_DIR]
     # A lone key says its name like Music's Letters; packs' letters/ are names, not family messages
     if text.strip().upper() in LETTER_PRONUNCIATION:
         dirs += content.pack_dirs("letters") + [VOICE_CLIPS_DIR.parent / "letters"]
-    return next((d / filename for d in dirs if (d / filename).exists()), None)
+    return next((d / n for d in dirs for n in names if (d / n).exists()), None)
 
 def _get_voice_search_paths(kind: str = "piper") -> list[Path]:
     """Where a voice of this kind may live: real and overridden $HOME, then the image path."""

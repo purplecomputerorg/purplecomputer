@@ -16,9 +16,10 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = 
 
 export const clear = (el: Element) => el.replaceChildren();
 
-// Goes to a page, drawing it again when it's the one showing.
-export function go(hash: string) {
+// Goes to a page, drawing it again when it's the one showing. replace: in place of this page in history, as after a rename.
+export function go(hash: string, replace = false) {
   if (location.hash === hash) window.dispatchEvent(new HashChangeEvent("hashchange"));
+  else if (replace) location.replace(hash);
   else location.hash = hash;
 }
 

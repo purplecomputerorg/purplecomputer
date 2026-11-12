@@ -165,6 +165,17 @@ def test_toast_leaves_on_time_while_idle(monkeypatch):
     run(go())
 
 
+def test_a_headless_screenshot_leaves_out_a_toast_whose_time_is_up(tmp_path):
+    """e2e runs screenshot a harness app with no render loop; an old "Added" toast stayed in every shot."""
+    async def go():
+        app = make_app()
+        app.notify("Added purple-sunny-otter", timeout=3).expires = time.monotonic() - 1
+        kept = app.notify("Still here", timeout=3)
+        app.screenshot(str(tmp_path / "shot.png"))
+        assert app._toasts == [kept]
+    run(go())
+
+
 def test_save_flash_animates_to_its_end_then_stops(monkeypatch):
     async def go():
         async with render_loop(monkeypatch, poll=SLOW_POLL) as (app, loop):

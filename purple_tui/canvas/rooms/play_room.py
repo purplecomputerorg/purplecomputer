@@ -42,7 +42,8 @@ SPEECH_ICONS = {"generating": "··", "playing": ICON_VOLUME_HIGH, "filtered": I
 ABACUS_MARK = "\x1e"
 ABACUS_RE = re.compile(r"\x1e(\d+) (.*?)\x1e")
 ABACUS_SLOTS = 12  # 9 beads plus the gap they slide across
-QUESTION = re.compile(r"(?:what|who)(?:'?s|\s+(?:is|are))?\s+(?:(?:a|an|the)\s+)?([a-z][a-z'-]*)\s*\?*|([a-z][a-z'-]*)\s*\?+", re.I)
+_ASKED = r"([^\W\d_](?:[^\W\d_]|['-])*)"  # letters, accented too: "niño" finds Studio's "nino"
+QUESTION = re.compile(rf"(?:what|who)(?:'?s|\s+(?:is|are))?\s+(?:(?:a|an|the)\s+)?{_ASKED}\s*\?*|{_ASKED}\s*\?+", re.I)
 
 
 class PlayEvaluator(SimpleEvaluator):

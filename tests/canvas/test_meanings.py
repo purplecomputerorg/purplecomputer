@@ -12,6 +12,7 @@ from purple_tui.content import MEANING_MAX, ContentManager
 from purple_tui.pack_manager import check_pack
 
 GRANDMA = "Grandma lives in Ohio [and] grows tomatoes."
+NINO = "un niño pequeño"
 
 
 @pytest.fixture
@@ -19,9 +20,11 @@ def meanings(tmp_path, monkeypatch):
     pack = tmp_path / "packs" / "family"
     (pack / "content").mkdir(parents=True)
     (pack / "manifest.json").write_text(json.dumps({"id": "family", "name": "F", "version": "1.0.0", "type": "emoji"}))
-    (pack / "content" / "emoji.json").write_text(json.dumps({"grandma": "👵"}))
+    (pack / "content" / "emoji.json").write_text(json.dumps({"grandma": "👵", "nino": "👦"}))
     (pack / "content" / "meanings.json").write_text(json.dumps(
-        {"Grandma": f"  {GRANDMA} ", "biscuit": "x" * 300, "blank": "  ", "bad": 3}))
+        {"Grandma": f"  {GRANDMA} ", "biscuit": "x" * 300, "blank": "  ", "bad": 3, "nino": NINO}))
+    (pack / "content" / "voice").mkdir()
+    (pack / "content" / "voice" / "nino.wav").write_bytes(b"RIFF")
     cm = ContentManager(packs_dir=tmp_path / "packs")
     cm.load_all()
     monkeypatch.setattr(content_mod, "_content", cm)
@@ -63,3 +66,17 @@ def test_play_shows_the_picture_and_meaning_and_says_it(meanings, monkeypatch):
 def test_the_installer_refuses_a_meaning_that_is_not_text(meanings):
     _, pack = meanings
     assert any("meanings.json" in p for p in check_pack(pack))
+
+
+def test_a_word_studio_saved_without_its_accent_is_found_with_it(meanings):
+    """Studio keys "niño" as "nino" (typedWord in studio/src/keys.ts); a kid types either."""
+    cm, pack = meanings
+    assert cm.get_word("Niño") == cm.get_word("nino") == ("👦", "emoji")
+    assert asked_meaning("who is niño") == asked_meaning("what's a NIÑO?") == ("👦", NINO)
+    assert tts._get_voice_clip("niño") == pack / "content" / "voice" / "nino.wav"
+
+    async def scenario():
+        play = make_app(room="play").rooms["play"]
+        play._submit_line("niño")
+        assert play.history[-1].markup == "👦"
+    run(scenario())

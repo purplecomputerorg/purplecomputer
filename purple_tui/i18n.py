@@ -261,8 +261,9 @@ def speech_language(text: str) -> Language | None:
 
 
 def fold(word: str) -> str:
-    """Lowercase without accents: what a kid types for "ratón" or "lǜ"."""
-    return "".join(c for c in unicodedata.normalize("NFD", word.lower()) if unicodedata.category(c) != "Mn")
+    """Lowercase without accents: what a kid types for "ratón" or "lǜ". Studio keys pack words
+    the same way (typedWord in studio/src/keys.ts)."""
+    return "".join(c for c in unicodedata.normalize("NFD", word.lower()) if not unicodedata.category(c).startswith("M"))
 
 
 def plural(lang: Language, word: str) -> str:

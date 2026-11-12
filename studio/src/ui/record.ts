@@ -71,31 +71,47 @@ export interface SoundPick {
 }
 
 // One control for a sound: Purple's voice reading typed words, or the family's own recording. A new sound plays right away.
+// Typed words are kept when the box is left too, without Say it; the newest words win if Purple is still reading older ones.
 export function soundPicker(o: SoundPick): HTMLElement {
   const box = h("div", { class: "sound-picker" });
   const status = h("div", { class: "status" });
   const say = (text: string) => void (status.textContent = text);
-  let mine = !!o.clip && !o.said;
-  const got: OnClip = (clip, said) => { play(clip); o.onClip(clip, said); };
-  const words = h("input", { type: "text", value: o.said ?? "", placeholder: o.placeholder, "aria-label": "Words for Purple to say", autocomplete: "off" });
-  const read = async () => {
+  let { clip, said } = o;
+  let mine = !!clip && !said;
+  let reading: { text: string; hear: boolean } | undefined;
+  const recorded = (c: Clip) => { play(c); [clip, said] = [c, undefined]; o.onClip(c); draw(); };
+  const clear = () => { [clip, said] = [undefined, undefined]; o.onClear?.(); };
+  const words = h("input", { type: "text", value: said ?? "", placeholder: o.placeholder, "aria-label": "Words for Purple to say", autocomplete: "off" });
+  const read = async (hear: boolean) => {
     const text = words.value.trim();
-    if (text && text === o.said && o.clip) return play(o.clip);
+    if (reading?.text === text) return void (reading.hear ||= hear);
+    const same = text === (said ?? "");
+    if (same && !hear) return;
+    if (same && text) return play(clip!);
+    if (!text && !hear) return clear();
     if (!text && !o.fallback) return say("Type the words first, then press Say it.");
-    const clip = await purpleSays(text || o.fallback!, say);
-    if (!clip) return;
-    if (text) return got(clip, text);
-    play(clip);
-    if (o.said) o.onClear?.();
+    const now = reading = { text, hear };
+    const c = await purpleSays(text || o.fallback!, say);
+    if (reading !== now) return;
+    reading = undefined;
+    // Picking Your voice while Purple read leaves the words unkept.
+    if (!c || (mine && !now.hear)) return;
+    if (now.hear) play(c);
+    if (text) { [clip, said] = [c, text]; o.onClip(c, text); } else if (said) clear();
   };
-  words.addEventListener("keydown", (e) => e.key === "Enter" && void read());
-  const option = (to: boolean, label: string) => h("button", { type: "button", "aria-pressed": String(mine === to), onclick: () => { mine = to; say(""); draw(); } }, label);
-  const draw = () => box.replaceChildren(
-    h("span", { class: "seg" }, option(false, "🔊 Purple's voice"), option(true, "🎤 Your voice")),
-    mine ? h("div", { class: "row" }, recordButton((c) => got(c), say, o.small), filePicker("audio/*", (f) => finish(f, (c) => got(c), say)),
-      ...(o.clip && !o.said ? [hear(o.clip), o.onClear && h("button", { type: "button", class: "x", title: "Remove your recording", "aria-label": "Remove your recording", onclick: o.onClear }, "×")] : []))
-      : h("div", { class: "type-it" }, words, h("button", { type: "button", class: "btn secondary", onclick: read }, "▶ Say it")),
-    status);
+  words.addEventListener("keydown", (e) => e.key === "Enter" && void read(true));
+  words.addEventListener("change", () => void read(false));
+  const option = (to: boolean, label: string) => h("button", { type: "button", "aria-pressed": String(mine === to), onclick: () => { mine = to; draw(); } }, label);
+  const draw = () => {
+    const yours = mine && clip && !said ? clip : undefined;
+    say(mine && !yours ? "Record yourself saying it, or choose a sound file." : "");
+    box.replaceChildren(
+      h("span", { class: "seg" }, option(false, "🔊 Purple's voice"), option(true, "🎤 Your voice")),
+      mine ? h("div", { class: "row" }, recordButton(recorded, say, o.small), filePicker("audio/*", (f) => finish(f, recorded, say)),
+        ...(yours ? [hear(yours), o.onClear && h("button", { type: "button", class: "x", title: "Remove your recording", "aria-label": "Remove your recording", onclick: () => { clear(); draw(); } }, "×")] : []))
+        : h("div", { class: "type-it" }, words, h("button", { type: "button", class: "btn secondary", onclick: () => read(true) }, "▶ Say it")),
+      status);
+  };
   draw();
   return box;
 }

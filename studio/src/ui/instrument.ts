@@ -51,6 +51,7 @@ function chooser(): View {
       "section",
       {},
       h("p", { class: "lead" }, "A sound of your own for the Music room. Try one, then change how it sounds."),
+      h("p", { class: "dim small" }, "Instruments are made from Purple's own sounds. To use your voice, record it on ", h("a", { href: "#keys" }, "Letters"), " or ", h("a", { href: "#words" }, "Words"), "."),
       yoursList(draft.instruments, (i) => ({ href: `#instruments/${encodeURIComponent(i.name)}`, title: titleOf(i), face: i.icon ? purpleEmoji(i.icon, "pick-icon") : h("span", { class: "pick-swatch", style: `background:${SWATCH[i.base]}` }) }), drop),
       h("h3", {}, "Try a sound"),
       h("p", { class: "swatch-legend" }, "Made from:", ...[...new Set(SOUNDS.map((snd) => snd.base))].map((b) =>
@@ -77,7 +78,7 @@ function editor(inst: Instrument): View {
     mine(inst);
     inst.name = freeName(inst.title, (n) => taken(n, inst));
     changed();
-    location.hash = `#instruments/${encodeURIComponent(inst.name)}`;
+    go(`#instruments/${encodeURIComponent(inst.name)}`, true);
   };
 
   const iconCell = h("span", { class: "emoji-wrap" }, emojiCell(inst.icon ?? "", () => "", (e) => {

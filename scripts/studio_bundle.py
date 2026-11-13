@@ -189,13 +189,13 @@ def bundled_emoji(files: list[str]) -> list[Path]:
 
 
 def main() -> None:
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     build_checker(OUT.parent / "purple-room-check.pyz")
     fetch_wheels()
     fetch_voice()
     fetch_kokoro()
     build_emoji()
     files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
-    OUT.parent.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(CORE_SOUNDS, ignore_errors=True)
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
         for f in files:

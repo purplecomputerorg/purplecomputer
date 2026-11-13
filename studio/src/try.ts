@@ -50,6 +50,7 @@ const moved = () => {
 };
 const stage = createStage({ stays: false, onMove: moved, trayKey: trayKeys, keyHints: true });
 stage.live.onReady = () => { ready = true; moved(); };
+stage.live.warmsRoomVoice = false;
 
 // What to do in each room, handwritten on the screen once it's been clicked, until the next key.
 const TYPE: Record<Room, string> = { art: "Type some letters!", music: "Press any keys!", play: "Type a word, then Enter!", blocks: "Type some letters!" };
@@ -103,6 +104,9 @@ const tip = () => {
   showing = next;
   stage.laptop.tip(next?.text ?? null, next?.key, !!next?.hold);
 };
+// Purple's voice is a big download: it starts with the first key, so a visitor who only looks never pays for it.
+const saveData = (navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
+if (!saveData) addEventListener(KEY_EVENT, () => stage.live.startVoice(), { once: true });
 addEventListener(KEY_EVENT, (e) => {
   if (demoing) return;
   since++;

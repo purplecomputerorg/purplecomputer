@@ -4,7 +4,7 @@
 import { browserKey, MODIFIERS } from "../keys";
 import { roomGuests } from "../rooms/guests";
 import { bootPurple, type LivePurple, type PackFiles, type Place, type RoomSetup } from "./boot";
-import { onVoiceNote } from "./piper";
+import { onVoiceNote, startVoice } from "./piper";
 import { trace } from "./trace";
 
 export type ToFrame =
@@ -15,6 +15,7 @@ export type ToFrame =
   | { type: "demo" }
   | { type: "focus" }
   | { type: "hush" }
+  | { type: "voice" }
   | { type: "filter"; id: number; text: string }
   | { type: "check"; id: number; source: string; names: string[] }
   | { type: "view"; view: View };
@@ -90,6 +91,7 @@ const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
   if (m.type === "code") return live.code(m.on);
   if (m.type === "demo") return live.demo();
   if (m.type === "hush") return live.hush();
+  if (m.type === "voice") return Promise.resolve(startVoice());
   if (m.type === "filter") return live.filter(m.text).then((value) => post({ type: "answer", id: m.id, value }));
   if (m.type === "check") return live.check(m.source, m.names).then((value) => post({ type: "answer", id: m.id, value }));
   canvas.focus();

@@ -25,7 +25,7 @@ function progress([loaded, total]: [number, number]) {
   note();
 }
 
-function start() {
+export function startVoice() {
   if (worker) return;
   worker = new Worker(new URL("./piper.worker.ts", import.meta.url), { type: "module" });
   worker.onmessage = ({ data }) => {
@@ -45,12 +45,12 @@ function start() {
 }
 
 export async function startIfCached() {
-  if (await caches.match(new URL(`voice/${MODEL}`, base).href, { cacheName: CACHE }).catch(() => null)) start();
+  if (await caches.match(new URL(`voice/${MODEL}`, base).href, { cacheName: CACHE }).catch(() => null)) startVoice();
 }
 
 // Purple's prepared text as 16-bit samples, or null while the voice is still loading.
 export function piperSay(text: string): Promise<Speech | null> {
-  start();
+  startVoice();
   if (!ready) {
     asked = true;
     note();

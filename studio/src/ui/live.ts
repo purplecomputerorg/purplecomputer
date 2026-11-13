@@ -65,6 +65,8 @@ class LiveScreen {
   // Set by try.html: Purple is up and taking keys for the first time; someone typed on their own keyboard.
   onReady = () => {};
   onTyped = () => {};
+  // Cleared by try.html, which has no family rooms to speak in the room voice.
+  warmsRoomVoice = true;
   // Set by the Rooms page: a family room's print() output, and why one stopped.
   onPrint = (_text: string) => {};
   onProblem = (_p: RoomProblem) => {};
@@ -195,6 +197,11 @@ class LiveScreen {
     announceKey(key);
   }
 
+  // Purple's voice, downloaded now instead of when Purple first speaks.
+  startVoice(): void {
+    this.post({ type: "voice" });
+  }
+
   // A key right after the edit that's settling, so Purple plays it with the change: the frame runs messages in order.
   keyAfterEdits(key: string): void {
     clearTimeout(this.timer);
@@ -278,7 +285,7 @@ class LiveScreen {
     if (m.type === "loaded" && !this.ready) {
       this.ready = true;
       this.element.classList.add("ready");
-      warmRoomVoice();
+      if (this.warmsRoomVoice) warmRoomVoice();
       void this.enter();
       this.onReady();
     }

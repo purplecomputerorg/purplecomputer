@@ -6,7 +6,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliCompressSync, constants as zlib } from "node:zlib";
 import basicSsl from "@vitejs/plugin-basic-ssl";
-import { defineConfig, type Connect, type Plugin } from "vite";
+import { defineConfig, runnerImport, type Connect, type Plugin } from "vite";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pyodideDir = resolve(here, "node_modules/pyodide");
@@ -32,6 +32,10 @@ const BROTLI: Record<string, string> = {
   "purple/purple.zip": join(cacheDir, "purple.zip"),
 };
 const brotliCache = join(cacheDir, "br");
+const ALIAS = { "@sdk": resolve(here, "sdk/src") };
+// The Room guide as plain text (src/ui/guide.ts), at the address Studio hands an AI helper.
+const AI_GUIDE = "ai.md";
+const aiGuide = async () => (await runnerImport<{ GUIDE: string }>(resolve(here, "src/ui/guide.ts"), { configFile: false, resolve: { alias: ALIAS } })).module.GUIDE;
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
 
 // pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval. It and
@@ -60,6 +64,10 @@ function pyodideAssets(): Plugin {
         createReadStream(file).pipe(res);
       });
       server.middlewares.use(pageCsp);
+      server.middlewares.use(`/${AI_GUIDE}`, (_req, res, next) => void aiGuide().then((text) => {
+        res.setHeader("Content-Type", TYPES.md);
+        res.end(text);
+      }, next));
       serve("/pyodide", [pyodideDir, join(cacheDir, "pyodide")]);
       serve("/purple", [cacheDir]);
       serve("/ort", [ortDir], (f) => ORT_FILES.includes(f));
@@ -74,7 +82,7 @@ function pyodideAssets(): Plugin {
         next();
       });
     },
-    closeBundle() {
+    async closeBundle() {
       const copyAll = (from: string, to: string, keep: (f: string) => boolean) => {
         mkdirSync(to, { recursive: true });
         if (existsSync(from)) for (const f of readdirSync(from).filter(keep)) copyFileSync(join(from, f), join(to, f));
@@ -89,6 +97,7 @@ function pyodideAssets(): Plugin {
       if (existsSync(join(cacheDir, "core-sounds"))) cpSync(join(cacheDir, "core-sounds"), resolve(here, "dist/purple/core-sounds"), { recursive: true });
       copyAll(espeakDir, resolve(here, "dist/voice/espeak-ng"), (f) => ESPEAK_SOURCE.includes(f));
       writeBrotli();
+      writeFileSync(resolve(here, "dist", AI_GUIDE), await aiGuide());
       // The commit this build is from, so purplecomputer.org's pre-push check can tell whether a change it
       // needs is live (landing's scripts/check-studio.mjs). "dirty" when built with uncommitted changes.
       const git = (a: string) => { try { return execSync(`git ${a}`, { cwd: here }).toString().trim(); } catch { return ""; } };
@@ -97,6 +106,7 @@ function pyodideAssets(): Plugin {
       const routes = [
         { src: "/(.*)", headers: HEADERS, continue: true },
         ...Object.keys(BROTLI).map((path) => ({ src: `/${path.replaceAll(".", "\\.")}`, headers: { "Content-Encoding": "br" }, continue: true })),
+        { src: `/${AI_GUIDE.replace(".", "\\.")}`, headers: { "Content-Type": TYPES.md }, continue: true },
         ...PAGE_CSP.map(([page, csp]) => ({ src: `/${page.replace(".", "\\.")}`, headers: { "Content-Security-Policy": csp }, continue: true })),
         // Each font version's pictures sit in a folder of their own (scripts/studio_bundle.py), so they never change.
         { src: "/purple/emoji/[^/]+/.*\\.png", headers: { "Cache-Control": "public, max-age=31536000, immutable" }, continue: true },
@@ -164,7 +174,7 @@ export default defineConfig({
   // https: cross-origin isolation (and so the room preview) needs a secure context, and the Mac
   // opens the dev server as https://simba:5173, which plain http on a LAN name is not.
   plugins: [basicSsl(), pyodideAssets(), { name: "csp-meta", transformIndexHtml: (html, ctx) => html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${ctx.path.endsWith("purple.html") ? LIVE_CSP : CSP}" />`) }],
-  resolve: { alias: { "@sdk": resolve(here, "sdk/src") } },
+  resolve: { alias: ALIAS },
   // host: true listens on the LAN so the dev server can be opened from another machine (the Mac hits "simba").
   server: { host: true, allowedHosts: ["simba"], fs: { allow: [".."] }, headers: HEADERS },
   preview: { headers: HEADERS },

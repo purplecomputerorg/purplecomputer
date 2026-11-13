@@ -13,7 +13,7 @@ import { storyBuilder } from "./storybuilder";
 import { worldBuilder } from "./worldbuilder";
 import { liveScreen, type RoomProblem } from "./live";
 import { codeHints } from "./codehints";
-import { copyGuideRow, LIBRARY_NAMES } from "./guide";
+import { aiGuideLink, copyGuideRow, LIBRARY_NAMES, roomFromPaste } from "./guide";
 import { openPackButton } from "./packfile";
 import { roomFilesBox } from "./roomfiles";
 import { rulesForm } from "./rulesform";
@@ -47,6 +47,16 @@ function drop(gone: RoomDraft[]) {
   draft.rooms = draft.rooms.filter((r) => !gone.includes(r));
   changed();
   go("#rooms");
+}
+
+// A room pasted from an AI helper is the family's from the start, so leaving it doesn't drop it.
+function pasteRoom(e: ClipboardEvent) {
+  const source = (e.target as Element).closest?.("input, textarea, [contenteditable]") ? null : roomFromPaste(e.clipboardData?.getData("text/plain") ?? "");
+  if (!source) return;
+  e.preventDefault();
+  tryRoom("my-room", null, source);
+  mine(draft.rooms.at(-1)!);
+  changed();
 }
 
 // Opening a way to start only tries it: it becomes the family's room, in their Purple Pack, when they change something.
@@ -83,9 +93,12 @@ function list(): View {
       h("div", { class: "cards big" }, ...starters.slice(0, FEATURED).map((s) => choice(s, s.go))),
       h("p", { class: "pick-label" }, "More to try"),
       h("div", { class: "cards small" }, ...starters.slice(FEATURED).map((s) => choice(s, s.go, false))),
+      h("p", { class: "dim" }, "Using an AI helper? Give it ", aiGuideLink(), ", then paste the room it writes anywhere on this page."),
       h("p", { class: "dim" }, "Made a Purple Pack already? ", openPackButton("Open it here"), " to try its rooms and change them."),
       roomFilesBox(),
     ),
+    mounted: () => document.addEventListener("paste", pasteRoom),
+    cleanup: () => document.removeEventListener("paste", pasteRoom),
   };
 }
 
@@ -335,7 +348,7 @@ function editor(room: RoomDraft): View {
       {},
       h("div", { class: "editor-head" }, iconCell, nameIn, h("button", { class: "linkbtn dim small", onclick: () => nameIn.select() }, "✏️ Rename"), nameNote),
       tryBar(room),
-      copyGuideRow(h("span", { class: "small" }, "Using an AI helper? The ", h("a", { href: "#guide" }, "Room guide"), " is everything it needs:")),
+      copyGuideRow(),
       h("div", { class: "row between tab-row" }, h("div", { class: "tabs", role: "tablist", hidden: tabs.length < 2 }, ...tabButtons),
         h("button", { class: "btn small", onclick: () => { restart(); live.focus(); } }, "▶ Play from the start")),
       pane,

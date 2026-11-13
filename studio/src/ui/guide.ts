@@ -17,8 +17,21 @@ function rowFor(name: string): HTMLElement | null {
   return codes.find((c) => new RegExp(`^${name}($|[(.\\[])`).test(c.textContent ?? ""))?.closest("tr") ?? null;
 }
 
-// The button that copies the whole guide, with a word under it on how it went.
-export function copyGuideRow(...lead: (string | Node)[]): HTMLElement {
+// GUIDE as plain text, for an AI helper to read: vite.config.ts serves and builds it.
+export const AI_GUIDE = "ai.md";
+export const aiGuideLink = () => {
+  const url = new URL(AI_GUIDE, location.href).href;
+  return h("a", { href: url, target: "_blank", class: "mono" }, url.replace(/^https?:\/\//, ""));
+};
+
+// A whole room copied out of an AI helper's answer, with or without the ``` fence around it.
+export function roomFromPaste(text: string): string | null {
+  const code = /```[a-z]*\n([\s\S]*?)```/.exec(text)?.[1] ?? text;
+  return /^from purple import \*/m.test(code) ? code.trim() + "\n" : null;
+}
+
+// The link to hand an AI helper, and a button that copies the whole guide for one that can't open links.
+export function copyGuideRow(): HTMLElement {
   const status = h("span", { class: "status" });
   const copy = async () => {
     try {
@@ -28,7 +41,7 @@ export function copyGuideRow(...lead: (string | Node)[]): HTMLElement {
       status.textContent = "Your browser did not allow copying. Select the text on the Room guide page instead.";
     }
   };
-  return h("div", { class: "row between copy-guide" }, ...lead, h("button", { class: "btn small secondary", onclick: copy }, "Copy the Room guide"), status);
+  return h("div", { class: "row between copy-guide" }, h("span", { class: "small" }, "Using an AI helper? Give it ", aiGuideLink(), " and say what you'd like."), h("button", { class: "btn small secondary", onclick: copy }, "Copy the Room guide"), status);
 }
 
 export function guideView(item: string | null): View {

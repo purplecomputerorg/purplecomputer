@@ -2,7 +2,9 @@
 
 A **room** is a small Python program your family adds to Purple Computer: a game, a story, a toy. Your kid finds it next to Purple's own rooms and plays it with the keyboard. Rooms come in a **Purple Pack**, the file Purple Studio downloads.
 
-You can make one on Purple Studio's New Rooms page (from a form, or by changing a starter room), or have an AI helper write it. This guide is everything either of you needs. If you are an AI helping a parent: write the room, check it with the room checker (near the end), and then tell the parent how to try it in Purple Studio and put it on Purple.
+You can make one on Purple Studio's New Rooms page (from a form, or by changing a starter room), or have an AI helper write it. This guide is everything either of you needs, and an AI helper can read it at https://studio.purplecomputer.org/ai.md.
+
+**If you are an AI helping a parent:** write the whole room as one Python file, in one code block. Draw with emoji and `pixels()` pictures and play Purple's own drums and instruments, never image or sound files: the parent pastes your code into Studio, and files don't come along. They can add their own photos and recordings in Studio afterward and tell you the names to use. If you can run Python, check the room with the room checker (near the end). Then tell the parent: copy the code, open Purple Studio's New Rooms page (https://studio.purplecomputer.org/#rooms), and paste it anywhere on that page. The room opens and runs right there, the way it will on Purple. If it stops, Studio shows the line and a "Copy the error" button, so they can paste the error back to you.
 
 ## A room
 
@@ -191,7 +193,8 @@ tar czf garden.purplepack --exclude=__pycache__ -C my-pack manifest.json content
 
 ## Trying it before it goes on Purple
 
-- **In Purple Studio:** on the New Rooms page, choose "Open it here" and pick the `.purplepack`. Its rooms run on the real Purple right there in your browser, with their pictures and sounds, and you can change them and download the pack again.
+- **In Purple Studio, one room:** copy its Python and paste it anywhere on the New Rooms page; it opens as a new room.
+- **In Purple Studio, a whole pack:** on the New Rooms page, choose "Open it here" and pick the `.purplepack`. Its rooms run on the real Purple right there in your browser, with their pictures and sounds, and you can change them and download the pack again.
 - **With the room checker:** download `https://studio.purplecomputer.org/purple/purple-room-check.pyz` and run `python3 purple-room-check.pyz my-pack` (a folder, a `.purplepack`, or one room's `.py`; Python 3.10 or newer). It checks the pack the way Purple does, then plays each room with a few hundred keys on a fast clock, and says what would stop it and on which line. `--show --keys "right right space"` prints the screen as text after each key, with the sounds and speech it made; each picture shows as a letter, named under the grid. `--room garden` tries just one room. The checker finds what would stop a room, not whether the game can be won: walk through the important parts yourself with `--show`.
 
 ## Putting it on Purple Computer

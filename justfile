@@ -79,6 +79,10 @@ preview-grub-guard:
 test: lint
     {{venv}}/bin/python -m pytest tests/ -v
 
+# Every check that costs no money (pytest, Studio, GRUB in QEMU, Chromium/Firefox, e2e-vm when HEAD is built): runs past failures, prints a table (--no-sudo)
+test-all *args:
+    scripts/test_all.sh {{args}}
+
 # Test the install/reboot flow in isolation (no hardware needed)
 test-install:
     {{venv}}/bin/python -m pytest tests/test_install_reboot.py -v

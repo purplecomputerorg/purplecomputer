@@ -20,8 +20,11 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 BUILD="$REPO/build-scripts/00-build-golden-image.sh"
 
-heredoc() {  # print the body of the heredoc that writes $1
-    sed -n "\|cat > \"\$MOUNT_DIR/$1\" <<'EOF'|,\|^EOF\$|p" "$BUILD" | sed '1d;$d'
+eval "$(grep -m1 '^PURPLE_CMDLINE=' "$BUILD")"
+heredoc() {  # print the body of the heredoc that writes $1, with $PURPLE_CMDLINE filled in
+    local body
+    body=$(sed -n "\|cat > \"\$MOUNT_DIR/$1\" <<'\?EOF'\?\$|,\|^EOF\$|p" "$BUILD" | sed '1d;$d')
+    echo "${body//\$PURPLE_CMDLINE/$PURPLE_CMDLINE}"
 }
 
 # Root partition contents: dummy kernel plus the config files grub.cfg sources.

@@ -75,7 +75,9 @@ on() {
     mkdir -p "$UNITS"
     printf '[Unit]\nDescription=Deploy Purple Studio when main moves\n\n[Path]\nPathModified=%s\n\n[Install]\nWantedBy=default.target\n' \
         "$COMMON/logs/refs/heads/main" >"$UNITS/$UNIT.path"
-    printf '[Service]\nType=oneshot\nEnvironment="PATH=%s"\nExecStart=%s run\n' "$PATH" "$SELF" >"$UNITS/$UNIT.service"
+    # NixOS: the venv's numpy finds libstdc++ only through nix-ld's LD_LIBRARY_PATH.
+    printf '[Service]\nType=oneshot\nEnvironment="PATH=%s"\nEnvironment="LD_LIBRARY_PATH=%s"\nExecStart=%s run\n' \
+        "$PATH" "${LD_LIBRARY_PATH:-}" "$SELF" >"$UNITS/$UNIT.service"
     systemctl --user daemon-reload && systemctl --user enable --now "$UNIT.path" || exit 1
     git -C "$MAIN" rev-parse main >"$DONE"
     echo "Studio now deploys itself when main changes. Log: $LOG"

@@ -60,7 +60,7 @@ run() {  # case-name  root-to-simulate  expected-root
     } > "$WORK/$name/boot/grub/grub.cfg"
     grub-mkrescue -o "$iso" "$WORK/$name" >/dev/null 2>&1
     out=$(timeout 60 qemu-system-x86_64 -m 256 -hda "$DISK" -cdrom "$iso" -boot d -display none \
-        -serial stdio 2>/dev/null | tr -d '\r' || true)
+        -serial stdio </dev/null 2>/dev/null | tr -d '\r' || true)
     local resolved found_kernel
     resolved=$(grep -o 'RESOLVED root=\[[^]]*\]' <<<"$out" | head -1)
     found_kernel=$(grep -c 'invalid magic number' <<<"$out" || true)

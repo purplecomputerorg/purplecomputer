@@ -25,7 +25,7 @@ run() {
     local expect="$1" args="$2"; shift 2
     local got
     got=$(timeout 30 qemu-system-x86_64 -m 256 -cdrom "$WORK/router.iso" -display none \
-        -serial stdio "$@" 2>/dev/null | tr -d '\r' | grep -o 'variant=\[[^]]*\] args=\[[^]]*\]' | head -1 || true)
+        -serial stdio "$@" </dev/null 2>/dev/null | tr -d '\r' | grep -o 'variant=\[[^]]*\] args=\[[^]]*\]' | head -1 || true)
     if [ "$got" = "variant=[$expect] args=[$args]" ]; then
         echo "ok    $* -> $got"
     else

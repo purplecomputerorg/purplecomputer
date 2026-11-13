@@ -108,6 +108,30 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
     run(go())
 
 
+def test_try_demos_start_in_the_mode_their_keys_are_for(live):
+    async def go():
+        live._app = app = make_app()
+        live.setup("art")
+        await live.key("tab")
+        assert not app.rooms["art"]._paint_mode
+        live.demo()
+        assert app.rooms["art"]._paint_mode
+
+        live.setup("music", letters=True)
+        live.demo()
+        assert not live.place()["letters"]
+
+        live.setup("blocks")
+        blocks = app.rooms["blocks"]
+        blocks.turn_around()
+        blocks._motion = None
+        blocks._tilt(True)
+        blocks._motion = None
+        live.demo()
+        assert not blocks._back and not blocks._peek
+    run(go())
+
+
 def test_the_familys_rooms_wait_in_the_esc_menu(live, tmp_path, monkeypatch):
     monkeypatch.setattr(live, "TRYING", tmp_path / "trying" / "content" / "rooms")
     say = 'from purple import *\n\ndef on_key(key):\n    say("{}")\n'

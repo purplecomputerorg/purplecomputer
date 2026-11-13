@@ -60,6 +60,8 @@ export interface LivePurple {
   key(char: string): Promise<void>;
   // Opens the room's code line (or closes it), without the Esc menu.
   code(on: boolean): Promise<void>;
+  // Puts the room in the mode its Try demo plays in: Art painting, Music on its instrument, Blocks from the front.
+  demo(): Promise<void>;
   // Stops Purple's speech and sounds.
   hush(): Promise<void>;
   // The words as Purple would say them: its speech filter drops words it never says ("" when nothing's left).
@@ -111,6 +113,7 @@ sys.path.insert(0, "${ROOT}")
     setup: async (room) => void (await call(`setup(**${arg(room)})`)),
     key: async (char) => void (await call(`await key(${arg(char)})`)),
     code: async (on) => void (await call(`code(${on ? "True" : "False"})`)),
+    demo: async () => void (await call("demo()")),
     hush: async () => void (await call("hush()")),
     filter: async (text) => String(await call(`__import__("purple_tui.speech_filter", fromlist=["_"]).filter_speech(${arg(text)})`)),
     check: async (source, names) => JSON.parse(String(await call(`__import__("json").dumps(check(${arg(source)}, ${arg(names)}))`))),

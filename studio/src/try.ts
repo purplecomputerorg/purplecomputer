@@ -169,6 +169,7 @@ function demo(room: Room) {
   // Its keys are for the room itself, not the code line.
   if (stage.live.place.code) return code(() => demo(room));
   tell({ demoed: room });
+  stage.live.demo();
   play(d.keys(), d.ms, () => stage.live.prompt("Your turn!"));
 }
 

@@ -137,6 +137,20 @@ def code(on):
     _app.invalidate()
 
 
+def demo():
+    """The room in the mode its Try demo's keys are for, whatever Tab left it in."""
+    room = _app.room
+    if _app.active_room == "art":
+        room._set_paint_mode(True)
+    elif _app.active_room == "music" and room.letters_mode:
+        room._toggle_letters()
+    elif _app.active_room == "blocks":
+        if room._back:
+            room.turn_around()  # first: it does nothing while the view is moving
+        room._tilt(False)
+    _app.invalidate()
+
+
 def hush():
     """Stops whatever Purple is saying or playing: Studio is playing something, or the page changed."""
     import pygame

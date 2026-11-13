@@ -36,6 +36,22 @@ def test_a_good_room_passes_and_shows_its_screen(make_pack, capsys):
     assert "After right:\n+---" in out and "|    🐱" in out and "Walk" in out and "All good." in out
 
 
+def test_wait_lets_timers_run_and_random_repeats(make_pack, capsys):
+    pack = make_pack(tick='from purple import *\nimport random\nn = state(t=0)\nstatus(str(random.randint(0, 10**9)))\n'
+                          'def step():\n    n.t += 1\n    show(f"tick {n.t}")\nevery(0.25, step)\n')
+    runs = []
+    for _ in range(2):
+        assert check.main([str(pack), "--show", "--keys", "wait"]) == 0
+        runs.append(capsys.readouterr().out)
+    assert runs[0] == runs[1] and "After wait:" in runs[0] and "tick 4" in runs[0].split("After wait:")[1]
+
+
+def test_a_misspelled_key_is_refused(make_pack, capsys):
+    with pytest.raises(SystemExit):
+        check.main([str(make_pack(hi='from purple import *\n')), "--show", "--keys", "right rigth"])
+    assert "unknown key 'rigth'" in capsys.readouterr().err
+
+
 def test_a_broken_room_names_its_line(make_pack, capsys):
     pack = make_pack(oops='from purple import *\ndef on_key(key):\n    if key == "space":\n        drum("snar")\n')
     assert check.main([str(pack)]) == 1

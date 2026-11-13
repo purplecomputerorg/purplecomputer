@@ -34,8 +34,11 @@ RANDOM_KEYS = 300
 PLACES = (Path.cwd(), Path.home() / "Downloads", Path.home() / ".purple" / "packs", Path.home() / ".purple" / "packs-waiting")
 FINDS = ("*.purplepack", "content/rooms/*.py", "*/content/rooms/*.py", "*/*/content/rooms/*.py")
 STEP_S = 0.15          # the room's clock between keys
+WAIT, WAIT_S = "wait", 1.0
 IDLE_S = 20            # then this long with no keys at all
-GUEST = "import sys; sys.path.insert(0, sys.argv[1]); from purple_tui.roomkit import runner; runner.serve(*runner.stdio())"
+# Seeded so the same --keys give the same screens, food and all.
+GUEST = ("import random, sys; random.seed(7); sys.path.insert(0, sys.argv[1]); "
+         "from purple_tui.roomkit import runner; runner.serve(*runner.stdio())")
 
 
 class Stopped(Exception):
@@ -217,7 +220,9 @@ def try_room(path: Path, content: Path, keys: list, show: bool) -> bool:
     try:
         room.start(path, lib, sounds)
         for key in [None, *keys]:
-            if key:
+            if key == WAIT:
+                room.wait(WAIT_S)
+            elif key:
                 room.press(key)
             if show:
                 print(f"{f'After {key}' if key else 'At the start'}:\n{screen(room.scene)}")
@@ -249,9 +254,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pack", type=Path, nargs="?", help="the pack folder (with manifest.json and content/), a .purplepack, or one room's .py; leave it out to pick from a list")
     ap.add_argument("--room", help="only this room")
-    ap.add_argument("--keys", default=" ".join(TRY_KEYS), help="keys to press, by name, separated by spaces")
+    ap.add_argument("--keys", default=" ".join(TRY_KEYS), help=f"keys to press, by name, separated by spaces; each takes {0.05 + STEP_S:g}s of the room's time, and {WAIT} lets {WAIT_S:g}s pass")
     ap.add_argument("--show", action="store_true", help="print the screen after each key instead of trying random keys")
     args = ap.parse_args(argv)
+    if unknown := [k for k in args.keys.split() if len(k) > 1 and k not in (*KEYS, WAIT)]:
+        ap.error(f"unknown key {unknown[0]!r}: keys are {', '.join(KEYS[:7])}, a letter, digit, or symbol, or {WAIT} (a second, no key)")
     with tempfile.TemporaryDirectory() as scratch:
         rooms, content, problems = gather(args.pack or ask(), Path(scratch), args.room)
         for problem in problems:

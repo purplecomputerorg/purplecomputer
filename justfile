@@ -420,8 +420,9 @@ pystdin:
     @{{venv}}/bin/python -
 
 # Try family rooms the way Purple runs them: asks which, or name a pack, .purplepack, or room .py (--show, --keys "right space")
+[positional-arguments]
 check-room *args:
-    @cd "{{invocation_directory()}}" && PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 -m purple_tui.roomkit.check {{args}}
+    @cd "{{invocation_directory()}}" && PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 -m purple_tui.roomkit.check "$@"
 
 # Studio's starter rooms as a pack, built fresh: installed here and turned on, or --out FILE for the .purplepack
 example-rooms *args:

@@ -33,6 +33,25 @@ The top of the file runs once when your kid comes in. After that, Purple calls:
 - `on_key_up(key)` when that key comes back up. `held(key)` says whether a key is down right now: to keep walking while an arrow is held, check `held()` from a timer.
 - The functions you gave to `every` and `after`.
 
+To keep walking while an arrow is held, take the first step in `on_key` and the rest from a timer that checks `held()`. Start the timer over on each key, or a quick tap sometimes takes two steps:
+
+```python
+walker = None
+
+def walk():
+    for key in ARROWS:
+        if held(key):
+            step(key)    # your own function that moves the hero one square
+
+def on_key(key):
+    global walker
+    if key in ARROWS:
+        step(key)
+        if walker:
+            walker.stop()
+        walker = every(0.2, walk)
+```
+
 Esc always belongs to Purple: it leaves the room, and your room never sees it.
 
 ### Settings a family can change
@@ -88,7 +107,7 @@ Theme colors follow the family's theme, the way Purple's own rooms do: `surface`
 
 An emoji, letter, color, or picture can cover more than one square: `grid.set(3, 4, "🐶", size=2)` is 2 by 2 squares, from (3, 4) right and down, and a picture keeps its shape inside them, like an emoji. A picture can instead cover as many squares as you ask for: `picture("cat", 4)` is 4 squares wide and as tall as its shape needs, and `picture("cat", 4, 3)` is 4 by 3. A big thing belongs to its top-left square: `grid.get` and `grid.erase` use that square, and the others stay empty. It doesn't wrap around, so keep it on the screen. A letter set in one of those other squares shows as a small badge in its corner, on top, so a key can keep its letter beside a big picture: `grid.set(3, 4, "🐸", size=2)` then `grid.set(4, 5, "Q")`.
 
-The floor sits under the grid, so a hero standing on grass is `grid.floor.set(x, y, "#4f9d4a")` and `grid.set(x, y, "🧒")`. Moving the hero only changes the grid; the grass stays.
+The floor sits under the grid, so a hero standing on grass is `grid.floor.set(x, y, "#4f9d4a")` and `grid.set(x, y, "🧒")`. Moving the hero only changes the grid; the grass stays. Things lying on the ground, like coins, dots, and seeds, go on the floor too, so anything walking over them leaves them be; picking one up is `grid.floor.erase(x, y)`.
 
 `show()` and `write()` work with or without the grid: over the grid, they sit in a box so they're easy to read. `status()` sits above the grid, so it never covers a square. When the grid is empty, `show()` is in the middle and `write()` lines are under it. `ask()` and `game_over()` show along the bottom.
 
@@ -139,7 +158,7 @@ def tone(path, freq, seconds=0.2):
 
 ## How rooms run
 
-Each room runs sealed off from the rest of the computer: no files, no internet, no other programs, and nothing can be installed. Python's own pure modules (`random`, `math`, `itertools`, `collections`, `dataclasses`, and so on) work. A room uses its pack's pictures and sounds by name; it never sees the files.
+Each room runs sealed off from the rest of the computer: no files, no internet, no other programs, and nothing can be installed. Python's own pure modules (`random`, `math`, `itertools`, `collections`, `dataclasses`, and so on) work. `from purple import *` doesn't bring them in: import them yourself, like `import random`. A room uses its pack's pictures and sounds by name; it never sees the files.
 
 Each key or timer has to finish within 3 seconds, and starting within 8. A room that raises an error, takes too long, or draws more than 1000 things at once (a full grid with a full floor is under 600) is stopped, and your kid sees a calm "this room needs fixing" card. The rest of Purple keeps working.
 
@@ -195,7 +214,7 @@ tar czf garden.purplepack --exclude=__pycache__ -C my-pack manifest.json content
 
 - **In Purple Studio, one room:** copy its Python and paste it anywhere on the New Rooms page; it opens as a new room.
 - **In Purple Studio, a whole pack:** on the New Rooms page, choose "Open it here" and pick the `.purplepack`. Its rooms run on the real Purple right there in your browser, with their pictures and sounds, and you can change them and download the pack again.
-- **With the room checker:** download `https://studio.purplecomputer.org/purple/purple-room-check.pyz` and run `python3 purple-room-check.pyz my-pack` (a folder, a `.purplepack`, or one room's `.py`; Python 3.10 or newer). It checks the pack the way Purple does, then plays each room with a few hundred keys on a fast clock, and says what would stop it and on which line. `--show --keys "right right space"` prints the screen as text after each key, with the sounds and speech it made; each picture shows as a letter, named under the grid. `--room garden` tries just one room. The checker finds what would stop a room, not whether the game can be won: walk through the important parts yourself with `--show`.
+- **With the room checker:** download `https://studio.purplecomputer.org/purple/purple-room-check.pyz` and run `python3 purple-room-check.pyz my-pack` (a folder, a `.purplepack`, or one room's `.py`; Python 3.10 or newer). It checks the pack the way Purple does, then plays each room with a few hundred keys on a fast clock, and says what would stop it and on which line. `--show --keys "right right space"` prints the screen as text after each key, with the sounds and speech it made; each picture shows as a letter, named under the grid. Each key takes 0.2 seconds of the room's time, and `wait` in the keys lets a second go by with no key, so timers run. A key name it doesn't know stops it, and `random` gives the same numbers every run, so the same keys show the same screens. `--room garden` tries just one room. The checker finds what would stop a room, not whether the game can be won: walk through the important parts yourself with `--show`.
 
 ## Putting it on Purple Computer
 

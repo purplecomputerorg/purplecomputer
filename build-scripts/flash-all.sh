@@ -469,12 +469,12 @@ if [[ $SUCCEEDED -gt 0 && "$CORRUPT_MODE" != true ]]; then
             CF_HEADERS=()
             [[ -n "${CF_ACCESS_CLIENT_ID:-}" ]] && CF_HEADERS+=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID")
             [[ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]] && CF_HEADERS+=(-H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
-            if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD_PROD" "${CF_HEADERS[@]}" \
+            if FLASH_POST_ERR="$(curl -fsS --max-time 15 --retry 3 --retry-all-errors -u ":$ADMIN_PASSWORD_PROD" "${CF_HEADERS[@]}" \
                     -H 'Content-Type: application/json' \
-                    -X POST "$FLASH_LOG_URL" -d "$FLASH_PAYLOAD" >/dev/null 2>&1; then
+                    -X POST "$FLASH_LOG_URL" -d "$FLASH_PAYLOAD" 2>&1 >/dev/null)"; then
                 echo -e "${GREEN}Recorded to the orders app; it shows in the software dropdown now.${NC}"
             else
-                echo -e "${YELLOW}Could not reach the orders app to record this flash. The hash above is still yours to use.${NC}"
+                echo -e "${YELLOW}Could not record this flash to the orders app (${FLASH_POST_ERR:-curl failed}). The hash above is still yours to use.${NC}"
             fi
         else
             echo -e "${YELLOW}FLASH_LOG_URL/ADMIN_PASSWORD_PROD not set in build-scripts/.env, so this flash was not recorded to the orders app. Hash above is still yours to use.${NC}"

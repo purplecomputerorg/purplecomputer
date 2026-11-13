@@ -269,7 +269,7 @@ probe() {
     target=$(find_target) || exit 0
     save_old_purple "$(part_prefix "$target")2" "$KEEP_DIR" || rc=$?
     case $rc in
-        0) echo "[PURPLE-FOUND] $(cat "$KEEP_DIR/.purple/computer_name.txt" "$KEEP_DIR/computer_name.txt" 2>/dev/null | head -1)" ;;
+        0) echo "[PURPLE-FOUND] $(cat "$KEEP_DIR/.purple/computer_name.txt" 2>/dev/null || cat "$KEEP_DIR/computer_name.txt" 2>/dev/null)" ;;
         2) echo "[PURPLE-FOUND-UNREADABLE]" ;;
     esac
     exit 0

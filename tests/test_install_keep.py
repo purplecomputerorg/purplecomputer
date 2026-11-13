@@ -7,7 +7,7 @@ import subprocess
 from tests.test_install_swap import INSTALL_SH, _extract_function
 
 
-def _save(tmp_path, label="PURPLE_ROOT", mount_ok=True):
+def _save(tmp_path, label="PURPLE_ROOT", mount_ok=True, home_name="Sam's Computer", probe=False):
     root = tmp_path / "oldroot"
     (root / "home/purple/.config/purple/timeline").mkdir(parents=True)
     (root / "home/purple/.config/purple/timeline/art.jsonl").write_text('{"s": {}}\n')
@@ -16,19 +16,24 @@ def _save(tmp_path, label="PURPLE_ROOT", mount_ok=True):
     (root / "opt/purple/computer_name.txt").write_text("Sam's Purple")
     (root / "home/purple/.purple/packs/dinos").mkdir(parents=True)
     (root / "home/purple/.purple/packs/dinos/manifest.json").write_text("{}")
-    (root / "home/purple/.purple/computer_name.txt").write_text("Sam's Computer")
+    if home_name:
+        (root / "home/purple/.purple/computer_name.txt").write_text(home_name)
     (root / "home/purple/.purple/cache/tts").mkdir(parents=True)
     (root / "home/purple/.purple/cache/tts/a.wav").write_text("x")
     keep = tmp_path / "keep"
     script = f"""
-{_extract_function(INSTALL_SH, 'save_old_purple')}
+{_extract_function(INSTALL_SH, 'save_old_purple').replace('/run/purple-old-root', str(tmp_path / 'mnt'))}
+{_extract_function(INSTALL_SH, 'probe')}
+find_target() {{ echo fake; }}; part_prefix() {{ echo /dev/fake; }}
+KEEP_DIR="{keep}"
 blkid() {{ echo "{label}"; }}
 mount() {{ {'cp -a "' + str(root) + '/." "$4"' if mount_ok else 'return 32'}; }}
 umount() {{ :; }}
 set -o pipefail
-save_old_purple /dev/fake2 "{keep}" "{tmp_path / 'mnt'}"
+{'(probe)' if probe else f'save_old_purple /dev/fake2 "{keep}" "{tmp_path / 'mnt'}"'}
 """
-    return subprocess.run(["bash", "-c", script]).returncode, keep
+    result = subprocess.run(["bash", "-c", script], capture_output=probe, text=True)
+    return (result.stdout if probe else result.returncode), keep
 
 
 def test_saves_settings_history_and_name(tmp_path):
@@ -45,6 +50,14 @@ def test_saves_packs_and_renamed_name_but_not_the_tts_cache(tmp_path):
     assert (keep / ".purple/packs/dinos/manifest.json").exists()
     assert (keep / ".purple/computer_name.txt").read_text() == "Sam's Computer"
     assert not (keep / ".purple/cache").exists()
+
+
+def test_probe_names_the_old_install_once(tmp_path):
+    assert _save(tmp_path, probe=True)[0] == "[PURPLE-FOUND] Sam's Computer\n"
+
+
+def test_probe_falls_back_to_the_install_time_name(tmp_path):
+    assert _save(tmp_path, home_name=None, probe=True)[0] == "[PURPLE-FOUND] Sam's Purple\n"
 
 
 def test_other_os_is_not_purple(tmp_path):

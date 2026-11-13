@@ -249,7 +249,9 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .words-field { width: 100%; min-height: 3.2em; font: 18px/1.4 PurpleArt; resize: vertical; }
 .phone-bar .tray-keys, .phone-hint { display: none; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
-  .room-buttons { margin-bottom: 10px; }
+  /* Snug enough that all four rooms fit one row on a 360px phone */
+  .room-buttons { margin-bottom: 10px; gap: 4px; }
+  .room-buttons button { padding-inline: 9px; }
   .phone-bar .tray-keys { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: fit-content; max-width: 100%; margin: 0 auto; padding: 8px; border-radius: 14px; background: linear-gradient(#45444d, #2a2930); }
   .phone-bar .tray-keys:empty { display: none; }
   .tray-key { flex: 0 0 auto !important; min-width: 46px; height: 46px; padding: 0; border-radius: 9px; font-size: 14px; box-shadow: 0 3px 0 #060608; }
@@ -1116,6 +1118,9 @@ html.embed.alone { overflow: auto; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .tray-bar { margin-top: 0; }
   .tray-bar:has(> .demo-keys[hidden]) { display: flex; }
+  /* Both keys in one row on a 360px phone, and onto two rows sooner than off the edge */
+  .demo-keys { flex-wrap: wrap; }
+  .demo-keys > .demo-key { padding: 0 14px; font-size: 15px; }
 }
 /* try.html with room to spare: the rooms and the demo keys in a rail beside the laptop, level with the
    screen, so pressing one and watching what it does never takes a scroll */

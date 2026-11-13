@@ -1,8 +1,10 @@
 /// <reference types="vitest/config" />
 import { execSync } from "node:child_process";
-import { copyFileSync, cpSync, mkdirSync, readdirSync, createReadStream, existsSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, cpSync, mkdirSync, readdirSync, readFileSync, createReadStream, existsSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { brotliCompressSync, constants as zlib } from "node:zlib";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import { defineConfig, type Connect, type Plugin } from "vite";
 
@@ -20,6 +22,16 @@ const blocklyMedia = resolve(here, "node_modules/blockly/media");
 // Files fetched or built for the in-browser Purple by scripts/studio_bundle.py: Pyodide's pygame-ce
 // wheel, purple.zip, its core sounds (core-sounds/), Purple's voice (voice/), and the room checker the Room guide links to.
 const cacheDir = resolve(here, ".cache");
+// The in-browser Purple's biggest files go out already brotli'd at the highest level, which is far smaller
+// than the host's own on-the-fly compression; the zips are stored uncompressed so brotli sees their files
+// whole. Built pages send them with Content-Encoding: br. Published path -> source.
+const BROTLI: Record<string, string> = {
+  "pyodide/pyodide.asm.wasm": join(pyodideDir, "pyodide.asm.wasm"),
+  "pyodide/pyodide.asm.mjs": join(pyodideDir, "pyodide.asm.mjs"),
+  "pyodide/python_stdlib.zip": join(cacheDir, `pyodide/python_stdlib-${JSON.parse(readFileSync(join(pyodideDir, "package.json"), "utf8")).version}.zip`),
+  "purple/purple.zip": join(cacheDir, "purple.zip"),
+};
+const brotliCache = join(cacheDir, "br");
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
 
 // pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval. It and
@@ -57,6 +69,10 @@ function pyodideAssets(): Plugin {
     },
     configurePreviewServer(server) {
       server.middlewares.use(pageCsp);
+      server.middlewares.use((req, res, next) => {
+        if ((req.url ?? "").slice(1).split("?")[0] in BROTLI) res.setHeader("Content-Encoding", "br");
+        next();
+      });
     },
     closeBundle() {
       const copyAll = (from: string, to: string, keep: (f: string) => boolean) => {
@@ -72,6 +88,7 @@ function pyodideAssets(): Plugin {
       if (existsSync(join(cacheDir, "emoji"))) cpSync(join(cacheDir, "emoji"), resolve(here, "dist/purple/emoji"), { recursive: true });
       if (existsSync(join(cacheDir, "core-sounds"))) cpSync(join(cacheDir, "core-sounds"), resolve(here, "dist/purple/core-sounds"), { recursive: true });
       copyAll(espeakDir, resolve(here, "dist/voice/espeak-ng"), (f) => ESPEAK_SOURCE.includes(f));
+      writeBrotli();
       // The commit this build is from, so purplecomputer.org's pre-push check can tell whether a change it
       // needs is live (landing's scripts/check-studio.mjs). "dirty" when built with uncommitted changes.
       const git = (a: string) => { try { return execSync(`git ${a}`, { cwd: here }).toString().trim(); } catch { return ""; } };
@@ -79,6 +96,7 @@ function pyodideAssets(): Plugin {
       // Vercel's Build Output API config, so `just studio-deploy` sends the same headers as vite.
       const routes = [
         { src: "/(.*)", headers: HEADERS, continue: true },
+        ...Object.keys(BROTLI).map((path) => ({ src: `/${path.replaceAll(".", "\\.")}`, headers: { "Content-Encoding": "br" }, continue: true })),
         ...PAGE_CSP.map(([page, csp]) => ({ src: `/${page.replace(".", "\\.")}`, headers: { "Content-Security-Policy": csp }, continue: true })),
         // Each font version's pictures sit in a folder of their own (scripts/studio_bundle.py), so they never change.
         { src: "/purple/emoji/[^/]+/.*\\.png", headers: { "Cache-Control": "public, max-age=31536000, immutable" }, continue: true },
@@ -89,6 +107,26 @@ function pyodideAssets(): Plugin {
       writeFileSync(resolve(here, ".vercel/output/config.json"), JSON.stringify({ version: 3, routes }, null, 2));
     },
   };
+}
+
+// Highest-level brotli takes about a minute for all of BROTLI, so each result is kept under its source's hash.
+function writeBrotli() {
+  mkdirSync(brotliCache, { recursive: true });
+  const used = new Set<string>();
+  for (const [path, source] of Object.entries(BROTLI)) {
+    // Sent as brotli whatever the file holds, so a missing one fails the build rather than going out unbrotli'd.
+    if (!existsSync(source)) throw new Error(`${source} is missing: run just studio-bundle`);
+    const data = readFileSync(source);
+    const hash = createHash("sha256").update(data).digest("hex");
+    used.add(hash);
+    const cached = join(brotliCache, hash);
+    if (!existsSync(cached)) {
+      const params = { [zlib.BROTLI_PARAM_QUALITY]: 11, [zlib.BROTLI_PARAM_LGWIN]: 24, [zlib.BROTLI_PARAM_SIZE_HINT]: data.length };
+      writeFileSync(cached, brotliCompressSync(data, { params }));
+    }
+    copyFileSync(cached, resolve(here, "dist", path));
+  }
+  for (const f of readdirSync(brotliCache)) if (!used.has(f)) rmSync(join(brotliCache, f));
 }
 
 // Cross-origin isolation lets a room's worker block on shared memory (purple.ask), and the CSP keeps

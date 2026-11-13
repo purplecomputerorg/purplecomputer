@@ -79,7 +79,7 @@ export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) 
   const indexURL = new URL("pyodide/", document.baseURI).href;
   const { loadPyodide } = (await import(/* @vite-ignore */ `${indexURL}pyodide.mjs`)) as { loadPyodide: (o: { indexURL: string; packages: string[]; stdout: (s: string) => void; stderr: (s: string) => void }) => Promise<Pyodide> };
   log("Loading Python…");
-  const py = await loadPyodide({ indexURL, packages: ["pygame-ce", "fonttools", "rich", "wcwidth"], stdout: log, stderr: log });
+  const py = await loadPyodide({ indexURL, packages: ["pygame-ce", "rich", "wcwidth"], stdout: log, stderr: log });
   mark("python");
   log("Loading Purple…");
   py.unpackArchive(await purpleZip, "zip", { extractDir: ROOT });

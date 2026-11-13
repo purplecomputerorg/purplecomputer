@@ -49,16 +49,18 @@ _stub_pwd()
 
 
 # pygame.freetype doesn't initialize in Pyodide; Gfx only uses it to ask whether a face has a
-# glyph, which the font's own character map answers.
+# glyph, which the fonts' character maps scripts/studio_bundle.py wrote answer.
 def _patch_glyph_coverage():
-    from fontTools.ttLib import TTFont
+    import json
+    from bisect import bisect_right
+    from pathlib import Path
+    import purple_tui
     from purple_tui.canvas import gfx
-    cmaps = {}
+    cmaps = json.loads((Path(purple_tui.__file__).parent.parent / "font-cmaps.json").read_text())
 
     def covers(self, face, text):
-        if face not in cmaps:
-            cmaps[face] = set(TTFont(str(gfx.FONT_DIR / gfx.FACES[face]), lazy=True).getBestCmap())
-        return all(ch.isspace() or ord(ch) in cmaps[face] for ch in text)
+        bounds = cmaps.get(Path(gfx.FACES[face]).name, [])
+        return all(ch.isspace() or bisect_right(bounds, ord(ch)) % 2 for ch in text)
 
     gfx.Gfx._covers = covers
 

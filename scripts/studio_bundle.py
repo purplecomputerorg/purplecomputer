@@ -11,13 +11,15 @@ every browser. Studio's pages show the same pictures, from studio/.cache/emoji/.
 Also fetches the Pyodide wheels Purple needs (pygame-ce and friends) and Purple's Piper voice once,
 since the page may only load files from its own site.
 
-Writes studio/.cache/purple.zip, studio/.cache/pyodide/*.whl, studio/.cache/voice/ (the voice model
+Writes studio/.cache/purple.zip (stored, not compressed: Studio's build brotlis it whole),
+studio/.cache/pyodide/*.whl and python_stdlib-<version>.zip, studio/.cache/voice/ (the voice model
 and the espeak-ng English data it phonemizes with, and in voice/kokoro/ the room voice Make a Room
 speaks a room's fixed lines in), and studio/.cache/purple-room-check.pyz, the room checker
 (purple_tui/roomkit/check.py) as one file anyone with Python 3 can run.
 Usage: just studio-bundle
 """
 
+import ast
 import hashlib
 import io
 import json
@@ -37,7 +39,7 @@ sys.path.insert(0, str(ROOT))
 OUT = ROOT / "studio" / ".cache" / "purple.zip"
 TRACKED = ["purple_tui", "packs/core-emoji", "packs/core-sounds"]
 SKIP = ("purple_tui/tests/",)
-WHEELS = ["pygame-ce", "fonttools", "rich", "wcwidth"]
+WHEELS = ["pygame-ce", "rich", "wcwidth"]
 LOCK = ROOT / "studio" / "node_modules" / "pyodide" / "pyodide-lock.json"
 EXPORT = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
 # Purple's voice, pinned where the shell builds read it: the VOICE_EN lines of scripts/voice_model.sh.
@@ -52,6 +54,11 @@ KOKORO = {"model": "kokoro-v1.0.int8.onnx", "voice": "af_heart", "tempo": 0.75, 
 CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/i18n.py", "purple_tui/pack_manager.py", "purple_tui/synth.py",
            "purple_tui/constants.py", "purple_tui/roomkit/purple.py", "purple_tui/roomkit/runner.py",
            "purple_tui/roomkit/limits.py", "purple_tui/roomkit/check.py"]
+FONTS = "purple_tui/canvas/fonts/"
+# Purple draws only its own icons from this one, so the zip carries just those.
+TRIMMED_FONTS = {FONTS + "SymbolsNerdFontMono-Regular.ttf"}
+# Each font's characters, for the browser's glyph check (studio/src/live/browser.py).
+CMAPS = "font-cmaps.json"
 EMOJI = OUT.parent / "emoji"
 SOUNDS = "packs/core-sounds/content/"
 CORE_SOUNDS = OUT.parent / "core-sounds"
@@ -70,6 +77,17 @@ def fetch_wheels() -> None:
         wheel = out / packages[name]["file_name"]
         if not wheel.exists():
             urllib.request.urlretrieve(f"https://cdn.jsdelivr.net/pyodide/v{version}/full/{wheel.name}", wheel)
+
+
+def store_stdlib() -> None:
+    """Pyodide's standard library zip with its files stored, so Studio's build can brotli it whole
+    (studio/vite.config.ts). Named for its Pyodide version, so the build never pairs it with another."""
+    version = json.loads((LOCK.parent / "package.json").read_text())["version"]
+    with zipfile.ZipFile(LOCK.parent / "python_stdlib.zip") as src, zipfile.ZipFile(OUT.parent / "pyodide" / f"python_stdlib-{version}.zip", "w") as out:
+        for info in src.infolist():
+            data = src.read(info)
+            info.compress_type = zipfile.ZIP_STORED
+            out.writestr(info, data)
 
 
 def fetch_voice() -> None:
@@ -176,14 +194,80 @@ def build_emoji() -> None:
     build(font, EMOJI, sequences, version)
 
 
-def bundled_emoji(files: list[str]) -> list[Path]:
+def bundled_text(files: list[str]) -> str:
+    """What the zip's fonts and emoji must cover: Purple's words and source, the browser's own Python, each
+    string literal as it reads at run time ("\\uf001" as the icon), and every string Purple's modules hold
+    once imported, so an icon built from its code point counts too. Rebuilt from source on every bundle."""
+    text = [loaded_strings()]
+    for f in files + sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "studio/src/live").glob("*.py")):
+        if f.endswith((".py", ".json", ".txt")):
+            text.append((ROOT / f).read_text(errors="ignore"))
+            if f.endswith(".py"):
+                text += [n.value for n in ast.walk(ast.parse(text[-1])) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+    return "".join(text)
+
+
+def loaded_strings() -> str:
+    import importlib
+    import os
+    import pkgutil
+    import purple_tui
+
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+    found: list[str] = []
+
+    def walk(value, depth: int) -> None:
+        if isinstance(value, str):
+            found.append(value)
+        elif depth and isinstance(value, dict):
+            for item in value.items():
+                walk(item, depth - 1)
+        elif depth and isinstance(value, (tuple, list, set, frozenset)):
+            for item in value:
+                walk(item, depth - 1)
+        elif depth and isinstance(value, type) and value.__module__.startswith("purple_tui."):
+            walk(list(vars(value).values()), depth - 1)
+
+    for module in pkgutil.walk_packages(purple_tui.__path__, "purple_tui."):
+        if ".tests" not in module.name:
+            walk(list(vars(importlib.import_module(module.name)).values()), 4)
+    return "".join(found)
+
+
+def trimmed_font(path: Path, text: str) -> bytes:
+    from fontTools import subset
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(path)
+    subsetter = subset.Subsetter()
+    subsetter.populate(unicodes={ord(c) for c in text} & set(font.getBestCmap()))
+    subsetter.subset(font)
+    out = io.BytesIO()
+    font.save(out)
+    return out.getvalue()
+
+
+def cmap_bounds(data: bytes) -> list[int]:
+    """The font's characters as sorted half-open run bounds: a character is in it when bisect_right lands odd."""
+    from fontTools.ttLib import TTFont
+
+    bounds: list[int] = []
+    for c in sorted(TTFont(io.BytesIO(data)).getBestCmap()):
+        if bounds and bounds[-1] == c:
+            bounds[-1] = c + 1
+        else:
+            bounds += [c, c + 1]
+    return bounds
+
+
+def bundled_emoji(text: str) -> list[Path]:
     """map.json and the pictures for the emoji Purple's vocabulary and its own files use; the browser
     fetches any other emoji's pictures the first time it draws one (studio/src/live/browser.py)."""
     from purple_tui.canvas.emoji_pictures import EmojiPictures
     from purple_tui.canvas.gfx import _ONE_EMOJI_RE
 
     pictures = EmojiPictures(EMOJI)
-    text = "".join((ROOT / f).read_text(errors="ignore") for f in files if f.endswith((".py", ".json", ".txt")))
     glyphs = {g for m in _ONE_EMOJI_RE.finditer(text) for g in pictures.glyphs_for(m[0]) if len(pictures.glyphs[g]) == 3}
     return [EMOJI / "map.json", *(pictures.dir / f"{g}.png" for g in sorted(glyphs))]
 
@@ -192,12 +276,15 @@ def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     build_checker(OUT.parent / "purple-room-check.pyz")
     fetch_wheels()
+    store_stdlib()
     fetch_voice()
     fetch_kokoro()
     build_emoji()
     files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", *TRACKED], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
     shutil.rmtree(CORE_SOUNDS, ignore_errors=True)
-    with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
+    text = bundled_text(files)
+    cmaps = {}
+    with zipfile.ZipFile(OUT, "w") as z:
         for f in files:
             if f.startswith(SKIP) or not (ROOT / f).is_file():
                 continue
@@ -207,8 +294,12 @@ def main() -> None:
                 shutil.copyfile(ROOT / f, CORE_SOUNDS / f.removeprefix(SOUNDS))
                 z.writestr(f, b"")
             else:
-                z.write(ROOT / f, f)
-        for f in bundled_emoji(files):
+                data = trimmed_font(ROOT / f, text) if f in TRIMMED_FONTS else (ROOT / f).read_bytes()
+                if f.startswith(FONTS) and f.endswith((".ttf", ".otf")):
+                    cmaps[Path(f).name] = cmap_bounds(data)
+                z.writestr(f, data)
+        z.writestr(CMAPS, json.dumps(cmaps, separators=(",", ":")))
+        for f in bundled_emoji(text):
             z.write(f, f.relative_to(OUT.parent).as_posix())
     subprocess.run(["node", "scripts/pyc.mjs", str(OUT)], cwd=ROOT / "studio", check=True)
     print(f"{OUT} ({OUT.stat().st_size // 1024} KB)", file=sys.stderr)

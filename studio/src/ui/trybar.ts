@@ -28,8 +28,9 @@ export const inPackBar = (after: Node[] = [], note = "✓ In your Purple Pack.")
 // rename says why a name can't be used, or renames the item and says nothing. keep stands in for the Add button.
 export interface YourCard { href: string; title: string; face: Node; current?: boolean; rename?: (text: string) => string | null; keep?: HTMLElement | null }
 
-// What the family made on a list page, one card each with an Add to my Pack button and a round tick in the
-// corner, plus a pencil beside the name when it can be renamed. Ticking one or more shows "Throw away" above.
+// What the family made on a list page, one card each with an Add to my Pack button, plus a pencil beside the
+// name when it can be renamed. Choose (above) puts a round tick on each card, for throwing some away; the ticks
+// stay hidden otherwise, since an empty one reads as "not in my Pack".
 // Examples only tried aren't theirs yet, so they aren't listed.
 // warn: anything more the confirm should say about throwing these away.
 export function yoursList<T extends Keepable>(items: T[], card: (item: T) => YourCard, remove: (gone: T[]) => void, warn?: (gone: T[]) => string): HTMLElement | null {
@@ -49,12 +50,18 @@ export function yoursList<T extends Keepable>(items: T[], card: (item: T) => You
     boxes.forEach((box, item) => { box.checked = chosen.has(item); });
     counted();
   };
+  let choosing = false;
+  const choosingMode = (on: boolean) => { choosing = on; choose([]); };
+  const link = (label: string, onclick: () => void) => h("button", { type: "button", class: "linkbtn dim small", onclick }, label);
   const bar = h("div", { class: "row choosing" });
-  const counted = () => bar.replaceChildren(...(chosen.size ? [
-    h("span", { class: "dim small" }, `${chosen.size} chosen`),
-    chosen.size < theirs.length ? h("button", { type: "button", class: "linkbtn dim small", onclick: () => choose(theirs) }, "Choose all") : null,
-    h("button", { type: "button", class: "linkbtn dim small", onclick: () => choose([]) }, "Clear"),
-    h("button", { type: "button", class: "btn small", onclick: throwAway }, "Throw away")] : []).filter((n) => n !== null));
+  const counted = () => {
+    list.classList.toggle("choosing", choosing);
+    bar.replaceChildren(...(choosing ? [
+      chosen.size ? h("span", { class: "dim small" }, `${chosen.size} chosen`) : null,
+      chosen.size < theirs.length ? link("Choose all", () => choose(theirs)) : null,
+      chosen.size ? h("button", { type: "button", class: "btn small", onclick: throwAway }, "Throw away") : null,
+      link("Cancel", () => choosingMode(false))] : [link("Choose", () => choosingMode(true))]).filter((n) => n !== null));
+  };
   const list = h("div", { class: "yours" });
   const render = () => {
     boxes.clear();

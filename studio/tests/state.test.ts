@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearSection, draft, emptyDraft, freeName, hasWork, keep, madeOf, mine, onChange, phraseFor, notInPieces, pieces, putPhrase, replaceDraft, withSample, type WordEntry } from "../src/state";
+import { clearSection, draft, dropPhotos, emptyDraft, freeName, hasWork, keep, madeOf, mine, onChange, phraseFor, notInPieces, pieces, putPhrase, replaceDraft, withSample, type WordEntry } from "../src/state";
 
 describe("rooms saved before the picture quiz", () => {
   it("keeps a trivia room's Python but not its old form, and keeps every other form", () => {
@@ -53,6 +53,18 @@ describe("clearing", () => {
     expect([draft.phrases, hasWork("keys")]).toEqual([[], true]);
     clearSection("keys");
     expect(draft.letters).toEqual({});
+  });
+
+  it("drops a word's photo once no word shows it, unless a room's code names it", () => {
+    const photo = (name: string) => ({ kind: "images" as const, name, data: new Uint8Array(1), kept: true });
+    const words = [{ word: "yard", emoji: "backyard" }, { word: "grass", emoji: "backyard" }, { word: "dog", emoji: "biscuit" }];
+    const rooms = [{ name: "quiz", source: 'picture("biscuit")', made: null }];
+    replaceDraft({ ...emptyDraft(), words, rooms, roomFiles: [photo("backyard"), photo("biscuit"), photo("cake")] });
+    draft.words[0].emoji = "🌳";
+    dropPhotos(["backyard"]);
+    expect(draft.roomFiles.map((f) => f.name)).toEqual(["backyard", "biscuit", "cake"]);
+    clearSection("words");
+    expect(draft.roomFiles.map((f) => f.name)).toEqual(["biscuit", "cake"]);
   });
 
   it("clears everything", () => {

@@ -77,7 +77,9 @@ export const things = (page) => page.evaluate(listThings);
 const at = (n) => `[data-e2e="${n}"]`;
 export async function click(page, n) { await page.click(at(n)); await sleep(400); }
 export async function type(page, n, text, { enter = false } = {}) {
-  await page.click(at(n), { clickCount: 3 });
+  // Triple-click selects a field's old text to type over; anywhere else it selects the page.
+  const field = await page.$eval(at(n), (el) => el.matches("input, textarea, [contenteditable]"));
+  await page.click(at(n), { clickCount: field ? 3 : 1 });
   await page.keyboard.type(text);
   if (enter) await page.keyboard.press("Enter");
   await sleep(300);

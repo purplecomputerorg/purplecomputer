@@ -79,12 +79,12 @@ describe("knobs", () => {
   it("offers only the fun settings of each starter room", () => {
     const names = Object.fromEntries(EXAMPLES.map((e) => [e.name, readKnobs(e.source).map((k) => k.name)]));
     expect(names).toEqual({
-      explore: ["WORLD", "THINGS", "GROUND", "HERO", "HERO_COLORS", "HERO_PICTURE", "FIND_SOUND", "DOOR_SOUND", "BUMP_SOUND", "HOME_SOUND"],
+      explore: ["WORLD", "THINGS", "GROUND", "HERO", "HERO_COLORS", "HERO_PICTURE", "SPEED", "FIND_SOUND", "DOOR_SOUND", "BUMP_SOUND", "HOME_SOUND"],
       garden: ["SEEDS", "SOIL", "PLANT_SOUND", "GROW_SOUND"],
       beats: ["DRUMS", "SPEED"],
-      memory: ["CARDS", "TURNED", "FLIP_SOUND", "MATCH_SOUND"],
+      memory: ["CARDS", "PAIRS", "PEEK", "TURNED", "FLIP_SOUND", "MATCH_SOUND"],
       story: ["TITLE", "PAGES", "PAGE_SOUND"],
-      snake: ["WORDS", "BODY"],
+      snake: ["WORDS", "BODY", "SPEED", "LONGEST"],
     });
   });
 

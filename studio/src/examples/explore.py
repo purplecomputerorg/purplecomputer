@@ -67,6 +67,8 @@ HERO = [
 HERO_COLORS = {"H": ("hair", "#6b3e1e"), "S": ("skin", "#f2c49b"), "K": ("eyes and shoes", "#222222"), "B": ("shirt", "#e0457b")}
 # An emoji or one of your photos to be the hero instead of the drawing, or nothing to use the drawing.
 HERO_PICTURE = ""
+# How many squares a second the hero walks while an arrow is held, 2 to 15.
+SPEED = 8
 # The drum when something is found: one of Purple's drums, one of your sounds, or none.
 FIND_SOUND = ""
 # The drum when the hero goes through a door, or none.
@@ -159,4 +161,4 @@ def walk():
 
 
 show_map()
-every(0.12, walk)
+every(1 / SPEED, walk)

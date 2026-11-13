@@ -7,7 +7,8 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <style>
-      html, body { margin: 0; height: 100%; background: #1d1234; overflow: hidden; }
+      /* user-select: a double or triple click would otherwise paint the screen with the selection's blue */
+      html, body { margin: 0; height: 100%; background: #1d1234; overflow: hidden; user-select: none; }
       body { display: flex; align-items: center; justify-content: center; }
       #screen { display: block; width: min(100vw, calc(100vh * 1366 / 768)); aspect-ratio: 1366 / 768; outline: none; cursor: pointer; }
       #canvas { position: absolute; left: -10000px; top: 0; }

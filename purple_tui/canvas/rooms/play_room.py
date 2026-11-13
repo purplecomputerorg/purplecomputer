@@ -9,7 +9,7 @@ import pygame
 from ... import i18n
 from ... import palette as P
 from ...constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
-from ...content import get_content
+from ...content import get_content, is_word_picture
 from .. import paper
 from ..gfx import is_emoji, mix, rgb, strip_markup
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
@@ -502,9 +502,11 @@ class PlayRoom(Room):
         return "   ".join(f"[bold {P.TEXT}]{i}[/] [{P.TEXT}]{emoji(w) or ''}{w}[/]" for i, w in enumerate(picks, 1))
 
     def _answer_px(self, g, e) -> int:
-        """Only a small all-emoji answer earns the big size; text stays a
-        step above the ask line so it reads as the computer's voice."""
+        """A small all-emoji answer is big, and a family's photo on its own bigger still, so it reads
+        as a photo; text stays a step above the ask line so it reads as the computer's voice."""
         plain = strip_markup(e.markup).replace(" ", "")
+        if len(plain) == 1 and is_word_picture(plain):
+            return g.em(6.0)
         if is_emoji(plain) and len(plain) <= 12:
             return g.em(2.0)
         return g.em(1.3)

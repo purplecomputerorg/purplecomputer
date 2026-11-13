@@ -6,8 +6,8 @@ from purple import *
 # The drums, top row of keys to bottom: the picture for each, the drum it plays (Purple's or one of your sounds), and its color.
 # Labels: picture, drum, color
 DRUMS = (("🐘", "kick", "#a0a0a0"), ("🐸", "snare", "#e44444"), ("🐝", "hi-hat", "#e2c63a"), ("👏", "clap", "#2e6ae1"))
-# Seconds from one beat to the next, 0.1 to 1: smaller is faster.
-SPEED = 0.2
+# How many beats a second, 1 to 10.
+SPEED = 5
 
 keys = [row[:8] for row in KEY_ROWS]
 at = grid.keyboard(keys)
@@ -58,7 +58,7 @@ def on_key(key):
         game.loop, game.at = None, -1
         draw()
     elif key == "space":
-        game.loop = every(SPEED, tick)
+        game.loop = every(1 / SPEED, tick)
 
 
 for row, (picture, _, _) in zip(keys, DRUMS):

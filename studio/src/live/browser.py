@@ -90,11 +90,17 @@ def _patch_emoji():
 
     async def fetch(gid):
         r = await pyfetch(URL.new(f"purple/emoji/{pictures.dir.name}/{gid}.png", document.baseURI).href)
-        if not r.ok or not (app := globals().get("_app")):
+        if not r.ok:
+            asked.discard(gid)
             return
+        # Kept even before the app is up: a room drawn during startup asks only once.
         (pictures.dir / f"{gid}.png").write_bytes(await r.bytes())
+        if not (app := globals().get("_app")):
+            return
         for cache in (app.g._emoji, app.g._text, app.g._layouts):
             cache.clear()
+        for room in app._family_rooms.values():  # each keeps its scene drawn once, with the blank
+            room._surface = None
         app.invalidate()
 
     def picture(self, gid):

@@ -6,8 +6,12 @@ from purple import *
 # Press a card's letter to turn it over. Find a pair and you go again.
 # Before the first card, press 1 to 6 for that many players, each finding pairs in their own color.
 
-# The pictures on the cards, up to 13: emoji, or your pictures, or both. Each one makes a pair, shuffled every game.
+# The pictures on the cards: emoji, or your pictures, or both. Each game picks PAIRS of them, a pair each.
 CARDS = ["🐶", "🐱", "🦕", "🚂", "🍓", "🌈", "🚀", "🐢", "🍦"]
+# How many pairs to find, 1 to 13.
+PAIRS = 9
+# How many seconds two cards that don't match stay turned over, 0.5 to 5.
+PEEK = 1.5
 # The color under a card turned over but not matched yet.
 TURNED = "#7a5ac8"
 # The drum when a card turns over: one of Purple's drums, one of your sounds, or none.
@@ -18,7 +22,7 @@ MATCH_SOUND = ""
 # Each player's mark, and the color under the pairs they find.
 players = [("🔴", "#e44444"), ("🔵", "#2e6ae1"), ("🟢", "#2e9e4f"), ("🟡", "#e0a020"), ("🟣", "#9b4dca"), ("🟠", "#ec7a1c")]
 rows = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
-cards = CARDS[:13] * 2
+cards = random.sample(CARDS, max(1, min(PAIRS, 13, len(CARDS)))) * 2
 random.shuffle(cards)
 # As few rows as fit the cards, each about as full as the others, so the rows end together.
 used = next(n for n in (1, 2, 3) if len(cards) <= sum(len(keys) for keys in rows[:n]))
@@ -69,7 +73,7 @@ def on_key(key):
             if MATCH_SOUND:
                 drum(MATCH_SOUND)
         elif len(up) == 2:
-            after(1.5, turn_back)
+            after(PEEK, turn_back)
     draw()
     if len(shown) == len(faces):
         game_over("All the pairs! Press a key to play again.")

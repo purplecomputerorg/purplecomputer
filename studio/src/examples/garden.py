@@ -54,7 +54,7 @@ def tend(key):
         plants[key] = [game.seed, 0]
         if PLANT_SOUND:
             drum(PLANT_SOUND)
-    elif plants[key][1] < 2:
+    elif plants[key][1] < len(SEEDS[plants[key][0]][1]) - 1:
         plants[key][1] += 1
         if GROW_SOUND:
             drum(GROW_SOUND)

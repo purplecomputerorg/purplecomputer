@@ -12,6 +12,10 @@ from purple import *
 WORDS = {"cat": "🐱", "dog": "🐶", "sun": "☀️", "bus": "🚌", "pig": "🐷", "fish": "🐟"}
 # The snake's colors, from its head back, repeated down its length.
 BODY = ["#5ec46a", "#3e9e4c"]
+# How many squares a second the snake crawls, 2 to 15.
+SPEED = 7
+# How long the snake can grow, 3 to 40 squares.
+LONGEST = 20
 
 spots = grid.keyboard(KEY_ROWS[1:])
 keys = {spot: key for key, spot in spots.items()}
@@ -81,7 +85,7 @@ def arrive(key):
         return
     play(KEY_NOTES[key], "glockenspiel")
     game.got += 1
-    if len(snake) < 20:
+    if len(snake) < LONGEST:
         snake.append(snake[-1])
     light()
     if wanted():
@@ -120,4 +124,4 @@ for key, spot in spots.items():
     grid.set(spot, key.upper())
 draw()
 new_word()
-every(0.15, crawl)
+every(1 / SPEED, crawl)

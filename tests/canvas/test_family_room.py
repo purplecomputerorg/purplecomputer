@@ -798,7 +798,7 @@ def test_the_esc_menu_holds_five_family_rooms_and_the_sixth_waits(pack):
         app = make_app()
         screen = RoomsScreen(app)
         app.push(screen)
-        assert _family_states(screen)[-1] == "full" and "5 of 5" in screen.description
+        assert _family_states(screen)[-1] == "full" and "Rooms from Purple Packs: 5 on, up to 5." in screen.description
         screen.row, screen.col = len(screen.rows) - 1, len(screen.rows[-1]) - 1
         await press(app, "enter")
         assert _family_states(screen)[-1] == "full" and app._toasts

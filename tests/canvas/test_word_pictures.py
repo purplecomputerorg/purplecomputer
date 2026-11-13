@@ -53,3 +53,17 @@ def test_the_picture_is_drawn_at_emoji_size_and_a_missing_one_as_a_frame(picture
     monkeypatch.setattr(content_mod.get_content(), "word_pictures", {})
     frame = g.emoji(char, 40)
     assert frame.get_size() == g.emoji("🖼️", 40).get_size()
+
+
+def test_play_draws_a_photo_on_its_own_big_and_beside_anything_else_at_emoji_size(pictures):
+    from purple_tui.canvas.harness import make_app, run
+    from purple_tui.canvas.rooms.play_room import Entry
+
+    char = pictures[0]().get_emoji("biscuit")
+
+    async def go():
+        app = make_app(room="play")
+        play, g = app.rooms["play"], app.g
+        alone, two, with_emoji = (play._answer_px(g, Entry("answer", m)) for m in (char, char * 2, f"{char}🐶"))
+        assert alone > two == with_emoji == play._answer_px(g, Entry("answer", "🐶"))
+    run(go())

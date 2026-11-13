@@ -91,7 +91,7 @@ class RoomsScreen(Dialog):
         if get_littles_mode():
             return self.LITTLES_ON
         text = self.JUST_ADDED if self.packs else self.DESCRIPTION
-        return text + (f" Family rooms on: {family_on()} of {MAX_FAMILY_ROOMS}." if len(self.labels) > 1 else "")
+        return text + (f" Rooms from Purple Packs: {family_on()} on, up to {MAX_FAMILY_ROOMS}." if len(self.labels) > 1 else "")
 
     def _state(self, item, on: dict) -> str:
         kind, x = item

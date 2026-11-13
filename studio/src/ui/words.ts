@@ -1,7 +1,7 @@
 import { CORE_EMOJI } from "@sdk/purple/core";
 import { play, previewUrl } from "../audio";
 import { roomLine } from "../roomvoice";
-import { changed, draft, phraseFor, putPhrase, whileShown, type WordEntry } from "../state";
+import { changed, draft, dropPhotos, phraseFor, putPhrase, whileShown, type WordEntry } from "../state";
 import { typedWord, typingKeys, wordProblem } from "../keys";
 import { h, removeButton } from "./dom";
 import { closeEmojiPicker, emojiCell, openEmojiPicker } from "./emojipicker";
@@ -102,6 +102,7 @@ function wordTable(): HTMLElement {
       h("button", { type: "button", class: "x chevron", "aria-expanded": String(isOpen), "aria-label": isOpen ? "Close" : `Open ${entry.word}`, onclick: toggle }, isOpen ? "▲" : "▼"),
       removeButton(() => {
         draft.words.splice(draft.words.indexOf(entry), 1);
+        dropPhotos([entry.emoji]);
         putPhrase(entry.word, null);
         render();
       }));
@@ -131,7 +132,9 @@ function wordTable(): HTMLElement {
   function showsField(entry: WordEntry): HTMLElement {
     const core = CORE_EMOJI[entry.word];
     const pick = emojiCell(entry.emoji, () => entry.word, (e) => {
+      const was = entry.emoji;
       entry.emoji = e;
+      dropPhotos([was]);
       changed();
       render();
     }, { pictures: true, title: showsTitle(entry.word) });

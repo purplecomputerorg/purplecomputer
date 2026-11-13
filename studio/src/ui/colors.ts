@@ -120,6 +120,6 @@ export function colorsView(): View {
     title: "Colors",
     editor: h("section", {}, h("p", { class: "lead" }, "Pick a color for Purple's screen. The words on it change to stay easy to read."), body),
     live: { room: "art" },
-    caption: "Type on the keyboard to paint.",
+    caption: "Your colors on the real Purple. Pick any room to see them there.",
   };
 }

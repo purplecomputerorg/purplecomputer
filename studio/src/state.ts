@@ -130,6 +130,12 @@ export interface Piece { id: string; section: string; label: string; one: string
 // A word's photo is one of the pack's pictures, named in the word's emoji; it belongs to Words, not to New Rooms.
 const wordsPicture = (f: RoomFile) => f.kind === "images" && draft.words.some((w) => w.emoji === f.name);
 
+// Once no word shows a photo, it leaves the pack, unless a room's code names it. It stays on the shelf.
+export function dropPhotos(names: string[]) {
+  const unused = (f: RoomFile) => f.kind === "images" && names.includes(f.name) && !wordsPicture(f) && !draft.rooms.some((r) => r.source.includes(f.name));
+  draft.roomFiles = draft.roomFiles.filter((f) => !unused(f));
+}
+
 // Everything in the draft by kind, with the Studio section it's made on.
 export function allPieces(): Piece[] {
   return [
@@ -153,9 +159,10 @@ const SECTION_FIELDS: Record<string, (keyof Draft)[]> = {
 };
 export const hasWork = (section?: string) => allPieces().some((p) => (!section || p.section === section) && p.items.length);
 export function clearSection(section: string) {
-  const fresh = emptyDraft(), before = draft.roomFiles;
+  const fresh = emptyDraft(), before = draft.roomFiles, photos = draft.words.map((w) => w.emoji);
   for (const k of SECTION_FIELDS[section]) Object.assign(draft, { [k]: fresh[k] });
   if (section === "rooms") draft.roomFiles = before.filter(wordsPicture);
+  if (section === "words") dropPhotos(photos);
   changed();
 }
 

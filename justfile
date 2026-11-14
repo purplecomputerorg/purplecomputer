@@ -10,7 +10,6 @@ default:
 
 # Show environment variables for testing
 env:
-    @echo "PURPLE_UX=tui           Run the Textual UI (what release/1.x ships) instead of the canvas"
     @echo "PURPLE_NO_AUDIO=1       Force audio off (test no-sound UX)"
     @echo "PURPLE_NO_EVDEV=1       Skip evdev input (use the window's keyboard events)"
     @echo "PURPLE_DEV_MODE=1       Dev shortcuts, screenshots, debug keys"
@@ -262,39 +261,6 @@ ship *args:
     ./build-scripts/upload-purple2.sh {{args}}
     @echo && ./build-scripts/ship-status.sh
 
-# v1 (release/1.x, frozen): its worktree; see guides/release-guide.md, v1
-release_dir := env_var("HOME") / "purplecomputer-release"
-
-# v1: show what ships vs what waits (= on release/1.x, + main only)
-release-status *args:
-    @./build-scripts/release-status.sh {{args}}
-
-# v1: cherry-pick fixes from main onto release/1.x and show what ships (run just release-test before building)
-release-pick +shas:
-    git -C {{release_dir}} cherry-pick -x {{shas}}
-    @echo && ./build-scripts/release-status.sh
-    @echo && echo "Run 'just release-test' before purple-build --release."
-
-# v1: lint and test release/1.x in its worktree; run once after a batch of picks, before building
-release-test:
-    cd {{release_dir}} && just test
-
-# v1: push release/1.x to GitHub (main is pushed separately via /push)
-release-push:
-    @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
-    git -C {{release_dir}} push origin release/1.x
-
-# Picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases. Build first with
-# purple-build --release (semver: PURPLE_VERSION=v1.x). just ship-v1 --commit <hash> releases an earlier built commit.
-# v1: publish the already-built release/1.x build to downloads.purplecomputer.org/v1
-ship-v1 *args:
-    @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
-    @cd {{release_dir}} && {{justfile_directory()}}/build-scripts/release-iso.sh {{args}}
-
-# v1: show which commit the v1 download is; with a hash, fail unless it matches (just release-check abc1234)
-release-check *commit:
-    @./build-scripts/release-check.sh {{commit}}
-
 # v1: upload the two v1 card PDFs to Cloudflare R2 (the files host)
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
@@ -305,7 +271,7 @@ read-log path *args:
     @python3 scripts/purple-log-summary.py "{{path}}" {{args}}
 
 # Symlink a built ISO into ~/isos and print the scp line to pull it to your Mac (same picker as flash).
-# just link-iso [--debug|--no-backup] [--main|--release|--ref <commit>] [iso-path]
+# just link-iso [--debug|--no-backup] [--main|--ref <commit>] [iso-path]
 link-iso *args:
     ./build-scripts/link-iso.sh {{args}}
 
@@ -325,11 +291,6 @@ print-card *args:
 #   just cards rooms      -> one card
 cards *args:
     @{{venv}}/bin/python cards/v2/build.py --png /tmp/screenshots {{args}}
-
-# Delete old releases from Cloudflare R2, keeping the current version (just ship runs this, also keeping the one it replaced).
-# E.g., just clean-releases --dry-run, just clean-releases --keep v1.0
-clean-releases *args:
-    ./build-scripts/clean-old-releases.sh {{args}}
 
 # Keep the newest N builds (default: 3) and delete older ones, plus every corrupt-test ISO. E.g., just clean-isos 5, just clean-isos --dry-run
 clean-isos *args:
@@ -351,7 +312,7 @@ build-pi *args:
 
 # Flash ISO to USB drive (asks which of the newest build's ISOs to use).
 # just flash --ref <commit> flashes that commit's build: archived (see just build --ref) or still in the output dir
-# just flash --main | --release flashes the newest build from that branch (flash-all takes the same flags)
+# just flash --main flashes the newest build on main (flash-all takes the same flags)
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 
@@ -508,11 +469,11 @@ studio-fixtures:
     {{venv}}/bin/python scripts/export_studio.py
 
 # Pretend laptop in QEMU with a build plugged in as a USB stick: UEFI firmware (Esc at power-on), persistent blank disk, screen in a browser.
-# just vm [commit|--release] [--debug|--backup] [--cd] [--legacy] [--empty] [--fresh]; default is the newest build's standard ISO
+# just vm [commit] [--debug|--backup] [--cd] [--legacy] [--empty] [--fresh]; default is the newest build's standard ISO
 vm *args:
     @./scripts/vm.sh start {{args}}
 
-# Swap the USB stick (or with --cd, the disc) in the running VM: just vm-insert [commit|--release] [--debug|--backup] [--cd]
+# Swap the USB stick (or with --cd, the disc) in the running VM: just vm-insert [commit] [--debug|--backup] [--cd]
 vm-insert *args:
     @./scripts/vm.sh insert {{args}}
 

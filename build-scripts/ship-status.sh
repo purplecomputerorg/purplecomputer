@@ -16,7 +16,7 @@ PURPLE_PATHS=(purple_tui packs scripts/voice_model.sh)
 IMAGE_PATHS=($(image_paths . | sort -u))
 LANDING=${LANDING_DIR:-$HOME/landing}
 
-git fetch -q origin main release/1.x 2>/dev/null || echo "(GitHub unreachable: using the last fetch)"
+git fetch -q origin main 2>/dev/null || echo "(GitHub unreachable: using the last fetch)"
 main=$(git rev-parse origin/main)
 fetch_json() { curl -fsS --max-time 10 "$1?t=$(date +%s)" 2>/dev/null; }
 field() { sed -n "s/.*\"$2\": *\"\([^\"]*\)\".*/\1/p" <<<"$1" | head -1; }
@@ -62,15 +62,6 @@ if known "$iso"; then
     compare "Download" "$iso" "$(field "$json" version)" "$main" main "$fix" "${IMAGE_PATHS[@]}"
 else
     row "Download" "" "" 0 "couldn't read purple2/latest.json"
-fi
-
-# The v1 download (downloads.purplecomputer.org/v1), against release/1.x.
-check=$(bash build-scripts/release-check.sh 2>/dev/null)
-v1=$(sed -n 's/^Commit: *\([0-9a-f]\{40\}\).*/\1/p' <<<"$check")
-if known "$v1"; then
-    compare "v1 download" "$v1" "$(sed -n 's/^Download: *\([^,]*\).*/\1/p' <<<"$check")" origin/release/1.x release/1.x "just release-status" "${IMAGE_PATHS[@]}"
-else
-    row "v1 download" "" "" 0 "couldn't read latest.json" "just release-status"
 fi
 
 # Studio (studio.purplecomputer.org, from its version.json), and whether its demo and packs run

@@ -383,7 +383,7 @@ The ISO is **hybrid**—bootable from USB stick or optical media, BIOS or UEFI, 
 
 ### Versioning and Releasing
 
-Every ISO is stamped with a version in `/etc/purple-version`, visible in the Parent Menu (hold Escape): `v2.0.N` for a clean commit on main, `build-<hash>-<date>` for anything else. `main` ships: `just rtbf` tests, builds and flashes customer USBs, and `just ship` publishes the build to downloads.purplecomputer.org (the landing repo serves the page; the ISOs, checksums, manifests and card PDFs come straight from R2 on the files host). v1 stays at downloads.purplecomputer.org/v1, published from `release/1.x` with `just ship-v1`. Formats, caching, credentials and the full workflow: `guides/release-guide.md`.
+Every ISO is stamped with a version in `/etc/purple-version`, visible in the Parent Menu (hold Escape): `v2.0.N` for a clean commit on main, `build-<hash>-<date>` for anything else. `main` ships: `just rtbf` tests, builds and flashes customer USBs, and `just ship` publishes the build to downloads.purplecomputer.org (the landing repo serves the page; the ISOs, checksums, manifests and card PDFs come straight from R2 on the files host). v1 is frozen and stays hosted at downloads.purplecomputer.org/v1. Formats, caching, credentials and the full workflow: `guides/release-guide.md`.
 
 ---
 

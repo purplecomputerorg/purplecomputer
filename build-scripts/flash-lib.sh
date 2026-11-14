@@ -687,12 +687,11 @@ built_on_branch() {
     true
 }
 
-# use_newest_build_on <flag>: --main or --release picks the newest build from that branch.
+# use_newest_build_on --main: pick the newest build on main.
 BUILD_BRANCH_FILTER=""
 use_newest_build_on() {
     case "$1" in
-        --main)    BUILD_BRANCH_FILTER=main ;;
-        --release) BUILD_BRANCH_FILTER=release/1.x ;;
+        --main) BUILD_BRANCH_FILTER=main ;;
     esac
 }
 

@@ -18,7 +18,7 @@
 
 `main` carries both UIs. The Textual UX (`purple_tui/purple_tui.py`, the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen. The TUI never imports canvas modules. The canvas UX lives under `purple_tui/canvas/` with its tests in `tests/canvas/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
 
-**No picks to `release/1.x` (frozen v1, see Shipping Branch):** don't propose or run `release-pick` for anything, fix or feature, unless the user calls it an emergency. Don't write TUI counterparts of canvas fixes. Shared-module changes (`code_runner.py`, `audio.py`, etc.) may change TUI behavior on main; update the TUI tests to match and move on. Duplicated logic between the TUI and canvas is deliberate; don't clean it up.
+Don't write TUI counterparts of canvas fixes. Shared-module changes (`code_runner.py`, `audio.py`, etc.) may change TUI behavior on main; update the TUI tests to match and move on. Duplicated logic between the TUI and canvas is deliberate; don't clean it up.
 
 ---
 
@@ -34,7 +34,7 @@ If you're unsure what message to use, propose one and ask the user to confirm be
 
 ## Shipping Branch
 
-`main` ships: customer USBs (`just rtbf`) and downloads.purplecomputer.org (`just ship`) both come from a clean main. v1 stays frozen on `release/1.x` (`~/purplecomputer-release`, served at downloads.purplecomputer.org/v1 via `just ship-v1`). Never commit or merge there directly; an emergency fix the user asks for lands on main first, then `just release-pick`, then show `just release-status`. Full workflow: `guides/release-guide.md`.
+`main` ships: customer USBs (`just rtbf`) and downloads.purplecomputer.org (`just ship`) both come from a clean main. v1 is frozen on `release/1.x` and no longer shipped; its last release stays hosted at downloads.purplecomputer.org/v1. Never commit there. Full workflow: `guides/release-guide.md`.
 
 ---
 

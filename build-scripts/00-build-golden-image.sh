@@ -1382,9 +1382,9 @@ JOURNAL
     cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/etc/purple/xinitrc"
 
     # Stamp build version so parents can report it from the Parent Menu.
-    # PURPLE_VERSION env var can be set externally (e.g. by release-iso.sh).
+    # PURPLE_VERSION env var is set by build-in-docker.sh.
     # Falls back to git short hash + build date. /etc/purple-commit always
-    # carries the source commit so release-iso.sh can verify an ISO against
+    # carries the source commit so the ship scripts can match an ISO to
     # the checkout even when a friendly version hides the hash.
     local git_hash="${PURPLE_COMMIT:-}"
     if [ -z "$git_hash" ]; then

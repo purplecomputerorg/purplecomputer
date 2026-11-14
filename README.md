@@ -18,11 +18,8 @@ They explore, create, and put it down on their own.
 > are always welcome via email. See [LICENSE](LICENSE) and
 > [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-> **Which branch?** `release/1.x` is the default branch and the code on a Purple
-> Key: clone it to run what is currently being shipped in boxes. `main` is Purple
-> 2.0 in development (a new canvas UI, Blocks and Write rooms, code mode, saving,
-> printing, kid profiles, and Purple Studio) and may be broken at any time. This
-> README describes `main`.
+> **Which branch?** `main` is what ships on Purple Keys and the download.
+> `release/1.x` is the frozen Purple 1.0 and no longer shipped.
 
 ---
 

@@ -4,7 +4,7 @@ How to build, release, and update Purple Computer downloads.
 
 ## Hosting layout
 
-- `downloads.purplecomputer.org`: the customer download pages, in the landing repo (`~/landing/src/components/DownloadsPage.tsx`), served by Vercel, deploying with the landing site. The root is the current build (from `purple2/latest.json`); `/v1` is v1 (from `latest.json`), for families still on it. Both share one email gate. The old 2.0 preview host, `purple2.purplecomputer.org`, redirects to the root.
+- `downloads.purplecomputer.org`: the customer download pages, in the landing repo (`~/landing/src/components/DownloadsPage.tsx`), served by Vercel, deploying with the landing site. The root is the current build (from `purple2/latest.json`); `/v1` is the frozen v1 (from `latest.json`), for families still on it. Both share one email gate. The old 2.0 preview host, `purple2.purplecomputer.org`, redirects to the root.
 - The files host: the R2 custom domain (`R2_CUSTOM_DOMAIN`, value in the private env file). Serves the actual objects straight from Cloudflare: ISOs, checksums, the manifests, and the card PDFs. Everything in this guide uploads here.
 
 Each page reads its manifest from the files host (cached 5 minutes), so the version badge updates on its own after a release.
@@ -25,56 +25,22 @@ just ship-status             # what families have vs main, and what to run
 
 `just ship [commit]` uploads standard + debug, plus the four `cards/v2/out` card PDFs as committed at the commit you name (default HEAD, even when it falls back to an older build), to `purple2/<version>/` on the files host (the prefix is from when this was the 2.0 preview), writes `purple2/latest.json`, and prunes `purple2/` to that version plus the one it replaced. It never touches `releases/`, `latest.json` or the redirects, which stay v1's. It tags the commit with its `v2.0.N` version and pushes the tag. When those exact ISOs are already live it only refreshes the cards under their version, so `just ship` after a card-only commit updates the cards without a rebuild. The page links the versioned paths straight from `purple2/latest.json`, so there are no redirects to maintain.
 
-`just ship-status` gives one line each for the newest ISO build, the download and v1 download, Studio, and purplecomputer.org: whether it's behind main and what to run (`-v` lists the missing commits). It also flags Studio running Purple the download doesn't have yet, since its demo and packs then show Purple families can't get. `just ship` and `just studio-deploy` print it when they finish.
+`just ship-status` gives one line each for the newest ISO build, the download, Studio, and purplecomputer.org: whether it's behind main and what to run (`-v` lists the missing commits). It also flags Studio running Purple the download doesn't have yet, since its demo and packs then show Purple families can't get. `just ship` and `just studio-deploy` print it when they finish.
 
 ---
 
 ## v1 (release/1.x)
 
-Frozen since main became the shipping branch (the cutover: [docs/RELEASE-2.0.md](../docs/RELEASE-2.0.md)): no picks unless the user calls it an emergency. Families still on v1 get it from `downloads.purplecomputer.org/v1`, and its cards from purplecomputer.org/cards/v1.
+Frozen and no longer shipped (the cutover: [docs/RELEASE-2.0.md](../docs/RELEASE-2.0.md)). Nothing commits to `release/1.x`. Families still on v1 get its last release from `downloads.purplecomputer.org/v1` (`releases/<version>/` and `latest.json` on the files host, plus the `/download.iso` redirects), and its cards from purplecomputer.org/cards/v1. Those objects stay up on their own; no command in this repo writes to them except `just upload-pdfs`.
 
-`release/1.x`, checked out at `~/purplecomputer-release`, is the branch v1 builds from. Its only commits are fixes cherry-picked from main. It is never committed to directly and never merges with main in either direction.
+To rebuild the v1 ISO if the hosted copy is ever lost:
 
 ```bash
-just release-status          # what v1 families have, what ships next, what on main needs a pick decision (--all for everything)
-just release-pick <sha>...   # cherry-pick onto release/1.x, show status
-just release-test            # lint and test release/1.x, once per batch of picks, before building
-just release-push            # push release/1.x to GitHub
-purple-build --release       # build the release worktree (includes the with-backup ISO)
-just flash-all --release     # flash USBs from that build (prefers with-backup)
-just ship-v1                 # confirm, upload, tag (just ship-v1 --commit <sha> for an earlier built commit)
-just release-check <sha>     # confirm the public download is that commit
+just build --ref release/1.x     # builds that commit with its own build scripts, under /opt/purple-installer/archive/<hash>/
+just flash --ref release/1.x     # flash that build
 ```
 
-A commit that is both fix and feature belongs with the feature. The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
-
-`release-status` reads the shipped commit from the public download's `latest.json` (the newest tag on `release/1.x` when offline), lists what sits on `release/1.x` above it, and then only the main commits that still need a fix-or-wait decision: unpicked, and touching a path the image build copies in (`purple_tui/` outside `canvas/`, `config/`, `packs/`, the on-device scripts, the build scripts). Everything else is hidden with a count, and `--all` lists it with a marker: `.` docs and tooling that never reach an ISO, `~` canvas UI only (`purple_tui/canvas/`, `tests/canvas/`), `w` decided to wait, `=` already picked. A fix that touches both UIs shows as two commits by design (the TUI-only one first, see CLAUDE.md, Two UIs): pick that one, the `~` one stays.
-
-A commit that should stay on main for good (a feature for the next major release that touches shared paths) goes in `build-scripts/release-waits`, one line of `<sha> <why>`, and drops out of the decision list.
-
-When a pick needs hand-edits to fit the release branch (usually because it touches a feature that stays on main), log what changed in [release-pick-adaptations.md](release-pick-adaptations.md).
-
-Build, then flash, then ship. `purple-build --release` is a local wrapper (machine config, not this repo) around `build-in-docker.sh` pointed at the release worktree; it sets `PURPLE_WITH_BACKUP_ISO=1` so shipping builds always carry the backup image copy.
-
-`just ship-v1` prints the commit, the ISO it picked, and the commit count since the last release tag, then asks for confirmation before uploading anything. It refuses if the worktree is not on `release/1.x`. It uploads standard + debug ISOs with checksums to `releases/{version}/`, points the Cloudflare redirect rules (`/download.iso` and `/download-debug.iso`) at them, records the shipped commit in `latest.json`, tags it with the release version, pushes `release/1.x` and the tag to GitHub (the page links the shipped commit, and GitHub only knows commits that have been pushed), and deletes every older release except the one just replaced, which stays as a rollback. `just release-check <sha>` reads the live v1 download back and fails unless it is that commit. Releases before the commit was recorded fall back to the tag; `v2026.07.27-1107` and earlier have neither, so they report as unknown. It does not build: for a semver release, stamp the version at build time (`PURPLE_VERSION=v1.x purple-build --release`) and `just ship-v1` adopts it; otherwise the version is the build's UTC timestamp.
-
-`just ship-v1 --commit <sha>` releases an earlier commit on `release/1.x` instead of its head, for when picks landed after the build that was flashed and validated. The tag goes on that commit and the newer picks wait for the next build. The commit has to be on the branch already, since the branch is what gets pushed as the commit's home.
-
-The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` picks the newest ISO with that commit, ignoring newer builds of other commits (main builds share the output directory).
-
-Every v1 release prunes R2 down to the current version plus the one before it. To go further, or keep extra versions: `just clean-releases` (asks first; `--dry-run` previews, `--keep v1.0` keeps one more). The current version (from `latest.json`) is always kept.
-
-### Why a separate worktree
-
-`~/purplecomputer-release` is a linked worktree of this repo, not a clone: same object database, same branches and tags, just a second directory with `release/1.x` checked out (its `.git` is a pointer file back into the main checkout's).
-
-- Builds read the working tree (docker mounts the project directory), so the branch needs its own directory. The alternative, switching the main checkout back and forth on ship day, is stateful and error-prone.
-- A shared object database means `release-pick` cherry-picks local commits directly and tags are visible from both directories, no remote round-trips. The justfile resolves `.venv` through `git-common-dir`, so the worktree also needs no second environment. Release tooling (`just ship-v1`, `release-iso.sh`, `.env`) always runs from this checkout; the worktree only supplies the commit, so tooling fixes on main take effect without a cherry-pick.
-- It lives outside `.claude/worktrees/` deliberately: lane worktrees merge into main and get deleted, and this branch must never merge.
-
-It is not a backup: it shares `.git` with the main checkout and dies with it. `just ship-v1` pushes `release/1.x` after every release, so GitHub has a copy as of the last ship.
-
-Once no family needs v1: delete the branch, the worktree, the `/v1` pages in landing, and this section.
+Once no family needs v1: delete the branch, the `/v1` pages in landing, and this section.
 
 ---
 
@@ -123,7 +89,7 @@ User visits <files host>/download.iso
     -> Cloudflare serves cached ISO (or fetches from R2 origin)
 ```
 
-When `release-iso.sh` runs, it calls `setup-cloudflare-rules.sh` to update the redirect target. No need to re-upload or rename anything.
+The redirect target was last set by `setup-cloudflare-rules.sh <version>` when v1 shipped; it only needs running again if the rules are lost.
 
 ---
 
@@ -134,11 +100,10 @@ Every ISO is stamped with a version in `/etc/purple-version`, visible in the Par
 | Type | Example | Parent Menu shows | When |
 |------|---------|-------------------|------|
 | Image count | `v2.0.1151` | Version 2.0.1151 | A clean commit on main (`just rtbf` or `just build`, then `just ship`) |
-| Semver | `v1.0` | Version 1.0 | v1 major releases (`PURPLE_VERSION=v1.x purple-build --release`, `just ship-v1`) |
-| Build time | `v2026.03.30-1430` | Build: Mar 30, 2026 | Regular v1 releases (`just ship-v1`), UTC |
-| Dev build | `build-abc1234-20260330` | Version abc1234 | Anything else with no `PURPLE_VERSION` set: uncommitted changes, a lane branch, `release/1.x` |
+| Semver, build time | `v1.0`, `v2026.03.30-1430` | Version 1.0, Build: Mar 30, 2026 | Past v1 releases |
+| Dev build | `build-abc1234-20260330` | Version abc1234 | Anything else with no `PURPLE_VERSION` set: uncommitted changes, a lane branch |
 
-The image count is the number of commits on main (first parent) that touch a path the image build copies in, or the scripts that build it (`image_paths` in `build-scripts/image-lib.sh`, the same list `release-status` uses). Docs, guides, tests and Studio commits leave it alone, so two builds with the same number carry the same image. It counts on from the newest `v2.0.N` tag, so a later change to the path list can't renumber published builds. `major.minor` comes from `__version__` in `purple_tui/__init__.py`; bump that by hand for a milestone and the count carries on.
+The image count is the number of commits on main (first parent) that touch a path the image build copies in, or the scripts that build it (`image_paths` in `build-scripts/image-lib.sh`). Docs, guides, tests and Studio commits leave it alone, so two builds with the same number carry the same image. It counts on from the newest `v2.0.N` tag, so a later change to the path list can't renumber published builds. `major.minor` comes from `__version__` in `purple_tui/__init__.py`; bump that by hand for a milestone and the count carries on.
 
 ---
 
@@ -151,10 +116,7 @@ All scripts live in `build-scripts/`.
 | `build-all.sh` (via `build-in-docker.sh`) | `./build-scripts/build-in-docker.sh` | Build standard + debug ISOs |
 | `purple-rtbf.sh` | `just rtbf` | Test, build (with-backup) and flash a clean main |
 | `upload-purple2.sh` | `just ship` | Publish a main build to the download |
-| `release-iso.sh` | `just ship-v1` | Publish a release/1.x build to the v1 download, update redirects |
-| `release-check.sh` | `just release-check` | Show the live v1 download's commit, verify it against a hash |
 | `upload-pdfs.sh` | `just upload-pdfs` | Upload the v1 card PDFs, purge cache |
-| `clean-old-releases.sh` | `just clean-releases` | Delete old release versions from R2 |
 | `flash-to-usb.sh` | `just flash` | Write ISO to USB drive |
-| `setup-cloudflare-rules.sh` | (called by release) | Configure Cloudflare cache/redirect rules |
+| `setup-cloudflare-rules.sh` | (run by hand) | Configure Cloudflare cache/redirect rules |
 | `r2-helpers.sh` | (sourced by upload scripts) | Shared R2 upload and cache purge helpers |

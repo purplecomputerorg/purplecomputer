@@ -41,4 +41,4 @@ Review done, nothing blocking. Run:
   just ship      # publish that build to downloads.purplecomputer.org and tag it
 ```
 
-Steps they've already done can be skipped: if the commit is already built, the build step no-ops. If commits landed on main after the build that was flashed and validated, `just ship <sha>` ships that earlier build. v1 (`release/1.x`) is frozen; an emergency v1 release goes through `just release-status`, `purple-build --release` and `just ship-v1` (see `guides/release-guide.md`). If they later report a failure, help debug from the output they paste; do not attempt the build yourself.
+Steps they've already done can be skipped: if the commit is already built, the build step no-ops. If commits landed on main after the build that was flashed and validated, `just ship <sha>` ships that earlier build. v1 (`release/1.x`) is frozen and no longer shipped. If they later report a failure, help debug from the output they paste; do not attempt the build yourself.

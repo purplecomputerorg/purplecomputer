@@ -4,15 +4,14 @@
 # (noVNC over QEMU's VNC websocket) or any VNC viewer.
 #
 # Usage: scripts/vm.sh <command> [args]
-#   start [ref] [--release] [--debug|--backup] [--cd] [--legacy] [--empty] [--fresh]
-#   insert [ref] [--release] [--debug|--backup] [--cd]
+#   start [ref] [--debug|--backup] [--cd] [--legacy] [--empty] [--fresh]
+#   insert [ref] [--debug|--backup] [--cd]
 #   rooms      plug in a second USB drive holding Example Rooms
 #              (scripts/example_rooms.py, built fresh)
 #   plug <image> [id]   a disk image in a USB port, writable (unplug [id] pulls it)
 #   eject | stop | key <keys...> | shot [file]
 #
-#   ref        a built commit on any branch (default: the newest build);
-#              --release means the build of release/1.x HEAD
+#   ref        a built commit on any branch (default: the newest build)
 #   --cd       put the ISO in the CD drive instead of plugging it in as a USB
 #              stick (Purple ISOs are made for USB; GRUB stops at a prompt)
 #   --legacy   legacy BIOS (SeaBIOS, F12 boot menu) instead of UEFI
@@ -35,7 +34,6 @@ REF="" VARIANT=standard USB=1 LEGACY=0 EMPTY=0 FRESH=0
 parse_args() {
     for arg in "$@"; do
         case "$arg" in
-            --release) REF=release/1.x ;;
             --debug|--standard|--backup) VARIANT="${arg#--}" ;;
             --cd) USB=0 ;;
             --legacy) LEGACY=1 ;;

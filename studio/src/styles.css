@@ -252,11 +252,12 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
   /* Snug enough that all four rooms fit one row on a 360px phone */
   .room-buttons { margin-bottom: 10px; gap: 4px; }
   .room-buttons button { padding-inline: 9px; }
-  .phone-bar .tray-keys { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: fit-content; max-width: 100%; margin: 0 auto; padding: 8px; border-radius: 14px; background: linear-gradient(#45444d, #2a2930); }
+  /* Six keys (a tip's key joins the room's five) in one row on a 360px phone */
+  .phone-bar .tray-keys { display: flex; flex-wrap: wrap; justify-content: center; gap: min(6px, 1.5vw); width: fit-content; max-width: 100%; margin: 0 auto; padding: 8px; border-radius: 14px; background: linear-gradient(#45444d, #2a2930); }
   .phone-bar .tray-keys:empty { display: none; }
-  .tray-key { flex: 0 0 auto !important; min-width: 46px; height: 46px; padding: 0; border-radius: 9px; font-size: 14px; box-shadow: 0 3px 0 #060608; }
+  .tray-key { flex: 0 0 auto !important; min-width: min(46px, 11.5vw); height: 46px; padding: 0; border-radius: 9px; font-size: 14px; box-shadow: 0 3px 0 #060608; }
   .tray-key .sticker { font-size: 17px; }
-  .tray-key > span { padding: 0 10px; }
+  .tray-key > span { padding: 0 min(10px, 1.5vw); }
   .tray-key.down { animation: traydown 0.22s; }
   .phone-hint { display: block; margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--dim); }
 }

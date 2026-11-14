@@ -10,8 +10,8 @@ import time
 
 import pygame
 
-from .. import boot_log
-from ..input import KeyCode, RawKeyEvent
+from . import boot_log
+from .input import KeyCode, RawKeyEvent
 
 _NAMES = {
     pygame.K_ESCAPE: "ESC", pygame.K_BACKSPACE: "BACKSPACE", pygame.K_TAB: "TAB", pygame.K_RETURN: "ENTER",

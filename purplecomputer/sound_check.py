@@ -12,7 +12,7 @@ status: docs/PLAN-audio-volume.md, "Hands-on probe".
 
 run() never raises and never plays unless pactl, a real sink, and a real
 unmuted mic are all present: nobody needs a microphone to use Purple.
-No boot_log import here, so `python3 -m purple_tui.sound_check` stays cheap.
+No boot_log import here, so `python3 -m purplecomputer.sound_check` stays cheap.
 
 Privacy: the mic audio is reduced to tone levels as it streams in. At most a
 tenth of a second of sound exists at any moment, nothing is written anywhere,

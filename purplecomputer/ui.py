@@ -11,11 +11,11 @@ import time
 
 import pygame
 
-from .. import i18n
-from .. import palette as P
-from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_ROBOT
+from . import i18n
+from . import palette as P
+from .constants import HOLD_OR_TAP_THRESHOLD, ICON_ROBOT
 from .gfx import Gfx, mix, rgb
-from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
+from .keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 
 # nf-md-arrow_*_bold: big heads stay readable at hint size, unlike Plex's or DejaVu's arrows.
 LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"

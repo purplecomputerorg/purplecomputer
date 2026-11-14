@@ -25,11 +25,11 @@
 ## How to use this
 
 - **Verify each repro before changing code.** These come from AI testers and an AI judge, and either can be wrong. Several "Where to look" entries are guesses from file names only.
-- **Read CLAUDE.md first.** Only the canvas UI (`purple_tui/canvas/`) and Studio (`studio/`) get fixes. The Textual UI is frozen.
+- **Read CLAUDE.md first.** Only the canvas UI (`purplecomputer/`) and Studio (`studio/`) get fixes. The Textual UI is frozen.
 - **Add a test for each real bug:**
-  - Purple-side bugs go in `tests/canvas/`.
+  - Purple-side bugs go in `tests/`.
   - Studio-side bugs go in Studio's tests.
-  - Anything about what ends up in a downloaded pack goes in `tests/canvas/test_studio_to_purple.py`.
+  - Anything about what ends up in a downloaded pack goes in `tests/test_studio_to_purple.py`.
 - **Studio's preview is a separate thing from real Purple.** Studio's preview runs Purple's Python in the browser (`studio/src/live/`), but several findings were only seen in the preview and not on real Purple. Check which side a bug is actually on before fixing.
 
 ## Fix these
@@ -80,7 +80,7 @@
 - `studio/src/styles.css`: the cover's blue color.
 - `studio/src/live/boot.ts`, `studio/src/live/frame.ts`: preview restart and first frame.
 - `studio/src/ui/colors.ts`, `studio/sdk/src/purple/theme.ts`: how the chosen theme reaches the preview.
-- `tests/canvas/test_studio_live.py`: may already cover the live preview.
+- `tests/test_studio_live.py`: may already cover the live preview.
 
 **Confidence**
 - High that it happens: seven scenarios and five screenshots.
@@ -129,7 +129,7 @@
 - `studio/src/ui/download.ts`: the summary and counts.
 - `studio/src/ui/roomfiles.ts`: the New Rooms "room pictures and sounds" list and badge.
 - `studio/src/ui/words.ts`: the picture swap.
-- Add a round-trip test in `tests/canvas/test_studio_to_purple.py`: reopen, swap, download, and assert no orphan image.
+- Add a round-trip test in `tests/test_studio_to_purple.py`: reopen, swap, download, and assert no orphan image.
 
 **Confidence**
 - High for the summary and badge: they are visible in the screenshot.
@@ -160,7 +160,7 @@
 - /tmp/purple-e2e-ai/sweep-20261112-134022/shots/1-room-maker-studio-016.png
 
 **Where to look** (guesses)
-- `purple_tui/canvas/emoji_pictures.py` and `studio/src/emoji.ts`: whether 🐖 resolves to a drawable picture. `tests/canvas/test_emoji_pictures.py` is the natural place for a test.
+- `purplecomputer/emoji_pictures.py` and `studio/src/emoji.ts`: whether 🐖 resolves to a drawable picture. `tests/test_emoji_pictures.py` is the natural place for a test.
 - `studio/src/ui/templateform.ts` or `studio/src/ui/builderkit.ts`: the form that writes the quiz Python.
 - `studio/src/saved.ts`: restoring room state after reload.
 - `studio/src/rooms/guest.py`: room runtime in the preview.
@@ -196,9 +196,9 @@
 - /tmp/purple-e2e-ai/sweep-20261112-134022/shots/1-breaker-studio-016.png
 
 **Where to look** (guesses)
-- `purple_tui/canvas/rooms/play_room.py`: meaning layout and wrap width.
+- `purplecomputer/rooms/play_room.py`: meaning layout and wrap width.
 - `studio/src/ui/laptop.ts` and `studio/src/ui/live.ts`: what "Zoom in" / "Whole screen" crops.
-- Tests to extend: `tests/canvas/test_meanings.py` and `tests/canvas/test_layout_fit.py`. `tests/canvas/test_play_markup_safety.py` already covers escaping.
+- Tests to extend: `tests/test_meanings.py` and `tests/test_layout_fit.py`. `tests/test_play_markup_safety.py` already covers escaping.
 
 **Confidence**
 - Low-medium.
@@ -257,10 +257,10 @@
 - /tmp/purple-e2e-ai/sweep-20261112-134022/shots/1-thorough-tour-purple-handoff-003.png
 
 **Where to look** (guess)
-- `purple_tui/canvas/rooms/rooms_screen.py`: the counter text and the limit.
-- `purple_tui/roomkit/limits.py`: possibly where 5 is defined.
-- `purple_tui/i18n.py`: if strings are translated.
-- Test in `tests/canvas/test_rooms_off.py` or `tests/canvas/test_room_picker.py`.
+- `purplecomputer/rooms/rooms_screen.py`: the counter text and the limit.
+- `purplecomputer/roomkit/limits.py`: possibly where 5 is defined.
+- `purplecomputer/i18n.py`: if strings are translated.
+- Test in `tests/test_rooms_off.py` or `tests/test_room_picker.py`.
 
 **Confidence**
 - High that the text is shown; the screenshot is clear.
@@ -278,7 +278,7 @@
     1. Keep emoji size.
     2. Draw a photo-only answer large, and keep it emoji-size inside sentences.
     3. Always draw photos larger.
-  - **Where:** `purple_tui/canvas/rooms/play_room.py`, `tests/canvas/test_word_pictures.py`.
+  - **Where:** `purplecomputer/rooms/play_room.py`, `tests/test_word_pictures.py`.
 - **Starter rooms' CAPITAL settings have no numbers to change.**
   - **What tripped testers up:** in Memory, Snake, Garden and Explore, the "easy settings in CAPITALS" are lists, emoji, colors and sound names. Simple knobs like card count, speed or lives are buried in code; Memory's card count is in `cards = CARDS[:13] * 2`. Long lines are also clipped in the small code box.
   - **Evidence:** 1-coder-kid, screenshot `/tmp/purple-e2e-ai/sweep-20261112-134022/shots/1-coder-kid-studio-015.png`.

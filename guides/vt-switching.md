@@ -52,7 +52,7 @@ On return (detected via `/sys/class/tty/tty0/active` check on each key event whi
 
 **Covers:** Normal app operation (the majority of the time).
 
-**File:** `purple_tui/input.py`, in `EvdevReader._read_loop()`
+**File:** `purplecomputer/input.py`, in `EvdevReader._read_loop()`
 
 ## Timeline
 
@@ -140,7 +140,7 @@ The tty2 switch works because `/dev/console` and `/dev/tty2` are on devtmpfs (su
 
 ## Key files
 
-- `purple_tui/input.py`: `EvdevReader` class, VT switch detection in `_read_loop()`, grab management
+- `purplecomputer/input.py`: `EvdevReader` class, VT switch detection in `_read_loop()`, grab management
 - `tools/purple-reboot.c`: Static reboot binary with fallback chain
 - `config/xinit/xinitrc`: X11 startup
 - `build-scripts/00-build-golden-image.sh`: Golden image build

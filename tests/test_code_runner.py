@@ -4,11 +4,11 @@ import asyncio
 
 import pytest
 
-from purple_tui.code_runner import (
+from purplecomputer.code_runner import (
     _split_clauses, _split_commands, _merge_multiword,
 )
-from purple_tui.canvas.rooms.art_room import onto_grid
-from purple_tui.fuzzy import fuzzy_match_small
+from purplecomputer.rooms.art_room import onto_grid
+from purplecomputer.fuzzy import fuzzy_match_small
 
 
 # ---------------------------------------------------------------------------
@@ -220,11 +220,11 @@ class _FakeCanvas:
         self._painted_chars.append(ch)
 
     def execute_logo_command(self, action, direction, distance):
-        from purple_tui.canvas.rooms.art_room import ArtRoom as ArtCanvas
+        from purplecomputer.rooms.art_room import ArtRoom as ArtCanvas
         ArtCanvas.execute_logo_command(self, action, direction, distance)
 
     def turn(self, direction):
-        from purple_tui.canvas.rooms.art_room import ArtRoom as ArtCanvas
+        from purplecomputer.rooms.art_room import ArtRoom as ArtCanvas
         ArtCanvas.turn(self, direction)
 
     _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
@@ -240,27 +240,27 @@ class TestSmartResolution:
         return asyncio.run(coro)
 
     def test_bare_color_switches(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["blue"]))
         assert canvas._last_key_color != "#FF0000"  # changed from default red
         assert canvas._paint_mode is True
 
     def test_modified_color(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["dark blue"]))
         assert canvas._last_key_color != "#FF0000"
         assert canvas._paint_mode is True
 
     def test_color_command_with_modified(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["color dark green"]))
         assert canvas._last_key_color != "#FF0000"
 
     def test_fuzzy_color_in_command(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["color bleu"]))
         assert canvas._last_key_color != "#FF0000"
@@ -268,7 +268,7 @@ class TestSmartResolution:
 
     def test_real_words_paint_not_coerced_to_color(self, canvas):
         """Real words must paint as letters, not be coerced into a lookalike color."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         for word in ("tree", "school", "apple"):
             canvas = _FakeCanvas()
             runner = ArtCodeRunner(canvas)
@@ -277,26 +277,26 @@ class TestSmartResolution:
 
     def test_real_word_not_coerced_to_command(self, canvas):
         """'tree' must paint, not fuzzy-match the 'repeat' keyword."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["tree"]))
         assert canvas._painted_chars == list("tree")
 
     def test_no_match_paints_chars(self, canvas):
         """Unrecognized text in paint mode should paint each character."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["xyzzy"]))
         assert canvas._painted_chars == list("xyzzy")
 
     def test_write_mode_still_types(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["write on", "hello"]))
         assert canvas._typed_chars == list("hello")
 
     def test_corrections_recorded(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["color bleu"]))
         assert len(runner.corrections) >= 1
@@ -306,28 +306,28 @@ class TestSmartResolution:
 
     def test_paint_inline_color(self, canvas):
         """'paint red' should paint one block in red."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint red"]))
         assert len(canvas._painted_chars) == 1  # one block
 
     def test_paint_inline_text(self, canvas):
         """'paint abc' should paint each char as a block."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint abc"]))
         assert canvas._painted_chars == ['a', 'b', 'c']
 
     def test_write_inline(self, canvas):
         """'write hello' should type each character."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["write hello"]))
         assert canvas._typed_chars == list("hello")
 
     def test_fuzzy_turn_arg(self, canvas):
         """'turn rite' should fuzzy match to 'turn right'."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         canvas._heading = 'up'
         self._run(runner.run(["turn rite"]))
@@ -335,14 +335,14 @@ class TestSmartResolution:
         assert len(runner.corrections) >= 1
 
     def test_fuzzy_face_arg(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["face dwon"]))
         assert canvas._heading == 'down'
         assert len(runner.corrections) >= 1
 
     def test_back_movement(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         canvas._cursor_x = 5
         self._run(runner.run(["paint off", "back 3"]))
@@ -350,27 +350,27 @@ class TestSmartResolution:
 
     def test_keymash_paints_chars(self, canvas):
         """Key mash in paint mode should paint each character."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["fdsajkl"]))
         assert canvas._painted_chars == list("fdsajkl")
 
     def test_abc_paints_three_chars(self, canvas):
         """'abc' should paint a, b, and c individually."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["abc"]))
         assert canvas._painted_chars == ['a', 'b', 'c']
 
     def test_single_letter_paints(self, canvas):
         """A single non-color letter should paint, not be swallowed."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["k"]))
         assert canvas._painted_chars == ['k']
 
     def test_paint_off_writes_letters(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "abc"]))
         assert canvas._painted_chars == []
@@ -383,7 +383,7 @@ class TestSmartResolution:
 
 class TestRepeatTypoCorrection:
     def test_repeet_becomes_repeat_block(self):
-        from purple_tui.code_runner import parse_lines
+        from purplecomputer.code_runner import parse_lines
         corrections = []
         cmds = parse_lines(["repeet 3 forward 10"], corrections=corrections)
         assert cmds[0]['type'] == 'repeat'
@@ -392,13 +392,13 @@ class TestRepeatTypoCorrection:
         assert parse_lines(["Repeet 3 forward 10"])[0]['type'] == 'repeat'
 
     def test_nested_body_typo_corrected(self):
-        from purple_tui.code_runner import parse_lines
+        from purplecomputer.code_runner import parse_lines
         cmds = parse_lines(["repeat 2: repeet 3 forward 1"])
         assert cmds[0]['body'][0]['type'] == 'repeat'
 
     def test_real_word_treat_not_coerced(self):
         """'treat'/'treats' fuzzy-match 'repeat' but are real content words."""
-        from purple_tui.code_runner import parse_lines
+        from purplecomputer.code_runner import parse_lines
         corrections = []
         for line in ("treat 5", "treats 5"):
             cmds = parse_lines([line], corrections=corrections)
@@ -406,13 +406,13 @@ class TestRepeatTypoCorrection:
         assert corrections == []
 
     def test_bare_typo_without_body_left_alone(self):
-        from purple_tui.code_runner import parse_lines
+        from purplecomputer.code_runner import parse_lines
         cmds = parse_lines(["repeet"])
         assert cmds == [{'type': 'line', 'text': 'repeet'}]
 
     def test_play_runner_repeet_runs_loop(self):
-        from purple_tui.canvas.rooms.play_room import SimpleEvaluator
-        from purple_tui.code_runner import PlayCodeRunner
+        from purplecomputer.rooms.play_room import SimpleEvaluator
+        from purplecomputer.code_runner import PlayCodeRunner
         runner = PlayCodeRunner(SimpleEvaluator())
         results = runner.run(["repeet 3: 2 + 2"])
         assert len(results) == 3
@@ -425,7 +425,7 @@ class TestArtRepeatTypos:
     CONTROL = "repeat 3 forward 4"
 
     def _run_art(self, line):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         canvas = _FakeCanvas()
         runner = ArtCodeRunner(canvas)
         asyncio.run(runner.run([line]))
@@ -456,7 +456,7 @@ class TestArtRepeatTypos:
 
 class TestRepeatTypoAcrossRunners:
     def test_music_repeet_loops_notes(self):
-        from purple_tui.code_runner import MusicCodeRunner
+        from purplecomputer.code_runner import MusicCodeRunner
         played = []
         runner = MusicCodeRunner(play_key_fn=lambda k, m: played.append(k))
         asyncio.run(runner.run(["repeet 2 fast abc"]))
@@ -464,7 +464,7 @@ class TestRepeatTypoAcrossRunners:
         assert runner.corrections
 
     def test_correct_spelling_records_no_correction(self):
-        from purple_tui.code_runner import parse_lines
+        from purplecomputer.code_runner import parse_lines
         corrections = []
         parse_lines(["repeat 3 forward 4"], corrections=corrections)
         assert corrections == []
@@ -475,7 +475,7 @@ class TestArtFuzzyVerbResolution:
     effects must be visible as soon as run() returns."""
 
     def _run_art(self, lines):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         canvas = _FakeCanvas()
         runner = ArtCodeRunner(canvas)
         asyncio.run(runner.run(lines))
@@ -496,7 +496,7 @@ class TestArtFuzzyVerbResolution:
 
 class TestMusicKey:
     def _run(self, line, set_key=True):
-        from purple_tui.code_runner import MusicCodeRunner
+        from purplecomputer.code_runner import MusicCodeRunner
         played, keys = [], []
         runner = MusicCodeRunner(play_key_fn=lambda k, m: played.append(k),
                                  set_key_fn=keys.append if set_key else None)
@@ -516,7 +516,7 @@ class TestMusicKey:
 
 class TestArtCommandsMidLine:
     def _cells(self, line):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         canvas = _FakeCanvas()
         runner = ArtCodeRunner(canvas)
         asyncio.run(runner.run([line]))

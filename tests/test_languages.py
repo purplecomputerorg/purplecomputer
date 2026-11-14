@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from purple_tui import content, i18n, settings, tts
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.parent_menu import LanguageScreen, SecondLanguageScreen
-from purple_tui.canvas.rooms.play_room import echo_markup, pinyin_candidates
-from purple_tui.canvas.ui import TextField
-from purple_tui.pack_manager import check_pack
+from purplecomputer import content, i18n, settings, tts
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.rooms.parent_menu import LanguageScreen, SecondLanguageScreen
+from purplecomputer.rooms.play_room import echo_markup, pinyin_candidates
+from purplecomputer.ui import TextField
+from purplecomputer.pack_manager import check_pack
 
 
-SPANISH_SPEECH = json.loads((Path(__file__).resolve().parents[2] / "packs/lang-es/content/language.json").read_text())["speech"]
+SPANISH_SPEECH = json.loads((Path(__file__).resolve().parents[1] / "packs/lang-es/content/language.json").read_text())["speech"]
 
 
 def make_pack(root, code, strings=None, words=None, typing=None, voice=None, speech=None):
@@ -255,7 +255,7 @@ def test_parent_menu_switches_languages(langs):
 
 @pytest.mark.parametrize("code", ["es", "zh"])
 def test_shipped_packs_load(code):
-    lang = i18n.load_language(i18n.Path(__file__).resolve().parents[2] / "packs" / f"lang-{code}")
+    lang = i18n.load_language(i18n.Path(__file__).resolve().parents[1] / "packs" / f"lang-{code}")
     assert lang and lang.code == code and lang.voice
 
 
@@ -268,7 +268,7 @@ def shipped(monkeypatch):
 
 
 def test_every_blocked_word_is_silent_alone(shipped):
-    from purple_tui.speech_filter import filter_speech
+    from purplecomputer.speech_filter import filter_speech
     for lang in shipped.values():
         assert lang.blocked, lang.code
         for word in lang.blocked:
@@ -277,7 +277,7 @@ def test_every_blocked_word_is_silent_alone(shipped):
 
 
 def test_blocked_words_are_scrubbed_from_a_sentence(shipped):
-    from purple_tui.speech_filter import filter_speech
+    from purplecomputer.speech_filter import filter_speech
     word = sorted(w for w in shipped["es"].blocked if w.isascii())[0]
     assert filter_speech(f"the purple dragon {word} flies") == "the purple dragon flies"
     hanzi = sorted(w for w in shipped["zh"].blocked if i18n.has_cjk(w) and len(w) > 1)[0]
@@ -285,7 +285,7 @@ def test_blocked_words_are_scrubbed_from_a_sentence(shipped):
 
 
 def test_every_play_word_can_still_be_said(shipped):
-    from purple_tui.speech_filter import filter_speech
+    from purplecomputer.speech_filter import filter_speech
     for lang in shipped.values():
         for word, reading in lang.words.values():
             assert filter_speech(word) == word, (lang.code, word)

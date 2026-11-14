@@ -3,9 +3,9 @@
 
 import pygame
 
-from purple_tui.canvas import harness  # noqa: F401  (sets SDL dummy drivers)
-from purple_tui.canvas.gfx import Gfx
-from purple_tui.canvas.sdl_input import pump
+from purplecomputer import harness  # noqa: F401  (sets SDL dummy drivers)
+from purplecomputer.gfx import Gfx
+from purplecomputer.sdl_input import pump
 
 
 def test_window_size_change_resizes_canvas():

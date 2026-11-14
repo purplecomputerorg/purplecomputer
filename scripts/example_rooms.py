@@ -21,10 +21,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 from purplepack import build_pack  # noqa: E402
-from purple_tui.canvas.room_picker import MAX_FAMILY_ROOMS  # noqa: E402
-from purple_tui.content import Room  # noqa: E402
-from purple_tui.pack_manager import get_installer  # noqa: E402
-from purple_tui.settings import set_room_on  # noqa: E402
+from purplecomputer.room_picker import MAX_FAMILY_ROOMS  # noqa: E402
+from purplecomputer.content import Room  # noqa: E402
+from purplecomputer.pack_manager import get_installer  # noqa: E402
+from purplecomputer.settings import set_room_on  # noqa: E402
 
 PACK_ID = "examples"
 

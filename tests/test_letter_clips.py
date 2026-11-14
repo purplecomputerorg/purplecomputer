@@ -1,8 +1,8 @@
 """Say Letters: any grid key a pack recorded plays its clip, punctuation included."""
 
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.canvas.rooms.music_room import MODE_LETTERS
-from purple_tui.canvas.sounds import CLIP_NAMES
+from purplecomputer.harness import make_app, run
+from purplecomputer.rooms.music_room import MODE_LETTERS
+from purplecomputer.sounds import CLIP_NAMES
 
 
 def test_punctuation_has_a_file_name():
@@ -27,8 +27,8 @@ def test_a_recorded_punctuation_key_speaks_and_an_unrecorded_one_plays_a_note(mo
 
 def test_a_pack_letter_plays_after_purple_when_listed_and_alone_otherwise(tmp_path, monkeypatch):
     import json
-    from purple_tui.canvas import sounds
-    from purple_tui.content import get_content
+    from purplecomputer import sounds
+    from purplecomputer.content import get_content
     letters = tmp_path / "content" / "letters"
     letters.mkdir(parents=True)
     for name in ("d", "e"):
@@ -45,7 +45,7 @@ def test_a_pack_letter_plays_after_purple_when_listed_and_alone_otherwise(tmp_pa
 
 def test_the_familys_clip_follows_purples_and_the_next_key_or_leaving_cuts_it_off(monkeypatch):
     import asyncio
-    from purple_tui.canvas.rooms import music_room
+    from purplecomputer.rooms import music_room
     played = []
 
     class Clip:

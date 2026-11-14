@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from purple_tui import content as content_mod
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.content import ContentManager
+from purplecomputer import content as content_mod
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.content import ContentManager
 
-HERE = Path(__file__).resolve().parents[2]
-LIB = Path(os.environ.get("PURPLE_ROOM_LIB", HERE / "purple_tui" / "roomkit" / "purple.py"))
+HERE = Path(__file__).resolve().parents[1]
+LIB = Path(os.environ.get("PURPLE_ROOM_LIB", HERE / "purplecomputer" / "roomkit" / "purple.py"))
 CORPUS = [Path(p) for p in os.environ.get("PURPLE_ROOM_CORPUS", f"{HERE / 'tests' / 'rooms'}:{HERE / 'studio' / 'src' / 'examples'}").split(":")]
 ROOMS = sorted(p for d in CORPUS for p in d.glob("*.py"))
 

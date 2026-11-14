@@ -3,7 +3,7 @@ summarized every 30s while frames are drawn (an idle screen logs nothing)."""
 
 import time
 
-from .. import boot_log
+from . import boot_log
 
 INTERVAL = 30.0
 

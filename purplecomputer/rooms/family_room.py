@@ -19,14 +19,14 @@ from pathlib import Path
 
 import pygame
 
-from ... import palette as P
-from ... import tts
-from ...audio import play_safe
-from ...content import png_size
-from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
-from ...music_constants import instruments, pitch_filename
-from ...timeline import state_dir
-from ...roomkit.limits import (KEEP_MAX_BYTES, MAX_REPLY_CHARS, MAX_SHAPES, MAX_SOUNDS, MAX_WAKE_S, MIN_WAKE_S,
+from .. import palette as P
+from .. import tts
+from ..audio import play_safe
+from ..content import png_size
+from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
+from ..music_constants import instruments, pitch_filename
+from ..timeline import state_dir
+from ..roomkit.limits import (KEEP_MAX_BYTES, MAX_REPLY_CHARS, MAX_SHAPES, MAX_SOUNDS, MAX_WAKE_S, MIN_WAKE_S,
                                START_TIMEOUT_S, STEP_TIMEOUT_S, sealed)
 from ..gfx import is_one_emoji
 from ..sounds import SoundBank
@@ -36,7 +36,7 @@ from ..ui import KEY_RE, KID_MATH_KEYS, Overlay, auto_ink, draw_key, draw_key_hi
 ICON_FAMILY = "\U000F0827"  # nf-md-home_heart
 API = 3                     # 3: a text's how.keys draws {Key} as a keycap
 SIZE = (240, 120)           # the room's surface; the viewport is 2:1 on every machine
-RUNNER = Path(__file__).parents[2] / "roomkit" / "runner.py"
+RUNNER = Path(__file__).parents[1] / "roomkit" / "runner.py"
 BUILTIN_LIB = RUNNER.parent / "purple.py"
 MAX_PIXELS = 64             # an inline picture's rows, and characters per row
 PICTURE_CACHE = 512

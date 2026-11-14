@@ -2,7 +2,7 @@
 (the root cause behind machines that probe no sound card) without drowning
 the capped window in unrelated lines."""
 
-from purple_tui.diagnostics import AUDIO_DMESG_PAT
+from purplecomputer.diagnostics import AUDIO_DMESG_PAT
 
 
 def test_pattern_catches_sof_firmware_failure():

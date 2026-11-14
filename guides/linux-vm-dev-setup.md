@@ -63,7 +63,7 @@ SSH is useful when the app is frozen or the terminal is broken.
 ssh username@vm-ip
 
 # Kill frozen app
-pkill -f purple_tui
+pkill -f purplecomputer
 
 # Check logs
 cat /tmp/purple-boot.log

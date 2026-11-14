@@ -58,14 +58,14 @@
   }
  ],
  "fingerprint": {
-  "studio/sdk/src/pack.ts": "4bda6eab26531484",
+  "studio/sdk/src/pack.ts": "301a6edc4dd7d522",
   "studio/src/pack.ts": "1c116cf864839672",
-  "purple_tui/content.py": "08c36e31a0a171ce",
-  "purple_tui/pack_manager.py": "41f6ab779c96aafd",
-  "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
-  "purple_tui/canvas/rooms/family_room.py": "6bab47ad736c726b",
-  "purple_tui/roomkit/purple.py": "579c13698a86002a",
-  "purple_tui/roomkit/runner.py": "9e62d3413c858a5a",
-  "purple_tui/roomkit/limits.py": "07347f3ac2df15ea"
+  "purplecomputer/content.py": "871f72970f88aa2c",
+  "purplecomputer/pack_manager.py": "41f6ab779c96aafd",
+  "purplecomputer/theme.py": "d23cc5c34fba9eb4",
+  "purplecomputer/rooms/family_room.py": "2173ec9530067fb3",
+  "purplecomputer/roomkit/purple.py": "579c13698a86002a",
+  "purplecomputer/roomkit/runner.py": "57cd548ae86c72b1",
+  "purplecomputer/roomkit/limits.py": "8121910c79fba706"
  }
 }

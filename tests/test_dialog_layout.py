@@ -2,10 +2,10 @@
 
 import pytest
 
-from purple_tui.canvas import ui
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.canvas.rooms.parent_menu import LanguageScreen, ParentVolumeModal, SecondLanguageScreen
-from purple_tui.canvas.ui import Confirm
+from purplecomputer import ui
+from purplecomputer.harness import make_app, run
+from purplecomputer.rooms.parent_menu import LanguageScreen, ParentVolumeModal, SecondLanguageScreen
+from purplecomputer.ui import Confirm
 
 
 def _body_bottom_and_hint_top(app, dialog):

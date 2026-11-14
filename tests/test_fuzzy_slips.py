@@ -12,8 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from purple_tui.fuzzy import looks_like_a_slip, _neighbor_keys
-from purple_tui.content import ContentManager
+from purplecomputer.fuzzy import looks_like_a_slip, _neighbor_keys
+from purplecomputer.content import ContentManager
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def test_the_matcher_alone_leaves_these_words_alone(content, monkeypatch, word):
     """Holds without the common-word list, which is the other layer. Words whose
     lookalike differs by a neighboring key ("trick"/"truck") are that layer's
     job, not this one."""
-    monkeypatch.setattr("purple_tui.content.is_real_word", lambda w: False)
+    monkeypatch.setattr("purplecomputer.content.is_real_word", lambda w: False)
     content._emoji_fuzzy_cache.clear()
     content._color_fuzzy_cache.clear()
     assert content.resolve(word).kind is None

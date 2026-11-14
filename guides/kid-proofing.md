@@ -100,7 +100,7 @@ AccessX accessibility features are well-intentioned but confuse kids. Sticky key
 
 ## Evdev Level: Keyboard Grabbed
 
-**File:** `purple_tui/input.py`
+**File:** `purplecomputer/input.py`
 
 ```python
 class EvdevReader:
@@ -123,9 +123,9 @@ This is the deepest layer of protection. Even if other layers fail, the terminal
 
 **Files:**
 - `/etc/systemd/logind.conf.d/purple-power.conf` (logind ignores all buttons)
-- `purple_tui/input.py`: `PowerButtonReader` monitors power button via evdev
-- `purple_tui/rooms/sleep_screen.py`: `SleepScreen`, `ByeScreen`, `LiveBootSplash`
-- `purple_tui/power_manager.py`: idle tracking, charger detection, and shutdown
+- `purplecomputer/input.py`: `PowerButtonReader` monitors power button via evdev
+- `purplecomputer/rooms/sleep_screen.py`: `SleepScreen`, `ByeScreen`, `LiveBootSplash`
+- `purplecomputer/power_manager.py`: idle tracking, charger detection, and shutdown
 
 ```ini
 [Login]

@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-from purple_tui import printing
-from purple_tui.canvas.harness import run
+from purplecomputer import printing
+from purplecomputer.harness import run
 
 URI = "ipp://localhost:60000/ipp/print"
 

@@ -11,7 +11,7 @@ Canvas UI only. The Textual UI stays English.
 
 **Off for now:** `i18n.ENABLED = False` until a speaker reviews the packs. No language pack loads (fonts and `blocked.txt` lists included), so Purple stays English and the parent menu hides both rows. Flip it to `True` to turn everything back on.
 
-Pack file format: `studio/PACK_FORMAT.md`. Code: `purple_tui/i18n.py`.
+Pack file format: `studio/PACK_FORMAT.md`. Code: `purplecomputer/i18n.py`.
 
 ## Why strings are translated where they are drawn
 
@@ -34,7 +34,7 @@ Keeping up: `just python scripts/i18n_strings.py` counts what each pack is missi
 
 ## Profanity
 
-`speech_filter.filter_speech` checks each installed pack's `blocked.txt` before the English list, so a Spanish or Chinese word is silenced even when the kid's settings are English. The Chinese typing dictionary drops the same words (`scripts/build_lang_zh.py` reads `blocked.txt`, plus a wider list of things typing shouldn't offer). `tests/canvas/test_languages.py` checks that every Play word in every pack can still be said, which is how a collision like Spanish "fucsia" against the English list gets caught. To edit a list, decode it, change it, and encode it again (`base64 -d` / `base64`).
+`speech_filter.filter_speech` checks each installed pack's `blocked.txt` before the English list, so a Spanish or Chinese word is silenced even when the kid's settings are English. The Chinese typing dictionary drops the same words (`scripts/build_lang_zh.py` reads `blocked.txt`, plus a wider list of things typing shouldn't offer). `tests/test_languages.py` checks that every Play word in every pack can still be said, which is how a collision like Spanish "fucsia" against the English list gets caught. To edit a list, decode it, change it, and encode it again (`base64 -d` / `base64`).
 
 ## Speech
 

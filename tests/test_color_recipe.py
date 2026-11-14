@@ -3,14 +3,14 @@ import time
 
 import pytest
 
-from purple_tui.canvas.app import LETTER_HOLD
+from purplecomputer.app import LETTER_HOLD
 from types import SimpleNamespace
 
-from purple_tui.canvas.color_recipe import BADGE_DABS, BADGE_FADE, HoldBadge, _badge_recipe, example, hint_row, partner
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.color_mixing import mix_colors_paint
-from purple_tui.input import KeyCode, RawKeyEvent
-from purple_tui.palette import get_key_color
+from purplecomputer.color_recipe import BADGE_DABS, BADGE_FADE, HoldBadge, _badge_recipe, example, hint_row, partner
+from purplecomputer.harness import make_app, run
+from purplecomputer.color_mixing import mix_colors_paint
+from purplecomputer.input import KeyCode, RawKeyEvent
+from purplecomputer.palette import get_key_color
 
 
 async def _key(app, code, down):
@@ -54,7 +54,7 @@ def _room(name):
 
 @pytest.mark.parametrize("name", ["art", "blocks"])
 def test_hint_row_shows_the_keys_just_mixed_until_a_plain_key(name):
-    from purple_tui.canvas.harness import press
+    from purplecomputer.harness import press
 
     async def go():
         app, room = _room(name)
@@ -79,7 +79,7 @@ def test_mixing_a_color_with_itself_shows_the_example_instead():
 
 
 def test_painting_over_paint_shows_what_was_there_first():
-    from purple_tui.canvas.harness import press
+    from purplecomputer.harness import press
 
     async def go():
         app, room = _room("art")
@@ -93,8 +93,8 @@ def test_painting_over_paint_shows_what_was_there_first():
 
 
 def test_dropping_a_block_onto_one_shows_its_color_first():
-    from purple_tui.canvas.harness import press
-    from purple_tui.canvas.rooms.blocks_room import HEIGHT
+    from purplecomputer.harness import press
+    from purplecomputer.rooms.blocks_room import HEIGHT
 
     async def go():
         app, room = _room("blocks")
@@ -124,7 +124,7 @@ def test_badge_asks_for_a_partner_while_one_letter_is_held_alone():
 
 
 def test_badge_fades_after_a_long_stroke_and_comes_back_for_a_new_recipe(monkeypatch):
-    import purple_tui.canvas.color_recipe as cr
+    import purplecomputer.color_recipe as cr
     drawn = []
     monkeypatch.setattr(cr, "draw_hold_badge", lambda g, terms, result, px, t, b, strength: drawn.append(strength))
     g = SimpleNamespace(vh=lambda pct: 10)

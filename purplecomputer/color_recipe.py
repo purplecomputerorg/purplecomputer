@@ -5,9 +5,9 @@ being painted, or '[R] + [?]' while one letter is held alone."""
 
 import pygame
 
-from .. import palette as P
-from ..color_mixing import mix_colors_paint
-from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
+from . import palette as P
+from .color_mixing import mix_colors_paint
+from .palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from .ui import CODE_HINT, draw_key_hint
 
 HUE_ROWS = [[k for k in row if k.isalpha()] for row in (QWERTY_ROW, ASDF_ROW, ZXCV_ROW)]   # red, yellow, blue

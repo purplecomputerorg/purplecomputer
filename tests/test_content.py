@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
-from purple_tui.content import ContentManager
+from purplecomputer.content import ContentManager
 
 
 @pytest.fixture
@@ -223,7 +223,7 @@ class TestResolve:
 
     def test_operator_word_typos_are_not_protected(self, content):
         # "timess"/"pluss" are slips, not words: the math path still fixes them
-        from purple_tui.content import is_real_word
+        from purplecomputer.content import is_real_word
         assert not any(is_real_word(w) for w in ("timess", "pluss", "minuss"))
 
     def test_a_real_word_that_is_content_still_draws(self, content):
@@ -242,8 +242,8 @@ class TestFuzzyPrecompute:
 
     @staticmethod
     def _reference_lookup(word, table):
-        from purple_tui.content import pluralize
-        from purple_tui.fuzzy import fuzzy_match
+        from purplecomputer.content import pluralize
+        from purplecomputer.fuzzy import fuzzy_match
         word = word.lower().strip()
         forms = {k: k for k in table}
         for k in table:

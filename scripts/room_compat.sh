@@ -7,8 +7,8 @@ root=$(git rev-parse --show-toplevel)
 tmp=$(mktemp -d)
 trap 'git -C "$root" worktree remove --force "$tmp/purple" 2>/dev/null; rm -rf "$tmp"' EXIT
 git -C "$root" worktree add --quiet --detach "$tmp/purple" "$ref"
-cp "$root/tests/canvas/test_room_compat.py" "$tmp/purple/tests/canvas/"
+cp "$root/tests/test_room_compat.py" "$tmp/purple/tests/"
 cd "$tmp/purple"
-PURPLE_ROOM_LIB="$root/purple_tui/roomkit/purple.py" \
+PURPLE_ROOM_LIB="$root/purplecomputer/roomkit/purple.py" \
 PURPLE_ROOM_CORPUS="$root/tests/rooms:$root/studio/src/examples" \
-    "$root/.venv/bin/python" -m pytest tests/canvas/test_room_compat.py -q -p no:cacheprovider
+    "$root/.venv/bin/python" -m pytest tests/test_room_compat.py -q -p no:cacheprovider

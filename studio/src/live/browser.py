@@ -54,9 +54,9 @@ def _patch_glyph_coverage():
     import json
     from bisect import bisect_right
     from pathlib import Path
-    import purple_tui
-    from purple_tui.canvas import gfx
-    cmaps = json.loads((Path(purple_tui.__file__).parent.parent / "font-cmaps.json").read_text())
+    import purplecomputer
+    from purplecomputer import gfx
+    cmaps = json.loads((Path(purplecomputer.__file__).parent.parent / "font-cmaps.json").read_text())
 
     def covers(self, face, text):
         bounds = cmaps.get(Path(gfx.FACES[face]).name, [])
@@ -75,13 +75,13 @@ def _patch_emoji():
     import asyncio
     from pathlib import Path
     import pygame
-    import purple_tui
+    import purplecomputer
     from js import URL, document
     from pyodide.http import pyfetch
-    from purple_tui.canvas import gfx
-    from purple_tui.canvas.emoji_pictures import EmojiPictures
+    from purplecomputer import gfx
+    from purplecomputer.emoji_pictures import EmojiPictures
 
-    root = Path(purple_tui.__file__).parent.parent / "emoji"
+    root = Path(purplecomputer.__file__).parent.parent / "emoji"
     if not (root / "map.json").exists():
         return
     pictures = EmojiPictures(root)
@@ -127,8 +127,8 @@ def _patch_mixer():
     import pygame.mixer
     from js import purpleSound
     from pyodide.ffi import to_js
-    from purple_tui import mixer
-    from purple_tui.canvas.sounds import core_sounds
+    from purplecomputer import mixer
+    from purplecomputer.sounds import core_sounds
 
     ids = itertools.count(1)
     core = core_sounds()
@@ -195,9 +195,9 @@ def _patch_speech():
     import tempfile
     import pygame
     from js import purplePiper, purpleSay, purpleHush
-    from purple_tui import tts
-    from purple_tui.audio import play_safe
-    from purple_tui.speech_filter import filter_speech
+    from purplecomputer import tts
+    from purplecomputer.audio import play_safe
+    from purplecomputer.speech_filter import filter_speech
 
     async def piper(text):
         prepared = tts._prepare_text(text)
@@ -269,7 +269,7 @@ _patch_speech()
 def _patch_present():
     import json
     from js import purpleMoved, purplePresented
-    from purple_tui.canvas import gfx
+    from purplecomputer import gfx
 
     present = gfx.Gfx.present
 
@@ -293,7 +293,7 @@ _patch_present()
 def _patch_family_rooms():
     from js import purpleRoomGuest, purpleRoomProblem
     from pyodide.ffi import create_proxy
-    from purple_tui.canvas.rooms import family_room
+    from purplecomputer.rooms import family_room
 
     class JsGuest:
         def __init__(self, start, on_line):

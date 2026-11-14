@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from purple_tui import printing
-from purple_tui.canvas.harness import run
+from purplecomputer import printing
+from purplecomputer.harness import run
 
 pytestmark = pytest.mark.skipif(not all(map(shutil.which, ("cupsd", "lp", "lpadmin", "ipptool"))),
                                 reason="needs CUPS")

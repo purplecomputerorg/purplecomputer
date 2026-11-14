@@ -1,7 +1,7 @@
 // A room's own thread. Loads Pyodide as soon as it starts (so a spare is warm), then on {type: "run"}
 // walls off JavaScript and serves the room with Purple's runner.py until the page terminates it.
 // Lines from the page arrive through the shared channel, so the room can block on them.
-import runnerSource from "../../../purple_tui/roomkit/runner.py?raw";
+import runnerSource from "../../../purplecomputer/roomkit/runner.py?raw";
 import guest from "./guest.py?raw";
 import { take } from "./channel";
 

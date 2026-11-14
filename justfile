@@ -96,11 +96,11 @@ test-partitioning:
 
 # Run linter
 lint:
-    {{venv}}/bin/ruff check purple_tui/ tools/ scripts/ tests/
+    {{venv}}/bin/ruff check purplecomputer/ tools/ scripts/ tests/
 
 # Run linter with auto-fix
 lint-fix:
-    {{venv}}/bin/ruff check purple_tui/ tools/ scripts/ tests/ --fix
+    {{venv}}/bin/ruff check purplecomputer/ tools/ scripts/ tests/ --fix
 
 # Build content packs
 build-packs:
@@ -235,7 +235,7 @@ debug-tts:
 
 # Clear cached TTS audio files
 clear-tts-cache:
-    {{venv}}/bin/python -c "from purple_tui.tts import clear_cache; n = clear_cache(); print(f'Cleared {n} cached TTS files')"
+    {{venv}}/bin/python -c "from purplecomputer.tts import clear_cache; n = clear_cache(); print(f'Cleared {n} cached TTS files')"
 
 # Apply zoom keyframes to demo video
 apply-zoom:
@@ -375,7 +375,7 @@ pystdin:
 # Try family rooms the way Purple runs them: asks which, or name a pack, .purplepack, or room .py (--show, --keys "right space")
 [positional-arguments]
 check-room *args:
-    @cd "{{invocation_directory()}}" && PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 -m purple_tui.roomkit.check "$@"
+    @cd "{{invocation_directory()}}" && PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python3 -m purplecomputer.roomkit.check "$@"
 
 # Studio's starter rooms as a pack, built fresh: installed here and turned on, or --out FILE for the .purplepack
 example-rooms *args:

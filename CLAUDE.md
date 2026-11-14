@@ -16,7 +16,7 @@
 
 ## Two UIs (until Textual is gone)
 
-`main` carries both UIs. The Textual UX (`purple_tui/purple_tui.py`, the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen. The TUI never imports canvas modules. The canvas UX lives under `purple_tui/canvas/` with its tests in `tests/canvas/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
+`main` carries both UIs. The Textual UX (`purplecomputer/purplecomputer.py`, the top-level `purplecomputer/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen. The TUI never imports canvas modules. The canvas UX lives under `purplecomputer/` with its tests in `tests/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
 
 Don't write TUI counterparts of canvas fixes. Shared-module changes (`code_runner.py`, `audio.py`, etc.) may change TUI behavior on main; update the TUI tests to match and move on. Duplicated logic between the TUI and canvas is deliberate; don't clean it up.
 
@@ -70,7 +70,7 @@ Purple Computer runs on kids' laptops. Never make changes that could cause issue
 
 **Exception:** user-facing error/diagnostic screens (e.g. `purple-x11-failed` scroll) ship in standard even though they're visual, because diagnosing failures matters more than hiding them.
 
-Boot hang diagnostics: see `guides/boot-hang-debugging.md`. `purple_tui/boot_log.py` is the always-on heartbeat + watchdog; log lives at `/tmp/purple-boot.log` and persistently at `/var/log/purple/boot.log` on the debug ISO (casper writable partition).
+Boot hang diagnostics: see `guides/boot-hang-debugging.md`. `purplecomputer/boot_log.py` is the always-on heartbeat + watchdog; log lives at `/tmp/purple-boot.log` and persistently at `/var/log/purple/boot.log` on the debug ISO (casper writable partition).
 
 ---
 
@@ -78,7 +78,7 @@ Boot hang diagnostics: see `guides/boot-hang-debugging.md`. `purple_tui/boot_log
 
 **Kids 3-10** (from learning letters to writing code) and their **non-technical parents**.
 
-User-facing messages: simple, friendly, no jargon. Clear next steps, not error explanations. Add `(Technical: ...)` for known root causes. Use `SUPPORT_EMAIL` from `purple_tui/constants.py`.
+User-facing messages: simple, friendly, no jargon. Clear next steps, not error explanations. Add `(Technical: ...)` for known root causes. Use `SUPPORT_EMAIL` from `purplecomputer/constants.py`.
 
 **Writing style:** No em-dashes or spaced dashes. Use colons, commas, or periods instead. Purple's own USB drive is the "Purple Key"; any other is a "USB drive". Never "USB stick" in anything a customer reads. The operating system is PurpleOS (also its GRUB and boot entry name): use it in technical docs and wherever the OS itself is the subject. Other kid and parent text says Purple or Purple Computer, since we sell a computer and an experience.
 
@@ -94,7 +94,7 @@ just test    just run    just lint    just setup    just python foo.py
 
 Always `just python` instead of `.venv/bin/python`.
 
-**Don't run the full suite (`just test`) unless the user asks.** Lots of lanes run in parallel; the user runs it manually. After a change, run `just lint` plus only the relevant tests (`just python -m pytest tests/canvas/test_foo.py -v`, or `-k` a name), and write or update tests as usual. This applies before `/wrap` and `/checkpoint` too.
+**Don't run the full suite (`just test`) unless the user asks.** Lots of lanes run in parallel; the user runs it manually. After a change, run `just lint` plus only the relevant tests (`just python -m pytest tests/test_foo.py -v`, or `-k` a name), and write or update tests as usual. This applies before `/wrap` and `/checkpoint` too.
 
 ---
 
@@ -110,7 +110,7 @@ just preview play room_picker                  # Room picker modal
 
 Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). `PURPLE_UX=tui just preview ...` previews the Textual UI. See `guides/headless-preview.md` for full reference.
 
-**Visual/layout tests:** canvas tests drive a headless app from `purple_tui.canvas.harness` (`tests/canvas/`); Textual tests use `app.run_test()` (e.g. `tests/test_code_panel_layout.py`).
+**Visual/layout tests:** canvas tests drive a headless app from `purplecomputer.harness` (`tests/`); Textual tests use `app.run_test()` (e.g. `tests/test_code_panel_layout.py`).
 
 **AI UX testing:** `just ux` launches a Claude agent that explores the app as a simulated kid, presses keys, and reports bugs to `docs/AI_UX_BUGS.md`. Config in `scripts/ai_ux_config.py`. See `guides/ai-ux-testing.md`.
 
@@ -132,21 +132,21 @@ Studio is one website that changes on every deploy; families keep the Purple bui
 
 ## Canvas UI (default)
 
-The screen is a pygame window the app paints itself (`purple_tui/canvas/gfx.py`, `purple_tui/canvas/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere. Rooms subclass `canvas/rooms/base.py`; family rooms from packs run sandboxed: `guides/family-rooms.md`.
+The screen is a pygame window the app paints itself (`purplecomputer/gfx.py`, `purplecomputer/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere. Rooms subclass `canvas/rooms/base.py`; family rooms from packs run sandboxed: `guides/family-rooms.md`.
 
 ## Textual UI (`PURPLE_UX=tui`, frozen)
 
-`purple_tui/purple_tui.py` plus the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`; runs in Alacritty (`config/alacritty/`). Fixes only (see Two UIs above). Notes kept for those fixes:
+`purplecomputer/purplecomputer.py` plus the top-level `purplecomputer/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`; runs in Alacritty (`config/alacritty/`). Fixes only (see Two UIs above). Notes kept for those fixes:
 
-- **Layout constants:** `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=29`, `REQUIRED_TERMINAL_ROWS=37`); `scripts/calc_font_size.py` imports from there.
-- **CSS scoping:** `CSS` is scoped to the defining class; use `DEFAULT_CSS` for inheritable styles. All modals inherit `PurpleModal` (`purple_tui/modal.py`) with the standard `#modal-dialog`, `#modal-title`, `#modal-hint` IDs.
+- **Layout constants:** `purplecomputer/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=29`, `REQUIRED_TERMINAL_ROWS=37`); `scripts/calc_font_size.py` imports from there.
+- **CSS scoping:** `CSS` is scoped to the defining class; use `DEFAULT_CSS` for inheritable styles. All modals inherit `PurpleModal` (`purplecomputer/modal.py`) with the standard `#modal-dialog`, `#modal-title`, `#modal-hint` IDs.
 - **Background colors:** `widget.styles.background` on `Static` doesn't repaint; use a `Widget` with `render_line()` returning `Strip([Segment(...)])`.
 - **Flicker-free reflows (MusicGrid):** set `_layout_ready = False` before a height change, render from `_cached_layout` meanwhile, `on_resize` debounces 50ms then flips it back.
 - **Code panel:** `_code_panel_active` (app-level, persists across rooms) vs `ReplPanel.is_open` (per-room). Space-hold pins canvas height; viewport grows by 4 on open. Textual's `_on_key()` suppresses events; all keyboard logic goes through `handle_keyboard_action()`.
 
 ## Keyboard Input (evdev + keyd, both UIs)
 
-Input is read from evdev (`/dev/input/event*`), never from the terminal or the window. `keyd` (`config/keyd/default.conf`, built in `00-build-golden-image.sh`) remaps grave/tilde to Escape and RightAlt to F2 at the kernel level; do NOT add application-level remaps. `purple_tui/input.py` feeds `KeyboardStateMachine` (`purple_tui/keyboard.py`), which both UIs dispatch from. `HoldOrTap` distinguishes taps from holds; always check `on_other_key()` to flush a buffered space before the next character. Full rationale: `guides/keyboard-architecture.md`.
+Input is read from evdev (`/dev/input/event*`), never from the terminal or the window. `keyd` (`config/keyd/default.conf`, built in `00-build-golden-image.sh`) remaps grave/tilde to Escape and RightAlt to F2 at the kernel level; do NOT add application-level remaps. `purplecomputer/input.py` feeds `KeyboardStateMachine` (`purplecomputer/keyboard.py`), which both UIs dispatch from. `HoldOrTap` distinguishes taps from holds; always check `on_other_key()` to flush a buffered space before the next character. Full rationale: `guides/keyboard-architecture.md`.
 
 ## Python Gotchas
 

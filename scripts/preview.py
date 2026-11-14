@@ -40,8 +40,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from purple_tui.canvas.harness import make_app, press  # noqa: E402
-from purple_tui.canvas.rooms import ROOM_NAMES as ROOMS  # noqa: E402
+from purplecomputer.harness import make_app, press  # noqa: E402
+from purplecomputer.rooms import ROOM_NAMES as ROOMS  # noqa: E402
 
 SCREENSHOT_DIR = os.environ.get("PURPLE_SCREENSHOT_DIR", "/tmp/screenshots")
 
@@ -54,16 +54,16 @@ async def run_action(app, action: str):
     elif action == "room_picker":
         app._show_room_picker()
     elif action == "help_videos":
-        from purple_tui.canvas.rooms.help_videos import HelpVideosScreen
+        from purplecomputer.rooms.help_videos import HelpVideosScreen
         app.push(HelpVideosScreen(app))
     elif action in ("first_boot", "sleep"):
-        from purple_tui.canvas.rooms.sleep_screen import FirstBootPowerCycleScreen, SleepScreen
+        from purplecomputer.rooms.sleep_screen import FirstBootPowerCycleScreen, SleepScreen
         app.push((SleepScreen if action == "sleep" else FirstBootPowerCycleScreen)(app))
     elif action == "install_done":
-        from purple_tui.canvas.rooms.parent_menu import InstallDoneScreen
+        from purplecomputer.rooms.parent_menu import InstallDoneScreen
         app.push(InstallDoneScreen(app))
     elif action in ("doodle", "photo"):
-        from purple_tui.canvas.secret_doodle import paint_doodle, paint_photo
+        from purplecomputer.picture_paint import paint_doodle, paint_photo
         (paint_doodle if action == "doodle" else paint_photo)(app)
     elif action == "time_travel":
         app._start_time_travel()

@@ -13,9 +13,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from purple_tui.canvas import app as app_module
-from purple_tui.canvas import sdl_input
-from purple_tui.canvas.harness import make_app, press, run
+from purplecomputer import app as app_module
+from purplecomputer import sdl_input
+from purplecomputer.harness import make_app, press, run
 
 PROMPT = 0.15   # a woken loop draws well inside this; the stretched poll would take seconds
 SLOW_POLL = 5.0

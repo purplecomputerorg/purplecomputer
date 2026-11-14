@@ -1,4 +1,4 @@
-// Packs built by the SDK itself for the Studio to Purple tests (tests/canvas/test_studio_to_purple.py):
+// Packs built by the SDK itself for the Studio to Purple tests (tests/test_studio_to_purple.py):
 // "everything" uses every file Purple reads, "everything-before" is an earlier download of it, and
 // "words" holds only words, under its own id. vite-node scripts/fixture-packs.ts <out dir>
 import { writeFileSync } from "node:fs";

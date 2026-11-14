@@ -13,7 +13,7 @@ import daddy from "../assets/daddy.mp3";
 import type { View } from "./view";
 
 const foldedNote = (typed: string, word: string) => (typedWord(typed) !== typed.trim().toLowerCase() ? `Saved as “${word}”, the way kids type it on Purple.` : "");
-// purple_tui/content.py MEANING_MAX.
+// purplecomputer/content.py MEANING_MAX.
 const MEANING_MAX = 200;
 
 // Shown, never added: one card for each thing a word can do, before the family has any.

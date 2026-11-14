@@ -3,7 +3,7 @@ drives a running app: the headless harness, and Studio typing into the in-browse
 
 import asyncio
 
-from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
+from .keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 
 CONTROL_KEYS = {"enter", "tab", "space", "escape", "backspace", "home", "end", "page_up", "page_down"}
 ARROWS = {"up", "down", "left", "right"}

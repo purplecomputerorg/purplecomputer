@@ -3,7 +3,7 @@ Switching kids just exits: xinitrc starts Purple again, now as that kid."""
 
 from pathlib import Path
 
-from ..settings import add_kid, get_kid, get_kids, kid_path, remove_kid, set_kid
+from .settings import add_kid, get_kid, get_kids, kid_path, remove_kid, set_kid
 from .ui import CANCELLED, DOWN, UP, Confirm, Picker
 
 PICKED = Path("/tmp/purple-kid-picked")  # the next start skips Pick your computer

@@ -2,8 +2,8 @@
 
 import pytest
 
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.play_room import speech_marks, toggled_say
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.rooms.play_room import speech_marks, toggled_say
 
 
 @pytest.mark.parametrize("text, marks", [

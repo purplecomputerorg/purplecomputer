@@ -6,7 +6,7 @@ oldest note kept: each note moves its key one color on, so playing the notes on
 notes come in, so a long think neither uses up the minute nor replays as silence.
 """
 
-from ..music_constants import ALL_KEYS, COLORS
+from .music_constants import ALL_KEYS, COLORS
 
 KEEP_S = 60.0
 MAX_GAP_S = 1.5

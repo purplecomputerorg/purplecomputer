@@ -9,7 +9,7 @@ from operator import itemgetter
 
 import pygame
 
-from ... import palette as P
+from .. import palette as P
 from .. import paper
 from ..gfx import mix, rgb
 from . import art_room

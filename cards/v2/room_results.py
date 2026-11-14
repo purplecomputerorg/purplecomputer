@@ -46,10 +46,10 @@ def examples(typ_files) -> dict:
 
 async def _play(codes: list, out: Path) -> None:
     import pygame
-    from purple_tui.canvas.harness import make_app
-    from purple_tui.canvas.rooms import play_room
-    from purple_tui.canvas.rooms.play_room import answer_parts
-    from purple_tui.play_eval import SimpleEvaluator
+    from purplecomputer.harness import make_app
+    from purplecomputer.rooms import play_room
+    from purplecomputer.rooms.play_room import answer_parts
+    from purplecomputer.play_eval import SimpleEvaluator
     SimpleEvaluator.ABACUS_COLORS = [for_paper(c) for c in SimpleEvaluator.ABACUS_COLORS]
     play_room.abacus_group_gap = lambda g: 0  # the screen's comma gap reads as a glitch on one small card abacus
 
@@ -72,7 +72,7 @@ async def _play(codes: list, out: Path) -> None:
 
 async def _ran(room: str, code: str):
     """A fresh app with the code run in the room."""
-    from purple_tui.canvas.harness import make_app
+    from purplecomputer.harness import make_app
     app = make_app(size=SIZE, room=room)
     await app.rooms[room].run_code([code])
     return app
@@ -81,7 +81,7 @@ async def _ran(room: str, code: str):
 async def _art(codes: list, out: Path) -> None:
     """The cells from where the brush starts to the far edge of the paint, on a pale checkerboard."""
     import pygame
-    from purple_tui.canvas.rooms.art_room import COLS, ROWS
+    from purplecomputer.rooms.art_room import COLS, ROWS
     c = ART_CELL_PX
     for code in codes:
         app = await _ran("art", code)

@@ -10,12 +10,12 @@ import re
 import shutil
 from pathlib import Path
 
-from purple_tui import content, i18n
-from purple_tui.canvas.app import PurpleApp
-from purple_tui.canvas.press import press
-from purple_tui.loop_station import IDLE
-from purple_tui.pack_manager import check_pack
-from purple_tui.settings import set_room_on
+from purplecomputer import content, i18n
+from purplecomputer.app import PurpleApp
+from purplecomputer.press import press
+from purplecomputer.loop_station import IDLE
+from purplecomputer.pack_manager import check_pack
+from purplecomputer.settings import set_room_on
 
 PACKS = Path.home() / ".purple" / "packs"
 TRYING = Path("/tmp/studio-trying/content/rooms")
@@ -87,13 +87,13 @@ def setup(room, letters=False, instrument=None, picture=None, family=None):
         music.letters_mode = letters
         music.set_instrument_by_name(instrument or "marimba")
     if picture:
-        from purple_tui.canvas.secret_doodle import paint_cells
-        from purple_tui.content import picture_grid
+        from purplecomputer.picture_paint import paint_cells
+        from purplecomputer.content import picture_grid
         paint_cells(_app, picture["ops"], picture.get("letters", []), picture_grid(picture))
     if room == "art":
         _app.rooms["art"]._set_paint_mode(True)
     if family:
-        from purple_tui.canvas.rooms.family_room import FamilyRoom
+        from purplecomputer.rooms.family_room import FamilyRoom
         _app.push(FamilyRoom(_app, _try(family)))
     global _placed
     _placed = "setup"
@@ -154,7 +154,7 @@ def demo():
 def hush():
     """Stops whatever Purple is saying or playing: Studio is playing something, or the page changed."""
     import pygame
-    from purple_tui import tts
+    from purplecomputer import tts
 
     tts.stop()
     if pygame.mixer.get_init():

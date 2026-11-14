@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
     import pytest
@@ -18,7 +18,7 @@ try:
 except ImportError:
     HAS_PYTEST = False
 
-from purple_tui.play_eval import (
+from purplecomputer.play_eval import (
     SimpleEvaluator, parse_speech_trigger,
 )
 
@@ -527,7 +527,7 @@ if HAS_PYTEST:
         """Test that plural forms work in autocomplete and underline detection."""
 
         def test_is_valid_word_recognizes_irregular_plurals(self):
-            from purple_tui.content import get_content
+            from purplecomputer.content import get_content
             c = get_content()
             # Irregular plurals should be recognized as valid
             assert c.is_valid_word("tomatoes")
@@ -535,7 +535,7 @@ if HAS_PYTEST:
             assert c.is_valid_word("wolves")
 
         def test_search_suggests_plural_when_typing_towards_it(self):
-            from purple_tui.content import get_content
+            from purplecomputer.content import get_content
             c = get_content()
             # "wolve" should suggest "wolves" (not "wolf")
             results = c.search_emojis("wolve")
@@ -544,7 +544,7 @@ if HAS_PYTEST:
             assert results[0][1] == "🐺"
 
         def test_search_suggests_singular_when_it_matches(self):
-            from purple_tui.content import get_content
+            from purplecomputer.content import get_content
             c = get_content()
             # "wol" should suggest "wolf" (singular preferred)
             results = c.search_emojis("wol")
@@ -552,7 +552,7 @@ if HAS_PYTEST:
             assert results[0][0] == "wolf"
 
         def test_search_no_duplicate_emojis(self):
-            from purple_tui.content import get_content
+            from purplecomputer.content import get_content
             c = get_content()
             # "app" should not show both "apple" and "apples"
             results = c.search_emojis("app")
@@ -560,7 +560,7 @@ if HAS_PYTEST:
             assert len(emojis) == len(set(emojis)), "No duplicate emojis in results"
 
         def test_search_tomatoe_suggests_tomatoes(self):
-            from purple_tui.content import get_content
+            from purplecomputer.content import get_content
             c = get_content()
             # "tomatoe" should suggest "tomatoes"
             results = c.search_emojis("tomatoe")
@@ -1648,7 +1648,7 @@ class TestSpeakable:
             assert "equals" not in evaluator._make_speakable(text, result)
 
     def test_repeat_pairs_carry_computed_flag(self, evaluator):
-        from purple_tui.code_runner import PlayCodeRunner
+        from purplecomputer.code_runner import PlayCodeRunner
         runner = PlayCodeRunner(evaluator)
         runner.run(["repeat 2: 2 + 2"])
         assert [c for _, _, c in runner.pairs] == [True, True]
@@ -1889,8 +1889,8 @@ class TestColorMappingConsistency:
 
     def test_letters_use_same_colors_as_art(self):
         """Every letter a-z should produce the same color in play and art."""
-        from purple_tui.canvas.rooms.art_room import get_key_color, KEY_COLORS
-        from purple_tui.canvas.rooms.play_room import SimpleEvaluator
+        from purplecomputer.rooms.art_room import get_key_color, KEY_COLORS
+        from purplecomputer.rooms.play_room import SimpleEvaluator
 
         SimpleEvaluator()
         for char in "abcdefghijklmnopqrstuvwxyz":
@@ -1904,7 +1904,7 @@ class TestColorMappingConsistency:
 
     def test_digits_use_same_colors_as_art(self):
         """Every digit 0-9 should produce the same color in play and art."""
-        from purple_tui.canvas.rooms.art_room import get_key_color, KEY_COLORS, GRAYSCALE
+        from purplecomputer.rooms.art_room import get_key_color, KEY_COLORS, GRAYSCALE
 
         for char in "0123456789":
             play_color = get_key_color(char)
@@ -1920,7 +1920,7 @@ class TestColorMappingConsistency:
 
     def test_play_format_uses_art_colors(self):
         """The colored block output in play should use the art color for each char."""
-        from purple_tui.canvas.rooms.art_room import get_key_color
+        from purplecomputer.rooms.art_room import get_key_color
 
         evaluator = SimpleEvaluator()
         # Test a word: each letter's background should be get_key_color(letter)

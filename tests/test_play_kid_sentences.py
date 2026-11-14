@@ -19,9 +19,9 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
-from purple_tui.canvas.gfx import strip_markup  # noqa: E402
-from purple_tui.play_eval import SimpleEvaluator, _strip_markup  # noqa: E402
-from tests.canvas.test_play_markup_safety import leaked_markup  # noqa: E402
+from purplecomputer.gfx import strip_markup  # noqa: E402
+from purplecomputer.play_eval import SimpleEvaluator, _strip_markup  # noqa: E402
+from tests.test_play_markup_safety import leaked_markup  # noqa: E402
 
 # Tallest an answer may be. The history view is 21 rows, so anything past this
 # buries the question the kid just asked.
@@ -170,8 +170,8 @@ def test_none_of_something_still_counts_beside_the_rest(evaluator, text, answer)
 @pytest.mark.parametrize("text", KID_INPUT)
 def test_the_ask_line_echoes_what_was_typed(text):
     """The Type line is the kid's own words: never reordered, dropped, or escaped."""
-    from purple_tui.canvas.harness import make_app, press, run, type_text
-    from purple_tui.play_eval import parse_speech_trigger
+    from purplecomputer.harness import make_app, press, run, type_text
+    from purplecomputer.play_eval import parse_speech_trigger
 
     async def scenario():
         app = make_app(room="play")

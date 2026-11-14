@@ -4,12 +4,12 @@ import json
 
 import pytest
 
-from purple_tui import content as content_mod
-from purple_tui import tts
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.canvas.rooms.play_room import asked_meaning
-from purple_tui.content import MEANING_MAX, ContentManager
-from purple_tui.pack_manager import check_pack
+from purplecomputer import content as content_mod
+from purplecomputer import tts
+from purplecomputer.harness import make_app, run
+from purplecomputer.rooms.play_room import asked_meaning
+from purplecomputer.content import MEANING_MAX, ContentManager
+from purplecomputer.pack_manager import check_pack
 
 GRANDMA = "Grandma lives in Ohio [and] grows tomatoes."
 NINO = "un niño pequeño"

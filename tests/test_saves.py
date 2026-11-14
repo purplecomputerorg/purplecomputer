@@ -4,11 +4,11 @@ import asyncio
 
 import pytest
 
-from purple_tui.canvas import saves
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.library import DELETE_HOLD_S, Library, PictureTile
-from purple_tui.canvas.rooms.art_room import COLS, ROWS, shift_from
-from purple_tui.constants import OLD_ART_GRID
+from purplecomputer import saves
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.library import DELETE_HOLD_S, Library, PictureTile
+from purplecomputer.rooms.art_room import COLS, ROWS, shift_from
+from purplecomputer.constants import OLD_ART_GRID
 
 
 @pytest.fixture(autouse=True)
@@ -55,7 +55,7 @@ def test_save_from_the_esc_menu_then_open_it_back():
 
 
 def test_pack_pictures_open_in_art_only_and_cannot_be_removed(monkeypatch):
-    from purple_tui.content import Picture, get_content
+    from purplecomputer.content import Picture, get_content
     monkeypatch.setattr(get_content(), "pictures", [Picture("palm-tree", [(2, 3, "#ff0000")], letters=[(2, 3, "P", "#ffffff"), (5, 5, "Q", "#000000")])])
 
     async def go():
@@ -144,7 +144,7 @@ def test_library_scrolls_past_two_rows():
 
 def test_export_writes_each_save_once(tmp_path):
     async def go():
-        from purple_tui.canvas.rooms.save_export import FOLDER, export_saves
+        from purplecomputer.rooms.save_export import FOLDER, export_saves
         app = await _art_with_drawing()
         app.save_room()
         dest = tmp_path / "stick"
@@ -159,7 +159,7 @@ def test_export_writes_each_save_once(tmp_path):
 def test_export_finds_a_purple_keys_data_partition_not_its_efi(monkeypatch):
     import json
     import subprocess
-    from purple_tui.canvas.rooms import save_export
+    from purplecomputer.rooms import save_export
     key = {"name": "/dev/sdb", "tran": "usb", "children": [
         {"name": "/dev/sdb1", "fstype": "iso9660", "parttype": "0x0"},
         {"name": "/dev/sdb2", "fstype": "vfat", "parttype": "0xef"},
@@ -172,7 +172,7 @@ def test_export_finds_a_purple_keys_data_partition_not_its_efi(monkeypatch):
 def test_an_sd_card_counts_as_a_drive_but_a_built_in_emmc_disk_does_not(monkeypatch):
     import json
     import subprocess
-    from purple_tui.canvas.rooms import save_export
+    from purplecomputer.rooms import save_export
     emmc = {"name": "/dev/mmcblk0", "tran": None, "children": [{"name": "/dev/mmcblk0p1", "fstype": "vfat", "parttype": "0x0c"}]}
     sd = {"name": "/dev/mmcblk1", "tran": None, "children": [{"name": "/dev/mmcblk1p1", "fstype": "hfsplus", "parttype": "0xaf"}]}
     out = json.dumps({"blockdevices": [emmc, sd]})
@@ -184,7 +184,7 @@ def test_an_sd_card_counts_as_a_drive_but_a_built_in_emmc_disk_does_not(monkeypa
 
 def test_reinstall_keeps_by_default_and_start_fresh_asks_again():
     async def go():
-        from purple_tui.canvas.rooms.parent_menu import ReinstallConfirmScreen, StartFreshConfirmScreen
+        from purplecomputer.rooms.parent_menu import ReinstallConfirmScreen, StartFreshConfirmScreen
         app = make_app()
         results = []
         app.push(ReinstallConfirmScreen(app), on_close=results.append)
@@ -223,7 +223,7 @@ def test_every_room_redraws_a_save_offscreen_without_touching_the_screen(room, k
 
 
 def test_save_card_greys_out_on_a_key_that_cannot_keep_work(monkeypatch, tmp_path):
-    from purple_tui.canvas import key_save
+    from purplecomputer import key_save
     monkeypatch.setattr(key_save, "is_live_boot", lambda: True)
     monkeypatch.setattr(key_save, "MARKER", str(tmp_path / "key-save"))
     present = [True]
@@ -246,7 +246,7 @@ def test_save_card_greys_out_on_a_key_that_cannot_keep_work(monkeypatch, tmp_pat
 
 
 def test_key_writes_wait_for_a_quiet_moment_and_flush_before_power_off(monkeypatch, tmp_path):
-    from purple_tui.canvas import key_save
+    from purplecomputer import key_save
     monkeypatch.setattr(key_save, "is_live_boot", lambda: True)
     monkeypatch.setattr(key_save, "is_usb_present", lambda: True)
     monkeypatch.setattr(key_save, "MARKER", str(tmp_path / "key-save"))
@@ -291,7 +291,7 @@ def test_time_travel_stars_the_saved_moment_until_the_save_is_removed():
 
 
 def test_open_fills_in_its_pictures_a_frame_at_a_time_and_keeps_them(monkeypatch):
-    import purple_tui.canvas.library as library
+    import purplecomputer.library as library
     monkeypatch.setattr(library, "FILL_BUDGET_S", 0)
 
     async def go():

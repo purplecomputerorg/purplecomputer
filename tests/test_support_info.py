@@ -1,9 +1,9 @@
 """The canvas Support info screen offers the same Sound check as the shipping screen, and its pages wrap long lines inside their box."""
 import pytest
 
-from purple_tui import sound_check
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.canvas.rooms.support_info import SoundCheckScreen, SupportInfoScreen
+from purplecomputer import sound_check
+from purplecomputer.harness import make_app, run
+from purplecomputer.rooms.support_info import SoundCheckScreen, SupportInfoScreen
 
 
 def test_support_info_offers_a_sound_check():

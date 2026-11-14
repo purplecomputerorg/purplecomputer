@@ -5,10 +5,10 @@ ones it has). The computer's Volume and printer sit in the top corners."""
 
 import pygame
 
-from .. import palette as P
-from .. import printing
-from ..constants import ICON_BROOM, ICON_ROBOT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
-from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from . import palette as P
+from . import printing
+from .constants import ICON_BROOM, ICON_ROBOT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
+from .keyboard import CharacterAction, ControlAction, NavigationAction
 from . import color_wheel, key_save
 from .paper import can_print
 from .rooms.family_room import room_icon
@@ -34,8 +34,8 @@ PILL_W = 17.0
 
 def family_rooms() -> list:
     """Rooms from installed packs that a parent turned on, unchanged since."""
-    from ..content import get_content
-    from ..settings import get_rooms_on
+    from .content import get_content
+    from .settings import get_rooms_on
     on = get_rooms_on()
     return [r for r in get_content().rooms if on.get(r.key) == r.digest][:MAX_FAMILY_ROOMS]
 

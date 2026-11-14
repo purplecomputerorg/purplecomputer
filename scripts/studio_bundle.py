@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Zip Purple itself for Studio's in-browser Purple: purple_tui, its fonts, the core packs, and
+"""Zip Purple itself for Studio's in-browser Purple: purplecomputer, its fonts, the core packs, and
 Noto's emoji as pictures (the ones Purple's own words use). Unpacked into Pyodide's file system as is.
 The core sounds go beside it in studio/.cache/core-sounds/, leaving empty files of the same names in the zip,
-and studio/scripts/pyc.mjs adds Pyodide's bytecode for purple_tui.
+and studio/scripts/pyc.mjs adds Pyodide's bytecode for purplecomputer.
 
 The emoji come from the Noto Color Emoji package Purple's ISO installs (Ubuntu noble-updates), pulled
-out of the font as PNGs (purple_tui/canvas/emoji_pictures.py) since no emoji font format draws in
+out of the font as PNGs (purplecomputer/emoji_pictures.py) since no emoji font format draws in
 every browser. Studio's pages show the same pictures, from studio/.cache/emoji/.
 
 Also fetches the Pyodide wheels Purple needs (pygame-ce and friends) and Purple's Piper voice once,
@@ -15,7 +15,7 @@ Writes studio/.cache/purple.zip (stored, not compressed: Studio's build brotlis 
 studio/.cache/pyodide/*.whl and python_stdlib-<version>.zip, studio/.cache/voice/ (the voice model
 and the espeak-ng English data it phonemizes with, and in voice/kokoro/ the room voice Make a Room
 speaks a room's fixed lines in), and studio/.cache/purple-room-check.pyz, the room checker
-(purple_tui/roomkit/check.py) as one file anyone with Python 3 can run.
+(purplecomputer/roomkit/check.py) as one file anyone with Python 3 can run.
 Usage: just studio-bundle
 """
 
@@ -37,8 +37,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 OUT = ROOT / "studio" / ".cache" / "purple.zip"
-TRACKED = ["purple_tui", "packs/core-emoji", "packs/core-sounds"]
-SKIP = ("purple_tui/tests/",)
+TRACKED = ["purplecomputer", "packs/core-emoji", "packs/core-sounds"]
+SKIP = ("purplecomputer/tests/",)
 WHEELS = ["pygame-ce", "rich", "wcwidth"]
 LOCK = ROOT / "studio" / "node_modules" / "pyodide" / "pyodide-lock.json"
 EXPORT = ROOT / "studio" / "sdk" / "src" / "purple" / "export.json"
@@ -51,10 +51,10 @@ KOKORO_CONFIG = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/config.j
 KOKORO_LICENSE = "https://www.apache.org/licenses/LICENSE-2.0.txt"
 KOKORO = {"model": "kokoro-v1.0.int8.onnx", "voice": "af_heart", "tempo": 0.75, "rate": 24000}
 # What the room checker imports: the pack rules and the room library, all standard library.
-CHECKER = ["purple_tui/__init__.py", "purple_tui/content.py", "purple_tui/i18n.py", "purple_tui/pack_manager.py", "purple_tui/synth.py",
-           "purple_tui/constants.py", "purple_tui/roomkit/purple.py", "purple_tui/roomkit/runner.py",
-           "purple_tui/roomkit/limits.py", "purple_tui/roomkit/check.py"]
-FONTS = "purple_tui/canvas/fonts/"
+CHECKER = ["purplecomputer/__init__.py", "purplecomputer/content.py", "purplecomputer/i18n.py", "purplecomputer/pack_manager.py", "purplecomputer/synth.py",
+           "purplecomputer/constants.py", "purplecomputer/roomkit/purple.py", "purplecomputer/roomkit/runner.py",
+           "purplecomputer/roomkit/limits.py", "purplecomputer/roomkit/check.py"]
+FONTS = "purplecomputer/fonts/"
 # Purple draws only its own icons from this one, so the zip carries just those.
 TRIMMED_FONTS = {FONTS + "SymbolsNerdFontMono-Regular.ttf"}
 # Each font's characters, for the browser's glyph check (studio/src/live/browser.py).
@@ -138,8 +138,8 @@ def build_checker(out: Path) -> Path:
         for f in CHECKER:
             (Path(tmp) / f).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / f, Path(tmp) / f)
-        (Path(tmp) / "purple_tui/roomkit/__init__.py").touch()
-        (Path(tmp) / "__main__.py").write_text("import sys\nfrom purple_tui.roomkit.check import main\nsys.exit(main())\n")
+        (Path(tmp) / "purplecomputer/roomkit/__init__.py").touch()
+        (Path(tmp) / "__main__.py").write_text("import sys\nfrom purplecomputer.roomkit.check import main\nsys.exit(main())\n")
         zipapp.create_archive(tmp, out, interpreter="/usr/bin/env python3")
     return out
 
@@ -180,7 +180,7 @@ def _noto_package(pocket: str) -> dict | None:
 
 def build_emoji() -> None:
     """studio/.cache/emoji/: every emoji Unicode lists, as the pictures the ISO's Noto draws it with."""
-    from purple_tui.canvas.emoji_pictures import build
+    from purplecomputer.emoji_pictures import build
 
     font, version = fetch_noto()
     if (EMOJI / version).is_dir() and (EMOJI / "map.json").exists():
@@ -211,7 +211,7 @@ def loaded_strings() -> str:
     import importlib
     import os
     import pkgutil
-    import purple_tui
+    import purplecomputer
 
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -226,10 +226,10 @@ def loaded_strings() -> str:
         elif depth and isinstance(value, (tuple, list, set, frozenset)):
             for item in value:
                 walk(item, depth - 1)
-        elif depth and isinstance(value, type) and value.__module__.startswith("purple_tui."):
+        elif depth and isinstance(value, type) and value.__module__.startswith("purplecomputer."):
             walk(list(vars(value).values()), depth - 1)
 
-    for module in pkgutil.walk_packages(purple_tui.__path__, "purple_tui."):
+    for module in pkgutil.walk_packages(purplecomputer.__path__, "purplecomputer."):
         if ".tests" not in module.name:
             walk(list(vars(importlib.import_module(module.name)).values()), 4)
     return "".join(found)
@@ -264,8 +264,8 @@ def cmap_bounds(data: bytes) -> list[int]:
 def bundled_emoji(text: str) -> list[Path]:
     """map.json and the pictures for the emoji Purple's vocabulary and its own files use; the browser
     fetches any other emoji's pictures the first time it draws one (studio/src/live/browser.py)."""
-    from purple_tui.canvas.emoji_pictures import EmojiPictures
-    from purple_tui.canvas.gfx import _ONE_EMOJI_RE
+    from purplecomputer.emoji_pictures import EmojiPictures
+    from purplecomputer.gfx import _ONE_EMOJI_RE
 
     pictures = EmojiPictures(EMOJI)
     glyphs = {g for m in _ONE_EMOJI_RE.finditer(text) for g in pictures.glyphs_for(m[0]) if len(pictures.glyphs[g]) == 3}

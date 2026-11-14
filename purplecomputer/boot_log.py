@@ -12,7 +12,7 @@ access, function keys (which Touch Bar Macs don't have), and a USB keyboard.
 This module gives us two things instead:
 
 1. **Heartbeat**: `heartbeat(phase)` appends a timestamped line to a boot-log
-   file. Called at every import checkpoint and init phase in purple_tui. The
+   file. Called at every import checkpoint and init phase in purplecomputer. The
    last line in the log before a hang tells us which phase hung.
 
 2. **Startup watchdog**: a background thread started at import time. If
@@ -96,7 +96,7 @@ def _write_line(line: str) -> None:
 def heartbeat(phase: str) -> None:
     """Append a timestamped heartbeat entry to the boot log.
 
-    Called at every important checkpoint during purple_tui startup. Cheap
+    Called at every important checkpoint during purplecomputer startup. Cheap
     (two file appends). Never touches stdout/stderr. Never raises.
 
     Example line:
@@ -214,7 +214,7 @@ def _install_watchdog() -> None:
 
 
 # Module import side effects (intentional): write a "module imported" line
-# and start the watchdog. This runs before any purple_tui imports happen,
+# and start the watchdog. This runs before any purplecomputer imports happen,
 # so the watchdog is armed from the earliest possible moment.
 _write_line(
     f"\n=== purple python starting at {datetime.now().isoformat()} "

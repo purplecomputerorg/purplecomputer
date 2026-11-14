@@ -2,7 +2,7 @@
 """Two AI testers with one Purple Pack between them. A parent uses Purple Studio in headless Chromium
 to make something for their kid and downloads it; the file goes onto a pretend USB drive into a headless
 Purple, where it's added (by a script, or by the parent in a handoff scenario) and checked
-(tests/canvas/pack_journey.py); a kid then plays with it. A judge reads the testers' reports, the checks
+(tests/pack_journey.py); a kid then plays with it. A judge reads the testers' reports, the checks
 and the screenshots, and keeps only what's real, which goes to docs/AI_UX_BUGS.md. Each real bug should
 become a test (just e2e-pack, test_studio_to_purple.py).
 
@@ -349,9 +349,9 @@ async def parent_phase(client, sc: Scenario, args, out: Path, budget: float, run
 
 def purple_act(app, shots: Path, tester: Tester, prefix: str, screens: list):
     """A tester's keys on the headless Purple; each answer is a screenshot, and each new screen's words are kept."""
-    from tests.canvas.pack_journey import said
-    from tests.canvas.real_purple import replay
-    from purple_tui.canvas.harness import type_text
+    from tests.pack_journey import said
+    from tests.real_purple import replay
+    from purplecomputer.harness import type_text
     n = 0
 
     async def act(name, a):
@@ -372,8 +372,8 @@ def purple_act(app, shots: Path, tester: Tester, prefix: str, screens: list):
 
 
 async def handoff(client, sc: Scenario, app, drive: Path, summary: str, shots: Path, budget: float, run: Run) -> None:
-    from purple_tui import pack_arrivals
-    from purple_tui.usb_updater import update_from
+    from purplecomputer import pack_arrivals
+    from purplecomputer.usb_updater import update_from
     print(f"parent: adding the pack on Purple (up to ${budget:.2f})")
     update_from(drive, pack_arrivals.WAITING_DIR)
     app._check_pack_arrivals()
@@ -387,9 +387,9 @@ async def handoff(client, sc: Scenario, app, drive: Path, summary: str, shots: P
 
 
 async def purple_phase(client, sc: Scenario, out: Path, summary: str, budget: float, run: Run) -> None:
-    from purple_tui import settings
-    from purple_tui.canvas.harness import make_app
-    from tests.canvas.pack_journey import check, deliver, isolate, read_pack
+    from purplecomputer import settings
+    from purplecomputer.harness import make_app
+    from tests.pack_journey import check, deliver, isolate, read_pack
     guard_subprocesses()
     isolate(out / "home")
     drive = out / "drive"
@@ -422,7 +422,7 @@ async def purple_phase(client, sc: Scenario, out: Path, summary: str, budget: fl
 
 def judge(client, sc: Scenario, run: Run, known: list[str]) -> tuple[list, float]:
     """known: what's off because of how this run was set up, not because of Studio or Purple."""
-    from tests.canvas.pack_journey import read_pack
+    from tests.pack_journey import read_pack
     found = [f for t in run.testers.values() if t for f in t.bugs + t.confusions]
     shots = list(dict.fromkeys(f["screenshot"] for f in found if f.get("screenshot")))[:12]
     evidence = {

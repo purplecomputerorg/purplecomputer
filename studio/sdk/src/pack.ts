@@ -7,7 +7,7 @@ import { SYNTH_RATE, renderNote, type BaseName, type Params } from "./purple/syn
 import { themeJson, type Theme } from "./purple/theme";
 import { gzip, tar, type TarEntry } from "./tar";
 import { encodeWav, type Clip } from "./wav";
-import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
+import roomLibrary from "../../../purplecomputer/roomkit/purple.py?raw";
 
 // title: the name as the family typed it, which Purple shows as is; name is the file name.
 // source: the photo Studio crops from, kept for reopening; Purple never reads it.

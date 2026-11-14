@@ -81,7 +81,7 @@ The output includes CPU model, SIMD flags, clock speed, thermal state, and per-p
 
 To switch models:
 
-1. Update `VOICE_MODEL` in `purple_tui/tts.py`
+1. Update `VOICE_MODEL` in `purplecomputer/tts.py`
 2. Update the download URL in `build-scripts/00-build-golden-image.sh`
 3. Regenerate pre-baked clips: `scripts/generate_voice_clips.py --force`
 4. Clear the TTS cache on test devices: `just clear-tts-cache`

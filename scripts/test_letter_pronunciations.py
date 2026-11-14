@@ -17,7 +17,7 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from purple_tui.tts import load_voice, synthesize_to_file  # noqa: E402
+from purplecomputer.tts import load_voice, synthesize_to_file  # noqa: E402
 
 OUTPUT_DIR = Path("/tmp/letter-tests")
 

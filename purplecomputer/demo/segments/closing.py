@@ -1,6 +1,6 @@
 """Closing text segment for demo."""
 
-from purple_tui.demo.script import (
+from purplecomputer.demo.script import (
     SwitchRoom, Pause, MoveSequence, Comment, TypeText, ZoomIn, ZoomOut,
 )
 

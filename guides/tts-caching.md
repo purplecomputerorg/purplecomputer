@@ -4,7 +4,7 @@ How spoken text gets fast, and why the cache stores raw WAV.
 
 ## Playback layers
 
-`speak_sync` in `purple_tui/tts.py` tries three sources in order:
+`speak_sync` in `purplecomputer/tts.py` tries three sources in order:
 
 1. **Pre-generated voice clips** (`packs/core-sounds/content/voice/*.wav`): hand-curated phrases like `goodbye.wav`. Instant, shipped on the image.
 2. **Disk cache** (`~/.purple/cache/tts/*.wav`): anything Piper has synthesized before on this machine. Instant on repeat.

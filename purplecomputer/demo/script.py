@@ -1,6 +1,6 @@
-"""Backward-compatible re-exports from purple_tui.playback.script.
+"""Backward-compatible re-exports from purplecomputer.playback.script.
 
-All action types now live in purple_tui.playback.script. This module
+All action types now live in purplecomputer.playback.script. This module
 re-exports them so existing demo code continues to work unchanged.
 DemoAction is an alias for PlaybackAction.
 """

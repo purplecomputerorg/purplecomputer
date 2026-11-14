@@ -55,7 +55,7 @@ driver, which Ubuntu doesn't ship.
 
 ## The page
 
-`purple_tui/canvas/paper.py` composes a US Letter page at 300 dpi; the driver
+`purplecomputer/paper.py` composes a US Letter page at 300 dpi; the driver
 fits it to A4 as well. A room that prints has `paper(g, size)` and `LANDSCAPE`:
 Art prints its paint and letters with unpainted cells left white, Blocks prints
 the build on a pale floor, Play prints the newest asks and answers that fit,
@@ -68,7 +68,7 @@ Computer" (left out when the name already says Purple; the bot then sits by the
 name). The app sends a PNG
 with `lp -o fit-to-page` and CUPS rasterizes it for the printer.
 
-`purple_tui/printing.py` paces prints (one per 20 s, 20 per boot, for the ink)
+`purplecomputer/printing.py` paces prints (one per 20 s, 20 per boot, for the ink)
 and follows each job by its number until it's over. Problems the family can fix
 (no paper, a jam, no ink, a door open) show as one short line and are never
 timed out. On a live boot the print stack is read from the stick, so Print hides
@@ -110,11 +110,11 @@ unplugged says it didn't print, without a rebuild.
   pages of a Write print as `print2.png`, `print3.png`, ...). The app also
   shows the pages full-screen until a key (arrows turn pages); the test VM's
   `run` turns this pretend printer on.
-- `tests/canvas/test_printing.py` covers the card, the pages and the pacing;
-  `tests/canvas/test_print_healing.py` the watcher's clocks and what it does;
+- `tests/test_printing.py` covers the card, the pages and the pacing;
+  `tests/test_print_healing.py` the watcher's clocks and what it does;
   `tests/test_printer_setup.py` the setup script, heal path included, against a
   fake `/run` and `/sys` (`PURPLE_PRINTER_ROOT`).
-- `tests/canvas/test_print_healing_cups.py` runs a real CUPS whose printer is a
+- `tests/test_print_healing_cups.py` runs a real CUPS whose printer is a
   second cupsd the test freezes (`SIGSTOP`, how a wedged `ipp-usb` looks) or
   kills. It copies CUPS's helper programs so a non-root CUPS trusts them.
 - On a Linux machine with CUPS, `ippeveprinter -p 8631 -d jobs ...` stands in

@@ -10,14 +10,14 @@ import time
 
 import pygame
 
-from ... import palette as P
-from ...code_runner import ArtCodeRunner
-from ...constants import ART_BAND_UNITS, ART_COLS, ART_ROWS, ART_SIDE_UNITS, ICON_PALETTE, OLD_ART_GRID
-from ...color_mixing import mix_colors_paint
+from .. import palette as P
+from ..code_runner import ArtCodeRunner
+from ..constants import ART_BAND_UNITS, ART_COLS, ART_ROWS, ART_SIDE_UNITS, ICON_PALETTE, OLD_ART_GRID
+from ..color_mixing import mix_colors_paint
 from ..gfx import _Cache, hexcolor, mix, rgb
-from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
+from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from .. import color_recipe, paper
-from ...palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
+from ..palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..panels import CodePanel, Echo
 from ..ui import (ABC_ALERT, ABC_PICTURE, AUTO, HINT_PICTURES, CLEAN_HINT, MOVE_HINT, PICK_HINT, auto_ink, draw_key_hint, draw_label, draw_mode_switch, draw_status_row, hint_row_h,

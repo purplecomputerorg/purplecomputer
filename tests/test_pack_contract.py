@@ -7,8 +7,8 @@ import sys
 
 import pytest
 
-from purple_tui.content import PACK_FORMAT
-from purple_tui.pack_manager import check_pack
+from purplecomputer.content import PACK_FORMAT
+from purplecomputer.pack_manager import check_pack
 from scripts import compat_check, export_studio, pack_contract
 from scripts.pack_contract import problems
 from tests.test_packs import make_pack
@@ -23,22 +23,22 @@ def test_pack_contract_is_decided():
 @pytest.fixture
 def contract(tmp_path, monkeypatch):
     """The contract over a copy of two watched files, so tests can change them."""
-    for rel in ("purple_tui/content.py", "studio/sdk/src/pack.ts"):
+    for rel in ("purplecomputer/content.py", "studio/sdk/src/pack.ts"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(pack_contract.ROOT / rel, tmp_path / rel)
     ledger = tmp_path / "pack_formats.json"
     ledger.write_text(json.dumps({**LEDGER, "fingerprint": {}}))
     monkeypatch.setattr(pack_contract, "ROOT", tmp_path)
     monkeypatch.setattr(pack_contract, "LEDGER", ledger)
-    monkeypatch.setattr(pack_contract, "CONTENT_PY", tmp_path / "purple_tui" / "content.py")
-    monkeypatch.setattr(pack_contract, "WATCHED", ["purple_tui/content.py", "studio/sdk/src/pack.ts"])
+    monkeypatch.setattr(pack_contract, "CONTENT_PY", tmp_path / "purplecomputer" / "content.py")
+    monkeypatch.setattr(pack_contract, "WATCHED", ["purplecomputer/content.py", "studio/sdk/src/pack.ts"])
     monkeypatch.setattr(export_studio, "main", lambda: None)
     pack_contract._save(pack_contract.load())
     return tmp_path
 
 
 def test_a_code_change_needs_a_decision_but_a_comment_does_not(contract):
-    py, ts = contract / "purple_tui" / "content.py", contract / "studio" / "sdk" / "src" / "pack.ts"
+    py, ts = contract / "purplecomputer" / "content.py", contract / "studio" / "sdk" / "src" / "pack.ts"
     py.write_text(py.read_text() + "\n# a note\n")
     ts.write_text(ts.read_text() + "\n// a note\n")
     assert problems() == []
@@ -49,7 +49,7 @@ def test_a_code_change_needs_a_decision_but_a_comment_does_not(contract):
 
 
 def test_purple_and_the_ledger_must_agree_on_the_newest_format(contract):
-    py = contract / "purple_tui" / "content.py"
+    py = contract / "purplecomputer" / "content.py"
     py.write_text(py.read_text().replace(f"PACK_FORMAT = {PACK_FORMAT}", f"PACK_FORMAT = {PACK_FORMAT + 1}"))
     pack_contract._save(pack_contract.load())
     assert any("PACK_FORMAT is" in p for p in problems())

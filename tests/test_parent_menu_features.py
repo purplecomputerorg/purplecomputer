@@ -1,8 +1,8 @@
 """The parent menu's Features row turns Code Space and Music Looping on and off in one list."""
 
-from purple_tui import settings
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.canvas.rooms.parent_menu import FeaturesScreen
+from purplecomputer import settings
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.rooms.parent_menu import FeaturesScreen
 
 
 def test_features_toggle_in_place(tmp_path, monkeypatch):

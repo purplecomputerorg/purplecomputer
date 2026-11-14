@@ -1,6 +1,6 @@
 # Blocks: showing where the next block goes
 
-Blocks is one color more often than not (a kid holds one key), drawn small enough to fit the whole floor, and nobody zooms. The cursor has to answer two questions at a glance: **where will the block land**, and **what is it next to**. The cursor is in `purple_tui/canvas/rooms/blocks_room.py`; the camera and painting it draws through are in `blocks_view.py`.
+Blocks is one color more often than not (a kid holds one key), drawn small enough to fit the whole floor, and nobody zooms. The cursor has to answer two questions at a glance: **where will the block land**, and **what is it next to**. The cursor is in `purplecomputer/rooms/blocks_room.py`; the camera and painting it draws through are in `blocks_view.py`.
 
 ## Rules
 

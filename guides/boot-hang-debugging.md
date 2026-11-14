@@ -2,7 +2,7 @@
 
 When Purple fails to fully start on live boot — you see alacritty (a cursor, maybe a partial render, or typed characters echoing back at you) but Textual never appears — this guide tells you where the logs are and how to read them.
 
-See also: `guides/boot-display-sequence.md` (normal boot path), `purple_tui/boot_log.py` (the module doing the instrumentation).
+See also: `guides/boot-display-sequence.md` (normal boot path), `purplecomputer/boot_log.py` (the module doing the instrumentation).
 
 ---
 
@@ -16,7 +16,7 @@ See also: `guides/boot-display-sequence.md` (normal boot path), `purple_tui/boot
 | `/var/log/purple/boot.log` | tmpfs (effectively the same as above) | **ext4 on the casper `writable` USB partition** | **Yes, on debug ISO** |
 | `journalctl -t purple-boot` | volatile journal | volatile journal | **Yes on installed systems** (persistent journal, every boot) |
 
-Once per kernel boot `purple-wait-display` rotates `boot.log`, `power.log` and `evdev.log` to `.prev`, so the files hold only this boot and the last. Every line also goes to the journal (`purple_tui/diag_log.py`), tagged `purple-boot`, `purple-power` and `purple-evdev`. On an installed system, read any earlier boot with `journalctl -b -2 -t purple-power`; `journalctl --list-boots` numbers them.
+Once per kernel boot `purple-wait-display` rotates `boot.log`, `power.log` and `evdev.log` to `.prev`, so the files hold only this boot and the last. Every line also goes to the journal (`purplecomputer/diag_log.py`), tagged `purple-boot`, `purple-power` and `purple-evdev`. On an installed system, read any earlier boot with `journalctl -b -2 -t purple-power`; `journalctl --list-boots` numbers them.
 
 For a slow (not hung) boot, `sudo purple-boot-timing` prints the lines that bound each phase as seconds since the kernel started, next to `systemd-analyze`, so the gap shows up without reading the raw log. `--timeline` prints just that part.
 
@@ -25,7 +25,7 @@ For a slow (not hung) boot, `sudo purple-boot-timing` prints the lines that boun
 1. `purple-wait-display.sh` — logs `[wait-display]` lines from systemd's `purple-x11.service` ExecStartPre. Connector states at start and timeout.
 2. `config/xinit/xinitrc` — logs `[xinitrc]` lines for every phase of X/WM/audio/alacritty startup.
 3. `/usr/local/bin/purple` (the bash launcher inside alacritty) — logs `[launcher]` lines immediately before `exec python3`.
-4. `purple_tui/boot_log.py` — logs `[python]` lines at every import checkpoint, `PurpleApp.__init__`, and `on_mount`.
+4. `purplecomputer/boot_log.py` — logs `[python]` lines at every import checkpoint, `PurpleApp.__init__`, and `on_mount`.
 
 A normal successful boot produces something like:
 
@@ -39,13 +39,13 @@ A normal successful boot produces something like:
 [HH:MM:SS.mmm] [xinitrc] Font size: 16
 [HH:MM:SS.mmm] [xinitrc] Launching Alacritty...
 [HH:MM:SS.mmm] [launcher] launcher entered pid=1234
-[HH:MM:SS.mmm] [launcher] exec python3 -m purple_tui.purple_tui
+[HH:MM:SS.mmm] [launcher] exec python3 -m purplecomputer.purplecomputer
 === purple python starting at ... pid=1234 python=3.12.3 ===
 [HH:MM:SS.mmm] [+ 0.002s] [python] boot_log module imported; watchdog arming
 [HH:MM:SS.mmm] [+ 0.003s] [python] watchdog armed
-[HH:MM:SS.mmm] [+ 0.003s] [python] purple_tui entry: beginning stdlib imports
+[HH:MM:SS.mmm] [+ 0.003s] [python] purplecomputer entry: beginning stdlib imports
 [HH:MM:SS.mmm] [+ 0.011s] [python] stdlib imports done; importing textual
-[HH:MM:SS.mmm] [+ 0.520s] [python] textual/rich imports done; importing purple_tui.constants
+[HH:MM:SS.mmm] [+ 0.520s] [python] textual/rich imports done; importing purplecomputer.constants
 [HH:MM:SS.mmm] [+ 0.540s] [python] constants imported; importing keyboard + input
 [HH:MM:SS.mmm] [+ 0.612s] [python] keyboard + input imported; importing power_manager
 [HH:MM:SS.mmm] [+ 0.623s] [python] power_manager imported; importing .demo
@@ -53,7 +53,7 @@ A normal successful boot produces something like:
 [HH:MM:SS.mmm] [+ 0.660s] [python] rooms.art_room imported; importing rooms.parent_menu
 [HH:MM:SS.mmm] [+ 0.675s] [python] rooms.parent_menu imported; importing room_picker
 [HH:MM:SS.mmm] [+ 0.690s] [python] room_picker imported; importing repl_panel
-[HH:MM:SS.mmm] [+ 0.701s] [python] all purple_tui imports done
+[HH:MM:SS.mmm] [+ 0.701s] [python] all purplecomputer imports done
 [HH:MM:SS.mmm] [+ 0.712s] [python] PurpleApp.__init__ begin
 [HH:MM:SS.mmm] [+ 0.984s] [python] PurpleApp.__init__ after App.__init__
 [HH:MM:SS.mmm] [+ 1.210s] [python] PurpleApp.on_mount begin
@@ -99,8 +99,8 @@ The dump is a full Python stack for every thread: main thread, Textual's render 
 ```
 [HH:MM:SS.mmm] [+30.001s] [python] WATCHDOG deadline 30s exceeded, dumping stacks
 Thread 0x00007f... (most recent call first):
-  File "/opt/purple/purple_tui/keyboard.py", line 812 in detect_keyboard_mode
-  File "/opt/purple/purple_tui/purple_tui.py", line 763 in __init__
+  File "/opt/purple/purplecomputer/keyboard.py", line 812 in detect_keyboard_mode
+  File "/opt/purple/purplecomputer/purplecomputer.py", line 763 in __init__
   ...
 --- end dump at +30s ---
 ```
@@ -119,7 +119,7 @@ When you suspect a hang *right now* and don't want to wait for the next watchdog
 dump-purple
 ```
 
-The helper (installed at `/usr/local/bin/dump-purple`) finds the running `purple_tui.purple_tui` process, sends it SIGUSR1, and tails the boot log. `boot_log.py` registers `faulthandler` on SIGUSR1 at startup, so every thread's stack lands in `/var/log/purple/boot.log` without killing the process. You can dump repeatedly to watch a deadlock evolve (or not).
+The helper (installed at `/usr/local/bin/dump-purple`) finds the running `purplecomputer.purplecomputer` process, sends it SIGUSR1, and tails the boot log. `boot_log.py` registers `faulthandler` on SIGUSR1 at startup, so every thread's stack lands in `/var/log/purple/boot.log` without killing the process. You can dump repeatedly to watch a deadlock evolve (or not).
 
 Use this to distinguish:
 
@@ -178,7 +178,7 @@ On laptops with real function keys, holding `Ctrl+Alt+F2` for 3 seconds switches
 | `matchbox-window-manager started` (nothing after) | font sizer, config copy, or alacritty exec |
 | `Launching Alacritty...` (nothing after) | alacritty itself (font loading, GPU init, pty setup) |
 | `launcher entered` (nothing after) | between bash and python interpreter — check PATH, libs, very rare |
-| `exec python3 -m purple_tui.purple_tui` (nothing after) | Python interpreter startup, site-packages scan |
+| `exec python3 -m purplecomputer.purplecomputer` (nothing after) | Python interpreter startup, site-packages scan |
 | `boot_log module imported` (nothing after) | the Python import machinery itself is broken — very rare |
 | `stdlib imports done; importing textual` (nothing after) | first-time bytecode compilation of textual/rich, or the rich module doing something at import |
 | `constants imported; importing keyboard + input` (nothing after) | `from .input import ...` — check for module-level evdev opens |
@@ -210,14 +210,14 @@ The 2015 MBP didn't exhibit the hang because its Intel USB 3.0 controller was fa
 import cProfile, pstats, io
 pr = cProfile.Profile()
 pr.enable()
-from purple_tui.rooms.art_room import ColorLegend
+from purplecomputer.rooms.art_room import ColorLegend
 pr.disable()
 pstats.Stats(pr).sort_stats('cumulative').print_stats(30)
 ```
 
 The profile showed ~2.9s cumulative in `inflect/__init__.py` → `typeguard/_decorators.py:typechecked` → `ast.visit` / `fix_missing_locations` / `compile`.
 
-**The fix.** `purple_tui/content.py` now lazy-loads `inflect` via a `@functools.cache`-decorated zero-arg factory (`_inflect_engine`), and `PurpleApp.on_mount` spawns a daemon thread that calls `warm_inflect_engine()` after `mark_first_render()`. First REPL plural lookup is instant because the engine is already warm by the time a kid types anything; boot time drops by ~1.4s on every machine.
+**The fix.** `purplecomputer/content.py` now lazy-loads `inflect` via a `@functools.cache`-decorated zero-arg factory (`_inflect_engine`), and `PurpleApp.on_mount` spawns a daemon thread that calls `warm_inflect_engine()` after `mark_first_render()`. First REPL plural lookup is instant because the engine is already warm by the time a kid types anything; boot time drops by ~1.4s on every machine.
 
 ---
 
@@ -229,7 +229,7 @@ After the inflect fix, the same 2016 MBP still hung at boot. Root cause: `pygame
 
 **Why `subprocess.run` is wrong here, and `Popen` + abandon is right.** A genuinely wedged CS8409 leaves the probe child in uninterruptible **D-state** inside the kernel's `snd_pcm_open()`. SIGKILL cannot reap a D-state task. `subprocess.run(timeout=...)` reacts to a timeout by calling `kill()` then a **blocking `wait()`** to reap, and that `wait()` hangs forever on the unkillable child, so `warm_mixer()` never returns and `audio_ok` stays `None`: the screen shows "Audio: checking..." with no resolution (observed on a MacBookPro13,2). The hang is in a separate process, not ours, so the fix is to stop waiting on it: `Popen` + `proc.wait(timeout=...)` (which polls and always returns at the deadline), then on timeout `kill()` and **abandon** the child (a daemon `_reap_orphan` thread collects it if the kernel ever lets go). `_start_mixer_warmup`'s `_warm()` is also wrapped so any unexpected error fails safe to `audio_ok = False` rather than leaving it `None`.
 
-**Retry logic** (in `purple_tui.py:_start_mixer_warmup`): PulseAudio/ALSA may still be initializing at boot, so a fast failure (exit code ≠ 0, not a timeout) triggers retries with delays of 1s, 2s, 4s. `_reset_mixer_state()` clears the cached failure between retries but refuses to reset after a timeout (returns False), so broken hardware stops after one 10s attempt.
+**Retry logic** (in `purplecomputer.py:_start_mixer_warmup`): PulseAudio/ALSA may still be initializing at boot, so a fast failure (exit code ≠ 0, not a timeout) triggers retries with delays of 1s, 2s, 4s. `_reset_mixer_state()` clears the cached failure between retries but refuses to reset after a timeout (returns False), so broken hardware stops after one 10s attempt.
 
 **Timing in practice:**
 
@@ -312,7 +312,7 @@ def public_api(x):
     return _thing().do(x)
 ```
 
-And if first-call latency matters, warm the cache from a daemon thread after first render (pattern in `purple_tui.py` `on_mount`).
+And if first-call latency matters, warm the cache from a daemon thread after first render (pattern in `purplecomputer.py` `on_mount`).
 
 ---
 
@@ -354,7 +354,7 @@ Press grave — it should print `esc`. Press right alt — it should print `f2`.
 
 ### Reading `purple-boot.log` for keyd status
 
-`purple_tui/input.py:_find_keyboards()` logs every device it opens. In the boot log you want to see:
+`purplecomputer/input.py:_find_keyboards()` logs every device it opens. In the boot log you want to see:
 
 ```
 KBD SCAN: strict via scan: /dev/input/eventN (keyd virtual keyboard)

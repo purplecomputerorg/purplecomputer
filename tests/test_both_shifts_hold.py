@@ -12,8 +12,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui.keyboard import KeyboardStateMachine, CharacterAction
-from purple_tui.input import RawKeyEvent, KeyCode
+from purplecomputer.keyboard import KeyboardStateMachine, CharacterAction
+from purplecomputer.input import RawKeyEvent, KeyCode
 
 # Base offset so timestamps are never 0.0 (which is falsy in Python)
 T = 100.0
@@ -65,7 +65,7 @@ class TestBackslashHoldCheck:
         sm = KeyboardStateMachine()
         sm.process(backslash_down(0.0))
 
-        with patch('purple_tui.keyboard.time') as mock_time:
+        with patch('purplecomputer.keyboard.time') as mock_time:
             mock_time.time.return_value = sm._backslash_press_time + 3.1
             assert sm.check_backslash_hold() is True
 
@@ -73,7 +73,7 @@ class TestBackslashHoldCheck:
         sm = KeyboardStateMachine()
         sm.process(backslash_down(0.0))
 
-        with patch('purple_tui.keyboard.time') as mock_time:
+        with patch('purplecomputer.keyboard.time') as mock_time:
             mock_time.time.return_value = sm._backslash_press_time + 1.0
             assert sm.check_backslash_hold() is False
 
@@ -81,7 +81,7 @@ class TestBackslashHoldCheck:
         sm = KeyboardStateMachine()
         sm.process(backslash_down(0.0))
 
-        with patch('purple_tui.keyboard.time') as mock_time:
+        with patch('purplecomputer.keyboard.time') as mock_time:
             mock_time.time.return_value = sm._backslash_press_time + 3.1
             assert sm.check_backslash_hold() is True
             assert sm.check_backslash_hold() is False
@@ -101,7 +101,7 @@ class TestBackslashHoldCheck:
         assert sm._backslash_press_time is not None
         assert sm._backslash_hold_triggered is False
 
-        with patch('purple_tui.keyboard.time') as mock_time:
+        with patch('purplecomputer.keyboard.time') as mock_time:
             mock_time.time.return_value = sm._backslash_press_time + 3.1
             assert sm.check_backslash_hold() is True
 

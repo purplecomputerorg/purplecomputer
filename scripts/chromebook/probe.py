@@ -25,7 +25,7 @@ os.environ["SDL_AUDIODRIVER"] = "alsa"
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame  # noqa: E402
 
-import kms  # noqa: E402  purple_tui/canvas/kms.py, copied next to this file by build-bundle.sh
+import kms  # noqa: E402  purplecomputer/kms.py, copied next to this file by build-bundle.sh
 
 WATCHDOG_SECONDS = 300
 MASTER_WAIT_SECONDS = 30

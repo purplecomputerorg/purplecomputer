@@ -1,10 +1,10 @@
-"""The canvas volume keys, badge and parent limit follow the shared step table in purple_tui.audio."""
+"""The canvas volume keys, badge and parent limit follow the shared step table in purplecomputer.audio."""
 import pytest
 
-from purple_tui import settings
-from purple_tui.audio import VOLUME_TOP, volume_badge
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.constants import VOLUME_DEFAULT, VOLUME_LEVELS
+from purplecomputer import settings
+from purplecomputer.audio import VOLUME_TOP, volume_badge
+from purplecomputer.harness import make_app, run
+from purplecomputer.constants import VOLUME_DEFAULT, VOLUME_LEVELS
 
 
 @pytest.fixture(autouse=True)
@@ -62,8 +62,8 @@ def test_parent_limit_caps_the_keys_and_reads_max():
 
 
 def test_limit_row_switches_with_left_and_right():
-    from purple_tui.canvas.rooms.parent_menu import ParentVolumeModal
-    from purple_tui.keyboard import NavigationAction
+    from purplecomputer.rooms.parent_menu import ParentVolumeModal
+    from purplecomputer.keyboard import NavigationAction
 
     async def go():
         app = make_app()
@@ -91,8 +91,8 @@ def test_silent_mode_blocks_the_keys():
 
 
 def test_mixer_recovery_reapplies_volume_and_preloads_speech(monkeypatch):
-    from purple_tui import tts
-    from purple_tui.canvas.app import PurpleApp
+    from purplecomputer import tts
+    from purplecomputer.app import PurpleApp
     calls = []
     monkeypatch.setattr(tts, "preload", lambda: calls.append("preload"))
 
@@ -112,7 +112,7 @@ def test_mixer_recovery_reapplies_volume_and_preloads_speech(monkeypatch):
 
 def test_first_boot_chime_picks_the_starting_volume(monkeypatch):
     import asyncio
-    from purple_tui import audio, sound_check
+    from purplecomputer import audio, sound_check
     pushed = []
     monkeypatch.setattr(audio, "set_system_volume", lambda level, wait=False: pushed.append(level))
     loud = sound_check.SoundCheck(heard=True, tone_db=(-5.0,) * 3, snr_db=40, sink_pct=58, sink_db=-14.0, source_pct=20, source_db=-42.0)
@@ -141,8 +141,8 @@ def test_first_boot_chime_picks_the_starting_volume(monkeypatch):
 def test_mute_key_held_at_start_skips_the_chime(monkeypatch):
     """A quiet room: holding mute, volume-down or M while Purple starts skips
     the first-boot chime and keeps the default volume as the saved one."""
-    from purple_tui import audio, sound_check
-    from purple_tui.canvas import app as app_mod
+    from purplecomputer import audio, sound_check
+    from purplecomputer import app as app_mod
     pushed = []
     monkeypatch.setattr(audio, "set_system_volume", lambda level, wait=False: pushed.append(level))
     monkeypatch.setattr(sound_check, "run", lambda **kw: (_ for _ in ()).throw(AssertionError("chimed")))
@@ -157,7 +157,7 @@ def test_mute_key_held_at_start_skips_the_chime(monkeypatch):
 
 
 def test_no_chime_once_a_volume_is_saved(monkeypatch):
-    from purple_tui import sound_check
+    from purplecomputer import sound_check
     settings.set_volume_level(VOLUME_LEVELS[7])
     monkeypatch.setattr(sound_check, "run", lambda **kw: (_ for _ in ()).throw(AssertionError("chimed")))
     async def go():

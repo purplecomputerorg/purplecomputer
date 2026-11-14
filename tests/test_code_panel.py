@@ -5,12 +5,12 @@ import asyncio
 
 import pytest
 
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.ui import LOOP
-from purple_tui.canvas.panels import RECIPES, CodePanel, Echo, color_name, color_spans, presses_keys
-from purple_tui.canvas.ui import UP
-from purple_tui.keyboard import NavigationAction
-from purple_tui.palette import get_key_color
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.ui import LOOP
+from purplecomputer.panels import RECIPES, CodePanel, Echo, color_name, color_spans, presses_keys
+from purplecomputer.ui import UP
+from purplecomputer.keyboard import NavigationAction
+from purplecomputer.palette import get_key_color
 
 KEYS = {get_key_color(k).lower(): k for k in "abcdefghijklmnopqrstuvwxyz"}
 
@@ -49,7 +49,7 @@ def test_echo_groups_steps_letters_and_colors():
 def test_echo_leaves_out_separators_and_starts_over_after_a_pause(monkeypatch):
     e = Echo(pause=2.0)
     clock = iter([10.0, 10.5, 11.0, 20.0])
-    monkeypatch.setattr("purple_tui.canvas.panels.time.monotonic", lambda: next(clock))
+    monkeypatch.setattr("purplecomputer.panels.time.monotonic", lambda: next(clock))
     for ch in "a,s":
         e.letter("", ch)
     e.letter("", "q")
@@ -122,7 +122,7 @@ def test_a_mashed_over_echo_comes_back_with_enter():
 
 def test_a_stale_echo_opens_code_empty(monkeypatch):
     clock = iter([10.0, 10.0 + 31])
-    monkeypatch.setattr("purple_tui.canvas.panels.time.monotonic", lambda: next(clock))
+    monkeypatch.setattr("purplecomputer.panels.time.monotonic", lambda: next(clock))
     e = Echo()
     e.step("right")
     assert e.take() == ""
@@ -155,12 +155,12 @@ def test_arrows_pick_a_word_to_retype_or_remove():
 
 
 async def press_control(panel, name):
-    from purple_tui.keyboard import ControlAction
+    from purplecomputer.keyboard import ControlAction
     await panel.handle(ControlAction(action=name, is_down=True))
 
 
 async def type_text_into(panel, text):
-    from purple_tui.keyboard import CharacterAction
+    from purplecomputer.keyboard import CharacterAction
     for ch in text:
         await panel.handle(CharacterAction(char=ch))
 
@@ -399,7 +399,7 @@ def test_blocks_esc_then_space_opens_code_and_tab_still_turns():
 
 @pytest.mark.parametrize("name", ["art", "music"])
 def test_demo_scripts_toggle_code_through_the_esc_menu(name):
-    from purple_tui.playback import PlaybackPlayer, ToggleCode
+    from purplecomputer.playback import PlaybackPlayer, ToggleCode
 
     async def go():
         app, room = await _room(name)
@@ -438,7 +438,7 @@ def test_holding_space_never_opens_code(name):
 
 
 def test_holding_space_in_code_types_one_space():
-    from purple_tui.keyboard import ControlAction
+    from purplecomputer.keyboard import ControlAction
 
     async def go():
         app, art = await _room("art")
@@ -452,7 +452,7 @@ def test_holding_space_in_code_types_one_space():
 
 
 def test_letting_go_of_a_shown_hold_leaves_a_hint_a_tap_does_not():
-    from purple_tui.keyboard import ControlAction
+    from purplecomputer.keyboard import ControlAction
 
     async def go():
         app, music = await _room("music")
@@ -469,7 +469,7 @@ def test_letting_go_of_a_shown_hold_leaves_a_hint_a_tap_does_not():
 
 
 def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
-    from purple_tui.keyboard import ControlAction
+    from purplecomputer.keyboard import ControlAction
 
     async def go():
         app, music = await _room("music")
@@ -487,7 +487,7 @@ def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
 
 
 def test_music_recipe_pictures_light_the_grid_keys():
-    from purple_tui.canvas.panels import _keys
+    from purplecomputer.panels import _keys
     assert _keys("asd") == ["-" * 10, "-" * 10, "asd-------", "-" * 10]
 
 
@@ -497,7 +497,7 @@ def test_music_recipe_pictures_light_the_grid_keys():
     ("music", "key", "Key"), ("music", "choose uke", "Sound"), ("blocks", "up 3 repeat", "Again"),
 ])
 def test_the_guide_shows_the_last_code_word_typed(room, text, heading):
-    from purple_tui.canvas.panels import guide_topic
+    from purplecomputer.panels import guide_topic
     topic = guide_topic(room, text)
     assert (topic and topic[0]) == heading if heading else topic is None
 
@@ -505,7 +505,7 @@ def test_the_guide_shows_the_last_code_word_typed(room, text, heading):
 @pytest.mark.parametrize("name", ["art", "music", "blocks"])
 def test_the_guide_never_shows_a_heading_with_nothing_under_it(name, monkeypatch):
     import pygame
-    from purple_tui.canvas import panels
+    from purplecomputer import panels
 
     async def go():
         app, room = await _room(name)
@@ -525,8 +525,8 @@ def test_the_guide_never_shows_a_heading_with_nothing_under_it(name, monkeypatch
 
 @pytest.mark.parametrize("name", ["art", "blocks"])
 def test_colors_in_code_opens_the_wheel_and_writes_the_color_picked(name):
-    from purple_tui.canvas.color_wheel import ColorBar
-    from purple_tui.content import get_content
+    from purplecomputer.color_wheel import ColorBar
+    from purplecomputer.content import get_content
 
     async def go():
         app, room = await _room(name)
@@ -563,7 +563,7 @@ def test_escape_from_the_code_wheel_puts_the_line_back():
 
 @pytest.mark.parametrize("room", ["music", "art", "blocks"])
 def test_esc_and_space_together_open_and_close_the_code_panel(room):
-    from purple_tui.keyboard import ControlAction
+    from purplecomputer.keyboard import ControlAction
 
     async def go():
         app = make_app(room=room)
@@ -591,7 +591,7 @@ def test_placeholder_offers_up_only_once_there_is_code_to_recall():
 
 
 def test_each_type_for_more_word_brings_up_its_section():
-    from purple_tui.canvas.panels import GUIDE, TOPICS, _topic_word, guide_topic
+    from purplecomputer.panels import GUIDE, TOPICS, _topic_word, guide_topic
     for room, sections in GUIDE.items():
         headings = {h for _, h, _ in TOPICS[room]}
         for heading, rows in sections:
@@ -600,7 +600,7 @@ def test_each_type_for_more_word_brings_up_its_section():
 
 
 def test_color_words_are_underlined_in_their_color():
-    from purple_tui.content import get_content
+    from purplecomputer.content import get_content
     content = get_content()
     spans = color_spans("dark blue right 5, red up 3")
     assert spans == [(0, 9, content.get_modified_color("dark blue")[0]), (19, 22, content.exact_color("red"))]

@@ -1,6 +1,6 @@
 """Holding Enter in Play runs the line once instead of alternating run and recall."""
 
-from purple_tui.canvas.harness import make_app, press, run, type_text
+from purplecomputer.harness import make_app, press, run, type_text
 
 
 def test_held_enter_runs_once():

@@ -1,4 +1,4 @@
-from purple_tui.canvas.harness import make_app, run, type_text
+from purplecomputer.harness import make_app, run, type_text
 
 
 def test_music_shows_the_sticker_keyboard_and_pops_the_last_key():
@@ -13,7 +13,7 @@ def test_music_shows_the_sticker_keyboard_and_pops_the_last_key():
 
 def test_the_popped_key_drops_back_after_a_moment(monkeypatch):
     import asyncio
-    from purple_tui.canvas import app as app_mod
+    from purplecomputer import app as app_mod
     monkeypatch.setattr(app_mod, "LEGEND_POP_S", 0.05)
 
     async def go():
@@ -27,7 +27,7 @@ def test_the_popped_key_drops_back_after_a_moment(monkeypatch):
 
 
 def test_enter_in_letters_switches_between_names_and_sounds(monkeypatch):
-    from purple_tui.canvas.harness import press
+    from purplecomputer.harness import press
     asked = []
 
     async def go():
@@ -63,18 +63,18 @@ def test_letters_say_the_letter_without_an_instrument_under_it(monkeypatch):
 
 
 def test_every_letter_has_a_sound_clip():
-    from purple_tui.canvas.sounds import core_sounds
+    from purplecomputer.sounds import core_sounds
     assert {p.stem for p in (core_sounds() / "letter-sounds").glob("*.wav")} == set("abcdefghijklmnopqrstuvwxyz")
 
 
 def test_every_fun_key_has_a_silly_sound():
-    from purple_tui.canvas.sounds import core_sounds, find_sound
+    from purplecomputer.sounds import core_sounds, find_sound
     assert all(find_sound(core_sounds() / "letters", n) for n in ("semicolon", "comma", "period", "slash"))
 
 
 
 def test_switching_shows_one_toast_and_plays_a_sample(monkeypatch):
-    from purple_tui.canvas.harness import press
+    from purplecomputer.harness import press
     heard = []
 
     async def go():
@@ -92,8 +92,8 @@ def test_switching_shows_one_toast_and_plays_a_sample(monkeypatch):
 
 
 def test_note_names_use_flats_in_flat_keys():
-    from purple_tui.canvas.rooms.music_room import note_name
-    from purple_tui.music_constants import FRIENDLY_KEY_NAMES
+    from purplecomputer.rooms.music_room import note_name
+    from purplecomputer.music_constants import FRIENDLY_KEY_NAMES
     scale = {name: [note_name(col, i) for col in range(7)] for i, name in enumerate(FRIENDLY_KEY_NAMES)}
     assert scale["B♭"] == ["B♭", "C", "D", "E♭", "F", "G", "A"]
     assert scale["F"] == ["F", "G", "A", "B♭", "C", "D", "E"]
@@ -102,10 +102,10 @@ def test_note_names_use_flats_in_flat_keys():
 
 def test_instruments_show_their_picture_a_packs_emoji_or_their_bases_picture(tmp_path, monkeypatch):
     import json
-    from purple_tui import content as content_mod
-    from purple_tui.canvas.rooms.music_room import instrument_icon
-    from purple_tui.constants import ICON_MUSIC
-    from purple_tui.content import ContentManager, is_word_picture
+    from purplecomputer import content as content_mod
+    from purplecomputer.rooms.music_room import instrument_icon
+    from purplecomputer.constants import ICON_MUSIC
+    from purplecomputer.content import ContentManager, is_word_picture
     content = tmp_path / "family" / "content"
     (content / "instruments").mkdir(parents=True)
     (content.parent / "manifest.json").write_text(json.dumps({"id": "family", "name": "F", "version": "1.0.0", "type": "emoji"}))
@@ -123,9 +123,9 @@ def test_instruments_show_their_picture_a_packs_emoji_or_their_bases_picture(tmp
 
 
 def test_arrows_toast_the_new_key_and_code_does_not():
-    from purple_tui.canvas.harness import press
-    from purple_tui.canvas.rooms.music_room import FRIENDLY_KEY_NAMES
-    from purple_tui.constants import ICON_MUSIC
+    from purplecomputer.harness import press
+    from purplecomputer.rooms.music_room import FRIENDLY_KEY_NAMES
+    from purplecomputer.constants import ICON_MUSIC
 
     async def go():
         app = make_app(room="music")
@@ -140,7 +140,7 @@ def test_arrows_toast_the_new_key_and_code_does_not():
 
 
 def _letters_room(monkeypatch):
-    from purple_tui.canvas.rooms import music_room
+    from purplecomputer.rooms import music_room
     monkeypatch.setattr(music_room, "LETTERS_MASH_S", 0)
     app = make_app(room="music")
     app.room.letters_mode = True
@@ -148,8 +148,8 @@ def _letters_room(monkeypatch):
 
 
 def test_letters_that_spell_a_word_show_it_and_space_says_it(monkeypatch):
-    from purple_tui import tts
-    from purple_tui.canvas.harness import press
+    from purplecomputer import tts
+    from purplecomputer.harness import press
     said = []
     monkeypatch.setattr(tts, "speak_many", lambda texts, **kw: said.append((texts, kw)) or True)
 
@@ -167,7 +167,7 @@ def test_letters_that_spell_a_word_show_it_and_space_says_it(monkeypatch):
 
 
 def test_a_familys_pack_word_spells_too(monkeypatch):
-    from purple_tui.content import get_content
+    from purplecomputer.content import get_content
     monkeypatch.setitem(get_content().emojis, "zorb", "🐙")
 
     async def go():
@@ -207,8 +207,8 @@ def test_a_two_letter_word_needs_a_rest_before_it(monkeypatch):
 
 
 def test_a_long_rest_or_a_mode_switch_starts_a_new_word(monkeypatch):
-    from purple_tui.canvas.harness import press
-    from purple_tui.canvas.rooms import music_room
+    from purplecomputer.harness import press
+    from purplecomputer.rooms import music_room
 
     async def go():
         app = _letters_room(monkeypatch)
@@ -225,7 +225,7 @@ def test_a_long_rest_or_a_mode_switch_starts_a_new_word(monkeypatch):
 
 def test_a_blocked_word_is_never_shown(monkeypatch):
     import base64
-    from purple_tui.content import ContentManager
+    from purplecomputer.content import ContentManager
     monkeypatch.setattr(ContentManager, "is_known_word", lambda self, w: True)
 
     async def go():
@@ -238,8 +238,8 @@ def test_a_blocked_word_is_never_shown(monkeypatch):
 
 def test_music_words_are_known_and_every_one_is_spoken():
     import base64
-    from purple_tui.content import _music_words, get_content
-    from purple_tui.speech_filter import is_clean
+    from purplecomputer.content import _music_words, get_content
+    from purplecomputer.speech_filter import is_clean
     known = get_content().is_known_word
     assert all(known(w) for w in ("the", "go", "run", "cat", "blue", "hog", "judge", "spoonful", "classes"))
     assert not any(known(w) for w in ("thy", "ans", "ofs", base64.b64decode("bXVyZGVy").decode()))
@@ -260,7 +260,7 @@ def test_the_same_letter_over_and_over_fades_out_but_still_spells(monkeypatch):
 
 def test_a_looping_word_shows_each_time_it_comes_around(monkeypatch):
     import asyncio
-    from purple_tui.canvas.rooms.music_room import MODE_LETTERS
+    from purplecomputer.rooms.music_room import MODE_LETTERS
 
     async def go():
         room = _letters_room(monkeypatch).room

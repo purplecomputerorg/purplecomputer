@@ -7,7 +7,7 @@
 #
 # Read-only. Does NOT touch audio state, open any PCM device, spawn pulseaudio,
 # or call pactl in a way that could autospawn a daemon. Safe to run alongside
-# everything; will never wedge audio or race purple_tui's own probes.
+# everything; will never wedge audio or race purplecomputer's own probes.
 #
 # Keeps the 10 most recent boot dumps so broken-boot post-mortems don't need
 # live shells or repro.
@@ -51,12 +51,12 @@ ls -la /run/user/1000/pulse/ 2>/dev/null
 ls -la /home/purple/.config/pulse/ 2>/dev/null
 
 section "purple-x11 process env"
-PID=$(pgrep -f purple_tui | head -1)
+PID=$(pgrep -f purplecomputer | head -1)
 if [ -n "$PID" ]; then
-    echo "purple_tui pid: $PID"
+    echo "purplecomputer pid: $PID"
     tr '\0' '\n' < /proc/$PID/environ | grep -E '^(SDL|PULSE|XDG|DBUS|HOME|USER)=' | sort
 else
-    echo "(purple_tui not running)"
+    echo "(purplecomputer not running)"
 fi
 
 section "pulseaudio.socket status (purple user)"

@@ -3,8 +3,8 @@
 import pytest
 import pygame
 
-from purple_tui.canvas.gfx import Gfx, is_emoji, parse_markup, split_runs, strip_markup
-from purple_tui.palette import contrast_text
+from purplecomputer.gfx import Gfx, is_emoji, parse_markup, split_runs, strip_markup
+from purplecomputer.palette import contrast_text
 
 
 @pytest.fixture(scope="module")

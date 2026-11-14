@@ -6,8 +6,8 @@ import pytest
 
 # Set environment before app imports
 
-from purple_tui import timeline as timeline_mod
-from purple_tui.timeline import RoomTimeline
+from purplecomputer import timeline as timeline_mod
+from purplecomputer.timeline import RoomTimeline
 
 
 # ---------------------------------------------------------------------------
@@ -201,9 +201,9 @@ class TestRoomTimeline:
 from datetime import datetime
 from types import SimpleNamespace
 
-from purple_tui.canvas import panels
-from purple_tui.canvas.app import JUMP_TAG
-from purple_tui.canvas.harness import make_app, press, run, type_text
+from purplecomputer import panels
+from purplecomputer.app import JUMP_TAG
+from purplecomputer.harness import make_app, press, run, type_text
 
 NOW = datetime(2026, 10, 13, 15, 0).timestamp()
 

@@ -6,7 +6,7 @@ that way, so lines run on from where the last one ended."""
 
 import asyncio
 
-from ...code_runner import ArtCodeRunner
+from ..code_runner import ArtCodeRunner
 
 # Code words to the room's ways; up and down are height, back and front depth.
 WAYS = {"right": "right", "left": "left", "back": "up", "front": "down", "up": "rise", "down": "sink"}

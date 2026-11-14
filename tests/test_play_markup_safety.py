@@ -7,9 +7,9 @@ import re
 
 import pytest
 
-from purple_tui.canvas.gfx import parse_markup, strip_markup
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.play_eval import SimpleEvaluator, _escape_markup, _escaped_width, _strip_markup, parse_speech_trigger
+from purplecomputer.gfx import parse_markup, strip_markup
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.play_eval import SimpleEvaluator, _escape_markup, _escaped_width, _strip_markup, parse_speech_trigger
 
 HOSTILE_INPUT = [
     "[", "[[[", "a[b[c", "[/]", "][", "cat[dog", "[cat] love [dog", "hello[",

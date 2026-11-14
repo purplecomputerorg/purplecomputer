@@ -7,7 +7,7 @@ import { gunzip, gzip, tar, untar } from "../sdk/src/tar";
 import { buildPack, openPack, packChanges, packSpec } from "../src/pack";
 import { scaleCrop } from "../src/photo";
 import type { Draft } from "../src/state";
-import roomLibrary from "../../purple_tui/roomkit/purple.py?raw";
+import roomLibrary from "../../purplecomputer/roomkit/purple.py?raw";
 
 const base: PackSpec = { name: "", pictures: [], letters: {}, phrases: [], words: [], synonyms: [], ranked: [], instruments: [], rooms: [], theme: null };
 const draftBase: Draft = { ...base, id: "pack-test", letters: {}, pictures: [], rooms: [], roomFiles: [], colors: {} };

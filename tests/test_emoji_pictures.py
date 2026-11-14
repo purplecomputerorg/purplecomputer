@@ -1,5 +1,5 @@
 """Studio's in-browser Purple draws emoji from pictures `just studio-bundle` pulls out of the ISO's Noto
-(purple_tui/canvas/emoji_pictures.py); they must look like pygame drawing that font, as Purple does."""
+(purplecomputer/emoji_pictures.py); they must look like pygame drawing that font, as Purple does."""
 
 import json
 from pathlib import Path
@@ -8,11 +8,11 @@ import numpy as np
 import pygame
 import pytest
 
-from purple_tui.canvas import harness  # noqa: F401  (sets SDL dummy drivers)
-from purple_tui.canvas.emoji_pictures import EmojiPictures
-from purple_tui.canvas.gfx import EMOJI_NATIVE_PX
+from purplecomputer import harness  # noqa: F401  (sets SDL dummy drivers)
+from purplecomputer.emoji_pictures import EmojiPictures
+from purplecomputer.gfx import EMOJI_NATIVE_PX
 
-CACHE = Path(__file__).resolve().parents[2] / "studio" / ".cache"
+CACHE = Path(__file__).resolve().parents[1] / "studio" / ".cache"
 EMOJI = CACHE / "emoji"
 if not (EMOJI / "map.json").exists():
     pytest.skip("no emoji pictures: run `just studio-bundle`", allow_module_level=True)
@@ -48,6 +48,6 @@ def test_an_emoji_sequence_is_one_picture_with_or_without_vs16(pictures):
 
 
 def test_keycaps_stay_text_as_on_purple():
-    from purple_tui.canvas.gfx import split_runs
+    from purplecomputer.gfx import split_runs
 
     assert split_runs("1️⃣") == [("1️⃣", False)]

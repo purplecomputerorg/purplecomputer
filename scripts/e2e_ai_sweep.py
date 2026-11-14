@@ -43,7 +43,7 @@ likely an LLM coding agent with this repo checked out) reads to fix what it foun
 
 Purple Computer is a laptop for kids 3 to 10. Purple Studio (studio/, a TypeScript website) is where parents
 make a Purple Pack (photos, words, recorded voices, instruments, colors, little game rooms) and download it;
-the pack goes onto a USB drive and into Purple (purple_tui/, Python, the canvas UI under purple_tui/canvas/).
+the pack goes onto a USB drive and into Purple (purplecomputer/, Python, the canvas UI under purplecomputer/).
 In each scenario AI testers played a parent persona in Studio, sometimes the parent adding the pack on
 Purple, and a kid persona on Purple; a judge then kept only real findings. You get every scenario's kept
 findings with screenshots, what each tester said they did, the repo's file list, and docs/AI_UX_BUGS.md
@@ -54,7 +54,7 @@ Write Markdown, starting at a level-2 heading (the title and scenario table are 
 ## How to use this
 A few lines for the agent: verify each issue's repro before changing code (an AI tester can be wrong), read
 CLAUDE.md first, and add a test for each
-real bug (tests/canvas/, studio tests, or tests/canvas/test_studio_to_purple.py for pack round trips).
+real bug (tests/, studio tests, or tests/test_studio_to_purple.py for pack round trips).
 
 ## Fix these
 Real bugs, most severe first. Merge the same problem seen in several scenarios into one issue (more
@@ -189,7 +189,7 @@ def gather(done: list[dict], shots: Path) -> list[dict]:
 
 
 def file_list() -> str:
-    files = subprocess.run(["git", "ls-files", "studio/src", "studio/sdk", "purple_tui", "packs", "tests/canvas"],
+    files = subprocess.run(["git", "ls-files", "studio/src", "studio/sdk", "purplecomputer", "packs", "tests"],
                            cwd=ROOT, capture_output=True, text=True).stdout.split()
     return "\n".join(f for f in files if f.endswith((".py", ".ts", ".css", ".html")))
 

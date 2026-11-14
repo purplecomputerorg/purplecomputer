@@ -6,12 +6,12 @@ import time
 
 import pygame
 
-from ... import backlight
-from ... import palette as P
-from ...constants import (ICON_BATTERY_MED, ICON_HARDDISK, ICON_HOURGLASS, ICON_KEYBOARD, ICON_LAPTOP, ICON_PLUG, ICON_USB,
+from .. import backlight
+from .. import palette as P
+from ..constants import (ICON_BATTERY_MED, ICON_HARDDISK, ICON_HOURGLASS, ICON_KEYBOARD, ICON_LAPTOP, ICON_PLUG, ICON_USB,
                          ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, is_live_boot)
-from ...keyboard import ControlAction
-from ...power_manager import LID_SHUTDOWN_DELAY, get_power_manager, manual_off_hint
+from ..keyboard import ControlAction
+from ..power_manager import LID_SHUTDOWN_DELAY, get_power_manager, manual_off_hint
 from .. import old_install
 from ..ui import Overlay, draw_key_hint
 
@@ -125,7 +125,7 @@ class SleepScreen(AsleepBot):
         self.status = "\n".join(lines)
 
     def _check_idle_shutdown(self):
-        from ...power_manager import _power_log
+        from ..power_manager import _power_log
         pm = get_power_manager()
         idle, threshold = pm.get_idle_seconds(), pm.get_idle_shutdown_threshold()
         if int(idle) % 30 == 0:
@@ -142,7 +142,7 @@ class SleepScreen(AsleepBot):
             self.hint = manual_off_hint()
 
     async def handle(self, action):
-        from ...power_manager import _power_log
+        from ..power_manager import _power_log
         _power_log("WAKE UP: key pressed on sleep screen")
         get_power_manager().record_activity()
         self.app._lid_was_closed_for = 0
@@ -251,7 +251,7 @@ def first_boot_power_cycle_needed(audio_ok) -> bool:
     boot: the warm-reboot codec wedge a power off fixes."""
     if audio_ok is not False or is_live_boot() or not os.path.exists(LIVE_AUDIO_MARKER):
         return False
-    from ...mixer import _silence_reason
+    from ..mixer import _silence_reason
     return _silence_reason() == "no-card"
 
 

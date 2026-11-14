@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import exported from "../sdk/src/purple/export.json";
 import { GRID_ROWS, LETTER_KEYS, SAMPLE_PITCHES, noteFrequency, pitchFilename, pitchFor, voiceClipFilename } from "../sdk/src/purple/sounds";
 
-describe("sound naming matches purple_tui", () => {
+describe("sound naming matches purplecomputer", () => {
   it("voice clip filename matches tts.voice_clip_filename on the exported examples", () => {
     for (const [text, name] of Object.entries(exported.voice.clip_filenames)) expect(voiceClipFilename(text)).toBe(name);
   });

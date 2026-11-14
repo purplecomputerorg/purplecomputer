@@ -41,7 +41,7 @@ Purple Computer turns your old laptop into a calm, creative computer for kids. W
 
 No. There's no chatbot, no LLM in the product, nothing that generates unpredictable output. The one ML component is speak-out-loud, which uses [Piper](https://github.com/rhasspy/piper) for text-to-speech (or [flite](https://github.com/festvox/flite) as the Quick voice); it runs entirely on the laptop, offline, with nothing sent anywhere. Purple Studio voices a family room's fixed lines with [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), in the parent's browser, before the pack ever reaches Purple.
 
-A lot of the code is LLM-generated, and LLMs are also used to make the demo videos, but no LLM ships in the product. The image gets `purple_tui/`, `packs/`, and a named list of files from `scripts/` (see `build-scripts/00-build-golden-image.sh`); `anthropic` is only in `tools/requirements.txt`. Generated assets are checked in as fixed data, like the keypress list in `purple_tui/demo/segments/`. See [DISCLOSURE.md](/docs/DISCLOSURE.md).
+A lot of the code is LLM-generated, and LLMs are also used to make the demo videos, but no LLM ships in the product. The image gets `purplecomputer/`, `packs/`, and a named list of files from `scripts/` (see `build-scripts/00-build-golden-image.sh`); `anthropic` is only in `tools/requirements.txt`. Generated assets are checked in as fixed data, like the keypress list in `purplecomputer/demo/segments/`. See [DISCLOSURE.md](/docs/DISCLOSURE.md).
 
 ---
 
@@ -226,7 +226,7 @@ The canvas is laid out in fractions of the screen, so it fills any display from 
 
 ```
 purplecomputer/
-├── purple_tui/           # The app: engine modules plus two UIs (see CLAUDE.md, Two UIs)
+├── purplecomputer/           # The app: engine modules plus two UIs (see CLAUDE.md, Two UIs)
 │   ├── canvas/           # The pygame canvas UI (default): rooms, drawing, headless harness
 │   ├── rooms/            # The Textual UI's rooms (frozen: what release/1.x ships; PURPLE_UX=tui)
 │   ├── demo/             # Demo recording and playback system
@@ -268,7 +268,7 @@ purplecomputer/
 └── guides/               # Technical references
 ```
 
-What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies into `/opt/purple`: `purple_tui/`, `packs/`, and two named scripts. `tools/` and `scripts/ai_ux_*` stay on the developer's machine, as does the demo tooling in `recording-setup/`.
+What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies into `/opt/purple`: `purplecomputer/`, `packs/`, and two named scripts. `tools/` and `scripts/ai_ux_*` stay on the developer's machine, as does the demo tooling in `recording-setup/`.
 
 **Stack:**
 - **Target System (PurpleOS):** Ubuntu 24.04 LTS minimal + X11 + a fullscreen pygame window (software rendering, no GL). Machines with 32-bit CPUs get a Debian trixie i386 image instead; GRUB picks it per machine (see `guides/hardware-coverage-plan.md`)
@@ -353,7 +353,7 @@ Purple Computer includes code from the following open-source projects:
 - **[spectral.js](https://github.com/rvanwijnen/spectral.js)** by Ronald van Wijnen (MIT License): Spectral reflectance data and CIE color matching functions, used for Beer-Lambert paint-like color mixing (yellow + blue = green, red + blue = purple)
 - **[Twemoji](https://github.com/jdecked/twemoji)** by Twitter and contributors ([CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)): source artwork for several stickers — T-Rex (U+1F996), ringed planet (U+1FA90), Earth (U+1F30E), turtle (U+1F422), and sun-with-face (U+1F31E) — and Purple Studio's section and starter room icons (listed in `cards/make_studio_icons.py`), recolored to Purple Computer shades in the scripts under `cards/`.
 - **[Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds)** by Purple Computer ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)): the letter sounds Music says in Letters with Enter (`packs/core-sounds/content/letter-sounds/`), raised to the letter names' volume.
-- **[SCOWL](http://wordlist.aspell.net/)** by Kevin Atkinson (permissive license, full notice in `purple_tui/music_words_scowl_copyright.txt`): the word list behind the words Music says back in Letters (`purple_tui/music_words.txt`).
+- **[SCOWL](http://wordlist.aspell.net/)** by Kevin Atkinson (permissive license, full notice in `purplecomputer/music_words_scowl_copyright.txt`): the word list behind the words Music says back in Letters (`purplecomputer/music_words.txt`).
 
 ---
 

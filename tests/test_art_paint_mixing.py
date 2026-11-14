@@ -11,12 +11,12 @@ import asyncio
 from contextlib import asynccontextmanager
 
 
-from purple_tui.canvas.harness import make_app
-from purple_tui.color_mixing import mix_colors_paint
-from purple_tui.keyboard import CharacterAction
-from purple_tui import palette as P
-from purple_tui.palette import get_key_color
-from purple_tui.canvas.rooms.art_room import BRUSH_CHAR
+from purplecomputer.harness import make_app
+from purplecomputer.color_mixing import mix_colors_paint
+from purplecomputer.keyboard import CharacterAction
+from purplecomputer import palette as P
+from purplecomputer.palette import get_key_color
+from purplecomputer.rooms.art_room import BRUSH_CHAR
 
 YELLOW = "#FFFF00"
 BLUE = "#0000FF"

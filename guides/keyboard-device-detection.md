@@ -58,7 +58,7 @@ With the minimal X11 setup, X11 may not claim event5 anymore, leaving it availab
 
 ## The Fix (Phase 1: Strict Detection)
 
-Made `_find_keyboard()` in `purple_tui/input.py` use strict validation instead of just checking for the presence of any letter keys.
+Made `_find_keyboard()` in `purplecomputer/input.py` use strict validation instead of just checking for the presence of any letter keys.
 
 A real keyboard must have:
 - All 26 letter keys (KEY_A through KEY_Z)

@@ -114,7 +114,7 @@ UI_READY_MARKER = "/tmp/purple-ui-ready"
 # Written into the installed system by install.sh when audio worked during
 # the live session; consumed on the first installed boot to tell "worked
 # minutes ago, silent now" (warm-reboot codec wedge, fixed by a power off)
-# apart from hardware that never had sound. See canvas/rooms/sleep_screen.py.
+# apart from hardware that never had sound. See rooms/sleep_screen.py.
 LIVE_AUDIO_MARKER = "/var/log/purple/audio-worked-in-live"
 
 # PURPLE_FAKE_USB env var simulates USB boot states for testing.

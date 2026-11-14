@@ -31,4 +31,4 @@ fi
 
 cd "$PROJECT_ROOT"
 # A kid switch exits for a restart, which xinitrc does on the ISO.
-while python -m purple_tui && [ -e /tmp/purple-kid-picked ]; do :; done
+while python -m purplecomputer && [ -e /tmp/purple-kid-picked ]; do :; done

@@ -192,7 +192,7 @@ Purple Computer is **keyboard-only**. Mouse and trackpad input is disabled at mu
 | Layer | How | Config |
 |-------|-----|--------|
 | **X.Org** | `MatchIsPointer "on"` → `Ignore "true"` | `40-disable-pointer.conf` |
-| **Textual** | `app.run(mouse=False)` | `purple_tui.py` |
+| **Textual** | `app.run(mouse=False)` | `purplecomputer.py` |
 
 The X.Org config (`/usr/share/X11/xorg.conf.d/40-disable-pointer.conf`) completely ignores all pointer and touchpad devices:
 
@@ -487,7 +487,7 @@ echo "myuser:password" | chroot "$MOUNT_DIR" chpasswd
 
 Install custom software:
 ```bash
-cp -r /path/to/purple_tui "$MOUNT_DIR/opt/"
+cp -r /path/to/purplecomputer "$MOUNT_DIR/opt/"
 chroot "$MOUNT_DIR" systemctl enable purple-tui
 ```
 
@@ -547,17 +547,17 @@ The sleep screen shows a power status message so parents understand what's happe
 ### Implementation
 
 **Key files:**
-- `purple_tui/power_manager.py`: Idle tracking, charger detection, shutdown timings
-- `purple_tui/rooms/sleep_screen.py`: Sleep UI (`SleepScreen`), shutdown confirm (`ShutdownConfirmScreen`), bye (`ByeScreen`)
-- `purple_tui/input.py`: `PowerButtonReader` and `LidSwitchReader` (evdev)
-- `purple_tui/purple_tui.py`: Activity recording, lid/power button integration
+- `purplecomputer/power_manager.py`: Idle tracking, charger detection, shutdown timings
+- `purplecomputer/rooms/sleep_screen.py`: Sleep UI (`SleepScreen`), shutdown confirm (`ShutdownConfirmScreen`), bye (`ByeScreen`)
+- `purplecomputer/input.py`: `PowerButtonReader` and `LidSwitchReader` (evdev)
+- `purplecomputer/purplecomputer.py`: Activity recording, lid/power button integration
 
 ### Testing Sleep Mode
 
 Use demo mode for accelerated timings:
 
 ```bash
-PURPLE_SLEEP_DEMO=1 python -m purple_tui.purple_tui
+PURPLE_SLEEP_DEMO=1 python -m purplecomputer.purplecomputer
 ```
 
 Demo timings: sleep face in 2-3 seconds, shutdown in 8-10 seconds (prints message instead of actual shutdown).

@@ -5,11 +5,11 @@ including cancellation."""
 
 import asyncio
 
-from purple_tui.constants import HOLD_OR_TAP_THRESHOLD
-from purple_tui.canvas.harness import make_app, run as _run
-from purple_tui.keyboard import ControlAction, NavigationAction
-from purple_tui.playback.player import PlaybackPlayer
-from purple_tui.playback.script import DrawPath
+from purplecomputer.constants import HOLD_OR_TAP_THRESHOLD
+from purplecomputer.harness import make_app, run as _run
+from purplecomputer.keyboard import ControlAction, NavigationAction
+from purplecomputer.playback.player import PlaybackPlayer
+from purplecomputer.playback.script import DrawPath
 
 
 def _space(is_down=True, is_repeat=False):
@@ -190,9 +190,9 @@ def test_draw_path_without_pen_callback_is_safe():
 
 
 def test_a_chord_paints_the_next_cell_in_the_mix():
-    from purple_tui.canvas.harness import press
-    from purple_tui.color_mixing import mix_colors_paint
-    from purple_tui.palette import get_key_color
+    from purplecomputer.harness import press
+    from purplecomputer.color_mixing import mix_colors_paint
+    from purplecomputer.palette import get_key_color
 
     async def _test():
         app, canvas = _art()
@@ -208,9 +208,9 @@ def test_a_chord_paints_the_next_cell_in_the_mix():
 
 
 def test_holding_a_chord_keeps_painting_the_mix():
-    from purple_tui.canvas.harness import press
-    from purple_tui.color_mixing import mix_colors_paint
-    from purple_tui.palette import get_key_color
+    from purplecomputer.harness import press
+    from purplecomputer.color_mixing import mix_colors_paint
+    from purplecomputer.palette import get_key_color
 
     async def _test():
         app, canvas = _art()

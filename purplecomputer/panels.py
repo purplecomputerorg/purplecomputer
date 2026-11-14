@@ -13,15 +13,15 @@ from functools import cache
 
 import pygame
 
-from .. import palette as P
-from ..code_runner import _COMMAND_VOCAB, _MODE_WORDS, _TURN_VOCAB, MusicCodeRunner
-from ..constants import ICON_MUSIC
-from ..content import get_content
-from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from ..loop_station import LOOPING, RECORDING
-from ..music_constants import GRID_KEYS
-from ..palette import get_key_color
-from ..timeline import SESSION_GAP_S
+from . import palette as P
+from .code_runner import _COMMAND_VOCAB, _MODE_WORDS, _TURN_VOCAB, MusicCodeRunner
+from .constants import ICON_MUSIC
+from .content import get_content
+from .keyboard import CharacterAction, ControlAction, NavigationAction
+from .loop_station import LOOPING, RECORDING
+from .music_constants import GRID_KEYS
+from .palette import get_key_color
+from .timeline import SESSION_GAP_S
 from . import color_wheel
 from .gfx import rgb
 from .ui import (AUTO, BACK, CODE_KEYS, DOWN, KEEP, LEFT, LOOP, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, draw_marked, key_hint_width,
@@ -147,7 +147,7 @@ _ART_WORDS = set(_COMMAND_VOCAB + _TURN_VOCAB)
 
 
 def _is_color_word(word: str) -> bool:
-    from ..color_mixing import COLOR_ADJECTIVES
+    from .color_mixing import COLOR_ADJECTIVES
     return word in COLOR_ADJECTIVES or bool(get_content().exact_color(word))
 
 
@@ -175,7 +175,7 @@ def guide_topic(room: str, text: str):
 
 def color_spans(text: str) -> list:
     """(start, end, hex) for each color word in `text`, taking in its light, dark or bright words."""
-    from ..color_mixing import COLOR_ADJECTIVES
+    from .color_mixing import COLOR_ADJECTIVES
     content, spans, adjs = get_content(), [], []
     for m in re.finditer(r"[^\W\d_]+|\S", text):
         word = m.group().lower()

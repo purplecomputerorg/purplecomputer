@@ -1,6 +1,6 @@
 """Purple Packs a USB drive brought, waiting for someone to press Add.
 
-purple_tui/usb_updater.py unpacks each into WAITING_DIR/<sha256 of its file>. One added before
+purplecomputer/usb_updater.py unpacks each into WAITING_DIR/<sha256 of its file>. One added before
 (same id, same file) goes back in without asking: the Purple Key's own packs on a live boot, where
 installed packs don't outlast a restart. The rest wait for the app to offer them; Not now moves one
 to LATER_DIR, where the Parent Menu's Purple Packs list still offers it.

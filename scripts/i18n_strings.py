@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """List the interface strings a language pack hasn't translated yet.
 
-Every string literal in the canvas UI that could be drawn is a candidate; an
+Every string literal in Purple that could be drawn is a candidate; an
 f-string becomes a template with {0}, {1}... where its values go. Extra keys
 in a pack are harmless (nothing draws them), so this errs toward listing too
 much. Guide: guides/languages.md.
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCES = [ROOT / "purple_tui" / "canvas", ROOT / "purple_tui" / "hints.py", ROOT / "purple_tui" / "tts.py"]
+SOURCES = [ROOT / "purplecomputer"]
 SKIP_FILES = {"gfx.py", "kms.py", "sdl_input.py", "frame_stats.py"}  # nothing here is drawn as words
 # Kid-facing examples to type, which only make sense in English.
 SKIP_NAMES = {"PLAY_IDEAS", "ART_IDEAS", "BLOCKS_IDEAS", "MUSIC_IDEAS", "IDEAS"}
@@ -130,7 +130,7 @@ def interface_strings() -> dict:
 
 def main(argv):
     sys.path.insert(0, str(ROOT))
-    from purple_tui import i18n
+    from purplecomputer import i18n
     wanted = interface_strings()
     langs = i18n.languages()
     codes = [a for a in argv if not a.startswith("-")] or sorted(langs)

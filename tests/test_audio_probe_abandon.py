@@ -9,8 +9,8 @@ Popen + wait(timeout) + abandon, so it returns at the deadline regardless.
 import subprocess
 import time
 
-from purple_tui import mixer as music_room
-from purple_tui.canvas.app import PurpleApp
+from purplecomputer import mixer as music_room
+from purplecomputer.app import PurpleApp
 
 
 class _WedgedProc:

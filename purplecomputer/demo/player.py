@@ -1,6 +1,6 @@
-"""Backward-compatible re-export from purple_tui.playback.player.
+"""Backward-compatible re-export from purplecomputer.playback.player.
 
-The player now lives in purple_tui.playback.player. This module
+The player now lives in purplecomputer.playback.player. This module
 re-exports it so existing demo code continues to work unchanged.
 DemoPlayer is an alias for PlaybackPlayer.
 """

@@ -19,16 +19,16 @@ os.environ['SDL_AUDIODRIVER'] = 'dummy'
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui.canvas.rooms.sleep_screen import first_boot_power_cycle_needed
+from purplecomputer.rooms.sleep_screen import first_boot_power_cycle_needed
 
 
 def _gate(audio_ok, *, live=False, marker=None, reason="no-card"):
-    with patch("purple_tui.canvas.rooms.sleep_screen.is_live_boot", return_value=live), \
-         patch("purple_tui.canvas.rooms.sleep_screen.LIVE_AUDIO_MARKER",
+    with patch("purplecomputer.rooms.sleep_screen.is_live_boot", return_value=live), \
+         patch("purplecomputer.rooms.sleep_screen.LIVE_AUDIO_MARKER",
                str(marker) if marker else "/nonexistent/marker"), \
-         patch("purple_tui.mixer._silence_reason", return_value=reason):
+         patch("purplecomputer.mixer._silence_reason", return_value=reason):
         return first_boot_power_cycle_needed(audio_ok)
 
 
@@ -75,16 +75,16 @@ def _run(coro):
 
 
 def _app_check(tmp_path, audio_ok, reason="no-card"):
-    from purple_tui.canvas.harness import make_app
-    from purple_tui.canvas.rooms.sleep_screen import FirstBootPowerCycleScreen
+    from purplecomputer.harness import make_app
+    from purplecomputer.rooms.sleep_screen import FirstBootPowerCycleScreen
     marker = tmp_path / "audio-worked-in-live"
     marker.touch()
 
     async def _test():
-        with patch("purple_tui.canvas.app.LIVE_AUDIO_MARKER", str(marker)), \
-             patch("purple_tui.canvas.rooms.sleep_screen.LIVE_AUDIO_MARKER", str(marker)), \
-             patch("purple_tui.canvas.rooms.sleep_screen.is_live_boot", return_value=False), \
-             patch("purple_tui.mixer._silence_reason", return_value=reason):
+        with patch("purplecomputer.app.LIVE_AUDIO_MARKER", str(marker)), \
+             patch("purplecomputer.rooms.sleep_screen.LIVE_AUDIO_MARKER", str(marker)), \
+             patch("purplecomputer.rooms.sleep_screen.is_live_boot", return_value=False), \
+             patch("purplecomputer.mixer._silence_reason", return_value=reason):
             app = make_app()
             app.audio_ok = audio_ok
             app._check_first_boot_audio()
@@ -110,14 +110,14 @@ class TestFirstBootAppFlow:
         assert not shown and marker_left
 
     def test_evdev_enter_powers_off(self, tmp_path):
-        from purple_tui.canvas.harness import make_app
-        from purple_tui.keyboard import ControlAction
-        from purple_tui.canvas.rooms.sleep_screen import ByeScreen, FirstBootPowerCycleScreen
+        from purplecomputer.harness import make_app
+        from purplecomputer.keyboard import ControlAction
+        from purplecomputer.rooms.sleep_screen import ByeScreen, FirstBootPowerCycleScreen
 
         async def _test():
             app = make_app()
             app.push(FirstBootPowerCycleScreen(app))
-            with patch("purple_tui.power_manager.PowerManager.shutdown", return_value=True) as shutdown:
+            with patch("purplecomputer.power_manager.PowerManager.shutdown", return_value=True) as shutdown:
                 await app.top.handle(ControlAction(action='enter', is_down=True))
                 assert app.has_overlay(ByeScreen)
                 assert shutdown.called

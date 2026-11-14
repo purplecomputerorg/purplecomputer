@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build, check, render, and install .purplepack files from the command line.
 
-The same rules Purple applies when it installs a pack (purple_tui.pack_manager)
-and the same synth it ships (purple_tui.synth), so a pack that passes here
+The same rules Purple applies when it installs a pack (purplecomputer.pack_manager)
+and the same synth it ships (purplecomputer.synth), so a pack that passes here
 installs there, and an instrument rendered here sounds like the Music room.
 
     just python scripts/purplepack.py check   my-pack/          # or my-pack.purplepack
@@ -26,10 +26,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from purple_tui import synth  # noqa: E402
-from purple_tui.content import read_manifest  # noqa: E402
-from purple_tui.music_constants import note_frequency, pitch_filename, reachable_pitches  # noqa: E402
-from purple_tui.pack_manager import PackInstaller, check_pack, extract_pack  # noqa: E402
+from purplecomputer import synth  # noqa: E402
+from purplecomputer.content import read_manifest  # noqa: E402
+from purplecomputer.music_constants import note_frequency, pitch_filename, reachable_pitches  # noqa: E402
+from purplecomputer.pack_manager import PackInstaller, check_pack, extract_pack  # noqa: E402
 
 READ_TODAY = {
     "manifest.json": "id, name, version, format",

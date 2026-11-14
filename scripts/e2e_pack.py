@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Carry .purplepack files to a fresh headless Purple on a pretend USB drive, add them as a parent
-would, and check each thing in them where a kid meets it (tests/canvas/pack_journey.py).
+would, and check each thing in them where a kid meets it (tests/pack_journey.py).
 
     just e2e-pack the-nathansons-purple.purplepack [--shots DIR] [--json]
 
@@ -18,8 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from purple_tui.canvas.harness import make_app  # noqa: E402
-from tests.canvas.pack_journey import check, deliver, isolate, shot  # noqa: E402
+from purplecomputer.harness import make_app  # noqa: E402
+from tests.pack_journey import check, deliver, isolate, shot  # noqa: E402
 
 
 async def journey(packs: list[Path], home: Path, shots: Path | None, expect: list[str] = ()) -> dict:

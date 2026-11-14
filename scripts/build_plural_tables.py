@@ -6,7 +6,7 @@ slow laptops. We only need it for a fixed set of words (emoji keys, color
 names, ranked words, synonyms). Precompute offline and ship a tiny JSON
 lookup instead, so runtime pays zero cost.
 
-Output: purple_tui/plural_forms.json
+Output: purplecomputer/plural_forms.json
 Schema: {"singular_to_plural": {"cat": "cats", ...},
          "plural_to_singular": {"cats": "cat", ...}}
 """
@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parent.parent
 EMOJI_JSON = REPO / "packs" / "core-emoji" / "content" / "emoji.json"
 SYNONYMS_JSON = REPO / "packs" / "core-emoji" / "content" / "synonyms.json"
 RANKINGS_TXT = REPO / "packs" / "core-emoji" / "content" / "rankings.txt"
-OUTPUT = REPO / "purple_tui" / "plural_forms.json"
+OUTPUT = REPO / "purplecomputer" / "plural_forms.json"
 
 
 def load_vocabulary() -> set[str]:
@@ -45,7 +45,7 @@ def load_vocabulary() -> set[str]:
 
     # Colors live in content.py as a hardcoded dict. Import and scrape.
     sys.path.insert(0, str(REPO))
-    from purple_tui.content import ContentManager
+    from purplecomputer.content import ContentManager
     cm = ContentManager.__new__(ContentManager)
     cm.emojis = {}
     cm.colors = {}

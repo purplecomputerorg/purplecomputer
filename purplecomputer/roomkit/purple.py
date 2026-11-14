@@ -539,7 +539,7 @@ def run(start: dict):
 
 # ---------------------------------------------------------------- mixing paint
 # From spectral.js by Ronald van Wijnen (MIT License), https://github.com/rvanwijnen/spectral.js.
-# Purple's Art room mixes with this same code (purple_tui/color_mixing.py imports it).
+# Purple's Art room mixes with this same code (purplecomputer/color_mixing.py imports it).
 
 SIZE = 38  # Number of spectral samples
 

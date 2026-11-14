@@ -2,7 +2,7 @@
 # Purple Computer Build Configuration
 
 # What reaches Studio's deploy: Studio and the Purple it bundles (scripts/studio_bundle.py).
-STUDIO_PATHS=(studio purple_tui packs scripts/studio_bundle.py scripts/voice_model.sh)
+STUDIO_PATHS=(studio purplecomputer packs scripts/studio_bundle.py scripts/voice_model.sh)
 
 # Paths
 INSTALLER_BASE="/opt/purple-installer"

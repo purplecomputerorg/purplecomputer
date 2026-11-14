@@ -1,5 +1,5 @@
 """Letters drop only a whole hand landing at once; a new letter cuts off the one still speaking."""
-from purple_tui.canvas.rooms.music_room import LETTERS_MASH_S, MusicRoom
+from purplecomputer.rooms.music_room import LETTERS_MASH_S, MusicRoom
 
 
 class _Stub:

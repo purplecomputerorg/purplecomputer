@@ -22,18 +22,18 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 LEDGER = ROOT / "studio" / "pack_formats.json"
-CONTENT_PY = ROOT / "purple_tui" / "content.py"
+CONTENT_PY = ROOT / "purplecomputer" / "content.py"
 # What Studio writes into a pack (and reads back from one), and what Purple reads out of it.
 WATCHED = [
     "studio/sdk/src/pack.ts",
     "studio/src/pack.ts",
-    "purple_tui/content.py",
-    "purple_tui/pack_manager.py",
-    "purple_tui/canvas/theme.py",
-    "purple_tui/canvas/rooms/family_room.py",
-    "purple_tui/roomkit/purple.py",
-    "purple_tui/roomkit/runner.py",
-    "purple_tui/roomkit/limits.py",
+    "purplecomputer/content.py",
+    "purplecomputer/pack_manager.py",
+    "purplecomputer/theme.py",
+    "purplecomputer/rooms/family_room.py",
+    "purplecomputer/roomkit/purple.py",
+    "purplecomputer/roomkit/runner.py",
+    "purplecomputer/roomkit/limits.py",
 ]
 
 DECIDE = """Code that writes or reads Purple Packs changed ({files}).
@@ -73,7 +73,7 @@ def problems() -> list[str]:
     if numbers != list(range(1, len(numbers) + 1)):
         out.append(f"studio/pack_formats.json formats must run 1, 2, 3...: {numbers}")
     if code_format() != numbers[-1]:
-        out.append(f"purple_tui/content.py PACK_FORMAT is {code_format()} but the ledger's newest is {numbers[-1]}: use `just pack-contract bump`.")
+        out.append(f"purplecomputer/content.py PACK_FORMAT is {code_format()} but the ledger's newest is {numbers[-1]}: use `just pack-contract bump`.")
     if changed := [rel for rel, h in fingerprint().items() if ledger["fingerprint"].get(rel) != h]:
         out.append(DECIDE.format(files=", ".join(changed)))
     return out

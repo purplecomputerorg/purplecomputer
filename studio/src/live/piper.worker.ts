@@ -1,5 +1,5 @@
 // Purple's voice in a worker, the way piper-tts 1.4.1 makes it: espeak-ng phonemes, phoneme ids, then
-// the same ONNX model with Purple's settings (purple_tui/tts.py). Answers one prepared text with 16-bit
+// the same ONNX model with Purple's settings (purplecomputer/tts.py). Answers one prepared text with 16-bit
 // samples, as Piper's audio_int16_bytes, before Purple's own trim and leveling.
 import type * as Ort from "onnxruntime-web";
 import { cached, espeak, onnx, sentences } from "./espeak";

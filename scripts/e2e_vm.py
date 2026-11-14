@@ -7,7 +7,7 @@ work back onto that same drive, which is then read here as a Windows or Mac woul
 
 PACK defaults to the SDK's fixture pack (studio/scripts/fixture-packs.ts); with it the screen's color
 and the copied picture's colors are checked too. Needs KVM and a built ISO (just build). The keys are
-tests/canvas/real_purple.py's, which test_studio_to_purple.py replays headless to keep them honest.
+tests/real_purple.py's, which test_studio_to_purple.py replays headless to keep them honest.
 Screens: DIR/NN-step.png (default $TMPDIR/purple-e2e-vm)."""
 
 import argparse
@@ -25,8 +25,8 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame  # noqa: E402
 
-from tests.canvas.pack_journey import read_pack  # noqa: E402
-from tests.canvas.real_purple import (ADD_PACK, ART_FIRST_PICTURE, PICTURE_COLORS, SAVE, page_has_colors,  # noqa: E402
+from tests.pack_journey import read_pack  # noqa: E402
+from tests.real_purple import (ADD_PACK, ART_FIRST_PICTURE, PICTURE_COLORS, SAVE, page_has_colors,  # noqa: E402
                                       play_word, qemu_keys, to_menu_item)
 
 VM = ROOT / "scripts" / "vm.sh"
@@ -96,11 +96,11 @@ def drive_image(pack: Path, out: Path) -> Path:
 
 def export_downs(pack: Path) -> int:
     """Down presses to Copy Saved Work to USB, from this checkout's menu with the pack added."""
-    from tests.canvas.pack_journey import isolate
+    from tests.pack_journey import isolate
     isolate(Path(tempfile.mkdtemp(prefix="vm-menu-")))
-    from purple_tui.canvas.harness import make_app, run
-    from purple_tui.pack_manager import get_installer
-    from tests.canvas.real_purple import menu_downs
+    from purplecomputer.harness import make_app, run
+    from purplecomputer.pack_manager import get_installer
+    from tests.real_purple import menu_downs
     get_installer().install_pack(pack, replace=True)
 
     async def count():

@@ -21,9 +21,9 @@ class Scenario:
     languages: bool = False  # tests other languages, so it waits until Purple's language support is on
 
     def skip_reason(self) -> str | None:
-        from purple_tui import i18n
+        from purplecomputer import i18n
         if self.languages and not i18n.ENABLED:
-            return "Purple's language support is off (purple_tui/i18n.py ENABLED)"
+            return "Purple's language support is off (purplecomputer/i18n.py ENABLED)"
         return None
 
 

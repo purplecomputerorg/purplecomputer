@@ -71,7 +71,7 @@ Vite, TypeScript, and plain DOM, with no backend. Two runtime dependencies: Pyod
 
 `purple.html` boots the real Purple, in Pyodide, in an iframe that stays up for the whole visit. After each edit Studio builds the pack exactly as Download would, and Purple installs it with its own `PackInstaller` and restarts, the same way it reads packs at boot.
 
-- `scripts/studio_bundle.py` zips `purple_tui`, its fonts and the core packs, and fetches the Pyodide wheels Purple needs. Emoji come from the Noto package Purple's ISO installs, pulled out as PNGs (`purple_tui/canvas/emoji_pictures.py`) that both the in-browser Purple and Studio's pages draw (`src/emoji.ts`), since no emoji font format draws in every browser.
+- `scripts/studio_bundle.py` zips `purplecomputer`, its fonts and the core packs, and fetches the Pyodide wheels Purple needs. Emoji come from the Noto package Purple's ISO installs, pulled out as PNGs (`purplecomputer/emoji_pictures.py`) that both the in-browser Purple and Studio's pages draw (`src/emoji.ts`), since no emoji font format draws in every browser.
 - `src/live/browser.py` turns what a browser can't do into no-ops before Purple loads (threads, the mixer's subprocess probe, freetype glyph checks) and routes speech to recorded clips or Piper.
 - `src/live/live.py` installs a pack, restarts the app, and opens the room a page asks for.
 - **Voice:** Piper, with the same model, speaker, and settings as Purple, phonemized by espeak-ng built to WebAssembly (`vendor/espeak-ng/`, GPL-3.0, source linked under the screen) and run in `src/live/piper.worker.ts`. Purple's own `tts` then trims, levels, and caches the audio, so a phrase sounds the way it does on Purple. The model is cached with the browser's Cache API.
@@ -89,16 +89,16 @@ Room code can be pasted from anywhere. In the preview it runs in a Web Worker wi
 
 Purple is the source of truth and nothing is copied by hand:
 
-- **`sdk/src/purple/export.json`** is written by `scripts/export_studio.py` from `purple_tui` itself: pack format version, canvas size, colors, the Music grid's pitches, voice clip settings, synth defaults, and the room language.
-- **`tests/golden.json`** holds reference renders from `purple_tui/synth.py` that `tests/synth.test.ts` checks the TypeScript port against, to within one sample (the last-bit difference between libm and V8 before truncation).
-- **`purple_tui/roomkit/purple.py`**, the module rooms import, is loaded into the preview as is; `tests/rooms.test.ts` runs the examples against it.
+- **`sdk/src/purple/export.json`** is written by `scripts/export_studio.py` from `purplecomputer` itself: pack format version, canvas size, colors, the Music grid's pitches, voice clip settings, synth defaults, and the room language.
+- **`tests/golden.json`** holds reference renders from `purplecomputer/synth.py` that `tests/synth.test.ts` checks the TypeScript port against, to within one sample (the last-bit difference between libm and V8 before truncation).
+- **`purplecomputer/roomkit/purple.py`**, the module rooms import, is loaded into the preview as is; `tests/rooms.test.ts` runs the examples against it.
 - **The core emoji pack** is imported straight from `../packs/core-emoji`.
 - **`tests/test_studio_export.py`** rebuilds both JSON files on every `just test` and fails if the checked-in copies differ, so a change to Purple's art, music, voice, synth, or pack format can't land without them.
 - **`tests/test_packs.py`** runs a Studio-shaped pack through the loader, the installer's rules, the USB updater, and the CLI.
 
 ### Instruments
 
-Purple's Music room plays samples rendered by `purple_tui/synth.py`: additive partials for the marimba and glockenspiel, detuned sawtooths for the accordion, Karplus-Strong for the ukulele. Each generator takes keyword parameters with the shipped sound as the defaults. `src/purple/synth.ts` is a port with the same parameter names, and its noise source is the same seeded mulberry32, so mallet and pluck noise match bit for bit.
+Purple's Music room plays samples rendered by `purplecomputer/synth.py`: additive partials for the marimba and glockenspiel, detuned sawtooths for the accordion, Karplus-Strong for the ukulele. Each generator takes keyword parameters with the shipped sound as the defaults. `src/purple/synth.ts` is a port with the same parameter names, and its noise source is the same seeded mulberry32, so mallet and pluck noise match bit for bit.
 
 Moving a slider re-renders and replays the last note. Downloading renders every pitch the Music grid can reach into `content/<name>/<pitch>.wav` and writes the parameters to `content/instruments/<name>.json`, so Purple can re-render it too. Samples are WAV rather than OGG because browsers have no OGG encoder, and Purple falls back to `.wav`.
 

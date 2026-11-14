@@ -10,8 +10,8 @@ page also has paper_pages(g, size), every page of it; paper() is then its first.
 
 import pygame
 
-from .. import palette as P
-from ..palette import rgb
+from . import palette as P
+from .palette import rgb
 
 DPI = 300  # printers print at 300 to 600; less shows as soft text and stepped edges
 

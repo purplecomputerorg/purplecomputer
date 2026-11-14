@@ -1,7 +1,7 @@
 """The 32-bit Key's boot script hands the app its paths through /run/purple-live.conf.
 casper never writes that file, so the 64-bit stick keeps its paths."""
 
-from purple_tui import constants
+from purplecomputer import constants
 
 
 def test_without_conf_the_casper_paths_stand():

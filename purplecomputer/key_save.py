@@ -11,7 +11,7 @@ import os
 import subprocess
 import threading
 
-from ..constants import is_live_boot, is_usb_present, is_usb_reinserted
+from .constants import is_live_boot, is_usb_present, is_usb_reinserted
 
 MARKER = os.environ.get("PURPLE_KEY_SAVE_MARKER", "/run/purple/key-save")
 WRITER = ["sudo", "-n", "ionice", "-c3", "/usr/local/bin/purple-key-save", "--write"]

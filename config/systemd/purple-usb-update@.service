@@ -15,7 +15,7 @@ TimeoutStartSec=60
 # unmount. A drive with no packs on it never starts Python.
 ExecStartPre=/bin/mkdir -p /run/purple-update/%i
 ExecStartPre=/bin/mount -o ro,nosuid,nodev,noexec /dev/%i /run/purple-update/%i
-ExecStart=/bin/sh -c 'find /run/purple-update/%i -maxdepth 2 -name "*.purplepack" -print -quit | grep -q . || exit 0; exec /usr/bin/python3 -m purple_tui.usb_updater /run/purple-update/%i'
+ExecStart=/bin/sh -c 'find /run/purple-update/%i -maxdepth 2 -name "*.purplepack" -print -quit | grep -q . || exit 0; exec /usr/bin/python3 -m purplecomputer.usb_updater /run/purple-update/%i'
 ExecStopPost=-/bin/umount /run/purple-update/%i
 ExecStopPost=-/bin/rmdir /run/purple-update/%i
 

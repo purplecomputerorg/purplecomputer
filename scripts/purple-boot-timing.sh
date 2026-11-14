@@ -38,7 +38,7 @@ timeline() {
     [ -f "$log" ] || { echo "no boot log at /tmp/purple-boot.log"; return; }
     local boot_hms
     boot_hms=$(date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" +%H:%M:%S)
-    grep -E 'wait-display\] (===|Display ready|No connected)|xinitrc\] (=== |matchbox|Launching)|usb-cache\] |launcher\] exec|\[python\] (watchdog armed|all purple_tui|PurpleApp|main loop|first render|WATCHDOG|mixer)' "$log" |
+    grep -E 'wait-display\] (===|Display ready|No connected)|xinitrc\] (=== |matchbox|Launching)|usb-cache\] |launcher\] exec|\[python\] (watchdog armed|all purplecomputer|PurpleApp|main loop|first render|WATCHDOG|mixer)' "$log" |
     awk -v boot="$boot_hms" '
         function secs(t,  a) { split(t, a, ":"); return a[1] * 3600 + a[2] * 60 + a[3] }
         BEGIN { b = secs(boot) }

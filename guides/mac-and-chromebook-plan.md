@@ -27,7 +27,7 @@ Companion guides with background detail: `t2-mac-support.md`, `apple-silicon-sup
 Three pieces of work unlock most rows and are reused across them:
 
 1. **arm64 build** (Asahi native, and the arm64 half of anything VM-based).
-2. **A second input backend** behind `RawKeyEvent` (native macOS, browser). Today `EvdevReader` in `purple_tui/input.py` is the only producer; `KeyboardStateMachine` and `handle_keyboard_action()` never need to change.
+2. **A second input backend** behind `RawKeyEvent` (native macOS, browser). Today `EvdevReader` in `purplecomputer/input.py` is the only producer; `KeyboardStateMachine` and `handle_keyboard_action()` never need to change.
 3. **A companion app / script per platform** that does everything the firmware lets a script do and turns each firmware-enforced step into one screen with a photo and a check.
 
 ---
@@ -71,7 +71,7 @@ macOS is Unix underneath, and everything Purple needs runs on it natively on arm
 - **Audio and TTS:** CoreAudio via pygame and piper-tts wheels (arm64 and x86_64). `audio_hotplug.py` (PulseAudio-specific) becomes a no-op.
 - **Power:** macOS handles lid and power button itself; `power_manager.py` (logind-specific) is bypassed.
 
-Linux-specific code is confined to `input.py`, `power_manager.py`, `audio_hotplug.py`, `diagnostics.py`, and bits of `constants.py` and `purple_tui.py`. The real work is a `MacKeyReader` producing `RawKeyEvent`s plus a Mac-to-Linux keycode table: roughly 300-400 lines. Same seam later serves a browser backend.
+Linux-specific code is confined to `input.py`, `power_manager.py`, `audio_hotplug.py`, `diagnostics.py`, and bits of `constants.py` and `purplecomputer.py`. The real work is a `MacKeyReader` producing `RawKeyEvent`s plus a Mac-to-Linux keycode table: roughly 300-400 lines. Same seam later serves a browser backend.
 
 ### Lockdown, kid-owns-it version
 

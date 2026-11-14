@@ -38,7 +38,7 @@ run_purple() {
     export LD_PRELOAD="$DEST/libf128shim.so"
     [ -w "$HOME" ] || echo "WARNING: $HOME is not writable, settings will not save"
     cd "$DEST/app" || return 1
-    timeout "${PURPLE_MAX_SECONDS:-0}" "$DEST/python/bin/python3" -m purple_tui
+    timeout "${PURPLE_MAX_SECONDS:-0}" "$DEST/python/bin/python3" -m purplecomputer
     echo "purple exited: $?"
 }
 

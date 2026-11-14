@@ -8,12 +8,12 @@ import threading
 
 import pygame
 
-from ... import diagnostics
-from ... import palette as P
-from ... import printing
-from ...constants import SUPPORT_EMAIL
-from ...keyboard import ControlAction, NavigationAction
-from ...palette import rgb
+from .. import diagnostics
+from .. import palette as P
+from .. import printing
+from ..constants import SUPPORT_EMAIL
+from ..keyboard import ControlAction, NavigationAction
+from ..palette import rgb
 from ..ui import DOWN, UP, Dialog, Picker
 
 SCROLL_LINES = 5
@@ -93,7 +93,7 @@ class SoundCheckScreen(_ScrollablePage):
         threading.Thread(target=self._run, daemon=True, name="sound-check-menu").start()
 
     def _run(self):
-        from ... import sound_check
+        from .. import sound_check
         takes: list[str] = []
         result = sound_check.run(ladder=sound_check.PROBE_LADDER, log=takes.append)
         self.app._apply_volume_system()  # the check restored the sink to its pre-chime level; reassert ours

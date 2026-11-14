@@ -10,17 +10,17 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from purple_tui import content, pack_arrivals, settings, tts
-from purple_tui import palette as P
-from purple_tui.canvas import sounds
-from purple_tui.canvas.harness import press, type_text
-from purple_tui.canvas.library import Library, PictureTile
-from purple_tui.canvas.room_picker import family_rooms
-from purple_tui.canvas.rooms.rooms_screen import RoomsScreen, room_state
-from purple_tui.canvas.ui import Confirm
-from purple_tui.content import MEANING_MAX, Picture, is_word_picture, typed_name
-from purple_tui.music_constants import instruments, pitch_filename, reachable_pitches
-from purple_tui.usb_updater import update_from
+from purplecomputer import content, pack_arrivals, settings, tts
+from purplecomputer import palette as P
+from purplecomputer import sounds
+from purplecomputer.harness import press, type_text
+from purplecomputer.library import Library, PictureTile
+from purplecomputer.room_picker import family_rooms
+from purplecomputer.rooms.rooms_screen import RoomsScreen, room_state
+from purplecomputer.ui import Confirm
+from purplecomputer.content import MEANING_MAX, Picture, is_word_picture, typed_name
+from purplecomputer.music_constants import instruments, pitch_filename, reachable_pitches
+from purplecomputer.usb_updater import update_from
 
 
 class _ThisProcess:

@@ -7,7 +7,7 @@ out of the source. Use _decode() to read test word lists.
 import base64
 
 import pytest
-from purple_tui.speech_filter import (
+from purplecomputer.speech_filter import (
     _normalize,
     filter_speech,
 )
@@ -364,5 +364,5 @@ class TestGraphicWords:
 
 
 def test_no_allowed_word_is_a_blocked_word():
-    from purple_tui.speech_filter import _ALLOWED_WORDS, _BLOCKED_WORDS
+    from purplecomputer.speech_filter import _ALLOWED_WORDS, _BLOCKED_WORDS
     assert not _ALLOWED_WORDS & _BLOCKED_WORDS

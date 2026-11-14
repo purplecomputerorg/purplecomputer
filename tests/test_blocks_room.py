@@ -12,17 +12,17 @@ cursor fade, a whole tower at a time, where they hide its glass column or landin
 import asyncio
 import time
 
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms import blocks_room
-from purple_tui import palette as P
-from purple_tui.canvas.rooms.blocks_room import (DEPTH, HEIGHT, RISE, SINK, TILT_S, TURN_DETAIL_BLOCKS,
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.rooms import blocks_room
+from purplecomputer import palette as P
+from purplecomputer.rooms.blocks_room import (DEPTH, HEIGHT, RISE, SINK, TILT_S, TURN_DETAIL_BLOCKS,
                                                  TURN_S, WIDTH)
-from purple_tui.canvas.rooms.blocks_view import RIBBON_ALPHA, TOP, tint
-from purple_tui.constants import HOLD_OR_TAP_THRESHOLD
-from purple_tui.color_mixing import mix_colors_paint
-from purple_tui.input import KeyCode, RawKeyEvent
-from purple_tui.keyboard import CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction
-from purple_tui.palette import get_key_color
+from purplecomputer.rooms.blocks_view import RIBBON_ALPHA, TOP, tint
+from purplecomputer.constants import HOLD_OR_TAP_THRESHOLD
+from purplecomputer.color_mixing import mix_colors_paint
+from purplecomputer.input import KeyCode, RawKeyEvent
+from purplecomputer.keyboard import CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction
+from purplecomputer.palette import get_key_color
 
 
 def _blocks():

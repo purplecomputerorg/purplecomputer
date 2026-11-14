@@ -5,7 +5,7 @@ Generate pre-recorded letter name clips for Music Mode's Letters sub-mode.
 Uses Piper TTS to generate a spoken clip of each letter (A-Z).
 These are loaded at runtime by MusicGrid instead of using live TTS.
 
-Same synthesis and leveling as live speech (purple_tui.tts), so a
+Same synthesis and leveling as live speech (purplecomputer.tts), so a
 clip and a live letter sound identical.
 
 Output directory: packs/core-sounds/content/letters/
@@ -24,7 +24,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 LETTERS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "letters"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.tts import _prepare_text, find_voice_model, load_voice, synthesize_to_file  # noqa: E402
+from purplecomputer.tts import _prepare_text, find_voice_model, load_voice, synthesize_to_file  # noqa: E402
 
 
 def generate_letter_clip(voice, letter: str, output_path: Path) -> bool:

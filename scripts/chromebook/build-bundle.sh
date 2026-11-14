@@ -33,10 +33,10 @@ build_flite() {
 }
 
 mkdir -p "$DEST/wheels" "$DEST/voice"
-cp "$SRC"/*.sh "$SRC/probe.py" "$REPO/purple_tui/canvas/kms.py" "$DEST/"
+cp "$SRC"/*.sh "$SRC/probe.py" "$REPO/purplecomputer/kms.py" "$DEST/"
 rm "$DEST/build-bundle.sh"
 gcc -shared -fPIC -O2 -o "$DEST/libf128shim.so" "$SRC/f128shim.c"
-tar -czf "$DEST/purple-app.tar.gz" -C "$REPO" --exclude=__pycache__ --exclude='*.purplepack' purple_tui packs
+tar -czf "$DEST/purple-app.tar.gz" -C "$REPO" --exclude=__pycache__ --exclude='*.purplepack' purplecomputer packs
 
 # pygame-ce, not pygame: see the guide. Versions are pinned because `just` eats "numpy<2" as a redirect.
 # evdev-binary is python-evdev prebuilt (evdev itself is sdist only); it needs glibc 2.2.5.

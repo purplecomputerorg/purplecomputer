@@ -15,4 +15,4 @@ exec /usr/bin/systemd-run --pipe --quiet --collect \
     -p RestrictNamespaces=yes -p RestrictRealtime=yes -p LockPersonality=yes \
     -p SystemCallFilter=@system-service -p SystemCallFilter=~@network-io -p SystemCallErrorNumber=EPERM -p SystemCallArchitectures=native \
     -p MemoryMax=256M -p MemorySwapMax=0 -p TasksMax=16 -p RuntimeMaxSec=12h \
-    /usr/bin/python3 -I -S /opt/purple/purple_tui/roomkit/runner.py
+    /usr/bin/python3 -I -S /opt/purple/purplecomputer/roomkit/runner.py

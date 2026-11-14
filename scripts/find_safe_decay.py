@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui.music_constants import NOTE_FREQUENCIES
+from purplecomputer.music_constants import NOTE_FREQUENCIES
 from scripts.generate_sounds import finalize_samples
 
 SET_VOLUME = 0.4

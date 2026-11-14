@@ -6,15 +6,15 @@ import re
 
 import pygame
 
-from ... import i18n
-from ... import palette as P
-from ...constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
-from ...content import get_content, is_word_picture
+from .. import i18n
+from .. import palette as P
+from ..constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
+from ..content import get_content, is_word_picture
 from .. import paper
 from ..gfx import is_emoji, mix, rgb, strip_markup
-from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ...palette import get_key_color
-from ...play_eval import SimpleEvaluator, _escape_markup, pair_speakables, parse_speech_trigger
+from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from ..palette import get_key_color
+from ..play_eval import SimpleEvaluator, _escape_markup, pair_speakables, parse_speech_trigger
 from ..ui import DOWN, MATH_OPERATORS, UP, HintRotator, TextField
 from .base import Room
 
@@ -333,7 +333,7 @@ class PlayRoom(Room):
         force_speak = force_speak and allow_speak
         if eval_text:
             self._add("ask", eval_text)
-        from ...code_runner import PlayCodeRunner, is_repeat_line
+        from ..code_runner import PlayCodeRunner, is_repeat_line
         runner = PlayCodeRunner(self.evaluator)
         if is_repeat_line(eval_text):
             results = runner.run([eval_text])
@@ -363,7 +363,7 @@ class PlayRoom(Room):
                 correction = c
         if correction:
             self.field.set_correction(correction[0], correction[1])
-        from ...tts import _dbg
+        from ..tts import _dbg
         _dbg(f"submit raw={input_text!r} force_speak={force_speak} result_len={len(result or '')}")
         if force_speak:
             self._speak(result if asked else self.evaluator._make_speakable(eval_text, result), entry, echo_spoken)
@@ -377,7 +377,7 @@ class PlayRoom(Room):
 
     def _speak(self, speakable: str, entry, echo: str = ""):
         """The answer in the interface language, then the second language's words for it."""
-        from ...tts import _dbg, speak_many
+        from ..tts import _dbg, speak_many
         _dbg(f"speakable len={len(speakable)} head={speakable[:60]!r}")
         if not speakable:
             return
@@ -391,7 +391,7 @@ class PlayRoom(Room):
             self.app.timers.after(1.5, lambda: self._set_speech(entry, ""))
 
     def _speak_sequence(self, pairs: list, entries: list):
-        from ...tts import speak_many
+        from ..tts import speak_many
         spoken = dict(pair_speakables(self.evaluator, pairs))
         items = [(spoken[i], e) for i, e in enumerate(entries) if i in spoken]
         if not items:

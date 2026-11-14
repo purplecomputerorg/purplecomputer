@@ -41,7 +41,7 @@ Layer 2: Per-room structural fuzzy (for keywords, operators)
   - Command keywords: "chooze" -> "choose", "lettrs" -> "letters"
   - Instrument names: "akordion" -> "accordion", "marimab" -> "marimba"
 
-Shared module: purple_tui/fuzzy.py
+Shared module: purplecomputer/fuzzy.py
 -----------------------------------
 
   damerau_levenshtein(s1, s2)

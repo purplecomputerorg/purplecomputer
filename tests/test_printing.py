@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-from purple_tui import printing, settings
-from purple_tui.canvas import paper
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.room_picker import RoomPicker
+from purplecomputer import printing, settings
+from purplecomputer import paper
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.room_picker import RoomPicker
 
 READY = {"ready": True, "model": "Brother HL-L2420DW", "via": "ipp-usb"}
 
@@ -127,7 +127,7 @@ def test_p_in_the_esc_menu_sends_the_art_page(plugged_in, lp_calls):
 
 
 def test_a_pretend_printer_shows_the_page_until_a_key(monkeypatch, tmp_path):
-    from purple_tui.canvas.print_preview import PrintPreview
+    from purplecomputer.print_preview import PrintPreview
     monkeypatch.setattr(printing, "FAKE", True)
     monkeypatch.setenv("PURPLE_SCREENSHOT_DIR", str(tmp_path))
 
@@ -221,7 +221,7 @@ def test_printer_check_says_what_to_do_next():
 
 @pytest.mark.parametrize("ready", [True, False])
 def test_printer_check_prints_a_test_page_and_says_how_it_went(ready, lp_calls, monkeypatch):
-    from purple_tui.canvas.rooms import support_info
+    from purplecomputer.rooms import support_info
     monkeypatch.setattr(support_info.PrinterCheckScreen, "on_open", lambda self: self._show("USB printers:"))
     if ready:
         _write(**READY)
@@ -240,7 +240,7 @@ def test_printer_check_prints_a_test_page_and_says_how_it_went(ready, lp_calls, 
 
 
 def _play_paper(size, ems=None, monkeypatch=None):
-    from purple_tui.canvas.rooms import play_room
+    from purplecomputer.rooms import play_room
     if ems:
         monkeypatch.setattr(play_room, "PAPER_EMS", ems)
 

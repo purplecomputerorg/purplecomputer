@@ -2,11 +2,11 @@ import random
 
 import pytest
 
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.color_mixing import mix_colors_paint
-from purple_tui.input import KeyCode, RawKeyEvent
-from purple_tui.keyboard import KeyboardStateMachine
-from purple_tui.palette import get_key_color
+from purplecomputer.harness import make_app, run
+from purplecomputer.color_mixing import mix_colors_paint
+from purplecomputer.input import KeyCode, RawKeyEvent
+from purplecomputer.keyboard import KeyboardStateMachine
+from purplecomputer.palette import get_key_color
 
 F, V, B, G = KeyCode.KEY_F, KeyCode.KEY_V, KeyCode.KEY_B, KeyCode.KEY_G
 FV = mix_colors_paint([get_key_color("f"), get_key_color("v")])

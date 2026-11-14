@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui import power_manager as pm
+from purplecomputer import power_manager as pm
 
 
 def _paths(tmp_path, monkeypatch):
@@ -38,7 +38,7 @@ class TestPowerLog:
         assert "still ok" in b.read_text()
 
     def test_lines_reach_the_journal_under_their_tag(self, tmp_path, monkeypatch):
-        from purple_tui import diag_log
+        from purplecomputer import diag_log
         sent = []
         class FakeSocket:
             def sendto(self, data, flags, addr):

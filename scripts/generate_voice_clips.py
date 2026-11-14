@@ -18,7 +18,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 VOICE_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "voice"
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from purple_tui.tts import (  # noqa: E402
+from purplecomputer.tts import (  # noqa: E402
     _SYNTH_PARAMS, _fix_pronunciation, find_voice_model, load_voice, synthesize_to_file, voice_clip_filename,
 )
 
@@ -34,7 +34,7 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
 
 
 def _stub_ui_modules():
-    """The evaluator lives in purple_tui.play_eval with no UI dependencies now; nothing to stub."""
+    """The evaluator lives in purplecomputer.play_eval with no UI dependencies now; nothing to stub."""
 def _collect_all_actions() -> list:
     """Collect all demo actions from composition segments and fallback script."""
     import importlib
@@ -44,18 +44,18 @@ def _collect_all_actions() -> list:
 
     # Scan the active composition (PURPLE_DEMO_COMPOSITION selects ad.json etc.)
     composition = os.environ.get("PURPLE_DEMO_COMPOSITION", "demo.json")
-    demo_json = PROJECT_ROOT / "purple_tui" / "demo" / composition
+    demo_json = PROJECT_ROOT / "purplecomputer" / "demo" / composition
     if demo_json.exists():
         entries = json.loads(demo_json.read_text())
         for entry in entries:
             name = entry["segment"]
             mod = importlib.import_module(
-                f"purple_tui.demo.segments.{name}"
+                f"purplecomputer.demo.segments.{name}"
             )
             actions.extend(mod.SEGMENT)
 
     # Also scan the default script as fallback
-    from purple_tui.demo.default_script import DEMO_SCRIPT
+    from purplecomputer.demo.default_script import DEMO_SCRIPT
     actions.extend(DEMO_SCRIPT)
 
     return actions
@@ -71,8 +71,8 @@ def extract_demo_phrases() -> list[str]:
     """
     _stub_ui_modules()
 
-    from purple_tui.demo.script import TypeText
-    from purple_tui.play_eval import (
+    from purplecomputer.demo.script import TypeText
+    from purplecomputer.play_eval import (
         SimpleEvaluator, parse_speech_trigger, speakables_for,
     )
 

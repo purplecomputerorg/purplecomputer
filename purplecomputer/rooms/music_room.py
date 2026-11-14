@@ -8,20 +8,20 @@ import time
 
 import pygame
 
-from ... import palette as P
-from ...audio import play_safe
-from ...code_runner import MusicCodeRunner
-from ...content import get_content
-from ...constants import ICON_DRUM, ICON_KEYBOARD, ICON_MUSIC
-from ...keyboard import CharacterAction, ControlAction, NavigationAction
-from ...loop_station import IDLE, LOOPING, RECORDING, LoopStation
-from ...mixer import warm_mixer
-from ...speech_filter import is_clean
-from ...music_constants import (
+from .. import palette as P
+from ..audio import play_safe
+from ..code_runner import MusicCodeRunner
+from ..content import get_content
+from ..constants import ICON_DRUM, ICON_KEYBOARD, ICON_MUSIC
+from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from ..loop_station import IDLE, LOOPING, RECORDING, LoopStation
+from ..mixer import warm_mixer
+from ..speech_filter import is_clean
+from ..music_constants import (
     ALL_KEYS, COLOR_KEYCAP, COLORS, DEFAULT_ROOT_INDEX, FRIENDLY_KEY_NAMES, FRIENDLY_KEYS, GRID_KEYS,
     INSTRUMENT_ALIASES, instruments, pitch_filename, pitch_for,
 )
-from ...palette import KEY_COLORS, text_color_for
+from ..palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..gfx import is_one_emoji, mix
 from ..music_replay import Recording
@@ -511,7 +511,7 @@ class MusicRoom(Room):
         elif self.loop.state == LOOPING:
             self._start_loop_playback()  # from the top: the sound and the bar start over together
         elif self.letters_mode and self.word:
-            from ...tts import speak_many
+            from ..tts import speak_many
             speak_many([self.word], family=False)
         self.app.invalidate()
 

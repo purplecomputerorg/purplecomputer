@@ -41,13 +41,13 @@ def resolve(commit: str) -> str | None:
 
 def format_at(sha: str) -> int | None:
     """The newest pack format the build reads; None before Purple read Studio's packs."""
-    m = re.search(r"^PACK_FORMAT = (\d+)$", git("show", f"{sha}:purple_tui/content.py").stdout, re.M)
+    m = re.search(r"^PACK_FORMAT = (\d+)$", git("show", f"{sha}:purplecomputer/content.py").stdout, re.M)
     return int(m.group(1)) if m else None
 
 
 def room_inputs_digest() -> str:
     """What room_compat.sh brings from this checkout; a build's result holds until one of these changes."""
-    files = [ROOT / "purple_tui" / "roomkit" / "purple.py", ROOT / "tests" / "canvas" / "test_room_compat.py",
+    files = [ROOT / "purplecomputer" / "roomkit" / "purple.py", ROOT / "tests" / "test_room_compat.py",
              ROOT / "scripts" / "room_compat.sh"]
     files += sorted((ROOT / "tests" / "rooms").glob("*.py")) + sorted((ROOT / "studio" / "src" / "examples").glob("*.py"))
     h = hashlib.sha256()
@@ -57,7 +57,7 @@ def room_inputs_digest() -> str:
 
 
 def rooms_run(sha: str) -> bool | None:
-    if git("cat-file", "-e", f"{sha}:purple_tui/canvas/harness.py").returncode:
+    if git("cat-file", "-e", f"{sha}:purplecomputer/harness.py").returncode:
         return None
     return subprocess.run([str(ROOT / "scripts" / "room_compat.sh"), sha], capture_output=True).returncode == 0
 

@@ -1,5 +1,5 @@
-from purple_tui.canvas.harness import make_app, run, type_text
-from purple_tui.canvas.rooms.play_room import PlayEvaluator, abacus_rows, answer_parts
+from purplecomputer.harness import make_app, run, type_text
+from purplecomputer.rooms.play_room import PlayEvaluator, abacus_rows, answer_parts
 
 
 def test_big_counts_become_an_abacus_part_and_small_ones_stay_text():

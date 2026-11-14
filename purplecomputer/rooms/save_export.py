@@ -139,6 +139,6 @@ class SaveExportScreen(Dialog):
             self._say("Nothing new to copy.", "", "Saved work you haven't copied yet goes over next time.", done=True)
 
     async def handle(self, action):
-        from ...keyboard import ControlAction
+        from ..keyboard import ControlAction
         if self.done and isinstance(action, ControlAction) and action.is_down and action.action in ("enter", "escape"):
             self.close()

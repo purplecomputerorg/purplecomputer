@@ -2,7 +2,7 @@
 // for a parent to read or to hand to an AI helper.
 import { EXAMPLES } from "../examples";
 import guide from "../room-guide.md?raw";
-import roomLibrary from "../../../purple_tui/roomkit/purple.py?raw";
+import roomLibrary from "../../../purplecomputer/roomkit/purple.py?raw";
 import { h } from "./dom";
 import { markdown } from "./markdown";
 import type { View } from "./view";

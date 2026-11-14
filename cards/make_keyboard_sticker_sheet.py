@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from purple_tui.palette import KEY_COLORS
+from purplecomputer.palette import KEY_COLORS
 
 OUT_SVG = Path(__file__).parent / "keyboard-sticker-sheet.svg"
 OUT_PDF = Path(__file__).parent / "keyboard-sticker-sheet.pdf"

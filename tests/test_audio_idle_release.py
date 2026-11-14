@@ -13,10 +13,10 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from purple_tui import audio
-from purple_tui import mixer as music_room
-from purple_tui.canvas.app import PurpleApp
-from purple_tui.canvas.sounds import SoundBank
+from purplecomputer import audio
+from purplecomputer import mixer as music_room
+from purplecomputer.app import PurpleApp
+from purplecomputer.sounds import SoundBank
 
 
 class _FakeMixer:
@@ -272,7 +272,7 @@ def test_play_safe_stamps_last_play_and_reinits_after_release(monkeypatch):
 
 def test_play_clip_clears_channel_on_exception(monkeypatch):
     """A stale tts._current_channel would veto idle release forever."""
-    from purple_tui import tts
+    from purplecomputer import tts
 
     class BadChannel:
         def get_busy(self):
@@ -300,7 +300,7 @@ class _FakeAppForIdleCheck:
 
 
 def _idle_check_setup(monkeypatch, idle_seconds):
-    from purple_tui import tts, power_manager
+    from purplecomputer import tts, power_manager
     calls = []
     monkeypatch.setattr(music_room, "_MIXER_READY", True)
     monkeypatch.setattr(tts, "_current_channel", None)
@@ -318,7 +318,7 @@ def test_idle_check_releases_when_everything_quiet(monkeypatch):
 
 
 def test_idle_check_vetoes(monkeypatch):
-    from purple_tui import tts
+    from purplecomputer import tts
 
     calls = _idle_check_setup(monkeypatch, idle_seconds=999)
     _FakeAppForIdleCheck("music")._check_audio_idle()  # music room veto
@@ -367,7 +367,7 @@ def test_audio_idle_timer_rearm_respects_audio_ok():
 def test_keypress_cancels_lid_countdown(monkeypatch):
     """Some firmware reports the lid closed at boot and never sends the open
     event; typing proves it is open, so the 10 min shutdown must stop."""
-    from purple_tui import power_manager
+    from purplecomputer import power_manager
     lines = []
     monkeypatch.setattr(power_manager, "_power_log", lines.append)
     app = SimpleNamespace(_lid_close_time=time.time(), _arm_audio_idle_timer=lambda: None)

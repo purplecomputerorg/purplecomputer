@@ -30,7 +30,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from purple_tui.i18n import has_cjk, read_blocked  # noqa: E402
+from purplecomputer.i18n import has_cjk, read_blocked  # noqa: E402
 
 CONTENT = REPO / "packs" / "lang-zh" / "content"
 SPOKEN_BLOCKED = {w for w in read_blocked(CONTENT / "blocked.txt") if has_cjk(w)}

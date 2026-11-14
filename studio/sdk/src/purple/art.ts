@@ -1,4 +1,4 @@
-// Art room facts come from export.json (written by scripts/export_studio.py from purple_tui itself).
+// Art room facts come from export.json (written by scripts/export_studio.py from purplecomputer itself).
 // Only the two functions Studio needs live, fit_to_canvas and generate_row_gradient, are ported,
 // and tests/art.test.ts checks both against the export.
 import exported from "./export.json";

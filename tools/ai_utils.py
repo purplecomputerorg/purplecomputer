@@ -5,8 +5,8 @@ import os
 import re
 from pathlib import Path
 
-# Root of the purple_tui package (relative to this tools/ directory)
-_DEMO_DIR = Path(__file__).parent.parent / "purple_tui" / "demo"
+# Root of the purplecomputer package (relative to this tools/ directory)
+_DEMO_DIR = Path(__file__).parent.parent / "purplecomputer" / "demo"
 
 
 def load_env_file():

@@ -1,8 +1,8 @@
 """The parent menu's Voice row switches the speech engine and persists the choice."""
 
-from purple_tui import settings, tts
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.canvas.rooms.parent_menu import VoiceScreen
+from purplecomputer import settings, tts
+from purplecomputer.harness import make_app, run
+from purplecomputer.rooms.parent_menu import VoiceScreen
 
 
 def test_voice_row_picks_quick(tmp_path, monkeypatch):

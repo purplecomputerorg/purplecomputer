@@ -11,8 +11,8 @@ import time
 
 import pytest
 
-from purple_tui import sound_check
-from purple_tui.audio import FULL_SCALE
+from purplecomputer import sound_check
+from purplecomputer.audio import FULL_SCALE
 
 RATE = sound_check.RECORD_RATE
 

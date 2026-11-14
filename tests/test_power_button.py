@@ -1,9 +1,9 @@
 """Power button while the parent terminal's fullscreen xterm covers Purple."""
 
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.canvas.rooms.parent_menu import TerminalScreen
-from purple_tui.canvas.rooms.sleep_screen import ShutdownConfirmScreen
-from purple_tui.input import PowerButtonEvent
+from purplecomputer.harness import make_app, run
+from purplecomputer.rooms.parent_menu import TerminalScreen
+from purplecomputer.rooms.sleep_screen import ShutdownConfirmScreen
+from purplecomputer.input import PowerButtonEvent
 
 
 class FakeProc:

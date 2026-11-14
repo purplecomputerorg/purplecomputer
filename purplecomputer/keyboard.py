@@ -974,7 +974,7 @@ class KeyboardStateMachine:
             return actions
 
         # Handle Escape release. Long-hold detection lives entirely in the
-        # app-level timer (purple_tui._check_escape_hold) so there's a single
+        # app-level timer (purplecomputer._check_escape_hold) so there's a single
         # source of truth — the release path just clears press state.
         if keycode == KeyCode.KEY_ESC:
             self._escape_press_time = None

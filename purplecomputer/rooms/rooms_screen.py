@@ -3,8 +3,8 @@ cards the Esc menu shows them on. Enter turns one on or off; Littles Mode sits o
 
 import pygame
 
-from ... import palette as P
-from ...keyboard import ControlAction, NavigationAction
+from .. import palette as P
+from ..keyboard import ControlAction, NavigationAction
 from ..room_picker import (MAX_FAMILY_ROOMS, ROOM_CARD, cards, short_title, draw_card, draw_section, nearest, row_centers,
                            row_width)
 from ..ui import CANCELLED, DOWN, KEEP, LEFT, RIGHT, UP, Dialog
@@ -33,16 +33,16 @@ def core_on(app) -> list:
 
 
 def family_on(on: dict | None = None) -> int:
-    from ...content import get_content
-    from ...settings import get_rooms_on
+    from ..content import get_content
+    from ..settings import get_rooms_on
     on = get_rooms_on() if on is None else on
     return sum(room_state(r, on) == "on" for r in get_content().rooms)
 
 
 def rooms_label(app) -> str:
-    from ...settings import get_littles_mode
+    from ..settings import get_littles_mode
     from .parent_menu import littles_name
-    from ...content import get_content
+    from ..content import get_content
     littles = get_littles_mode()
     if littles:
         return f"Rooms: Littles Mode, {littles_name(littles)}"
@@ -50,7 +50,7 @@ def rooms_label(app) -> str:
 
 
 def _pack_name(room) -> str:
-    from ...content import read_manifest
+    from ..content import read_manifest
     return (read_manifest(room.path.parents[2]) or {}).get("name", room.pack)
 
 
@@ -74,7 +74,7 @@ class RoomsScreen(Dialog):
 
     def _rows(self) -> tuple:
         """Navigable rows, Littles Mode first, and the section label over each group's first row."""
-        from ...content import get_content
+        from ..content import get_content
         groups = {"": [("core", name) for name in self.app.rooms]}
         for r in get_content().rooms:
             groups.setdefault(r.pack, []).append(("family", r))
@@ -87,7 +87,7 @@ class RoomsScreen(Dialog):
 
     @property
     def description(self) -> str:
-        from ...settings import get_littles_mode
+        from ..settings import get_littles_mode
         if get_littles_mode():
             return self.LITTLES_ON
         text = self.JUST_ADDED if self.packs else self.DESCRIPTION
@@ -135,7 +135,7 @@ class RoomsScreen(Dialog):
                 return self.app.notify("One room always stays on", timeout=3)
             self.app.set_room_off(x, x in on)
         else:
-            from ...settings import get_rooms_on, set_room_on
+            from ..settings import get_rooms_on, set_room_on
             state = self._state(item, get_rooms_on())
             if state == "full":
                 return self.app.notify(f"The Esc menu holds {MAX_FAMILY_ROOMS} family rooms. Turn one off first.", timeout=4)
@@ -162,7 +162,7 @@ class RoomsScreen(Dialog):
         return desc + pill + self._shown(g) * card
 
     def draw_body(self, g, rect):
-        from ...settings import get_littles_mode, get_rooms_on
+        from ..settings import get_littles_mode, get_rooms_on
         from .parent_menu import littles_name
         desc_h, pill_h, card_h = self._heights(g)
         g.draw_markup(self.description, g.em(0.92), rect.x, rect.y, "mono", P.MUTED, rect.w, "center", P.SURFACE)

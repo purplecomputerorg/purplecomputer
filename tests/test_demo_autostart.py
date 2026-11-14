@@ -6,7 +6,7 @@ timer must still fire so recordings don't capture a frozen app.
 
 import asyncio
 
-from purple_tui.canvas.harness import make_app, press, run
+from purplecomputer.harness import make_app, press, run
 
 
 def test_autostart_fires_with_zero_preroll(tmp_path, monkeypatch):
@@ -34,7 +34,7 @@ def test_autostart_fires_with_zero_preroll(tmp_path, monkeypatch):
 def test_dispatched_action_resets_idle():
     """Demo playback bypasses evdev, so dispatch itself must count as activity
     or long recordings hit the idle sleep face."""
-    from purple_tui.power_manager import get_power_manager
+    from purplecomputer.power_manager import get_power_manager
 
     async def go():
         app = make_app()
@@ -49,7 +49,7 @@ def test_dispatched_action_resets_idle():
 def test_lifting_an_idle_inhibitor_resets_idle():
     """Time under an inhibitor (terminal, install) was not idle, so the next
     idle tick must not show the sleep screen at once."""
-    from purple_tui.power_manager import get_power_manager
+    from purplecomputer.power_manager import get_power_manager
 
     async def go():
         app = make_app()
@@ -66,8 +66,8 @@ def test_away_skips_sleep_face_and_shuts_down_on_its_own_timer(monkeypatch):
     woken, so idle goes straight to shutdown on the longer away threshold."""
     from types import SimpleNamespace
 
-    from purple_tui import power_manager
-    from purple_tui.power_manager import get_power_manager
+    from purplecomputer import power_manager
+    from purplecomputer.power_manager import get_power_manager
     monkeypatch.setattr(power_manager, "can_power_back_on", lambda: True)
 
     async def go():
@@ -91,8 +91,8 @@ def test_stay_awake_skips_sleep_and_shutdown(tmp_path, monkeypatch):
     while away, and turning it off doesn't count the held time as idle."""
     from types import SimpleNamespace
 
-    from purple_tui import power_manager, stay_awake
-    from purple_tui.power_manager import get_power_manager
+    from purplecomputer import power_manager, stay_awake
+    from purplecomputer.power_manager import get_power_manager
     monkeypatch.setattr(power_manager, "can_power_back_on", lambda: True)
     monkeypatch.setattr(stay_awake, "FLAG", tmp_path / "flag")
 

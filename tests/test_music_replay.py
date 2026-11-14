@@ -4,12 +4,12 @@ import asyncio
 
 import pytest
 
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.music_replay import KEEP_S, MAX_GAP_S, Recording
-from purple_tui.canvas.panels import LoopPanel, ReplayPanel
-from purple_tui.canvas.rooms.music_room import MusicRoom
-from purple_tui.loop_station import IDLE, LOOPING
-from purple_tui.music_constants import ALL_KEYS, COLORS
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.music_replay import KEEP_S, MAX_GAP_S, Recording
+from purplecomputer.panels import LoopPanel, ReplayPanel
+from purplecomputer.rooms.music_room import MusicRoom
+from purplecomputer.loop_station import IDLE, LOOPING
+from purplecomputer.music_constants import ALL_KEYS, COLORS
 
 
 @pytest.fixture(autouse=True)

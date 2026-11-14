@@ -2,9 +2,9 @@
 
 import json
 
-from purple_tui import pack_manager, settings
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.canvas.rooms.parent_menu import PurplePacksScreen, _get_menu_items
+from purplecomputer import pack_manager, settings
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.rooms.parent_menu import PurplePacksScreen, _get_menu_items
 
 
 def test_a_parent_removes_a_purple_pack_and_it_is_gone_at_once(tmp_path, monkeypatch):

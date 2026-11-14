@@ -2,7 +2,7 @@
 
 A family room is a Python file in a pack (`content/rooms/<name>.py`) that runs as a guest: Purple sends it events, it answers each with what to draw and play, and Purple decides what actually happens. Families make them in Purple Studio; Purple shows them in a row of their own in the room picker once a parent turns them on.
 
-The design goal is that how rooms get built (rules, forms, Python, sprites, whatever comes next) can change in Studio for years without a new Purple Key. So Purple's side is a small fixed protocol, and everything that makes a room a room lives in the guest library, `purple_tui/roomkit/purple.py`, which each pack carries. Reasoning and the decisions behind it: `docs/PLAN-room-interface.md`.
+The design goal is that how rooms get built (rules, forms, Python, sprites, whatever comes next) can change in Studio for years without a new Purple Key. So Purple's side is a small fixed protocol, and everything that makes a room a room lives in the guest library, `purplecomputer/roomkit/purple.py`, which each pack carries. Reasoning and the decisions behind it: `docs/PLAN-room-interface.md`.
 
 ## Writing one
 
@@ -10,7 +10,7 @@ Everything a room can call, with the starter rooms, is Studio's Room guide: `stu
 
 ## The protocol
 
-One JSON line each way, strictly in turn: Purple sends an event, the room sends exactly one reply, and only then does Purple send the next event. The host is `purple_tui/canvas/rooms/family_room.py`; the guest side is `roomkit/runner.py` (which loads the library) and `roomkit/purple.py`.
+One JSON line each way, strictly in turn: Purple sends an event, the room sends exactly one reply, and only then does Purple send the next event. The host is `purplecomputer/rooms/family_room.py`; the guest side is `roomkit/runner.py` (which loads the library) and `roomkit/purple.py`.
 
 Purple to room:
 
@@ -64,4 +64,4 @@ Studio's Rooms page runs the room on the real Purple in its preview: `FamilyRoom
 
 ## The room checker
 
-`purple_tui/roomkit/check.py` plays a pack's rooms the way Purple does, without Purple: `check_pack` first, then each room in its own process with the real library, on a clock it moves itself, through arrows, typing, a few hundred random keys, and 20 seconds of timers. It reports what would put up the "needs fixing" card (an error and its line, a slow answer, too many shapes, a picture the pack lacks) and `--show` prints the screen as text. It holds rooms to the same numbers Purple does, `roomkit/limits.py`. `just studio-bundle` builds it with the pack rules and the library into one file anyone with Python 3.10 can run, served by Studio at `/purple/purple-room-check.pyz`; the Room guide points AI helpers at it. In this repo: `just check-room`, which asks which room, or `just check-room <pack or room.py>`.
+`purplecomputer/roomkit/check.py` plays a pack's rooms the way Purple does, without Purple: `check_pack` first, then each room in its own process with the real library, on a clock it moves itself, through arrows, typing, a few hundred random keys, and 20 seconds of timers. It reports what would put up the "needs fixing" card (an error and its line, a slow answer, too many shapes, a picture the pack lacks) and `--show` prints the screen as text. It holds rooms to the same numbers Purple does, `roomkit/limits.py`. `just studio-bundle` builds it with the pack rules and the library into one file anyone with Python 3.10 can run, served by Studio at `/purple/purple-room-check.pyz`; the Room guide points AI helpers at it. In this repo: `just check-room`, which asks which room, or `just check-room <pack or room.py>`.

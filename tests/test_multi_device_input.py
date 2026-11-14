@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from purple_tui.input import (
+from purplecomputer.input import (
     EvdevReader,
     KeyCode,
     PowerButtonReader,
@@ -205,7 +205,7 @@ class TestMultiDeviceLifecycle:
             grabbed_while_held = []
             real_grab = kbd.grab
             kbd.grab = lambda: (grabbed_while_held.append(bool(kbd.held_keys)), real_grab())
-            with patch('purple_tui.input.time.sleep', side_effect=lambda _: kbd.held_keys.clear()):
+            with patch('purplecomputer.input.time.sleep', side_effect=lambda _: kbd.held_keys.clear()):
                 reader.reacquire_grab()
             assert kbd._grabbed and grabbed_while_held == [False]
 
@@ -564,7 +564,7 @@ class TestPowerButtonHotplug:
             reader = PowerButtonReader(callback=cb, hold_seconds=3)
             with patch.object(reader, '_find_power_buttons', return_value=[]), \
                  patch.object(reader, '_device_paths', return_value=set()), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01):
                 await reader.start()
                 assert reader._devices == []
 
@@ -596,8 +596,8 @@ class TestPowerButtonHotplug:
             reader = PowerButtonReader(callback=AsyncCallback(), hold_seconds=3)
             with patch.object(reader, '_device_paths',
                               return_value={"/dev/input/event0"}), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01), \
-                 patch("purple_tui.input.SILENT_RESCAN_FIRST_SECS", 0.02):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01), \
+                 patch("purplecomputer.input.SILENT_RESCAN_FIRST_SECS", 0.02):
                 with patch.object(reader, '_find_power_buttons', return_value=[]):
                     await reader.start()
                     assert reader._devices == []
@@ -618,7 +618,7 @@ class TestPowerButtonHotplug:
             reader = PowerButtonReader(callback=AsyncCallback(), hold_seconds=3)
             with patch.object(reader, '_device_paths',
                               return_value={"/dev/input/event0"}), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01):
                 with patch.object(reader, '_find_power_buttons', return_value=[pb]):
                     await reader.start()
 
@@ -650,7 +650,7 @@ class TestPowerButtonHotplug:
             with patch.object(reader, '_find_power_buttons', _counting_scan), \
                  patch.object(reader, '_device_paths',
                               return_value={"/dev/input/event0"}), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01):
                 await reader.start()
                 await asyncio.sleep(0.15)
                 await reader.stop()
@@ -671,14 +671,14 @@ class TestShutdownWatchdog:
     """
 
     def _calls(self):
-        from purple_tui.power_manager import PowerManager
+        from purplecomputer.power_manager import PowerManager
         calls = []
 
         def capture(*args, **kwargs):
             calls.append((args, kwargs))
             raise FileNotFoundError("not found")
 
-        with patch("purple_tui.power_manager.subprocess.Popen", side_effect=capture):
+        with patch("purplecomputer.power_manager.subprocess.Popen", side_effect=capture):
             PowerManager().shutdown()
         return calls
 
@@ -689,7 +689,7 @@ class TestShutdownWatchdog:
     def test_watchdog_is_the_tmpfs_poweroff_binary_after_8s(self):
         """8s matches the old sysrq stage: a slow but working systemctl
         (Surface) finishes first."""
-        from purple_tui.constants import REBOOT_BIN
+        from purplecomputer.constants import REBOOT_BIN
         assert self._calls()[0][0][0] == [REBOOT_BIN, "--poweroff", "8"]
 
     def test_systemctl_uses_single_force(self):
@@ -703,8 +703,8 @@ class TestShutdownWatchdog:
 
     def test_watchdog_swallows_exceptions(self):
         """Backstop spawn failure should not prevent shutdown attempt."""
-        from purple_tui.power_manager import PowerManager
-        with patch("purple_tui.power_manager.subprocess.Popen",
+        from purplecomputer.power_manager import PowerManager
+        with patch("purplecomputer.power_manager.subprocess.Popen",
                    side_effect=OSError("spawn failed")):
             PowerManager().shutdown()  # Should not raise
 
@@ -823,7 +823,7 @@ class TestSilentKeyboardRecovery:
             reader = EvdevReader(callback=AsyncCallback(), grab=False)
             with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
                  patch.object(reader, '_device_paths', return_value={"/dev/input/event0"}), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01):
                 await reader.start()
 
                 # A rescan opens fresh handles for devices already being read.
@@ -852,7 +852,7 @@ class TestSilentKeyboardRecovery:
 
             with patch.object(reader, '_find_keyboards', _counting_scan), \
                  patch.object(reader, '_device_paths', return_value={"/dev/input/event0"}), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01):
                 await reader.start()
                 await asyncio.sleep(0.15)
                 await reader.stop()
@@ -879,8 +879,8 @@ class TestSilentKeyboardRecovery:
             with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
                  patch.object(reader, '_device_paths',
                               return_value={"/dev/input/event0", "/dev/input/event1"}), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01), \
-                 patch("purple_tui.input.SILENT_RESCAN_FIRST_SECS", 0.02):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01), \
+                 patch("purplecomputer.input.SILENT_RESCAN_FIRST_SECS", 0.02):
                 await reader.start()
 
                 with patch.object(reader, '_find_keyboards', fresh_scan):
@@ -935,7 +935,7 @@ class TestSilentKeyboardRecovery:
             reader = EvdevReader(callback=AsyncCallback(), grab=False)
             with patch.object(reader, '_find_keyboards', return_value=[dev_a, dev_b]), \
                  patch.object(reader, '_device_paths', return_value=paths), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01):
                 await reader.start()
 
                 # Both read loops die, staggered, without either node going
@@ -970,7 +970,7 @@ class TestSilentKeyboardRecovery:
 
             with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
                  patch.object(reader, '_device_paths', return_value={"/dev/input/event0"}), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 5):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 5):
                 await reader.start()
                 assert not reader._rescan_wanted
 
@@ -1018,8 +1018,8 @@ class TestSilentKeyboardRecovery:
                     ticks.append(1)
 
             with patch.object(reader, '_keyd_virtual_present', return_value=False), \
-                 patch("purple_tui.input.KEYD_CONFIG_PATH", Path(__file__)), \
-                 patch("purple_tui.input.KEYD_WAIT_SECS", 0.2):
+                 patch("purplecomputer.input.KEYD_CONFIG_PATH", Path(__file__)), \
+                 patch("purplecomputer.input.KEYD_WAIT_SECS", 0.2):
                 ticker = asyncio.create_task(_ticker())
                 await reader._await_keyd_virtual()
                 ticker.cancel()
@@ -1032,8 +1032,8 @@ class TestSilentKeyboardRecovery:
         async def _test():
             reader = EvdevReader(callback=AsyncCallback())
             with patch.object(reader, '_keyd_virtual_present', return_value=True), \
-                 patch("purple_tui.input.KEYD_CONFIG_PATH", Path(__file__)), \
-                 patch("purple_tui.input.KEYD_WAIT_SECS", 5.0):
+                 patch("purplecomputer.input.KEYD_CONFIG_PATH", Path(__file__)), \
+                 patch("purplecomputer.input.KEYD_WAIT_SECS", 5.0):
                 start = time.monotonic()
                 await reader._await_keyd_virtual()
                 assert time.monotonic() - start < 0.1
@@ -1050,7 +1050,7 @@ class TestSilentKeyboardRecovery:
 
             with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
                  patch.object(reader, '_device_paths', return_value={"/dev/input/event0"}), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01):
                 await reader.start()
 
                 with patch.object(reader, '_device_paths', side_effect=OSError("boom")):
@@ -1094,7 +1094,7 @@ class TestSilentKeyboardRecovery:
             logged = []
             with patch.object(reader, '_find_keyboards', _scan), \
                  patch.object(reader, '_device_paths', return_value=sets[0]), \
-                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                 patch("purplecomputer.input.DEVICE_POLL_SECS", 0.01):
                 await reader.start()
 
                 with patch.object(reader, '_diag', lambda m: logged.append(m)), \
@@ -1112,8 +1112,8 @@ class TestSilentKeyboardRecovery:
         async def _test():
             reader = EvdevReader(callback=AsyncCallback())
             with patch.object(reader, '_keyd_virtual_present', return_value=False), \
-                 patch("purple_tui.input.KEYD_CONFIG_PATH", Path(__file__)), \
-                 patch("purple_tui.input.KEYD_WAIT_SECS", 0.2):
+                 patch("purplecomputer.input.KEYD_CONFIG_PATH", Path(__file__)), \
+                 patch("purplecomputer.input.KEYD_WAIT_SECS", 0.2):
                 await reader._await_keyd_virtual()
 
                 start = time.monotonic()
@@ -1205,7 +1205,7 @@ if __name__ == "__main__":
 
 def test_keys_held_now_unions_every_keyboard_and_skips_unreadable_ones(monkeypatch):
     import types
-    from purple_tui import input as input_mod
+    from purplecomputer import input as input_mod
 
     class Dev:
         def __init__(self, path):

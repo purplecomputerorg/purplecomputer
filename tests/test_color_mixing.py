@@ -6,7 +6,7 @@ https://github.com/rvanwijnen/spectral.js (MIT License)
 """
 
 import pytest
-from purple_tui.color_mixing import (
+from purplecomputer.color_mixing import (
     get_color_name_approximation,
     mix_colors_paint,
     hex_to_rgb,

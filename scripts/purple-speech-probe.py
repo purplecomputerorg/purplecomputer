@@ -91,8 +91,8 @@ def machine() -> None:
 
 def app_state(tts) -> None:
     section("app state")
-    app = run("pgrep", "-f", "python.* -m purple_tui")
-    worker = run("pgrep", "-f", "purple_tui.tts_worker")
+    app = run("pgrep", "-f", "python.* -m purplecomputer")
+    worker = run("pgrep", "-f", "purplecomputer.tts_worker")
     out(f"app running: {'yes' if app else 'no'}   speech worker alive: {'yes' if worker else 'NO'}")
     note(f"speech worker alive: {'yes' if worker else 'NO'}" if app else "app not running")
     cache = tts._CACHE_DIR
@@ -166,7 +166,7 @@ def main() -> None:
     sys.path.insert(0, os.environ.get("PURPLE_SRC", "/opt/purple"))
     machine()
     try:
-        from purple_tui import tts
+        from purplecomputer import tts
         import onnxruntime
     except ImportError as e:
         out(f"cannot import the app: {e} (set PYTHONPATH or PURPLE_SRC)")

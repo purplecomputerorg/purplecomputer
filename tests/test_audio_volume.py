@@ -1,4 +1,4 @@
-"""System volume path (purple_tui/audio.py): backend selection, the commands
+"""System volume path (purplecomputer/audio.py): backend selection, the commands
 it issues, and the badge tables derived from VOLUME_LEVELS."""
 
 import array
@@ -6,8 +6,8 @@ import math
 
 import pytest
 
-from purple_tui import audio
-from purple_tui.constants import VOLUME_ICONS, VOLUME_LEVELS
+from purplecomputer import audio
+from purplecomputer.constants import VOLUME_ICONS, VOLUME_LEVELS
 
 
 @pytest.fixture

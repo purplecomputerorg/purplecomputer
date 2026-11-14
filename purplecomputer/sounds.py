@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pygame
 
-from ..mixer import mixer_generation, mixer_ready_for_play
-from ..music_constants import ALL_KEYS, PERCUSSION
+from .mixer import mixer_generation, mixer_ready_for_play
+from .music_constants import ALL_KEYS, PERCUSSION
 
 # Every grid key can have a recording; the ones that can't be a file name are spelled out.
 CLIP_NAMES = {k: {";": "semicolon", ",": "comma", ".": "period", "/": "slash"}.get(k, k.lower()) for k in ALL_KEYS}
@@ -17,7 +17,7 @@ SAMPLE_VOLUME = 0.4
 
 
 def core_sounds() -> Path:
-    paths = [Path(__file__).parents[2] / "packs" / "core-sounds" / "content",
+    paths = [Path(__file__).parents[1] / "packs" / "core-sounds" / "content",
              Path.home() / ".purple" / "packs" / "core-sounds" / "content"]
     return next((p for p in paths if p.exists()), paths[0])
 
@@ -63,7 +63,7 @@ class SoundBank:
     def instrument(self, instrument_id: str) -> dict:
         """Samples keyed by pitch stem ('c4', 'cs5')."""
         def load():
-            from ..content import get_content
+            from .content import get_content
             base = get_content().instrument_dir(instrument_id) or core_sounds() / instrument_id
             paths = sorted(base.glob("*.wav")) + sorted(base.glob("*.ogg")) if base.exists() else []
             return {p.stem: s for p in paths if (s := _load(p)) is not None}
@@ -102,7 +102,7 @@ def _first_found(dirs: list) -> dict:
 
 def _family_letters() -> dict:
     """Clip name -> (Sound, after), from the last installed pack that recorded it."""
-    from ..content import get_content
+    from .content import get_content
     found = {}
     for d in reversed(get_content().pack_dirs("letters")):
         after = _after(d.parent)
@@ -111,7 +111,7 @@ def _family_letters() -> dict:
 
 
 def _after(content_dir: Path) -> set:
-    from ..content import _read_json
+    from .content import _read_json
     data = _read_json(content_dir / "letters.json")
     names = data.get("after") if isinstance(data, dict) else None
     return {n for n in names if isinstance(n, str)} if isinstance(names, list) else set()

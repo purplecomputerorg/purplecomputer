@@ -17,11 +17,11 @@ from pathlib import Path
 
 import pygame
 
-from .. import boot_log
+from . import boot_log
 from .frame_stats import FrameStats
-from .. import palette as P
-from .. import printing, stay_awake
-from ..constants import (
+from . import palette as P
+from . import printing, stay_awake
+from .constants import (
     CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
     ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_COMPUTER, ICON_MENU,
     ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, STICKY_SHIFT_GRACE,
@@ -31,14 +31,14 @@ from ..constants import (
 from .gfx import Gfx, _Cache, rgb
 from .press import ARROWS
 from .rooms import ROOM_CLASSES, ROOM_NAMES
-from ..input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
-from ..keyboard import (
+from .input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available, chime_skip_key_held
+from .keyboard import (
     CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction, RoomAction,
     detect_keyboard_mode,
 )
-from ..palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
-from ..timeline import RoomTimeline
-from ..audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
+from .palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
+from .timeline import RoomTimeline
+from .audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
 from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_BAR_EM, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
                  draw_key, draw_keycap, draw_label, draw_level)
@@ -178,7 +178,7 @@ class PurpleApp:
         self._input_flood_guard = InputFloodGuard(repeats_only=True)
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
             detect_keyboard_mode()
-        from .. import pack_arrivals
+        from . import pack_arrivals
         pack_arrivals.settle()
         self._arrivals_seen = None
         self._offering_packs = self._reading_packs = self._looking_for_packs = False
@@ -196,7 +196,7 @@ class PurpleApp:
 
     # ------------------------------------------------------------------ settings
     def _load_settings(self):
-        from ..settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_looping, get_rooms_off,
+        from .settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_looping, get_rooms_off,
                                get_volume_level, get_volume_lock)
         self.g.all_caps = get_all_caps()
         self._rooms_off = set(get_rooms_off(tuple(c.name for c in ROOM_CLASSES if c.STARTS_OFF)))
@@ -221,19 +221,19 @@ class PurpleApp:
     async def _main(self):
         self.timers.bind(asyncio.get_running_loop())
         boot_log.heartbeat("main loop begin")
-        from ..power_manager import set_logind_power_key
+        from .power_manager import set_logind_power_key
         set_logind_power_key("ignore")
         self.room.on_enter()
         self.timeline_restore(self.active_room)
         self._apply_volume_system()
-        from .. import tts
+        from . import tts
         tts.set_muted(self._effective_volume() == 0)
         await self._start_readers()
         if os.environ.get("PURPLE_DEV_MODE") != "1":
             demo = os.environ.get("PURPLE_SLEEP_DEMO")
             self._idle_timer = self.timers.every(1.0 if demo else 5.0, self._check_idle_state)
             if demo:
-                from ..power_manager import (BATTERY_IDLE_SHUTDOWN, BATTERY_IDLE_SLEEP, CHARGER_IDLE_SHUTDOWN,
+                from .power_manager import (BATTERY_IDLE_SHUTDOWN, BATTERY_IDLE_SLEEP, CHARGER_IDLE_SHUTDOWN,
                                             CHARGER_IDLE_SLEEP)
                 self.notify(f"Demo: sleep@{BATTERY_IDLE_SLEEP}s/{CHARGER_IDLE_SLEEP}s, "
                             f"shutdown@{BATTERY_IDLE_SHUTDOWN}s/{CHARGER_IDLE_SHUTDOWN}s", timeout=5)
@@ -278,7 +278,7 @@ class PurpleApp:
     async def _start_readers(self):
         if os.environ.get("PURPLE_NO_EVDEV") == "1":
             return
-        from ..power_manager import POWER_HOLD_SHUTDOWN, _power_log
+        from .power_manager import POWER_HOLD_SHUTDOWN, _power_log
         self._evdev_reader = EvdevReader(callback=self._handle_raw_key_event, grab=not is_debug(),
                                          on_ignored_key=self._record_user_activity)
         await self._evdev_reader.start()
@@ -460,7 +460,7 @@ class PurpleApp:
         return rooms or list(self.rooms)
 
     def set_room_off(self, name: str, off: bool):
-        from ..settings import set_room_off
+        from .settings import set_room_off
         set_room_off(name, off)
         self._rooms_off = self._rooms_off - {name} | ({name} if off else set())
         self._leave_closed_room()
@@ -571,7 +571,7 @@ class PurpleApp:
         self._record_user_activity()
         now = time.monotonic()
         if now - self._last_evdev_time > 5.0:
-            from .. import tts
+            from . import tts
             tts.stop()
             self._input_flood_guard.reset()
         self._last_evdev_time = now
@@ -778,7 +778,7 @@ class PurpleApp:
         return next((o for o in self._overlays if isinstance(o, FamilyRoom)), None)
 
     def open_family_room(self, name: str):
-        from ..content import get_content
+        from .content import get_content
         from .rooms.family_room import FamilyRoom
         here = self.family_room
         room = next((r for r in get_content().rooms if r.name == name), None)
@@ -799,7 +799,7 @@ class PurpleApp:
                 room._stop()
 
     def _check_pack_arrivals(self):
-        from .. import pack_arrivals
+        from . import pack_arrivals
         stamp = pack_arrivals.stamp()
         if stamp == self._arrivals_seen or self._offering_packs or self._looking_for_packs:
             return
@@ -834,7 +834,7 @@ class PurpleApp:
 
     def _look_for_packs(self, then):
         import subprocess
-        from .. import pack_arrivals
+        from . import pack_arrivals
         from .rooms.save_export import PACK_FILESYSTEMS, find_stick
         dev = find_stick(PACK_FILESYSTEMS)[0] if pack_arrivals.UPDATE_SERVICE.exists() else None
         before, failed = pack_arrivals.stamp(), False
@@ -864,7 +864,7 @@ class PurpleApp:
         self.push(Notice(self, *notes[0]), on_close=lambda _: self._tell_skipped(notes[1:], offer))
 
     def _offer_packs(self, waiting):
-        from .. import pack_arrivals
+        from . import pack_arrivals
         from .ui import Confirm
         body = "\n".join(m["name"] for _, m in waiting) + "\nPictures, words, and sounds from Purple Studio."
         if pack_arrivals.has_rooms(waiting):
@@ -885,7 +885,7 @@ class PurpleApp:
 
     def _settle_offer(self, waiting, add):
         """A pack added again keeps who it's for; new ones ask, once there's more than one kid."""
-        from ..pack_manager import get_installer
+        from .pack_manager import get_installer
         from . import kids
         new = [m["id"] for _, m in waiting if not (get_installer().packs_dir / m["id"]).exists()]
         if add and new and kids.many():
@@ -894,8 +894,8 @@ class PurpleApp:
             self._add_packs(waiting, None if add else CANCELLED, new)
 
     def _add_packs(self, waiting, kid, new):
-        from .. import pack_arrivals
-        from ..settings import set_pack_kid
+        from . import pack_arrivals
+        from .settings import set_pack_kid
         self._offering_packs = False
         if kid is CANCELLED:
             pack_arrivals.decline(waiting)
@@ -918,7 +918,7 @@ class PurpleApp:
             overlay.on_packs_changed()
 
     def _pick_new_rooms(self, packs):
-        from ..content import get_content
+        from .content import get_content
         from .rooms.rooms_screen import RoomsScreen
         if any(r.pack in packs for r in get_content().rooms):
             self.push(RoomsScreen(self, packs))
@@ -926,8 +926,8 @@ class PurpleApp:
     def refresh_packs(self, reread=True):
         """The packs changed under a running Purple: read them again, and redo what was drawn or
         loaded from the old ones."""
-        from .. import i18n
-        from ..content import reload_content
+        from . import i18n
+        from .content import reload_content
         from . import theme
         if reread:
             i18n.reload()
@@ -1003,7 +1003,7 @@ class PurpleApp:
 
     def with_parent_pin(self, then, cancelled=None):
         """then() now, or once the parent PIN is typed when one is set."""
-        from ..settings import get_parent_pin
+        from .settings import get_parent_pin
         pin = get_parent_pin()
         if not pin:
             return then()
@@ -1021,7 +1021,7 @@ class PurpleApp:
     def _on_littles_exit_dismissed(self, result):
         from .rooms.parent_menu import LittlesModeScreen, ParentMenu
         if result == "exit":
-            from ..settings import set_littles_mode
+            from .settings import set_littles_mode
             set_littles_mode(None)
             self._apply_littles_mode(None)
         elif result == "switch":
@@ -1042,7 +1042,7 @@ class PurpleApp:
             self.action_switch_room(room)
             self.room.close_code_panel()
         else:
-            from ..settings import get_code_panel, get_music_looping
+            from .settings import get_code_panel, get_music_looping
             self._code_panel_enabled = get_code_panel()
             self._music_looping_enabled = get_music_looping()
             self._leave_closed_room()
@@ -1318,7 +1318,7 @@ class PurpleApp:
         self.notify("", picture=sheet.subsurface(drawn.clip(sheet.get_rect())).copy())
 
     def _apply_volume_system(self):
-        from ..audio import set_system_volume
+        from .audio import set_system_volume
         if not self._sound_check_running:  # the chime owns the sink until its verdict lands, which reapplies
             set_system_volume(self._effective_volume())
 
@@ -1337,7 +1337,7 @@ class PurpleApp:
         self._sound_check_running = True
 
         def _work():
-            from .. import sound_check
+            from . import sound_check
             try:
                 result = sound_check.run(wait=5.0)
                 boot_log.heartbeat(result.summary())
@@ -1354,8 +1354,8 @@ class PurpleApp:
         self._apply_volume()  # saved either way: the first boot settles the volume and later boots don't chime
 
     def _apply_volume(self):
-        from .. import tts
-        from ..settings import set_volume_level
+        from . import tts
+        from .settings import set_volume_level
         if self._volume_lock:
             self.volume_level = self._effective_volume()  # every writer converges under a limit; Silent Mode keeps the kid's level
         set_volume_level(self.volume_level)
@@ -1420,18 +1420,18 @@ class PurpleApp:
     def uninhibit_idle(self, reason: str):
         self._idle_inhibitors.discard(reason)
         # Inhibited time was not idle; otherwise the next tick sleeps at once.
-        from ..power_manager import get_power_manager
+        from .power_manager import get_power_manager
         get_power_manager().record_activity()
 
     def _record_user_activity(self):
         if self._lid_close_time is not None:
             # Typing proves the lid is open: some firmware reports it closed at
             # boot and never sends the open event, which would power off mid-use.
-            from ..power_manager import _power_log
+            from .power_manager import _power_log
             _power_log("LID COUNTDOWN cancelled: key pressed")
             self._lid_close_time = None
         try:
-            from ..power_manager import get_power_manager
+            from .power_manager import get_power_manager
             get_power_manager().record_activity()
         except Exception:
             pass
@@ -1443,7 +1443,7 @@ class PurpleApp:
 
     def _check_idle_state(self):
         try:
-            from ..power_manager import LID_SHUTDOWN_DELAY, _power_log, get_power_manager
+            from .power_manager import LID_SHUTDOWN_DELAY, _power_log, get_power_manager
             pm = get_power_manager()
             charger = pm.is_on_charger()
             if self._lid_switch_reader is None:
@@ -1517,7 +1517,7 @@ class PurpleApp:
         self.push(ByeScreen(self))
 
     async def _handle_lid_switch_event(self, event):
-        from ..power_manager import _power_log
+        from .power_manager import _power_log
         if self._bye_screen_active:
             _power_log(f"LID EVENT ignored: bye screen active, is_open={event.is_open}")
             return
@@ -1534,7 +1534,7 @@ class PurpleApp:
         self.invalidate()
 
     async def _handle_power_button_event(self, event):
-        from ..power_manager import _power_log
+        from .power_manager import _power_log
         _power_log(f"POWER BUTTON: action={event.action}, suspended={self._app_suspended}, bye_active={self._bye_screen_active}")
         if self._app_suspended or self._bye_screen_active:
             return
@@ -1560,8 +1560,8 @@ class PurpleApp:
     def _start_mixer_warmup(self):
 
         def _warm():
-            from .. import cras
-            from ..mixer import _reset_mixer_state, warm_mixer
+            from . import cras
+            from .mixer import _reset_mixer_state, warm_mixer
             cras.start()
             ok = False
             try:
@@ -1593,7 +1593,7 @@ class PurpleApp:
         sink boots at its own level, and the voice can load once sound is ready."""
         if ok:
             self._apply_volume_system()
-            from .. import tts
+            from . import tts
             tts.preload()
         self.call_from_thread(setattr, self, "audio_ok", ok)
         self.call_from_thread(self.invalidate)
@@ -1614,12 +1614,12 @@ class PurpleApp:
             self.push(FirstBootPowerCycleScreen(self))
 
     def _start_audio_hotplug(self):
-        from .. import audio_hotplug
+        from . import audio_hotplug
 
         def _on_event(action: str):
             boot_log.heartbeat(f"audio hotplug: {action}")
-            from ..mixer import reinit_mixer_after_hotplug
-            from ..tts import _dbg
+            from .mixer import reinit_mixer_after_hotplug
+            from .tts import _dbg
             _dbg(f"audio hotplug event: {action}")
             ok = reinit_mixer_after_hotplug()
             self._mixer_recovered(ok)
@@ -1631,9 +1631,9 @@ class PurpleApp:
             self._audio_idle_timer = self.timers.every(30.0, self._check_audio_idle)
 
     def _check_audio_idle(self):
-        from .. import tts
-        from ..mixer import AUDIO_IDLE_SECONDS, mixer_is_open, request_idle_release
-        from ..power_manager import get_power_manager
+        from . import tts
+        from .mixer import AUDIO_IDLE_SECONDS, mixer_is_open, request_idle_release
+        from .power_manager import get_power_manager
         if not mixer_is_open():
             if self._audio_idle_timer is not None:
                 self._audio_idle_timer.stop()
@@ -1647,9 +1647,9 @@ class PurpleApp:
     def _start_audio_retry_poll(self):
 
         def _poll():
-            from ..mixer import reinit_mixer_after_hotplug
-            from ..power_manager import get_power_manager
-            from ..tts import _dbg
+            from .mixer import reinit_mixer_after_hotplug
+            from .power_manager import get_power_manager
+            from .tts import _dbg
             delay = 5
             deadline = time.monotonic() + 600
             while delay <= 80 and time.monotonic() < deadline:
@@ -1672,7 +1672,7 @@ class PurpleApp:
 
     # ------------------------------------------------------------------ demo
     def start_demo(self):
-        from ..demo import DemoPlayer, get_demo_script, get_speed_multiplier
+        from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
         self.cancel_demo()
         self._demo_player = DemoPlayer(
             dispatch_action=self._dispatch_keyboard_action,
@@ -1777,7 +1777,7 @@ class PurpleApp:
             else f"{ICON_USB} USB  If restart, reinsert"
 
     def _battery_text(self) -> str:
-        from ..power_manager import get_power_manager
+        from .power_manager import get_power_manager
         pm = get_power_manager()
         status = pm.get_battery_status() if pm.battery_available else None
         if not status and os.environ.get("PURPLE_TEST_BATTERY") == "1":

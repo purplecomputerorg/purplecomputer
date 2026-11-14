@@ -1,4 +1,4 @@
-"""What Purple holds a room to: canvas/rooms/family_room.py on the laptop, and check.py before a pack gets there."""
+"""What Purple holds a room to: rooms/family_room.py on the laptop, and check.py before a pack gets there."""
 
 from pathlib import Path
 

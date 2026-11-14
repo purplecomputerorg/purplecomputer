@@ -11,8 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui.keyboard import KeyboardStateMachine, CharacterAction
-from purple_tui.input import RawKeyEvent, KeyCode
+from purplecomputer.keyboard import KeyboardStateMachine, CharacterAction
+from purplecomputer.input import RawKeyEvent, KeyCode
 
 
 # Base offset so timestamps are never 0.0 (which is falsy in Python,
@@ -222,7 +222,7 @@ class TestStickyShiftArrows:
     """A tap of Shift carries to the next arrow, and to that arrow's repeats while it's held."""
 
     def test_arrow_uses_up_sticky_and_keeps_it_while_held(self):
-        from purple_tui.keyboard import NavigationAction
+        from purplecomputer.keyboard import NavigationAction
         sm = KeyboardStateMachine()
         sm.process(shift_down(0.0))
         sm.process(shift_up(0.1))

@@ -1,4 +1,4 @@
-// Purple shows English letters only while its language support is off (purple_tui/i18n.py ENABLED), so
+// Purple shows English letters only while its language support is off (purplecomputer/i18n.py ENABLED), so
 // letters from other alphabets are taken out as they're typed. Accents, digits, symbols and emoji stay.
 const OTHER_ALPHABETS = /(?!\p{Script=Latin})\p{L}/gu;
 export const ENGLISH_ONLY = "Purple can only show English letters for now.";

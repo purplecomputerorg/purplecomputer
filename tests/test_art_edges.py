@@ -2,8 +2,8 @@
 far side; typing wraps like lines of text, from the last row to the first,
 in both write and paint mode, once the next letter comes."""
 
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.art_room import COLS, ROWS
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.rooms.art_room import COLS, ROWS
 
 
 def _art(paint=True):

@@ -3,13 +3,13 @@ picked at every start once there's more than one."""
 
 import pytest
 
-from purple_tui import content, settings
-from purple_tui.canvas import kids
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms import parent_menu
-from purple_tui.canvas.rooms.parent_menu import _get_menu_items
-from purple_tui.timeline import timeline_dir
-from tests.canvas.test_pack_arrivals import drive, offered, zorb  # noqa: F401
+from purplecomputer import content, settings
+from purplecomputer import kids
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.rooms import parent_menu
+from purplecomputer.rooms.parent_menu import _get_menu_items
+from purplecomputer.timeline import timeline_dir
+from tests.test_pack_arrivals import drive, offered, zorb  # noqa: F401
 
 
 @pytest.fixture(autouse=True)

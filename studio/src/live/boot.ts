@@ -115,7 +115,7 @@ sys.path.insert(0, "${ROOT}")
     code: async (on) => void (await call(`code(${on ? "True" : "False"})`)),
     demo: async () => void (await call("demo()")),
     hush: async () => void (await call("hush()")),
-    filter: async (text) => String(await call(`__import__("purple_tui.speech_filter", fromlist=["_"]).filter_speech(${arg(text)})`)),
+    filter: async (text) => String(await call(`__import__("purplecomputer.speech_filter", fromlist=["_"]).filter_speech(${arg(text)})`)),
     check: async (source, names) => JSON.parse(String(await call(`__import__("json").dumps(check(${arg(source)}, ${arg(names)}))`))),
   };
   await live.load(null);

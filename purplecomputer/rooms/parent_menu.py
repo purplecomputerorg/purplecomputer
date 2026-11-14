@@ -14,18 +14,18 @@ from pathlib import Path
 
 import pygame
 
-from ... import boot_log, diagnostics, i18n
-from ...backlight import set_level as set_backlight_level
-from ... import palette as P
+from .. import boot_log, diagnostics, i18n
+from ..backlight import set_level as set_backlight_level
+from .. import palette as P
 from ..gfx import FONT_DIR, mix
-from ...audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volume_step
-from ...tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK, natural_voice_available
-from ...constants import (
+from ..audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volume_step
+from ..tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK, natural_voice_available
+from ..constants import (
     DISK_BY_LABEL_DIR, PAYLOAD_DIR, SUPPORT_EMAIL, USB_LABELS,
     is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present, is_usb_reinserted,
 )
-from ...input import KeyCode, PowerButtonEvent, RawKeyEvent
-from ...keyboard import CharacterAction, ControlAction, NavigationAction
+from ..input import KeyCode, PowerButtonEvent, RawKeyEvent
+from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, Confirm, Dialog, Overlay, Picker, draw_field, draw_fill_pill, draw_key_hint,
                   draw_key_lines, draw_scrim, draw_setting_rows, draw_text_caret, draw_window, field_height, window_title_height)
 from .rooms_screen import RoomsScreen, rooms_label
@@ -203,12 +203,12 @@ class LittlesModeScreen(Picker):
 
     def __init__(self, app):
         super().__init__(app)
-        from ...settings import get_littles_mode
+        from ..settings import get_littles_mode
         current = get_littles_mode()
         self.selected = next((i for i, o in enumerate(self.OPTIONS) if o[0] == current), 0)
 
     def _on_confirm(self, value):
-        from ...settings import set_littles_mode
+        from ..settings import set_littles_mode
         set_littles_mode(value)
         self.close(value)
 
@@ -236,7 +236,7 @@ FEATURES = {  # key: (name, what it does, setting, app flag, undo when turned of
 
 
 def _feature_on(key) -> bool:
-    from ... import settings
+    from .. import settings
     return getattr(settings, f"get_{FEATURES[key][2]}")()
 
 
@@ -262,7 +262,7 @@ class FeaturesScreen(Picker):
     def _on_confirm(self, key):
         if key is None:
             return self.close(True)
-        from ... import settings
+        from .. import settings
         _, _, setting, flag, undo = FEATURES[key]
         on = not _feature_on(key)
         getattr(settings, f"set_{setting}")(on)
@@ -295,8 +295,8 @@ class PurplePacksScreen(Picker):
         self.app.invalidate()
 
     def _options(self) -> list:
-        from ...pack_arrivals import later
-        from ...pack_manager import get_installer
+        from ..pack_arrivals import later
+        from ..pack_manager import get_installer
         return ([(p["id"], p["name"], _pack_for(p["id"]) if many() else "{Enter} to remove") for p in get_installer().list_installed()]
                 + [(("add", d, m), m["name"], "Not added yet · {Enter} to add") for d, m in later()] + [(None, "Done")])
 
@@ -308,14 +308,14 @@ class PurplePacksScreen(Picker):
         name = self.options[self.selected][1]
         if not many():
             return self._ask_remove(pack_id, name)
-        from ...settings import get_kids
+        from ..settings import get_kids
         picker = Picker(self.app, [(("for", None), "For everyone")] + [(("for", k), f"Just {computer_name(k)}") for k in get_kids()]
                         + [("remove", f"Remove {name}"), (None, "Never mind")])
         picker.title, picker.dim_values = name, {"remove"}
         self.app.push(picker, on_close=lambda choice: self._chose(pack_id, name, choice))
 
     def _chose(self, pack_id, name, choice):
-        from ...settings import set_pack_kid
+        from ..settings import set_pack_kid
         if choice == "remove":
             self._ask_remove(pack_id, name)
         elif choice:
@@ -328,8 +328,8 @@ class PurplePacksScreen(Picker):
                               yes="Remove", no="Keep"), on_close=lambda yes: yes is True and self._remove(pack_id))
 
     def _remove(self, pack_id: str):
-        from ...pack_manager import get_installer
-        from ...settings import set_pack_added, set_pack_kid
+        from ..pack_manager import get_installer
+        from ..settings import set_pack_added, set_pack_kid
         if get_installer().uninstall_pack(pack_id)[0]:
             set_pack_added(pack_id, None)
             set_pack_kid(pack_id, None)
@@ -340,24 +340,24 @@ class PurplePacksScreen(Picker):
 
 
 def _purple_packs_label() -> str:
-    from ...pack_manager import get_installer
+    from ..pack_manager import get_installer
     return f"Purple Packs: {len(get_installer().list_installed())}"
 
 
 def _has_purple_packs() -> bool:
-    from ...pack_arrivals import later
-    from ...pack_manager import get_installer
+    from ..pack_arrivals import later
+    from ..pack_manager import get_installer
     return bool(get_installer().list_installed() or later())
 
 
 def _pack_for(pack_id: str) -> str:
-    from ...settings import get_pack_kid
+    from ..settings import get_pack_kid
     kid = get_pack_kid(pack_id)
     return "For everyone" if kid is None else f"Just {computer_name(kid)}"
 
 
 def _kids_label() -> str:
-    from ...settings import get_kids
+    from ..settings import get_kids
     if is_live_boot():
         return "Kid Profiles (install Purple first)"
     return f"Kid Profiles: {len(get_kids())}" if many() else "Kid Profiles"
@@ -370,7 +370,7 @@ class AllCapsScreen(_YesNo):
 
     @staticmethod
     def getter():
-        from ...settings import get_all_caps
+        from ..settings import get_all_caps
         return get_all_caps()
 
 
@@ -384,7 +384,7 @@ class VoiceScreen(Picker):
 
     def __init__(self, app):
         super().__init__(app)
-        from ...settings import get_voice
+        from ..settings import get_voice
         self.selected = next((i for i, opt in enumerate(self.OPTIONS) if opt[0] == get_voice()), 0)
 
 
@@ -568,7 +568,7 @@ class ParentVolumeModal(Dialog):
         self.app._apply_volume()
 
     def _write_lock(self, level):
-        from ...settings import set_volume_lock
+        from ..settings import set_volume_lock
         set_volume_lock(level)
         self.app._volume_lock = level
 
@@ -576,11 +576,11 @@ class ParentVolumeModal(Dialog):
         level = self._slider_level()
         if level == 0:
             return
-        from ...audio import set_system_volume
+        from ..audio import set_system_volume
         set_system_volume(level, wait=True)
         try:
-            from ...audio import play_safe
-            from ...mixer import warm_mixer
+            from ..audio import play_safe
+            from ..mixer import warm_mixer
             if not warm_mixer():
                 return
             from ..sounds import core_sounds
@@ -865,7 +865,7 @@ class InstallProgressScreen(FullScreen):
 
     # --- install subprocess (thread; UI updates hop back to the loop) ---
     def _run_install_thread(self):
-        from ...settings import SETTINGS_FILE
+        from ..settings import SETTINGS_FILE
         proc = subprocess.Popen(
             ["sudo", "-E", "bash", "/cdrom/purple/install.sh"], stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
             env={**os.environ, "PURPLE_PAYLOAD_DIR": PAYLOAD_DIR, "PURPLE_COMPUTER_NAME": self._computer_name,
@@ -1120,7 +1120,7 @@ def _term_rc() -> str:
     installed = Path("/opt/purple/parent-shell-rc.sh")
     if installed.exists():
         return str(installed)
-    return str(Path(__file__).resolve().parents[3] / "scripts" / "parent-shell-rc.sh")
+    return str(Path(__file__).resolve().parents[2] / "scripts" / "parent-shell-rc.sh")
 
 
 def _xterm_cmd() -> list:
@@ -1253,7 +1253,7 @@ def _is_usb_payload_available() -> bool:
 
 
 def _is_dev_environment() -> bool:
-    return bool(os.environ.get("PURPLE_TEST_BATTERY")) or (Path(__file__).parents[3] / ".git").is_dir()
+    return bool(os.environ.get("PURPLE_TEST_BATTERY")) or (Path(__file__).parents[2] / ".git").is_dir()
 
 
 def _rename_label(app) -> str:
@@ -1262,7 +1262,7 @@ def _rename_label(app) -> str:
 
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
-    from ...settings import get_all_caps, get_littles_mode, get_parent_pin, get_voice, get_volume_lock
+    from ..settings import get_all_caps, get_littles_mode, get_parent_pin, get_voice, get_volume_lock
     items = [("menu-help", "Help & Videos")]
     if is_live_boot():
         items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
@@ -1398,13 +1398,13 @@ class ParentMenu(Overlay):
             "menu-install": self._install_to_disk, "menu-rename": self._rename_computer,
             "menu-kids": lambda: self.app.push(KidsScreen(self.app), on_close=lambda _: (
                 self._relabel("menu-kids", _kids_label()), self._relabel("menu-rename", _rename_label(self.app)))),
-            "menu-export": lambda: self.app.push(__import__("purple_tui.canvas.rooms.save_export", fromlist=["SaveExportScreen"]).SaveExportScreen(self.app)),
+            "menu-export": lambda: self.app.push(__import__("purplecomputer.rooms.save_export", fromlist=["SaveExportScreen"]).SaveExportScreen(self.app)),
             "menu-shell": lambda: (self.close(), self.app.push(TerminalScreen(self.app))),
             "menu-fake-key": self._open_fake_key,
             "menu-demo": lambda: (self.close(), self.app.start_demo()),
             "menu-bash": lambda: (self.close(), self.app.exit()), "menu-system": lambda: (self.close(), self.app.exit()),
-            "menu-help": lambda: self.app.push(__import__("purple_tui.canvas.rooms.help_videos", fromlist=["HelpVideosScreen"]).HelpVideosScreen(self.app)),
-            "menu-support": lambda: self.app.push(__import__("purple_tui.canvas.rooms.support_info", fromlist=["SupportInfoScreen"]).SupportInfoScreen(self.app)),
+            "menu-help": lambda: self.app.push(__import__("purplecomputer.rooms.help_videos", fromlist=["HelpVideosScreen"]).HelpVideosScreen(self.app)),
+            "menu-support": lambda: self.app.push(__import__("purplecomputer.rooms.support_info", fromlist=["SupportInfoScreen"]).SupportInfoScreen(self.app)),
             "menu-shutdown": lambda: (self.close(), self.app._show_bye_screen()),
         }.get(item_id)
         if handler:
@@ -1425,14 +1425,14 @@ class ParentMenu(Overlay):
         def apply(v):
             if v is CANCELLED:
                 return
-            from ...settings import set_all_caps
+            from ..settings import set_all_caps
             set_all_caps(v)
             self.app.g.all_caps = v
             self._relabel("menu-all-caps", "ALL CAPS: On" if v else "ALL CAPS: Off")
         self.app.push(AllCapsScreen(self.app), on_close=apply)
 
     def _open_parent_pin(self):
-        from ...settings import get_parent_pin
+        from ..settings import get_parent_pin
         if get_parent_pin() is None:
             return self._start_set_pin_flow()
 
@@ -1452,7 +1452,7 @@ class ParentMenu(Overlay):
         self.app.push(PinEntry(self.app, "Enter New PIN"), on_close=on_first)
 
     def _save_pin(self, pin):
-        from ...settings import set_parent_pin
+        from ..settings import set_parent_pin
         set_parent_pin(pin)
         self._relabel("menu-parent-pin", "Parent PIN: On" if pin else "Parent PIN: Off")
 
@@ -1490,7 +1490,7 @@ class ParentMenu(Overlay):
         def apply(v):
             if v is CANCELLED:
                 return
-            from ... import tts
+            from .. import tts
             tts.set_voice(v)
             self._relabel("menu-voice", _voice_menu_label(v))
         self.app.push(VoiceScreen(self.app), on_close=apply)

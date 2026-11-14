@@ -2,7 +2,7 @@
 
 Purple draws its own screen. Since the `ux-experiments` branch (August 2026)
 the default UI is a pygame window rendered in software, under
-`purple_tui/canvas/`. The Textual terminal UI (Alacritty, `purple_tui.py`,
+`purplecomputer/`. The Textual terminal UI (Alacritty, `purplecomputer.py`,
 the top-level `rooms/`) is still on `main`, frozen, because it is what v1
 (`release/1.x`) runs: `PURPLE_UX=tui` runs it, and CLAUDE.md (Two UIs) has
 the rules for it. This guide is the map for anyone working on the canvas
@@ -50,17 +50,17 @@ Design rules, in priority order:
 ## Layers
 
 ```
-purple_tui/canvas/gfx.py       Gfx: the surface, fonts, text and emoji caches, markup layout
-purple_tui/canvas/ui.py        Timers, TextField, Overlay/Dialog/Picker, Toast, draw_ring
-purple_tui/canvas/app.py       PurpleApp: asyncio loop, readers, dispatch, overlays, frame
-purple_tui/canvas/panels.py    CodePanel, LoopPanel, TimeTravelBar
-purple_tui/canvas/rooms/     Room (base.py) and ROOM_CLASSES, the five rooms, FamilyRoom, parent flows, system screens
-purple_tui/canvas/sounds.py    SoundBank: instrument, percussion, and letter sounds, pack ones first
-purple_tui/play_eval.py The Play evaluator (engine; emits markup strings)
-purple_tui/mixer.py     Audio mixer lifecycle (engine)
-purple_tui/palette.py   Theme colors and the sticker palette
-purple_tui/canvas/harness.py   Headless app for previews and tests
-purple_tui/canvas/sdl_input.py Keyboard from the SDL window when evdev is absent (dev)
+purplecomputer/gfx.py       Gfx: the surface, fonts, text and emoji caches, markup layout
+purplecomputer/ui.py        Timers, TextField, Overlay/Dialog/Picker, Toast, draw_ring
+purplecomputer/app.py       PurpleApp: asyncio loop, readers, dispatch, overlays, frame
+purplecomputer/panels.py    CodePanel, LoopPanel, TimeTravelBar
+purplecomputer/rooms/     Room (base.py) and ROOM_CLASSES, the five rooms, FamilyRoom, parent flows, system screens
+purplecomputer/sounds.py    SoundBank: instrument, percussion, and letter sounds, pack ones first
+purplecomputer/play_eval.py The Play evaluator (engine; emits markup strings)
+purplecomputer/mixer.py     Audio mixer lifecycle (engine)
+purplecomputer/palette.py   Theme colors and the sticker palette
+purplecomputer/harness.py   Headless app for previews and tests
+purplecomputer/sdl_input.py Keyboard from the SDL window when evdev is absent (dev)
 ```
 
 Engine modules (`keyboard`, `input`, `content`, `color_mixing`, `fuzzy`,
@@ -76,15 +76,15 @@ thread). An idle loop sleeps until woken, a toast is due to leave, or the next
 `IDLE_POLL_S` poll of SDL window events (the parent terminal closing over us);
 without evdev SDL is the keyboard, so it polls every frame instead. Drawing must
 never call `invalidate()` itself, or an idle screen redraws forever:
-`tests/canvas/conftest.py` checks every test that draws, and
-`tests/canvas/test_render_loop.py` pins the rest. There is no dirty-rect tracking:
+`tests/conftest.py` checks every test that draws, and
+`tests/test_render_loop.py` pins the rest. There is no dirty-rect tracking:
 a full 1366x768 frame costs 1.5 to 3 ms warm on a modern machine and stays
 under a keystroke's worth of time on 2006 hardware, because every glyph and
 emoji is rasterized once and blitted from a cache (`Gfx.text`, `Gfx.emoji`).
 
 Animations (hold rings, the Music key-change wave, note flashes) are timers
 that invalidate at their own rate and stop themselves. `Timers.intervals()`
-lists what is armed; `tests/canvas/test_performance.py` asserts nothing under one
+lists what is armed; `tests/test_performance.py` asserts nothing under one
 second ticks while idle in Play.
 
 Sizes come from `g.vh(percent)`, `g.vw(percent)` and `g.em(n)`, and all three
@@ -120,7 +120,7 @@ coverage probe. ALL CAPS is applied here, so every caller inherits it.
 already speak: `[bold]`, `[dim]`, `[#hex]`, `[on #hex]`, `[/]`, `\[`.
 Whitespace-only spans with a background are drawn as square color swatches.
 Unknown tags stay literal, so kid input never breaks rendering
-(`tests/canvas/test_play_markup_safety.py`).
+(`tests/test_play_markup_safety.py`).
 
 ## Input
 
@@ -161,7 +161,7 @@ pack is a `FamilyRoom` overlay over the current room: guides/family-rooms.md.
 ## Boot
 
 `xinitrc` starts X, matchbox, picom, then `/usr/local/bin/purple`, which execs
-`python3 -m purple_tui`. The app opens a fullscreen SDL window on the X
+`python3 -m purplecomputer`. The app opens a fullscreen SDL window on the X
 session, first switching a lone screen over 1920x1200 to the largest smaller
 mode of the same shape, set to fill the panel (`canvas/screen_size.py`), since
 every frame is drawn in software and the panel scales up for free. The boot
@@ -180,6 +180,6 @@ Enter.
 
 - `just run-dev` opens a window on a dev machine (SDL keyboard, no evdev).
 - `just preview art type:hello key:tab type:hi` renders a PNG headlessly.
-- `purple_tui.canvas.harness.make_app()` gives tests a headless app; `press` and
+- `purplecomputer.harness.make_app()` gives tests a headless app; `press` and
   `type_text` drive it through the real dispatcher.
-- `tests/canvas/test_render_smoke.py` draws every screen at three sizes.
+- `tests/test_render_smoke.py` draws every screen at three sizes.

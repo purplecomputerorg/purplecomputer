@@ -1,4 +1,4 @@
-// Port of purple_tui/synth.py. Parameter names and defaults come from export.json; the arithmetic
+// Port of purplecomputer/synth.py. Parameter names and defaults come from export.json; the arithmetic
 // is kept in the same order as the Python so tests/synth.test.ts can hold it to within one sample
 // of the golden renders in tests/golden.json.
 import exported from "./export.json";

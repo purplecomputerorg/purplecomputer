@@ -1,6 +1,6 @@
 """Pre-recorded drawing demo, authored on a dev machine with tools/art_ai.py."""
 
-from purple_tui.demo.script import (
+from purplecomputer.demo.script import (
     PressKey, SwitchRoom, Pause, MoveSequence, Comment,
 )
 

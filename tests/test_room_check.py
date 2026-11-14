@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from purple_tui.roomkit import check
+from purplecomputer.roomkit import check
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import studio_bundle  # noqa: E402
 
@@ -60,7 +60,7 @@ def test_a_broken_room_names_its_line(make_pack, capsys):
 
 def test_on_the_iso_rooms_run_sealed_and_say_what_they_printed(make_pack, capsys, monkeypatch):
     """Purple runs rooms through purple-room-run, so a room only the sandbox stops must fail here too."""
-    monkeypatch.setattr(check.L, "sealed", lambda: [sys.executable, "-I", "-S", str(ROOT / "purple_tui/roomkit/runner.py")])
+    monkeypatch.setattr(check.L, "sealed", lambda: [sys.executable, "-I", "-S", str(ROOT / "purplecomputer/roomkit/runner.py")])
     pack = make_pack(dies='from purple import *\nimport os\nprint("going down")\nos.kill(os.getpid(), 9)\n')
     assert check.main([str(pack)]) == 1
     out = capsys.readouterr().out

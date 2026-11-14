@@ -4,11 +4,11 @@ Run by config/systemd/purple-usb-update@.service, as root, with the drive
 already mounted read-only at the path given on the command line. Each pack
 that passes check_pack is unpacked into the purple user's waiting folder,
 named by the file's sha256, and chowned to that user. Nothing is installed
-here: the app (purple_tui/pack_arrivals.py) asks before it adds one. Only
-stdlib and the pure-data parts of purple_tui are imported: this runs under
+here: the app (purplecomputer/pack_arrivals.py) asks before it adds one. Only
+stdlib and the pure-data parts of purplecomputer are imported: this runs under
 the system python3, outside the app's venv.
 
-    python3 -m purple_tui.usb_updater /run/purple-update/sdb1
+    python3 -m purplecomputer.usb_updater /run/purple-update/sdb1
 """
 
 import hashlib
@@ -135,7 +135,7 @@ def update_from(mount: Path, waiting: Path | None = None) -> list[tuple[str, boo
 
 def main(argv: list[str]) -> int:
     if len(argv) != 2 or not Path(argv[1]).is_dir():
-        print("usage: python3 -m purple_tui.usb_updater <mounted drive>", file=sys.stderr)
+        print("usage: python3 -m purplecomputer.usb_updater <mounted drive>", file=sys.stderr)
         return 2
     results = update_from(Path(argv[1]))
     stamp = time.strftime("%Y-%m-%d %H:%M:%S")

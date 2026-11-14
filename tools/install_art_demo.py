@@ -168,7 +168,7 @@ After installing, run:
     if args.save:
         # Save as a named segment
         from tools.ai_utils import append_to_demo_json
-        segments_dir = os.path.join(PROJECT_ROOT, "purple_tui", "demo", "segments")
+        segments_dir = os.path.join(PROJECT_ROOT, "purplecomputer", "demo", "segments")
         os.makedirs(segments_dir, exist_ok=True)
 
         # The generated demo_code defines RECORDED_DRAWING. We need to transform it
@@ -191,7 +191,7 @@ After installing, run:
         output_content = demo_code + "\n\n"
         output_content += f"SPEED_MULTIPLIER = {speed_multiplier:.4f}\n"
 
-        dest_path = os.path.join(PROJECT_ROOT, "purple_tui", "demo", "recorded_script.py")
+        dest_path = os.path.join(PROJECT_ROOT, "purplecomputer", "demo", "recorded_script.py")
         with open(dest_path, 'w') as f:
             f.write(output_content)
 

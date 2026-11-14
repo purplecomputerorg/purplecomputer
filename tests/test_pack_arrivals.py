@@ -8,14 +8,14 @@ import threading
 
 import pytest
 
-from purple_tui import content, pack_arrivals, settings
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.room_picker import family_rooms
-from purple_tui.canvas.rooms import save_export
-from purple_tui.canvas.rooms.parent_menu import PinEntry, PurplePacksScreen, _get_menu_items
-from purple_tui.canvas.rooms.rooms_screen import RoomsScreen
-from purple_tui.canvas.ui import Confirm, Notice
-from purple_tui.usb_updater import sha256, update_from
+from purplecomputer import content, pack_arrivals, settings
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.room_picker import family_rooms
+from purplecomputer.rooms import save_export
+from purplecomputer.rooms.parent_menu import PinEntry, PurplePacksScreen, _get_menu_items
+from purplecomputer.rooms.rooms_screen import RoomsScreen
+from purplecomputer.ui import Confirm, Notice
+from purplecomputer.usb_updater import sha256, update_from
 from scripts.purplepack import build_pack
 from tests.test_packs import make_pack
 

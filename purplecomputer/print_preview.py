@@ -1,7 +1,7 @@
 """What a pretend printer (PURPLE_FAKE_PRINTER=1, as the test VM runs) was sent, shown on screen."""
 
-from .. import palette as P
-from ..keyboard import ControlAction, NavigationAction
+from . import palette as P
+from .keyboard import ControlAction, NavigationAction
 from .saves import fit
 from .ui import Overlay, draw_key_hint
 

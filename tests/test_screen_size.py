@@ -1,4 +1,4 @@
-from purple_tui.canvas import screen_size
+from purplecomputer import screen_size
 
 # `xrandr --query --prop` as i915 prints it: properties, then the mode list
 RETINA = """Screen 0: minimum 320 x 200, current 2880 x 1800, maximum 16384 x 16384

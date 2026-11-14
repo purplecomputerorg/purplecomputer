@@ -4,8 +4,8 @@ stopping once the oldest line reaches the top."""
 
 import pygame
 
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms.play_room import scroll_thumb
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.rooms.play_room import scroll_thumb
 
 TRACK = pygame.Rect(100, 0, 10, 400)
 

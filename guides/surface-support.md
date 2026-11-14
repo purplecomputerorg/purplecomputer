@@ -53,7 +53,7 @@ This tells the i915 driver to use DPCD registers for backlight control, which:
 
 If the kernel parameter isn't set (or on hardware where xrandr can't control the display), Purple Computer detects this at startup and hides the "Adjust Display" option from the parent menu. The detection works by running a no-op xrandr brightness command and checking for "need crtc" errors.
 
-See `purple_tui/rooms/parent_menu.py`: `display_control_available()`.
+See `purplecomputer/rooms/parent_menu.py`: `display_control_available()`.
 
 ---
 

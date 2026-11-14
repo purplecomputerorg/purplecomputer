@@ -1,4 +1,4 @@
-"""Bake the help-hub QR matrix into purple_tui/qr_data.py.
+"""Bake the help-hub QR matrix into purplecomputer/qr_data.py.
 
 Dev-time only: the `qrcode` package is NOT a runtime dependency. Purple ships
 the pre-computed matrix so the Help screen renders it with no import cost.
@@ -17,7 +17,7 @@ import qrcode
 from qrcode.constants import ERROR_CORRECT_H
 
 HELP_URL = "https://purplecomputer.org/help"
-OUT = Path(__file__).resolve().parent.parent / "purple_tui" / "qr_data.py"
+OUT = Path(__file__).resolve().parent.parent / "purplecomputer" / "qr_data.py"
 
 
 def main() -> None:

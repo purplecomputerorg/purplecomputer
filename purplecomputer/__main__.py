@@ -1,11 +1,11 @@
-"""Entry point so `python -m purple_tui` loads the app module exactly once.
+"""Entry point so `python -m purplecomputer` loads the app module exactly once.
 
-Running `python -m purple_tui.canvas.app` would register the same file twice
-in sys.modules (as `__main__` and as `purple_tui.canvas.app`), giving us two
+Running `python -m purplecomputer.app` would register the same file twice
+in sys.modules (as `__main__` and as `purplecomputer.app`), giving us two
 copies of every class and module-level global.
 """
 
-from purple_tui.canvas.app import main
+from purplecomputer.app import main
 
 if __name__ == "__main__":
     main()

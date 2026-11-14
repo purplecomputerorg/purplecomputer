@@ -2,7 +2,7 @@
 
 import asyncio
 
-from purple_tui.code_runner import MusicCodeRunner
+from purplecomputer.code_runner import MusicCodeRunner
 
 
 class TestResolveInstrument:

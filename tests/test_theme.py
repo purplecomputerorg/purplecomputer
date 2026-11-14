@@ -6,13 +6,13 @@ import json
 
 import pytest
 
-from purple_tui import content as content_mod
-from purple_tui import palette as P
-from purple_tui import settings
-from purple_tui.canvas import theme, ui
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.canvas.rooms import art_room
-from purple_tui.content import ContentManager
+from purplecomputer import content as content_mod
+from purplecomputer import palette as P
+from purplecomputer import settings
+from purplecomputer import theme, ui
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.rooms import art_room
+from purplecomputer.content import ContentManager
 
 DEFAULT_Q, DEFAULT_BG, DEFAULT_TEXT, DEFAULT_CANVAS = P.KEY_COLORS["q"], P.BG, P.TEXT, art_room.CANVAS_BG
 

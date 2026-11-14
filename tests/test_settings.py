@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from purple_tui import settings
+from purplecomputer import settings
 
 
 @pytest.fixture

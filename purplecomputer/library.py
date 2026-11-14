@@ -6,14 +6,14 @@ import time
 
 import pygame
 
-from .. import palette as P
-from .. import printing
-from ..constants import ICON_ROBOT
-from ..content import get_content
-from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from . import palette as P
+from . import printing
+from .constants import ICON_ROBOT
+from .content import get_content
+from .keyboard import CharacterAction, ControlAction, NavigationAction
 from . import saves
 from .saves import fit
-from .secret_doodle import paint_picture
+from .picture_paint import paint_picture
 from .ui import BACK, KEEP, Overlay, draw_bar, draw_key_hint, draw_label, draw_scrim, draw_window
 
 ICON_SAVE = "\U000F0193"  # nf-md-content_save
@@ -150,7 +150,7 @@ class Library(Overlay):
         self._deadline, self._filling = None, False
         self._draw(g)
         if self._filling:
-            self.app.timers.after(0, self.app.invalidate)   # drawing never invalidates itself (tests/canvas/conftest.py)
+            self.app.timers.after(0, self.app.invalidate)   # drawing never invalidates itself (tests/conftest.py)
 
     def _draw(self, g):
         draw_scrim(g)

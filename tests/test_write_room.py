@@ -6,11 +6,11 @@ import random
 
 import pytest
 
-from purple_tui import settings
-from purple_tui.canvas import paper, saves
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.room_picker import RoomPicker
-from purple_tui.canvas.rooms.write_room import COLS, MAX_CHARS, keep_in_view, line_of, wrap
+from purplecomputer import settings
+from purplecomputer import paper, saves
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.room_picker import RoomPicker
+from purplecomputer.rooms.write_room import COLS, MAX_CHARS, keep_in_view, line_of, wrap
 
 STORY = ("The dragon flew over the hills and the rivers, past the old mill and the orchard "
          "where the apples grew red and round. ")
@@ -55,7 +55,7 @@ def test_typing_inserts_at_the_caret_and_backspace_takes_the_letter_before_it():
 
 
 def test_holding_backspace_takes_letters_then_whole_words(monkeypatch):
-    from purple_tui.canvas.rooms import write_room
+    from purplecomputer.rooms import write_room
     clock = [100.0]
     monkeypatch.setattr(write_room.time, "monotonic", lambda: clock[0])
 
@@ -144,8 +144,8 @@ def test_write_takes_math_keys_as_typed_while_play_still_turns_them_into_math():
 
 
 def test_only_a_canvas_keyboard_reports_cmd_and_the_jump_keys():
-    from purple_tui.input import KeyCode, RawKeyEvent
-    from purple_tui.keyboard import CharacterAction, ControlAction, KeyboardStateMachine
+    from purplecomputer.input import KeyCode, RawKeyEvent
+    from purplecomputer.keyboard import CharacterAction, ControlAction, KeyboardStateMachine
 
     def keys(edit_keys):
         m = KeyboardStateMachine(edit_keys=edit_keys)
@@ -244,7 +244,7 @@ def test_a_long_story_prints_every_page_and_an_empty_one_prints_none():
 
 def test_copying_to_usb_brings_a_txt_beside_the_picture(tmp_path):
     async def go():
-        from purple_tui.canvas.rooms.save_export import FOLDER, export_saves
+        from purplecomputer.rooms.save_export import FOLDER, export_saves
         app = await _write("A story about a cat.")
         app.save_room()
         app.action_switch_room("art")

@@ -8,9 +8,9 @@ from bisect import bisect_right
 
 import pygame
 
-from ... import palette as P
-from ...constants import ICON_PENCIL
-from ...keyboard import CharacterAction, ControlAction, NavigationAction
+from .. import palette as P
+from ..constants import ICON_PENCIL
+from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from .. import paper
 from ..ui import MOVE_HINT, TextField, draw_key_hint, draw_text_caret, hint_row_h
 from .base import Room

@@ -3,9 +3,9 @@ import asyncio
 
 import pytest
 
-from purple_tui import settings
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.canvas.rooms.parent_menu import ParentMenu
+from purplecomputer import settings
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.rooms.parent_menu import ParentMenu
 
 
 @pytest.fixture(autouse=True)

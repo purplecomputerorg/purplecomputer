@@ -12,7 +12,7 @@ source build-scripts/image-lib.sh
 verbose=${1:-}
 
 # Purple itself, as both the download and Studio's live Purple run it.
-PURPLE_PATHS=(purple_tui packs scripts/voice_model.sh)
+PURPLE_PATHS=(purplecomputer packs scripts/voice_model.sh)
 IMAGE_PATHS=($(image_paths . | sort -u))
 LANDING=${LANDING_DIR:-$HOME/landing}
 

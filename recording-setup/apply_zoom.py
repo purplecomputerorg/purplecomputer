@@ -29,7 +29,7 @@ import numpy as np
 
 # Add parent to path to import constants
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from purple_tui.constants import ZOOM_REGIONS
+from purplecomputer.constants import ZOOM_REGIONS
 
 
 def get_video_info(video_path: Path) -> tuple[int, int, float, float, str]:

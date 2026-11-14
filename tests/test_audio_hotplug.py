@@ -1,4 +1,4 @@
-"""Tests for purple_tui.audio_hotplug.
+"""Tests for purplecomputer.audio_hotplug.
 
 Covers:
 - udev event line parsing (known-good and unrelated lines)
@@ -18,8 +18,8 @@ import textwrap
 import time
 from pathlib import Path
 
-from purple_tui import audio_hotplug
-from purple_tui.audio_hotplug import debounce_events, parse_event_line
+from purplecomputer import audio_hotplug
+from purplecomputer.audio_hotplug import debounce_events, parse_event_line
 
 
 def test_parse_add_event():
@@ -302,7 +302,7 @@ def _run_child(tmp_path, *, emit="", debounce=0.5, linger=0.1):
     firedfile = tmp_path / "fired"
     program = textwrap.dedent(f"""
         import sys, time
-        from purple_tui import audio_hotplug
+        from purplecomputer import audio_hotplug
 
         def on_event(action):
             with open({str(firedfile)!r}, "w") as f:

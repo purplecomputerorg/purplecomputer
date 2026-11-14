@@ -5,10 +5,10 @@ import json
 import pygame
 import pytest
 
-from purple_tui import content as content_mod
-from purple_tui.canvas.gfx import Gfx
-from purple_tui.content import ContentManager, is_word_picture
-from purple_tui.play_eval import SimpleEvaluator
+from purplecomputer import content as content_mod
+from purplecomputer.gfx import Gfx
+from purplecomputer.content import ContentManager, is_word_picture
+from purplecomputer.play_eval import SimpleEvaluator
 
 
 @pytest.fixture
@@ -56,8 +56,8 @@ def test_the_picture_is_drawn_at_emoji_size_and_a_missing_one_as_a_frame(picture
 
 
 def test_play_draws_a_photo_on_its_own_big_and_beside_anything_else_at_emoji_size(pictures):
-    from purple_tui.canvas.harness import make_app, run
-    from purple_tui.canvas.rooms.play_room import Entry
+    from purplecomputer.harness import make_app, run
+    from purplecomputer.rooms.play_room import Entry
 
     char = pictures[0]().get_emoji("biscuit")
 

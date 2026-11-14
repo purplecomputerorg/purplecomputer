@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from purple_tui.canvas.rooms.art_room import ArtRoom as ArtCanvas, HEADING_TURNS, onto_grid
+from purplecomputer.rooms.art_room import ArtRoom as ArtCanvas, HEADING_TURNS, onto_grid
 
 
 # ---------------------------------------------------------------------------
@@ -294,83 +294,83 @@ class TestArtCodeRunnerTurtle:
         return asyncio.run(coro)
 
     def test_turn_left_absolute(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         canvas._heading = 'down'
         self._run(runner.run(["turn left"]))
         assert canvas._heading == 'left'
 
     def test_turn_right_absolute(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         canvas._heading = 'up'
         self._run(runner.run(["turn right"]))
         assert canvas._heading == 'right'
 
     def test_spin_command(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["spin"]))
         assert canvas._heading == 'down'
 
     def test_rotate_command(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["rotate"]))
         assert canvas._heading == 'down'
 
     def test_bare_turn_is_spin(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["turn"]))
         assert canvas._heading == 'down'
 
     def test_face_up(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["face up"]))
         assert canvas._heading == 'up'
 
     def test_face_down(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["face down"]))
         assert canvas._heading == 'down'
 
     def test_forward_command_default_distance(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "forward"]))
         assert canvas._cursor_x == 1
 
     def test_forward_command_with_distance(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "forward 5"]))
         assert canvas._cursor_x == 5
 
     def test_forward_respects_heading(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "turn down", "forward 3"]))
         assert canvas._cursor_y == 3
         assert canvas._cursor_x == 0
 
     def test_forward_paints_by_default(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["forward 3"]))
         assert len(canvas._painted_positions) >= 3
 
     def test_forward_no_paint_when_off(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "forward 3"]))
         assert len(canvas._painted_positions) == 0
 
     def test_spin_square(self, canvas):
         """Draw a square using spin: forward, spin, forward, spin, ..."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run([
             "paint off",
@@ -387,135 +387,135 @@ class TestArtCodeRunnerTurtle:
 
     def test_back_command(self, canvas):
         """back 3 from heading right should move left."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         canvas._cursor_x = 5
         self._run(runner.run(["paint off", "back 3"]))
         assert canvas._cursor_x == 2
 
     def test_backward_command(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         canvas._cursor_x = 5
         self._run(runner.run(["paint off", "backward 2"]))
         assert canvas._cursor_x == 3
 
     def test_back_default_distance(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         canvas._cursor_x = 5
         self._run(runner.run(["paint off", "back"]))
         assert canvas._cursor_x == 4
 
     def test_forward_capped_at_200(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "forward 999"]))
         assert canvas._cursor_x == 200 % 20
 
     def test_turn_case_insensitive(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["TURN UP"]))
         assert canvas._heading == 'up'
 
     def test_forward_sets_heading_cursor(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "forward 1"]))
         assert canvas._use_heading_cursor is True
 
     def test_turn_up_sets_absolute(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["turn up"]))
         assert canvas._heading == 'up'
 
     def test_turn_down_sets_absolute(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["turn down"]))
         assert canvas._heading == 'down'
 
     def test_turn_back(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["turn back"]))
         assert canvas._heading == 'left'
 
     def test_turn_around(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         canvas._heading = 'up'
         self._run(runner.run(["turn around"]))
         assert canvas._heading == 'down'
 
     def test_turn_backward(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["turn backward"]))
         assert canvas._heading == 'left'
 
     def test_turn_90(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["turn 90"]))
         assert canvas._heading == 'down'  # spin from right
 
     def test_turn_n_spins_and_moves(self, canvas):
         """turn N = spin 90 CW then forward N."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "turn 5"]))
         assert canvas._heading == 'down'  # spun from right
         assert canvas._cursor_y == 5  # moved down 5
 
     def test_turn_back_via_runner(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["turn back"]))
         assert canvas._heading == 'left'
 
     def test_go_synonym(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "go 3"]))
         assert canvas._cursor_x == 3
 
     def test_move_synonym(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "move 4"]))
         assert canvas._cursor_x == 4
 
     def test_walk_synonym(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "walk 2"]))
         assert canvas._cursor_x == 2
 
     def test_step_synonym(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "step 1"]))
         assert canvas._cursor_x == 1
 
     def test_repeated_spin_on_one_line(self, canvas):
         """'spin spin' on a single line should execute both."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["spin spin"]))
         assert canvas._heading == 'left'  # two spins from right
 
     def test_mixed_commands_on_one_line(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "forward 3 spin forward 2"]))
         assert canvas._cursor_x == 3
         assert canvas._cursor_y == 2
 
     def test_bad_command_doesnt_break_others(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
         original_turn = canvas.turn
         call_count = [0]
@@ -544,7 +544,7 @@ class TestFreeOrderArgs:
         return FakeCanvas()
 
     def _run(self, lines):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         canvas = FakeCanvas()
         asyncio.run(ArtCodeRunner(canvas).run(lines))
         return canvas
@@ -600,7 +600,7 @@ class TestModeWords:
     without a space; "paint hi" and "write hi" switch, then do the rest."""
 
     def _run(self, lines, paint=True):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         canvas = FakeCanvas()
         canvas._paint_mode = paint
         asyncio.run(ArtCodeRunner(canvas).run(lines, paint=paint))
@@ -633,7 +633,7 @@ class TestColorBeforeRepeat:
     typing the letters of "repeat" (regression guards for _peel_color_before_repeat)."""
 
     def _run(self, lines):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         canvas = FakeCanvas()
         asyncio.run(ArtCodeRunner(canvas).run(lines))
         return canvas
@@ -641,7 +641,7 @@ class TestColorBeforeRepeat:
     def test_misspelled_color_before_repeat_applies_and_loops(self):
         """'purpl repeat ...' fuzzy-resolves to purple, applied synchronously
         before the loop body runs (guards against deferred color application)."""
-        from purple_tui.content import get_content
+        from purplecomputer.content import get_content
         purple = get_content().get_color('purple')
         c = self._run(["purpl repeat 4 forward 8 spin"])
         assert c._cursor_x == 0 and c._cursor_y == 0  # square closed: loop ran 4x
@@ -655,7 +655,7 @@ class TestColorBeforeRepeat:
 
     def test_color_before_repeat_no_spurious_correction(self):
         """Peeling the color off must not surface a no-op 'purple -> purple' hint."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(FakeCanvas())
         asyncio.run(runner.run(["purple repeat 4 forward 8 spin"]))
         assert all(orig != corr for orig, corr in runner.corrections)
@@ -675,7 +675,7 @@ class TestColorBeforeRepeat:
 
     def test_peel_leaves_plain_lines_alone(self):
         """_peel only splits a leading color directly before 'repeat'."""
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         r = ArtCodeRunner(FakeCanvas())
         assert r._peel_color_before_repeat("forward 10 spin") == ["forward 10 spin"]
         assert r._peel_color_before_repeat("repeat 4 forward 8") == ["repeat 4 forward 8"]
@@ -695,14 +695,14 @@ class TestNearestAnchor:
     motion verb or direction in the line, ties favoring the earlier anchor."""
 
     def _run(self, lines):
-        from purple_tui.code_runner import ArtCodeRunner
+        from purplecomputer.code_runner import ArtCodeRunner
         canvas = FakeCanvas(width=30, height=30)  # roomy: motions of 10 fit
         runner = ArtCodeRunner(canvas)
         asyncio.run(runner.run(lines))
         return canvas, runner
 
     def _color(self, name):
-        from purple_tui.content import get_content
+        from purplecomputer.content import get_content
         return get_content().get_color(name)
 
     def test_color_distance_before_direction(self):

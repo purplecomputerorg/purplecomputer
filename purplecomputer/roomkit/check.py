@@ -19,10 +19,10 @@ import tempfile
 import threading
 from pathlib import Path
 
-from purple_tui.content import ROOM_LIB, ROOM_NAME, png_size, room_files
-from purple_tui.pack_manager import check_pack, extract_pack
-from purple_tui.roomkit import limits as L
-from purple_tui.roomkit import purple as builtin_lib
+from purplecomputer.content import ROOM_LIB, ROOM_NAME, png_size, room_files
+from purplecomputer.pack_manager import check_pack, extract_pack
+from purplecomputer.roomkit import limits as L
+from purplecomputer.roomkit import purple as builtin_lib
 
 SIZE = (240, 120)
 CELL, LEFT, TOP = builtin_lib.CELL, (SIZE[0] - builtin_lib.W * builtin_lib.CELL) / 2, builtin_lib.TOP
@@ -38,7 +38,7 @@ WAIT, WAIT_S = "wait", 1.0
 IDLE_S = 20            # then this long with no keys at all
 # Seeded so the same --keys give the same screens, food and all.
 GUEST = ("import random, sys; random.seed(7); sys.path.insert(0, sys.argv[1]); "
-         "from purple_tui.roomkit import runner; runner.serve(*runner.stdio())")
+         "from purplecomputer.roomkit import runner; runner.serve(*runner.stdio())")
 
 
 class Stopped(Exception):

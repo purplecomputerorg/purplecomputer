@@ -1,5 +1,5 @@
 """Instrument synthesis shared by the sound pack build (scripts/generate_sounds.py),
-the startup chime (purple_tui/sound_check.py), and Purple Studio.
+the startup chime (purplecomputer/sound_check.py), and Purple Studio.
 
 Every generator takes keyword parameters whose defaults are the shipped sound.
 Studio exposes the same names as sliders and checks its JavaScript port against

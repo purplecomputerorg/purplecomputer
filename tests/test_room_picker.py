@@ -1,7 +1,7 @@
 """The Esc menu: rooms on top, Volume and the printer in the corners above them, the room's own tools below."""
 
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.canvas.room_picker import HERE, ROWS, VOLUME, RoomPicker
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.room_picker import HERE, ROWS, VOLUME, RoomPicker
 
 
 def test_arrows_cross_between_rooms_tools_and_volume():

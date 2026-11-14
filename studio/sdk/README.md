@@ -13,7 +13,7 @@ It is a directory, not a published package. Import it as `@sdk` inside Studio (a
 | `purple/art` | Viewport and canvas sizes, `fitToCanvas`, `generateRowGradient`, key colors, `cellsToOps`. |
 | `purple/sounds` | `parseNote`, letter keys, clip sample rate, `voiceClipFilename`, `pitchFilename`, `pitchFor`, `noteFrequency`, the reachable pitch set. |
 | `purple/core` | The core emoji pack, imported from the repo. |
-| `purple/export.json` | Every constant above, written by `scripts/export_studio.py` from `purple_tui`. Regenerate with `just studio-fixtures`. |
+| `purple/export.json` | Every constant above, written by `scripts/export_studio.py` from `purplecomputer`. Regenerate with `just studio-fixtures`. |
 | `wav` | `encodeWav`, `tidy`, `normalize`, `peak` for mono 16-bit clips. |
 | `tar` | `tar`, `gzip`. |
 
@@ -38,11 +38,11 @@ const blob = await buildPack(spec, (msg) => console.log(msg));
 
 ## Running a room outside Purple
 
-A room is Python that imports `purple_tui/roomkit/purple.py`. `roomkit/runner.py`'s `serve(recv_line, send_line)` runs one: the first line in is the start event, carrying the room and the library, and after that each event line gets one reply line back; `guides/family-rooms.md` has the protocol. Purple's host is `purple_tui/canvas/rooms/family_room.py`. Studio runs that same host in its live Purple, with the room in a Web Worker (`studio/src/rooms/`).
+A room is Python that imports `purplecomputer/roomkit/purple.py`. `roomkit/runner.py`'s `serve(recv_line, send_line)` runs one: the first line in is the start event, carrying the room and the library, and after that each event line gets one reply line back; `guides/family-rooms.md` has the protocol. Purple's host is `purplecomputer/rooms/family_room.py`. Studio runs that same host in its live Purple, with the room in a Web Worker (`studio/src/rooms/`).
 
 ## Staying honest
 
 - `export.json` is generated. Do not edit it; change Purple and run `just studio-fixtures`.
 - `tests/golden.json` holds Python's synth renders. The SDK tests fail when the port drifts.
-- Rooms are Python, run by `purple_tui/roomkit/purple.py` itself, so the SDK only packs them (`content/rooms/<name>.py`) along with that file (`content/rooms/purple.py`).
+- Rooms are Python, run by `purplecomputer/roomkit/purple.py` itself, so the SDK only packs them (`content/rooms/<name>.py`) along with that file (`content/rooms/purple.py`).
 - The pack layout has a `format` version in the manifest. Purple skips packs newer than it reads.

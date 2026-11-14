@@ -28,7 +28,7 @@
   speech about 16 dB, so the ceiling binds for all of them and the RMS target
   never does. Getting more than that means a limiter that reshapes the attack,
   which is a timbre decision, not a gain-staging one, and was not made here.
-  What did land: one `normalize_loudness` in `purple_tui/audio.py`, used by
+  What did land: one `normalize_loudness` in `purplecomputer/audio.py`, used by
   runtime TTS and `scripts/generate_voice_clips.py` through a shared
   `tts.postprocess_samples` (the script's duplicated trim/fade/normalize code
   is gone). Speech now sits at a -1 dBFS peak instead of -3, and the shipped
@@ -106,7 +106,7 @@ every step (source at 100%, chime pinned at -2 dBFS, CLIP on 40/60/80) and the
 broadband floor read -13 dBFS while tonal SNR was 50 dB, which means DC offset
 on the capture path, not noise. Speech: model load 1.5 s, synthesis 0.3 s.
 
-**The sound check** (`purple_tui/sound_check.py`) is the startup chime: three
+**The sound check** (`purplecomputer/sound_check.py`) is the startup chime: three
 marimba notes rising (C5 E5 G5, the Music room's own instrument), played once
 at the Medium step with the mic at 20% and recorded. It reports **loop
 gain**: each tone's loudest 100 ms window at the mic (25 ms hops, so the fast
@@ -165,7 +165,7 @@ Soft (which would mean lowering the floor), and a Mac. If a reading doesn't
 sort with the others, the fallback is a per-model table keyed on the
 `machine:` line.
 
-Speech synthesis runs in a worker process (`purple_tui/tts_worker.py`, started
+Speech synthesis runs in a worker process (`purplecomputer/tts_worker.py`, started
 by `tts.preload` when the mixer comes up). Building the ONNX session holds the
 GIL for seconds, which in-process meant a frozen screen exactly when a kid
 starts typing; in its own process the load never touches the UI, and the child
@@ -186,9 +186,9 @@ Four separate attenuations stack, and only one of them was chosen for hiss:
 | Stage | Value | Where |
 |---|---|---|
 | Sample render level | peak-normalized to 0.7 FS (ukulele 0.4, low notes up to 0.95) | `scripts/generate_sounds.py:106` |
-| Playback gain per sound | `set_volume(0.4)` | `purple_tui/rooms/music_room.py:670`, `:689` |
-| App volume default | 60 of 100 | `purple_tui/constants.py:75` |
-| System mixer cap | app volume x 0.85 into ALSA `Master` | `purple_tui/constants.py:76`, `purple_tui/purple_tui.py:3031` |
+| Playback gain per sound | `set_volume(0.4)` | `purplecomputer/rooms/music_room.py:670`, `:689` |
+| App volume default | 60 of 100 | `purplecomputer/constants.py:75` |
+| System mixer cap | app volume x 0.85 into ALSA `Master` | `purplecomputer/constants.py:76`, `purplecomputer/purplecomputer.py:3031` |
 
 The dominant one is the last. `amixer sset Master 51%` is not "half volume":
 ALSA percentages are linear in the control's raw value, and on typical HDA
@@ -200,13 +200,13 @@ Three things make it machine-dependent:
 
 1. **`Master` may not exist.** SOF and Apple `cs8409` codecs often expose `PCM`,
    `Speaker`, or `Digital` instead. The call is a `Popen` with stderr to
-   `/dev/null` inside a bare `except` (`purple_tui.py:3030`), so failure is
+   `/dev/null` inside a bare `except` (`purplecomputer.py:3030`), so failure is
    completely silent: the badge updates and nothing happens.
 2. **No boot-time mixer normalization.** Nothing in the golden image unmutes or
    levels the secondary controls, so `Speaker`, `PCM`, `Headphone`, and
    Auto-Mute Mode sit at whatever that codec defaults to.
 3. **Hotplug never re-applies volume.** `_start_audio_hotplug`
-   (`purple_tui.py:1295`) reinits the mixer for a new sink but does not call
+   (`purplecomputer.py:1295`) reinits the mixer for a new sink but does not call
    `_apply_volume_system()`, so a USB speaker lands at its own default level
    while the badge still shows the old one.
 
@@ -232,7 +232,7 @@ The hiss cap deserves the same scrutiny: it predates both PulseAudio and the
 audio idle-release (`743a8d0`, 2026-07-23), which closes the PCM stream after a
 quiet minute and on most laptop codecs mutes the speaker amp along with it. It
 may already be solving a problem a later change solved better. Note the Music
-room is exempt from idle release (`purple_tui.py:1332`), which is exactly where
+room is exempt from idle release (`purplecomputer.py:1332`), which is exactly where
 silence between notes is most audible.
 
 ## Solution Overview
@@ -320,12 +320,12 @@ idle release is vetoed.
 
 ### 1a. One helper, two callers
 
-The amixer invocation is currently duplicated at `purple_tui/purple_tui.py:3031`
-and `purple_tui/rooms/parent_menu.py:683`. Collapse to a single function; the
+The amixer invocation is currently duplicated at `purplecomputer/purplecomputer.py:3031`
+and `purplecomputer/rooms/parent_menu.py:683`. Collapse to a single function; the
 parent menu's test-sound path differs only in that it wants a specific level and
 a blocking call.
 
-New in `purple_tui/audio.py` (already the audio helper module):
+New in `purplecomputer/audio.py` (already the audio helper module):
 
 ```python
 _backend = None  # "pactl" | "amixer", probed once
@@ -358,7 +358,7 @@ load-bearing: a blocking mixer call used to freeze volume adjustment.
 
 ### 1b. Delete the cap and the mapping
 
-In `purple_tui/constants.py`:
+In `purplecomputer/constants.py`:
 
 - Remove `SYSTEM_VOLUME_MAX` and the `* SYSTEM_VOLUME_MAX / 100` at both call
   sites. The app level goes to Pulse unchanged.
@@ -371,14 +371,14 @@ In `purple_tui/constants.py`:
 
 ### 1c. Derive the badge from the levels
 
-`_volume_badge` (`purple_tui/purple_tui.py:175`) hardcodes the old thresholds,
+`_volume_badge` (`purplecomputer/purplecomputer.py:175`) hardcodes the old thresholds,
 so changing `VOLUME_LEVELS` silently desyncs the bars and labels. Derive the
 bars and label from the level's index in `VOLUME_LEVELS` instead, keeping the
 existing label set (Sound Off, Whisper, Quiet, Medium, Loud, Full) and icons.
 
 ### 1d. Re-apply volume on hotplug
 
-In `_start_audio_hotplug`'s `_on_event` (`purple_tui.py:1298`), after the mixer
+In `_start_audio_hotplug`'s `_on_event` (`purplecomputer.py:1298`), after the mixer
 reinit succeeds, call `_apply_volume_system()` so a newly plugged sink gets the
 level the badge is claiming.
 
@@ -391,10 +391,10 @@ cheap, so it satisfies the logging policy for the standard ISO.
 
 ### Files touched
 
-- `purple_tui/audio.py` (new helper)
-- `purple_tui/purple_tui.py` (`_apply_volume_system`, `_volume_badge`, `_on_event`)
-- `purple_tui/rooms/parent_menu.py` (`_play_test_sound`)
-- `purple_tui/constants.py`
+- `purplecomputer/audio.py` (new helper)
+- `purplecomputer/purplecomputer.py` (`_apply_volume_system`, `_volume_badge`, `_on_event`)
+- `purplecomputer/rooms/parent_menu.py` (`_play_test_sound`)
+- `purplecomputer/constants.py`
 - `build-scripts/00-build-golden-image.sh` (Phase 0a)
 - `tests/test_audio_volume.py` (new)
 - `docs/UX_LOG.md`
@@ -405,7 +405,7 @@ cheap, so it satisfies the logging policy for the standard ISO.
 
 Samples are **peak**-normalized today, and a decaying marimba note has a large
 peak-to-average ratio, so most of the available loudness is discarded. Speech is
-peak-normalized separately to -3 dBFS (`purple_tui/tts.py:247`), which is why it
+peak-normalized separately to -3 dBFS (`purplecomputer/tts.py:247`), which is why it
 sits roughly 8 to 13 dB above the instruments.
 
 Replace peak normalization with loudness normalization against a fixed true-peak

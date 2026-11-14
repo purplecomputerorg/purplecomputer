@@ -19,7 +19,7 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.tts import _prepare_text, find_voice_model, load_voice, synthesize_to_file  # noqa: E402
+from purplecomputer.tts import _prepare_text, find_voice_model, load_voice, synthesize_to_file  # noqa: E402
 
 # Test phrases
 TEST_PHRASES = [

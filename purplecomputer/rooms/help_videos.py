@@ -1,10 +1,10 @@
 """Help & Videos: a QR code to purplecomputer.org/help, drawn from the
 pre-baked matrix in qr_data.py."""
 
-from ... import palette as P
-from ...constants import SUPPORT_EMAIL
-from ...keyboard import ControlAction
-from ...qr_data import HELP_QR_MATRIX, HELP_QR_URL
+from .. import palette as P
+from ..constants import SUPPORT_EMAIL
+from ..keyboard import ControlAction
+from ..qr_data import HELP_QR_MATRIX, HELP_QR_URL
 from ..ui import Dialog
 
 _QR_DARK = "#1e1033"

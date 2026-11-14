@@ -5,8 +5,8 @@ from bisect import bisect_right
 
 from fontTools.ttLib import TTFont
 
-from purple_tui import constants
-from purple_tui.canvas import gfx
+from purplecomputer import constants
+from purplecomputer import gfx
 from scripts.studio_bundle import cmap_bounds, loaded_strings, trimmed_font
 
 NERD = gfx.FONT_DIR / gfx.FACES["nerd"]

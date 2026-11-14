@@ -11,7 +11,7 @@ image_paths() {
     printf '%s\n' build-scripts/00-build-golden-image.sh build-scripts/01-remaster-iso.sh \
         build-scripts/build-all.sh build-scripts/build-in-docker.sh build-scripts/config.sh \
         build-scripts/Dockerfile build-scripts/install.sh build-scripts/image-lib.sh \
-        purple_tui/__init__.py
+        purplecomputer/__init__.py
 }
 
 # v<major>.<minor>.<N> for a clean commit on main, N counting the main commits
@@ -29,7 +29,7 @@ image_version() {
         range="$tag..HEAD"
     fi
     n=$(git -C "$repo" rev-list --count --first-parent "$range" -- $(image_paths "$repo" | sort -u))
-    major_minor=$(sed -n 's/^__version__ = "\([0-9]*\.[0-9]*\).*/\1/p' "$repo/purple_tui/__init__.py")
+    major_minor=$(sed -n 's/^__version__ = "\([0-9]*\.[0-9]*\).*/\1/p' "$repo/purplecomputer/__init__.py")
     echo "v$major_minor.$((base + n))"
 }
 

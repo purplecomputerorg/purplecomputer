@@ -1,11 +1,11 @@
 // A family's screen colors, all from one: Purple's own palette turned to a new base color with
 // the same relationships between its colors, then nudged so every kind of text stays readable on
 // it. A light base flips the palette, dark words on a light screen. Purple applies whatever ends
-// up in theme.json (purple_tui/canvas/theme.py); the deriving happens only here.
+// up in theme.json (purplecomputer/theme.py); the deriving happens only here.
 import exported from "./export.json";
 import { ASDF_ROW, CANVAS_BG, QWERTY_ROW, ROW_HUES, ZXCV_ROW, generateRowGradient, hslToHex } from "./art";
 
-// The roles Purple's screen is drawn with (purple_tui/palette.py), plus the Art canvas.
+// The roles Purple's screen is drawn with (purplecomputer/palette.py), plus the Art canvas.
 export const ROLES = ["bg", "surface", "canvas", "tile", "field", "hair", "line", "primary", "on_primary", "accent", "text", "muted", "dim"] as const;
 export type Role = (typeof ROLES)[number];
 export type Palette = Record<Role, string>;
@@ -101,7 +101,7 @@ export function rowColors({ hues, rainbow }: Theme): Record<string, string> {
   return { ...generateRowGradient(hues.qwerty, QWERTY_ROW), ...generateRowGradient(hues.asdf, ASDF_ROW), ...generateRowGradient(hues.zxcv, ZXCV_ROW) };
 }
 
-// content/theme.json, as purple_tui/canvas/theme.py reads it.
+// content/theme.json, as purplecomputer/theme.py reads it.
 export function themeJson(t: Theme) {
   const { canvas, ...colors } = themePalette(t);
   return { colors, canvas, keys: rowColors(t) };

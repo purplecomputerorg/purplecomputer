@@ -20,7 +20,7 @@ export function loadEmojiMap(): Promise<EmojiMap | null> {
   return loading;
 }
 
-// One emoji's glyphs, found as Purple finds them (purple_tui/canvas/emoji_pictures.py).
+// One emoji's glyphs, found as Purple finds them (purplecomputer/emoji_pictures.py).
 function glyphsFor(m: EmojiMap, emoji: string): number[] {
   return m.seqs[emoji] ?? m.seqs[emoji.replaceAll(VS16, "")] ?? [...emoji].flatMap((c) => m.seqs[c] ?? [0]);
 }

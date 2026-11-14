@@ -809,7 +809,7 @@ main() {
             # Record that audio worked during the live session. The first
             # installed boot uses this to tell a warm-reboot codec wedge
             # (fixable by a power off) apart from hardware that never had
-            # sound. Consumed by purple_tui/canvas/rooms/sleep_screen.py.
+            # sound. Consumed by purplecomputer/rooms/sleep_screen.py.
             if [ "$PURPLE_LIVE_AUDIO_OK" = "1" ]; then
                 mkdir -p /mnt/root/var/log/purple
                 if touch /mnt/root/var/log/purple/audio-worked-in-live 2>/dev/null; then

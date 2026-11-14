@@ -14,19 +14,19 @@ import time
 import pygame
 import pytest
 
-from purple_tui import content as content_mod
-from purple_tui import settings
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.room_picker import FAMILY, HERE, RoomPicker
-from purple_tui.canvas import theme
-from purple_tui.canvas.rooms import family_room
-from purple_tui.canvas.rooms.family_room import FamilyRoom
-from purple_tui.canvas.rooms.rooms_screen import RoomsScreen
-from purple_tui.content import ContentManager
-from purple_tui.keyboard import ControlAction, NavigationAction
-from purple_tui.music_constants import PERCUSSION
-from purple_tui.roomkit import limits
-from purple_tui.roomkit import purple as purple_lib
+from purplecomputer import content as content_mod
+from purplecomputer import settings
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.room_picker import FAMILY, HERE, RoomPicker
+from purplecomputer import theme
+from purplecomputer.rooms import family_room
+from purplecomputer.rooms.family_room import FamilyRoom
+from purplecomputer.rooms.rooms_screen import RoomsScreen
+from purplecomputer.content import ContentManager
+from purplecomputer.keyboard import ControlAction, NavigationAction
+from purplecomputer.music_constants import PERCUSSION
+from purplecomputer.roomkit import limits
+from purplecomputer.roomkit import purple as purple_lib
 
 SNAKE = '''from purple import *
 snake, heading = [(5, 5)], (1, 0)
@@ -870,14 +870,14 @@ def test_letting_go_of_a_spinning_room_ends_it():
 
 
 def test_a_room_sees_each_key_in_its_sticker_color():
-    from purple_tui.palette import KEY_COLORS
-    from purple_tui.roomkit import purple
+    from purplecomputer.palette import KEY_COLORS
+    from purplecomputer.roomkit import purple
     assert purple.KEY_COLORS == {k: KEY_COLORS[k] for k in purple.KEY_COLORS}
     assert set(KEY_COLORS) - set(purple.KEY_COLORS) == {"+", "×", "÷"}
 
 
 def test_a_letter_reads_on_its_floor_light_or_dark():
-    from purple_tui.roomkit import purple
+    from purplecomputer.roomkit import purple
     purple.grid.clear()
     for x, floor in enumerate(("#FFFFFF", "#101010", "primary", None)):
         if floor:

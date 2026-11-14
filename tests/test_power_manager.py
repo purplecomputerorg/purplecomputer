@@ -18,7 +18,7 @@ try:
 except ImportError:
     HAS_PYTEST = False
 
-from purple_tui.power_manager import (
+from purplecomputer.power_manager import (
     PowerManager,
     CHARGER_IDLE_SLEEP,
     CHARGER_IDLE_SHUTDOWN,
@@ -39,7 +39,7 @@ if HAS_PYTEST:
     def power_manager():
         """Create a fresh PowerManager for each test."""
         # Reset singleton
-        import purple_tui.power_manager as pm_module
+        import purplecomputer.power_manager as pm_module
         pm_module._power_manager = None
         return PowerManager()
 
@@ -151,7 +151,7 @@ if HAS_PYTEST:
 
         def test_away_shutdown_never_shorter_than_normal(self, power_manager):
             """Terminal or other VT: at least AWAY_IDLE_SHUTDOWN, never below the charger hour."""
-            from purple_tui.power_manager import AWAY_IDLE_SHUTDOWN
+            from purplecomputer.power_manager import AWAY_IDLE_SHUTDOWN
             power_manager._charger_state = False
             assert power_manager.get_idle_shutdown_threshold(away=True) == AWAY_IDLE_SHUTDOWN
             power_manager._charger_state = True
@@ -164,7 +164,7 @@ if HAS_PYTEST:
             """Demo mode should have much shorter timings."""
             import os
             import importlib
-            import purple_tui.power_manager as pm_module
+            import purplecomputer.power_manager as pm_module
 
             # Save original
             original = os.environ.get("PURPLE_SLEEP_DEMO")
@@ -200,7 +200,7 @@ if HAS_PYTEST:
 
         @pytest.fixture
         def pm(self):
-            import purple_tui.power_manager as pm_module
+            import purplecomputer.power_manager as pm_module
             pm_module._power_manager = None
             mgr = PowerManager()
             mgr._poweroff_available = True
@@ -208,8 +208,8 @@ if HAS_PYTEST:
 
         def test_shutdown_arms_backstop_then_systemctl_force(self, pm):
             """The tmpfs backstop is armed in its own session, then systemctl --force runs."""
-            from purple_tui.constants import REBOOT_BIN
-            with patch("purple_tui.power_manager.subprocess.Popen") as mock_popen:
+            from purplecomputer.constants import REBOOT_BIN
+            with patch("purplecomputer.power_manager.subprocess.Popen") as mock_popen:
                 result = pm.shutdown()
 
             assert result is True
@@ -229,7 +229,7 @@ if HAS_PYTEST:
                     raise FileNotFoundError("not found")
                 return MagicMock()
 
-            with patch("purple_tui.power_manager.subprocess.Popen", side_effect=fail_systemctl):
+            with patch("purplecomputer.power_manager.subprocess.Popen", side_effect=fail_systemctl):
                 result = pm.shutdown()
 
             assert result is True
@@ -237,26 +237,26 @@ if HAS_PYTEST:
 
         def test_shutdown_succeeds_on_backstop_when_sudo_cannot_start(self, pm):
             """USB pulled on a live boot: sudo can't exec, the tmpfs binary still powers off."""
-            from purple_tui.constants import REBOOT_BIN
+            from purplecomputer.constants import REBOOT_BIN
 
             def only_backstop(cmd, **kwargs):
                 if cmd[0] != REBOOT_BIN:
                     raise OSError(5, "Input/output error")
                 return MagicMock()
 
-            with patch("purple_tui.power_manager.subprocess.Popen", side_effect=only_backstop):
+            with patch("purplecomputer.power_manager.subprocess.Popen", side_effect=only_backstop):
                 assert pm.shutdown() is True
 
         def test_shutdown_returns_false_when_all_fail(self, pm):
             """Nothing could start (no backstop, no sudo): the UI asks a person to turn it off."""
-            with patch("purple_tui.power_manager.subprocess.Popen",
+            with patch("purplecomputer.power_manager.subprocess.Popen",
                        side_effect=FileNotFoundError("not found")):
                 assert pm.shutdown() is False
 
         def test_shutdown_tries_even_when_poweroff_unavailable(self, pm):
             """Should still try commands even if _poweroff_available is False."""
             pm._poweroff_available = False
-            with patch("purple_tui.power_manager.subprocess.Popen") as mock_popen:
+            with patch("purplecomputer.power_manager.subprocess.Popen") as mock_popen:
                 result = pm.shutdown()
 
             assert result is True
@@ -269,7 +269,7 @@ if HAS_PYTEST:
             original = os.environ.get("PURPLE_SLEEP_DEMO")
             try:
                 os.environ["PURPLE_SLEEP_DEMO"] = "1"
-                with patch("purple_tui.power_manager.subprocess.Popen") as mock_popen:
+                with patch("purplecomputer.power_manager.subprocess.Popen") as mock_popen:
                     result = pm.shutdown()
                 assert result is True
                 mock_popen.assert_not_called()
@@ -290,7 +290,7 @@ if HAS_PYTEST:
                     return MagicMock()
                 raise FileNotFoundError("not found")
 
-            with patch("purple_tui.power_manager.subprocess.Popen",
+            with patch("purplecomputer.power_manager.subprocess.Popen",
                        side_effect=capture_cmd):
                 pm.shutdown()
 
@@ -303,7 +303,7 @@ if HAS_PYTEST:
 
         def test_available_when_systemctl_exists(self):
             """Should be True when systemctl is on PATH."""
-            import purple_tui.power_manager as pm_module
+            import purplecomputer.power_manager as pm_module
             pm_module._power_manager = None
             with patch("shutil.which", return_value="/usr/bin/systemctl"):
                 mgr = PowerManager()
@@ -311,7 +311,7 @@ if HAS_PYTEST:
 
         def test_available_when_only_poweroff_exists(self):
             """Should be True when poweroff is on PATH (no systemctl)."""
-            import purple_tui.power_manager as pm_module
+            import purplecomputer.power_manager as pm_module
             pm_module._power_manager = None
 
             def which_side_effect(cmd):
@@ -325,7 +325,7 @@ if HAS_PYTEST:
 
         def test_unavailable_when_nothing_exists(self):
             """Should be False when neither systemctl nor poweroff exists."""
-            import purple_tui.power_manager as pm_module
+            import purplecomputer.power_manager as pm_module
             pm_module._power_manager = None
             with patch("shutil.which", return_value=None):
                 mgr = PowerManager()
@@ -374,7 +374,7 @@ if __name__ == "__main__":
     ("Raspberry Pi 500 Rev 1.0", True),
 ])
 def test_pi_without_wake_never_halts(monkeypatch, tmp_path, model, wakeable):
-    from purple_tui import power_manager
+    from purplecomputer import power_manager
     path = tmp_path / "model"
     path.write_text(model + "\0")
     monkeypatch.setattr(power_manager, "DEVICE_TREE_MODEL", str(path))

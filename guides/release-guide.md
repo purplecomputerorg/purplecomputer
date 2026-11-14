@@ -103,7 +103,7 @@ Every ISO is stamped with a version in `/etc/purple-version`, visible in the Par
 | Semver, build time | `v1.0`, `v2026.03.30-1430` | Version 1.0, Build: Mar 30, 2026 | Past v1 releases |
 | Dev build | `build-abc1234-20260330` | Version abc1234 | Anything else with no `PURPLE_VERSION` set: uncommitted changes, a lane branch |
 
-The image count is the number of commits on main (first parent) that touch a path the image build copies in, or the scripts that build it (`image_paths` in `build-scripts/image-lib.sh`). Docs, guides, tests and Studio commits leave it alone, so two builds with the same number carry the same image. It counts on from the newest `v2.0.N` tag, so a later change to the path list can't renumber published builds. `major.minor` comes from `__version__` in `purple_tui/__init__.py`; bump that by hand for a milestone and the count carries on.
+The image count is the number of commits on main (first parent) that touch a path the image build copies in, or the scripts that build it (`image_paths` in `build-scripts/image-lib.sh`). Docs, guides, tests and Studio commits leave it alone, so two builds with the same number carry the same image. It counts on from the newest `v2.0.N` tag, so a later change to the path list can't renumber published builds. `major.minor` comes from `__version__` in `purplecomputer/__init__.py`; bump that by hand for a milestone and the count carries on.
 
 ---
 

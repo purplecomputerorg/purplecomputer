@@ -5,10 +5,10 @@ line back. Backspace with an arrow, in either order, erases toward the arrow, sq
 
 import pytest
 
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.canvas.rooms import art_room
-from purple_tui.canvas.rooms.art_room import COLS, LINE_FADE_S, LINES_AFTER
-from purple_tui.keyboard import ControlAction, NavigationAction
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.rooms import art_room
+from purplecomputer.rooms.art_room import COLS, LINE_FADE_S, LINES_AFTER
+from purplecomputer.keyboard import ControlAction, NavigationAction
 
 
 @pytest.fixture

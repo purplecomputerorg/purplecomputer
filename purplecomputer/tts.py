@@ -500,7 +500,7 @@ def preload() -> threading.Thread | None:
     _preload_started = True
     try:
         _worker = subprocess.Popen(
-            [sys.executable, "-m", "purple_tui.tts_worker"],
+            [sys.executable, "-m", "purplecomputer.tts_worker"],
             cwd=Path(__file__).resolve().parent.parent,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=_worker_stderr(),
             text=True, bufsize=1,

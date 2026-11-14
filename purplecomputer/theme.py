@@ -7,8 +7,8 @@ time; KEY_COLORS is changed in place because rooms hold references."""
 
 import re
 
-from .. import palette as P
-from ..content import _read_json, get_content
+from . import palette as P
+from .content import _read_json, get_content
 from .rooms import art_room
 
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")

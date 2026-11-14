@@ -22,7 +22,7 @@ from pathlib import Path
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui.music_constants import GRID_KEYS, ALL_KEYS, COLORS, NOTE_FREQUENCIES, PERCUSSION
+from purplecomputer.music_constants import GRID_KEYS, ALL_KEYS, COLORS, NOTE_FREQUENCIES, PERCUSSION
 from ai_utils import load_env_file, parse_json_robust
 
 
@@ -506,7 +506,7 @@ def main():
 
         if args.save:
             from ai_utils import append_to_demo_json
-            segments_dir = Path(__file__).parent.parent / "purple_tui" / "demo" / "segments"
+            segments_dir = Path(__file__).parent.parent / "purplecomputer" / "demo" / "segments"
             segments_dir.mkdir(parents=True, exist_ok=True)
             segment_path = segments_dir / f"{args.save}.py"
             content = f'''"""Pre-recorded Music Mode composition: {title}

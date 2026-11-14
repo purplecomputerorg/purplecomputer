@@ -15,9 +15,9 @@ import math
 
 import pygame
 
-from .. import palette as P
-from ..color_mixing import rgb_to_hex
-from ..keyboard import CharacterAction, ControlAction, NavigationAction
+from . import palette as P
+from .color_mixing import rgb_to_hex
+from .keyboard import CharacterAction, ControlAction, NavigationAction
 from .gfx import rgb
 from .ui import (AUTO, BACK, DOWN, KEEP, LEFT, RIGHT, UP, Overlay, auto_inks, draw_key_hint, header_pill, hint_row_h, key_hint_width,
                  keycap_size, swatch_dot)

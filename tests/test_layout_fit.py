@@ -4,8 +4,8 @@ under the room's canvas."""
 
 import pytest
 
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.canvas.rooms.art_room import ROWS
+from purplecomputer.harness import make_app, run
+from purplecomputer.rooms.art_room import ROWS
 
 SIZES = [(1024, 768), (1280, 800), (1366, 768), (1440, 900), (1920, 1080), (2560, 1080), (3440, 1440), (2560, 1600)]
 ROOMS = ["play", "music", "art", "blocks"]

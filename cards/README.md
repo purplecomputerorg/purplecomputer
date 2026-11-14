@@ -36,7 +36,7 @@ Omit `--pdf` to write SVG only.
 - **Layers**: `art` (everything visible), `cut` (die/kiss-cut paths), optional `guides` (dev-reference page border — not for printing).
 - **Purple ramp** (dark → light): `#1e1033`, `#3b1a5c`, `#5c2d91`, `#9b59d0`, `#ebe2fd`.
 - **Brand font**: Nunito (weights 500, 700, 800). Installed under `~/.local/share/fonts/Nunito/` if you need to re-render locally. Fallback chain in SVGs is `Nunito, Helvetica, Arial, sans-serif`.
-- **Kid-math remaps on keyboard sheet**: `=` shows `+`, `/` shows `÷`, shift-`8` shows `×` — matches the global remap in `purple_tui/purple_tui.py`.
+- **Kid-math remaps on keyboard sheet**: `=` shows `+`, `/` shows `÷`, shift-`8` shows `×` — matches the global remap in `purplecomputer/purplecomputer.py`.
 
 ## Silhouette cutting (stickers that hug art)
 
@@ -77,7 +77,7 @@ lists, and the `PURPLE_RAMP` auto-recolor palette.
 
 ## Box cards (`v2/`)
 
-The box cards are Typst sources, so an LLM can edit them and you can too. Four numbered two-sided 4x6 cards: 1 `start.typ` (booting from the Purple Key), 2 `rooms.typ` (the rooms, then cool things to try), 3 `code.typ` (things to type in Play, then code in Art, Music and Blocks), and 4 `grown-ups.typ` (the Parent Menu, then Purple Studio). Each card has its own color and number (`SET` in `theme.typ`), and every side's footer lists the whole set with that card filled in. A back is any side whose `header()` gets a `title:`; it says Back and wears a softer number. They share `theme.typ` for colors, keycaps and panels, in the landing site's palette. Text is Purple's own Figtree and IBM Plex Mono from `purple_tui/canvas/fonts/`; titles are Sora, from `v2/fonts/`.
+The box cards are Typst sources, so an LLM can edit them and you can too. Four numbered two-sided 4x6 cards: 1 `start.typ` (booting from the Purple Key), 2 `rooms.typ` (the rooms, then cool things to try), 3 `code.typ` (things to type in Play, then code in Art, Music and Blocks), and 4 `grown-ups.typ` (the Parent Menu, then Purple Studio). Each card has its own color and number (`SET` in `theme.typ`), and every side's footer lists the whole set with that card filled in. A back is any side whose `header()` gets a `title:`; it says Back and wears a softer number. They share `theme.typ` for colors, keycaps and panels, in the landing site's palette. Text is Purple's own Figtree and IBM Plex Mono from `purplecomputer/fonts/`; titles are Sora, from `v2/fonts/`.
 
 ```bash
 just cards          # or: just cards rooms

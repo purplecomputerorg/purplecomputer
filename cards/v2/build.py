@@ -22,7 +22,7 @@ import typst
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-FONTS = ROOT / "purple_tui" / "canvas" / "fonts"
+FONTS = ROOT / "purplecomputer" / "fonts"
 OUT = HERE / "out"
 CARDS = ("start", "rooms", "code", "grown-ups")
 QRS = {"help-qr.svg": "https://purplecomputer.org/help", "studio-qr.svg": "https://studio.purplecomputer.org/"}

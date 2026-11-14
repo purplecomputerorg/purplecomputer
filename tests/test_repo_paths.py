@@ -1,9 +1,9 @@
-"""Paths the canvas rooms build from __file__ must land on the repo root, not inside purple_tui."""
+"""Paths the canvas rooms build from __file__ must land on the repo root, not inside purplecomputer."""
 
 from pathlib import Path
 
-from purple_tui.canvas import sounds
-from purple_tui.canvas.rooms import parent_menu
+from purplecomputer import sounds
+from purplecomputer.rooms import parent_menu
 
 
 def test_music_sounds_are_found():

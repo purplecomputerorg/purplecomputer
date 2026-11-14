@@ -4,11 +4,11 @@ other key keeps it and reaches the room, the bar reopens on the last color
 kept in that room, a bar color paints like a letter color, the Esc menu
 opens it too, and in ABC it colors the letters typed next."""
 
-from purple_tui.canvas.color_wheel import HUES, SHADES, ColorBar, _place, bar_color
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.canvas.ui import AUTO
-from purple_tui import palette as P
-from purple_tui.palette import get_key_color
+from purplecomputer.color_wheel import HUES, SHADES, ColorBar, _place, bar_color
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.ui import AUTO
+from purplecomputer import palette as P
+from purplecomputer.palette import get_key_color
 
 
 def _room(name):

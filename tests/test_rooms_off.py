@@ -2,11 +2,11 @@
 
 import pytest
 
-from purple_tui import settings
-from purple_tui.canvas.harness import make_app, press, run
-from purple_tui.canvas.room_picker import RoomPicker
-from purple_tui.canvas.rooms.parent_menu import ParentMenu
-from purple_tui.canvas.rooms.rooms_screen import RoomsScreen, rooms_label
+from purplecomputer import settings
+from purplecomputer.harness import make_app, press, run
+from purplecomputer.room_picker import RoomPicker
+from purplecomputer.rooms.parent_menu import ParentMenu
+from purplecomputer.rooms.rooms_screen import RoomsScreen, rooms_label
 
 
 @pytest.fixture(autouse=True)

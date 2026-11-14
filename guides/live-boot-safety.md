@@ -95,4 +95,4 @@ This only applies during an explicit install, not during live boot.
 |------|------|
 | `build-scripts/01-remaster-iso.sh` | Builds the ISO, sets GRUB params, creates boot hook |
 | `build-scripts/install.sh` | Runs only on explicit install, handles disk detection and EFI setup |
-| `purple_tui/rooms/parent_menu.py` | Install UI, confirmation dialogs, casper detection |
+| `purplecomputer/rooms/parent_menu.py` | Install UI, confirmation dialogs, casper detection |

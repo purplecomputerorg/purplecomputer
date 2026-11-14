@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pygame
 
-from ..timeline import state_dir
+from .timeline import state_dir
 
 _ram_dir = None
 

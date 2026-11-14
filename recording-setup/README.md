@@ -41,7 +41,7 @@ Source: https://soundcloud.com/royalty-free-audio-loops/antarcticbreeze-happy-uk
 
 ## Customizing the Demo
 
-Edit `purple_tui/demo/default_script.py` to change what the demo shows.
+Edit `purplecomputer/demo/default_script.py` to change what the demo shows.
 
 The script uses simple actions:
 

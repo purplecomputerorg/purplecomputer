@@ -20,7 +20,7 @@ export function typingKeys(word: string): string[] {
   return [...new Set([...word.toLowerCase()].filter((c) => /^[a-z0-9]$/.test(c)))].slice(0, 5).concat("enter");
 }
 
-// Accents folded away, as Purple's language packs do (purple_tui/i18n.py fold): its keyboard only types a to z.
+// Accents folded away, as Purple's language packs do (purplecomputer/i18n.py fold): its keyboard only types a to z.
 export const typedWord = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
 const WORD = /^[a-z][a-z'-]*$/;
 const WORD_MAX = 30;

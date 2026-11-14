@@ -6,9 +6,9 @@
 
 import time
 
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.keyboard import CharacterAction
-from purple_tui.palette import GRAYSCALE, get_key_color
+from purplecomputer.harness import make_app, run
+from purplecomputer.keyboard import CharacterAction
+from purplecomputer.palette import GRAYSCALE, get_key_color
 
 
 def _canvas(paint_mode: bool):

@@ -47,7 +47,7 @@ DEVICE_POLL_SECS = 2.0
 SILENT_RESCAN_FIRST_SECS = 5
 
 # Diag log paths. /var/log/purple is on the writable partition of the installed
-# system (same convention as purple_tui/boot_log.py) and survives reboot.
+# system (same convention as purplecomputer/boot_log.py) and survives reboot.
 DIAG_LOG_PATHS = ("/tmp/evdev-diag.log", "/var/log/purple/evdev.log")
 
 

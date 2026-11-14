@@ -11,7 +11,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
@@ -135,7 +135,7 @@ def test_eof_only_hangs_with_pipe_holder():
 
 def _make_screen():
     """An InstallProgressScreen with UI repaint stubbed out (no running app)."""
-    from purple_tui.canvas.rooms.parent_menu import InstallProgressScreen
+    from purplecomputer.rooms.parent_menu import InstallProgressScreen
     screen = InstallProgressScreen.__new__(InstallProgressScreen)
     # Bypass Overlay init; set only the state _handle_line/creep touch.
     screen._progress = 0
@@ -217,7 +217,7 @@ def test_corrupt_key_marker_sets_flag():
 
 
 def test_calibration_factor_from_write_time(monkeypatch):
-    import purple_tui.canvas.rooms.parent_menu as pm
+    import purplecomputer.rooms.parent_menu as pm
     screen = _make_screen()
     clock = {"t": 1000.0}
     monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
@@ -229,7 +229,7 @@ def test_calibration_factor_from_write_time(monkeypatch):
 
 
 def test_creep_fills_toward_hi_without_reaching_it(monkeypatch):
-    import purple_tui.canvas.rooms.parent_menu as pm
+    import purplecomputer.rooms.parent_menu as pm
     screen = _make_screen()
     clock = {"t": 0.0}
     monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
@@ -255,7 +255,7 @@ def test_creep_disabled_for_pv_driven_band():
 def test_eta_does_not_overpromise_on_slow_tail(monkeypatch):
     """A machine that crawls through the slow tail must not be told '1 minute'
     while minutes of work remain."""
-    import purple_tui.canvas.rooms.parent_menu as pm
+    import purplecomputer.rooms.parent_menu as pm
     screen = _make_screen()
     clock = {"t": 0.0}
     monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
@@ -271,7 +271,7 @@ def test_eta_does_not_overpromise_on_slow_tail(monkeypatch):
 
 
 def test_eta_shows_range_early_and_done_near_end(monkeypatch):
-    import purple_tui.canvas.rooms.parent_menu as pm
+    import purplecomputer.rooms.parent_menu as pm
     screen = _make_screen()
     clock = {"t": 0.0}
     monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
@@ -285,7 +285,7 @@ def test_eta_shows_range_early_and_done_near_end(monkeypatch):
 
 
 def test_eta_hints_have_no_trailing_period(monkeypatch):
-    import purple_tui.canvas.rooms.parent_menu as pm
+    import purplecomputer.rooms.parent_menu as pm
     screen = _make_screen()
     clock = {"t": 0.0}
     monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])

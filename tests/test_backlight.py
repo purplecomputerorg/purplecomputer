@@ -1,4 +1,4 @@
-from purple_tui import backlight
+from purplecomputer import backlight
 
 
 def _device(root, name, value, top):

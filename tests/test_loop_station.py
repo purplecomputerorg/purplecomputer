@@ -6,18 +6,18 @@ Run with: pytest tests/test_loop_station.py -v
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from purple_tui.loop_station import (
+from purplecomputer.loop_station import (
     LoopStation,
     IDLE,
     RECORDING,
     LOOPING,
     MAX_LOOP_DURATION,
 )
-from purple_tui.canvas.rooms.music_room import MODE_MUSIC, MODE_LETTERS
+from purplecomputer.rooms.music_room import MODE_MUSIC, MODE_LETTERS
 
 
 # =============================================================================
@@ -399,7 +399,7 @@ class TestTimeFn:
 # =============================================================================
 
 def test_loop_panel_keeps_grid_size():
-    from purple_tui.canvas.harness import make_app, run
+    from purplecomputer.harness import make_app, run
 
     async def _test():
         app = make_app()
@@ -417,8 +417,8 @@ def test_loop_panel_keeps_grid_size():
 
 
 def test_opening_code_while_looping_stops_the_loop():
-    from purple_tui.canvas.harness import make_app, run
-    from purple_tui.canvas.panels import CodePanel
+    from purplecomputer.harness import make_app, run
+    from purplecomputer.panels import CodePanel
 
     async def _test():
         app = make_app()

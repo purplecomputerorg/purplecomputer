@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-TARGETS = ["purple_tui", "tools", "scripts", "tests"]
+TARGETS = ["purplecomputer", "tools", "scripts", "tests"]
 
 
 def test_ruff_clean():

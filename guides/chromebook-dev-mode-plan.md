@@ -19,7 +19,7 @@ different board.
 
 1. Run Purple on Chromebooks as easily as possible for parents. Key combos beat screws.
 2. Broad, uniform compatibility beats a confusing per-model matrix.
-3. Ubuntu/Debian are not required. The product is the Python UI in `purple_tui/`.
+3. Ubuntu/Debian are not required. The product is the Python UI in `purplecomputer/`.
 4. Lock the machine down: nothing else reachable.
 5. A live-boot and a permanent-install story would be nice; willing to give up live boot.
 
@@ -53,7 +53,7 @@ live stick (the kernel is per-board), and no Ubuntu on Chromebooks.
 - **Install medium:** the existing Purple USB stick carries a `chromebook/` folder. PCs boot the
   stick; Chromebooks read the folder from ChromeOS, which auto-mounts USB at `/media/removable/`.
 - **Userland:** a copy of Google's own rootfs (ROOT-A) placed in ROOT-C, plus a Purple tarball
-  (python-build-standalone, pygame, numpy, piper-tts + voice, fonts, `purple_tui`). One tarball
+  (python-build-standalone, pygame, numpy, piper-tts + voice, fonts, `purplecomputer`). One tarball
   per arch (x86_64, arm64). Purple lives inside ROOT-C, not `/usr/local`, so stateful wipes never
   touch it.
 - **Kernel:** the device's own KERN-A, dumped and repacked with `futility vbutil_kernel --repack`
@@ -232,10 +232,10 @@ Everything in this section is **unverified** until the run notes say otherwise.
 
 **App adapters** (all no-ops off ChromeOS):
 
-- `purple_tui/canvas/kms.py`: the probe's dumb-buffer scanout, shared with `probe.py`.
+- `purplecomputer/kms.py`: the probe's dumb-buffer scanout, shared with `probe.py`.
   `PURPLE_DISPLAY=kms` makes `Gfx` draw to an offscreen XRGB surface and copy it out per dirty
   frame. If DRM master is not free after 3 s it runs `stop frecon`, then `pkill -9 frecon`.
-- `purple_tui/cras.py`: picks the output node (plugged headphones, else internal speaker) at
+- `purplecomputer/cras.py`: picks the output node (plugged headphones, else internal speaker) at
   mixer warm-up and on CRAS's `NodesChanged` D-Bus signal (through `dbus-monitor`, reusing the
   `audio_hotplug` listener). Volume backend `cras`: CRAS steps are 0.5 dB, so the pactl-style
   cubic percent maps to `100 + 120*log10(level/100)`.
@@ -250,7 +250,7 @@ Everything in this section is **unverified** until the run notes say otherwise.
   device): a scan of every import (lazy ones too), subprocess call, `shutil.which` and absolute
   path outside the frozen TUI files. Python: pygame, evdev, piper (numpy, onnxruntime) and `rich`
   (`play_eval` validates markup with it inside a catch-all, so without it every Play answer fell
-  back to letter blocks). Data: only `purple_tui/` and `packs/`. Tools with no ChromeOS
+  back to letter blocks). Data: only `purplecomputer/` and `packs/`. Tools with no ChromeOS
   counterpart: `flite` plus its voice (Quick voice says nothing), `keyd`, `xrandr` and `xterm`
   (both already gated), pactl/paplay/parecord (first-boot sound check skips itself). `install.sh`
   now ends with a dependency check that logs each of these.

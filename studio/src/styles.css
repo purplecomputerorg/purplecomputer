@@ -1,9 +1,9 @@
 /* Purple's own Art letters and code font, so they look here as they will there. */
-@font-face { font-family: PurpleArt; src: url("../../purple_tui/canvas/fonts/MartianMonoArt-Bold.ttf"); }
-@font-face { font-family: PurpleMono; src: url("../../purple_tui/canvas/fonts/IBMPlexMono-Regular.ttf"); }
-@font-face { font-family: PurpleMono; font-weight: 600; src: url("../../purple_tui/canvas/fonts/IBMPlexMono-SemiBold.ttf"); }
-@font-face { font-family: PurpleMono; font-weight: 700; src: url("../../purple_tui/canvas/fonts/IBMPlexMono-Bold.ttf"); }
-@font-face { font-family: PurpleMono; font-style: italic; src: url("../../purple_tui/canvas/fonts/IBMPlexMono-Italic.ttf"); }
+@font-face { font-family: PurpleArt; src: url("../../purplecomputer/fonts/MartianMonoArt-Bold.ttf"); }
+@font-face { font-family: PurpleMono; src: url("../../purplecomputer/fonts/IBMPlexMono-Regular.ttf"); }
+@font-face { font-family: PurpleMono; font-weight: 600; src: url("../../purplecomputer/fonts/IBMPlexMono-SemiBold.ttf"); }
+@font-face { font-family: PurpleMono; font-weight: 700; src: url("../../purplecomputer/fonts/IBMPlexMono-Bold.ttf"); }
+@font-face { font-family: PurpleMono; font-style: italic; src: url("../../purplecomputer/fonts/IBMPlexMono-Italic.ttf"); }
 :root {
   --purple: #5c2d91;
   --purple-dark: #4a2473;

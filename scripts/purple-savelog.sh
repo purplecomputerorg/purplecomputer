@@ -7,7 +7,7 @@
 set -e
 BOOT=/boot/firmware
 if [ "$1" = profile ]; then
-    pid=$(pgrep -f 'python.* -m purple_tui' | head -1)
+    pid=$(pgrep -f 'python.* -m purplecomputer' | head -1)
     [ -n "$pid" ] || { echo "Purple isn't running."; exit 1; }
     echo "Recording for 40 seconds. Press Ctrl+Alt+F1 now and use the slow parts of Purple."
     echo "Then come back here with Ctrl+Alt+F2."

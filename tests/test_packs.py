@@ -12,12 +12,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui import content as content_mod  # noqa: E402
-from purple_tui import tts  # noqa: E402
-from purple_tui.content import PACK_FORMAT, ContentManager  # noqa: E402
-from purple_tui.music_constants import INSTRUMENTS, instruments, pitch_filename, reachable_pitches  # noqa: E402
-from purple_tui.pack_manager import PackInstaller, check_pack  # noqa: E402
-from purple_tui.usb_updater import sha256, update_from  # noqa: E402
+from purplecomputer import content as content_mod  # noqa: E402
+from purplecomputer import tts  # noqa: E402
+from purplecomputer.content import PACK_FORMAT, ContentManager  # noqa: E402
+from purplecomputer.music_constants import INSTRUMENTS, instruments, pitch_filename, reachable_pitches  # noqa: E402
+from purplecomputer.pack_manager import PackInstaller, check_pack  # noqa: E402
+from purplecomputer.usb_updater import sha256, update_from  # noqa: E402
 from scripts.purplepack import build_pack, render_instruments  # noqa: E402
 
 

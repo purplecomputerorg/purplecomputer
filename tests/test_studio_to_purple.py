@@ -13,16 +13,16 @@ from pathlib import Path
 
 import pytest
 
-from purple_tui import pack_arrivals, settings
-from purple_tui.canvas import theme
-from purple_tui.canvas.harness import make_app, press, run, type_text
-from purple_tui.canvas.rooms import save_export
-from purple_tui.usb_updater import sha256, update_from
-from tests.canvas.pack_journey import check, deliver, isolate
-from tests.canvas.real_purple import (ADD_PACK, ART_FIRST_PICTURE, PICTURE_COLORS, SAVE, menu_downs, page_has_colors, play_word,
+from purplecomputer import pack_arrivals, settings
+from purplecomputer import theme
+from purplecomputer.harness import make_app, press, run, type_text
+from purplecomputer.rooms import save_export
+from purplecomputer.usb_updater import sha256, update_from
+from tests.pack_journey import check, deliver, isolate
+from tests.real_purple import (ADD_PACK, ART_FIRST_PICTURE, PICTURE_COLORS, SAVE, menu_downs, page_has_colors, play_word,
                                       replay, to_menu_item)
 
-STUDIO = Path(__file__).parents[2] / "studio"
+STUDIO = Path(__file__).parents[1] / "studio"
 VITE_NODE = STUDIO / "node_modules" / ".bin" / "vite-node"
 EVERYTHING, WORDS = "pack-e2e00001", "pack-e2e00002"
 
@@ -107,7 +107,7 @@ def test_a_download_cut_short_says_so_and_the_rest_still_go_in(sdk_packs, purple
 
 
 def test_a_studio_pack_from_a_newer_format_is_refused_whole(sdk_packs, purple):
-    from purple_tui.content import PACK_FORMAT
+    from purplecomputer.content import PACK_FORMAT
     newer = purple / "newer.purplepack"
     with tarfile.open(sdk_packs["words"]) as src, tarfile.open(newer, "w:gz") as dst:
         for m in src.getmembers():

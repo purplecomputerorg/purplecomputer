@@ -1,7 +1,7 @@
 """Tests for music_constants: verify note names match frequencies."""
 
 import math
-from purple_tui.music_constants import (
+from purplecomputer.music_constants import (
     NOTE_FREQUENCIES, NOTE_NAMES, INSTRUMENTS, PERCUSSION_NAMES, GRID_KEYS,
     pitch_for, pitch_filename, FRIENDLY_KEYS, DEFAULT_ROOT_INDEX,
 )

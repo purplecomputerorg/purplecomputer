@@ -35,7 +35,7 @@ from .default_script import DEMO_SCRIPT, DEMO_SCRIPT_SHORT
 def _load_composition(path: Path) -> list:
     """Load a composed demo from demo.json.
 
-    Each entry names a segment module in purple_tui.demo.segments.
+    Each entry names a segment module in purplecomputer.demo.segments.
     A SetSpeed action is inserted before each segment.
 
     Supports "duration" field: computes speed = natural_duration / target_duration.
@@ -52,7 +52,7 @@ def _load_composition(path: Path) -> list:
     script: list[DemoAction] = [ClearAll()]
     for entry in entries:
         name = entry["segment"]
-        mod = importlib.import_module(f".segments.{name}", package="purple_tui.demo")
+        mod = importlib.import_module(f".segments.{name}", package="purplecomputer.demo")
 
         if "duration" in entry:
             natural = segment_duration(mod.SEGMENT)

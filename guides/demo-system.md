@@ -46,7 +46,7 @@ This is a recording rig for producing the marketing and walkthrough video, not a
 just run-demo
 ```
 
-Each `--save` creates a segment file in `purple_tui/demo/segments/` and adds it to `demo.json`. The demo plays all segments in order.
+Each `--save` creates a segment file in `purplecomputer/demo/segments/` and adds it to `demo.json`. The demo plays all segments in order.
 
 ---
 
@@ -54,7 +54,7 @@ Each `--save` creates a segment file in `purple_tui/demo/segments/` and adds it 
 
 ### demo.json
 
-The file `purple_tui/demo/demo.json` lists which segments to play and in what order:
+The file `purplecomputer/demo/demo.json` lists which segments to play and in what order:
 
 ```json
 [
@@ -63,7 +63,7 @@ The file `purple_tui/demo/demo.json` lists which segments to play and in what or
 ]
 ```
 
-Each entry names a Python module in `purple_tui/demo/segments/`. The `speed` field is optional.
+Each entry names a Python module in `purplecomputer/demo/segments/`. The `speed` field is optional.
 
 You don't need to create this file manually. `--save` builds it up as you generate segments. To start over, delete the file.
 
@@ -80,7 +80,7 @@ Just edit the JSON array:
 
 ### Removing a Segment
 
-Delete its line from `demo.json`. You can also delete the segment file from `purple_tui/demo/segments/` if you no longer need it.
+Delete its line from `demo.json`. You can also delete the segment file from `purplecomputer/demo/segments/` if you no longer need it.
 
 ### Per-Segment Speed
 
@@ -165,10 +165,10 @@ Without `--save`, it writes to `recorded_script.py` (legacy behavior).
 
 ### Writing a Segment by Hand
 
-Create a Python file in `purple_tui/demo/segments/`:
+Create a Python file in `purplecomputer/demo/segments/`:
 
 ```python
-# purple_tui/demo/segments/greeting.py
+# purplecomputer/demo/segments/greeting.py
 from ..script import SwitchRoom, TypeText, PressKey, Pause
 
 SEGMENT = [
@@ -228,11 +228,11 @@ handle_keyboard_action()  (same path as real keyboard input)
 ```
 
 Key files:
-- `purple_tui/demo/script.py`: action dataclasses (TypeText, PlayKeys, DrawPath, etc.)
-- `purple_tui/demo/player.py`: executes scripts by dispatching actions
-- `purple_tui/demo/__init__.py`: `get_demo_script()` and composition loading
-- `purple_tui/demo/segments/`: one file per segment
-- `purple_tui/demo/default_script.py`: the hand-crafted fallback
+- `purplecomputer/demo/script.py`: action dataclasses (TypeText, PlayKeys, DrawPath, etc.)
+- `purplecomputer/demo/player.py`: executes scripts by dispatching actions
+- `purplecomputer/demo/__init__.py`: `get_demo_script()` and composition loading
+- `purplecomputer/demo/segments/`: one file per segment
+- `purplecomputer/demo/default_script.py`: the hand-crafted fallback
 
 ### Segment Format
 
@@ -439,7 +439,7 @@ You're in text mode. Press Tab to switch to paint mode. `DrawPath` does this aut
 Check which keyboard row the key is on (QWERTY=red, ASDF=yellow, ZXCV=blue).
 
 **Demo doesn't use my segments.**
-Check that `demo.json` exists in `purple_tui/demo/` and that the segment names match files in `purple_tui/demo/segments/`.
+Check that `demo.json` exists in `purplecomputer/demo/` and that the segment names match files in `purplecomputer/demo/segments/`.
 
 **Demo plays the old monolithic script.**
 Delete `demo.json` to fall back to `recorded_script.py`, or delete both to fall back to `default_script.py`.

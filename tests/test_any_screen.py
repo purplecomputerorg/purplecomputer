@@ -3,8 +3,8 @@ fills the viewport in whole cells with its hint row lined up under it."""
 
 import pytest
 
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.constants import ART_BAND_UNITS, ART_COLS, ART_ROWS, ART_SIDE_UNITS
+from purplecomputer.harness import make_app, run
+from purplecomputer.constants import ART_BAND_UNITS, ART_COLS, ART_ROWS, ART_SIDE_UNITS
 
 SCREENS = [(1024, 768), (1280, 800), (1366, 768), (1440, 900), (1920, 1080), (2256, 1504), (2560, 1080)]
 
@@ -34,7 +34,7 @@ def test_chrome_scales_with_the_frame(size):
 
 
 def _sleep_text(app):
-    from purple_tui.canvas.rooms.sleep_screen import FullScreen
+    from purplecomputer.rooms.sleep_screen import FullScreen
     screen = FullScreen(app)
     screen.message, screen.status = "Sleeping", "Battery. Shuts off in about 1 hr."
     return screen
@@ -42,7 +42,7 @@ def _sleep_text(app):
 
 def _install(phase, diag=()):
     def make(app):
-        from purple_tui.canvas.rooms.parent_menu import InstallProgressScreen
+        from purplecomputer.rooms.parent_menu import InstallProgressScreen
         screen = InstallProgressScreen(app)
         screen._phase, screen._diag_lines = phase, list(diag)
         return screen

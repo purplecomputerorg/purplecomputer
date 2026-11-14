@@ -23,9 +23,9 @@ from functools import lru_cache
 
 import pygame
 
-from ... import palette as P
-from ...keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
-from ...palette import DEFAULT_BRUSH_COLOR
+from .. import palette as P
+from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
+from ..palette import DEFAULT_BRUSH_COLOR
 from .. import color_recipe
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import rgb

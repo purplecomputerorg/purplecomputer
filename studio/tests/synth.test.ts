@@ -3,7 +3,7 @@ import golden from "./golden.json";
 import exported from "../sdk/src/purple/export.json";
 import { BASES, BASE_NAMES, SYNTH_RATE, defaults, renderNote, type BaseName, type Params } from "../sdk/src/purple/synth";
 
-// golden.json is rendered by purple_tui/synth.py (scripts/export_studio.py). One LSB of slack covers
+// golden.json is rendered by purplecomputer/synth.py (scripts/export_studio.py). One LSB of slack covers
 // the last-bit differences between libm and V8 before int() truncation; nothing else may differ.
 const toInt16 = (out: Float32Array) => Array.from(out, (s) => Math.round(s * 32767));
 

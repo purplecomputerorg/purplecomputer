@@ -1,6 +1,6 @@
 """TextField recall hint: a typo correction outlives repaints."""
 
-from purple_tui.canvas.ui import TextField
+from purplecomputer.ui import TextField
 
 
 def test_correction_survives_repaints_until_next_edit():

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadPyodide } from "pyodide";
-import purpleSource from "../../purple_tui/roomkit/purple.py?raw";
-import runnerSource from "../../purple_tui/roomkit/runner.py?raw";
+import purpleSource from "../../purplecomputer/roomkit/purple.py?raw";
+import runnerSource from "../../purplecomputer/roomkit/runner.py?raw";
 import guest from "../src/rooms/guest.py?raw";
 import { BLANK_ROOMS, EXAMPLES, TEMPLATES, quizSource, soundboardSource } from "../src/examples";
 import { blankRules, rulesSource, type Rule } from "../src/rules";

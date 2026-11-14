@@ -216,7 +216,7 @@ def test_boot_timing_timeline_is_seconds_since_boot(tmp_path):
         f"[{stamp(9.5)}] [wait-display]   connector at start: card0-eDP-1 = connected (gpu)\n"
         f"[{stamp(12)}] [xinitrc] === xinitrc started ===  debug_flag=no\n"
         f"[{stamp(13)}] [usb-cache] Caching squashfs for USB safety...\n"
-        f"[{stamp(14)}] [launcher] exec python3 -m purple_tui\n"
+        f"[{stamp(14)}] [launcher] exec python3 -m purplecomputer\n"
         f"[{stamp(14.2)}] [+ 0.010s] [python] watchdog armed\n"
         f"[{stamp(95)}] [+80.810s] [python] PurpleApp.__init__ begin\n"
         f"[{stamp(100)}] [+85.810s] [python] first render reached; watchdog disarmed\n"
@@ -472,7 +472,7 @@ def test_poweroff_binary_staged_in_ram_every_boot():
     assert 'scripts/purple-stage-reboot.sh "$MOUNT_DIR/usr/local/bin/purple-stage-reboot"' in src
     assert "systemctl enable purple-stage-reboot.service" in src
     assert "/usr/local/bin/purple-stage-reboot" in (ROOT / "build-scripts" / "install.sh").read_text()
-    from purple_tui.constants import REBOOT_BIN
+    from purplecomputer.constants import REBOOT_BIN
     assert REBOOT_BIN.startswith("/run/purple-reboot-mount/")
     assert "DIR=/run/purple-reboot-mount" in (ROOT / "scripts" / "purple-stage-reboot.sh").read_text()
 

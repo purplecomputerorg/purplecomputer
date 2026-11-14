@@ -2,7 +2,7 @@
 
 import pytest
 
-from purple_tui.canvas.harness import make_app, press, run, type_text
+from purplecomputer.harness import make_app, press, run, type_text
 
 SIZES = [(1024, 768), (1366, 768), (1440, 900)]
 
@@ -55,12 +55,12 @@ def test_overlays_and_panels_draw():
         app.top.close(None)
         app.action_parent_menu()
         app._draw()
-        from purple_tui.canvas.rooms.parent_menu import (ComputerNameScreen, DisplaySettingsScreen, InstallConfirmScreen,
+        from purplecomputer.rooms.parent_menu import (ComputerNameScreen, DisplaySettingsScreen, InstallConfirmScreen,
                                                    LittlesModeScreen, ParentVolumeModal, PinEntry, ReinstallConfirmScreen,
                                                    TerminalScreen, UnreadableReinstallScreen)
-        from purple_tui.canvas.rooms.help_videos import HelpVideosScreen
-        from purple_tui.canvas.rooms.sleep_screen import FirstBootPowerCycleScreen, LiveBootSplash, ShutdownConfirmScreen, SleepScreen
-        from purple_tui.canvas.rooms.support_info import SupportInfoScreen
+        from purplecomputer.rooms.help_videos import HelpVideosScreen
+        from purplecomputer.rooms.sleep_screen import FirstBootPowerCycleScreen, LiveBootSplash, ShutdownConfirmScreen, SleepScreen
+        from purplecomputer.rooms.support_info import SupportInfoScreen
         for overlay in (LittlesModeScreen(app), ComputerNameScreen(app), InstallConfirmScreen(app), PinEntry(app),
                         ReinstallConfirmScreen(app), UnreadableReinstallScreen(app),
                         ParentVolumeModal(app), DisplaySettingsScreen(app), HelpVideosScreen(app),

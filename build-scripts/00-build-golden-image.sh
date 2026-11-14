@@ -861,7 +861,7 @@ LEANINITRD
     fi
     log_info "Sound modules verified"
 
-    # UI fonts ship inside purple_tui/canvas/fonts; Noto Color Emoji comes from apt above.
+    # UI fonts ship inside purplecomputer/fonts; Noto Color Emoji comes from apt above.
     # The parent-menu xterm resolves IBM Plex Mono from that bundled dir via
     # XDG_DATA_HOME (see rooms/parent_menu.py), so no system font install here.
 
@@ -882,7 +882,7 @@ LEANINITRD
     cat > "$MOUNT_DIR/etc/tmpfiles.d/purple.conf" <<'TMPFILES'
 d /var/log/purple 0755 purple purple -
 TMPFILES
-    cp -r /purple-src/purple_tui "$MOUNT_DIR/opt/purple/"
+    cp -r /purple-src/purplecomputer "$MOUNT_DIR/opt/purple/"
     cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
@@ -914,7 +914,7 @@ TMPFILES
     # USB. Saves ~1-2s per cold boot on slow machines where bytecode generation
     # is noticeable. -f forces overwrite, -q stays quiet, -j 0 uses all cores.
     log_info "Precompiling Python bytecode..."
-    chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /opt/purple/purple_tui || true
+    chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /opt/purple/purplecomputer || true
     chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /usr/lib/python3 || true
     chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /usr/local/lib/python3 || true
 
@@ -998,7 +998,7 @@ TMPFILES
     # Create launcher script
     # The launcher writes timestamped markers to the boot log before and
     # around the python exec so we can tell whether a hang is in the shell
-    # launcher, the python interpreter startup, or purple_tui's imports.
+    # launcher, the python interpreter startup, or purplecomputer's imports.
     cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
 #!/bin/bash
 # Launches the Purple app (an SDL window on the X session xinitrc started).
@@ -1021,14 +1021,14 @@ export PYTHONUNBUFFERED=1
 export PYTHONFAULTHANDLER=1
 export PYGAME_HIDE_SUPPORT_PROMPT=1
 
-_log "exec python3 -m purple_tui"
-exec python3 -m purple_tui "$@"
+_log "exec python3 -m purplecomputer"
+exec python3 -m purplecomputer "$@"
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"
     # Parent Menu terminal: `check-room` lists the family rooms on this computer and says why one stopped
-    printf '#!/bin/sh\nPYTHONPATH=/opt/purple exec python3 -m purple_tui.roomkit.check "$@"\n' > "$MOUNT_DIR/usr/local/bin/check-room"
+    printf '#!/bin/sh\nPYTHONPATH=/opt/purple exec python3 -m purplecomputer.roomkit.check "$@"\n' > "$MOUNT_DIR/usr/local/bin/check-room"
     chmod +x "$MOUNT_DIR/usr/local/bin/check-room"
-    printf '#!/bin/sh\nPYTHONPATH=/opt/purple exec python3 -m purple_tui.stay_awake "$@"\n' > "$MOUNT_DIR/usr/local/bin/stay-awake"
+    printf '#!/bin/sh\nPYTHONPATH=/opt/purple exec python3 -m purplecomputer.stay_awake "$@"\n' > "$MOUNT_DIR/usr/local/bin/stay-awake"
     chmod +x "$MOUNT_DIR/usr/local/bin/stay-awake"
 
     # Mask getty@tty1: the purple-x11 service owns tty1 directly (no login shell needed)
@@ -1067,9 +1067,9 @@ BACK
     cat > "$MOUNT_DIR/usr/local/bin/dump-purple" <<'DUMP'
 #!/bin/bash
 set -e
-pid=$(pgrep -f 'python.* -m purple_tui' | head -1)
+pid=$(pgrep -f 'python.* -m purplecomputer' | head -1)
 if [ -z "$pid" ]; then
-    echo "no purple_tui process found" >&2
+    echo "no purplecomputer process found" >&2
     exit 1
 fi
 echo "dumping threads for pid=$pid"
@@ -1144,7 +1144,7 @@ purple ALL=(ALL) NOPASSWD: ALL
 SUDOERS
     chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-nopasswd"
 
-    # purple may start exactly the sealed room launcher, with no arguments (canvas/rooms/family_room.py)
+    # purple may start exactly the sealed room launcher, with no arguments (purplecomputer/rooms/family_room.py)
     install -m 755 /purple-src/scripts/purple-room-run.sh "$MOUNT_DIR/usr/local/bin/purple-room-run"
     cat > "$MOUNT_DIR/etc/sudoers.d/purple-room" <<'SUDOERS'
 purple ALL=(root) NOPASSWD: /usr/local/bin/purple-room-run ""
@@ -1305,7 +1305,7 @@ JOURNAL
 
     # Family packs from any USB drive, the Purple Key included: udev starts
     # the templated unit, which mounts the drive read-only and runs
-    # purple_tui.usb_updater when it has packs on it. See
+    # purplecomputer.usb_updater when it has packs on it. See
     # studio/PACK_FORMAT.md, "Where packs live".
     mkdir -p "$MOUNT_DIR/etc/udev/rules.d"
     cp /purple-src/config/udev/99-purple-update.rules "$MOUNT_DIR/etc/udev/rules.d/"
@@ -1341,7 +1341,7 @@ JOURNAL
     log_info "Verifying audio pipeline is configured..."
     AUDIO_MISSING=""
     chroot "$MOUNT_DIR" bash -c "command -v pulseaudio >/dev/null" || AUDIO_MISSING="$AUDIO_MISSING pulseaudio"
-    # pactl is the runtime volume backend (purple_tui/audio.py); without it
+    # pactl is the runtime volume backend (purplecomputer/audio.py); without it
     # volume silently falls back to amixer's linear-raw scale.
     chroot "$MOUNT_DIR" bash -c "command -v pactl >/dev/null" || AUDIO_MISSING="$AUDIO_MISSING pulseaudio-utils"
     # Guard against the duplicate-load footgun ever coming back.

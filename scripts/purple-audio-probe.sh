@@ -4,7 +4,7 @@
 # at the end (the full log is saved next to the boot dumps).
 #
 # Unlike purple-audio-dump this one is ACTIVE: it plays the startup chime and
-# records it with the built-in mic (purple_tui/sound_check.py, the same check
+# records it with the built-in mic (purplecomputer/sound_check.py, the same check
 # the app runs at startup), and it loads the speech model to time it.
 # Rationale and what to look for: docs/PLAN-audio-volume.md, "Hands-on probe".
 set +e
@@ -73,14 +73,14 @@ pa pactl list sinks 2>&1 | grep -E 'Name:|Description:|^\s+Volume:|Base Volume|A
 echo "--- sources ---"
 pa pactl list sources 2>&1 | grep -E 'Name:|Description:|^\s+Volume:|Base Volume|Active Port|Mute:'
 
-if [ ! -d "$SRC/purple_tui" ]; then
+if [ ! -d "$SRC/purplecomputer" ]; then
     section "mic loopback and speech timing"
-    echo "$SRC/purple_tui not found (set PURPLE_SRC); skipped"
+    echo "$SRC/purplecomputer not found (set PURPLE_SRC); skipped"
 else
     section "mic loopback: the startup chime at the Medium step, recorded by the default source"
     # Drops the mic gain a step each time the chord clips, restores sink and
     # source state, and prints the summary line last.
-    OUT=$(pa env PYTHONPATH="$SRC" python3 -m purple_tui.sound_check 2>&1)
+    OUT=$(pa env PYTHONPATH="$SRC" python3 -m purplecomputer.sound_check 2>&1)
     echo "$OUT"
     note "$(echo "$OUT" | tail -1)"
 
@@ -89,7 +89,7 @@ else
     PYTHONPATH="$SRC" python3 - "$SUMMARY_FILE" <<'PY'
 import os, sys, tempfile, time
 t = time.monotonic()
-from purple_tui.tts import load_voice, synthesize_to_file, find_voice_model
+from purplecomputer.tts import load_voice, synthesize_to_file, find_voice_model
 print(f"  import tts        {time.monotonic() - t:5.1f}s")
 model = find_voice_model()
 print(f"  model             {model} ({model.stat().st_size // 2**20 if model else 0} MB)")

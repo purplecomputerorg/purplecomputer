@@ -27,7 +27,7 @@ from .i18n import fold, read_words
 # old steps). The canvas draws it.
 WORD_PICTURE_FIRST = 0x100000
 WORD_PICTURE_SPAN = 0xFFFE
-INSTRUMENT_PICTURES = Path(__file__).parent / "canvas" / "images" / "instruments"
+INSTRUMENT_PICTURES = Path(__file__).parent / "images" / "instruments"
 
 
 def is_word_picture(char: str) -> bool:

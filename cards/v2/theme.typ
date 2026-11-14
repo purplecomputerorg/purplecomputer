@@ -11,7 +11,7 @@
 #let magenta = rgb("#9b59d0")
 #let lilac = rgb("#efe6fa")
 
-// The box set in order. After Start, cards wear the keyboard's sticker rows (purple_tui/palette.py).
+// The box set in order. After Start, cards wear the keyboard's sticker rows (purplecomputer/palette.py).
 #let SET = (
   (name: "Start", color: purple),
   (name: "Rooms", color: rgb("#E44444")),
@@ -42,7 +42,7 @@
   text(font: "Figtree", weight: "semibold", size: size, fill: purple-dk, k),
 )
 #let key(k) = keycap(k, size: 0.86em)
-// The app's own Nerd Font icons (purple_tui/constants.py), so the card matches the screen
+// The app's own Nerd Font icons (purplecomputer/constants.py), so the card matches the screen
 #let icon(cp, fill: purple) = text(font: "Symbols Nerd Font Mono", fill: fill, cp)
 #let ICONS = (
   art: "\u{F03D8}", music: "\u{F001}", play: "\u{F0B79}", blocks: "\u{F01A7}",
@@ -53,7 +53,7 @@
 )
 // Studio's own section icons (studio/src/main.ts SECTIONS, drawn from studio/src/icons)
 #let studio-icon(code) = box(baseline: 15%, image("/studio/src/icons/" + code + ".svg", height: 1em))
-// A key wearing its real sticker color (purple_tui/palette.py KEY_COLORS)
+// A key wearing its real sticker color (purplecomputer/palette.py KEY_COLORS)
 #let sticker(k, hex, ink: purple-dk) = box(inset: (x: 0.36em), outset: (y: 0.24em), radius: 2.6pt, fill: rgb(hex),
   text(font: "Figtree", weight: "bold", size: 0.86em, fill: ink, k))
 

@@ -150,7 +150,7 @@ The DSP chain is critical. Apple's speakers are driven hard and rely on software
 
 **Lid close:** triggers s2idle (freeze). Battery drain during sleep is approximately 2% per hour (50% overnight). Compare to macOS at 1-2% over 8 hours. This is because the hardware isn't properly powered down during suspend.
 
-**Purple Computer's workaround:** logind ignores the lid entirely (`HandleLidSwitch=ignore`, configured in `00-build-golden-image.sh`); the TUI handles lid close itself (`purple_tui/power_manager.py`): immediate sleep face, shutdown after 10 minutes. Suspend is never used, which sidesteps the battery drain problem entirely. The same approach would apply on Apple Silicon.
+**Purple Computer's workaround:** logind ignores the lid entirely (`HandleLidSwitch=ignore`, configured in `00-build-golden-image.sh`); the TUI handles lid close itself (`purplecomputer/power_manager.py`): immediate sleep face, shutdown after 10 minutes. Suspend is never used, which sidesteps the battery drain problem entirely. The same approach would apply on Apple Silicon.
 
 **Power button:** logind ignores it; the TUI handles tap (sleep face) and 3-second hold (shutdown). Same as on Intel Purple Computer systems.
 
@@ -166,7 +166,7 @@ The Python TUI code is 100% architecture-independent:
 
 | Component | Why it's portable |
 |-----------|------------------|
-| `purple_tui/` (all Python code) | Pure Python, no native extensions |
+| `purplecomputer/` (all Python code) | Pure Python, no native extensions |
 | Textual / Rich | Pure Python |
 | evdev (Python package) | Small C extension, works on all Linux architectures. Pre-built in Fedora aarch64 repos. |
 | NumPy | Official aarch64 wheels on PyPI. Pre-built in Fedora aarch64 repos. |

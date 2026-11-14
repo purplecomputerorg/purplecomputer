@@ -1,7 +1,7 @@
-"""Paint the saved pictures (purple_tui.secret_doodle) onto the canvas Art room."""
+"""Paint the saved pictures (purplecomputer.secret_doodle) onto the canvas Art room."""
 
-from ..secret_doodle import build_ops
-from ..secret_photo import OPS
+from .secret_doodle import build_ops
+from .secret_photo import OPS
 
 
 def paint_picture(art, cells: list, letters: list = (), grid=None) -> None:

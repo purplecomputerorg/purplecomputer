@@ -1,4 +1,4 @@
-"""A family room's process. On the laptop, canvas/rooms/family_room.py starts it
+"""A family room's process. On the laptop, rooms/family_room.py starts it
 (sealed by /usr/local/bin/purple-room-run on the ISO) with python3 -I -S, so
 nothing beside the room is importable by accident; Studio's room worker calls
 serve() itself. The first line in is the start event, carrying the pack's

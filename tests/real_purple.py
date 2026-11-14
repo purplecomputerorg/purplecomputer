@@ -7,7 +7,7 @@ import time
 
 import pygame
 
-from purple_tui.canvas.harness import press
+from purplecomputer.harness import press
 
 # A key, or (key, seconds held). Room picker digits are the kid rooms in order: 1 Art, 2 Music, 3 Play.
 ADD_PACK = ["enter", "enter", "escape"]          # Add, check the first new room, done
@@ -29,7 +29,7 @@ def to_menu_item(downs: int) -> list:
 
 def menu_downs(app, item: str) -> int:
     """Down presses from the Parent Menu's first row to item, on a live boot as the ISO is."""
-    from purple_tui.canvas.rooms import parent_menu
+    from purplecomputer.rooms import parent_menu
     real = parent_menu.is_live_boot
     parent_menu.is_live_boot = lambda: True
     try:
@@ -43,7 +43,7 @@ HELD = {"escape": 1}  # evdev keycodes: a held key goes through the keyboard sta
 
 
 async def replay(app, script: list) -> None:
-    from purple_tui.input import RawKeyEvent
+    from purplecomputer.input import RawKeyEvent
     for key in script:
         name, hold = key if isinstance(key, tuple) else (key, 0.0)
         if hold and name not in HELD:

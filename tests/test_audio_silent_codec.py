@@ -9,8 +9,8 @@ vetoed, unless a USB adapter is present (a real output Pulse can route to).
 
 import os
 
-from purple_tui import mixer as music_room
-from purple_tui.mixer import output_is_known_silent
+from purplecomputer import mixer as music_room
+from purplecomputer.mixer import output_is_known_silent
 
 
 def _make_codec(root, card, dev, chip_name):

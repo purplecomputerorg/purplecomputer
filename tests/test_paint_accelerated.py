@@ -7,9 +7,9 @@ since a second coat re-mixes to a different shade)."""
 
 from contextlib import asynccontextmanager
 
-from purple_tui.canvas.harness import make_app, run as _run
-from purple_tui.keyboard import NavigationAction
-from purple_tui.canvas.rooms.art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER
+from purplecomputer.harness import make_app, run as _run
+from purplecomputer.keyboard import NavigationAction
+from purplecomputer.rooms.art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER
 
 
 @asynccontextmanager

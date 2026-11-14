@@ -8,17 +8,17 @@ from pathlib import Path
 
 import pytest
 
-from purple_tui import content
-from purple_tui import palette as P
-from purple_tui import settings
-from purple_tui.canvas import theme
-from purple_tui.canvas.harness import make_app, run
-from purple_tui.canvas.rooms.art_room import shift_from
-from purple_tui.constants import OLD_ART_GRID
-from purple_tui.music_constants import instruments
+from purplecomputer import content
+from purplecomputer import palette as P
+from purplecomputer import settings
+from purplecomputer import theme
+from purplecomputer.harness import make_app, run
+from purplecomputer.rooms.art_room import shift_from
+from purplecomputer.constants import OLD_ART_GRID
+from purplecomputer.music_constants import instruments
 from tests.test_packs import make_pack
 
-LIVE = Path(__file__).parents[2] / "studio" / "src" / "live" / "live.py"
+LIVE = Path(__file__).parents[1] / "studio" / "src" / "live" / "live.py"
 ID = "the-tests-pack"
 
 
@@ -149,7 +149,7 @@ def test_the_familys_rooms_wait_in_the_esc_menu(live, tmp_path, monkeypatch):
 
 
 def test_a_room_partway_written_is_caught_before_it_runs(live):
-    from purple_tui.roomkit import purple
+    from purplecomputer.roomkit import purple
     names = [*purple.__all__, "on_key", "on_key_up"]
     for starter in (LIVE.parents[1] / "examples").glob("*.py"):
         assert live.check(starter.read_text(), names) is None, starter.name
@@ -165,7 +165,7 @@ def test_the_browser_speaks_with_purples_own_arguments():
     import ast
     import inspect
 
-    from purple_tui import tts
+    from purplecomputer import tts
 
     shim = ast.parse((LIVE.parent / "browser.py").read_text())
     ours = next(n for n in ast.walk(shim) if isinstance(n, ast.FunctionDef) and n.name == "speak_many")

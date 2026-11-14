@@ -4,7 +4,7 @@ Goal: after 2.0 ships, how families build rooms (Blockly, forms, Python, sprites
 
 ## The idea
 
-Purple keeps only what a sandboxed process can't do itself: a screen, a speaker, a voice, a keyboard, a clock, and a small notebook (`keep`). Everything that makes a room a *room* (the grid, `show`, `ask`, timers, `game_over`, a Pygame Zero layer later) lives in the guest library, `purple_tui/roomkit/purple.py`, and every pack carries its own copy as `content/rooms/purple.py`. The Key freezes a protocol with nothing left to grow: four events in, one reply out with five optional fields, three shapes, four sounds.
+Purple keeps only what a sandboxed process can't do itself: a screen, a speaker, a voice, a keyboard, a clock, and a small notebook (`keep`). Everything that makes a room a *room* (the grid, `show`, `ask`, timers, `game_over`, a Pygame Zero layer later) lives in the guest library, `purplecomputer/roomkit/purple.py`, and every pack carries its own copy as `content/rooms/purple.py`. The Key freezes a protocol with nothing left to grow: four events in, one reply out with five optional fields, three shapes, four sounds.
 
 Two rules keep it simple:
 

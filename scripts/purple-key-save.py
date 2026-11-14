@@ -54,7 +54,7 @@ MARKER = "/run/purple/key-save"  # "partition offset sequence": Purple reads it 
 LOCK = "/run/purple/key-save.lock"
 CONFIG_DIR = "/home/purple/.config/purple"
 USER = "purple"
-# Exit codes Purple reads (purple_tui/canvas/key_save.py)
+# Exit codes Purple reads (purplecomputer/key_save.py)
 OK, NO_FILE, GONE, FULL = 0, 2, 3, 4
 # The build reads this line with sed (01-remaster-iso.sh): keep it one plain string.
 PRISTINE_HEAD = "PURPLE-SAVE: what your kid made on this Key (settings, Time Travel and saved work). Purple writes it in place; please don't delete or edit it."

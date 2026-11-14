@@ -61,7 +61,7 @@ install_app() {
     check_deps
 }
 
-# Everything Purple reaches outside its own tree, from an audit of purple_tui (imports incl. lazy
+# Everything Purple reaches outside its own tree, from an audit of purplecomputer (imports incl. lazy
 # ones, subprocess calls, shutil.which). A miss is logged, not fatal: most features degrade alone.
 PY_MODULES="pygame numpy evdev rich piper onnxruntime"
 TOOLS_NEEDED="cras_test_client dbus-send dbus-monitor udevadm poweroff sudo timeout setsid pgrep initctl cgpt rootdev"

@@ -18,8 +18,8 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
 import pytest
 
-from purple_tui import fuzzy
-from purple_tui.content import ContentManager, pluralize
+from purplecomputer import fuzzy
+from purplecomputer.content import ContentManager, pluralize
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +116,7 @@ def test_no_subsecond_timers_while_idle():
     """An idle Purple must not wake the CPU several times a second: no blink,
     no reaper, no fast poll. Dev-mode screenshot triggers (0.1s/0.2s) are
     exempt: they never ship enabled."""
-    from purple_tui.canvas.harness import make_app, run
+    from purplecomputer.harness import make_app, run
 
     async def scenario():
         app = make_app()
@@ -132,7 +132,7 @@ def test_typing_and_repainting_stays_cheap():
     """Each keystroke redraws the whole screen from cached text; eight of them,
     frames included, must stay well inside a keystroke's worth of time even on
     a 20x slower laptop."""
-    from purple_tui.canvas.harness import make_app, press, run
+    from purplecomputer.harness import make_app, press, run
 
     async def scenario():
         app = make_app()
@@ -151,8 +151,8 @@ def test_typing_and_repainting_stays_cheap():
 def test_play_history_is_not_relaid_out_every_frame(monkeypatch):
     """Play measures every history row each frame; a repaint with nothing new
     must answer from the layout cache, or frame cost grows with the scrollback."""
-    from purple_tui.canvas.gfx import Gfx
-    from purple_tui.canvas.harness import make_app, press, run, type_text
+    from purplecomputer.gfx import Gfx
+    from purplecomputer.harness import make_app, press, run, type_text
 
     async def scenario():
         app = make_app(room="play")

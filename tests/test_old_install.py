@@ -1,6 +1,6 @@
 """Live boots on a laptop that already has Purple: one shared probe, and the splash and menu say so."""
-from purple_tui.canvas import old_install
-from purple_tui.canvas.rooms import parent_menu
+from purplecomputer import old_install
+from purplecomputer.rooms import parent_menu
 
 
 def test_probe_runs_once_and_retries_when_it_could_not_run(monkeypatch):

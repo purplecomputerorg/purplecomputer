@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes purple_tui/canvas/images/instruments/<id>.svg and a 128px .png (needs inkscape),
+"""Writes purplecomputer/images/instruments/<id>.svg and a 128px .png (needs inkscape),
 the Letters switch's names and sounds pictures to images/letters/, and the Tab
 switches' paint, notes, abc, front and back pictures to images/modes/, and pictures that stand
 in for words in hint lines to images/hints/.
@@ -14,7 +14,7 @@ from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
 
-IMAGES = Path(__file__).resolve().parent.parent / "purple_tui" / "canvas" / "images"
+IMAGES = Path(__file__).resolve().parent.parent / "purplecomputer" / "images"
 FONTS = {w: TTFont(IMAGES.parent / "fonts" / f"Figtree-{w}.ttf") for w in ("Bold", "SemiBold")}  # real type, not hand-drawn strokes
 OUT, LETTERS, MODES, HINTS = IMAGES / "instruments", IMAGES / "letters", IMAGES / "modes", IMAGES / "hints"
 D, P3, P5, P6 = "#2a1650", "#a379e8", "#dfc9ff", "#f6efff"

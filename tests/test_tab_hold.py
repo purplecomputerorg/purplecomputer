@@ -1,7 +1,7 @@
 """Holding Tab emits one tab action, so mode toggles flip once, not per repeat."""
 
-from purple_tui.input import KeyCode, RawKeyEvent
-from purple_tui.keyboard import ControlAction, KeyboardStateMachine
+from purplecomputer.input import KeyCode, RawKeyEvent
+from purplecomputer.keyboard import ControlAction, KeyboardStateMachine
 
 
 def test_held_tab_emits_one_action():

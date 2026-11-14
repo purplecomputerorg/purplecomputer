@@ -27,9 +27,9 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 os.environ.setdefault("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
 import pygame  # noqa: E402
 
-from .. import i18n, palette as P
-from ..content import get_content, is_word_picture
-from ..palette import NAMED_COLORS, rgb
+from . import i18n, palette as P
+from .content import get_content, is_word_picture
+from .palette import NAMED_COLORS, rgb
 
 FONT_DIR = Path(__file__).parent / "fonts"
 IMAGE_DIR = Path(__file__).parent / "images"
@@ -226,7 +226,7 @@ class Gfx:
             self.surface = pygame.Surface(size or (1366, 768))
         elif os.environ.get("PURPLE_DISPLAY") == "kms":
             from . import kms
-            from .. import boot_log
+            from . import boot_log
             self._kms = kms.open_display(log=boot_log.heartbeat)
             self.surface = self._kms.make_surface(pygame)
         else:
@@ -258,7 +258,7 @@ class Gfx:
     @staticmethod
     def _cap_screen() -> bool:
         from . import screen_size
-        from .. import boot_log
+        from . import boot_log
         info = pygame.display.Info()
         try:
             return screen_size.cap(info.current_w, info.current_h, boot_log.heartbeat)

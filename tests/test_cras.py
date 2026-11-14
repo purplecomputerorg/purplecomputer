@@ -1,6 +1,6 @@
 """CRAS glue: node choice and volume mapping. Dump lines are from a real ChromeOS 96 device."""
 
-from purple_tui import cras
+from purplecomputer import cras
 
 SPEAKER = "    (72a57953)    9:0       75 0.000000     yes                no    1789917063            INTERNAL_SPEAKER     2 Speaker"
 HEADPHONE = "    (9e934263)    9:1      100 0.000000      {plugged}                no             0            HEADPHONE     2 Headphone"

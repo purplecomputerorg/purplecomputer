@@ -6,7 +6,7 @@ emits one (x, y, "#rrggbb") paint op per cell, written as a generated data
 module plus a PNG preview of the expected canvas.
 
 Usage:
-    just python tools/photo_to_art.py PHOTO [--out purple_tui/secret_photo.py]
+    just python tools/photo_to_art.py PHOTO [--out purplecomputer/secret_photo.py]
 """
 
 import argparse
@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image
 
-from purple_tui.canvas.rooms.art_room import COLS as CANVAS_WIDTH, ROWS as CANVAS_HEIGHT, CANVAS_BG as DEFAULT_BG_DARK
+from purplecomputer.rooms.art_room import COLS as CANVAS_WIDTH, ROWS as CANVAS_HEIGHT, CANVAS_BG as DEFAULT_BG_DARK
 
 CELL_ASPECT = 2  # a canvas cell is twice as tall as it is wide
 PREVIEW_CELL_PX = 10
@@ -93,7 +93,7 @@ def write_preview(cells: list[list[str]], preview_path: str) -> None:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("photo")
-    parser.add_argument("--out", default="purple_tui/secret_photo.py")
+    parser.add_argument("--out", default="purplecomputer/secret_photo.py")
     parser.add_argument("--preview", default="/tmp/screenshots/photo_to_art_preview.png")
     args = parser.parse_args()
 

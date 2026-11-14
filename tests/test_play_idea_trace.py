@@ -1,4 +1,4 @@
-from purple_tui.canvas.ui import HintRotator, TextField
+from purplecomputer.ui import HintRotator, TextField
 
 
 def test_traced_idea_only_while_the_text_starts_it():

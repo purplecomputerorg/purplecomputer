@@ -11,7 +11,7 @@ echo
 HOME="$(pwd)/.test_home" PYTHONPATH="$(pwd)" python3 - <<'EOF'
 import hashlib, json, string
 from pathlib import Path
-from purple_tui.content import get_content
+from purplecomputer.content import get_content
 
 core = Path("packs/core-sounds/content/letters")
 dirs = get_content().pack_dirs("letters") + [core]

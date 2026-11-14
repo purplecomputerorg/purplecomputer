@@ -31,16 +31,16 @@ def _repo(tmp_path):
     repo = tmp_path / 'repo'
     repo.mkdir()
     _git(repo, 'init', '-qb', 'main')
-    (repo / 'purple_tui').mkdir()
-    (repo / 'purple_tui' / '__init__.py').write_text('__version__ = "2.0.0"\n')
-    _commit(repo, 'build-scripts/00-build-golden-image.sh', 'cp -r /purple-src/purple_tui "$X"\n')
+    (repo / 'purplecomputer').mkdir()
+    (repo / 'purplecomputer' / '__init__.py').write_text('__version__ = "2.0.0"\n')
+    _commit(repo, 'build-scripts/00-build-golden-image.sh', 'cp -r /purple-src/purplecomputer "$X"\n')
     return repo
 
 
 def test_counts_only_image_commits(tmp_path):
     repo = _repo(tmp_path)
     assert _version(repo) == 'v2.0.1'
-    _commit(repo, 'purple_tui/room.py')
+    _commit(repo, 'purplecomputer/room.py')
     _commit(repo, 'docs/notes.md')
     _commit(repo, 'studio/app.ts')
     assert _version(repo) == 'v2.0.2'
@@ -49,14 +49,14 @@ def test_counts_only_image_commits(tmp_path):
 def test_counts_on_from_the_newest_tag(tmp_path):
     repo = _repo(tmp_path)
     _git(repo, 'tag', 'v2.0.40')
-    _commit(repo, 'purple_tui/room.py')
+    _commit(repo, 'purplecomputer/room.py')
     assert _version(repo) == 'v2.0.41'
 
 
 def test_nothing_for_uncommitted_or_off_main(tmp_path):
     repo = _repo(tmp_path)
-    (repo / 'purple_tui' / 'room.py').write_text('dirty')
+    (repo / 'purplecomputer' / 'room.py').write_text('dirty')
     assert _version(repo) == ''
     _git(repo, 'checkout', '-qb', 'lane')
-    _commit(repo, 'purple_tui/room.py')
+    _commit(repo, 'purplecomputer/room.py')
     assert _version(repo) == ''

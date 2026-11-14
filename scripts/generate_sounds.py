@@ -24,10 +24,10 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 SOUNDS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.music_constants import (  # noqa: F401  reachable_pitches re-exported for older scripts
+from purplecomputer.music_constants import (  # noqa: F401  reachable_pitches re-exported for older scripts
     note_frequency, pitch_filename, reachable_pitches,
 )
-from purple_tui.synth import (  # noqa: F401  re-exported for the clip analysis scripts
+from purplecomputer.synth import (  # noqa: F401  re-exported for the clip analysis scripts
     finalize_samples, generate_accordion, generate_glockenspiel, generate_marimba, generate_ukulele,
     loudness_compensated_peak, low_freq_partial_boost,
 )

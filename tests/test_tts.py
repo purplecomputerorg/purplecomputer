@@ -8,7 +8,7 @@ os.environ['SDL_AUDIODRIVER'] = 'dummy'
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
-from purple_tui import tts
+from purplecomputer import tts
 
 
 class TestCache:
@@ -123,7 +123,7 @@ class TestQuickVoice:
         assert tts._engine() == tts.VOICE_QUICK
 
     def test_set_voice_persists_and_updates_engine(self, monkeypatch, tmp_path):
-        from purple_tui import settings
+        from purplecomputer import settings
         monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
         monkeypatch.setattr(tts, "_voice_pref", None)
         monkeypatch.setattr(tts, "preload", lambda: None)
@@ -142,7 +142,7 @@ def _fake_voice(synths):
 
 def test_worker_process_serves_requests(monkeypatch):
     import io
-    from purple_tui import tts_worker
+    from purplecomputer import tts_worker
     synths, written = [], []
     monkeypatch.setattr(tts, "load_voice", lambda *model: _fake_voice(synths))
     monkeypatch.setattr(tts, "_make_synth_config", lambda *model: None)
@@ -167,7 +167,7 @@ def test_preload_talks_to_the_worker_and_falls_back_when_it_dies(monkeypatch):
     monkeypatch.setattr(tts, "_preload_started", False)
     monkeypatch.setattr(tts, "_worker", None)
     tts._worker_ready.clear()
-    from purple_tui import audio
+    from purplecomputer import audio
     logged = []
     monkeypatch.setattr(audio, "_log", logged.append)
 

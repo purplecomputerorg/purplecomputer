@@ -809,7 +809,7 @@ main() {
             # Record that audio worked during the live session. The first
             # installed boot uses this to tell a warm-reboot codec wedge
             # (fixable by a power off) apart from hardware that never had
-            # sound. Consumed by the TUI; see purple_tui/rooms/sleep_screen.py.
+            # sound. Consumed by purple_tui/canvas/rooms/sleep_screen.py.
             if [ "$PURPLE_LIVE_AUDIO_OK" = "1" ]; then
                 mkdir -p /mnt/root/var/log/purple
                 if touch /mnt/root/var/log/purple/audio-worked-in-live 2>/dev/null; then
@@ -823,7 +823,6 @@ main() {
             # install's settings, Time Travel history and packs, plus the saves made
             # on the Purple Key. Otherwise the live session comes over whole
             # (settings, so first boot doesn't chime again, history and saves).
-            # PURPLE_LIVE_SETTINGS alone is what the Textual UI passes.
             if [ -n "$PURPLE_KEEP_DIR" ] && [ -d "$PURPLE_KEEP_DIR/config" ]; then
                 carry_over "$PURPLE_KEEP_DIR/config/." "Earlier install's settings and history"
                 if [ -d "$PURPLE_KEEP_DIR/.purple" ]; then
@@ -904,7 +903,7 @@ main() {
     log "============================================"
 
     # Prep for reboot while still running as root with USB present.
-    # Python cannot do these without sudo, and sudo from within Textual hangs.
+    # Python cannot do these without sudo.
     touch /run/casper-no-prompt
 
     # Normally staged at boot; with --wait it shows a message, waits for

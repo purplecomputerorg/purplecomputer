@@ -59,7 +59,7 @@ install_now() {
     printf '   > '
     read answer
     [ "$answer" = "YES" ] || stop "Okay, nothing was changed."
-    # install.sh's [PURPLE-PV] percent lines feed the TUI on a live session;
+    # install.sh's [PURPLE-PV] percent lines feed Purple on a live session;
     # here they become one updating line instead of a 15-minute scroll.
     { PURPLE_PAYLOAD_DIR=$KEY/purple32 bash $KEY/purple/install.sh; echo $? > /tmp/rc; } 2>&1 \
         | awk '/^\[PURPLE-PV/ { printf "\r   %s%% done   ", $2; fflush(); next } { print }'

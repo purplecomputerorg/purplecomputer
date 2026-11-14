@@ -11,7 +11,6 @@ Purplepacks are content-only (JSON + assets) - NO executable Python code.
 
 import hashlib
 import json
-import os
 import re
 import zlib
 from dataclasses import dataclass, field
@@ -440,8 +439,6 @@ class ContentManager:
 
     def _load_instrument_pictures(self) -> None:
         """Purple's own instruments' pictures, drawn like word pictures; after the packs so their words keep their characters."""
-        if os.environ.get("PURPLE_UX") == "tui":
-            return
         for path in sorted(INSTRUMENT_PICTURES.glob("*.png")):
             char = self._free_picture_char(f"instrument:{path.stem}")
             self.word_pictures[char] = path
@@ -497,9 +494,9 @@ class ContentManager:
                 pass
 
     def _load_word_pictures(self, content_dir: Path) -> None:
-        """content/word-pictures.json: word -> one of the pack's content/images. The Textual UI can't draw them."""
+        """content/word-pictures.json: word -> one of the pack's content/images."""
         data = _read_json(content_dir / "word-pictures.json")
-        if not isinstance(data, dict) or os.environ.get("PURPLE_UX") == "tui":
+        if not isinstance(data, dict):
             return
         for word, name in data.items():
             path = content_dir / "images" / f"{name}.png"

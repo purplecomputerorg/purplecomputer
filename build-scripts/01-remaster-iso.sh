@@ -45,7 +45,7 @@ create_live_boot_hook() {
 #
 # Runs after casper mounts the live root. Sets up dotfiles, debug mode,
 # and the boot splash. Installation is handled by the parent menu in
-# the running TUI (parent_menu.py), not by this hook.
+# the running app (parent_menu.py), not by this hook.
 
 PREREQ=""
 DESCRIPTION="Setting up Purple Computer..."

@@ -60,7 +60,7 @@
  "fingerprint": {
   "studio/sdk/src/pack.ts": "4bda6eab26531484",
   "studio/src/pack.ts": "1c116cf864839672",
-  "purple_tui/content.py": "211425c285072be4",
+  "purple_tui/content.py": "08c36e31a0a171ce",
   "purple_tui/pack_manager.py": "41f6ab779c96aafd",
   "purple_tui/canvas/theme.py": "0bf49d8c2e458225",
   "purple_tui/canvas/rooms/family_room.py": "6bab47ad736c726b",

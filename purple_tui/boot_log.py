@@ -5,8 +5,8 @@ Purpose
 -------
 When a customer reports "purple takes forever to start" or "purple hangs on
 boot on my old MacBook", we need to know *which line* of startup is stuck.
-Symptoms up to this module have been: alacritty is visible, cursor is blinking,
-Textual never appears. Gathering anything useful after that requires physical
+Symptoms up to this module have been: a blank or purple screen, and the app
+never appears. Gathering anything useful after that requires physical
 access, function keys (which Touch Bar Macs don't have), and a USB keyboard.
 
 This module gives us two things instead:
@@ -24,8 +24,8 @@ This module gives us two things instead:
 Design rules (so this can ship in standard AND debug ISOs)
 ---------------------------------------------------------
 - Only stdlib imports (no side effects from third-party packages).
-- File descriptors only. Never touches stdout or stderr. Textual owns stderr
-  for its UI, so printing there would corrupt the display.
+- File descriptors only. Never touches stdout or stderr, which land in the
+  xinitrc log.
 - Writes are single-line appends to a tmpfs path and (when writable) a
   casper-persistent path. No flushing of anything else, no fsync.
 - The watchdog thread sleeps most of the time; when `mark_first_render` is
@@ -100,7 +100,7 @@ def heartbeat(phase: str) -> None:
     (two file appends). Never touches stdout/stderr. Never raises.
 
     Example line:
-        [13:42:07.832] [+0.412s] [python] textual imported
+        [13:42:07.832] [+0.412s] [python] pygame imported
     """
     try:
         now = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -111,7 +111,7 @@ def heartbeat(phase: str) -> None:
 
 
 def mark_first_render() -> None:
-    """Signal that Textual has painted its first frame.
+    """Signal that the app has painted its first frame.
 
     After this is called, the startup watchdog stops dumping. Idempotent.
     Safe to call from any thread.
@@ -183,8 +183,7 @@ def _install_watchdog() -> None:
 
     # PYTHONFAULTHANDLER=1 in the launcher enables stderr dumps on signals;
     # faulthandler.enable(file=...) redirects those to our log file too, so
-    # a SIGSEGV during startup lands in the boot log instead of corrupting
-    # the Textual screen.
+    # a SIGSEGV during startup lands in the boot log.
     try:
         faulthandler.enable(file=_fault_fd, all_threads=True)
     except Exception:

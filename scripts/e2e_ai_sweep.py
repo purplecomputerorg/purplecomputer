@@ -53,7 +53,7 @@ Write Markdown, starting at a level-2 heading (the title and scenario table are 
 
 ## How to use this
 A few lines for the agent: verify each issue's repro before changing code (an AI tester can be wrong), read
-CLAUDE.md first (only the canvas UI and Studio get fixes, the Textual UI is frozen), and add a test for each
+CLAUDE.md first, and add a test for each
 real bug (tests/canvas/, studio tests, or tests/canvas/test_studio_to_purple.py for pack round trips).
 
 ## Fix these
@@ -191,9 +191,7 @@ def gather(done: list[dict], shots: Path) -> list[dict]:
 def file_list() -> str:
     files = subprocess.run(["git", "ls-files", "studio/src", "studio/sdk", "purple_tui", "packs", "tests/canvas"],
                            cwd=ROOT, capture_output=True, text=True).stdout.split()
-    tui = ("purple_tui/rooms/", "purple_tui/purple_tui.py", "purple_tui/modal.py", "purple_tui/repl_panel.py",
-           "purple_tui/loop_panel.py", "purple_tui/time_travel.py")
-    return "\n".join(f for f in files if f.endswith((".py", ".ts", ".css", ".html")) and not f.startswith(tui))
+    return "\n".join(f for f in files if f.endswith((".py", ".ts", ".css", ".html")))
 
 
 def write_up(client, runs: list[dict]) -> tuple[str, float]:

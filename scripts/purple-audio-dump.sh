@@ -1,7 +1,7 @@
 #!/bin/bash
 # Purple Computer: post-boot audio diagnostic dump.
 #
-# Fires once per boot, ~12s after purple-x11.service starts (giving the TUI's
+# Fires once per boot, ~12s after purple-x11.service starts (giving Purple's
 # mixer warmup retry chain 0.5+1+2s and the first 5s retry-poll tick time to
 # land), and writes a snapshot to /var/log/purple/audio-<boot-id-prefix>.log.
 #

@@ -13,7 +13,7 @@ from purple_tui.keyboard import HoldOrTap
 
 
 class FakeTimer:
-    """Fake Textual timer for testing."""
+    """Fake timer for testing."""
 
     def __init__(self, callback):
         self.callback = callback

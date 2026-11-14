@@ -9,7 +9,7 @@ import subprocess
 import sys
 import threading as _threading
 # Suppress ALSA error/log messages before pygame imports ALSA.
-# These corrupt Textual's stderr-based UI. Install null handlers for both paths.
+# They flood the xinitrc log. Install null handlers for both paths.
 def _suppress_alsa_output():
     try:
         import ctypes
@@ -50,7 +50,7 @@ def _suppress_alsa_output():
 
 # pygame.mixer.init() blocks in C code holding the GIL on broken audio hw
 # (T2 Macs, some Surfaces/AMDs). A stuck call wedges the whole interpreter
-# — Textual stops rendering, evdev grab stays held, only a power cycle
+# — the app stops rendering, evdev grab stays held, only a power cycle
 # recovers. So we probe in a subprocess first (subprocess wait releases the
 # GIL; SIGKILL on timeout), and only init in-process after the probe passes.
 # See guides/boot-hang-debugging.md.

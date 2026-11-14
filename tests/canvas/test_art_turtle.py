@@ -9,7 +9,7 @@ from purple_tui.canvas.rooms.art_room import ArtRoom as ArtCanvas, HEADING_TURNS
 
 # ---------------------------------------------------------------------------
 # Helpers: lightweight canvas mock that has the real turn/execute_logo_command
-# logic but doesn't need a Textual app running.
+# logic but doesn't need an app running.
 # ---------------------------------------------------------------------------
 
 class FakeCanvas:

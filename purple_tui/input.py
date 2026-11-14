@@ -5,7 +5,7 @@ Reads keyboard events directly from Linux evdev, bypassing the terminal.
 This gives us true key up/down events, precise timing, and access to all keys
 including media keys (volume).
 
-The terminal (Alacritty) is display-only. Keyboard input flows:
+The window is display-only. Keyboard input flows:
   evdev → EvdevReader → RawKeyEvent → App
 
 IMPORTANT: Purple Computer requires Linux with evdev. macOS is not supported.
@@ -548,7 +548,7 @@ class EvdevReader:
         Re-acquire the keyboard grab after suspend.
 
         Call this after the terminal session ends and before
-        the TUI resumes normal operation.
+        Purple resumes normal operation.
         """
         import select
 
@@ -616,7 +616,7 @@ class EvdevReader:
                             )
 
                     # Emergency VT switch: Ctrl+\ held 3s or Ctrl+Alt+F2 → chvt 2
-                    # Runs at evdev level so it works even when Textual is hung.
+                    # Runs at evdev level so it works even when the app is hung.
                     if keycode in (KeyCode.KEY_LEFTCTRL, KeyCode.KEY_RIGHTCTRL):
                         self._ctrl_held = is_down
                         if not is_down:
@@ -1013,8 +1013,8 @@ class PowerButtonReader:
     (HP Stream 11), so presses closer than PRESS_DEBOUNCE_SECS count once;
     otherwise the second copy confirms the shutdown prompt the first opened.
 
-    Hold detection uses asyncio timers, independent of Textual's event loop.
-    This ensures reliable detection even if the TUI is suspended.
+    Hold detection uses asyncio timers, independent of the app's render loop.
+    This ensures reliable detection even if the app is stalled.
 
     Usage:
         async def handle_power(event: PowerButtonEvent):

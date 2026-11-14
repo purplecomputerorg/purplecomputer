@@ -58,7 +58,7 @@ FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame lin
 SIDE_MARGIN_VW = 6            # air beside the frame
 TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
 STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
-STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge, like the TUI's room bar
+STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge
 TIMELINE_DEBOUNCE_S = 0.5     # a Time Travel step once play pauses this long,
 TIMELINE_MAX_WAIT_S = 2.0     # or this often through steady play
 TIMELINE_FINE_FOR_S = 5 * 60  # steps stay that fine this long, then thin to one per pause
@@ -1685,7 +1685,6 @@ class PurpleApp:
             get_selected_menu_label=self._selected_menu_label,
             get_cursor_position=self._get_cursor_position,
             zoom_events_file=os.environ.get("PURPLE_ZOOM_EVENTS"),
-            code_via_menu=True,
         )
         exit_after = os.environ.get("PURPLE_DEMO_AUTOSTART")
 

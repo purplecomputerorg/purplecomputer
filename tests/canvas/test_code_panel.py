@@ -403,7 +403,7 @@ def test_demo_scripts_toggle_code_through_the_esc_menu(name):
 
     async def go():
         app, room = await _room(name)
-        player = PlaybackPlayer(dispatch_action=app._dispatch_keyboard_action, speed_multiplier=50, code_via_menu=True)
+        player = PlaybackPlayer(dispatch_action=app._dispatch_keyboard_action, speed_multiplier=50)
         await player.play([ToggleCode()])
         assert room.code_panel is not None and not app._overlays
         await player.play([ToggleCode()])

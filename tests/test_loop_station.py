@@ -17,7 +17,7 @@ from purple_tui.loop_station import (
     LOOPING,
     MAX_LOOP_DURATION,
 )
-from purple_tui.music_session import MODE_MUSIC, MODE_LETTERS
+MODE_MUSIC, MODE_LETTERS = "music", "letters"
 
 
 # =============================================================================

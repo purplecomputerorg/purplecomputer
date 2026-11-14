@@ -105,7 +105,6 @@ recordings/*.mp4
 pytest-of-*/
 
 .ai_ux_last_args.json
-.ai_ux_hunt/
 .flash-denylist.conf
 
 # Purple Studio (studio/, web)

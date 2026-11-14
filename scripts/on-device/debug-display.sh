@@ -170,7 +170,7 @@ compositor() {
 
 # ---------------------------------------------------------------------------
 # On-demand repro: drive partial redraws of a few cells, the same music-grid
-# keystroke pattern that exposes the tear. Same Alacritty -> X -> scanout path.
+# keystroke pattern that exposes the tear. Same app -> X -> scanout path.
 # ---------------------------------------------------------------------------
 repro() {
     if [ ! -t 0 ]; then echo "repro needs an interactive terminal (run it from Open Terminal)."; exit 1; fi

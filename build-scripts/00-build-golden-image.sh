@@ -996,7 +996,6 @@ TMPFILES
     echo "d3fb6b1c4f781fc5c9b1ea5efdc8c46c1ce5e74cf349cd78c1fae3c0e19d7c9f  $FLITE_VOICE_DIR/cmu_us_lnh.flitevox" | sha256sum -c --quiet -
 
     # Create launcher script
-    # NOTE: Do NOT redirect stderr - Textual writes its UI to stderr!
     # The launcher writes timestamped markers to the boot log before and
     # around the python exec so we can tell whether a hang is in the shell
     # launcher, the python interpreter startup, or purple_tui's imports.
@@ -1115,20 +1114,20 @@ SPLASHUNIT
     chroot "$MOUNT_DIR" systemctl enable purple-splash.service
 
     # Configure systemd-logind for power management
-    # The Purple TUI handles power button and lid close with kid-friendly UX:
+    # Purple handles power button and lid close with kid-friendly UX:
     #   Power tap = sleep screen, power hold 3s = shutdown, lid close = shutdown after 2 min
-    # logind is set to ignore so the TUI has full control.
-    # If the TUI isn't running, idle shutdown (30 min) and hardware power-off (10s hold) still work.
+    # logind is set to ignore so Purple has full control.
+    # If Purple isn't running, idle shutdown (30 min) and hardware power-off (10s hold) still work.
     mkdir -p "$MOUNT_DIR/etc/systemd/logind.conf.d"
     cat > "$MOUNT_DIR/etc/systemd/logind.conf.d/purple-power.conf" <<'LOGIND'
 # Purple Computer power management
-# TUI handles all power UX. logind ignores buttons so TUI has full control.
+# Purple handles all power UX. logind ignores buttons so Purple has full control.
 # Hardware 10-second power hold always works as emergency off (ACPI).
 [Login]
-# Power button: TUI handles tap (sleep) and hold (shutdown)
+# Power button: Purple handles tap (sleep) and hold (shutdown)
 HandlePowerKey=ignore
 HandlePowerKeyLongPress=ignore
-# Lid: TUI handles it (immediate sleep face, shutdown after 10 min)
+# Lid: Purple handles it (immediate sleep face, shutdown after 10 min)
 HandleLidSwitch=ignore
 HandleLidSwitchExternalPower=ignore
 HandleLidSwitchDocked=ignore

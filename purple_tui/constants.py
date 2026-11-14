@@ -21,61 +21,20 @@ def is_debug() -> bool:
     from pathlib import Path
     return Path(DEBUG_FLAG_PATH).exists()
 
-# =============================================================================
-# ROOM NAMES
-# =============================================================================
-# Central location for room names to keep them DRY across the codebase.
-# Format: (id, label) where id is lowercase for internal use, label is display text.
-
-ROOM_PLAY = ("play", "Play")           # Math and emoji REPL
-ROOM_MUSIC = ("music", "Music")        # Music and art grid
-ROOM_ART = ("art", "Art")              # Drawing canvas
-ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a switchable room)
-
-# =============================================================================
-# TERMINAL LAYOUT CONSTANTS
-# =============================================================================
-# These define the terminal grid required for the full UI.
-# Font size is calculated to fill the screen (see scripts/calc_font_size.py).
-#
-# Normal mode layout (from purple_tui.py CSS):
-#   - Title row: 1h + margin-bottom 1h = 2 rows
-#   - Viewport: VIEWPORT_HEIGHT + border(2) rows
-#   - Room indicator: margin-top 1h + height 3h = 4 rows
-#
-# Code space layout (font shrinks so more rows fit):
-#   - Title row: hidden (display: none)
-#   - Viewport: VIEWPORT_HEIGHT + border-top(1) rows (no bottom border)
-#   - Code panel: CODE_PANEL_MIN_HEIGHT rows (flexible via 1fr, no top border)
-#   - Compact indicator: 1 row (no margin)
 
 ART_COLS, ART_ROWS = 70, 30   # the canvas Art grid, in square cells
 ART_SIDE_UNITS, ART_BAND_UNITS = 1, 3   # Art's margin beside the grid, and its header and hint bands
 # The canvas viewport in square units, one unit per Art cell, so Art fills it in whole cells on every
-# screen and leftover pixels land outside the frame. 72x36: the terminal UI's 2:1 shape.
+# screen and leftover pixels land outside the frame. 72x36, a 2:1 shape.
 CANVAS_COLS = ART_COLS + 2 * ART_SIDE_UNITS
 CANVAS_ROWS = ART_ROWS + 2 * ART_BAND_UNITS
 # Art's grid before it grew: pack pictures and Art states that name no grid were made on it, and are centered on today's.
 OLD_ART_GRID = (56, 24)
 
-VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
-VIEWPORT_HEIGHT = 29          # Viewport widget height (CSS)
-REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2 + 5 + 5  # Full UI width (+ border + spacer + legend)
-
-# Normal mode: title(2) + viewport+border(32) + indicator margin(1) + indicator(3)
-_TITLE_ROWS = 2               # Title row + margin-bottom
-_VIEWPORT_ROWS = VIEWPORT_HEIGHT + 2  # Content + heavy border
-_INDICATOR_ROWS = 4            # margin-top(1) + height(3)
-REQUIRED_TERMINAL_ROWS = _TITLE_ROWS + _VIEWPORT_ROWS + _INDICATOR_ROWS
-# Centering reference for #viewport-wrapper: rows below the title bar in normal mode.
-WRAPPER_REFERENCE_ROWS = _VIEWPORT_ROWS + _INDICATOR_ROWS
-
 # =============================================================================
 # TIMING
 # =============================================================================
 
-# Timing
-TOGGLE_DEBOUNCE = 0.3        # Delay before speaking toggle state (debounce rapid toggles)
 STICKY_SHIFT_GRACE = 8.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 HOLD_OR_TAP_THRESHOLD = 0.8  # Space/Enter hold threshold for code panel / loop mode (seconds)
@@ -90,38 +49,22 @@ VOLUME_LEVELS = [0, 15, 19, 23, 28, 35, 43, 53, 66, 81, 100]
 VOLUME_DEFAULT = 53  # volume 7: where a first boot starts when the chime can't measure
 
 # Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
-# These require JetBrainsMono Nerd Font. Unicode emoji (🐱 🎉) use Noto Color Emoji.
 # Volume icons (nf-md-volume variants)
 ICON_VOLUME_OFF = "󰖁"       # nf-md-volume_off (muted)
 ICON_VOLUME_LOW = "󰕿"       # nf-md-volume_low
 ICON_VOLUME_MED = "󰖀"       # nf-md-volume_medium
 ICON_VOLUME_HIGH = "󰕾"      # nf-md-volume_high
 VOLUME_ICONS = [ICON_VOLUME_OFF] + [ICON_VOLUME_LOW] * 3 + [ICON_VOLUME_MED] * 4 + [ICON_VOLUME_HIGH] * 3
-ICON_VOLUME_DOWN = "󰝞"      # nf-md-volume_minus
-ICON_VOLUME_UP = "󰝝"        # nf-md-volume_plus
-ICON_ERASER = "󰇾"           # nf-md-eraser
 ICON_SAVE = "󰆓"             # nf-md-content_save
-ICON_LOAD = "󰈔"             # nf-md-file_import
 ICON_PALETTE = "󰏘"          # nf-md-palette
 ICON_MUSIC = "\uf001"       # nf-fa-music
-ICON_MUSIC_NOTE = "\U000f0387"  # nf-md-music_note_outline (single note for flash)
 ICON_DRUM = "\uee32"        # nf-fa-drum
-ICON_LOOP = ""        # nf-fa-repeat (looping indicator)
 ICON_CHAT = "󰭹"             # nf-md-chat_question
-ICON_DOCUMENT = "󰏫"         # nf-md-file_document
-ICON_MOON = "󰖙"             # nf-md-weather_night
-ICON_SUN = "󰖨"              # nf-md-weather_sunny
 ICON_MENU = "󰀻"             # nf-md-apps (grid icon for room picker)
 ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
-ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)
-ICON_SHIFT = "⇧"             # Unicode upward arrow (shift indicator)
-ICON_SHIFT_ACTIVE = "⬆"       # Unicode upward arrow (shift active, filled)
-ICON_CODE = "󰚩"               # nf-md-robot (code room)
 ICON_KEYBOARD = "󰌌"          # nf-md-keyboard (key capture indicator)
-ICON_TAB = "󰌒"                # nf-md-keyboard_tab
 ICON_BROOM = "󰃢"              # nf-md-broom (start fresh / clear)
-ICON_ROBOT = "󰚩"              # nf-md-robot (same as ICON_CODE, for code space toggle)
-ICON_TIME_TRAVEL = "󰕍"        # nf-md-restore (Time Travel scrubbing)
+ICON_ROBOT = "󰚩"              # nf-md-robot (code space toggle)
 ICON_COMPUTER = "\U000F0379"  # nf-md-monitor (this computer, title bar)
 ICON_LAPTOP = "\U000F0322"    # nf-md-laptop (lid status lines)
 ICON_PLUG = "\U000F06A5"      # nf-md-power_plug (plugged in)
@@ -135,27 +78,10 @@ ICON_BATTERY_LOW = "󰁻"      # nf-md-battery_20 (10-29%)
 ICON_BATTERY_EMPTY = "󰂃"    # nf-md-battery_alert (<10%)
 ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
 
-APP_BACKGROUND = "#1e1033"
 
 # USB / installed indicator
 ICON_USB = "\uf287"           # nf-fa-usb
-ICON_SIGN_OUT = "\uf08b"     # nf-fa-sign_out
 ICON_HARDDISK = "󰋊"         # nf-md-harddisk (installed)
-
-
-def display_len(text: str) -> int:
-    """String length adjusted for double-wide Nerd Font icons in JetBrainsMono.
-
-    Nerd Font glyphs in the Private Use Area render as 2 cells wide,
-    but Python's len() counts them as 1. This adds 1 for each such character.
-    """
-    extra = 0
-    for ch in text:
-        cp = ord(ch)
-        # Nerd Font PUA ranges: U+E000-U+F8FF (BMP PUA), U+F0000-U+FFFFF (Supp PUA-A)
-        if 0xE000 <= cp <= 0xF8FF or 0xF0000 <= cp <= 0xFFFFF:
-            extra += 1
-    return len(text) + extra
 
 
 # Where the live stick keeps its squashfs and install payload: casper's paths,
@@ -188,7 +114,7 @@ UI_READY_MARKER = "/tmp/purple-ui-ready"
 # Written into the installed system by install.sh when audio worked during
 # the live session; consumed on the first installed boot to tell "worked
 # minutes ago, silent now" (warm-reboot codec wedge, fixed by a power off)
-# apart from hardware that never had sound. See rooms/sleep_screen.py.
+# apart from hardware that never had sound. See canvas/rooms/sleep_screen.py.
 LIVE_AUDIO_MARKER = "/var/log/purple/audio-worked-in-live"
 
 # PURPLE_FAKE_USB env var simulates USB boot states for testing.
@@ -273,13 +199,6 @@ def is_usb_reinserted() -> bool:
         return _FAKE_USB == "reinserted"
     return not is_usb_present() and any(os.path.exists(os.path.join(DISK_BY_LABEL_DIR, label)) for label in USB_LABELS)
 
-# Room titles with icons (uses room name constants)
-ROOM_TITLES = {
-    ROOM_PLAY[0]: (ICON_CHAT, ROOM_PLAY[1]),
-    ROOM_MUSIC[0]: (ICON_MUSIC, ROOM_MUSIC[1]),
-    ROOM_ART[0]: (ICON_PALETTE, ROOM_ART[1]),
-}
-
 # =============================================================================
 # ZOOM REGIONS FOR DEMO RECORDING
 # =============================================================================
@@ -289,10 +208,6 @@ ROOM_TITLES = {
 # The post-processor calculates actual pixels based on recording resolution.
 #
 # Note: "input" focuses on the Play room input area (bottom portion of viewport).
-
-# =============================================================================
-# ZOOM REGIONS FOR DEMO RECORDING
-# =============================================================================
 ZOOM_REGIONS = {
     # Full viewport (no zoom, 100% of content visible)
     "viewport": (0.5, 0.5, 1.0, 1.0),

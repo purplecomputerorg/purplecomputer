@@ -44,7 +44,7 @@ def check_power_button():
 
     if not found:
         print("  No device with KEY_POWER found!")
-        print("  The TUI power button handler won't work.")
+        print("  Purple power button handler won't work.")
     else:
         # Show which one the app would pick (fewest keys, same as PowerButtonReader)
         found.sort(key=lambda x: x[2])

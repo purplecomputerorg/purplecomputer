@@ -69,8 +69,7 @@ class PressKey(PlaybackAction):
 
 @dataclass
 class ToggleCode(PlaybackAction):
-    """Open or close the code panel with the gesture this UI uses: holding
-    Space in the Textual UI, Esc then Space in the canvas UI."""
+    """Open or close the code panel: Esc, then Space on the Code card."""
     pause_after: float = 0.5
 
 

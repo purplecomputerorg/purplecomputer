@@ -12,8 +12,6 @@ echo "  Purple Computer - Debug Shell"
 echo "============================================"
 echo ""
 echo "--- Display ---"
-python3 /opt/purple/calc_font_size.py --info 2>&1 || echo "  (calc_font_size.py not found)"
-echo ""
 echo "Terminal: $(tput cols)x$(tput lines)"
 echo ""
 echo "--- Scaling ---"
@@ -31,7 +29,6 @@ echo ""
 
 # Handy aliases
 alias purple='/usr/local/bin/purple'
-alias fontinfo='python3 /opt/purple/calc_font_size.py --info'
 alias bootlog='cat /tmp/xinitrc.log'
 
 PS1='\[\e[35m\]purple-debug\[\e[0m\]:\w\$ '

@@ -474,9 +474,8 @@ _WORKER_REPLY_TIMEOUT = 30.0
 
 
 def _worker_stderr():
-    from .stderr_guard import LOG_PATH
     try:
-        return open(LOG_PATH, "ab")
+        return open("/tmp/purple-stderr.log", "ab")
     except OSError:
         return subprocess.DEVNULL
 

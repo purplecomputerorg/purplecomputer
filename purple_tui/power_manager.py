@@ -123,8 +123,8 @@ _POWEROFF_BACKSTOP_SECS = 8
 def set_logind_power_key(mode: str) -> bool:
     """Switch logind HandlePowerKey between 'ignore' and 'poweroff'.
 
-    Used to let logind handle shutdown directly when the TUI is suspended
-    (e.g., parent menu bash shell), then restore TUI control after.
+    Used to let logind handle shutdown directly when Purple is suspended
+    (e.g., parent menu bash shell), then restore its control after.
 
     Returns True on success. Fails silently (best effort).
     """

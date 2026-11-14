@@ -111,10 +111,10 @@ xlog "matchbox-window-manager started"
 # Tear-free compositor. The modesetting driver has no TearFree option, so this
 # is what stops old Intel panels flashing a checkerboard of the old+new frame
 # during transitions. Guarded launcher: never blocks or fails the session.
-# Backgrounded, and held until the TUI has painted its first frame (Purple
+# Backgrounded, and held until Purple has painted its first frame (Purple
 # touches UI_READY_MARKER then). picom's GL-context init is its slowest step,
 # and on the oldest Intel target (the only machine slow enough to notice) it
-# otherwise contends with the Python/Textual/pygame import + first-paint crunch
+# otherwise contends with the Python/pygame import + first-paint crunch
 # and stretches time-to-interactive. The compositor only protects user-driven
 # transitions, which can't happen that early, so waiting costs nothing. The
 # marker beats a fixed sleep: it tracks the actual end of the crunch on any

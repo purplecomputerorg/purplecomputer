@@ -31,7 +31,7 @@ if [ -n "$running_pid" ]; then
     exit 0
 fi
 
-# Hardware GL for the compositor regardless of the session's Alacritty GL
+# Hardware GL for the compositor regardless of the session's GL
 # mode (purple-gl-probe decides that separately). glx gives reliable vsync;
 # xrender is the no-GL fallback. Without a GPU render node (plain VM VGA, a
 # GPU with no driver) glx lands on llvmpipe, where picom stays up but stops

@@ -53,6 +53,16 @@ planned_iso_variants() {
     return 0
 }
 
+# A full build (step 0, not --fast) ends with the Raspberry Pi card image.
+pi_in_full_build() {
+    [ "${FAST_BUILD:-0}" != "1" ] && [ "${START_STEP:-0}" -le 0 ]
+}
+
+# pi_image_for_commit <short hash>: newest full (not --fast) Pi image of that commit, or nothing.
+pi_image_for_commit() {
+    ls -t "$OUTPUT_DIR"/purple-pi-*-"$1".img.xz 2>/dev/null | head -1
+}
+
 # planned_build_stem <commit> [name]: path stem (no variant suffix) a build of
 # that commit writes today, given FAST_BUILD; name defaults to purple-installer.
 # The commit keeps a same-day build of another branch from overwriting this one.
@@ -69,6 +79,7 @@ planned_iso_names() {
     for variant in $(planned_iso_variants); do
         echo "$(basename "$(variant_path "$stem" "$variant")")  ($(variant_label "$variant"))"
     done
+    if pi_in_full_build; then echo "$(basename "$(planned_build_stem "$PURPLE_COMMIT" purple-pi)").img.xz  (Raspberry Pi card image)"; fi
 }
 
 # Stem of an existing build of git commit <hash> that already has every variant
@@ -87,6 +98,7 @@ existing_build_for_hash() {
         for variant in $(planned_iso_variants); do
             [ -f "$(variant_path "$stem" "$variant")" ] || continue 2
         done
+        ! pi_in_full_build || [ -n "$(pi_image_for_commit "$hash")" ] || continue
         found="$stem"
     done
     [ -n "$found" ] || return 1

@@ -33,7 +33,7 @@ The sleep-screen and bye-screen UI exists in both UIs, so that part is two commi
 
 ## Build (as built)
 
-`just build-pi` (`--fast` for quick compression) runs `build-in-docker.sh --pi`, which runs `PURPLE_ARCH=arm64 00-build-golden-image.sh` and writes `purple-pi-<date>-<commit>.img.xz` plus `.version` to `/opt/purple-installer/output/` and symlinks it into `~/isos` (`link-iso.sh`) for scp or Cyberduck.
+Every full `just build` (and so `just rtbf`) builds it after the ISOs, and `just ship` publishes it beside them. `just build-pi` (`--fast` for quick compression) runs `build-in-docker.sh --pi`, which runs `PURPLE_ARCH=arm64 00-build-golden-image.sh` and writes `purple-pi-<date>-<commit>.img.xz` plus `.version` to `/opt/purple-installer/output/` and symlinks it into `~/isos` (`link-iso.sh`) for scp or Cyberduck.
 
 1. **Per-image switches.** The profile block at the top of `00-build-golden-image.sh` sets `BOOT` (efi or pi), `GLAMOR`, `PIPER`, `MODULES_EXTRA`, `MODULE_CHECKS`, `SOUND_MODULE_DIR` and the boot tooling to install and verify; the body reads those instead of `PURPLE_ARCH`. GRUB/shim setup is `setup_efi_boot`, the firmware prune `prune_firmware` and the squashfs `build_live_squashfs`, moved verbatim so the amd64 and i386 paths are unchanged.
 2. **Pi path.** Debootstrap trixie arm64, install the pinned `raspberrypi-archive-keyring` deb, add `archive.raspberrypi.com`, install `raspi-firmware linux-image-rpi-v8 linux-image-rpi-2712` with p1 mounted at `/boot/firmware` (the packages' hooks copy kernels, initramfs, dtbs and overlays there). `setup_pi_boot` writes `config.txt` and `cmdline.txt`, then fails the build if any file a supported board needs is missing. `populate_pi_data` seeds p3 from `/home/purple`; `publish_pi_image` xz-compresses the card.
@@ -67,4 +67,4 @@ Assumed fast enough, so no spike; these are the things to watch during bench tes
 2. arm64 image (Build 2 to 7).
 3. Runtime changes.
 4. Bench: every model from SD and USB; 50 random power cuts with settings and time travel intact; HDMI audio with and without speakers, USB speaker; idle and Shut Down on each model.
-5. Downloads page (`~/landing`): a short Raspberry Pi section below the laptop instructions: download `.img.xz`, flash with Raspberry Pi Imager "Use custom", insert, plug in.
+5. Downloads page (`~/landing`): a Raspberry Pi row, labeled experimental until the bench passes, in the "For technical folks" tile, shown when `purple2/latest.json` lists `pi`, with one line of Raspberry Pi Imager "Use custom" instructions.

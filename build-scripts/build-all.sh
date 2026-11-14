@@ -91,11 +91,17 @@ main() {
         echo
     fi
 
+    # Last, and allowed to fail: the ISOs are what USBs and the download need.
+    if pi_in_full_build; then
+        ( build_pi ) || echo "WARNING: the Raspberry Pi image failed; the ISOs are fine. Retry with: just build-pi"
+        echo
+    fi
+
     print_banner
     log_done "Build complete!"
     log_done "ISO ready at: $OUTPUT_DIR/"
     echo
-    ls -lh "$OUTPUT_DIR"/*.iso 2>/dev/null || true
+    ls -lh "$OUTPUT_DIR"/*.iso "$OUTPUT_DIR"/*.img.xz 2>/dev/null || true
     echo
     log_info "Write to USB stick with:"
     log_info "  sudo dd if=$OUTPUT_DIR/purple-installer-*.iso of=/dev/sdX bs=4M status=progress"

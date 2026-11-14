@@ -57,6 +57,12 @@ if [[ "${STANDARD_ISO%.iso}" != "${DEBUG_ISO%.debug.iso}" ]]; then
 fi
 
 VERSION="$(tr -d '[:space:]' < "$STANDARD_ISO.version" 2>/dev/null || true)"
+# The Pi image ships only when it carries the same version stamp as the ISOs
+PI_IMG="$(pi_image_for_commit "$(iso_commit "$STANDARD_ISO")")"
+if [[ -n "$PI_IMG" && "$(tr -d '[:space:]' < "$PI_IMG.version" 2>/dev/null)" != "$VERSION" ]]; then
+    echo "Note: $(basename "$PI_IMG") has a different version stamp than the ISOs, so it won't ship."
+    PI_IMG=""
+fi
 
 # The page links the commit on GitHub
 git -C "$PROJECT_DIR" fetch -q origin main 2>/dev/null || true
@@ -74,6 +80,15 @@ ISOS_LIVE=false
 if [[ "$(jq -r '"\(.standard.sha256) \(.debug.sha256)"' <<< "$LIVE")" == "$STANDARD_SHA $DEBUG_SHA" ]]; then
     ISOS_LIVE=true VERSION="$PREVIOUS"
 fi
+# Uploaded unless this exact image is already live; with the ISOs live and no
+# local image, the live one stays listed
+PI_SHA="" PI_UPLOAD=false PI_JSON=null
+[[ -z "$PI_IMG" ]] || PI_SHA="$(sha256sum "$PI_IMG" | cut -d' ' -f1)"
+if [[ -n "$PI_SHA" ]] && ! { $ISOS_LIVE && [[ "$(jq -r '.pi.sha256 // empty' <<< "$LIVE")" == "$PI_SHA" ]]; }; then
+    PI_UPLOAD=true
+elif $ISOS_LIVE; then
+    PI_JSON="$(jq -c '.pi // null' <<< "$LIVE")"
+fi
 # Families see this version in the Parent Menu; only a clean commit on main is stamped v2.0.N
 if ! $ISOS_LIVE && ! is_release_version "$VERSION"; then
     log_error "$(basename "$STANDARD_ISO") is a dev build (${VERSION:-no version}): the tree wasn't a clean main when it was built."
@@ -84,24 +99,35 @@ fi
 echo ""
 echo "  $(basename "${STANDARD_ISO%.iso}")  standard + debug, commit $SHORT"
 if $ISOS_LIVE; then
-    echo "  ISOs already live as $VERSION: updating the cards only, from ${CARDS_COMMIT:0:7}"
+    echo "  ISOs already live as $VERSION: updating the rest, cards from ${CARDS_COMMIT:0:7}"
 else
     echo "  -> downloads.purplecomputer.org as $VERSION"
+fi
+if $PI_UPLOAD; then
+    echo "  Raspberry Pi image: $(basename "$PI_IMG")"
+elif [[ "$PI_JSON" == null ]]; then
+    echo "  No Raspberry Pi image for this build, so the page won't list one (just build-pi adds it)."
 fi
 echo ""
 read -p "Upload? Type 'yes' to continue: " answer
 [[ "$answer" == "yes" ]] || { log_info "Aborted."; exit 0; }
 
-upload_variant() {
-    local iso="$1" name="$2" sha="$3" key="${PREFIX}/${VERSION}/$2.iso"
-    aws s3 cp "$iso" "s3://${R2_BUCKET}/${key}" --endpoint-url "$R2_ENDPOINT" \
+# upload_file <local> <name on R2> <sha256> <filename the browser saves>
+upload_file() {
+    local key="${PREFIX}/${VERSION}/$2"
+    aws s3 cp "$1" "s3://${R2_BUCKET}/${key}" --endpoint-url "$R2_ENDPOINT" \
         --content-type application/octet-stream --no-progress \
-        --content-disposition "attachment; filename=\"purple-computer-${VERSION}${4:-}.iso\""
-    echo "$sha  $name.iso" | r2_upload - "${key}.sha256" text/plain
+        --content-disposition "attachment; filename=\"$4\""
+    echo "$3  $2" | r2_upload - "${key}.sha256" text/plain
 }
 if ! $ISOS_LIVE; then
-    upload_variant "$STANDARD_ISO" standard "$STANDARD_SHA"
-    upload_variant "$DEBUG_ISO" debug "$DEBUG_SHA" -debug
+    upload_file "$STANDARD_ISO" standard.iso "$STANDARD_SHA" "purple-computer-${VERSION}.iso"
+    upload_file "$DEBUG_ISO" debug.iso "$DEBUG_SHA" "purple-computer-${VERSION}-debug.iso"
+fi
+if $PI_UPLOAD; then
+    upload_file "$PI_IMG" pi.img.xz "$PI_SHA" "purple-computer-${VERSION}-raspberry-pi-experimental.img.xz"
+    PI_JSON="$(jq -nc --arg p "$PREFIX/$VERSION/pi.img.xz" --arg s "$PI_SHA" --arg z "$(du -h "$PI_IMG" | cut -f1)" \
+        '{path: $p, sha256: $s, size: $z}')"
 fi
 
 CARDS='[]' CARD_PATHS=()
@@ -116,15 +142,15 @@ done
 jq -n --arg v "$VERSION" --arg c "$COMMIT" --arg p "$PREFIX/$VERSION" \
     --arg ss "$STANDARD_SHA" --arg ds "$DEBUG_SHA" \
     --arg sz "$(du -h "$STANDARD_ISO" | cut -f1)" --arg dz "$(du -h "$DEBUG_ISO" | cut -f1)" \
-    --argjson cards "$CARDS" \
+    --argjson cards "$CARDS" --argjson pi "$PI_JSON" \
     '{version: $v, commit: $c, released: (now | todate),
       standard: {path: "\($p)/standard.iso", sha256: $ss, size: $sz},
       debug: {path: "\($p)/debug.iso", sha256: $ds, size: $dz},
-      cards: $cards}' \
+      cards: $cards} + if $pi then {pi: $pi} else {} end' \
     | r2_upload - "${PREFIX}/latest.json" application/json
 purge_cache "/${PREFIX}/latest.json" "${CARD_PATHS[@]}"
 if $ISOS_LIVE; then
-    echo -e "${GREEN}Updated cards${NC} for $VERSION: https://downloads.purplecomputer.org"
+    echo -e "${GREEN}Updated${NC} $VERSION: https://downloads.purplecomputer.org"
     exit 0
 fi
 

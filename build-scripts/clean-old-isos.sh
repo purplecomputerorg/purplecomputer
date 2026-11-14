@@ -4,7 +4,8 @@
 #
 # Keeps the newest few builds and drops everything older. A build is one stem
 # (purple-installer-YYYYMMDD-<commit>), so its .iso, .debug.iso and .with-backup.iso
-# variants count as one build between them, not three.
+# variants count as one build between them, not three. A kept build's commit
+# keeps its Raspberry Pi images too; other Pi images go.
 #
 # corrupt-test ISOs go at any age: each is a full ~9GB copy of a build's
 # with-backup ISO with a few KiB deliberately damaged (just corrupt-test-iso),
@@ -45,7 +46,8 @@ fi
 
 # An ISO and its sidecars are always cleaned together, so every pass matches
 # the same name patterns.
-ISO_FILES=(-name "*.iso" -o -name "*.iso.sha256" -o -name "*.iso.version" -o -name "*.iso.commit")
+ISO_FILES=(-name "*.iso" -o -name "*.iso.sha256" -o -name "*.iso.version" -o -name "*.iso.commit"
+    -o -name "purple-pi-*.img.xz" -o -name "purple-pi-*.img.xz.version")
 
 # Newest builds first, collapsing each build's variants to a single stem.
 mapfile -t KEEP_STEMS < <(list_build_isos \
@@ -55,7 +57,8 @@ mapfile -t KEEP_STEMS < <(list_build_isos \
 
 KEEP_ARGS=()
 for stem in "${KEEP_STEMS[@]}"; do
-    KEEP_ARGS+=(! -name "$stem.*")
+    hash="${stem%-fast}"
+    KEEP_ARGS+=(! -name "$stem.*" ! -name "purple-pi-*-${hash##*-}*")
 done
 
 mapfile -t OLD_FILES < <({

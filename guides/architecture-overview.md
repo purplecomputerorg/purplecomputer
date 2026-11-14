@@ -26,7 +26,7 @@ These are **not** the same system. They share the same root filesystem (built on
 The USB serves two purposes:
 
 1. **Live boot (default)**: Boot directly into Purple Computer from USB. No installation, no disk writes, no waiting. The child plays immediately.
-2. **Install (optional)**: A parent opens the parent menu inside the running TUI and chooses "Install on this Computer" to write the system to the internal disk permanently.
+2. **Install (optional)**: A parent opens the parent menu inside the running app and chooses "Install on this Computer" to write the system to the internal disk permanently.
 
 ### Boot Flow
 
@@ -57,7 +57,7 @@ Parent plugs in USB, presses boot key
     └─────────────────────────────────────────────────────────┘
 
     ┌─────────────────────────────────────────────────────────┐
-    │ INSTALL (optional, from inside the running TUI)         │
+    │ INSTALL (optional, from inside the running app)         │
     │                                                         │
     │ Parent menu (hold Escape 1s, PIN-gated)                 │
     │   → "Install on this Computer"                          │
@@ -74,7 +74,7 @@ Parent plugs in USB, presses boot key
     └─────────────────────────────────────────────────────────┘
 ```
 
-There is no "Install Purple Computer" GRUB entry and no `purple.install=1` arming in production: consent happens in the PIN-gated parent menu and the install confirmation screen, inside the TUI. (`purple.install=1` survives only as a developer/test switch that suppresses X11 so the install path can be exercised on a tty; see `test-boot.sh --mode install` and the debug ISO's "test install failure" entry.)
+There is no "Install Purple Computer" GRUB entry and no `purple.install=1` arming in production: consent happens in the PIN-gated parent menu and the install confirmation screen, inside the app. (`purple.install=1` survives only as a developer/test switch that suppresses X11 so the install path can be exercised on a tty; see `test-boot.sh --mode install` and the debug ISO's "test install failure" entry.)
 
 ---
 
@@ -92,7 +92,7 @@ There is no "Install Purple Computer" GRUB entry and no `purple.install=1` armin
 **The installed system is NOT an appliance:**
 - Normal Ubuntu 24.04 system
 - Has apt, systemd, X11
-- Auto-logins to Purple TUI application
+- Auto-logins to Purple application
 
 (Offline by design: there are no over-the-air updates. A newer version means re-flashing the Purple Key.)
 
@@ -100,7 +100,7 @@ There is no "Install Purple Computer" GRUB entry and no `purple.install=1` armin
 
 ## Install Consent (Install Path Only)
 
-Installation is wiping the internal disk, so it requires explicit consent, all inside the running TUI:
+Installation is wiping the internal disk, so it requires explicit consent, all inside the running app:
 
 | Step | Where | What |
 |------|-------|------|
@@ -108,7 +108,7 @@ Installation is wiping the internal disk, so it requires explicit consent, all i
 | **Choose install** | Parent menu | "Install on this Computer" |
 | **Confirm** | Install screen | Clear data-loss warning before anything is written |
 
-There is no GRUB-level or kernel-cmdline arming in production: the old `purple.install=1` + `purple-confirm.service` two-gate model has been replaced by this in-TUI flow. `install.sh` only runs when a parent walks through all three steps.
+There is no GRUB-level or kernel-cmdline arming in production: the old `purple.install=1` + `purple-confirm.service` two-gate model has been replaced by this in-app flow. `install.sh` only runs when a parent walks through all three steps.
 
 ---
 
@@ -146,7 +146,7 @@ Once X starts, `purple-usb-cache.service` (`scripts/purple-usb-cache.py`, root, 
 
 **User-facing indicator:**
 
-The TUI title bar shows a blinking USB icon while caching is in progress. When caching completes, the icon changes to a green eject symbol (⏏), telling the parent it's safe to remove the USB drive.
+The title bar shows a blinking USB icon while caching is in progress. When caching completes, the icon changes to a green eject symbol (⏏), telling the parent it's safe to remove the USB drive.
 
 **Why not `toram`?** Casper supports a `toram` kernel parameter that copies the squashfs into RAM before booting. This blocks the entire boot until the copy finishes (30-90 seconds on USB 2.0). Our approach lets the child start playing immediately while caching happens in the background.
 
@@ -216,7 +216,7 @@ Internal disk contains:
 ├── Linux kernel (Ubuntu's linux-image-generic)
 ├── GRUB bootloader
 ├── X11 + the Purple window (see guides/canvas-architecture.md)
-├── Purple TUI application
+├── Purple application
 └── Everything needed to run Purple Computer
 ```
 
@@ -224,7 +224,7 @@ Internal disk contains:
 
 ## Safety Design (Install Path)
 
-Install is gated entirely in the running TUI, not in the boot chain:
+Install is gated entirely in the running app, not in the boot chain:
 
 1. **Parent menu is PIN-gated.** Reaching install means holding Escape for 1s and entering the PIN, so a child can't trigger it.
 2. **Explicit data-loss confirmation.** `InstallProgressScreen` shows a clear warning before `install.sh` writes anything.
@@ -290,7 +290,7 @@ Casper-bottom scripts are NOT auto-discovered. The file `/scripts/casper-bottom/
 │   all the live boot plumbing.                                   │
 │                                                                 │
 │   Installation is optional, started from the parent menu        │
-│   inside the running TUI (PIN-gated, with a data-loss           │
+│   inside the running app (PIN-gated, with a data-loss           │
 │   confirmation) rather than from GRUB.                          │
 │                                                                 │
 │   Same root filesystem, two packages:                           │

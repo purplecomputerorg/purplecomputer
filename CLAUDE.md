@@ -14,14 +14,6 @@
 
 ---
 
-## Two UIs (until Textual is gone)
-
-`main` carries both UIs. The Textual UX (`purplecomputer/purplecomputer.py`, the top-level `purplecomputer/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen. The TUI never imports canvas modules. The canvas UX lives under `purplecomputer/` with its tests in `tests/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
-
-Don't write TUI counterparts of canvas fixes. Shared-module changes (`code_runner.py`, `audio.py`, etc.) may change TUI behavior on main; update the TUI tests to match and move on. Duplicated logic between the TUI and canvas is deliberate; don't clean it up.
-
----
-
 ## Git Commits
 
 Never run `git commit` directly. Always commit via `/checkpoint <msg>` (you supply the message) or `/wrap` (you draft a 1-2 sentence message from the diff). These come from the [`lanes`](https://github.com/tavinathanson/lanes) tool installed at `~/.claude/`.
@@ -64,7 +56,7 @@ Purple Computer runs on kids' laptops. Never make changes that could cause issue
 
 **Default to always-on.** The debug ISO is rarely the one booted on real hardware, so a log line that only exists there is usually missing when a bug is reported. Any logging that meets the three rules above belongs in the standard ISO; reserve the debug flag for behavior that has to be tested separately (no evdev grab so kernel VT switching works, parent-menu extras, verbose kernel output, sysrq), not for ordinary log lines. Chatty streams are fine as long as their volume is bounded (a heartbeat a minute, a tick every 30s); log identical lines once when hardware can flap.
 
-- **Non-visual** = file descriptors only. Never write to stdout/stderr: under the canvas UI they land in the xinitrc log (fine for diagnostics, wrong for per-keystroke chatter); under the Textual UI, Textual owns stderr and any stray write corrupts the screen (`stderr_guard.hide_native_stderr()` points fd 2 at `/tmp/purple-stderr.log` for C-level noise). Use `boot_log`, `_power_log`, or `tts._dbg`.
+- **Non-visual** = file descriptors only. Never write to stdout/stderr: they land in the xinitrc log (fine for diagnostics, wrong for per-keystroke chatter). Use `boot_log`, `_power_log`, or `tts._dbg`.
 - **Non-expensive** = cheap appends, no subprocess spawns at runtime, no fsync/flush cascades.
 - **Non-interfering** = no EVIOCGRAB, no terminal mode changes, no signal handlers that paint.
 
@@ -108,11 +100,11 @@ just preview play parent_menu                  # Parent menu modal
 just preview play room_picker                  # Room picker modal
 ```
 
-Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). `PURPLE_UX=tui just preview ...` previews the Textual UI. See `guides/headless-preview.md` for full reference.
+Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). See `guides/headless-preview.md` for full reference.
 
-**Visual/layout tests:** canvas tests drive a headless app from `purplecomputer.harness` (`tests/`); Textual tests use `app.run_test()` (e.g. `tests/test_code_panel_layout.py`).
+**Visual/layout tests:** tests drive a headless app from `purplecomputer.harness`.
 
-**AI UX testing:** `just ux` launches a Claude agent that explores the app as a simulated kid, presses keys, and reports bugs to `docs/AI_UX_BUGS.md`. Config in `scripts/ai_ux_config.py`. See `guides/ai-ux-testing.md`.
+**AI UX testing:** `just e2e-ai` has Claude agents play a parent in Studio and a kid on Purple, and reports bugs to `docs/AI_UX_BUGS.md`. See `guides/studio-to-purple-testing.md`.
 
 ---
 
@@ -130,23 +122,13 @@ Studio is one website that changes on every deploy; families keep the Purple bui
 - **Pages purplecomputer.org embeds (`try.html`, `cards.html`) must work with either order of deploys:** landing deploys separately and may be older or newer than Studio. Change what the embed tells the landing page (`src/embed.ts`, extra fields like `bleed` in `cards.ts`) so an older landing page that ignores a new field still looks right, and keep fields the landing page reads (`height`, `opened`, `bleed`). When a landing change truly can't work against the live Studio, tell the user to put the Studio commit in landing's `.studio-needs`; its pre-push check reads Studio's `/version.json`.
 - **Suggest `just compat-check`** whenever the user ships a build, deploys Studio after room or pack changes, or asks who can open what.
 
-## Canvas UI (default)
+## Drawing (pygame canvas)
 
-The screen is a pygame window the app paints itself (`purplecomputer/gfx.py`, `purplecomputer/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere. Rooms subclass `canvas/rooms/base.py`; family rooms from packs run sandboxed: `guides/family-rooms.md`.
+The screen is a pygame window the app paints itself (`purplecomputer/gfx.py`, `purplecomputer/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere. Rooms subclass `purplecomputer/rooms/base.py`; family rooms from packs run sandboxed: `guides/family-rooms.md`.
 
-## Textual UI (`PURPLE_UX=tui`, frozen)
+## Keyboard Input (evdev + keyd)
 
-`purplecomputer/purplecomputer.py` plus the top-level `purplecomputer/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`; runs in Alacritty (`config/alacritty/`). Fixes only (see Two UIs above). Notes kept for those fixes:
-
-- **Layout constants:** `purplecomputer/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=29`, `REQUIRED_TERMINAL_ROWS=37`); `scripts/calc_font_size.py` imports from there.
-- **CSS scoping:** `CSS` is scoped to the defining class; use `DEFAULT_CSS` for inheritable styles. All modals inherit `PurpleModal` (`purplecomputer/modal.py`) with the standard `#modal-dialog`, `#modal-title`, `#modal-hint` IDs.
-- **Background colors:** `widget.styles.background` on `Static` doesn't repaint; use a `Widget` with `render_line()` returning `Strip([Segment(...)])`.
-- **Flicker-free reflows (MusicGrid):** set `_layout_ready = False` before a height change, render from `_cached_layout` meanwhile, `on_resize` debounces 50ms then flips it back.
-- **Code panel:** `_code_panel_active` (app-level, persists across rooms) vs `ReplPanel.is_open` (per-room). Space-hold pins canvas height; viewport grows by 4 on open. Textual's `_on_key()` suppresses events; all keyboard logic goes through `handle_keyboard_action()`.
-
-## Keyboard Input (evdev + keyd, both UIs)
-
-Input is read from evdev (`/dev/input/event*`), never from the terminal or the window. `keyd` (`config/keyd/default.conf`, built in `00-build-golden-image.sh`) remaps grave/tilde to Escape and RightAlt to F2 at the kernel level; do NOT add application-level remaps. `purplecomputer/input.py` feeds `KeyboardStateMachine` (`purplecomputer/keyboard.py`), which both UIs dispatch from. `HoldOrTap` distinguishes taps from holds; always check `on_other_key()` to flush a buffered space before the next character. Full rationale: `guides/keyboard-architecture.md`.
+Input is read from evdev (`/dev/input/event*`), never from the terminal or the window. `keyd` (`config/keyd/default.conf`, built in `00-build-golden-image.sh`) remaps grave/tilde to Escape and RightAlt to F2 at the kernel level; do NOT add application-level remaps. `purplecomputer/input.py` feeds `KeyboardStateMachine` (`purplecomputer/keyboard.py`), which the app dispatches from. `HoldOrTap` distinguishes taps from holds; always check `on_other_key()` to flush a buffered space before the next character. Full rationale: `guides/keyboard-architecture.md`.
 
 ## Python Gotchas
 
@@ -172,11 +154,11 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 2. Parent menu → Install option → user confirms
 3. `install.sh` runs (called from `parent_menu.py`)
 4. Success screen: "Press ENTER to restart"
-5. The app shows "All done" and on Enter `execv`s into `/run/purple-reboot-mount/purple-reboot` (static binary on tmpfs; the Textual UI exits first and passes `--wait`)
+5. The app shows "All done" and on Enter `execv`s into `/run/purple-reboot-mount/purple-reboot` (static binary on tmpfs)
 
 **Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Backstop: the static `purple-reboot --poweroff 8` on its own tmpfs (staged every boot by `purple-stage-reboot`) powers off if systemctl hasn't, even after the live USB is pulled. Logged to `/tmp/purple-power.log`.
 
-**Post-install reboot:** `purple-reboot` static binary on its own `exec,suid` tmpfs (Ubuntu's `/run` is `nosuid,noexec`). Ignores pty signals so it survives Alacritty dying after USB removal. Calls `reboot(2)` directly.
+**Post-install reboot:** `purple-reboot` static binary on its own `exec,suid` tmpfs (Ubuntu's `/run` is `nosuid,noexec`). Ignores pty signals so it survives the session dying after USB removal. Calls `reboot(2)` directly.
 
 **Casper shutdown prompt** suppressed by touching `/run/casper-no-prompt` (runtime) + neutering `casper-stop` to `exit 0` at image build time.
 

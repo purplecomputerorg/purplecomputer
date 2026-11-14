@@ -56,7 +56,6 @@ git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
 just setup    # Creates venv, installs deps, downloads TTS voice, installs fonts
 just run      # Opens Purple in a window (SDL keyboard, no evdev needed)
-PURPLE_UX=tui just run   # The Textual UI the current release ships, in Alacritty
 ```
 
 In the Play room, try:
@@ -226,9 +225,11 @@ The canvas is laid out in fractions of the screen, so it fills any display from 
 
 ```
 purplecomputer/
-├── purplecomputer/           # The app: engine modules plus two UIs (see CLAUDE.md, Two UIs)
-│   ├── canvas/           # The pygame canvas UI (default): rooms, drawing, headless harness
-│   ├── rooms/            # The Textual UI's rooms (frozen: what release/1.x ships; PURPLE_UX=tui)
+├── purplecomputer/       # The app, a pygame window it paints itself
+│   ├── app.py            # The app: rooms, overlays, render loop
+│   ├── gfx.py            # Drawing primitives, fonts, emoji fallbacks
+│   ├── rooms/            # Play, Music, Art, Blocks, family rooms, parent menu
+│   ├── harness.py        # Headless app for tests and previews
 │   ├── demo/             # Demo recording and playback system
 │   ├── content.py        # Content API for packs
 │   ├── keyboard.py       # Keyboard state machine
@@ -254,13 +255,11 @@ purplecomputer/
 │   └── zoom_editor_server.py      # Web UI for zoom keyframe editing
 │
 ├── scripts/              # Development utilities
-│   ├── calc_font_size.py           # Font sizing for the Textual UI
 │   ├── export_studio.py            # Facts and reference renders Studio depends on
 │   ├── generate_sounds.py          # Procedural sound synthesis
 │   └── generate_voice_clips.py     # TTS narration generation
 │
 ├── tools/                # Dev-machine only: authoring demo content (never shipped)
-│   ├── art_ai.py                  # Generates Art room demo drawings for videos
 │   └── music_ai.py                # Generates Music room demo compositions for videos
 │
 ├── config/               # System configs (X11, keyd, picom, systemd)
@@ -268,7 +267,7 @@ purplecomputer/
 └── guides/               # Technical references
 ```
 
-What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies into `/opt/purple`: `purplecomputer/`, `packs/`, and two named scripts. `tools/` and `scripts/ai_ux_*` stay on the developer's machine, as does the demo tooling in `recording-setup/`.
+What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies into `/opt/purple`: `purplecomputer/`, `packs/`, and two named scripts. `tools/` and the `scripts/e2e_ai*` testers stay on the developer's machine, as does the demo tooling in `recording-setup/`.
 
 **Stack:**
 - **Target System (PurpleOS):** Ubuntu 24.04 LTS minimal + X11 + a fullscreen pygame window (software rendering, no GL). Machines with 32-bit CPUs get a Debian trixie i386 image instead; GRUB picks it per machine (see `guides/hardware-coverage-plan.md`)
@@ -326,7 +325,7 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 - **[guides/keyboard-architecture.md](guides/keyboard-architecture.md):** evdev input, state machine, F-key calibration
 - **[guides/play-room-design.md](guides/play-room-design.md):** How the Play room parses and evaluates input
 - **[guides/sound-synthesis.md](guides/sound-synthesis.md):** Procedural sound generation
-- **[guides/canvas-architecture.md](guides/canvas-architecture.md):** How the canvas UI draws and takes input
+- **[guides/canvas-architecture.md](guides/canvas-architecture.md):** How Purple draws and takes input
 - **[guides/family-rooms.md](guides/family-rooms.md):** Family rooms from Purple Packs, and how they run sandboxed
 - **[guides/printing.md](guides/printing.md):** Plug-in USB printing
 - **[guides/mode-reference.md](guides/mode-reference.md):** Room mechanics for demo scripting (written for the Textual UI)

@@ -2,7 +2,7 @@
 
 A family room is a Python file in a pack (`content/rooms/<name>.py`) that runs as a guest: Purple sends it events, it answers each with what to draw and play, and Purple decides what actually happens. Families make them in Purple Studio; Purple shows them in a row of their own in the room picker once a parent turns them on.
 
-The design goal is that how rooms get built (rules, forms, Python, sprites, whatever comes next) can change in Studio for years without a new Purple Key. So Purple's side is a small fixed protocol, and everything that makes a room a room lives in the guest library, `purplecomputer/roomkit/purple.py`, which each pack carries. Reasoning and the decisions behind it: `docs/PLAN-room-interface.md`.
+The design goal is that how rooms get built (rules, forms, Python, sprites, whatever comes next) can change in Studio for years without a new Purple Key. So Purple's side is a small fixed protocol, and everything that makes a room a room lives in the guest library, `purplecomputer/roomkit/purple.py`, which each pack carries. Reasoning and the decisions behind it: `docs/plans/room-interface.md`.
 
 ## Writing one
 

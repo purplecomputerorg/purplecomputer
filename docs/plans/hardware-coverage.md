@@ -1,6 +1,6 @@
 # Hardware Coverage Plan: 32-bit EFI, T2 Macs, and 32-bit CPUs
 
-Findings and plan (August 2026) for booting Purple on three hardware classes the current ISO can't reach, plus the ISO size work that makes room for them. Companion to `t2-mac-support.md`, `secure-boot.md`, and `usb-boot-reference.md`.
+Findings and plan (August 2026) for booting Purple on three hardware classes the current ISO can't reach, plus the ISO size work that makes room for them. Companion to `guides/t2-mac-support.md`, `guides/secure-boot.md`, and `guides/usb-boot-reference.md`.
 
 **Status (September 2026): landed on main from branch `expanded-laptops`; bench tests on real hardware still open (see "Still open" below).** The plan below is kept as the rationale; the "As built" section at the end records where each piece landed and where the build deviated from the plan.
 
@@ -14,7 +14,7 @@ Findings and plan (August 2026) for booting Purple on three hardware classes the
 | T2 Macs | 2018-2020 MacBook Air and Pro, Mac mini 2018 | Keyboard, trackpad, audio need the `apple-bce` driver; stock kernel lacks it | Ship a second, t2linux kernel; GRUB picks it by SMBIOS model | 1-2 weeks | Pinned third-party kernel, revisit per image |
 | 32-bit CPU | Core Duo/Solo Macs (2006), Pentium M, Atom N270/N280 netbooks | Everything: no 64-bit mode at all | Separate Debian i386 payload, install-only | ~2 weeks | Second distro, second test matrix |
 
-Out of scope, unchanged: Chromebooks (`chromebook-support.md`), Apple Silicon (`apple-silicon-support.md`), 4GB-SSD netbooks (below the 16GB install minimum in `install.sh`).
+Out of scope, unchanged: Chromebooks (`docs/plans/chromebook-firmware.md`), Apple Silicon (`docs/plans/apple-silicon.md`), 4GB-SSD netbooks (below the 16GB install minimum in `install.sh`).
 
 T2 likely unlocks more real machines than true 32-bit: a 2019 Air in a drawer is far more common than a 2008 Eee PC, and a much better Purple machine.
 
@@ -75,7 +75,7 @@ Properties that matter:
 
 ### Why two kernels, not one patched kernel
 
-`t2-mac-support.md` suggests a single patched kernel for everyone. The driver side of that is true (`apple-bce` is a no-op without a T2). The boot chain side is not: Purple boots Canonical-signed shim, GRUB, and kernel (`secure-boot.md`). The t2linux kernel is unsigned. Make it the only kernel and every Secure Boot machine we support today (Surface, HP, Dell) stops booting.
+`guides/t2-mac-support.md` suggests a single patched kernel for everyone. The driver side of that is true (`apple-bce` is a no-op without a T2). The boot chain side is not: Purple boots Canonical-signed shim, GRUB, and kernel (`guides/secure-boot.md`). The t2linux kernel is unsigned. Make it the only kernel and every Secure Boot machine we support today (Surface, HP, Dell) stops booting.
 
 Two kernels dissolves this, helped by a structural fact: a T2 Mac cannot boot Linux at all until Startup Security Utility is set to No Security. So the machines that need the unsigned kernel are exactly the machines where signature enforcement is already off, and the signed kernel stays the default for everyone else.
 
@@ -204,7 +204,7 @@ GRUB script gotcha: `if insmod cpuid && ! cpuid -l` routed every 64-bit machine 
 | Drop `/pool`, `/dists` | `01-remaster-iso.sh`, step 4 |
 | BOOTIA32.EFI | `grub-mkimage -O i386-efi -p /EFI/ubuntu` in `00-build-golden-image.sh`, on both the golden ESP and (via `signed-efi/`) the ISO's EFI image. Same prefix as Canonical's signed GRUB, so it reads the same `/EFI/ubuntu/grub.cfg`. Every needed module is built in: once that config points `$prefix` at a device with no `i386-efi/` tree, nothing else can load, and a failed `insmod cpuid` would route a 32-bit CPU to the amd64 kernel |
 | T2 kernel | `install_pinned_deb` in `00-build-golden-image.sh`: `linux-image-6.18.45-1-t2-noble` and `apple-t2-audio-config` 0.5.2, sha256-pinned. dpkg's postinst builds the initrd through the lean hook; the remaster extracts both kernel pairs from the squashfs and patches both initrds |
-| i386 image | `PURPLE_ARCH=i386 ./00-build-golden-image.sh` (run by `build-all.sh` after the amd64 image, skipped on fast builds). Same script, Debian trixie i386 (bookworm has no alacritty) with bookworm's `linux-image-686` pinned in (trixie has no i386 kernel). `requirements.txt` skips numpy and Piper on i686 via PEP 508 markers; Debian's `python3-numpy` (2.x, built for the i686 baseline, so the SSE4.2 problem behind `numpy-pin.md` doesn't apply) fills in. No casper. Output under `build/i386/` |
+| i386 image | `PURPLE_ARCH=i386 ./00-build-golden-image.sh` (run by `build-all.sh` after the amd64 image, skipped on fast builds). Same script, Debian trixie i386 (bookworm has no alacritty) with bookworm's `linux-image-686` pinned in (trixie has no i386 kernel). `requirements.txt` skips numpy and Piper on i686 via PEP 508 markers; Debian's `python3-numpy` (2.x, built for the i686 baseline, so the SSE4.2 problem behind `guides/numpy-pin.md` doesn't apply) fills in. No casper. Output under `build/i386/` |
 | i386 live session and installer | No custom initrd: initramfs-tools boot script `build-scripts/initramfs/purple-live` (`boot=purple-live`) mounts the stick by label, then either boots `purple32/filesystem.squashfs` under a RAM overlay (the parent menu installs from there, `PURPLE_PAYLOAD_DIR=/cdrom/purple32` via `/run/purple-live.conf`) or, under 700MB of RAM or with `purple.installonly=1`, asks for YES and runs the ISO's own `install.sh` directly. The hook next to it adds the loop, squashfs and overlay modules plus bash, zstd, pv, parted, util-linux, e2fsprogs and `grub-install` with `i386-pc`, only when `PURPLE_KEY_INITRD=1` |
 | Voice on i386 | flite, the same Quick voice the amd64 image ships; `tts.py` uses it whenever Piper is absent, so the i386 image just skips the Piper model download |
 

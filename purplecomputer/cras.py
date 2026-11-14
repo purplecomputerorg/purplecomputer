@@ -4,7 +4,7 @@ Chrome normally tells CRAS which output node is active. With Chrome never
 started, CRAS lists the speaker but marks nothing active, and streams play
 into nothing while every call succeeds. So Purple picks the node itself, at
 startup and whenever the node list changes (headphones in or out).
-guides/chromebook-dev-mode-plan.md, probe run 4.
+docs/plans/chromebook-dev-mode.md, probe run 4.
 """
 
 import functools

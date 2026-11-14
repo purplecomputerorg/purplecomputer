@@ -6,7 +6,7 @@
 # Unlike purple-audio-dump this one is ACTIVE: it plays the startup chime and
 # records it with the built-in mic (purplecomputer/sound_check.py, the same check
 # the app runs at startup), and it loads the speech model to time it.
-# Rationale and what to look for: docs/PLAN-audio-volume.md, "Hands-on probe".
+# Rationale and what to look for: docs/plans/audio-volume.md, "Hands-on probe".
 set +e
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)

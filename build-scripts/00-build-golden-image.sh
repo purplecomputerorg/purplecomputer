@@ -9,9 +9,9 @@ source "$SCRIPT_DIR/config.sh"
 UBUNTU_MIRROR="${UBUNTU_MIRROR:-http://archive.ubuntu.com/ubuntu}"
 
 # PURPLE_ARCH=i386: install-only image for 32-bit CPUs, Debian trixie userland
-# with bookworm's i386 kernel. See guides/hardware-coverage-plan.md.
+# with bookworm's i386 kernel. See docs/plans/hardware-coverage.md.
 # PURPLE_ARCH=arm64: Raspberry Pi SD card image, Debian trixie userland with
-# Raspberry Pi's kernel and firmware. See guides/raspberry-pi-plan.md.
+# Raspberry Pi's kernel and firmware. See docs/plans/raspberry-pi.md.
 PURPLE_ARCH="${PURPLE_ARCH:-amd64}"
 # Per-image switches; the rest of the script reads these instead of PURPLE_ARCH.
 BOOT=efi              # efi: shim/GRUB golden image + live squashfs. pi: SD card image
@@ -291,7 +291,7 @@ setup_efi_boot() {
     # number the firmware gave it (a media-less SD reader takes hd0 on 13"
     # MacBook Airs, and every `search` probed it). The kernel command line
     # lives in purple-cmdline.cfg so install.sh can hand the same line to the
-    # Mac UKI (see install.sh Layer 7). See docs/PLAN-macbook5-slow-boot.md.
+    # Mac UKI (see install.sh Layer 7). See docs/plans/macbook5-slow-boot.md.
     log_info "Creating GRUB configuration..."
     mkdir -p "$MOUNT_DIR/boot/grub"
     cp /purple-src/config/grub/purple-router.cfg /purple-src/config/grub/purple-variants.cfg "$MOUNT_DIR/boot/grub/"
@@ -781,7 +781,7 @@ SOURCES
     #      its module is unloadable from the initrd by construction)
     # "zzz-" sorts last within /etc hooks; /etc hooks run after /usr/share
     # hooks (mkinitramfs runs the two dirs as separate passes).
-    # See docs/PLAN-macbook5-slow-boot.md.
+    # See docs/plans/macbook5-slow-boot.md.
     cat > "$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd" <<'LEANINITRD'
 #!/bin/sh
 PREREQ=""
@@ -1511,7 +1511,7 @@ AUTOLOGIN
 
     # Zero freed blocks. Every purge above (linux-firmware, gcc, pip caches)
     # leaves its bytes in unallocated blocks, and zstd compresses that garbage
-    # faithfully: 2.8GB of a 3.7GB image. See guides/hardware-coverage-plan.md.
+    # faithfully: 2.8GB of a 3.7GB image. See docs/plans/hardware-coverage.md.
     log_info "Zeroing free space..."
     dd if=/dev/zero of="$MOUNT_DIR/.zero-fill" bs=1M status=none 2>/dev/null || true
     sync

@@ -12,7 +12,7 @@
 #      the copy with Google's make_dev_ssd.sh, adds Purple and an upstart job to the copy, and
 #      gives slot C one try at the next boot. A slot that does not reach Purple's UI is not tried
 #      again, so the machine falls back to ChromeOS by itself.
-# Design: guides/chromebook-dev-mode-plan.md
+# Design: docs/plans/chromebook-dev-mode.md
 set -u -o pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)"
 LOGS=("$SRC/install-slot.log" /usr/local/purple/install-slot.log)

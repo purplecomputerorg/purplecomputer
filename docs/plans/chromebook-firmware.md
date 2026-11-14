@@ -1,10 +1,12 @@
 # Chromebook Support
 
+**Status: Research.** Superseded for planning by `docs/plans/chromebook-dev-mode.md`.
+
 > This guide is LLM-generated. The repo-side details were checked against the code; the Chromebook firmware and hardware claims were not verified on a real device.
 
 Purple Computer does not support Chromebooks. We don't test on them and don't fix Chromebook-only bugs.
 
-On an x86 Chromebook it can work after replacing the firmware. This guide covers what that involves. The 2026 plan (unattended RW_LEGACY via `dev_default_boot=legacy`, offline audio and keyd baking, kernel requirement, school-enrolled devices) is in `mac-and-chromebook-plan.md`.
+On an x86 Chromebook it can work after replacing the firmware. This guide covers what that involves. The 2026 plan (unattended RW_LEGACY via `dev_default_boot=legacy`, offline audio and keyd baking, kernel requirement, school-enrolled devices) is in `docs/plans/mac-and-chromebook.md`.
 
 ---
 

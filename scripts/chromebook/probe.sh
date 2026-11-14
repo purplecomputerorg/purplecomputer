@@ -1,6 +1,6 @@
 #!/bin/bash
 # Purple Chromebook probe. Run as root from the stick: sudo bash, then bash probe.sh
-# Design: guides/chromebook-dev-mode-plan.md
+# Design: docs/plans/chromebook-dev-mode.md
 set -u -o pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)"
 LOGS=("$SRC/probe.log" /usr/local/purple/probe.log)

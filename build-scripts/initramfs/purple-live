@@ -4,7 +4,7 @@
 # session exactly as on 64-bit. Machines without the RAM for that (or booted
 # with purple.installonly=1) get a plain install prompt instead. Installed as
 # /etc/initramfs-tools/scripts/purple-live; init calls mountroot().
-# See guides/hardware-coverage-plan.md.
+# See docs/plans/hardware-coverage.md.
 
 LIVE_MIN_KB=700000  # MemTotal below this: the overlay plus Purple won't fit, so install straight away
 KEY=/cdrom          # where casper mounts the stick, so the app's paths hold on both

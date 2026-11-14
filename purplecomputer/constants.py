@@ -44,7 +44,7 @@ MASH_GAP = 0.4              # A key pressed while another is held mixes into its
 # map from -49 dB (15%) to 0 dB (100%). Laptops differ by 30 dB or more, so
 # the scale is wide enough that a loud one has a whisper at the bottom and a
 # quiet one its loud at the top; the first-boot chime picks the starting
-# step. Icons run parallel to the steps. docs/PLAN-audio-volume.md.
+# step. Icons run parallel to the steps. docs/plans/audio-volume.md.
 VOLUME_LEVELS = [0, 15, 19, 23, 28, 35, 43, 53, 66, 81, 100]
 VOLUME_DEFAULT = 53  # volume 7: where a first boot starts when the chime can't measure
 

@@ -397,4 +397,4 @@ These are too detailed for the printed card but should live on a web help page (
 
 > Purple Computer does not work on Chromebooks. Chromebooks are locked to Google's ChromeOS and won't start Purple Computer from a USB.
 
-Note: many Chromebooks are x86 and can run Purple after replacing the firmware (MrChromebox), which means disabling write protect and untested audio. Keep the answer above simple; see `guides/chromebook-support.md` for the details when someone asks.
+Note: many Chromebooks are x86 and can run Purple after replacing the firmware (MrChromebox), which means disabling write protect and untested audio. Keep the answer above simple; see `docs/plans/chromebook-firmware.md` for the details when someone asks.

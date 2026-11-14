@@ -296,7 +296,7 @@ root_arg() {
 # Layer 7 is for Macs: no Secure Boot to satisfy, and Apple's EFI reads the
 # kernel through GRUB at well under 1 MB/s on 2009-2010 models while loading
 # a PE itself is fast (it is how macOS boots). Everything else keeps shim +
-# GRUB. See docs/PLAN-macbook5-slow-boot.md.
+# GRUB. See docs/plans/macbook5-slow-boot.md.
 uki_wanted() {
     grep -qi '^Apple' /sys/class/dmi/id/sys_vendor 2>/dev/null || return 1
     [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = "64" ] || return 1

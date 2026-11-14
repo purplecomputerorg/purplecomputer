@@ -1,6 +1,6 @@
 """Purple Chromebook probe v2: display, sound, speech and keyboard, board-agnostic.
 
-Run by probe.sh after `stop ui`. Design: guides/chromebook-dev-mode-plan.md
+Run by probe.sh after `stop ui`. Design: docs/plans/chromebook-dev-mode.md
 Uses only interfaces that are the same on every Chromebook: kernel KMS dumb buffers
 (no GBM/EGL/Mesa), CRAS for audio (raw ALSA only as a data point), evdev for keys.
 Everything is discovered at runtime; nothing is hardcoded to one board.

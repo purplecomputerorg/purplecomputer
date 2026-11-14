@@ -2,7 +2,7 @@
 # Stage 1: installs Purple under /usr/local/purple on a Developer Mode Chromebook.
 # Writes files there and nowhere else: no partition, kernel or ChromeOS change.
 # Run as root from the stick: sudo bash, then bash install.sh
-# Design: guides/chromebook-dev-mode-plan.md
+# Design: docs/plans/chromebook-dev-mode.md
 set -u -o pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)"
 LOGS=("$SRC/install.log" /usr/local/purple/install.log)

@@ -1,5 +1,7 @@
 # Plan: a room interface that outlives the 2.0 Key
 
+**Status: Active** (PUR-38).
+
 Goal: after 2.0 ships, how families build rooms (Blockly, forms, Python, sprites, whatever comes next) changes in Studio alone, and no Key needs reflashing. Linear: PUR-38. The protocol and the safety rules as built are in `guides/family-rooms.md`; this page is why they look the way they do, and what's left.
 
 ## The idea

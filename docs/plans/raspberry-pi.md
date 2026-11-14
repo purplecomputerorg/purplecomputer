@@ -1,6 +1,6 @@
 # Raspberry Pi Plan
 
-Plan (September 2026) for running Purple on Raspberry Pi 4, Pi 400, Pi 5 and Pi 500/500+. Companion to `hardware-coverage-plan.md` (the i386 precedent this reuses) and `apple-silicon-support.md` (general ARM64 notes).
+Plan (September 2026) for running Purple on Raspberry Pi 4, Pi 400, Pi 5 and Pi 500/500+. Companion to `docs/plans/hardware-coverage.md` (the i386 precedent this reuses) and `docs/plans/apple-silicon.md` (general ARM64 notes).
 
 **Status: built on main (`just build-pi`), awaiting first boot on a Pi 400.** Ships from main; v1 (`release/1.x`) is frozen and gets no Pi image.
 
@@ -39,7 +39,7 @@ The sleep-screen and bye-screen UI exists in both UIs, so that part is two commi
 2. **Pi path.** Debootstrap trixie arm64, install the pinned `raspberrypi-archive-keyring` deb, add `archive.raspberrypi.com`, install `raspi-firmware linux-image-rpi-v8 linux-image-rpi-2712` with p1 mounted at `/boot/firmware` (the packages' hooks copy kernels, initramfs, dtbs and overlays there). `setup_pi_boot` writes `config.txt` and `cmdline.txt`, then fails the build if any file a supported board needs is missing. `populate_pi_data` seeds p3 from `/home/purple`; `publish_pi_image` xz-compresses the card.
 3. **One kernel command line.** `PURPLE_CMDLINE` feeds both GRUB's `purple-cmdline.cfg` and the Pi's `cmdline.txt`, where `ro` becomes `rw` plus `rootwait overlayroot=tmpfs:recurse=0`. With `ro`, overlayroot remounts its overlay read-only for systemd to flip back, kernel 6.18 refuses ("No changes allowed in reconfigure"), and logind dies on a read-only `/var/lib`, so X gets no GPU (first Pi 400 boot). The SD card's system partition stays read-only underneath either way.
 4. **`config/pi/config.txt`:** `arm_64bit=1`, `auto_initramfs=1`, `dtoverlay=vc4-kms-v3d`, `disable_splash=1`, `dtparam=audio=on` (Pi 4 jack), `dtoverlay=disable-wifi`, `dtoverlay=disable-bt`.
-5. **numpy.** Marker is `platform_machine == "x86_64"`; the Pi installs `python3-numpy` from apt as i386 does. The `<2` pin exists only for old x86 CPUs (`numpy-pin.md`), and 1.x has no cp313 aarch64 wheels.
+5. **numpy.** Marker is `platform_machine == "x86_64"`; the Pi installs `python3-numpy` from apt as i386 does. The `<2` pin exists only for old x86 CPUs (`guides/numpy-pin.md`), and 1.x has no cp313 aarch64 wheels.
 6. **Emulation.** The build container has `qemu-user-static`; `build-all.sh` registers aarch64 binfmt with the F flag (kernel-wide until the host reboots, as pi-gen does) and fails with a clear message if an existing registration lacks F. No host setup.
 7. **Not yet:** release upload of the `.img.xz`, and `just flash` for SD cards (flash with Raspberry Pi Imager "Use custom" or `dd`).
 8. **Debugging on a Pi.** `savelog` (Ctrl+Alt+F2) writes `purple-diag-collect`'s report to `PURPLE-DEBUG.TXT` on the boot partition, readable on any Mac or PC.

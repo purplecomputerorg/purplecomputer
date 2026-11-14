@@ -1,9 +1,11 @@
 # Chromebooks: Purple in a Third Boot Slot on ChromeOS
 
+**Status: Research.** The probe scripts in `scripts/chromebook/` exist; nothing ships to families.
+
 > Handoff from a research session on 2026-09-19. The reasoning is LLM-generated; the inventory
 > section was read off a real Chromebook. Firmware and vboot claims marked **unverified** were not
-> tested. This supersedes the Chromebook ordering in `mac-and-chromebook-plan.md` (which ranks
-> RW_LEGACY first) and `chromebook-support.md` (which assumes MrChromebox firmware).
+> tested. This supersedes the Chromebook ordering in `docs/plans/mac-and-chromebook.md` (which ranks
+> RW_LEGACY first) and `docs/plans/chromebook-firmware.md` (which assumes MrChromebox firmware).
 
 **This is research, not a compatibility promise.** Nothing here ships, and Purple does not claim
 Chromebook support anywhere. One machine has been probed.
@@ -306,4 +308,4 @@ Ctrl+Alt+Back; (2) audio through CRAS with `ui` stopped; (3) whether KERN-C prio
 - Chromebrew (proof that `/usr/local` on stateful is a working userland in dev mode): https://github.com/chromebrew/chromebrew
 - MrChromebox GBB flags and write protect (quiet-boot tier only): https://docs.mrchromebox.tech/docs/firmware/wp/
 - python-build-standalone: https://github.com/astral-sh/python-build-standalone
-- Prior repo thinking: `mac-and-chromebook-plan.md`, `chromebook-support.md`.
+- Prior repo thinking: `docs/plans/mac-and-chromebook.md`, `docs/plans/chromebook-firmware.md`.

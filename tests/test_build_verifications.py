@@ -190,7 +190,7 @@ def test_compositor_skips_glx_without_a_render_node():
 def test_boot_timing_tool_ships():
     """The pre-kernel boot investigation depends on this being on the image;
     it is the only way to measure seek latency and file fragmentation on a
-    customer machine. See docs/PLAN-macbook5-slow-boot.md."""
+    customer machine. See docs/plans/macbook5-slow-boot.md."""
     src = _build_source()
     assert re.search(r'cp /purple-src/scripts/purple-boot-timing\.sh\b', src), \
         "purple-boot-timing.sh not copied into the image"
@@ -260,7 +260,7 @@ def test_initrd_lean_hook_prunes_modules_and_firmware():
     firmware the golden initrd never contained and shipped as a silent no-op,
     so these assertions pin the mechanism, not just the file's existence:
     net-class + gpu module pruning, unreferenced-firmware pruning, and a
-    fail-loudly artifact check. See docs/PLAN-macbook5-slow-boot.md."""
+    fail-loudly artifact check. See docs/plans/macbook5-slow-boot.md."""
     src = _build_source()
     hook = re.search(
         r'cat > "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd" <<\'LEANINITRD\'\n(.*?)\nLEANINITRD\n',

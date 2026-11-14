@@ -2,7 +2,7 @@
 # Builds the Chromebook stick bundle (~190 MB of downloads) into a folder outside the repo:
 # the probe, and Purple itself for the stage 1 install. Downloads already there are kept.
 # Usage: scripts/chromebook/build-bundle.sh [dest]   (default ~/purple-chromebook)
-# Then copy the folder to a FAT32 stick. Run steps: guides/chromebook-dev-mode-plan.md
+# Then copy the folder to a FAT32 stick. Run steps: docs/plans/chromebook-dev-mode.md
 set -euo pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)"
 REPO="$SRC/../.."

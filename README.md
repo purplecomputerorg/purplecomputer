@@ -183,7 +183,7 @@ Hold Esc for a second (behind an optional PIN): install, name the computer, **Ki
 
 ## Purple Studio
 
-[studio.purplecomputer.org](https://studio.purplecomputer.org/) is a website for parents to make a **Purple Pack** for their family: their own words and photos (type "grandma" and see her picture), their voice on the keys, instruments, screen and paint colors, and whole new rooms written with blocks or Python, all tried live on a real Purple running in the browser. Nothing is uploaded. The pack goes onto any USB drive; plug it into Purple and it asks to add it. Source and pack format: [`studio/`](studio/), [`studio/PACK_FORMAT.md`](studio/PACK_FORMAT.md), [guides/family-rooms.md](guides/family-rooms.md).
+[studio.purplecomputer.org](https://studio.purplecomputer.org/) is a website for parents to make a **Purple Pack** for their family: their own words and photos (type "grandma" and see her picture), their voice on the keys, instruments, screen and paint colors, and whole new rooms written with blocks or Python, all tried live on a real Purple running in the browser. Nothing is uploaded. The pack goes onto any USB drive; plug it into Purple and it asks to add it. Source and pack format: [`studio/`](studio), [`studio/PACK_FORMAT.md`](studio/PACK_FORMAT.md), [guides/family-rooms.md](guides/family-rooms.md).
 
 ---
 
@@ -270,7 +270,7 @@ purplecomputer/
 What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies into `/opt/purple`: `purplecomputer/`, `packs/`, and two named scripts. `tools/` and the `scripts/e2e_ai*` testers stay on the developer's machine, as does the demo tooling in `recording-setup/`.
 
 **Stack:**
-- **Target System (PurpleOS):** Ubuntu 24.04 LTS minimal + X11 + a fullscreen pygame window (software rendering, no GL). Machines with 32-bit CPUs get a Debian trixie i386 image instead; GRUB picks it per machine (see `guides/hardware-coverage-plan.md`)
+- **Target System (PurpleOS):** Ubuntu 24.04 LTS minimal + X11 + a fullscreen pygame window (software rendering, no GL). Machines with 32-bit CPUs get a Debian trixie i386 image instead; GRUB picks it per machine (see `docs/plans/hardware-coverage.md`)
 - **Installer:** Remastered Ubuntu Server ISO with initramfs hook, Secure Boot support
 - **Application:** Python + Pygame (SDL2) + Piper TTS
 
@@ -328,7 +328,7 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 - **[guides/canvas-architecture.md](guides/canvas-architecture.md):** How Purple draws and takes input
 - **[guides/family-rooms.md](guides/family-rooms.md):** Family rooms from Purple Packs, and how they run sandboxed
 - **[guides/printing.md](guides/printing.md):** Plug-in USB printing
-- **[guides/mode-reference.md](guides/mode-reference.md):** Room mechanics for demo scripting (written for the Textual UI)
+- **[guides/mode-reference.md](guides/mode-reference.md):** Room mechanics for demo scripting
 - **[guides/kid-proofing.md](guides/kid-proofing.md):** Kiosk lockdown and safety measures
 - **[guides/usb-flash-settle.md](guides/usb-flash-settle.md):** Why freshly flashed drives get a one-time QEMU boot
 

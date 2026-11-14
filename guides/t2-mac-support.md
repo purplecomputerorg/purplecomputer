@@ -2,7 +2,7 @@
 
 Apple Macs with the T2 Security Chip (2018-2020 models) are a viable hardware target for Purple Computer. The things that are "broken" on T2 Linux (Wi-Fi firmware, suspend, Touch ID) are all things Purple Computer doesn't need.
 
-This guide covers what works, what's needed, and how to get Purple Computer running on T2 Macs. The verified list of manual steps (including making Purple the default startup disk) and the companion-app plan are in `mac-and-chromebook-plan.md`.
+This guide covers what works, what's needed, and how to get Purple Computer running on T2 Macs. The verified list of manual steps (including making Purple the default startup disk) and the companion-app plan are in `docs/plans/mac-and-chromebook.md`.
 
 ---
 
@@ -130,7 +130,7 @@ Purple Computer's installer is a remastered Ubuntu Server ISO. To support T2 Mac
 2. **`apple-bce` module in initramfs** (so keyboard works immediately at boot)
 3. **`efi=noruntime`** kernel parameter may be needed on some T2 models to avoid boot hangs
 
-On non-T2 hardware, the apple-bce driver simply doesn't find a T2 chip and does nothing. A single ISO can support both, but not with a single kernel: the t2linux kernel is unsigned, so replacing the Canonical-signed kernel would break every Secure Boot machine. The plan is two kernels on one ISO with GRUB choosing by SMBIOS model. See `hardware-coverage-plan.md`.
+On non-T2 hardware, the apple-bce driver simply doesn't find a T2 chip and does nothing. A single ISO can support both, but not with a single kernel: the t2linux kernel is unsigned, so replacing the Canonical-signed kernel would break every Secure Boot machine. The plan is two kernels on one ISO with GRUB choosing by SMBIOS model. See `docs/plans/hardware-coverage.md`.
 
 ---
 
@@ -165,7 +165,7 @@ With macOS wiped and GRUB installed to the EFI fallback path, the Mac should boo
 
 ## Implementation Path
 
-**Done (August 2026):** phases 1-3 landed as the two-kernel design in `hardware-coverage-plan.md` ("As built"). What remains is bench validation on real T2 hardware.
+**Done (August 2026):** phases 1-3 landed as the two-kernel design in `docs/plans/hardware-coverage.md` ("As built"). What remains is bench validation on real T2 hardware.
 
 This doesn't need to be solved all at once. A reasonable progression:
 

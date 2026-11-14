@@ -8,7 +8,7 @@ boot a machine that plays the chime loud starts at volume 4 instead of 7.
 The check only ever turns the volume down: a low reading can mean a quiet
 speaker or an insensitive mic, and those look the same.
 The app and purple-audio-probe both call run(). Rationale and the calibration
-status: docs/PLAN-audio-volume.md, "Hands-on probe".
+status: docs/plans/audio-volume.md, "Hands-on probe".
 
 run() never raises and never plays unless pactl, a real sink, and a real
 unmuted mic are all present: nobody needs a microphone to use Purple.

@@ -2,15 +2,11 @@
 
 Current thinking on extending Music Room to stay fun and interesting across a wide age range, from toddlers banging on keys to older kids who are genuinely into music.
 
-> Status note: several ideas below have since shipped. Looping/layering is now
-> the loop station (`loop_station.py`, `loop_panel.py`, driven by Space).
-> Multiple instruments now ship and cycle with Enter (`INSTRUMENTS` in
-> `music_constants.py`). The remaining ideas (chords, held-number beats,
-> progressive hints) are still unbuilt.
+**Status: Active.** Several ideas below have since shipped: looping is the loop station (`loop_station.py`, recorded by holding Enter), and multiple instruments cycle with Enter (`INSTRUMENTS` in `music_constants.py`). Chords, held-number beats and progressive hints are still unbuilt.
 
 ## What Works Now
 
-Music Room maps every letter key to a note (default instrument marimba, default key C major across 3 octaves; the key and octave shift with the arrow keys) and every number key to a percussion sound. Any random combination of keys sounds pleasant. Colors cycle on each press. Enter swaps instruments, Tab toggles Letters mode (each letter said aloud; Space picks its name or its phonics sound), and Space otherwise shows note names or drives the loop station.
+Music Room maps every letter key to a note (default instrument marimba, default key C major across 3 octaves; the key and octave shift with the arrow keys) and every number key to a percussion sound. Any random combination of keys sounds pleasant. Colors cycle on each press. Enter swaps instruments, Tab toggles Letters mode (each letter said aloud; Space picks its name or its phonics sound), and holding Enter records a loop.
 
 For young kids, this is great. Press a key, get a sound and a color. Immediate, predictable, satisfying. The core principle: **every key always makes the same sound.** This predictability is what makes it fun for toddlers and must not change.
 

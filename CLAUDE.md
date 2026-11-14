@@ -34,6 +34,8 @@ If you're unsure what message to use, propose one and ask the user to confirm be
 
 Do not save anything to Claude's persistent memory system. Durable notes and project state go in the repo under `docs/`. Tasks, bugs, and ideas go in Linear (see below), not a markdown backlog.
 
+`guides/` describes the system as it is now: when a change makes a guide wrong, fix the guide. Plans, research and investigations go in `docs/plans/`, starting with a status line (Active, Shipped, Research or Abandoned); delete a plan once nothing in it explains the code anymore.
+
 ## Linear (task source of truth)
 
 Tasks, bugs, and ideas for the Purple repos live in Linear (team `Purple Computer`, prefix `PUR`), not markdown backlogs. Check Linear yourself for a relevant issue before asking. When you finish or materially change tracked work, update or close the matching issue automatically; no need to ask first. Don't open and immediately close an issue for work you just did, but do close an existing open issue when its work lands. Without access, reference any `PUR-` id the user gives you; plan docs under `docs/` stay the technical reasoning of record, without restating issue status.
@@ -147,7 +149,7 @@ Input is read from evdev (`/dev/input/event*`), never from the terminal or the w
 Both ISOs boot via Casper (Ubuntu's live boot framework). The normal ISO hides the GRUB menu and auto-boots. The debug ISO shows a GRUB menu with verbose boot options.
 
 GRUB picks the kernel per machine via `config/grub/purple-router.cfg`: signed stock, `-t2` (t2linux kernel, by SMBIOS model) or `-i386` (Debian image; `build-scripts/initramfs/purple-live` stands in for casper there). Same snippet on installed systems.
- Verify with `scripts/test-grub-router.sh`; `scripts/test-grub-installed-cfg.sh` runs the installed grub.cfg in QEMU. Design: `guides/hardware-coverage-plan.md`.
+ Verify with `scripts/test-grub-router.sh`; `scripts/test-grub-installed-cfg.sh` runs the installed grub.cfg in QEMU. Design: `docs/plans/hardware-coverage.md`.
 
 Installation is triggered through the live boot, not a GRUB menu entry. The install flow is:
 1. Live boot starts Purple Computer normally

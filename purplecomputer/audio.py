@@ -7,7 +7,7 @@ leaves sound silently broken until Purple is restarted.
 
 System volume goes through `set_system_volume`: pactl when present (percent
 maps onto perceived loudness and follows the default sink across hotplug),
-CRAS on ChromeOS, `amixer -M` otherwise. Design and history: docs/PLAN-audio-volume.md.
+CRAS on ChromeOS, `amixer -M` otherwise. Design and history: docs/plans/audio-volume.md.
 """
 
 from __future__ import annotations

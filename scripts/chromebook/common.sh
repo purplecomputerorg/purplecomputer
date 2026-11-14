@@ -1,6 +1,6 @@
 # Shared by probe.sh, install.sh and install-slot.sh. Sourced from the stick; callers set SRC and
 # LOGS first, and DEST when Purple goes somewhere other than the running system's /usr/local.
-# Design: guides/chromebook-dev-mode-plan.md
+# Design: docs/plans/chromebook-dev-mode.md
 DEST="${DEST:-/usr/local/purple}"
 PY="$DEST/python/bin/python3"
 

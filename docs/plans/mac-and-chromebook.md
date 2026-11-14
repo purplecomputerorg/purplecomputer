@@ -2,11 +2,11 @@
 
 One place for the machines our USB stick can't boot as-is: Apple Silicon Macs (M1 through M4), T2 Intel Macs, and Chromebooks. Researched August 2026. Claims marked **unverified** were not checked on hardware.
 
-**Status: brainstorming, not a commitment.** Nothing here is decided or scheduled. It records what is possible, what it would cost, and what stays impossible, so the decision can be made later with the facts in one place.
+**Status: Research,** not a commitment. Nothing here is decided or scheduled. It records what is possible, what it would cost, and what stays impossible, so the decision can be made later with the facts in one place.
 
 The premise throughout: the kid owns the machine. Purple owns the whole visible surface. What Apple or Google keep underneath is our concern, never the kid's.
 
-Companion guides with background detail: `t2-mac-support.md`, `apple-silicon-support.md`, `chromebook-support.md`. **For Chromebooks, `chromebook-dev-mode-plan.md` (Sept 2026) supersedes the ordering below: third-slot boot on Google's kernel ranks above RW_LEGACY.** Where they disagree with this one, this one is newer. The x86 kernel plan (T2 kernel, 32-bit EFI, 32-bit CPUs) is in `hardware-coverage-plan.md`.
+Companion guides with background detail: `guides/t2-mac-support.md`, `docs/plans/apple-silicon.md`, `docs/plans/chromebook-firmware.md`. **For Chromebooks, `docs/plans/chromebook-dev-mode.md` (Sept 2026) supersedes the ordering below: third-slot boot on Google's kernel ranks above RW_LEGACY.** Where they disagree with this one, this one is newer. The x86 kernel plan (T2 kernel, 32-bit EFI, 32-bit CPUs) is in `docs/plans/hardware-coverage.md`.
 
 ---
 
@@ -40,7 +40,7 @@ Consequences:
 
 - Nothing boots that Apple's chain hasn't authorized. Asahi works by having the owner authorize m1n1 once from recoveryOS (Permissive Security). That authorization step is the one thing no script can do; it needs a human with the owner password.
 - A permanent ~2.5GB macOS stub (iBoot, recoveryOS) stays on disk. Not shrinkable.
-- **USB boot is possible after a one-time internal install.** The Asahi installer's "UEFI environment only" option (m1n1 + U-Boot + a 500MB ESP, ~3GB total with the stub) leaves a machine whose U-Boot will boot `EFI/BOOT/BOOTAA64.EFI` from a USB stick. NixOS installs exactly this way. `apple-silicon-support.md` said "no USB boot, no workaround"; that is too strong.
+- **USB boot is possible after a one-time internal install.** The Asahi installer's "UEFI environment only" option (m1n1 + U-Boot + a 500MB ESP, ~3GB total with the stub) leaves a machine whose U-Boot will boot `EFI/BOOT/BOOTAA64.EFI` from a USB stick. NixOS installs exactly this way. `docs/plans/apple-silicon.md` said "no USB boot, no workaround"; that is too strong.
 - Internal keyboard at the U-Boot/GRUB stage: works on M1 laptops (upstream U-Boot SPI keyboard driver). M2 and later: **unverified, likely absent**. Irrelevant when GRUB auto-boots with no menu, which is our design.
 
 Asahi in 2026: healthy (seven-person board since Hector Martin left in Feb 2025, Fedora Asahi Remix 44 in April 2026, kernel 7.1.x, downstream patch count falling). M1 and M2 families supported. **M3 is bring-up only with the installer disabled and no display driver. M4 has nothing and no ETA.** Apple Silicon generations do not carry over; each is a new reverse-engineering effort.
@@ -56,7 +56,7 @@ Verified against wiki.t2linux.org. Both are enforced by the T2 chip and survive 
 1. **Startup Security Utility, once.** Recovery (Cmd+R), Utilities > Startup Security Utility: Secure Boot = **No Security**, Allow Boot Media = **Allow booting from external media**. Needs a macOS admin password; Internet Recovery (Cmd+Option+R) works if macOS is already gone.
 2. **Make Purple the default startup disk, once, after install.** Apple firmware ignores `efibootmgr` NVRAM entries, and t2linux warns against touching NVRAM on T2 at all (`install.sh` Layer 4 should be skipped on Apple hardware). Instead: hold Option at power-on, then hold **Control** while selecting the EFI Boot entry. That persists.
 
-For a laptop we pre-configure, the parent sees neither. The rest of the T2 story (unsigned t2linux kernel chosen by GRUB via SMBIOS) is in `hardware-coverage-plan.md`.
+For a laptop we pre-configure, the parent sees neither. The rest of the T2 story (unsigned t2linux kernel chosen by GRUB via SMBIOS) is in `docs/plans/hardware-coverage.md`.
 
 ---
 
@@ -120,7 +120,7 @@ What our image needs for Chromebooks, all bakeable offline as no-ops elsewhere:
 
 - **Audio:** WeirdTreeThing's `chromebook-linux-audio` (https://github.com/WeirdTreeThing/chromebook-linux-audio) is file copies: UCM2 configs from `alsa-ucm-conf-cros` into `/usr/share/alsa/ucm2`, SOF topology and firmware blobs into `/lib/firmware/{intel,amd}`, driver-selection files into `/etc/modprobe.d`. Its one runtime `git clone` gets vendored at build time. Covers Baytrail through Meteor Lake and AMD Stoney through Mendocino. It also deletes `max98357a-tplg.bin` on purpose to prevent unlimited-volume speaker damage.
 - **Keyboard:** standard evdev (`cros_ec` or i8042). The top row emits media keycodes, not F-keys; WeirdTreeThing's `cros-keyboard-map` generates a **keyd** config from `/sys/.../function_row_physmap`, which drops straight into our keyd layer. Search key is LeftMeta. No physical Delete or CapsLock.
-- **Kernel:** we ship `linux-image-generic` on 24.04 (6.8). chrultrabook wants 6.19+ (AMD Stoney audio requires it). Since `hardware-coverage-plan.md` already adds a second, unsigned kernel for T2, a newer Chromebook-capable kernel is the same slot; MrChromebox firmware has no Secure Boot so signing doesn't matter there.
+- **Kernel:** we ship `linux-image-generic` on 24.04 (6.8). chrultrabook wants 6.19+ (AMD Stoney audio requires it). Since `docs/plans/hardware-coverage.md` already adds a second, unsigned kernel for T2, a newer Chromebook-capable kernel is the same slot; MrChromebox firmware has no Secure Boot so signing doesn't matter there.
 - **Storage:** cheap AUE-expired boards (Dell 3100 "fleex", Lenovo 100e "robo", HP 11 G8 "vorticon") all support both tiers but have 4GB RAM and 16-32GB eMMC. Our 16GB minimum is tight on the 16GB ones.
 
 Ctrl+U boot of a vboot-signed kernel partition on USB (no firmware change at all) is technically real on x86 and ARM, but the tooling is dead (eupnea/depthboot discontinued 2023 with a compromised GitHub; PrawnOS last touched 2021), the kernel command line is baked into the signed blob, and shim/GRUB are bypassed entirely. Not worth maintaining.

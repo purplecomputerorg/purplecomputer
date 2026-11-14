@@ -11,7 +11,7 @@ Not covered: MacBook8,1 (2015 12", unsupported upstream), T2 Macs (audio goes th
 
 ## Why unsigned modules are safe here
 
-The patched modules are unsigned. Intel Macs before the T2 chip have no Secure Boot, so the kernel is not in lockdown and loads them (it logs a taint). Every Secure Boot machine runs only signed code, because the modules load solely on the listed models. Same reasoning as the t2 kernel (`guides/hardware-coverage-plan.md`, "Why two kernels").
+The patched modules are unsigned. Intel Macs before the T2 chip have no Secure Boot, so the kernel is not in lockdown and loads them (it logs a taint). Every Secure Boot machine runs only signed code, because the modules load solely on the listed models. Same reasoning as the t2 kernel (`docs/plans/hardware-coverage.md`, "Why two kernels").
 
 ## How it fits
 

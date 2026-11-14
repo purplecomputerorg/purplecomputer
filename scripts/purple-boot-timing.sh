@@ -8,7 +8,7 @@
 # can measure the two things that would explain it: how fast the disk serves
 # small seeking reads (GRUB's access pattern), and how scattered the files are.
 #
-# See docs/PLAN-macbook5-slow-boot.md.
+# See docs/plans/macbook5-slow-boot.md.
 #
 # On a live USB boot the report fits one photo: stick link speed, systemd's
 # view, the startup timeline in seconds since the kernel started (X allowed,

@@ -1,8 +1,10 @@
 # Apple Silicon Support
 
+**Status: Research.** Nothing here is built; Purple does not run on Apple Silicon.
+
 Running Purple Computer on Apple Silicon Macs (M1, M2) via Asahi Linux.
 
-This is the companion to `t2-mac-support.md` (Intel Macs with T2 chip). Apple Silicon is a completely different architecture (ARM64 vs x86_64) with a completely different boot chain.
+This is the companion to `guides/t2-mac-support.md` (Intel Macs with T2 chip). Apple Silicon is a completely different architecture (ARM64 vs x86_64) with a completely different boot chain.
 
 ---
 
@@ -40,7 +42,7 @@ This is the companion to `t2-mac-support.md` (Intel Macs with T2 chip). Apple Si
 
 ## Key Difference from Intel: No USB Boot Without a One-Time Install
 
-**Apple Silicon cannot boot a USB stick on a fresh machine.** The SecureROM only runs Apple's boot chain from the internal SSD. The workaround is a one-time internal install of the Asahi "UEFI environment" (m1n1 + U-Boot + ESP, ~3GB), after which U-Boot boots a normal `BOOTAA64.EFI` USB stick. Current plan and the M3/M4 situation: `mac-and-chromebook-plan.md`.
+**Apple Silicon cannot boot a USB stick on a fresh machine.** The SecureROM only runs Apple's boot chain from the internal SSD. The workaround is a one-time internal install of the Asahi "UEFI environment" (m1n1 + U-Boot + ESP, ~3GB), after which U-Boot boots a normal `BOOTAA64.EFI` USB stick. Current plan and the M3/M4 situation: `docs/plans/mac-and-chromebook.md`.
 
 On Intel Macs and PCs, the deployment model is:
 ```

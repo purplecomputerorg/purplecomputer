@@ -235,15 +235,13 @@ In text mode, backgrounds get subtle tints (15%) but don't mix. Typing over an e
 
 **To get to the center of the canvas:**
 ```python
-# Assuming ~80 wide × ~24 tall canvas
-# Move right ~40 times and down ~12 times
-for _ in range(40):
+# The Art grid is 70 wide × 30 tall (ART_COLS, ART_ROWS in constants.py)
+# Move right 35 times and down 15 times
+for _ in range(35):
     PressKey("right")
-for _ in range(12):
+for _ in range(15):
     PressKey("down")
 ```
-
-**Or use a helper in the demo script to estimate center based on typical terminal size.**
 
 ### Enter Key
 Moves down one row, keeps column position. Useful for vertical typing/drawing.

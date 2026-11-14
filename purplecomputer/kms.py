@@ -1,7 +1,7 @@
 """Scanout without X: one KMS dumb buffer on the first connected output.
 
 Used where there is no display server (PURPLE_DISPLAY=kms). Only libdrm and
-kernel ioctls, no GBM/EGL/Mesa: guides/chromebook-dev-mode-plan.md. Stands
+kernel ioctls, no GBM/EGL/Mesa: docs/plans/chromebook-dev-mode.md. Stands
 alone (no package imports) so scripts/chromebook/probe.py can load it.
 """
 

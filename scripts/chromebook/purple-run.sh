@@ -4,7 +4,7 @@
 #   bash purple-run.sh          stage 1, from a shell: stops Chrome, brings ChromeOS back after
 #   bash purple-run.sh --job    stage 2, the upstart job in Purple's own boot slot
 # PURPLE_MAX_SECONDS=120 ends Purple after that long (a safety net for first runs).
-# Design: guides/chromebook-dev-mode-plan.md
+# Design: docs/plans/chromebook-dev-mode.md
 set -u
 DEST="$(cd "$(dirname "$0")" && pwd)"
 RUN_LOG="$DEST/logs/run.log"

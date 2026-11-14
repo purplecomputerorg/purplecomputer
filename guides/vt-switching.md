@@ -15,7 +15,7 @@ All combos release the evdev grab so tty2 actually receives keyboard input. keyd
 
 ## The Problem
 
-Standard Linux VT switching (Ctrl+Alt+Fn) relies on the kernel's keyboard handler. Alacritty (and X11 before it) sets the tty1 keyboard mode to `K_OFF`, which disables kernel keyboard processing entirely. This means the standard combos do nothing.
+Standard Linux VT switching (Ctrl+Alt+Fn) relies on the kernel's keyboard handler. X11 sets the tty1 keyboard mode to `K_OFF`, which disables kernel keyboard processing entirely. This means the standard combos do nothing.
 
 Meanwhile, the app reads keyboard input via evdev (`EVIOCGRAB`), bypassing the terminal. When evdev has an exclusive grab, no other process (including tty2's console) receives key events.
 
@@ -39,7 +39,7 @@ X handles Ctrl+Alt+F2 via its default xkb VT-switch binding, reading evdev throu
 
 ### Layer 3: App's evdev handler (`EvdevReader` in `input.py`)
 
-The main app's keyboard read loop includes VT switch detection at the evdev level, before any Textual processing. This means it works even when the Textual UI is frozen or hung.
+The main app's keyboard read loop includes VT switch detection at the evdev level, before any room or screen code runs. This means it works even when the UI is frozen or hung.
 
 On switch:
 1. Releases evdev grab (`release_grab()`)
@@ -70,10 +70,10 @@ purple-x11.service starts, X11 initializes
   |  X sets K_OFF on tty1 -- kernel VT switching stops
   |  X handles VT switching via xkb (DontVTSwitch unset)
   v
-xinitrc setup (PulseAudio, window manager, font calc...)
+xinitrc setup (PulseAudio, window manager...)
   |  X handles VT switching via xkb
   v
-Alacritty launches, Python app starts loading
+Python app starts loading
   |  X handles VT switching via xkb
   v
 App's EvdevReader.start() grabs keyboards
@@ -124,7 +124,7 @@ After install completes, Python `execv`s into `purple-reboot` (a static C binary
 
 ### Signal safety
 
-The binary ignores terminal signals (SIGHUP, SIGQUIT, SIGINT, SIGTSTP) at startup. This is critical for surviving USB removal: when the USB is ejected, Alacritty SIGBUSes on dead overlayfs code pages and dies. The pty master side closes, and the kernel sends SIGHUP to the binary (foreground process on the slave pty). Without ignoring SIGHUP, the binary dies before reaching `reboot()`, xinitrc tries to restart, and the user is stuck on a blank purple screen (the X root window). SIGQUIT/SIGINT/SIGTSTP are also ignored so Ctrl+\, Ctrl+C, and Ctrl+Z from the pty can't kill it.
+The binary ignores terminal signals (SIGHUP, SIGQUIT, SIGINT, SIGTSTP) at startup. This is critical for surviving USB removal: when the USB is ejected, processes still running code from the stick can SIGBUS on dead overlayfs code pages and die, and losing the session's terminal sends SIGHUP to the binary. Without ignoring SIGHUP, the binary dies before reaching `reboot()`, xinitrc tries to restart, and the user is stuck on a blank purple screen (the X root window). SIGQUIT/SIGINT/SIGTSTP are also ignored so Ctrl+\, Ctrl+C, and Ctrl+Z can't kill it.
 
 ### Reboot fallback chain
 

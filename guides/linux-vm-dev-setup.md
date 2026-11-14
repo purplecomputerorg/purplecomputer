@@ -79,7 +79,7 @@ Purple reads keyboard directly from `/dev/input/event*`, bypassing the terminal.
 - Precise timing for sticky shift, long-press escape
 - All keycodes (terminals drop F13-F24)
 
-The terminal (Alacritty) is display-only. See `guides/keyboard-architecture.md` for details.
+The window is display-only. See `guides/keyboard-architecture.md` for details.
 
 ---
 

@@ -1,6 +1,6 @@
 # Boot Display Sequence
 
-What the user sees from power-on to the TUI, what controls each stage, and what we learned getting here.
+What the user sees from power-on to Purple, what controls each stage, and what we learned getting here.
 
 **Debugging a hang during live boot?** See `boot-hang-debugging.md` for the always-on boot log (`/var/log/purple/boot.log`) and the Python startup watchdog that dumps thread stacks on stuck starts.
 
@@ -60,9 +60,9 @@ On shutdown, `ExecStop` repaints the splash so systemd teardown messages aren't 
 
 Old Intel panels (pre-2016 MacBooks) also need `i915.enable_psr=0 i915.enable_fbc=0` on the kernel cmdline to stop a partial-redraw checkerboard artifact. See `intel-display-tuning.md` for what it fixes, why it's safe, and why it costs Purple almost no battery.
 
-Once a display is found (or 15s timeout), X11 starts. xinit guarantees the X server is accepting connections before running xinitrc (SIGUSR1 handshake + XOpenDisplay polling, standard since X11R5). xinitrc clears the VT buffer under X (so nothing scary shows if X exits later), starts PulseAudio, launches Alacritty, and runs the Purple TUI. Once the TUI paints its first frame, xinitrc starts the picom compositor in the background (`scripts/purple-start-compositor.sh`, tear-free transitions on old Intel panels; see `intel-display-tuning.md`).
+Once a display is found (or 15s timeout), X11 starts. xinit guarantees the X server is accepting connections before running xinitrc (SIGUSR1 handshake + XOpenDisplay polling, standard since X11R5). xinitrc clears the VT buffer under X (so nothing scary shows if X exits later), starts PulseAudio, and runs Purple (`/usr/local/bin/purple`, a pygame window). Once Purple paints its first frame, xinitrc starts the picom compositor in the background (`scripts/purple-start-compositor.sh`, tear-free transitions on old Intel panels; see `intel-display-tuning.md`).
 
-**What the user sees:** Purple "Starting up..." screen holds until the TUI appears.
+**What the user sees:** Purple "Starting up..." screen holds until Purple appears.
 
 **Key files:**
 - `scripts/purple-wait-display.sh`
@@ -82,9 +82,9 @@ Restart is attempted 3 times within 120s (long enough for three full 15s display
 | 0-2s | Laptop vendor logo (firmware) |
 | instant | Nothing (GRUB, invisible) |
 | 3-10s | Purple with "Welcome to Purple Computer! / Starting up..." |
-| 0s | TUI appears |
+| 0s | Purple appears |
 
-One transition: vendor logo to purple. Purple holds steady until the TUI is ready.
+One transition: vendor logo to purple. Purple holds steady until the app is ready.
 
 ---
 
@@ -94,7 +94,7 @@ One transition: vendor logo to purple. Purple holds steady until the TUI is read
 
 - **VT palette trick:** `\033]P02d1b4e` redefines VT color 0 (normally black) to purple. Clearing the screen then fills it with "black" = purple. Works on all Linux framebuffer consoles. 24-bit RGB escapes (`\033[48;2;...`) do NOT work on VT consoles.
 - **Kernel params:** `vt.default_red=0x2d,...` sets the palette before any scripts run.
-- **X11:** `xsetroot -solid '#2d1b4e'` sets the root window. Alacritty background matches.
+- **X11:** `xsetroot -solid '#2d1b4e'` sets the root window, which shows until Purple paints its first frame.
 
 ---
 
@@ -104,9 +104,7 @@ Audited the full boot path for unnecessary delays. Changes made:
 
 **Removed `sleep 1` in xinitrc (X readiness).** xinit uses a SIGUSR1 handshake + XOpenDisplay polling to guarantee X is accepting connections before running the client script. This has been standard behavior since X11R5 (early 1990s), unchanged in Ubuntu 24.04's xinit 1.4.1. The sleep was pure waste. Saves 1.0s every boot.
 
-**Faster font sizing poll.** `font_sizer.py` sleeps 0.3s per iteration waiting for Alacritty to resize after a font change. Replaced with 20ms polling of `os.get_terminal_size()` with the same 0.3s timeout. Typically resolves in 50-100ms, saving ~0.2s per iteration.
-
-**Deferred display settings probe.** `apply_saved_display_settings()` runs two xrandr subprocesses (~0.2-1s) to probe display control. Moved to `call_later()` after `mark_first_render()` so it doesn't block time-to-first-frame.
+**Deferred display settings probe.** `apply_saved_display_settings()` runs two xrandr subprocesses (~0.2-1s) to probe display control. Runs on a 0.5s timer after startup so it doesn't block time-to-first-frame.
 
 ### Investigated but left alone
 

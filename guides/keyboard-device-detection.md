@@ -6,7 +6,7 @@ How we diagnosed and fixed the EvdevReader picking the wrong input device.
 
 ## The Problem
 
-On an Apple MacBook running Purple Computer, the app loaded normally but keyboard input did nothing. The sleep screen could detect keypresses (via Textual's terminal input), but the main app (which reads input via evdev) was unresponsive.
+On an Apple MacBook running Purple Computer, the app loaded normally but keyboard input did nothing. The sleep screen could detect keypresses (the old Textual UI also read terminal input), but the main app (which reads input via evdev) was unresponsive.
 
 ---
 

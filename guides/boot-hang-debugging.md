@@ -1,6 +1,6 @@
 # Debugging Boot Hangs
 
-When Purple fails to fully start on live boot — you see alacritty (a cursor, maybe a partial render, or typed characters echoing back at you) but Textual never appears — this guide tells you where the logs are and how to read them.
+When Purple fails to fully start on live boot — you see a purple or black screen but Purple never appears — this guide tells you where the logs are and how to read them.
 
 See also: `guides/boot-display-sequence.md` (normal boot path), `purplecomputer/boot_log.py` (the module doing the instrumentation).
 
@@ -23,9 +23,9 @@ For a slow (not hung) boot, `sudo purple-boot-timing` prints the lines that boun
 **Writers (in order of appearance in a normal boot):**
 
 1. `purple-wait-display.sh` — logs `[wait-display]` lines from systemd's `purple-x11.service` ExecStartPre. Connector states at start and timeout.
-2. `config/xinit/xinitrc` — logs `[xinitrc]` lines for every phase of X/WM/audio/alacritty startup.
-3. `/usr/local/bin/purple` (the bash launcher inside alacritty) — logs `[launcher]` lines immediately before `exec python3`.
-4. `purplecomputer/boot_log.py` — logs `[python]` lines at every import checkpoint, `PurpleApp.__init__`, and `on_mount`.
+2. `config/xinit/xinitrc` — logs `[xinitrc]` lines for every phase of X/WM/audio startup.
+3. `/usr/local/bin/purple` (the bash launcher xinitrc runs) — logs `[launcher]` lines immediately before `exec python3`.
+4. `purplecomputer/boot_log.py` — logs `[python]` lines at import, `PurpleApp.__init__`, the main loop start, and first render.
 
 A normal successful boot produces something like:
 
@@ -33,32 +33,20 @@ A normal successful boot produces something like:
 [HH:MM:SS.mmm] [wait-display] === purple-wait-display started === kernel=6.8.0-31-generic
 [HH:MM:SS.mmm] [wait-display] Display ready: card0-eDP-1 (waited 0 half-seconds = 0.0s)
 [HH:MM:SS.mmm] [xinitrc] === xinitrc started ===  debug_flag=no
-[HH:MM:SS.mmm] [xinitrc] X server ready (after 1s wait)
-[HH:MM:SS.mmm] [xinitrc] unclutter started
+[HH:MM:SS.mmm] [xinitrc] X server ready (xinit handshake)
+[HH:MM:SS.mmm] [xinitrc] unclutter started (PID=1200)
 [HH:MM:SS.mmm] [xinitrc] matchbox-window-manager started
-[HH:MM:SS.mmm] [xinitrc] Font size: 16
-[HH:MM:SS.mmm] [xinitrc] Launching Alacritty...
+[HH:MM:SS.mmm] [xinitrc] Launching Purple...
 [HH:MM:SS.mmm] [launcher] launcher entered pid=1234
-[HH:MM:SS.mmm] [launcher] exec python3 -m purplecomputer.purplecomputer
+[HH:MM:SS.mmm] [launcher] exec python3 -m purplecomputer
 === purple python starting at ... pid=1234 python=3.12.3 ===
 [HH:MM:SS.mmm] [+ 0.002s] [python] boot_log module imported; watchdog arming
 [HH:MM:SS.mmm] [+ 0.003s] [python] watchdog armed
-[HH:MM:SS.mmm] [+ 0.003s] [python] purplecomputer entry: beginning stdlib imports
-[HH:MM:SS.mmm] [+ 0.011s] [python] stdlib imports done; importing textual
-[HH:MM:SS.mmm] [+ 0.520s] [python] textual/rich imports done; importing purplecomputer.constants
-[HH:MM:SS.mmm] [+ 0.540s] [python] constants imported; importing keyboard + input
-[HH:MM:SS.mmm] [+ 0.612s] [python] keyboard + input imported; importing power_manager
-[HH:MM:SS.mmm] [+ 0.623s] [python] power_manager imported; importing .demo
-[HH:MM:SS.mmm] [+ 0.640s] [python] .demo imported; importing rooms.art_room
-[HH:MM:SS.mmm] [+ 0.660s] [python] rooms.art_room imported; importing rooms.parent_menu
-[HH:MM:SS.mmm] [+ 0.675s] [python] rooms.parent_menu imported; importing room_picker
-[HH:MM:SS.mmm] [+ 0.690s] [python] room_picker imported; importing repl_panel
-[HH:MM:SS.mmm] [+ 0.701s] [python] all purplecomputer imports done
-[HH:MM:SS.mmm] [+ 0.712s] [python] PurpleApp.__init__ begin
-[HH:MM:SS.mmm] [+ 0.984s] [python] PurpleApp.__init__ after App.__init__
-[HH:MM:SS.mmm] [+ 1.210s] [python] PurpleApp.on_mount begin
-[HH:MM:SS.mmm] [+ 1.880s] [python] PurpleApp.on_mount complete
-[HH:MM:SS.mmm] [+ 1.880s] [python] first render reached; watchdog disarmed
+[HH:MM:SS.mmm] [+ 0.650s] [python] PurpleApp.__init__ begin
+[HH:MM:SS.mmm] [+ 1.020s] [python] PurpleApp.__init__ complete
+[HH:MM:SS.mmm] [+ 1.030s] [python] main loop begin
+[HH:MM:SS.mmm] [+ 1.210s] [python] main loop ready
+[HH:MM:SS.mmm] [+ 1.300s] [python] first render reached; watchdog disarmed
 ```
 
 If the log ends abruptly, **the last phase line is where the hang happened.** That's the whole design.
@@ -94,18 +82,18 @@ Confirm the layout on a fresh ISO with `xorriso -indev <iso> -report_system_area
 
 A daemon thread started in `boot_log.py` at module import time. It sleeps in 1-second increments, checking a `_first_render_done` flag. At deadlines **10s, 20s, 40s, 80s** from process start, if first render hasn't happened, the watchdog calls `faulthandler.dump_traceback(all_threads=True)` against the boot log file.
 
-The dump is a full Python stack for every thread: main thread, Textual's render thread, evdev reader threads, asyncio loop, etc. Example of what a hang in `detect_keyboard_mode` would look like in the log:
+The dump is a full Python stack for every thread: main thread, evdev reader threads, the mixer warm-up thread, etc. Example of what a hang in `detect_keyboard_mode` would look like in the log:
 
 ```
 [HH:MM:SS.mmm] [+30.001s] [python] WATCHDOG deadline 30s exceeded, dumping stacks
 Thread 0x00007f... (most recent call first):
   File "/opt/purple/purplecomputer/keyboard.py", line 812 in detect_keyboard_mode
-  File "/opt/purple/purplecomputer/purplecomputer.py", line 763 in __init__
+  File "/opt/purple/purplecomputer/app.py", line 180 in __init__
   ...
 --- end dump at +30s ---
 ```
 
-When `PurpleApp.on_mount` finishes, it calls `boot_log.mark_first_render()` which sets the flag; the watchdog wakes, sees the flag, and exits. Zero overhead after startup.
+When the first frame reaches the screen, the app calls `boot_log.mark_first_render()` which sets the flag; the watchdog wakes, sees the flag, and exits. Zero overhead after startup.
 
 **Why four deadlines and not one?** A progression tells you what kind of hang it is. If the 10s dump shows thread A blocked on lock L and the 20s dump shows it still there on the same line, it's truly wedged. If 20s shows it moved, it's slow but progressing.
 
@@ -119,7 +107,7 @@ When you suspect a hang *right now* and don't want to wait for the next watchdog
 dump-purple
 ```
 
-The helper (installed at `/usr/local/bin/dump-purple`) finds the running `purplecomputer.purplecomputer` process, sends it SIGUSR1, and tails the boot log. `boot_log.py` registers `faulthandler` on SIGUSR1 at startup, so every thread's stack lands in `/var/log/purple/boot.log` without killing the process. You can dump repeatedly to watch a deadlock evolve (or not).
+The helper (installed at `/usr/local/bin/dump-purple`) finds the running `python3 -m purplecomputer` process, sends it SIGUSR1, and tails the boot log. `boot_log.py` registers `faulthandler` on SIGUSR1 at startup, so every thread's stack lands in `/var/log/purple/boot.log` without killing the process. You can dump repeatedly to watch a deadlock evolve (or not).
 
 Use this to distinguish:
 
@@ -129,13 +117,13 @@ Use this to distinguish:
 
 SIGUSR1 is passive (zero cost until fired), so this ships in both ISOs.
 
-**Dump destination:** `faulthandler` requires a persistent file descriptor. We open `/var/log/purple/boot.log` (falling back to `/tmp/purple-boot.log`) and keep the fd open for the life of the process. The faulthandler is also armed for signals (SIGSEGV/SIGFPE/SIGBUS/SIGILL) against the same file, so a segfault during startup lands in the log instead of Textual's stderr.
+**Dump destination:** `faulthandler` requires a persistent file descriptor. We open `/var/log/purple/boot.log` (falling back to `/tmp/purple-boot.log`) and keep the fd open for the life of the process. The faulthandler is also armed for signals (SIGSEGV/SIGFPE/SIGBUS/SIGILL) against the same file, so a segfault during startup lands in the log.
 
 ---
 
 ## Reading the log after a hang
 
-You hit a hang. The MBP is stuck on a cursor. Options, in order of ease:
+You hit a hang. The screen is stuck on purple. Options, in order of ease:
 
 ### 1. Power cycle, boot again, read `boot.log.prev` (debug ISO only)
 
@@ -175,18 +163,15 @@ On laptops with real function keys, holding `Ctrl+Alt+F2` for 3 seconds switches
 | `=== purple-wait-display started ===` (nothing after) | shell/dash itself, or systemd is not executing ExecStart |
 | `Waiting for display...` with no "Display ready" | no real GPU connector reports `connected`: slow driver probe (i915 async init), `nomodeset`, or a GPU with no driver |
 | `=== xinitrc started ===` (nothing after) | X server is running but xinitrc is blocked extremely early |
-| `matchbox-window-manager started` (nothing after) | font sizer, config copy, or alacritty exec |
-| `Launching Alacritty...` (nothing after) | alacritty itself (font loading, GPU init, pty setup) |
+| `matchbox-window-manager started` (nothing after) | debug display diagnostics, or the launcher exec |
+| `Launching Purple...` (nothing after) | the launcher script itself, before its first log line |
 | `launcher entered` (nothing after) | between bash and python interpreter — check PATH, libs, very rare |
-| `exec python3 -m purplecomputer.purplecomputer` (nothing after) | Python interpreter startup, site-packages scan |
-| `boot_log module imported` (nothing after) | the Python import machinery itself is broken — very rare |
-| `stdlib imports done; importing textual` (nothing after) | first-time bytecode compilation of textual/rich, or the rich module doing something at import |
-| `constants imported; importing keyboard + input` (nothing after) | `from .input import ...` — check for module-level evdev opens |
-| `keyboard + input imported; importing power_manager` (nothing after) | power_manager's imports (dbus, upower, subprocess calls at import?) |
-| `power_manager imported; importing demo + rooms + repl` (nothing after) | one of `demo/`, `rooms/`, `room_picker`, `repl_panel`. **Historical cause:** `rooms/__init__` → `play_room` → `content` → `inflect` → `typeguard` AST rewriting at ~3s of CPU; see "Case study" below. Check first if a new import somewhere in this chain pulls a package that decorates with `typeguard.@typechecked`. |
-| `PurpleApp.__init__ begin` (nothing after) | App() superclass, CSS parsing, Textual App setup |
-| `PurpleApp.__init__ after App.__init__` (nothing after) | our `__init__` — keyboard state machine, `detect_keyboard_mode()` which opens evdev, power_manager, evdev readers |
-| `PurpleApp.on_mount begin` (nothing after) | theme, `apply_saved_display_settings`, `set_logind_power_key`, settings file read, `_load_room_content` |
+| `exec python3 -m purplecomputer` (nothing after) | Python interpreter startup, site-packages scan |
+| `boot_log module imported` / `watchdog armed` (nothing after) | the app's imports: pygame, content and packs, rooms. **Historical cause:** `content` → `inflect` → `typeguard` AST rewriting at ~3s of CPU; see "Case study" below. Check first if a new import pulls a package that decorates with `typeguard.@typechecked`. |
+| `PurpleApp.__init__ begin` (nothing after) | the SDL window (`Gfx`), `detect_keyboard_mode()` which opens evdev, pack arrivals, theme, settings |
+| `PurpleApp.__init__ complete` (nothing after) | between construction and the main loop, very rare |
+| `main loop begin` (nothing after) | `set_logind_power_key`, entering the first room, volume, starting the evdev readers |
+| `main loop ready` (nothing after) | the first frame: drawing, or the live-boot splash |
 
 The **watchdog dump** narrows this further: it shows the exact line of Python the main thread is parked on.
 
@@ -217,7 +202,7 @@ pstats.Stats(pr).sort_stats('cumulative').print_stats(30)
 
 The profile showed ~2.9s cumulative in `inflect/__init__.py` → `typeguard/_decorators.py:typechecked` → `ast.visit` / `fix_missing_locations` / `compile`.
 
-**The fix.** `purplecomputer/content.py` now lazy-loads `inflect` via a `@functools.cache`-decorated zero-arg factory (`_inflect_engine`), and `PurpleApp.on_mount` spawns a daemon thread that calls `warm_inflect_engine()` after `mark_first_render()`. First REPL plural lookup is instant because the engine is already warm by the time a kid types anything; boot time drops by ~1.4s on every machine.
+**The fix.** `content.py` first lazy-loaded `inflect` and warmed it on a daemon thread after first render, which took ~1.4s off every boot. It has since dropped `inflect` entirely: plurals come from a prebuilt table (`plural_forms.json`, built by `scripts/build_plural_tables.py`).
 
 ---
 
@@ -312,7 +297,7 @@ def public_api(x):
     return _thing().do(x)
 ```
 
-And if first-call latency matters, warm the cache from a daemon thread after first render (pattern in `purplecomputer.py` `on_mount`).
+And if first-call latency matters, warm the cache from a daemon thread after first render.
 
 ---
 

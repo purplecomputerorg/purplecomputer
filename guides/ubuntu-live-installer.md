@@ -11,7 +11,7 @@ For the high-level architecture, see [architecture-overview.md](architecture-ove
 The ISO serves two purposes from one USB stick:
 
 1. **Live boot (default)**: Boots directly into Purple Computer. No installation, no disk writes, no waiting. The child plays immediately from the USB.
-2. **Install (optional)**: A parent opens the parent menu inside the running Purple Computer TUI and selects the Install option. The system is written to the internal disk permanently.
+2. **Install (optional)**: A parent opens the parent menu inside the running Purple app and selects the Install option. The system is written to the internal disk permanently.
 
 Both paths use the same root filesystem, built once by debootstrap and packaged two ways:
 - **Squashfs** for live boot (casper mounts it read-only with an overlayfs on top)
@@ -124,7 +124,7 @@ sudo ./test-boot.sh --interactive
 
 1. No GRUB menu appears (the normal ISO hides it with `timeout=0` and auto-boots; the debug ISO shows a visible menu)
 2. Kernel boots (scrolling text, then quiet)
-3. Login prompt appears (or Purple TUI if X11 starts successfully in the VM)
+3. Login prompt appears (or Purple if X11 starts successfully in the VM)
 4. Internal disk is never touched (the QEMU target disk stays empty)
 
 To test the install path interactively, boot normally, open the parent menu (hold Escape 1 second, PIN-gated), and select "Install on this Computer". Verify the confirmation screen appears ("Everything on this computer will be erased"), with "No, go back" selected by default.
@@ -160,14 +160,14 @@ Add `-snapshot` to avoid writing to the ISO or target disk (useful for repeated 
 | GRUB hidden | Watch screen at power-on | No menu on the normal ISO; boots straight into Purple (the debug ISO shows a menu) |
 | No disk writes | `lsblk` inside VM | Internal disk has no mounts |
 | Login prompt | Watch serial/screen | `purple-computer login:` appears |
-| Purple TUI starts | Interactive mode | Purple Computer app loads (if X11 works in VM) |
+| Purple starts | Interactive mode | Purple Computer app loads (if X11 works in VM) |
 | udisks2 masked | `systemctl status udisks2` | Inactive/masked (prevents internal disk auto-mount) |
 
 ### Install Path
 
 | Check | How to verify | Expected |
 |-------|--------------|----------|
-| No GRUB install entry | Watch GRUB (debug ISO menu) | Only live boot entries; install lives inside the TUI |
+| No GRUB install entry | Watch GRUB (debug ISO menu) | Only live boot entries; install lives inside the app |
 | Parent menu entry | Hold Escape 1s, enter PIN | "Install on this Computer" listed (or "Install (Reinsert USB)" if the payload is missing) |
 | Confirmation screen | Select the install entry | "Everything on this computer will be erased", with "No, go back" selected by default |
 | Cancel is safe | Press Esc or confirm "No, go back" | Returns to the menu, disk untouched |
@@ -185,9 +185,9 @@ Add `-snapshot` to avoid writing to the ISO or target disk (useful for repeated 
 1. Create 8GB disk image, partition (GPT: 512MB ESP + rest ext4)
 2. Mount partitions
 3. debootstrap Ubuntu 24.04 (minimal)
-4. apt-get install: X11, Alacritty, Python, SDL, PulseAudio, fonts, ...
-5. pip install: textual, rich, pygame, piper-tts, evdev, ...
-6. Copy Purple TUI application, configs, scripts
+4. apt-get install: X11, Python, SDL, PulseAudio, fonts, ...
+5. pip install: pygame, rich, piper-tts, evdev, ...
+6. Copy the Purple app, configs, scripts
 7. Configure: auto-login, power management, .bashrc, .xinitrc
 8. Create GRUB standalone EFI binary (for installed system's bootloader)
 9. mksquashfs → filesystem.squashfs (for live boot)
@@ -215,7 +215,7 @@ The squashfs is created from the mounted root filesystem **before** unmounting, 
 
 The normal ISO boots straight into Purple with no visible menu. There is no GRUB
 install entry: installation is triggered later from the parent menu inside the
-running TUI (`parent_menu.py` runs `/cdrom/purple/install.sh`).
+running app (`rooms/parent_menu.py` runs `/cdrom/purple/install.sh`).
 
 ```
 set timeout=0
@@ -277,7 +277,7 @@ The GRUB config wasn't replaced. Check that step 7/8 in `01-remaster-iso.sh` fou
 **Boots to Ubuntu Server instead of Purple**
 The squashfs wasn't replaced. Run `validate-build.sh` to check the squashfs inside the ISO. If it's small (~2GB instead of ~2.5GB+), the copy step failed.
 
-**"login:" appears but Purple TUI doesn't start**
+**"login:" appears but Purple doesn't start**
 This is expected in QEMU without GPU passthrough. X11 may fail to start because the VM lacks proper graphics drivers. On real hardware, it should work. Check `/var/log/Xorg.0.log` inside the live system.
 
 **Internal disk auto-mounted**
@@ -293,7 +293,7 @@ The menu can't find `/cdrom/purple/install.sh` (`_PAYLOAD_PATH` in `parent_menu.
 
 ### QEMU-Specific Notes
 
-- QEMU's default graphics may not support X11. The live boot test considers a login prompt as success, not the full Purple TUI.
+- QEMU's default graphics may not support X11. The live boot test considers a login prompt as success, not the full Purple app.
 - Use `-m 2048` or more. The live squashfs is large and casper needs RAM for the overlay.
 - The `-snapshot` flag prevents writes to the ISO file, which is important for repeated testing.
 - Serial console (`-serial stdio` or `-serial file:log.txt`) captures kernel and initramfs messages that aren't visible on the graphical console.
@@ -317,7 +317,7 @@ sync
 
 Then boot a test laptop from USB and verify:
 1. No GRUB menu appears; the USB auto-boots
-2. Boot reaches the Purple TUI (full experience, not just login prompt)
+2. Boot reaches Purple (full experience, not just login prompt)
 3. Internal disk is untouched (check with `lsblk` from tty2: Ctrl+Alt+F2)
 4. Parent menu (hold Escape 1s, PIN) → "Install on this Computer" shows the confirmation screen
 5. Backing out at the confirmation leaves the disk untouched

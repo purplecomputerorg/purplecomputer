@@ -39,7 +39,7 @@ hook). It:
 - Paints the terminal purple
 
 That is all. Its own source comment says: *"Installation is handled by the parent menu
-in the running TUI, not by this hook."*
+in the running app, not by this hook."*
 
 ### 4. Installation requires deliberate action
 

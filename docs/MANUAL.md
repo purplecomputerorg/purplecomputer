@@ -20,10 +20,10 @@ Complete reference for building, installing, and maintaining Purple Computer.
 
 ## Overview
 
-Purple Computer turns old laptops into calm, creative tools for kids. The installer boots from USB, writes a pre-built Ubuntu disk image to the internal drive, and reboots into a minimal TUI environment.
+Purple Computer turns old laptops into calm, creative tools for kids. The installer boots from USB, writes a pre-built Ubuntu disk image to the internal drive, and reboots into Purple, a full-screen app on a minimal X11 session.
 
 **Key Facts:**
-- **Installed OS:** PurpleOS, built on Ubuntu 24.04 LTS (Noble Numbat) with custom TUI application
+- **Installed OS:** PurpleOS, built on Ubuntu 24.04 LTS (Noble Numbat) with the Purple app
 - **Installer Method:** Direct disk imaging (no apt, no package installation during setup)
 - **Boot Medium:** USB stick (hybrid ISO, BIOS and UEFI compatible)
 - **Installation Time:** 10-20 minutes (mostly disk write time)
@@ -45,23 +45,23 @@ The PurpleOS installer is built for **simplicity, reliability, and broad hardwar
 
 ### How It Works (Live Boot + Optional Install)
 
-The USB boots straight into Purple (live boot). Installation is optional and is started from the parent menu inside the running TUI, after a PIN and a data-loss confirmation. There is no GRUB install entry and no kernel-cmdline arming in production.
+The USB boots straight into Purple (live boot). Installation is optional and is started from the parent menu inside the running app, after a PIN and a data-loss confirmation. There is no GRUB install entry and no kernel-cmdline arming in production.
 
 **Boot Flow:**
 
 1. **Boot:** USB stick loads Ubuntu's signed boot chain (shim → GRUB → kernel). The GRUB menu is hidden and auto-boots "Purple Computer."
 2. **Casper:** Ubuntu's casper mounts our squashfs and overlayfs. The casper-bottom hook (`80_purple_installer`) restores dotfiles, sets debug mode, and paints the splash. It does NOT gate install.
-3. **Live system:** systemd auto-logins as `purple`, `purple-x11.service` starts X11 → Alacritty → Purple TUI. The internal disk is never touched.
+3. **Live system:** systemd auto-logins as `purple`, `purple-x11.service` starts X11 → Purple (a pygame window). The internal disk is never touched.
 4. **Install (optional):** A parent holds Escape for 1s to open the PIN-gated parent menu and picks "Install on this Computer." `InstallProgressScreen` shows a data-loss warning, then runs `/cdrom/purple/install.sh` (via sudo) while the live system keeps running.
 5. **Write:** `install.sh` detects the internal disk (excluding USB/removable devices), wipes it, and writes the pre-built Ubuntu image (`purple-os.img.zst`) directly to disk.
 6. **Bootloader:** Sets up UEFI boot entries with multi-layer fallback.
-7. **Reboot:** "Press ENTER to restart" hands off to the `purple-reboot` binary; the system boots into installed Ubuntu + Purple TUI.
+7. **Reboot:** "Press ENTER to restart" hands off to the `purple-reboot` binary; the system boots into installed Ubuntu + Purple.
 
 **Key insight:** The squashfs is never modified. The same debootstrap root filesystem is packaged twice: as the squashfs for live boot and as `purple-os.img.zst` for install.
 
 **No package manager runs during installation.** The installer writes a complete, pre-built Ubuntu system image directly to disk.
 
-> Historical note: earlier versions armed install from a GRUB entry (`purple.install=1`) and confirmed via a `purple-confirm.service` two-gate model. That has been replaced by the in-TUI parent-menu flow. `purple.install=1` now survives only as a developer/test switch that suppresses X11 so the install path can be exercised on a tty (see `test-boot.sh --mode install`).
+> Historical note: earlier versions armed install from a GRUB entry (`purple.install=1`) and confirmed via a `purple-confirm.service` two-gate model. That has been replaced by the in-app parent-menu flow. `purple.install=1` now survives only as a developer/test switch that suppresses X11 so the install path can be exercised on a tty (see `test-boot.sh --mode install`).
 
 ### Why Ubuntu's Boot Stack?
 
@@ -78,59 +78,13 @@ Ubuntu's stock kernel handles these automatically:
 - **ThinkPad:** ThinkPad ACPI, TrackPoint drivers
 - **Generic:** EFI framebuffer, NVMe APST quirks
 
-### Screen Size & Font Calculation
+### Screen Size
 
-Purple Computer displays a **134×29 character viewport** (plus header and footer) requiring a **146×37 character terminal grid**. The font size is the largest that fits the screen, clamped to 12-48pt.
+Purple is laid out in fractions of the screen, so it fills any display from a 1024×768 netbook to a 4K TV. Screens over 1920×1200 (Retina MacBooks, 4K TVs) switch to a smaller mode of the same shape to keep software drawing fast; touch `/opt/purple/native-resolution` to keep the native size. Details: [guides/canvas-architecture.md](../guides/canvas-architecture.md).
 
 **Minimum supported resolution:** 1024×768
 
-#### How It Works
-
-At X11 startup, `calc_font_size.py` calculates the optimal font size:
-
-1. **Get resolution** from xrandr (fallback: 1366×768)
-2. **Use a fixed cell-to-point ratio** for JetBrainsMono at 96 DPI (11×22 px at 18pt)
-3. **Calculate the largest font** that fits the required grid on screen
-4. **Clamp** to 12-48pt range
-
-That's it. No EDID/physical size detection (too unreliable), no caching (fast enough), no validation loops (calculation just works).
-
-#### Behavior by Screen Size
-
-| Screen | Resolution | Font | Viewport Fill |
-|--------|------------|------|---------------|
-| 11" laptop | 1366×768 | 14pt | 80% |
-| 13" laptop | 1920×1080 | 19pt | 80% |
-| 15" laptop | 1920×1080 | 19pt | 80% |
-| 17" laptop | 2560×1440 | 24pt | ~60% (capped) |
-| 4K monitor | 3840×2160 | 24pt | ~40% (capped) |
-
-The 24pt cap prevents oversized viewports on large screens while keeping the UI proportional on typical donated laptops (11-15").
-
-#### Debugging
-
-Run inside the VM to see what's happening:
-```bash
-python3 /opt/purple/calc_font_size.py --info
-```
-
-Output:
-```
-Screen: 1920x1080
-Grid: 146x37
-Cell ratio: 0.611w x 1.222h px/pt
-Fill: 100% (max font that fits grid)
-Font: 19.1pt
-```
-
 Startup log: `cat /tmp/xinitrc.log`
-
-#### Manual Override
-
-Edit xinitrc to force a specific font size:
-```bash
-FONT_SIZE=20  # Override calculated size
-```
 
 ---
 
@@ -142,8 +96,8 @@ The installed Purple Computer uses X11 with a deliberately minimal graphics conf
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Purple TUI                           │
-│                   (Alacritty terminal)                  │
+│                      Purple                             │
+│              (pygame window, software SDL)              │
 ├─────────────────────────────────────────────────────────┤
 │              Matchbox Window Manager                    │
 ├─────────────────────────────────────────────────────────┤
@@ -192,7 +146,7 @@ Purple Computer is **keyboard-only**. Mouse and trackpad input is disabled at mu
 | Layer | How | Config |
 |-------|-----|--------|
 | **X.Org** | `MatchIsPointer "on"` → `Ignore "true"` | `40-disable-pointer.conf` |
-| **Textual** | `app.run(mouse=False)` | `purplecomputer.py` |
+| **Purple** | hides the pointer, reads only the keyboard (evdev) | `gfx.py` |
 
 The X.Org config (`/usr/share/X11/xorg.conf.d/40-disable-pointer.conf`) completely ignores all pointer and touchpad devices:
 
@@ -338,7 +292,7 @@ Creates a complete Ubuntu Noble Numbat system as a disk image using `debootstrap
 - Ubuntu 24.04 minimal base
 - Standard Ubuntu kernel (linux-image-generic)
 - GRUB bootloader
-- X11 + Alacritty + Purple TUI
+- X11 + Purple
 - Python dependencies
 
 This is the system that gets written to the target laptop's internal disk.
@@ -488,7 +442,7 @@ echo "myuser:password" | chroot "$MOUNT_DIR" chpasswd
 Install custom software:
 ```bash
 cp -r /path/to/purplecomputer "$MOUNT_DIR/opt/"
-chroot "$MOUNT_DIR" systemctl enable purple-tui
+chroot "$MOUNT_DIR" systemctl enable purple-x11
 ```
 
 **Rebuild:**
@@ -525,7 +479,7 @@ The power button is kid-proofed to prevent accidental shutdowns:
 | Hold (3s) | Shows "Bye!" and shuts down. Like a phone. |
 | Hold (10s) | Hardware forced off (ACPI, always available). |
 
-logind is configured to ignore the power button (`HandlePowerKey=ignore`). The TUI reads the power button via a separate evdev device (`PowerButtonReader`) and handles all the UX.
+logind is configured to ignore the power button (`HandlePowerKey=ignore`). Purple reads the power button via a separate evdev device (`PowerButtonReader`) and handles all the UX.
 
 ### Lid Close
 
@@ -632,7 +586,7 @@ Purple Computer runs on tty1. To get a root shell on tty2 for debugging:
 - **Ctrl+Alt+F2** held for 3 seconds (Ctrl+Alt+RightAlt on Macs without F-keys; keyd enforces the hold so kids mashing keys don't trigger it): standard Linux VT switching, reimplemented via evdev since the kernel's built-in version is disabled by Alacritty's K_OFF mode)
 - **Ctrl+\\** (Ctrl+Backslash) held for 3 seconds: Same effect, alternative combo
 
-Both release the evdev grab so tty2 receives keyboard input. Both work even when the TUI is completely frozen. Note: these only work once the app's evdev handler has started (a few seconds after the purple screen appears).
+Both release the evdev grab so tty2 receives keyboard input. Both work even when the app is completely frozen. Note: these only work once the app's evdev handler has started (a few seconds after the purple screen appears).
 
 **From SSH:** `sudo chvt 2` (note: this does not release the evdev grab, so keyboard input will still go to the app. Use the keyboard methods instead.)
 
@@ -770,17 +724,17 @@ Casper mounts OUR squashfs → systemd starts
   └─ casper-bottom hook 80_purple_installer:
        restores dotfiles, sets debug mode, paints splash
   ↓
-Auto-login as purple → purple-x11.service → Alacritty → Purple TUI
+Auto-login as purple → purple-x11.service → X11 → Purple
   ↓
 LIVE: child plays. Internal disk untouched.
   ↓
-(Optional install, from the running TUI)
+(Optional install, from the running app)
 Parent menu (hold Escape 1s, PIN) → "Install on this Computer"
   ├─ InstallProgressScreen shows data-loss confirmation
   └─ On confirm: install.sh (from /cdrom/purple/) writes golden image to disk
   ↓
 Reboot → First Boot (Installed System)
-  └─ Ubuntu 24.04 + Purple TUI
+  └─ Ubuntu 24.04 + Purple
 ```
 
 ### Documentation

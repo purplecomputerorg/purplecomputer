@@ -111,8 +111,7 @@ class EvdevReader:
 
 The evdev reader grabs the keyboard exclusively. This means:
 
-- X11/Alacritty never see keyboard events
-- Ctrl+C doesn't reach the terminal (can't send SIGINT)
+- X11 never sees keyboard events
 - All keyboard input goes through Purple's handler
 
 This is the deepest layer of protection. Even if other layers fail, the terminal can't receive dangerous signals.
@@ -138,7 +137,7 @@ HandleSuspendKey=ignore
 HandleHibernateKey=ignore
 ```
 
-logind ignores all power actions so the TUI has full control over the UX.
+logind ignores all power actions so Purple has full control over the UX.
 
 Two power states: awake and sleep face. Timers adapt to charger and lid:
 
@@ -194,7 +193,7 @@ sudo sysctl -p /etc/sysctl.d/99-purple-sysrq.conf
 # 3. Mask Ctrl+Alt+Del
 sudo systemctl mask ctrl-alt-del.target
 
-# 4. Power button and lid: TUI handles everything
+# 4. Power button and lid: Purple handles everything
 sudo mkdir -p /etc/systemd/logind.conf.d
 sudo tee /etc/systemd/logind.conf.d/purple-power.conf << 'EOF'
 [Login]
@@ -246,6 +245,6 @@ Purple Computer uses defense in depth:
 3. **Systemd** blocks Ctrl+Alt+Del reboot
 4. **XKB** blocks accessibility toggles
 5. **Evdev** grabs keyboard so terminal never sees signals
-6. **Logind** ignores power/lid so TUI controls the UX (tap=sleep, hold=shutdown, lid=delayed shutdown)
+6. **Logind** ignores power/lid so Purple controls the UX (tap=sleep, hold=shutdown, lid=delayed shutdown)
 
 No single layer is sufficient. Together, they make the system resilient to any key combination a kid can produce.

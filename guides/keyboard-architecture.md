@@ -33,7 +33,7 @@ keyd  (systemd service, golden image only)
        ↓
 evdev (keyd virtual keyboard)
        ↓
-TUI Process:
+Purple process:
   ├── EvdevReader (one async task per device)
   │     - Prefers keyd virtual device when present
   │     - Still opens any physical keyboards keyd did not grab
@@ -146,7 +146,7 @@ With keyboard input bypassing the terminal:
 
 ### Device Grabbing
 
-The TUI grabs all keyboard devices (`EVIOCGRAB`):
+Purple grabs all keyboard devices (`EVIOCGRAB`):
 - Other applications can't receive keyboard input
 - This is intentional for kiosk mode
 - In dev mode, grabbing can be disabled for convenience

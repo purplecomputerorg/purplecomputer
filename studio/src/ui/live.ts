@@ -50,6 +50,7 @@ class LiveScreen {
   // autoplay: so Purple can make sounds even when Studio's own page is embedded in another site's.
   private frame = h("iframe", { class: "live-frame", src: "purple.html", title: "Purple", tabindex: -1, allow: "autoplay" });
   private status = h("span", {}, "Loading Purple Computer in your browser");
+  private bar = h("b");
   private hint = tryHint("then it's keyboard only, on purpose");
   private voiceNote = h("div", { class: "voice-loading", hidden: true });
   // An edit on its way: Purple still plays meanwhile, with what it had.
@@ -96,7 +97,7 @@ class LiveScreen {
 
   constructor() {
     this.hint.onclick = () => this.focus();
-    this.element = h("div", { class: "screen-wrap live" }, this.frame, h("div", { class: "live-status" }, h("i"), this.status), this.hint, this.zoomButton, this.voiceNote, this.updating, this.note);
+    this.element = h("div", { class: "screen-wrap live" }, this.frame, h("div", { class: "live-status" }, h("i"), h("div", { class: "live-bar" }, this.bar), this.status), this.hint, this.zoomButton, this.voiceNote, this.updating, this.note);
     PHONE.addEventListener("change", () => { this.zoomed = PHONE.matches; this.reframe(); });
     this.reframe();
     addEventListener("message", (e: MessageEvent<FromFrame>) => {
@@ -293,6 +294,7 @@ class LiveScreen {
     if (m.type === "focus" && m.on) this.element.classList.add("tried");
     if (m.type === "focus" && m.on) this.focusedAt = performance.now();
     if (m.type === "voice") this.voiceLoading(m.text);
+    if (m.type === "progress") this.bar.style.width = `${m.percent}%`;
     if (m.type === "keydown") { announceKey(m.key); this.onTyped(); }
     if (m.type === "modifier") dispatchEvent(new CustomEvent(MODIFIER_EVENT, { detail: m.key }));
     if (m.type === "click") this.nudge();

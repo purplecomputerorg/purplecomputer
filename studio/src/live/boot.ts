@@ -2,6 +2,7 @@
 // page and drawn into a canvas. purple.zip is built by scripts/studio_bundle.py.
 import type { ArtPicture } from "@sdk/purple/art";
 import browserShim from "./browser.py?raw";
+import { countDownloads, PACKAGES } from "./download";
 import controller from "./live.py?raw";
 import { piperHush, piperSay, startIfCached } from "./piper";
 import { purpleSound, warmSounds } from "./sound";
@@ -70,16 +71,28 @@ export interface LivePurple {
   check(source: string, names: string[]): Promise<[text: string, line: number | null] | null>;
 }
 
-export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) => void): Promise<LivePurple> {
+// The share of the bar each step of the start fills once done; downloading fills the rest.
+const STEPS: Record<string, number> = { python: 0.06, "purple.zip": 0.02, imports: 0.08, started: 0.04 };
+const DOWNLOADING = 1 - Object.values(STEPS).reduce((a, b) => a + b, 0);
+
+// progress: how far along the start is, from 0 to 1.
+export async function bootPurple(canvas: HTMLCanvasElement, log: (line: string) => void, progress: (fraction: number) => void): Promise<LivePurple> {
   // With ?trace, how long each step of the start took, from the start.
   const started = performance.now();
-  const mark = (step: string) => trace(`[boot] ${step} at ${Math.round(performance.now() - started)} ms`);
+  let downloaded = 0, steps = 0;
+  const show = () => progress(downloaded * DOWNLOADING + steps);
+  const stopCounting = countDownloads((f) => ((downloaded = f), show()));
+  const mark = (step: string) => {
+    trace(`[boot] ${step} at ${Math.round(performance.now() - started)} ms`);
+    steps += STEPS[step];
+    show();
+  };
   // Everything downloads at once: Purple's files and the wheels come in while Python starts.
   const purpleZip = fetch(new URL("purple/purple.zip", document.baseURI)).then((r) => r.arrayBuffer());
   const indexURL = new URL("pyodide/", document.baseURI).href;
   const { loadPyodide } = (await import(/* @vite-ignore */ `${indexURL}pyodide.mjs`)) as { loadPyodide: (o: { indexURL: string; packages: string[]; stdout: (s: string) => void; stderr: (s: string) => void }) => Promise<Pyodide> };
   log("Loading Python…");
-  const py = await loadPyodide({ indexURL, packages: ["pygame-ce", "rich", "wcwidth"], stdout: log, stderr: log });
+  const py = await loadPyodide({ indexURL, packages: PACKAGES, stdout: log, stderr: log });
   mark("python");
   log("Loading Purple…");
   py.unpackArchive(await purpleZip, "zip", { extractDir: ROOT });
@@ -120,6 +133,7 @@ sys.path.insert(0, "${ROOT}")
   };
   await live.load(null);
   mark("started");
+  stopCounting();
   warmSounds();
   return live;
 }

@@ -24,6 +24,8 @@ export type View = [number, number, number, number];
 export type FromFrame =
   | { type: "hello" }
   | { type: "status"; text: string }
+  // How far Purple's start has got, in percent.
+  | { type: "progress"; percent: number }
   | { type: "voice"; text: string | null }
   | { type: "restarting" }
   | { type: "loaded" }
@@ -40,7 +42,7 @@ export type FromFrame =
 // SDL draws into #canvas, kept off screen; #screen is what people see, at its own pixel size.
 const sdl = document.getElementById("canvas") as HTMLCanvasElement;
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
-const post = (m: FromFrame) => (m.type !== "status" && trace("[frame] sends", m.type), parent.postMessage(m, location.origin));
+const post = (m: FromFrame) => (m.type !== "status" && m.type !== "progress" && trace("[frame] sends", m.type), parent.postMessage(m, location.origin));
 // For Purple's FamilyRoom (browser.py): rooms run in workers from this page.
 const guests = roomGuests((text) => post({ type: "print", text }));
 Object.assign(globalThis, {
@@ -100,7 +102,9 @@ const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
 
 // Messages queue up while Purple boots, then run in order, one at a time.
 // Straight to the console too, to see how far Purple got in a browser where it never shows.
-const booted = bootPurple(sdl, (text) => (console.info("[purple]", text), post({ type: "status", text })));
+let percent = 0;
+const progress = (f: number) => Math.floor(f * 100) > percent && post({ type: "progress", percent: (percent = Math.floor(f * 100)) });
+const booted = bootPurple(sdl, (text) => (console.info("[purple]", text), post({ type: "status", text })), progress);
 let queue: Promise<unknown> = booted;
 const run = (task: (live: LivePurple) => Promise<void>) => {
   queue = queue.then(async () => task(await booted)).catch((err) => post({ type: "failed", text: String(err?.message ?? err) }));

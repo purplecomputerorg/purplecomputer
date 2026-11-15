@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { brotliCompressSync, constants as zlib } from "node:zlib";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import { defineConfig, runnerImport, type Connect, type Plugin } from "vite";
+import { PACKAGES } from "./src/live/download";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pyodideDir = resolve(here, "node_modules/pyodide");
@@ -36,6 +37,16 @@ const ALIAS = { "@sdk": resolve(here, "sdk/src") };
 // The Room guide as plain text (src/ui/guide.ts), at the address Studio hands an AI helper.
 const AI_GUIDE = "ai.md";
 const aiGuide = async () => (await runnerImport<{ GUIDE: string }>(resolve(here, "src/ui/guide.ts"), { configFile: false, resolve: { alias: ALIAS } })).module.GUIDE;
+// Published file name -> decoded size, for each file Purple fetches as it starts (src/live/download.ts).
+function downloadSizes(): Record<string, number> {
+  const lock = JSON.parse(readFileSync(join(pyodideDir, "pyodide-lock.json"), "utf8")).packages;
+  const sources: [string, string][] = [
+    ["pyodide-lock.json", join(pyodideDir, "pyodide-lock.json")],
+    ...["pyodide/pyodide.asm.wasm", "pyodide/python_stdlib.zip", "purple/purple.zip"].map((path): [string, string] => [path.split("/")[1], BROTLI[path]]),
+    ...PACKAGES.map((name): [string, string] => [lock[name].file_name, join(cacheDir, "pyodide", lock[name].file_name)]),
+  ];
+  return Object.fromEntries(sources.filter(([, f]) => existsSync(f)).map(([name, f]) => [name, statSync(f).size]));
+}
 const PYODIDE_FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "pyodide-lock.json", "python_stdlib.zip", "pyodide.mjs"];
 
 // pygame's WebAssembly build evaluates JavaScript, so the live Purple page alone allows eval. It and
@@ -57,7 +68,9 @@ function pyodideAssets(): Plugin {
     configureServer(server) {
       const serve = (prefix: string, dirs: string[], keep: (f: string) => boolean = () => true) => server.middlewares.use(prefix, (req, res, next) => {
         const name = decodeURIComponent((req.url ?? "/").slice(1).split("?")[0]);
-        const file = name && keep(name) ? dirs.map((d) => resolve(d, name)).find((f) => dirs.some((d) => f.startsWith(d + sep)) && existsSync(f) && statSync(f).isFile()) : null;
+        // What a build ships, where that differs from the package's own (the repacked stdlib).
+        const shipped = BROTLI[`${prefix.slice(1)}/${name}`];
+        const file = shipped && existsSync(shipped) ? shipped : name && keep(name) ? dirs.map((d) => resolve(d, name)).find((f) => dirs.some((d) => f.startsWith(d + sep)) && existsSync(f) && statSync(f).isFile()) : null;
         if (!file) return next();
         res.setHeader("Content-Type", TYPES[name.split(".").pop()!] ?? "application/octet-stream");
         for (const [k, v] of Object.entries(HEADERS)) res.setHeader(k, v);
@@ -175,6 +188,7 @@ export default defineConfig({
   // opens the dev server as https://simba:5173, which plain http on a LAN name is not.
   plugins: [basicSsl(), pyodideAssets(), { name: "csp-meta", transformIndexHtml: (html, ctx) => html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${ctx.path.endsWith("purple.html") ? LIVE_CSP : CSP}" />`) }],
   resolve: { alias: ALIAS },
+  define: { __PURPLE_DOWNLOADS__: JSON.stringify(downloadSizes()) },
   // host: true listens on the LAN so the dev server can be opened from another machine (the Mac hits "simba").
   server: { host: true, allowedHosts: ["simba"], fs: { allow: [".."] }, headers: HEADERS },
   preview: { headers: HEADERS },

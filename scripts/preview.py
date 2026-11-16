@@ -19,6 +19,7 @@ Actions (processed left to right):
     parent_menu      Open the parent menu
     room_picker      Open the Esc room picker
     help_videos      Open the Help & Videos screen
+    fridge           Open the Share What They Made screen
     first_boot       Show the first-boot power-cycle screen
     install_done     Show the install-finished restart screen
     sleep            Show the sleep screen
@@ -53,9 +54,9 @@ async def run_action(app, action: str):
         app.action_parent_menu()
     elif action == "room_picker":
         app._show_room_picker()
-    elif action == "help_videos":
-        from purplecomputer.rooms.help_videos import HelpVideosScreen
-        app.push(HelpVideosScreen(app))
+    elif action in ("help_videos", "fridge"):
+        from purplecomputer.rooms.help_videos import FridgeScreen, HelpVideosScreen
+        app.push((FridgeScreen if action == "fridge" else HelpVideosScreen)(app))
     elif action in ("first_boot", "sleep"):
         from purplecomputer.rooms.sleep_screen import FirstBootPowerCycleScreen, SleepScreen
         app.push((SleepScreen if action == "sleep" else FirstBootPowerCycleScreen)(app))

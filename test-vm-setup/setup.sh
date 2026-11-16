@@ -62,6 +62,7 @@ if [ -z "$JUST_HAVE" ] || ! printf '%s\n' "$JUST_MIN" "$JUST_HAVE" | sort -V -C;
     echo "  Installing latest just to /usr/local/bin (had: ${JUST_HAVE:-none})..."
     curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin --force
     hash -r
+    echo "  Open a new shell (or run 'hash -r') so it finds the new just."
 else
     echo "  just $JUST_HAVE already installed, skipping."
 fi
@@ -136,7 +137,7 @@ fi
 # (Golden image grants purple full NOPASSWD; test VM stays narrowly scoped.)
 SUDOERS_FILE="/etc/sudoers.d/purple-test-shutdown"
 SUDOERS_RULE="$USER ALL=(root) NOPASSWD: /bin/systemctl poweroff *, /usr/bin/systemctl poweroff *, /sbin/poweroff, /usr/sbin/poweroff, /bin/systemctl reboot *, /usr/bin/systemctl reboot *, /sbin/reboot, /usr/sbin/reboot"
-if [ ! -f "$SUDOERS_FILE" ] || ! grep -qF "$SUDOERS_RULE" "$SUDOERS_FILE"; then
+if [ ! -f "$SUDOERS_FILE" ] || ! sudo grep -qF "$SUDOERS_RULE" "$SUDOERS_FILE"; then
     echo "  Granting passwordless sudo for shutdown/reboot..."
     echo "$SUDOERS_RULE" | sudo tee "$SUDOERS_FILE" > /dev/null
     sudo chmod 440 "$SUDOERS_FILE"
@@ -211,7 +212,7 @@ echo "  2. Log into VM console (not SSH)"
 echo "  3. Run:     startx-purple"
 echo "  4. Clone:   git clone https://github.com/purplecomputerorg/purplecomputer.git"
 echo "  5. Setup:   cd purplecomputer && just setup"
-echo "  6. Run:     just run  (later: just type 'run' to pull and start dev mode)"
+echo "  6. Run:     just run  (later: type 'run' to pull and start dev mode)"
 echo ""
 echo "Remember: SSH is for editing. Use VM console for testing keyboard."
 echo ""

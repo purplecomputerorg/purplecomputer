@@ -96,7 +96,8 @@ After that, type `run` (installed by `setup.sh`) to pull the latest code, reinst
 
 ## What setup.sh Does
 
-- Installs packages: git, make, python, X11, Alacritty, SDL/audio
+- Installs packages: git, python, X11, Alacritty, SDL/audio
+- Installs a current `just` to `/usr/local/bin` (apt's is too old for the justfile)
 - Installs fonts: JetBrainsMono Nerd Font, Noto Color Emoji
 - Adds user to `input` group (evdev access)
 - Configures uinput permissions

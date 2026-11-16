@@ -44,18 +44,30 @@ install_if_needed() {
 }
 
 # Update package lists (always, so install_if_needed can find new packages)
-echo "[1/7] Updating package lists..."
+echo "[1/8] Updating package lists..."
 sudo apt update -qq
 
 # Install base packages
-echo "[2/7] Base packages..."
+echo "[2/8] Base packages..."
 install_if_needed \
-    git make unzip curl fontconfig \
+    git unzip curl fontconfig \
     python3 python3-venv python3-pip \
     build-essential gcc python3-dev
 
+# apt's just (1.21 on 24.04) can't parse the justfile, which needs 1.29+
+echo "[3/8] just..."
+JUST_MIN=1.29
+JUST_HAVE=$(just --version 2>/dev/null | cut -d' ' -f2)
+if [ -z "$JUST_HAVE" ] || ! printf '%s\n' "$JUST_MIN" "$JUST_HAVE" | sort -V -C; then
+    echo "  Installing latest just to /usr/local/bin (had: ${JUST_HAVE:-none})..."
+    curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin --force
+    hash -r
+else
+    echo "  just $JUST_HAVE already installed, skipping."
+fi
+
 # Install X11 stack
-echo "[3/7] X11 and terminal..."
+echo "[4/8] X11 and terminal..."
 install_if_needed \
     xorg xinit xauth x11-xserver-utils \
     xserver-xorg-core xserver-xorg-input-all \
@@ -66,14 +78,14 @@ install_if_needed \
     ncurses-term xkbset evtest
 
 # Install audio (pygame/sound)
-echo "[4/7] Audio and SDL libraries..."
+echo "[5/8] Audio and SDL libraries..."
 install_if_needed \
     pulseaudio alsa-utils \
     libsdl2-2.0-0 libsdl2-mixer-2.0-0 \
     libsdl2-image-2.0-0 libsdl2-ttf-2.0-0
 
 # Install fonts
-echo "[5/7] Fonts..."
+echo "[6/8] Fonts..."
 install_if_needed fontconfig fonts-noto-color-emoji
 
 FONT_DIR="/usr/share/fonts/truetype/jetbrains-mono-nerd"
@@ -89,7 +101,7 @@ else
 fi
 
 # --- System configuration ---
-echo "[6/7] System configuration..."
+echo "[7/8] System configuration..."
 
 # VirtioFS support (Apple Virtualization file sharing)
 if ! grep -q "^virtiofs" /etc/initramfs-tools/modules 2>/dev/null; then
@@ -138,7 +150,7 @@ needs_root_rights=yes
 XWRAP
 
 # --- X11 startup ---
-echo "[7/7] Creating X11 startup files..."
+echo "[8/8] Creating X11 startup files..."
 
 # .xinitrc
 cat > ~/.xinitrc << 'XINITRC'
@@ -198,8 +210,8 @@ echo "  1. Reboot:  sudo reboot"
 echo "  2. Log into VM console (not SSH)"
 echo "  3. Run:     startx-purple"
 echo "  4. Clone:   git clone https://github.com/purplecomputerorg/purplecomputer.git"
-echo "  5. Setup:   cd purplecomputer && make setup"
-echo "  6. Run:     make run  (later: just type 'run' to pull and start dev mode)"
+echo "  5. Setup:   cd purplecomputer && just setup"
+echo "  6. Run:     just run  (later: just type 'run' to pull and start dev mode)"
 echo ""
 echo "Remember: SSH is for editing. Use VM console for testing keyboard."
 echo ""

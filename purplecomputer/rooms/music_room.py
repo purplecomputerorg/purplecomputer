@@ -44,9 +44,9 @@ LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past t
 LETTER_FADE_REST_S = 1.0      # a rest this long, or another letter, brings it back to full
 LETTER_AFTER_GAP_S = 0.15     # between Purple saying a key and the family's recording after it
 ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes, and a new phrase on the tape
-TAPE_GAP_S = 0.8              # a rest this long shows as a gap on the music tape
 TAPE_MAX = 100                # notes kept on the music tape
 ERASE_MORE_S = 1.0            # seconds of holding Backspace before it takes whole phrases (whole words in Letters)
+ERASE_EVERY_S = (0.15, 0.6)   # a held Backspace takes a note, or later a phrase, this often, not at key repeat
 ERASE_HINT = "{Backspace} erase"
 TAPE_FADE_S = (3.0, 6.0)      # the letters tape dims at each; it clears at WORD_REST_S
 LETTER_REST_STEPS = 10        # the letters tape's timer empties in this many steps over WORD_REST_S
@@ -114,6 +114,7 @@ class MusicRoom(Room):
         self._tape_origin = 0.0   # when the song began, and how many notes have dropped off its front,
         self._tape_base = 0       # so each note keeps its timeline key while the song grows
         self._erasing_since = None
+        self._erased_at = 0.0
         self._tape_task = None
         self._tape_at = None      # the tape note playing back now
         self._rest_timers: list = []
@@ -503,7 +504,6 @@ class MusicRoom(Room):
         tape = self._tape + [(key, MODE_MUSIC, now)]
         self._tape_base += max(0, len(tape) - TAPE_MAX)
         self._tape = tape[-TAPE_MAX:]
-        self._schedule_rest(self.app.invalidate)
 
     def _tune(self) -> list:
         """What the tape holds, as (key, mode, when): the song in Notes, the letters in Letters."""
@@ -598,11 +598,8 @@ class MusicRoom(Room):
             self._schedule_rest(self._fade_out)
 
     def _rest(self) -> tuple:
-        """(how long the rest runs, timer steps, when it began) for the tape now: Letters clear after theirs, a
-        Music phrase is finished after its own, which has no timer, only the double bar once it's over."""
-        if self.letters_mode:
-            return WORD_REST_S, LETTER_REST_STEPS, self._typed_at[-1] if self._typed_at else None
-        return ECHO_PAUSE_S, 1, self._tape[-1][2] if self._tape else None
+        """(how long the rest runs, timer steps, when it began) before the letters clear."""
+        return WORD_REST_S, LETTER_REST_STEPS, self._typed_at[-1] if self._typed_at else None
 
     def _schedule_rest(self, end):
         """The tape's timer empties a step at a time while the rest runs, then `end`."""
@@ -710,8 +707,13 @@ class MusicRoom(Room):
             return
         now = time.monotonic()
         if not action.is_repeat or self._erasing_since is None:
-            self._erasing_since = now
-        self._erase(whole=now - self._erasing_since >= ERASE_MORE_S)
+            self._erasing_since = self._erased_at = now
+            self._erase(whole=False)
+        else:
+            whole = now - self._erasing_since >= ERASE_MORE_S
+            if now - self._erased_at >= ERASE_EVERY_S[whole]:
+                self._erased_at = now
+                self._erase(whole)
         self.app.invalidate()
 
     def _erase(self, whole: bool):
@@ -816,7 +818,7 @@ class MusicRoom(Room):
     def _tape_parts(self) -> tuple:
         """(texts, keys over them, rest before each, face, lead, underline from) for what the tape shows now: the
         letters in Letters; in Notes each note's name, with the key that played it over it in its color. A rest
-        is 0 (none), 1 (a gap) or 2 (a phrase's end, drawn as a double bar)."""
+        before each is 1 where a new word or phrase starts, drawn as a space."""
         if self.letters_mode:
             run, at = self._spelled.upper(), self._typed_at
             rests = [int(i > 0 and at[i] - at[i - 1] >= WORD_GAP_S) for i in range(len(run))]
@@ -824,7 +826,7 @@ class MusicRoom(Room):
         names = [ICON_DRUM if key not in _KEY_TO_RC else note_name(_KEY_TO_RC[key][1], self.root_index)
                  for key, *_ in self._tape]
         keys = [(KID_MATH_REMAP.get(key, key), KEY_COLORS.get(key.lower(), P.MUTED)) for key, *_ in self._tape]
-        rests = [0] + [(b[2] - a[2] >= TAPE_GAP_S) + (b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
+        rests = [0] + [int(b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
         return names, keys, rests, "mono-heavy-italic", "♪", None
 
     def _tape_ink(self) -> str:
@@ -852,9 +854,6 @@ class MusicRoom(Room):
         spans = [cell * len(t) + step + rest_w * r for t, r in zip(texts, rests)]
         first, last = self._tape_window(spans, room, cell + step)
         clipped = first > 0 or last < len(texts) - 1
-        if self.letters_mode:   # the letters, their timer, and the word with its hint, centered together
-            word_w = self._draw_word(g, None, cy, round(px * 1.15)) + px if self.word else 0
-            x = max(x, row.centerx - (lead_w + sum(spans[first:last + 1]) + px // 4 + 2 * clock_r + word_w) // 2)
         end = x + lead_w + room
         ink = self._tape_ink()
         if lead:
@@ -865,8 +864,6 @@ class MusicRoom(Room):
             x += cell + step
         under = None
         for i in range(first, last + 1):
-            if rests[i] == 2 and i > first:
-                self._draw_double_bar(g, x + rest_w, cy, clock_r)
             x += rest_w * rests[i] if i > first else 0
             w = cell * len(texts[i])
             lead_in = word_at is not None and i < word_at   # letters before the word step back
@@ -884,9 +881,11 @@ class MusicRoom(Room):
         if under is not None:
             line = pygame.Rect(under.x, under.bottom + max(2, px // 10), under.w, max(2, px // 8))
             g.rect(P.ACCENT, line, radius=line.h // 2)
-        x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
-        if self.letters_mode and self.word:
-            self._draw_word(g, x + px, cy, round(px * 1.15))
+        if self.letters_mode:
+            x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
+            if self.word:   # centered on the row, unless the letters reach past where it would start
+                word_w = self._draw_word(g, None, cy, round(px * 1.15))
+                self._draw_word(g, max(x + px, row.centerx - word_w // 2), cy, round(px * 1.15))
 
     def _draw_word(self, g, x, cy, px) -> int:
         """The word the letters found, with its picture, and what Space does with it; returns its width, and
@@ -916,22 +915,9 @@ class MusicRoom(Room):
                 last += 1
         return first, last
 
-    @staticmethod
-    def _draw_double_bar(g, cx, cy, r):
-        """The double bar sheet music closes a phrase with, about 2r tall around (cx, cy)."""
-        h, thin = round(r * 2.2), max(1, r // 5)
-        g.rect(P.MUTED, pygame.Rect(cx - 2 * thin, cy - h // 2, thin, h))
-        g.rect(P.MUTED, pygame.Rect(cx + thin, cy - h // 2, 3 * thin, h))
-
     def _draw_rest_mark(self, g, cx, cy, r) -> int:
-        """In Letters, a small pie that empties while the rest runs, till they clear; in Music, once a phrase's
-        rest is over, a double bar: the phrase is done, and the next note starts another after it. Returns its
-        right edge."""
+        """A small pie that empties while the letters' rest runs, till they clear. Returns its right edge."""
         left = self._rest_left()
-        if not self.letters_mode:
-            if left == 0:
-                self._draw_double_bar(g, cx, cy, r)
-            return cx + r
         pygame.draw.circle(g.surface, rgb(P.LINE), (cx, cy), r, width=max(1, r // 6))
         if left > 0:
             arc = [(cx + r * math.sin(2 * math.pi * left * k / 24), cy - r * math.cos(2 * math.pi * left * k / 24))

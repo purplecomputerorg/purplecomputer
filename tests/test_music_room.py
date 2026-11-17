@@ -304,15 +304,15 @@ def test_every_key_names_its_note_faintly_and_brighter_while_it_sounds(monkeypat
     run(go())
 
 
-def test_a_shorter_rest_shows_as_a_gap_and_a_long_one_marks_a_phrase_in_the_song():
-    from purplecomputer.rooms.music_room import ECHO_PAUSE_S, TAPE_GAP_S
+def test_only_a_phrase_rest_shows_on_the_song_as_a_space():
+    from purplecomputer.rooms.music_room import ECHO_PAUSE_S
 
     async def go():
         room = make_app(room="music").room
-        for key, at in (("Q", 0.0), ("W", 0.2), ("E", 0.2 + TAPE_GAP_S), ("R", 0.2 + TAPE_GAP_S + ECHO_PAUSE_S)):
+        for key, at in (("Q", 0.0), ("W", 0.2), ("E", 1.2), ("R", 1.2 + ECHO_PAUSE_S)):
             room._tape_add(key, at)
         texts, _, rests, *_ = room._tape_parts()
-        assert texts == ["C", "D", "E", "F"] and rests == [0, 0, 1, 2]
+        assert texts == ["C", "D", "E", "F"] and rests == [0, 0, 0, 1]
     run(go())
 
 
@@ -325,11 +325,15 @@ def test_backspace_erases_a_note_at_a_time_then_held_whole_phrases():
         room = app.room
         for key, at in (("Q", 0.0), ("W", 0.1), ("E", 5.0), ("R", 5.1), ("T", 5.2)):
             room._tape_add(key, at)
+        held = ControlAction(action="backspace", is_down=True, is_repeat=True)
         await room.handle(ControlAction(action="backspace", is_down=True))
-        assert [k for k, *_ in room._tape] == ["Q", "W", "E", "R"]
+        await room.handle(held)
+        assert [k for k, *_ in room._tape] == ["Q", "W", "E", "R"], "key repeat doesn't race through the notes"
         room._erasing_since -= music_room.ERASE_MORE_S
-        await room.handle(ControlAction(action="backspace", is_down=True, is_repeat=True))
-        assert [k for k, *_ in room._tape] == ["Q", "W"], "the rest of its phrase goes at once"
+        room._erased_at -= music_room.ERASE_EVERY_S[1]
+        await room.handle(held)
+        await room.handle(held)
+        assert [k for k, *_ in room._tape] == ["Q", "W"], "the rest of its phrase goes at once, and only it"
         await room.handle(ControlAction(action="backspace", is_down=False))
         assert room._erasing_since is None
     run(go())
@@ -467,23 +471,6 @@ def test_a_long_tape_shows_its_end_and_playback_scrolls_to_the_note_playing():
         room._tape_at = 15
         assert room._tape_window(spans, 100, 10) == (11, 19)
         assert room._tape_window([10] * 5, 100, 10) == (0, 4), "a tape that fits shows whole"
-    run(go())
-
-
-def test_a_phrase_is_finished_once_its_rest_is_over():
-    import time
-    from purplecomputer.rooms.music_room import ECHO_PAUSE_S
-
-    async def go():
-        app = make_app(room="music")
-        room = app.room
-        room._tape_add("Q", time.monotonic())
-        assert room._rest_left() == 1.0
-        room._tape[-1] = room._tape[-1][:2] + (time.monotonic() - ECHO_PAUSE_S / 2,)
-        assert room._rest_left() == 1.0
-        room._tape[-1] = room._tape[-1][:2] + (time.monotonic() - ECHO_PAUSE_S,)
-        assert room._rest_left() == 0 and room._tape, "finished, but kept to play, loop and save"
-        app._draw()
     run(go())
 
 

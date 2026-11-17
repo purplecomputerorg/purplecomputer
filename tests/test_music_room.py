@@ -304,17 +304,47 @@ def test_every_key_names_its_note_faintly_and_brighter_while_it_sounds(monkeypat
     run(go())
 
 
-def test_a_long_rest_starts_a_new_tape_and_a_shorter_one_shows_as_a_gap():
+def test_a_shorter_rest_shows_as_a_gap_and_a_long_one_marks_a_phrase_in_the_song():
     from purplecomputer.rooms.music_room import ECHO_PAUSE_S, TAPE_GAP_S
 
     async def go():
         room = make_app(room="music").room
-        for key, at in (("Q", 0.0), ("W", 0.2), ("E", 0.2 + TAPE_GAP_S)):
+        for key, at in (("Q", 0.0), ("W", 0.2), ("E", 0.2 + TAPE_GAP_S), ("R", 0.2 + TAPE_GAP_S + ECHO_PAUSE_S)):
             room._tape_add(key, at)
         texts, _, rests, *_ = room._tape_parts()
-        assert texts == ["C", "D", "E"] and rests == [False, False, True]
-        room._tape_add("R", 0.2 + TAPE_GAP_S + ECHO_PAUSE_S)
-        assert [key for key, *_ in room._tape] == ["R"]
+        assert texts == ["C", "D", "E", "F"] and rests == [0, 0, 1, 2]
+    run(go())
+
+
+def test_backspace_erases_a_note_at_a_time_then_held_whole_phrases():
+    from purplecomputer.keyboard import ControlAction
+    from purplecomputer.rooms import music_room
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        for key, at in (("Q", 0.0), ("W", 0.1), ("E", 5.0), ("R", 5.1), ("T", 5.2)):
+            room._tape_add(key, at)
+        await room.handle(ControlAction(action="backspace", is_down=True))
+        assert [k for k, *_ in room._tape] == ["Q", "W", "E", "R"]
+        room._erasing_since -= music_room.ERASE_MORE_S
+        await room.handle(ControlAction(action="backspace", is_down=True, is_repeat=True))
+        assert [k for k, *_ in room._tape] == ["Q", "W"], "the rest of its phrase goes at once"
+        await room.handle(ControlAction(action="backspace", is_down=False))
+        assert room._erasing_since is None
+    run(go())
+
+
+def test_backspace_in_letters_takes_a_letter_and_the_word_follows():
+    from purplecomputer.keyboard import ControlAction
+
+    async def go():
+        room = make_app(room="music").room
+        room.letters_mode = True
+        for i, key in enumerate("CATS"):
+            room._spell(key, i * 0.1)
+        await room.handle(ControlAction(action="backspace", is_down=True))
+        assert room._spelled == "cat" and room.word == "cat"
     run(go())
 
 

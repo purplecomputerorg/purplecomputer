@@ -1,7 +1,8 @@
 """A Music save keeps the picture and the tape's tune: opening it shows the picture as saved and plays the tune once.
-Hold Enter loops the tape."""
+Time Travel keeps the song with each step. Hold Enter loops the tape."""
 
 import asyncio
+import time
 
 import pytest
 
@@ -34,8 +35,21 @@ async def _music_with_a_save(keys="qwq"):
 def test_a_save_keeps_the_tape_as_its_tune():
     async def go():
         app, save = await _music_with_a_save()
-        assert [n[0] for n in save.state["tune"]] == ["Q", "W", "Q"]
-        assert "replay" not in save.state and "loop" not in save.state
+        assert [save.state[f"t:{i}"][0] for i in range(3)] == ["Q", "W", "Q"]
+        assert not {"replay", "loop", "tune"} & save.state.keys()
+    run(go())
+
+
+def test_a_letters_save_keeps_its_letters():
+    async def go():
+        app = make_app(room="music")
+        app.room.letters_mode = True
+        for i, key in enumerate("CAT"):
+            app.room._spell(key, time.monotonic() + i * 0.1)
+        state = app.save_state("music")
+        app._start_fresh("music")
+        app.apply_room_state("music", state)
+        assert app.room._spelled == "cat" and app.room.word == "cat"
     run(go())
 
 
@@ -57,7 +71,7 @@ def test_an_older_save_plays_its_minute_as_the_tune(monkeypatch):
     async def go():
         app, save = await _music_with_a_save()
         room = app.room
-        state = {k: v for k, v in save.state.items() if k != "tune"}
+        state = {k: v for k, v in save.state.items() if not k.startswith("t:")}
         state["replay"] = {"from": {}, "notes": [["A", "music", "marimba", 0], ["S", "music", "marimba", 300]]}
         state["loop"] = {"ms": 1000, "notes": [["Z", "music", "marimba", 0]]}
         played = _listen(room, monkeypatch)
@@ -141,4 +155,79 @@ def test_a_loop_going_around_leaves_the_picture_alone(monkeypatch):
         await asyncio.sleep(0.15)
         room._stop_loop()
         assert room.color_state == colors
+    run(go())
+
+
+def _keys(room) -> list:
+    return [k for k, *_ in room._tape]
+
+
+def test_time_travel_shows_each_moment_with_its_song_and_backing_out_keeps_the_song():
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "qw")
+        app.timeline_capture_now("music")
+        await type_text(app, "er")
+        app._start_time_travel()
+        app._step_time_travel(-1)
+        assert _keys(room) == ["Q", "W"]
+        app._cancel_time_travel()
+        assert _keys(room) == ["Q", "W", "E", "R"]
+    run(go())
+
+
+def test_landing_on_a_moment_brings_back_its_song_to_play_and_add_to():
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "qw")
+        app.timeline_capture_now("music")
+        await type_text(app, "er")
+        app._start_time_travel()
+        app._step_time_travel(-1)
+        app._land_time_travel()
+        await type_text(app, "a")
+        assert _keys(room) == ["Q", "W", "A"]
+    run(go())
+
+
+def test_an_erased_song_comes_back_through_time_travel():
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "qwe")
+        app.timeline_capture_now("music")
+        room._erase(whole=True)
+        app.timeline_capture_now("music")
+        assert room._tape == []
+        app._start_time_travel()
+        app._step_time_travel(-1)
+        app._land_time_travel()
+        assert _keys(room) == ["Q", "W", "E"]
+    run(go())
+
+
+def test_a_step_adds_only_its_new_notes_even_once_the_song_is_full(monkeypatch):
+    monkeypatch.setattr(music_room, "TAPE_MAX", 3)
+
+    async def go():
+        room = make_app(room="music").room
+        for i, key in enumerate("QWE"):
+            room._tape_add(key, i * 0.5)
+        before = room.timeline_state()
+        room._tape_add("R", 1.5)
+        after = room.timeline_state()
+        changed = {k for k in before.keys() | after.keys() if before.get(k) != after.get(k)}
+        assert changed == {"t:0", "t:3"}, "the first note drops off and the new one joins; the rest stay as they were"
+    run(go())
+
+
+def test_restoring_a_song_records_it_as_it_was():
+    async def go():
+        app = make_app(room="music")
+        await type_text(app, "qwe")
+        state = app.room_state("music")
+        app.apply_room_state("music", state)
+        assert app.room_state("music") == state
     run(go())

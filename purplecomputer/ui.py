@@ -809,10 +809,13 @@ def _chord_pad(t: str, px: int) -> int:
 HINT_PICTURES: dict = {}  # {name} -> fn(height) -> surface, for a picture a room draws itself
 
 
+HINT_SCALE = {"hints/loop.png": 0.85}   # a picture that reads big beside its words
+
+
 def hint_picture(g: Gfx, t: str, px: int, h: int | None = None) -> pygame.Surface | None:
     """A {hints/name.png} or a HINT_PICTURES name in a hint line is a picture standing in for words;
     beside keycaps it's a bit taller than one, in a line of text (h) about the letters' height."""
-    h = h or round(keycap_size(g, "X", px)[1] * 1.2)
+    h = h or round(keycap_size(g, "X", px)[1] * 1.2 * HINT_SCALE.get(t, 1))
     if t in HINT_PICTURES:
         return HINT_PICTURES[t](h)
     return g.image(t, h) if t.endswith(".png") else None

@@ -901,6 +901,9 @@ class KeyboardStateMachine:
             if keycode in (KeyCode.KEY_BRIGHTNESSDOWN, KeyCode.KEY_BRIGHTNESSUP):
                 actions.append(ControlAction(action='brightness_hint', is_down=True))
                 return actions
+            if keycode == KeyCode.KEY_CAPSLOCK:
+                actions.append(ControlAction(action='caps_hint', is_down=True))
+                return actions
 
         # Handle printable characters
         char = event.char

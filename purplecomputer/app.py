@@ -129,7 +129,6 @@ class PurpleApp:
         self._volume_chosen = True  # False only until the first boot's sound check, or a person, settles the volume
         self._sound_check_running = False
         self._volume_lock = None
-        self._brightness_hint_showing = False
         self._toasts: list[Toast] = []
         self._hold_nudge = None
         self._hold_nudge_timer = None
@@ -662,7 +661,8 @@ class PurpleApp:
             return
         if isinstance(action, ControlAction) and action.is_down and not self._littles_mode:
             handler = {"volume_mute": self.action_volume_mute, "volume_down": self.action_volume_down,
-                       "volume_up": self.action_volume_up, "brightness_hint": self._show_brightness_hint}.get(action.action)
+                       "volume_up": self.action_volume_up, "brightness_hint": self._show_brightness_hint,
+                       "caps_hint": self._show_caps_hint}.get(action.action)
             if handler:
                 handler()
                 return
@@ -1394,12 +1394,18 @@ class PurpleApp:
         self.volume_level = adjacent_volume(self._effective_volume(), up=True)
         self._apply_volume()
 
+    def _hint(self, text: str):
+        """A 3 second toast that a held or mashed key doesn't restart."""
+        now = time.monotonic()
+        if not any(t.text == text and t.expires > now for t in self._toasts):
+            self.notify(text, timeout=3)
+
     def _show_brightness_hint(self):
-        if self._brightness_hint_showing:
-            return
-        self._brightness_hint_showing = True
-        self.notify("Go to the Parent Menu to change brightness", timeout=3)
-        self.timers.after(3, lambda: setattr(self, "_brightness_hint_showing", False))
+        self._hint("Go to the Parent Menu to change brightness")
+
+    def _show_caps_hint(self):
+        if not self.g.all_caps:
+            self._hint("Press Shift for a big letter")
 
     # ------------------------------------------------------------------ shift indicator
     def _update_shift_indicator(self):

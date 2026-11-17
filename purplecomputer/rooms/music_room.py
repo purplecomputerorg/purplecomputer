@@ -20,7 +20,7 @@ from ..mixer import warm_mixer
 from ..speech_filter import is_clean
 from ..music_constants import (
     ALL_KEYS, COLOR_KEYCAP, COLORS, DEFAULT_ROOT_INDEX, FRIENDLY_KEY_NAMES, FRIENDLY_KEYS, GRID_KEYS,
-    INSTRUMENT_ALIASES, instruments, pitch_filename, pitch_for,
+    INSTRUMENT_ALIASES, PERCUSSION, instruments, pitch_filename, pitch_for,
 )
 from ..palette import KEY_COLORS, text_color_for
 from .. import paper
@@ -34,6 +34,11 @@ from .base import Room
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
+
+
+def drum_picture(key: str) -> str:
+    return f"drums/{PERCUSSION[key].replace('-', '_')}.png"
+
 PITCH_TRANSITION_DURATION = 0.25
 LETTER_PICTURES = ("letters/names.png", "letters/sounds.png")
 KEY_WORD = 0.75               # sizes the grid's side margin; changing it moves the grid
@@ -830,7 +835,7 @@ class MusicRoom(Room):
             run, at = self._spelled.upper(), self._typed_at
             rests = [int(i > 0 and at[i] - at[i - 1] >= WORD_GAP_S) for i in range(len(run))]
             return list(run), None, rests, "mono-heavy", "", len(run) - len(self.word) if self.word else None
-        names = [ICON_DRUM if key not in _KEY_TO_RC else note_name(_KEY_TO_RC[key][1], self.root_index)
+        names = [drum_picture(key) if key not in _KEY_TO_RC else note_name(_KEY_TO_RC[key][1], self.root_index)
                  for key, *_ in self._tape]
         keys = [(KID_MATH_REMAP.get(key, key), KEY_COLORS.get(key.lower(), P.MUTED)) for key, *_ in self._tape]
         rests = [0] + [int(b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
@@ -855,10 +860,13 @@ class MusicRoom(Room):
         key_px = round(px * 0.7)
         cell = g.measure("M", px, face, tr=False)[0]
         step, rest_w, clock_r = px // 3, px, round(px * 0.32)
+
+        def width(t):   # a drum's picture gets a slot wider than itself, so drums side by side don't touch
+            return round(px * 1.4) if t.endswith(".png") else cell * len(t)
         x, cy = row.x, row.centery + (key_px // 2 if keys else 0)
         lead_w = cell + px // 2 if lead else 0
         room = row.right - x - lead_w - (2 * clock_r + px)
-        spans = [cell * len(t) + step + rest_w * r for t, r in zip(texts, rests)]
+        spans = [width(t) + step + rest_w * r for t, r in zip(texts, rests)]
         first, last = self._tape_window(spans, room, cell + step)
         clipped = first > 0 or last < len(texts) - 1
         end = x + lead_w + room
@@ -872,12 +880,16 @@ class MusicRoom(Room):
         under = None
         for i in range(first, last + 1):
             x += rest_w * rests[i] if i > first else 0
-            w = cell * len(texts[i])
+            w = width(texts[i])
             lead_in = word_at is not None and i < word_at   # letters before the word step back
             playing = i == self._tape_at
             lit = (keys[i][1] if keys else KEY_COLORS.get(texts[i].lower(), P.ACCENT)) if playing else None
             color = lit or (mix(ink, P.SURFACE, 0.5) if lead_in else ink)
-            g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False)
+            if texts[i].endswith(".png"):
+                pic = g.image(texts[i], round(px * 0.87), color)   # a little taller than the notes, on their baseline
+                g.surface.blit(pic, pic.get_rect(midbottom=(x + w // 2, cy + round(px * 0.37))))
+            else:
+                g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False)
             if lit:   # a dot under what's sounding, in its key's color, below the word's underline in Letters
                 dot_y = cy + round(px * (1.1 if word_at is not None else 0.85))
                 pygame.draw.circle(g.surface, rgb(lit), (x + w // 2, dot_y), max(3, px // 4))

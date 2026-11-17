@@ -367,13 +367,16 @@ class Gfx:
         out.blit(img, img.get_rect(center=(side // 2, side // 2)))
         return out
 
-    def image(self, name: str, height: int) -> pygame.Surface:
-        """A picture from images/, scaled to height (cached)."""
+    def image(self, name: str, height: int, tint=None) -> pygame.Surface:
+        """A picture from images/, scaled to height (cached); a white one takes on tint."""
         def make():
             native = pygame.image.load(str(IMAGE_DIR / name))
             w = max(1, round(native.get_width() * height / native.get_height()))
-            return pygame.transform.smoothscale(native, (w, height))
-        return self._images.get_or((name, height), make)
+            img = pygame.transform.smoothscale(native, (w, height))
+            if tint is not None:
+                img.fill((*rgb(tint), 255), special_flags=pygame.BLEND_RGBA_MULT)
+            return img
+        return self._images.get_or((name, height, tint and rgb(tint)), make)
 
     def text(self, text: str, px: int, face: str = "sans", color="#ffffff", _raw=False, track: float = 0,
              tr: bool = True) -> pygame.Surface:

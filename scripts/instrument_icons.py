@@ -7,6 +7,7 @@ Drawn for the Music header's chips: every part at least ~3px at 24px (16 units o
 Usage: just python scripts/instrument_icons.py"""
 
 import subprocess
+import zlib
 from pathlib import Path
 
 from fontTools.pens.boundsPen import BoundsPen
@@ -249,6 +250,100 @@ def stop():
     return svg(f'<rect x="26" y="26" width="76" height="76" rx="18" fill="{RAINBOW[0]}"/>')
 
 
+DRUM_INK = "#ffffff"  # one color: the Music tape tints them
+HOLE = 'stroke="#000" fill="none" stroke-linejoin="round"'
+
+
+def line(d, w=12):
+    return f'<path d="{d}" stroke="{DRUM_INK}" stroke-width="{w}" {ROUND}/>'
+
+
+def solid(d, w=6):
+    """A filled shape with its corners rounded off."""
+    return f'<path d="{d}" fill="{DRUM_INK}" stroke="{DRUM_INK}" stroke-width="{w}" stroke-linejoin="round"/>'
+
+
+def cut(shape, *holes):
+    """shape with holes knocked out of it, so a one-color picture still shows its parts."""
+    i = zlib.crc32("".join(holes).encode())
+    return (f'<mask id="m{i}"><rect x="-128" y="-128" width="384" height="384" fill="#fff"/>{"".join(holes)}</mask>'
+            f'<g mask="url(#m{i})">{shape}</g>')
+
+
+def kick():
+    """Bass drum from the front: a big round head with a dot, on two feet."""
+    return svg(line("M34 104 L24 122 M94 104 L104 122")
+               + f'<circle cx="64" cy="60" r="48" fill="none" stroke="{DRUM_INK}" stroke-width="14"/>'
+               f'<circle cx="64" cy="60" r="16" fill="{DRUM_INK}"/>')
+
+
+def snare():
+    """Snare from the side, its lacing cut in, two sticks crossed over it."""
+    return svg(cut(f'<rect x="10" y="62" width="108" height="54" rx="10" fill="{DRUM_INK}"/>',
+                   f'<path d="M10 74 H118 M10 104 H118 M20 80 L36 98 L52 80 L68 98 L84 80 L100 98 L112 84" stroke-width="5" {HOLE}/>')
+               + line("M24 12 L76 54 M104 12 L52 54", 9)
+               + "".join(f'<circle cx="{x}" cy="12" r="8" fill="{DRUM_INK}"/>' for x in (24, 104)))
+
+
+def hi_hat():
+    """Two cymbals facing each other on a stand."""
+    return svg(solid("M8 34 Q64 4 120 34 Z") + solid("M8 50 Q64 80 120 50 Z")
+               + line("M64 66 V112 M64 104 L38 122 M64 104 L90 122", 9))
+
+
+def clap():
+    """Two open hands leaning in to clap, with a burst over them."""
+    hand = cut(f'<rect x="-15" y="-46" width="32" height="76" rx="12" fill="{DRUM_INK}"/>'
+               f'<rect x="-30" y="-8" width="18" height="34" rx="9" fill="{DRUM_INK}" transform="rotate(30 -16 22)"/>',
+               f'<path d="M-7 -40 V-14 M1 -40 V-14 M9 -40 V-14" stroke-width="5" {HOLE}/>')
+    return svg(f'<g transform="translate(42 80) rotate(14)">{hand}</g>'
+               f'<g transform="translate(86 80) scale(-1 1) rotate(14)">{hand}</g>'
+               + line("M64 6 V22 M38 14 L46 28 M90 14 L82 28", 8))
+
+
+def cowbell():
+    """A cowbell with its handle, hanging open-end down."""
+    return svg(line("M50 30 V16 Q50 8 58 8 H70 Q78 8 78 16 V30", 9)
+               + cut(solid("M38 32 H90 L108 112 H20 Z", 12), f'<path d="M24 96 H104" stroke-width="6" {HOLE}/>'))
+
+
+def woodblock():
+    """A wood block with its slot, and the stick that taps it."""
+    return svg(cut(f'<rect x="8" y="62" width="112" height="50" rx="12" fill="{DRUM_INK}"/>',
+                   '<rect x="22" y="80" width="84" height="12" rx="6" fill="#000"/>')
+               + line("M34 46 L94 22", 9) + f'<circle cx="104" cy="18" r="12" fill="{DRUM_INK}"/>')
+
+
+def triangle():
+    """A triangle hanging from its string, open at one corner."""
+    return svg(line("M64 6 V24", 6) + line("M38 116 H112 L64 30 L18 112"))
+
+
+def tambourine():
+    """A tambourine: a ring with jingles set into it."""
+    spots = [(64 + 46 * dx, 64 + 46 * dy) for dx, dy in ((0, -1), (0.95, -0.31), (0.59, 0.81), (-0.59, 0.81), (-0.95, -0.31))]
+    return svg(cut(f'<circle cx="64" cy="64" r="46" fill="none" stroke="{DRUM_INK}" stroke-width="14"/>',
+                   *(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="16" fill="#000"/>' for x, y in spots))
+               + "".join(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="11" fill="{DRUM_INK}"/>' for x, y in spots))
+
+
+def bongo():
+    """Two bongos, big and small, joined in the middle."""
+    def drum(cx, top, w, h):
+        return (f'<rect x="{cx - w / 2}" y="{top}" width="{w}" height="12" rx="6" fill="{DRUM_INK}"/>'
+                + solid(f"M{cx - w / 2 + 2} {top + 18} H{cx + w / 2 - 2} L{cx + w / 2 - 14} {top + h} H{cx - w / 2 + 14} Z"))
+    return svg(drum(36, 24, 60, 98) + drum(96, 42, 48, 80) + f'<rect x="56" y="62" width="24" height="12" fill="{DRUM_INK}"/>')
+
+
+def gong():
+    """A gong hanging in its frame, a bump in the middle."""
+    return svg(line("M14 122 V12 H114 V122", 10) + line("M48 12 L56 28 M80 12 L72 28", 5)
+               + cut(f'<circle cx="64" cy="72" r="40" fill="{DRUM_INK}"/>', f'<circle cx="64" cy="72" r="18" stroke-width="6" {HOLE}/>'))
+
+
+DRUMS = (kick, snare, hi_hat, clap, cowbell, woodblock, triangle, tambourine, bongo, gong)
+
+
 def render(draw, folder):
     folder.mkdir(exist_ok=True)
     svg_path = folder / f"{draw.__name__}.svg"
@@ -266,3 +361,5 @@ if __name__ == "__main__":
         render(draw, MODES)
     for draw in (rainbow, lighter, darker, keep, go_back, up, loop, new_line, play, stop):
         render(draw, HINTS)
+    for draw in DRUMS:
+        render(draw, IMAGES / "drums")

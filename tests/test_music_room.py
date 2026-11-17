@@ -285,3 +285,44 @@ def test_choosing_an_instrument_or_key_in_code_leaves_letters(monkeypatch):
         await app.room.run_code(["key g"])
         assert not app.room.letters_mode
     run(go())
+
+
+def test_a_sounding_note_bridges_its_column_to_its_name_until_it_stops(monkeypatch):
+    from purplecomputer.rooms.music_room import MusicRoom
+    tinted = []
+    monkeypatch.setattr(MusicRoom, "_draw_bridge", staticmethod(lambda g, color, xs, col, top, bar: tinted.append(col)))
+
+    async def go():
+        app = make_app(room="music")
+        await type_text(app, "f")
+        app._draw()
+        assert tinted == [3]
+        app.room._note_labels.clear()
+        tinted.clear()
+        app._draw()
+        assert tinted == []
+    run(go())
+
+
+def test_the_bridge_is_as_wide_as_its_column_and_both_ends_mirror_to_the_pixel():
+    import pygame
+    from purplecomputer.rooms.music_room import MusicRoom, _corner_top_inset
+
+    class Rows:
+        def __init__(self):
+            self.rects = []
+
+        def rect(self, color, r):
+            self.rects.append(pygame.Rect(r))
+
+    xs = [100 + 97 * i for i in range(11)]
+    bar = pygame.Rect(xs[0], 220, xs[10] - xs[0], 26)
+    drawn = {}
+    for col in (0, 4, 9):
+        drawn[col] = Rows()
+        MusicRoom._draw_bridge(drawn[col], "#ffffff", xs, col, 200, bar)
+    assert drawn[4].rects == [pygame.Rect(xs[4], 200, xs[5] - xs[4], 20)]
+    left = [r.x - xs[0] for r in drawn[0].rects]
+    right = [xs[10] - r.right for r in drawn[9].rects]
+    assert left == right and left[0] == 0 and left[-1] == _corner_top_inset(bar.h // 2)
+    assert all(r.right == xs[1] for r in drawn[0].rects) and all(r.x == xs[9] for r in drawn[9].rects)

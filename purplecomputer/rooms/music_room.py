@@ -4,6 +4,8 @@ instrument (in Letters: names or sounds), hold Enter records a loop, and the cod
 In Letters, a real word typed shows under the grid and Space says it."""
 
 import asyncio
+import functools
+import math
 import time
 
 import pygame
@@ -37,6 +39,7 @@ _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c
 PITCH_TRANSITION_DURATION = 0.25
 LETTER_PICTURES = ("letters/names.png", "letters/sounds.png")
 KEY_WORD = 0.75               # "Key" on the note bar's right tab, against the key name on its left
+COLUMN_SHADE = 0.07          # every other column of the note ledge, toward the ink
 NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past the end it's silent
@@ -71,6 +74,14 @@ def instrument_icon(instrument_id: str) -> str:
     """Its picture, or a pack's emoji; anything that isn't one emoji gets the music glyph, as rooms do."""
     icon = get_content().instrument_icon(instrument_id)
     return icon if is_one_emoji(icon) else ICON_MUSIC
+
+
+@functools.cache
+def _corner_top_inset(r: int) -> int:
+    """How far in a rounded corner of radius r starts on its top row, as pygame draws it."""
+    s = pygame.Surface((2 * r + 1, 2 * r + 1))
+    pygame.draw.rect(s, (255, 255, 255), s.get_rect(), border_radius=r)
+    return next(x for x in range(s.get_width()) if s.get_at((x, 0))[0])
 
 
 class MusicRoom(Room):
@@ -788,7 +799,7 @@ class MusicRoom(Room):
         bar.centery = round(ys[4] + size * NOTE_STRIP / 2 + size * 0.08)
         px = self._strip_px(size)
         if not self.letters_mode:
-            self._draw_note_strip(g, tab_w, xs, bar, px, on_paper)
+            self._draw_note_strip(g, tab_w, xs, ys[4], bar, px, on_paper)
         elif self.word and not on_paper:
             self._draw_word_strip(g, bar, px)
 
@@ -818,10 +829,11 @@ class MusicRoom(Room):
         if hint:
             draw_key_hint(g, hint, px, x + text_w + gap, bar.centery)
 
-    def _draw_note_strip(self, g, tab_w, xs, bar, px, on_paper):
+    def _draw_note_strip(self, g, tab_w, xs, grid_bottom, bar, px, on_paper):
         """Every letter row plays the same note in a column, so each column is named once, on a ledge
-        as wide as the grid, between a tab naming the key behind its left end and a matching one saying Key behind
-        its right. Played names go bold so the eye stays on the keys; the key-change sweep gets the selection plate."""
+        as wide as the grid with every other column shaded, between a tab naming the key behind its left end
+        and a matching one saying Key behind its right. A sounding note's color bridges its column to its name, which
+        goes bold so the eye stays on the keys; the key-change sweep gets the selection plate."""
         size = xs[1] - xs[0]
         h = bar.h
         ink = paper.INK_MUTED if on_paper else P.MUTED
@@ -834,18 +846,45 @@ class MusicRoom(Room):
             g.draw_text(text, text_px, tab.centerx + (h // 2 if x > xs[0] else -h // 2), bar.centery, face, color,
                         anchor="center", tr=False)
         g.rect(ground, bar, radius=h // 2)
+        for col in range(1, 10, 2):
+            self._tint_column(g, mix(ground, ink, COLUMN_SHADE), xs, col, bar)
         plate = pygame.Rect(0, 0, round(size * 0.8), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
             root_idx, sweeping = self._transition_state_for_col(col)
             note = note_label(note_name(col, root_idx))
             sweeping = sweeping and not on_paper
-            played = not on_paper and any(row[col] in self._note_labels for row in GRID_KEYS[1:])
+            sounding = None if on_paper else next((row[col] for row in reversed(GRID_KEYS[1:])
+                                                   if row[col] in self._note_labels), None)
+            played = sounding is not None
+            if played:
+                hue = self.get_color(sounding)
+                self._draw_bridge(g, mix(P.SURFACE, hue, 0.43), xs, col, grid_bottom, bar)
+                self._tint_column(g, mix(ground, hue, 0.24), xs, col, bar)
             plate.center = ((xs[col] + xs[col + 1]) // 2, bar.centery)
             if sweeping:
                 g.rect(P.PRIMARY, plate, radius=plate.h // 2)
             color = P.ON_PRIMARY if sweeping else P.TEXT if played else ink
             g.draw_text(note, px, plate.centerx, plate.centery, "mono-heavy-italic" if played else "mono-bold-italic",
                         color, anchor="center", tr=False)
+
+    @staticmethod
+    def _draw_bridge(g, color, xs, col, top, bar):
+        """The gap from a column down to its name. An end column curves in onto the ledge's flat top, so it
+        meets the ledge where its rounded end begins; drawn a row at a time so both ends mirror to the pixel."""
+        x, w, h = xs[col], xs[col + 1] - xs[col], bar.y - top
+        if col not in (0, 9):
+            return g.rect(color, pygame.Rect(x, top, w, h))
+        end = _corner_top_inset(bar.h // 2)
+        for i in range(h):
+            inset = round(end * (1 - math.sqrt(1 - (i / max(1, h - 1)) ** 2)))
+            g.rect(color, pygame.Rect(x + inset if col == 0 else x, top + i, w - inset, 1))
+
+    @staticmethod
+    def _tint_column(g, color, xs, col, bar):
+        """One column's stretch of the ledge, keeping the ledge's rounded ends."""
+        r = bar.h // 2
+        seg = pygame.Rect(xs[col], bar.y, xs[col + 1] - xs[col], bar.h)
+        g.rect(color, seg, left=r if col == 0 else 0, right=r if col == 9 else 0)
 
     def _draw_noscreen(self, g, rect):
         cy = rect.centery

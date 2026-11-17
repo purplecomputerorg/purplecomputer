@@ -453,9 +453,9 @@ def test_the_hints_after_the_tape_hold_still_whatever_it_holds(monkeypatch):
             room._spelled, room._typed_at = letters or "", [time.monotonic()] * len(letters or "")
             at.clear()
             app._draw()
-            return [h for h in at if "Enter" in h[0]]
+            return [h for h in at if "Backspace" in h[0]]
 
-        notes = [hints([(k, "music", 0, i * 0.1) for i, k in enumerate(keys)]) for keys in ("QQQ", "RYR", "PPP")]
+        notes = [hints([(k, "music", i * 0.1) for i, k in enumerate(keys)]) for keys in ("QQQ", "RYR", "PPP")]
         assert notes[0] and notes[0] == notes[1] == notes[2]
         assert hints(letters="iii") and hints(letters="iii") == hints(letters="www") == hints(letters="mmm")
     run(go())
@@ -486,4 +486,19 @@ def test_letters_has_no_key_to_change():
         assert room.root_index == root and room.arrow_hint() == ""
         room.letters_mode = False
         assert room.arrow_hint()
+    run(go())
+
+
+def test_letters_has_no_loop_and_a_hold_of_enter_is_a_tap():
+    async def go():
+        app = make_app(room="music")
+        app._music_looping_enabled = True
+        room = app.room
+        room._tape_add("Q", 0.0)
+        room.letters_mode = True
+        room._spell("C", 0.0)
+        sounds = room.say_sounds
+        room._enter_hold_fired()
+        assert room.loop.state == "idle" and room.say_sounds != sounds and "loop" not in room._hint_text()
+        assert room.hold_progress() is None
     run(go())

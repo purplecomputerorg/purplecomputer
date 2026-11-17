@@ -370,9 +370,9 @@ class MusicRoom(Room):
 
     # ---------------------------------------------------------------- loop station
     def _loop_tune(self):
-        """Hold Enter: the tape plays over and over, its rests as played back, and notes played along join in."""
-        tune = self._tune()
-        if not tune:
+        """Hold Enter: the song plays over and over, its rests as played back, and notes played along join in."""
+        tune = list(self._tape)
+        if not self._loopable():
             return
         offsets = self._tune_offsets(tune)
         gaps = [b - a for a, b in zip(offsets, offsets[1:])]
@@ -573,6 +573,7 @@ class MusicRoom(Room):
 
     # ---------------------------------------------------------------- input
     def _toggle_letters(self):
+        self._stop_loop()
         self.letters_mode = not self.letters_mode
         self._forget_word()
         self._announce_voice()
@@ -759,16 +760,22 @@ class MusicRoom(Room):
     def _enter_hold_fired(self):
         if self.app._littles_mode or self.code_panel is not None:
             return
-        if self.loop.state == IDLE:
-            if self.app._music_looping_enabled:
-                self._loop_tune()
-        else:
+        if self.loop.state != IDLE:
             self._stop_loop()
+        elif self._loopable():
+            self._loop_tune()
+        elif self.letters_mode:   # Letters has nothing to loop, so a hold is a tap
+            self._next_voice()
+            self.app.invalidate()
+
+    def _loopable(self) -> bool:
+        """Only a Notes song loops: Letters has Space to say its word, and its letters clear."""
+        return self.app._music_looping_enabled and not self.letters_mode and bool(self._tape)
 
     def hold_progress(self):
         held = self.enter_hold.progress()
         looping = self.loop.state != IDLE
-        if held is not None and (looping or (self.app._music_looping_enabled and self._tune())):
+        if held is not None and (looping or self._loopable()):
             return hold_status(held, "Enter", LOOP, "stop the loop" if looping else "loop it")
         return None
 
@@ -811,7 +818,7 @@ class MusicRoom(Room):
             return
         tune = self._tune()
         space = "" if self.letters_mode else TAPE_HINT if tune else ""   # Letters says it beside the word
-        hint = "   ".join(h for h in (space, self._hint_text() if tune else "", ERASE_HINT if tune else "") if h)
+        hint = "   ".join(h for h in (space, self._hint_text(), ERASE_HINT if tune else "") if h)
         if hint:
             draw_key_hint(g, hint, px, (left + right) // 2, cy, anchor="center")
 
@@ -867,8 +874,13 @@ class MusicRoom(Room):
             x += rest_w * rests[i] if i > first else 0
             w = cell * len(texts[i])
             lead_in = word_at is not None and i < word_at   # letters before the word step back
-            color = P.ACCENT if i == self._tape_at else mix(ink, P.SURFACE, 0.5) if lead_in else ink
+            playing = i == self._tape_at
+            lit = (keys[i][1] if keys else KEY_COLORS.get(texts[i].lower(), P.ACCENT)) if playing else None
+            color = lit or (mix(ink, P.SURFACE, 0.5) if lead_in else ink)
             g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False)
+            if lit:   # a dot under what's sounding, in its key's color, below the word's underline in Letters
+                dot_y = cy + round(px * (1.1 if word_at is not None else 0.85))
+                pygame.draw.circle(g.surface, rgb(lit), (x + w // 2, dot_y), max(3, px // 4))
             if keys:
                 g.draw_text(keys[i][0], key_px, x + w // 2, cy - round(px * 0.85), "mono-bold", keys[i][1], anchor="center", tr=False)
             if word_at is not None and i >= word_at:
@@ -927,7 +939,7 @@ class MusicRoom(Room):
 
     def _hint_text(self) -> str:
         """Hold Enter loops the tape, so this shows beside one."""
-        return f"{{hold Enter}} {LOOP} to loop" if self.app._music_looping_enabled else ""
+        return f"{{hold Enter}} {LOOP} to loop" if self._loopable() else ""
 
     def _draw_header(self, g, rect):
         """The same header as Art and Blocks: the Enter chip beside the Notes / Letters switch."""

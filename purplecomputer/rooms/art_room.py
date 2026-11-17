@@ -869,8 +869,9 @@ class ArtRoom(Room):
             draw_status_row(g, pygame.Rect(sheet.x, sheet.y - status_h, sheet.w, status_h), self._code_status(g))
         in_band = lambda y: pygame.Rect(sheet.x, y + (band - chrome_h) // 2, sheet.w, chrome_h)
         self.bar_row = self.bar_foot = None
+        self.header_row = in_band(rect.y) if chrome_h else None
         if chrome_h:
-            self.bar_row = self._draw_header(g, in_band(rect.y))
+            self.bar_row = self._draw_header(g, self.header_row)
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
         g.rect(mix(P.HAIR, P.LINE, GRID_EDGE), sheet.inflate(2, 2), width=1)
         self._draw_letters(g, ox, oy, c)
@@ -996,4 +997,4 @@ class ArtRoom(Room):
             return None
         icon = self._tips.get_or(("icon", r.h, self._last_key_color, self._lift), lambda: _brush_icon(r.h, self._last_key_color, self._lift)) if self._paint_mode else None
         return draw_mode_switch(g, r, tuple(pic for _, pic, _ in MODES), 0 if self._paint_mode else 1, self.brush_color,
-                                icon, wheel_chip(self))
+                                icon, wheel_chip(self), reserve=self.header_reserve(g))

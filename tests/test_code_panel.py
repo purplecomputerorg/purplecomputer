@@ -275,9 +275,9 @@ def test_open_code_hides_the_color_legend_and_names_its_arrows(monkeypatch):
         drawn.clear()
         app._draw()
         assert not drawn
-        assert "Examples" in art.code_panel.arrow_hint()
+        assert "try one" in art.code_panel.placeholder() and not app.arrow_chip_hint()
         await press(app, "down")
-        assert "pick" in art.code_panel.arrow_hint()
+        assert "pick" in art.code_panel._sub()
         art.close_code_panel()
         app._draw()
         assert drawn

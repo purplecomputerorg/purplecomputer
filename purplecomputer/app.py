@@ -40,7 +40,7 @@ from .palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from .timeline import RoomTimeline
 from .audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
-from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_BAR_EM, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_hold_bar,
+from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_BAR_EM, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_arrow_chip, draw_hold_bar,
                  draw_key, draw_keycap, draw_label, draw_level)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
@@ -57,7 +57,7 @@ IDLE_POLL_S = 0.1             # an idle screen still answers window events (the 
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
 SIDE_MARGIN_VW = 6            # air beside the frame
 TITLE_STRIP_VH = 8            # air above the frame: computer name, title, battery
-STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, arrow hint
+STATUS_STRIP_VH = 12          # air below the frame: keyboard note, room tabs, code panel arrow hint
 STATUS_TEXT_VH = 4.5          # the status strip hugs the bottom edge
 TIMELINE_DEBOUNCE_S = 0.5     # a Time Travel step once play pauses this long,
 TIMELINE_MAX_WAIT_S = 2.0     # or this often through steady play
@@ -1841,6 +1841,7 @@ class PurpleApp:
         content = self.content_rect(vp)
         g.surface.set_clip(frame.inflate(-4, -4))
         self.room.draw(g, content)
+        self._draw_arrow_chip()
         if panel := self.viewport_panel():
             panel.draw(g, pygame.Rect(vp.x, content.bottom, vp.w, panel.height(g)))
             if content.w < vp.w:
@@ -1864,6 +1865,14 @@ class PurpleApp:
             o.draw(g)
         self._draw_toasts()
 
+    def arrow_chip_hint(self) -> str:
+        """The room's arrow hint for its header row; the code panel says its own under its input."""
+        return "" if self._littles_mode or self._code_panel_active else self.room.arrow_hint()
+
+    def _draw_arrow_chip(self):
+        if (row := self.room.header_row) and (hint := self.arrow_chip_hint()):
+            draw_arrow_chip(self.g, hint, row.right, row.centery, ARROW_GLYPHS.get(self._lit_arrow))
+
     def _draw_footer(self, frame):
         """The status strip and, beside it, the sticker keyboard: the same under every room."""
         esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
@@ -1885,6 +1894,8 @@ class PurpleApp:
         if saved:
             g.draw_text(f"{ICON_STAR} Saved", round(px * 0.85), r.right + px, y, "mono", P.MUTED, anchor="midleft")
         right, x = self._battery_text(), frame.right
+        if self._effective_volume() == 0:
+            right = f"{ICON_VOLUME_OFF}  {right}".strip()
         if right:
             x = g.draw_text(right, px, x, y, "mono", P.MUTED, anchor="midright").x - px
         if self._keyboard_state_machine.shift_active:
@@ -1926,11 +1937,9 @@ class PurpleApp:
             g.rect(P.BG, big.inflate(4, 4), radius=big.w // 4)
             draw_color_cap(g, KID_MATH_REMAP.get(key, key).upper(), get_key_color(key), big, px, radius=big.w // 5)
 
-    def _draw_status(self, frame, left=None, right=None, tabs=True):
+    def _draw_status(self, frame, left=None, tabs=True):
         """The strip under the viewport: keyboard note, the Esc pill and room
-        names (active one in inverse video), arrow hint. The Parent Menu
-        reuses it with its own corners and no room tabs. A family room's name
-        takes the arrow hint's corner, lit."""
+        names (active one in inverse video); a family room's name, lit, in the right corner."""
         g = self.g
         y = g.stage.bottom - g.vh(STATUS_TEXT_VH)
         if self._littles_mode:
@@ -1938,15 +1947,7 @@ class PurpleApp:
             return
         left = left if left is not None else "Keyboard only, on purpose"
         family = self.family_room if tabs else None
-        if family:
-            right = ""
-        elif right is None:
-            right = (getattr(self._panel, "arrow_hint", None) or self.room.arrow_hint)()
-            if self._effective_volume() == 0:
-                right = f"{ICON_VOLUME_OFF}  " + right
-        if glyph := ARROW_GLYPHS.get(self._lit_arrow):
-            right = right.replace(glyph, f"[{P.ACCENT}]{glyph}[/]")
-        px, parts = self._status_layout(frame, left, right, tabs)
+        px, parts = self._status_layout(frame, left, tabs)
         g.draw_text(left, px, frame.x, y, "mono", P.DIM, anchor="midleft")
         esc_pill = draw_keycap(g, f"Esc {ICON_MENU}", px, parts["esc"].x, y)
         here = self.family_room or self.active_room
@@ -1954,12 +1955,9 @@ class PurpleApp:
             draw_label(g, label, px, r.centerx, y, P.MUTED, anchor="center", on=rid == here)
         if family:
             draw_label(g, family.tab, px, frame.right, y, anchor="midright", on=True)
-        else:
-            h = g.markup_size(right, px, "mono")[1]
-            g.draw_markup(right, px, parts["right"].x, y - h // 2, "mono", P.MUTED)
         return esc_pill
 
-    def _status_layout(self, frame, left: str, right: str, tabs: bool = True):
+    def _status_layout(self, frame, left: str, tabs: bool = True):
         """(px, {left, esc, tabs, right} rects) for the status strip: the
         largest text up to em(0.92) at which the corners and the centered Esc
         pill and room tabs fit the frame side by side."""
@@ -1972,7 +1970,7 @@ class PurpleApp:
             pad, gap = round(px * 1.4), round(px * 0.55)
             mid = [g.measure(f"Esc {ICON_MENU}", px, "mono")[0] + pad] + \
                   [g.measure(t, px, "mono-bold")[0] + pad for _, t in names]
-            rw = g.measure(family.tab, px, "mono-bold")[0] + pad if family else g.markup_size(right, px, "mono")[0]
+            rw = g.measure(family.tab, px, "mono-bold")[0] + pad if family else 0
             return gap, mid, max(reserve, g.measure(left, px, "mono")[0]), rw
 
         def need(px):

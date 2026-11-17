@@ -28,7 +28,7 @@ from ..music_replay import Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
 from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
-                  draw_mode_switch, draw_status_row, hint_row_h, HeldKey, hold_status, key_hint_width, status_row_h)
+                  draw_mode_switch, draw_status_row, HeldKey, hold_status, key_hint_width, status_row_h)
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -695,6 +695,7 @@ class MusicRoom(Room):
         panel = self.app.viewport_panel()
         hint_h = em(FOOTER_EM) if panel is None else 0 if isinstance(panel, (LoopPanel, ReplayPanel)) else em(1.0)
         pad = em(1.6)
+        self.header_row = None
         if self.code_panel is None:
             head_h = em(4.3)
             self._draw_header(g, rect)
@@ -722,11 +723,9 @@ class MusicRoom(Room):
             plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else self._instrument_label(self.instrument_index)
             draw_label(g, plate, g.em(1.0), rect.centerx, rect.y + g.em(1.9), P.TEXT, anchor="center", on=True)
             return
-        bar = rect.inflate(-2 * g.em(0.7), -2 * g.em(0.7))
-        bar.h = hint_row_h(g)
-        draw_mode_switch(g, bar, ("modes/notes.png", ABC_PICTURE), 1 if self.letters_mode else 0,
+        draw_mode_switch(g, self.header_band(g, rect), ("modes/notes.png", ABC_PICTURE), 1 if self.letters_mode else 0,
                          chips=self._header_chips(),
-                         also=(self._header_chips(not self.letters_mode),))
+                         also=(self._header_chips(not self.letters_mode),), reserve=self.header_reserve(g))
 
     def _header_chips(self, letters: bool | None = None) -> tuple:
         """Enter steps through instruments, shown by their pictures, or in Letters, names and sounds."""

@@ -472,7 +472,7 @@ class PlayRoom(Room):
         picks = self._picks_markup()
         self.field.draw_sub(g, box.x + round(line_px * 0.55), bottom, sub_px, "{Enter} go" if self.field.value.strip() else "",
                             "{Tab} quiet" if talks else "{Tab} say it", hint=(picks, "") if picks else None)
-        top_limit = rect.y + em(1)
+        top_limit = self.header_band(g, rect).bottom + em(0.5)
         base = box.y - em(1)
         viewport = base - top_limit
         rows = [(e, self._entry_height(g, e, width), self._gap_above(g, e)) for e in self.history]

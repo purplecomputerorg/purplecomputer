@@ -2,8 +2,9 @@
 Open library read a room's identity from these attributes; adding a room is one
 subclass plus a line in rooms/__init__.py. guides/canvas-architecture.md."""
 
+import pygame
 
-from ..ui import hint_row_h
+from ..ui import arrow_chip_width, hint_row_h
 
 
 class Room:
@@ -56,6 +57,19 @@ class Room:
                 field.live = None
         if field and runner.corrections:
             field.set_correction(*runner.corrections[-1])
+
+    header_row = None   # set by draw: the arrow hint sits at its right end
+
+    def header_band(self, g, rect) -> pygame.Rect:
+        """The toolbar row along the top of rect, which the arrow hint ends."""
+        pad = g.em(0.7)
+        self.header_row = pygame.Rect(rect.x + pad, rect.y + pad, rect.w - 2 * pad, hint_row_h(g))
+        return self.header_row
+
+    def header_reserve(self, g) -> int:
+        """How much of the header row's right end the arrow hint takes, with a gap."""
+        hint = self.app.arrow_chip_hint()
+        return arrow_chip_width(g, hint) + g.em(1.2) if hint else 0
 
     def arrow_hint(self) -> str:
         return ""

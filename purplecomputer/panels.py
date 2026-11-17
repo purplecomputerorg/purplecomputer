@@ -13,6 +13,7 @@ from functools import cache
 
 import pygame
 
+from . import i18n
 from . import palette as P
 from .code_runner import _COMMAND_VOCAB, _MODE_WORDS, _TURN_VOCAB, MusicCodeRunner
 from .constants import ICON_MUSIC
@@ -451,11 +452,6 @@ class CodePanel:
             head = [*head, name]
         self.field.set(" ".join(head) + " " if head else "")
 
-    def arrow_hint(self) -> str:
-        if self.card is not None:
-            return f"Arrows pick  {LEFT} {RIGHT}   Back  {UP}"
-        return f"Your code  {UP}   Examples  {DOWN}"
-
     def _choose(self, i: int):
         self.card = i
         self.field.set(self._shown(self.recipes[i][0]))
@@ -489,10 +485,9 @@ class CodePanel:
 
     def _sub(self) -> str | None:
         """The key hint under the line when the cards or a note own it, else None."""
-        if self.card == self.CLOSE:
-            return "{Enter} close"
         if self.card is not None:
-            return "{Enter} run it"
+            enter = "{Enter} close" if self.card == self.CLOSE else "{Enter} run it"
+            return f"{i18n.translate(enter)}   {{{LEFT}}}{{{RIGHT}}} {i18n.translate('pick')}   {{{UP}}} {i18n.translate('back')}"
         v = self.field.value
         if v and self.note[0].startswith(v) and self.field.selected in (None, (0, len(v))):
             return self.note[1]

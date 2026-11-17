@@ -651,9 +651,9 @@ class BlocksRoom(Room):
             self._draw_hold_badge(g, area)
         else:
             self._draw_moving(g, area, *moving)
-        self.bar_row = draw_mode_switch(g, pygame.Rect(inner.x, inner.y, inner.w, chrome_h), tuple(pic for _, pic in SIDES),
+        self.bar_row = draw_mode_switch(g, self.header_band(g, rect), tuple(pic for _, pic in SIDES),
                                         1 if self._back else 0, self._color, wheel=None if self.code_panel else wheel_chip(self),
-                                        after=("hold Tab", PEEK_PIC, self._peek))
+                                        after=("hold Tab", PEEK_PIC, self._peek), reserve=self.header_reserve(g))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)

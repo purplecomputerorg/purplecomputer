@@ -207,7 +207,8 @@ class WriteRoom(Room):
         em, pad = g.em, g.em(0.7)
         inner = rect.inflate(-2 * pad, -2 * pad)
         foot_h = hint_row_h(g)
-        page = pygame.Rect(inner.x, inner.y + em(0.5), inner.w, inner.h - foot_h - em(1.0))
+        top = self.header_band(g, rect).bottom + em(0.3)
+        page = pygame.Rect(inner.x, top, inner.w, inner.bottom - foot_h - em(0.5) - top)
         px = text_px(g, page.w - 2 * em(2), em(1.45))
         lh = line_pitch(g, px)
         cw = g.measure("M", px, "mono", tr=False)[0]

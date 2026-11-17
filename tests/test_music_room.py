@@ -290,13 +290,14 @@ def test_choosing_an_instrument_or_key_in_code_leaves_letters(monkeypatch):
 def test_a_sounding_note_bridges_its_column_to_its_name_until_it_stops(monkeypatch):
     from purplecomputer.rooms.music_room import MusicRoom
     tinted = []
-    monkeypatch.setattr(MusicRoom, "_draw_bridge", staticmethod(lambda g, color, xs, col, top, bar: tinted.append(col)))
+    real = MusicRoom._column
+    monkeypatch.setattr(MusicRoom, "_column", staticmethod(lambda xs, col, top, bottom: tinted.append(col) or real(xs, col, top, bottom)))
 
     async def go():
         app = make_app(room="music")
         await type_text(app, "f")
         app._draw()
-        assert tinted == [3]
+        assert tinted == [3, 3]   # the gap above its name, and the name's stretch of the ledge
         app.room._note_labels.clear()
         tinted.clear()
         app._draw()
@@ -304,25 +305,66 @@ def test_a_sounding_note_bridges_its_column_to_its_name_until_it_stops(monkeypat
     run(go())
 
 
-def test_the_bridge_is_as_wide_as_its_column_and_both_ends_mirror_to_the_pixel():
-    import pygame
-    from purplecomputer.rooms.music_room import MusicRoom, _corner_top_inset
 
-    class Rows:
-        def __init__(self):
-            self.rects = []
+def test_a_long_rest_starts_a_new_tape_and_a_shorter_one_shows_as_a_gap():
+    from purplecomputer.rooms.music_room import ECHO_PAUSE_S, TAPE_GAP_S
 
-        def rect(self, color, r):
-            self.rects.append(pygame.Rect(r))
+    async def go():
+        room = make_app(room="music").room
+        for key, at in (("Q", 0.0), ("W", 0.2), ("E", 0.2 + TAPE_GAP_S)):
+            room._tape_add(key, at)
+        texts, rests, *_ = room._tape_parts()
+        assert texts == ["C", "D", "E"] and rests == [False, False, True]
+        room._tape_add("R", 0.2 + TAPE_GAP_S + ECHO_PAUSE_S)
+        assert [key for key, _, _ in room._tape] == ["R"]
+    run(go())
 
-    xs = [100 + 97 * i for i in range(11)]
-    bar = pygame.Rect(xs[0], 220, xs[10] - xs[0], 26)
-    drawn = {}
-    for col in (0, 4, 9):
-        drawn[col] = Rows()
-        MusicRoom._draw_bridge(drawn[col], "#ffffff", xs, col, 200, bar)
-    assert drawn[4].rects == [pygame.Rect(xs[4], 200, xs[5] - xs[4], 20)]
-    left = [r.x - xs[0] for r in drawn[0].rects]
-    right = [xs[10] - r.right for r in drawn[9].rects]
-    assert left == right and left[0] == 0 and left[-1] == _corner_top_inset(bar.h // 2)
-    assert all(r.right == xs[1] for r in drawn[0].rects) and all(r.x == xs[9] for r in drawn[9].rects)
+
+def test_space_plays_the_tape_back_without_touching_the_colors_the_save_or_the_tape(monkeypatch):
+    from purplecomputer.harness import press
+    from purplecomputer.rooms import music_room
+    monkeypatch.setattr(music_room, "MAX_GAP_S", 0.01)
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        played = []
+        monkeypatch.setattr(room, "play_sound_with_instrument", lambda key, instrument, volume_scale=1.0: played.append(key))
+        await type_text(app, "qwe")
+        colors, notes, tape = dict(room.color_state), len(room.recording.notes), list(room._tape)
+        played.clear()
+        await press(app, "space")
+        await room._tape_task
+        assert played == ["Q", "W", "E"]
+        assert room.color_state == colors and len(room.recording.notes) == notes and room._tape == tape
+        await press(app, "space")
+        await press(app, "a")
+        assert room._tape_task is None, "any other key stops it"
+    run(go())
+
+
+def test_the_letters_tape_underlines_the_word_dims_as_the_rest_grows_and_clears_with_it(monkeypatch):
+    import asyncio
+    import time
+    from purplecomputer import palette as P
+    from purplecomputer.gfx import rgb
+    from purplecomputer.rooms import music_room
+
+    async def go():
+        room = make_app(room="music").room
+        room.letters_mode = True
+        now = time.monotonic()
+        for i, key in enumerate("ZQCAT"):
+            room._spell(key, now + i * 0.1)
+        texts, _, _, _, word_at, _ = room._tape_parts()
+        assert texts == list("ZQCAT") and room.word == "cat" and word_at == 2
+        assert rgb(room._tape_ink()) == rgb(P.TEXT)
+        room._typed_at[-1] = now - music_room.TAPE_FADE_S[0] - 0.1
+        dimmer = room._tape_ink()
+        room._typed_at[-1] = now - music_room.TAPE_FADE_S[1] - 0.1
+        assert rgb(P.TEXT) != rgb(dimmer) != rgb(room._tape_ink())
+        monkeypatch.setattr(music_room, "WORD_REST_S", 0.05)
+        room._spell("S", time.monotonic())
+        await asyncio.sleep(0.15)
+        assert room._spelled == "" and room.word is None and room._tape_parts()[0] == []
+    run(go())

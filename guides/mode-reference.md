@@ -34,7 +34,14 @@ Each cell displays its key character and can be colored.
 - **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds) in `packs/core-sounds/content/letter-sounds/`). Hold Enter to record a loop.
 - **Tab**: switch between Notes and Letters, which says each pressed letter aloud.
 - **Left/Right**: shift the musical key (B♭ / F / C / G / D).
-- **Space**: in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop records or plays, drives the loop station instead.
+- **Space**: in Notes, plays the tape back; in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop records or plays, drives the loop station instead.
+
+## The Tape
+
+The hint row under the grid shows what was just played, in place of "hold Enter to loop":
+
+- **Notes**: the note names of the phrase (`♪ CDEFG  CCC`). A rest of `TAPE_GAP_S` shows as a gap; a rest of `ECHO_PAUSE_S` ends the phrase, and the next note starts a new tape. Space plays it back with its rhythm, sound and lit note names only, so the colors, the save's recording and the loop are untouched. Any other key stops it.
+- **Letters**: every letter typed, the word they end with underlined and the letters before it dimmer. It dims at each `TAPE_FADE_S` and clears with the word at `WORD_REST_S`.
 - **Esc + Space**: open or close the code line.
 
 ## Color Cycling

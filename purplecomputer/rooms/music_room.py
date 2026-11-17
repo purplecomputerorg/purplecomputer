@@ -4,8 +4,6 @@ instrument (in Letters: names or sounds), hold Enter records a loop, and the cod
 In Letters, a real word typed shows under the grid and Space says it."""
 
 import asyncio
-import functools
-import math
 import time
 
 import pygame
@@ -26,7 +24,7 @@ from ..music_constants import (
 from ..palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..gfx import is_one_emoji, mix
-from ..music_replay import Recording
+from ..music_replay import MAX_GAP_S, Recording
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel, ReplayPanel
 from ..sounds import SoundBank
 from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
@@ -38,14 +36,17 @@ PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
 PITCH_TRANSITION_DURATION = 0.25
 LETTER_PICTURES = ("letters/names.png", "letters/sounds.png")
-KEY_WORD = 0.75               # "Key" on the note bar's right tab, against the key name on its left
-COLUMN_SHADE = 0.07          # every other column of the note ledge, toward the ink
+KEY_WORD = 0.75               # sizes the grid's side margin; changing it moves the grid
 NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past the end it's silent
 LETTER_FADE_REST_S = 1.0      # a rest this long, or another letter, brings it back to full
 LETTER_AFTER_GAP_S = 0.15     # between Purple saying a key and the family's recording after it
-ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes
+ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes, and a new tape
+TAPE_GAP_S = 0.8              # a rest this long shows as a gap on the music tape
+TAPE_MAX = 40                 # notes kept on the music tape
+TAPE_FADE_S = (3.0, 6.0)      # the letters tape dims at each; it clears at WORD_REST_S
+TAPE_HINT = "{Space} play it"
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
 WORD_GAP_S = 1.5              # a two-letter word counts only after a rest this long
 SPELL_MAX = 12                # letters kept toward a word
@@ -74,14 +75,6 @@ def instrument_icon(instrument_id: str) -> str:
     """Its picture, or a pack's emoji; anything that isn't one emoji gets the music glyph, as rooms do."""
     icon = get_content().instrument_icon(instrument_id)
     return icon if is_one_emoji(icon) else ICON_MUSIC
-
-
-@functools.cache
-def _corner_top_inset(r: int) -> int:
-    """How far in a rounded corner of radius r starts on its top row, as pygame draws it."""
-    s = pygame.Surface((2 * r + 1, 2 * r + 1))
-    pygame.draw.rect(s, (255, 255, 255), s.get_rect(), border_radius=r)
-    return next(x for x in range(s.get_width()) if s.get_at((x, 0))[0])
 
 
 class MusicRoom(Room):
@@ -115,6 +108,10 @@ class MusicRoom(Room):
         self._spelled = ""
         self._typed_at: list = []  # when each letter of _spelled was typed
         self.word = None          # the real word the letters just typed end with
+        self._tape: list = []     # (key, instrument, when) of the phrase just played, for Space to play back
+        self._tape_task = None
+        self._tape_at = None      # the tape note playing back now
+        self._fade_timers: list = []
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HeldKey(app, self._enter_hold_fired)
         self.code_panel = None
@@ -137,6 +134,7 @@ class MusicRoom(Room):
     def stop_sound(self):
         self._stop_loop()
         self._stop_letter()
+        self._stop_tape()
 
     def on_littles_change(self):
         self.app.invalidate()
@@ -173,6 +171,8 @@ class MusicRoom(Room):
         self._saved_loop = state.get("loop")
         self._transition = None
         self._forget_word()
+        self._stop_tape()
+        self._tape = []
         self.echo.reset()
         self.app.invalidate()
 
@@ -391,6 +391,8 @@ class MusicRoom(Room):
     def _advance_loop_state(self):
         state = self.loop.state
         if state == IDLE:
+            self._stop_tape()
+            self._tape = []
             self.loop.start_recording()
             self._start_loop_timer()
         elif state == RECORDING:
@@ -524,7 +526,40 @@ class MusicRoom(Room):
         elif self.letters_mode and self.word:
             from ..tts import speak_many
             speak_many([self.word], family=False)
+        elif not self.letters_mode and self._tape:
+            self._play_tape()
         self.app.invalidate()
+
+    # ---------------------------------------------------------------- tape
+    def _tape_add(self, key: str, now: float):
+        """A note after a long enough rest starts a new phrase."""
+        if self._tape and now - self._tape[-1][2] >= ECHO_PAUSE_S:
+            self._tape = []
+        self._tape = (self._tape + [(key, self.instrument_index, now)])[-TAPE_MAX:]
+
+    def _play_tape(self):
+        self._stop_tape()
+        self._tape_task = asyncio.create_task(self._tape_playback(list(self._tape)))
+
+    async def _tape_playback(self, notes: list):
+        """The phrase again as it was played, its rests capped like a save's; only sound and the note's name, so
+        the colors the kid made stay put and nothing joins the save, the loop or the code."""
+        try:
+            last = notes[0][2]
+            for i, (key, instrument, when) in enumerate(notes):
+                await asyncio.sleep(min(when - last, MAX_GAP_S))
+                last, self._tape_at = when, i
+                self.play_sound_with_instrument(key, instrument)
+                self.flash_note(key)
+            await asyncio.sleep(0.3)
+        finally:
+            self._tape_at = None
+            self.app.invalidate()
+
+    def _stop_tape(self):
+        if self._tape_task is not None and not self._tape_task.done():
+            self._tape_task.cancel()
+        self._tape_task, self._tape_at = None, None
 
     def set_instrument_by_name(self, name: str):
         name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
@@ -577,6 +612,18 @@ class MusicRoom(Room):
             self._spelled = (self._spelled + key.lower())[-SPELL_MAX:]
             self._typed_at = (self._typed_at + [now])[-SPELL_MAX:]
             self.word = self._word_at_end()
+            self._schedule_fade()
+
+    def _schedule_fade(self):
+        """The letters tape dims as the rest grows, and clears when the rest starts a new word."""
+        for timer in self._fade_timers:
+            timer.stop()
+        self._fade_timers = [self.app.timers.after(s, self.app.invalidate) for s in TAPE_FADE_S]
+        self._fade_timers.append(self.app.timers.after(WORD_REST_S, self._fade_out))
+
+    def _fade_out(self):
+        self._forget_word()
+        self.app.invalidate()
 
     def _word_at_end(self):
         """The longest real word the letters end with: three letters or more, or two typed after a rest."""
@@ -596,6 +643,8 @@ class MusicRoom(Room):
         return False
 
     async def handle(self, action):
+        if self._tape_task is not None and getattr(action, "is_down", True) and not getattr(action, "is_repeat", False):
+            self._stop_tape()   # Space starts it over; any other key just stops it
         if self._replay and getattr(action, "is_down", True) and not getattr(action, "is_repeat", False):
             self._end_replay()   # the key that stops it plays as usual; Esc only stops
             if isinstance(action, ControlAction) and action.action == "escape":
@@ -649,6 +698,8 @@ class MusicRoom(Room):
             mode = self._current_mode()
             self.loop.record_event(lookup, mode, instrument=self.instrument_index)
             self._hit(lookup, mode)
+            if mode == MODE_MUSIC and self.loop.state == IDLE:
+                self._tape_add(lookup, time.monotonic())
             self.echo.letter("", lookup.lower())
 
     def _handle_enter(self, action):
@@ -721,7 +772,59 @@ class MusicRoom(Room):
             right_edge = rect.right - pad
             if self.app._code_panel_enabled:
                 right_edge = draw_key_hint(g, CODE_HINT, em(0.86), right_edge, cy, anchor="midright").left - em(2)
-            draw_key_hint(g, self._hint_text(), em(0.92), (rect.x + right_edge) // 2, cy, anchor="center")
+            if self.app._littles_mode or not self._draw_tape(g, rect.x + pad, right_edge, cy):
+                draw_key_hint(g, self._hint_text(), em(0.92), (rect.x + right_edge) // 2, cy, anchor="center")
+
+    def _tape_parts(self) -> tuple:
+        """(texts, rest before each, face, lead, underline from, hints after it) for what the tape shows now;
+        the loop's hint stays beside the tape."""
+        if self.letters_mode:
+            run, at = self._spelled.upper(), self._typed_at
+            rests = [i > 0 and at[i] - at[i - 1] >= WORD_GAP_S for i in range(len(run))]
+            return list(run), rests, "mono-heavy", "", len(run) - len(self.word) if self.word else None, self._hint_text()
+        names = [ICON_DRUM if key not in _KEY_TO_RC else note_name(_KEY_TO_RC[key][1], self.root_index)
+                 for key, _, _ in self._tape]
+        rests = [i > 0 and self._tape[i][2] - self._tape[i - 1][2] >= TAPE_GAP_S for i in range(len(self._tape))]
+        return names, rests, "mono-heavy-italic", "♪", None, f"{TAPE_HINT}   {self._hint_text()}".rstrip()
+
+    def _tape_ink(self) -> str:
+        """The letters tape dims in steps as the rest grows; the music tape stays until the next phrase."""
+        if not self.letters_mode or not self._typed_at:
+            return P.TEXT
+        age = time.monotonic() - self._typed_at[-1]
+        return mix(P.TEXT, P.SURFACE, sum(0.35 for s in TAPE_FADE_S if age >= s))
+
+    def _draw_tape(self, g, x, right, cy) -> bool:
+        """What was just played or typed, left to right along the hint row, a rest as a gap and the
+        oldest dropping off the left; the word the letters end with is underlined. False when there is none."""
+        texts, rests, face, lead, word_at, hint = self._tape_parts()
+        if not texts:
+            return False
+        px = g.em(1.0)
+        step, rest_w = px // 4, px
+        widths = [g.measure(t, px, face, tr=False)[0] for t in texts]
+        fixed = (g.measure(lead, px, face, tr=False)[0] + px // 2 if lead else 0) + (px + key_hint_width(g, hint, g.em(0.92)) if hint else 0)
+        first = 0
+        while first < len(texts) - 1 and fixed + sum(w + step + rest_w * r for w, r in zip(widths[first:], rests[first:])) > right - x:
+            first += 1
+        ink = self._tape_ink()
+        if lead:
+            x = g.draw_text(lead, px, x, cy, face, P.MUTED, anchor="midleft", tr=False).right + px // 2
+        under = None
+        for i in range(first, len(texts)):
+            x += rest_w if rests[i] and i > first else 0
+            lead_in = word_at is not None and i < word_at   # letters before the word step back
+            color = P.ACCENT if i == self._tape_at else mix(ink, P.SURFACE, 0.5) if lead_in else ink
+            r = g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False)
+            if word_at is not None and i >= word_at:
+                under = r if under is None else under.union(r)
+            x = r.right + step
+        if under is not None:
+            line = pygame.Rect(under.x, under.bottom + max(2, px // 8), under.w, max(2, px // 8))
+            g.rect(P.ACCENT, line, radius=line.h // 2)
+        if hint:
+            draw_key_hint(g, hint, g.em(0.92), x + px, cy)
+        return True
 
     def _hint_text(self) -> str:
         if self.app._littles_mode:
@@ -799,7 +902,7 @@ class MusicRoom(Room):
         bar.centery = round(ys[4] + size * NOTE_STRIP / 2 + size * 0.08)
         px = self._strip_px(size)
         if not self.letters_mode:
-            self._draw_note_strip(g, tab_w, xs, ys[4], bar, px, on_paper)
+            self._draw_note_strip(g, xs, ys[4], bar, px, on_paper)
         elif self.word and not on_paper:
             self._draw_word_strip(g, bar, px)
 
@@ -812,8 +915,7 @@ class MusicRoom(Room):
         return round(size * NOTE_STRIP * 0.62)
 
     def _key_tab_width(self, g, size) -> int:
-        """The key tabs' visible width, the same in every key so the grid holds still: the longest name
-        (or "Key") and half a bar height either side."""
+        """The margin either side of the grid, the same in every key so the grid holds still."""
         px = self._strip_px(size)
         labels = [(name, px) for name in FRIENDLY_KEY_NAMES] + [("Key", round(px * KEY_WORD))]
         return max(g.measure(text, text_px, "mono-heavy-italic", tr=False)[0] for text, text_px in labels) + self._bar_h(size)
@@ -829,25 +931,14 @@ class MusicRoom(Room):
         if hint:
             draw_key_hint(g, hint, px, x + text_w + gap, bar.centery)
 
-    def _draw_note_strip(self, g, tab_w, xs, grid_bottom, bar, px, on_paper):
-        """Every letter row plays the same note in a column, so each column is named once, on a ledge
-        as wide as the grid with every other column shaded, between a tab naming the key behind its left end
-        and a matching one saying Key behind its right. A sounding note's color bridges its column to its name, which
-        goes bold so the eye stays on the keys; the key-change sweep gets the selection plate."""
+    def _draw_note_strip(self, g, xs, grid_bottom, bar, px, on_paper):
+        """Every letter row plays the same note in a column, so each column is named once, on a plain ledge
+        as wide as the grid; ♪ marks the names as notes, not keys. A sounding note's color bridges its column to
+        its name, which goes bold so the eye stays on the keys; the key-change sweep gets the selection plate."""
         size = xs[1] - xs[0]
-        h = bar.h
         ink = paper.INK_MUTED if on_paper else P.MUTED
         ground = mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE
-        face, color = "mono-heavy-italic", paper.INK if on_paper else P.TEXT
-        for x, text, text_px in ((xs[0] - tab_w, FRIENDLY_KEY_NAMES[self.root_index], px),
-                                 (xs[10] - h, "Key", round(px * KEY_WORD))):
-            tab = pygame.Rect(x, bar.y, tab_w + h, h)
-            g.rect(mix(ground, ink, 0.2), tab, radius=h // 2)
-            g.draw_text(text, text_px, tab.centerx + (h // 2 if x > xs[0] else -h // 2), bar.centery, face, color,
-                        anchor="center", tr=False)
-        g.rect(ground, bar, radius=h // 2)
-        for col in range(1, 10, 2):
-            self._tint_column(g, mix(ground, ink, COLUMN_SHADE), xs, col, bar)
+        g.rect(ground, bar)
         plate = pygame.Rect(0, 0, round(size * 0.8), bar.h - 2 * max(2, bar.h // 8))
         for col in range(10):
             root_idx, sweeping = self._transition_state_for_col(col)
@@ -858,8 +949,8 @@ class MusicRoom(Room):
             played = sounding is not None
             if played:
                 hue = self.get_color(sounding)
-                self._draw_bridge(g, mix(P.SURFACE, hue, 0.26), xs, col, grid_bottom, bar)
-                self._tint_column(g, mix(ground, hue, 0.14), xs, col, bar)
+                g.rect(mix(P.SURFACE, hue, 0.26), self._column(xs, col, grid_bottom, bar.y))
+                g.rect(mix(ground, hue, 0.14), self._column(xs, col, bar.y, bar.bottom))
             plate.center = ((xs[col] + xs[col + 1]) // 2, bar.centery)
             if sweeping:
                 g.rect(P.PRIMARY, plate, radius=plate.h // 2)
@@ -868,23 +959,8 @@ class MusicRoom(Room):
                         color, anchor="center", tr=False)
 
     @staticmethod
-    def _draw_bridge(g, color, xs, col, top, bar):
-        """The gap from a column down to its name. An end column curves in onto the ledge's flat top, so it
-        meets the ledge where its rounded end begins; drawn a row at a time so both ends mirror to the pixel."""
-        x, w, h = xs[col], xs[col + 1] - xs[col], bar.y - top
-        if col not in (0, 9):
-            return g.rect(color, pygame.Rect(x, top, w, h))
-        end = _corner_top_inset(bar.h // 2)
-        for i in range(h):
-            inset = round(end * (1 - math.sqrt(1 - (i / max(1, h - 1)) ** 2)))
-            g.rect(color, pygame.Rect(x + inset if col == 0 else x, top + i, w - inset, 1))
-
-    @staticmethod
-    def _tint_column(g, color, xs, col, bar):
-        """One column's stretch of the ledge, keeping the ledge's rounded ends."""
-        r = bar.h // 2
-        seg = pygame.Rect(xs[col], bar.y, xs[col + 1] - xs[col], bar.h)
-        g.rect(color, seg, left=r if col == 0 else 0, right=r if col == 9 else 0)
+    def _column(xs, col, top, bottom) -> pygame.Rect:
+        return pygame.Rect(xs[col], top, xs[col + 1] - xs[col], bottom - top)
 
     def _draw_noscreen(self, g, rect):
         cy = rect.centery

@@ -230,7 +230,7 @@ class _YesNo(Picker):
 FEATURES = {  # key: (name, what it does, setting, app flag, undo when turned off)
     "code": ("Code Space", "Write code in Music, Art and Blocks",
              "code_panel", "_code_panel_enabled", lambda app: app.room.close_code_panel()),
-    "looping": ("Music Looping", "Hold Enter in Music to record a loop",
+    "looping": ("Music Looping", "Hold Enter in Music to loop what was just played",
                 "music_looping", "_music_looping_enabled", lambda app: app.rooms["music"].stop_sound()),
 }
 

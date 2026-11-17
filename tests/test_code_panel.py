@@ -457,13 +457,14 @@ def test_letting_go_of_a_shown_hold_leaves_a_hint_a_tap_does_not():
     async def go():
         app, music = await _room("music")
         app._music_looping_enabled = True
+        music._tape_add("A", 0.0)
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
         assert app._hold_nudge is None
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
         await asyncio.sleep(0.5)
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
-        assert app._hold_nudge == "Hold Enter longer to record a loop"
+        assert app._hold_nudge == "Hold Enter longer to loop it"
         app._draw()
     run(go())
 
@@ -476,7 +477,12 @@ def test_holding_enter_in_music_names_the_loop_only_when_looping_is_allowed():
         app._music_looping_enabled = True
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
         await asyncio.sleep(0.3)
-        assert music.hold_progress()[1] == f"{LOOP} Record a loop"
+        assert music.hold_progress() is None, "nothing on the tape to loop"
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
+        music._tape_add("A", 0.0)
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))
+        await asyncio.sleep(0.3)
+        assert music.hold_progress()[1] == f"{LOOP} Loop it"
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=False))
         app._music_looping_enabled = False
         await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True))

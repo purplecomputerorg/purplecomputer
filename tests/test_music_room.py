@@ -265,7 +265,7 @@ def test_a_looping_word_shows_each_time_it_comes_around(monkeypatch):
     async def go():
         room = _letters_room(monkeypatch).room
         seen = []
-        monkeypatch.setattr(room, "next_color", lambda key: seen.append(room.word))
+        monkeypatch.setattr(room, "_play_key", lambda key, mode, instrument=None: seen.append(room.word))
         room.loop.play([(k, MODE_LETTERS, i * 0.01, 0) for i, k in enumerate("CATDOG")], 0.1)
         room._start_loop_playback()
         await asyncio.sleep(0.08)
@@ -316,14 +316,14 @@ def test_a_long_rest_starts_a_new_tape_and_a_shorter_one_shows_as_a_gap():
         texts, rests, *_ = room._tape_parts()
         assert texts == ["C", "D", "E"] and rests == [False, False, True]
         room._tape_add("R", 0.2 + TAPE_GAP_S + ECHO_PAUSE_S)
-        assert [key for key, _, _ in room._tape] == ["R"]
+        assert [key for key, *_ in room._tape] == ["R"]
     run(go())
 
 
 def test_space_plays_the_tape_back_without_touching_the_colors_the_save_or_the_tape(monkeypatch):
     from purplecomputer.harness import press
     from purplecomputer.rooms import music_room
-    monkeypatch.setattr(music_room, "MAX_GAP_S", 0.01)
+    monkeypatch.setattr(music_room, "TUNE_GAP_MAX_S", 0.01)
 
     async def go():
         app = make_app(room="music")
@@ -331,12 +331,12 @@ def test_space_plays_the_tape_back_without_touching_the_colors_the_save_or_the_t
         played = []
         monkeypatch.setattr(room, "play_sound_with_instrument", lambda key, instrument, volume_scale=1.0: played.append(key))
         await type_text(app, "qwe")
-        colors, notes, tape = dict(room.color_state), len(room.recording.notes), list(room._tape)
+        colors, tape = dict(room.color_state), list(room._tape)
         played.clear()
         await press(app, "space")
         await room._tape_task
         assert played == ["Q", "W", "E"]
-        assert room.color_state == colors and len(room.recording.notes) == notes and room._tape == tape
+        assert room.color_state == colors and room._tape == tape
         await press(app, "space")
         await press(app, "a")
         assert room._tape_task is None, "any other key stops it"
@@ -367,4 +367,62 @@ def test_the_letters_tape_underlines_the_word_dims_as_the_rest_grows_and_clears_
         room._spell("S", time.monotonic())
         await asyncio.sleep(0.15)
         assert room._spelled == "" and room.word is None and room._tape_parts()[0] == []
+    run(go())
+
+
+def test_a_word_typed_since_the_last_rest_wins_but_a_slow_speller_still_gets_theirs():
+    from purplecomputer.rooms.music_room import WORD_GAP_S
+
+    async def go():
+        room = make_app(room="music").room
+        room.letters_mode = True
+        for i, key in enumerate("T"):
+            room._spell(key, float(i))
+        for i, key in enumerate("HAT"):
+            room._spell(key, 1 + WORD_GAP_S + i * 0.1)
+        assert room.word == "hat", "the rest on the tape splits 'that'"
+        room._forget_word()
+        for i, key in enumerate("CAT"):
+            room._spell(key, i * (WORD_GAP_S + 0.5))
+        assert room.word == "cat", "nothing since the last rest is a word, so the word spans the rests"
+    run(go())
+
+
+def test_the_rest_clock_empties_a_step_a_second_until_the_letters_clear():
+    import time
+    from purplecomputer.rooms.music_room import TAPE_TICK_S, WORD_REST_S
+
+    async def go():
+        room = make_app(room="music").room
+        room.letters_mode = True
+        room._spell("A", time.monotonic())
+        assert room._rest_left() == 1.0
+        room._typed_at[-1] = time.monotonic() - 2.5 * TAPE_TICK_S
+        assert room._rest_left() == 1 - 2 * TAPE_TICK_S / WORD_REST_S
+        room._typed_at[-1] = time.monotonic() - WORD_REST_S
+        assert room._rest_left() == 0
+    run(go())
+
+
+def test_the_hints_after_the_tape_hold_still_whatever_it_holds(monkeypatch):
+    import time
+    from purplecomputer.rooms import music_room
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        at = []
+        real = music_room.draw_key_hint
+        monkeypatch.setattr(music_room, "draw_key_hint", lambda g, text, px, x, y, *a, **k: at.append((text, x, y)) or real(g, text, px, x, y, *a, **k))
+
+        def hints(tape=None, letters=None):
+            room._tape, room.letters_mode = tape or [], letters is not None
+            room._spelled, room._typed_at = letters or "", [time.monotonic()] * len(letters or "")
+            at.clear()
+            app._draw()
+            return [h for h in at if "Enter" in h[0]]
+
+        notes = [hints([(k, "music", 0, i * 0.1) for i, k in enumerate(keys)]) for keys in ("QQQ", "RYR", "PPP")]
+        assert notes[0] and notes[0] == notes[1] == notes[2]
+        assert hints(letters="iii") and hints(letters="iii") == hints(letters="www") == hints(letters="mmm")
     run(go())

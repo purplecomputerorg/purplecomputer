@@ -31,18 +31,19 @@ Each cell displays its key character and can be colored.
 
 ## Other Controls
 
-- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds) in `packs/core-sounds/content/letter-sounds/`). Hold Enter to record a loop.
+- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds) in `packs/core-sounds/content/letter-sounds/`). Hold Enter to loop the tape (below).
 - **Tab**: switch between Notes and Letters, which says each pressed letter aloud.
 - **Left/Right**: shift the musical key (B♭ / F / C / G / D).
-- **Space**: in Notes, plays the tape back; in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop records or plays, drives the loop station instead.
+- **Space**: in Notes, plays the tape back; in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop plays, starts it over.
 
 ## The Tape
 
-The hint row under the grid shows what was just played, in place of "hold Enter to loop":
+The hint row under the grid shows what was just played, with "hold Enter to loop" after it. It is the one thing a kid hears again: Space plays it, hold Enter loops it, and a save keeps it.
 
-- **Notes**: the note names of the phrase (`♪ CDEFG  CCC`). A rest of `TAPE_GAP_S` shows as a gap; a rest of `ECHO_PAUSE_S` ends the phrase, and the next note starts a new tape. Space plays it back with its rhythm, sound and lit note names only, so the colors, the save's recording and the loop are untouched. Any other key stops it.
-- **Letters**: every letter typed, the word they end with underlined and the letters before it dimmer. It dims at each `TAPE_FADE_S` and clears with the word at `WORD_REST_S`.
-- **Esc + Space**: open or close the code line.
+- **Notes**: the note names of the phrase (`♪ CDEFG  CCC`). A rest of `TAPE_GAP_S` shows as a gap; a rest of `ECHO_PAUSE_S` ends the phrase, and the next note starts a new tape. Space plays it back with its rhythm (rests capped at `TUNE_GAP_MAX_S`), sound and lit note names only, so the colors and the loop are untouched. Any other key stops it.
+- **Letters**: every letter typed, the word they end with underlined and the letters before it dimmer. A word typed since the last rest wins over a longer one across it, so the gap means a new word; a slow speller's word still spans rests when nothing after the last one is a word. A small clock empties a step a second, and the letters clear with the word at `WORD_REST_S`.
+- **Loop**: hold Enter loops the tape; notes played along join it on the next cycle. Like Space, it sounds and lights keys without moving their colors, so the picture stays put. Hold Enter again (or Esc) stops it, and the tape stays to loop again.
+- **Save**: keeps the picture and the tape as its `tune`. Opening shows the picture as saved, puts the tune on the tape and plays it once. A save from before the tape plays its recorded minute (`replay`) as the tune; a saved `loop` is ignored.
 
 ## Color Cycling
 

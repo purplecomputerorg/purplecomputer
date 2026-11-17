@@ -1,419 +1,68 @@
-"""Tests for the music room loop station.
-
-Run with: pytest tests/test_loop_station.py -v
-"""
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
+"""The loop station plays a phrase over and over; notes played along join it."""
 
 import pytest
 
-from purplecomputer.loop_station import (
-    LoopStation,
-    IDLE,
-    RECORDING,
-    LOOPING,
-    MAX_LOOP_DURATION,
-)
-from purplecomputer.rooms.music_room import MODE_MUSIC, MODE_LETTERS
-
-
-# =============================================================================
-# State transitions
-# =============================================================================
-
-class TestStateTransitions:
-    """Test the idle → recording → looping → idle state machine."""
-
-    def test_initial_state_is_idle(self):
-        loop = LoopStation()
-        assert loop.state == IDLE
-
-    def test_start_recording(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        assert loop.state == RECORDING
-
-    def test_finish_recording_starts_looping(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        events, duration = loop.finish_recording(now=1.0)
-        assert loop.state == LOOPING
-        assert len(events) == 1
-        assert duration == 1.0
-
-    def test_finish_recording_no_events_returns_empty(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        events, duration = loop.finish_recording(now=1.0)
-        assert events == []
-        assert duration == 0.0
-
-    def test_stop_from_recording(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.stop()
-        assert loop.state == IDLE
-
-    def test_stop_from_looping(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=1.0)
-        assert loop.state == LOOPING
-        loop.stop()
-        assert loop.state == IDLE
-
-    def test_stop_clears_all_data(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=1.0)
-        loop.stop()
-        assert loop.loop_events == []
-        assert loop.loop_duration == 0.0
-
-    def test_start_recording_clears_previous_loop(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=1.0)
-        # Start a new recording
-        loop.start_recording(now=2.0)
-        assert loop.state == RECORDING
-        assert loop.loop_events == []
-        assert loop.loop_duration == 0.0
-
-
-# =============================================================================
-# Recording
-# =============================================================================
-
-class TestRecording:
-    """Test event recording during the RECORDING state."""
-
-    def test_record_single_event(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        assert loop.has_recording_events()
-
-    def test_record_preserves_offset(self):
-        loop = LoopStation()
-        loop.start_recording(now=1.0)
-        loop.record_event('A', MODE_MUSIC, now=1.5)
-        loop.record_event('B', MODE_MUSIC, now=2.0)
-        events, duration = loop.finish_recording(now=3.0)
-        assert events[0][:3] == ('A', MODE_MUSIC, 0.5)
-        assert events[1][:3] == ('B', MODE_MUSIC, 1.0)
-
-    def test_record_preserves_mode(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.record_event('B', MODE_LETTERS, now=1.0)
-        events, _ = loop.finish_recording(now=2.0)
-        assert events[0][1] == MODE_MUSIC
-        assert events[1][1] == MODE_LETTERS
-
-    def test_record_preserves_instrument(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5, instrument=0)
-        loop.record_event('B', MODE_MUSIC, now=1.0, instrument=2)
-        events, _ = loop.finish_recording(now=2.0)
-        assert events[0][3] == 0
-        assert events[1][3] == 2
-
-    def test_record_in_idle_is_ignored(self):
-        loop = LoopStation()
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        assert not loop.has_recording_events()
-
-    def test_duration_includes_trailing_silence(self):
-        """Duration spans to when Space was pressed, not just last note."""
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        events, duration = loop.finish_recording(now=3.0)
-        assert duration == 3.0
-
-    def test_duration_at_least_covers_last_event(self):
-        """Edge case: finish called at same time as last event."""
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=2.0)
-        events, duration = loop.finish_recording(now=1.0)  # before last event
-        assert duration == 2.0  # must cover the event
-
-
-# =============================================================================
-# Max duration
-# =============================================================================
-
-class TestMaxDuration:
-    """Test recording time limit."""
-
-    def test_events_beyond_max_are_dropped(self):
-        loop = LoopStation(max_duration=5.0)
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=1.0)
-        loop.record_event('B', MODE_MUSIC, now=6.0)  # beyond max
-        events, _ = loop.finish_recording(now=7.0)
-        assert len(events) == 1
-        assert events[0][0] == 'A'
-
-    def test_is_at_max_duration(self):
-        loop = LoopStation(max_duration=5.0)
-        loop.start_recording(now=0.0)
-        assert not loop.is_at_max_duration(now=4.9)
-        assert loop.is_at_max_duration(now=5.0)
-        assert loop.is_at_max_duration(now=6.0)
-
-    def test_recording_progress(self):
-        loop = LoopStation(max_duration=10.0)
-        loop.start_recording(now=0.0)
-        assert loop.recording_progress(now=0.0) == pytest.approx(0.0)
-        assert loop.recording_progress(now=5.0) == pytest.approx(0.5)
-        assert loop.recording_progress(now=10.0) == pytest.approx(1.0)
-        assert loop.recording_progress(now=15.0) == pytest.approx(1.0)  # capped
-
-    def test_recording_remaining(self):
-        loop = LoopStation(max_duration=10.0)
-        loop.start_recording(now=0.0)
-        assert loop.recording_remaining(now=0.0) == pytest.approx(10.0)
-        assert loop.recording_remaining(now=7.0) == pytest.approx(3.0)
-        assert loop.recording_remaining(now=10.0) == pytest.approx(0.0)
-        assert loop.recording_remaining(now=15.0) == pytest.approx(0.0)  # floor at 0
-
-    def test_progress_and_remaining_zero_when_not_recording(self):
-        loop = LoopStation()
-        assert loop.recording_progress() == 0.0
-        assert loop.recording_remaining() == 0.0
-        assert not loop.is_at_max_duration()
-
-    def test_duration_capped_at_max(self):
-        loop = LoopStation(max_duration=5.0)
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=1.0)
-        events, duration = loop.finish_recording(now=10.0)
-        assert duration == 5.0
-
-
-# =============================================================================
-# Auto-layering during looping
-# =============================================================================
-
-class TestAutoLayering:
-    """Test that notes played during looping are auto-added to the loop."""
-
-    def test_new_notes_added_during_looping(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)  # cycle_start = 2.0
-        # Play a new note at 0.8s into the cycle
-        loop.record_event('B', MODE_MUSIC, now=2.8)
-        events = loop.loop_events
-        assert len(events) == 2
-        keys = [e[0] for e in events]
-        assert 'A' in keys
-        assert 'B' in keys
-
-    def test_new_notes_sorted_by_offset(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=1.0)  # offset 1.0
-        loop.finish_recording(now=2.0)
-        # Play note earlier in the cycle than A
-        loop.record_event('B', MODE_MUSIC, now=2.3)  # offset 0.3
-        events = loop.loop_events
-        keys = [e[0] for e in events]
-        assert keys == ['B', 'A']  # B at 0.3, A at 1.0
-
-    def test_new_notes_preserve_mode(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)
-        loop.record_event('B', MODE_LETTERS, now=2.8)
-        events = loop.loop_events
-        b_event = [e for e in events if e[0] == 'B'][0]
-        assert b_event[1] == MODE_LETTERS
-
-    def test_new_notes_preserve_instrument(self):
-        """Each layer keeps the instrument it was recorded with."""
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5, instrument=0)
-        loop.finish_recording(now=2.0)
-        loop.record_event('B', MODE_MUSIC, now=2.8, instrument=2)
-        events = loop.loop_events
-        a_event = [e for e in events if e[0] == 'A'][0]
-        b_event = [e for e in events if e[0] == 'B'][0]
-        assert a_event[3] == 0
-        assert b_event[3] == 2
-
-    def test_new_note_offset_relative_to_cycle(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)  # cycle_start = 2.0
-        loop.record_event('B', MODE_MUSIC, now=2.8)  # offset = 0.8
-        events = loop.loop_events
-        b_event = [e for e in events if e[0] == 'B'][0]
-        assert b_event[2] == pytest.approx(0.8)
-
-    def test_multiple_new_notes(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)
-        loop.record_event('B', MODE_MUSIC, now=2.3)
-        loop.record_event('C', MODE_MUSIC, now=2.8)
-        loop.record_event('D', MODE_MUSIC, now=3.5)
-        assert len(loop.loop_events) == 4
-
-    def test_offset_wraps_around_cycle(self):
-        """Notes past the loop duration wrap around."""
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)  # duration=2.0, cycle_start=2.0
-        # Play at 2.5s into cycle (duration is 2.0, so offset = 0.5)
-        loop.record_event('B', MODE_MUSIC, now=4.5)
-        events = loop.loop_events
-        b_event = [e for e in events if e[0] == 'B'][0]
-        assert b_event[2] == pytest.approx(0.5)
-
-    def test_duration_unchanged_by_new_notes(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        events, duration = loop.finish_recording(now=2.0)
-        loop.record_event('B', MODE_MUSIC, now=2.8)
-        assert loop.loop_duration == duration  # unchanged
-
-
-# =============================================================================
-# Loop progress
-# =============================================================================
-
-class TestLoopProgress:
-    """Test loop_progress() for position indicator."""
-
-    def test_progress_zero_when_not_looping(self):
-        loop = LoopStation()
-        assert loop.loop_progress() == 0.0
-
-    def test_progress_at_cycle_start(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)
-        assert loop.loop_progress(now=2.0) == pytest.approx(0.0)
-
-    def test_progress_midway(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)  # duration=2.0, cycle_start=2.0
-        assert loop.loop_progress(now=3.0) == pytest.approx(0.5)
-
-    def test_progress_wraps(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)  # duration=2.0, cycle_start=2.0
-        # 2.5 cycles later: at 50% of a cycle
-        assert loop.loop_progress(now=7.0) == pytest.approx(0.5)
-
-
-# =============================================================================
-# Cycle management
-# =============================================================================
-
-class TestCycleManagement:
-    def test_start_new_cycle(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)
-        loop.start_new_cycle(now=4.0)
-        # New notes relative to new cycle start
-        loop.record_event('B', MODE_MUSIC, now=4.3)
-        events = loop.loop_events
-        b_event = [e for e in events if e[0] == 'B'][0]
-        assert b_event[2] == pytest.approx(0.3)
-
-
-# =============================================================================
-# Properties
-# =============================================================================
-
-class TestProperties:
-    def test_loop_events_is_copy(self):
-        """loop_events returns a copy, not the internal list."""
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=1.0)
-        events = loop.loop_events
-        events.clear()
-        assert len(loop.loop_events) == 1  # internal list unchanged
-
-    def test_max_duration_property(self):
-        loop = LoopStation(max_duration=15.0)
-        assert loop.max_duration == 15.0
-
-    def test_default_max_duration(self):
-        loop = LoopStation()
-        assert loop.max_duration == MAX_LOOP_DURATION
-
-
-# =============================================================================
-# Time function injection
-# =============================================================================
-
-class TestTimeFn:
-    def test_custom_time_fn(self):
-        clock = [0.0]
-        def tick():
-            clock[0] += 1.0
-            return clock[0]
-
-        loop = LoopStation(time_fn=tick)
-        loop.start_recording()  # now=1.0
-        loop.record_event('A', MODE_MUSIC)  # now=2.0, offset=1.0
-        events, duration = loop.finish_recording()  # now=3.0, duration=2.0
-        assert events[0][2] == pytest.approx(1.0)
-        assert duration == pytest.approx(2.0)
-
-
-# =============================================================================
-# Panel layout
-# =============================================================================
-
-def test_loop_panel_keeps_grid_size():
-    from purplecomputer.harness import make_app, run
-
-    async def _test():
-        app = make_app()
-        app.action_switch_room("music")
-        music = app.rooms["music"]
-        grids = []
-        music._draw_grid = lambda g, r, on_paper=False: grids.append(r)
-        app._draw()
-        music._advance_loop_state()
-        assert music.loop.state == RECORDING
-        app._draw()
-        assert grids[0] == grids[1]
-        music._stop_loop()
-    run(_test())
+from purplecomputer.loop_station import IDLE, LOOPING, MAX_LOOP_DURATION, LoopStation
+from purplecomputer.rooms.music_room import MODE_LETTERS, MODE_MUSIC
+
+
+def _looping(now=2.0, duration=2.0):
+    """A loop of A half a second in, two seconds long, its cycle starting at `now`."""
+    loop = LoopStation()
+    loop.play([("A", MODE_MUSIC, 0.5, 0)], duration, now=now)
+    return loop
+
+
+def test_play_loops_and_stop_goes_back_to_idle():
+    loop = LoopStation()
+    assert loop.state == IDLE
+    loop.play([("B", MODE_MUSIC, 1.0, 0), ("A", MODE_MUSIC, 0.2, 0)], 2.0, now=0.0)
+    assert loop.state == LOOPING and [e[0] for e in loop.loop_events] == ["A", "B"]
+    loop.stop()
+    assert loop.state == IDLE and loop.loop_events == [] and loop.loop_duration == 0.0
+
+
+def test_a_note_while_idle_is_ignored():
+    loop = LoopStation()
+    loop.record_event("A", MODE_MUSIC, now=1.0)
+    assert loop.loop_events == []
+
+
+def test_a_note_played_along_joins_where_it_falls_in_the_cycle():
+    loop = _looping()
+    loop.record_event("B", MODE_LETTERS, now=2.3, instrument=2)
+    assert [e[0] for e in loop.loop_events] == ["B", "A"]
+    assert loop.loop_events[0] == pytest.approx(("B", MODE_LETTERS, 0.3, 2))
+    assert loop.loop_duration == 2.0
+
+
+def test_a_note_past_the_cycle_wraps_around():
+    loop = _looping()
+    loop.record_event("B", MODE_MUSIC, now=4.5)
+    assert [e[2] for e in loop.loop_events if e[0] == "B"] == [pytest.approx(0.5)]
+
+
+def test_a_new_cycle_moves_where_notes_land():
+    loop = _looping()
+    loop.start_new_cycle(now=4.0)
+    loop.record_event("B", MODE_MUSIC, now=4.3)
+    assert [e[2] for e in loop.loop_events if e[0] == "B"] == [pytest.approx(0.3)]
+
+
+def test_progress_runs_through_each_cycle():
+    loop = _looping()
+    assert LoopStation().loop_progress() == 0.0
+    assert loop.loop_progress(now=2.0) == pytest.approx(0.0)
+    assert loop.loop_progress(now=3.0) == pytest.approx(0.5)
+    assert loop.loop_progress(now=7.0) == pytest.approx(0.5)
+
+
+def test_loop_events_is_a_copy_and_max_duration_has_a_default():
+    loop = _looping()
+    loop.loop_events.clear()
+    assert len(loop.loop_events) == 1
+    assert LoopStation().max_duration == MAX_LOOP_DURATION
+    assert LoopStation(max_duration=15.0).max_duration == 15.0
 
 
 def test_opening_code_while_looping_stops_the_loop():
@@ -425,11 +74,28 @@ def test_opening_code_while_looping_stops_the_loop():
         app._code_panel_enabled = True
         app.action_switch_room("music")
         music = app.rooms["music"]
-        music._advance_loop_state()
-        music.loop.record_event('A', MODE_MUSIC)
-        music._advance_loop_state()
+        music._tape_add("A", 0.0)
+        music._loop_tune()
         assert music.loop.state == LOOPING
         music.open_code_panel()
         assert music.loop.state == IDLE
         assert isinstance(app._panel, CodePanel)
+    run(_test())
+
+
+def test_the_loop_panel_keeps_the_grid_size():
+    from purplecomputer.harness import make_app, run
+
+    async def _test():
+        app = make_app()
+        app.action_switch_room("music")
+        music = app.rooms["music"]
+        grids = []
+        music._draw_grid = lambda g, r, on_paper=False: grids.append(r)
+        app._draw()
+        music._tape_add("A", 0.0)
+        music._loop_tune()
+        app._draw()
+        assert grids[0] == grids[1]
+        music._stop_loop()
     run(_test())

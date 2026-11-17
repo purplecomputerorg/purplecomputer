@@ -16,10 +16,9 @@ import pygame
 from . import i18n
 from . import palette as P
 from .code_runner import _COMMAND_VOCAB, _MODE_WORDS, _TURN_VOCAB, MusicCodeRunner
-from .constants import ICON_MUSIC
 from .content import get_content
 from .keyboard import CharacterAction, ControlAction, NavigationAction
-from .loop_station import LOOPING, RECORDING
+from .loop_station import LOOPING
 from .music_constants import GRID_KEYS
 from .palette import get_key_color
 from .timeline import SESSION_GAP_S
@@ -667,28 +666,9 @@ class LoopPanel:
         return g.em(FOOTER_EM)
 
     def draw(self, g, rect):
-        st = self.loop.state
-        if st == RECORDING:
-            draw_status_row(g, rect, "● Recording", P.DANGER, "{Space} {hints/play.png}   {Esc} {hints/stop.png}",
-                            self.loop.recording_progress(), f"{int(self.loop.recording_remaining())}s")
-        elif st == LOOPING:
+        if self.loop.state == LOOPING:
             draw_status_row(g, rect, f"{LOOP} Looping", P.PRIMARY, "{Esc} {hints/stop.png}",
                             self.loop.loop_progress())
-
-
-class ReplayPanel:
-    kind = "replay"
-
-    def __init__(self, app, room):
-        self.app = app
-        self.room = room
-
-    def height(self, g) -> int:
-        return g.em(FOOTER_EM)
-
-    def draw(self, g, rect):
-        draw_status_row(g, rect, f"{ICON_MUSIC} Playing your saved music", P.PRIMARY, "any key stops",
-                        self.room.replay_progress())
 
 
 class TimeTravelBar:

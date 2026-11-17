@@ -287,23 +287,21 @@ def test_choosing_an_instrument_or_key_in_code_leaves_letters(monkeypatch):
     run(go())
 
 
-def test_a_sounding_note_bridges_its_column_to_its_name_until_it_stops(monkeypatch):
-    from purplecomputer.rooms.music_room import MusicRoom
-    tinted = []
-    real = MusicRoom._column
-    monkeypatch.setattr(MusicRoom, "_column", staticmethod(lambda xs, col, top, bottom: tinted.append(col) or real(xs, col, top, bottom)))
-
+def test_every_key_names_its_note_faintly_and_brighter_while_it_sounds(monkeypatch):
     async def go():
         app = make_app(room="music")
+        inks = {}
+        real = app.g.draw_text
+        monkeypatch.setattr(app.g, "draw_text", lambda text, px, x, y, face="sans", color="#ffffff", *a, **k:
+                            inks.setdefault(text, []).append(color) or real(text, px, x, y, face, color, *a, **k))
+        app._draw()
+        assert len(inks["♪ F"]) == 3, "R, F and V all play F"
+        quiet = inks["♪ F"][1]
         await type_text(app, "f")
+        inks.clear()
         app._draw()
-        assert tinted == [3, 3]   # the gap above its name, and the name's stretch of the ledge
-        app.room._note_labels.clear()
-        tinted.clear()
-        app._draw()
-        assert tinted == []
+        assert inks["♪ F"][1] != quiet and inks["♪ F"][0] == quiet, "only the F key that sounds lights up"
     run(go())
-
 
 
 def test_a_long_rest_starts_a_new_tape_and_a_shorter_one_shows_as_a_gap():
@@ -313,7 +311,7 @@ def test_a_long_rest_starts_a_new_tape_and_a_shorter_one_shows_as_a_gap():
         room = make_app(room="music").room
         for key, at in (("Q", 0.0), ("W", 0.2), ("E", 0.2 + TAPE_GAP_S)):
             room._tape_add(key, at)
-        texts, rests, *_ = room._tape_parts()
+        texts, _, rests, *_ = room._tape_parts()
         assert texts == ["C", "D", "E"] and rests == [False, False, True]
         room._tape_add("R", 0.2 + TAPE_GAP_S + ECHO_PAUSE_S)
         assert [key for key, *_ in room._tape] == ["R"]
@@ -356,7 +354,7 @@ def test_the_letters_tape_underlines_the_word_dims_as_the_rest_grows_and_clears_
         now = time.monotonic()
         for i, key in enumerate("ZQCAT"):
             room._spell(key, now + i * 0.1)
-        texts, _, _, _, word_at, _ = room._tape_parts()
+        texts, *_, word_at = room._tape_parts()
         assert texts == list("ZQCAT") and room.word == "cat" and word_at == 2
         assert rgb(room._tape_ink()) == rgb(P.TEXT)
         room._typed_at[-1] = now - music_room.TAPE_FADE_S[0] - 0.1

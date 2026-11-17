@@ -37,7 +37,8 @@ _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c
 PITCH_TRANSITION_DURATION = 0.25
 LETTER_PICTURES = ("letters/names.png", "letters/sounds.png")
 KEY_WORD = 0.75               # sizes the grid's side margin; changing it moves the grid
-NOTE_STRIP = 0.45             # height of the note-name row under the grid, in keys
+NOTE_STRIP = 0.45             # height of the tape's row under the grid, in keys
+NOTE_FAINT = 0.72             # how far a key's note name sinks into the key until it sounds
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past the end it's silent
 LETTER_FADE_REST_S = 1.0      # a rest this long, or another letter, brings it back to full
@@ -750,22 +751,42 @@ class MusicRoom(Room):
             right_edge = rect.right - pad
             if self.app._code_panel_enabled:
                 right_edge = draw_key_hint(g, CODE_HINT, em(0.86), right_edge, cy, anchor="midright").left - em(2)
-            if self.app._littles_mode:
-                draw_key_hint(g, "{Enter} sound", em(0.92), (rect.x + right_edge) // 2, cy, anchor="center")
-            else:
-                self._draw_tape(g, rect.x + pad, right_edge, cy)
+            self._draw_hints(g, rect.x + pad, right_edge, cy)
+
+    def _draw_hints(self, g, left, right, cy):
+        """The hint row, centered: what Space and Enter do with the tape now; in Letters a found word leads it,
+        with its picture."""
+        px = g.em(0.92)
+        if self.app._littles_mode:
+            draw_key_hint(g, "{Enter} sound", px, (left + right) // 2, cy, anchor="center")
+            return
+        tune = self._tune()
+        space = (WORD_HINT if self.word else "") if self.letters_mode else (TAPE_HINT if tune else "")
+        hint = "   ".join(h for h in (space, self._hint_text() if tune else "") if h)
+        word = ""
+        if self.letters_mode and self.word:
+            picture = get_content().exact_emoji(self.word)
+            word = f"{self.word} {picture}" if picture else self.word
+        word_px = round(px * 1.3)
+        word_w = g.measure(word, word_px, "mono-heavy", tr=False)[0] + px * 2 if word else 0
+        x = (left + right - word_w - key_hint_width(g, hint, px)) // 2
+        if word:
+            g.draw_text(word, word_px, x, cy, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
+        if hint:
+            draw_key_hint(g, hint, px, x + word_w, cy)
 
     def _tape_parts(self) -> tuple:
-        """(texts, rest before each, face, lead, underline from, hints after it) for what the tape shows now;
-        the loop's hint stays beside the tape."""
+        """(texts, keys over them, rest before each, face, lead, underline from) for what the tape shows now: the
+        letters in Letters; in Notes each note's name, with the key that played it over it in its color."""
         if self.letters_mode:
             run, at = self._spelled.upper(), self._typed_at
             rests = [i > 0 and at[i] - at[i - 1] >= WORD_GAP_S for i in range(len(run))]
-            return list(run), rests, "mono-heavy", "", len(run) - len(self.word) if self.word else None, self._hint_text()
+            return list(run), None, rests, "mono-heavy", "", len(run) - len(self.word) if self.word else None
         names = [ICON_DRUM if key not in _KEY_TO_RC else note_name(_KEY_TO_RC[key][1], self.root_index)
                  for key, *_ in self._tape]
+        keys = [(KID_MATH_REMAP.get(key, key), KEY_COLORS.get(key.lower(), P.MUTED)) for key, *_ in self._tape]
         rests = [i > 0 and self._tape[i][3] - self._tape[i - 1][3] >= TAPE_GAP_S for i in range(len(self._tape))]
-        return names, rests, "mono-heavy-italic", "♪", None, f"{TAPE_HINT}   {self._hint_text()}".rstrip()
+        return names, keys, rests, "mono-heavy-italic", "♪", None
 
     def _tape_ink(self) -> str:
         """The letters tape dims in steps as the rest grows; the music tape stays until the next phrase."""
@@ -774,20 +795,21 @@ class MusicRoom(Room):
         age = time.monotonic() - self._typed_at[-1]
         return mix(P.TEXT, P.SURFACE, sum(0.35 for s in TAPE_FADE_S if age >= s))
 
-    def _draw_tape(self, g, x, right, cy):
-        """What was just played or typed, left to right along the hint row, a rest as a gap; the word the letters
-        end with is underlined. Too long for the row, it shows its end, or follows the note playing back, with
-        … where it goes on. Laid out on the face's cell width, and with the timer and hints pinned while it
-        overflows, so nothing after it moves with which notes it holds."""
-        texts, rests, face, lead, word_at, hint = self._tape_parts()
+    def _draw_tape(self, g, row: pygame.Rect, size: float):
+        """What was just played or typed, left to right under the grid, a rest as a gap; the word the letters end
+        with is underlined. Too long for the row, it shows its end, or follows the note playing back, with …
+        where it goes on. Laid out on the face's cell width, and the timer pinned while it overflows, so nothing
+        moves with which notes it holds."""
+        texts, keys, rests, face, lead, word_at = self._tape_parts()
         if not texts:
             return
-        px = g.em(1.0)
+        px = max(12, int(size * 0.2))
+        key_px = round(px * 0.7)
         cell = g.measure("M", px, face, tr=False)[0]
-        step, rest_w, clock_r = px // 4, px, round(px * 0.32)
-        hint_w = key_hint_width(g, hint, g.em(0.92)) if hint else 0
+        step, rest_w, clock_r = px // 3, px, round(px * 0.32)
+        x, cy = row.x, row.centery + (key_px // 2 if keys else 0)
         lead_w = cell + px // 2 if lead else 0
-        room = right - x - lead_w - (2 * clock_r + px) - (px + hint_w if hint else 0)
+        room = row.right - x - lead_w - (2 * clock_r + px)
         spans = [cell * len(t) + step + (rest_w if r else 0) for t, r in zip(texts, rests)]
         first, last = self._tape_window(spans, room, cell + step)
         clipped = first > 0 or last < len(texts) - 1
@@ -802,22 +824,23 @@ class MusicRoom(Room):
         under = None
         for i in range(first, last + 1):
             x += rest_w if rests[i] and i > first else 0
+            w = cell * len(texts[i])
             lead_in = word_at is not None and i < word_at   # letters before the word step back
             color = P.ACCENT if i == self._tape_at else mix(ink, P.SURFACE, 0.5) if lead_in else ink
             g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False)
+            if keys:
+                g.draw_text(keys[i][0], key_px, x + w // 2, cy - round(px * 0.85), "mono-bold", keys[i][1], anchor="center", tr=False)
             if word_at is not None and i >= word_at:
-                slot = pygame.Rect(x, cy, cell * len(texts[i]), px // 2)
+                slot = pygame.Rect(x, cy, w, round(px * 0.6))
                 under = slot if under is None else under.union(slot)
-            x += cell * len(texts[i]) + step
+            x += w + step
         if last < len(texts) - 1:
             g.draw_text("…", px, x, cy, face, P.MUTED, anchor="midleft", tr=False)
             x += cell + step
         if under is not None:
-            line = pygame.Rect(under.x, under.bottom + max(2, px // 8), under.w, max(2, px // 8))
+            line = pygame.Rect(under.x, under.bottom + max(2, px // 10), under.w, max(2, px // 8))
             g.rect(P.ACCENT, line, radius=line.h // 2)
-        x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
-        if hint:
-            draw_key_hint(g, hint, g.em(0.92), x + px, cy)
+        self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
 
     def _tape_window(self, spans: list, room: int, ellipsis: int) -> tuple:
         """(first, last) of the tape that fit in `room`: its end, or from the note playing back once that has
@@ -894,8 +917,8 @@ class MusicRoom(Room):
         return s
 
     def _draw_grid(self, g, r, on_paper=False):
-        """Ten by four gapless blocks, as wide as fit with room for the key tab either side: a quiet key is
-        just its letter, a sounding key fills its whole block with color."""
+        """Ten by four gapless blocks, as wide as fit with a margin either side, the tape's row under them: a quiet
+        key is its letter over its note's name, faint until it sounds; a sounding key fills its block with color."""
         rows_h = r.h / (4 + NOTE_STRIP)
         tab_w = self._key_tab_width(g, rows_h)
         w = (r.w - 2 * tab_w) / 10
@@ -918,17 +941,15 @@ class MusicRoom(Room):
                 fg = (paper.INK_MUTED if on_paper else P.MUTED) if quiet else text_color_for(bg)
                 g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
-                if key in self._note_labels and not on_paper:
-                    sound = note_label(note) if melodic else ICON_DRUM
-                    g.draw_text(sound, max(10, int(size * 0.15)), tile.centerx, tile.bottom - int(size * 0.17),
-                                "mono-bold-italic", mix(fg, bg, 0.3), anchor="center", tr=False)
-        bar = pygame.Rect(xs[0], 0, xs[10] - xs[0], self._bar_h(size))
-        bar.centery = round(ys[4] + size * NOTE_STRIP / 2 + size * 0.08)
-        px = self._strip_px(size)
-        if not self.letters_mode:
-            self._draw_note_strip(g, xs, ys[4], bar, px, on_paper)
-        elif self.word and not on_paper:
-            self._draw_word_strip(g, bar, px)
+                sounding = key in self._note_labels
+                if (melodic or sounding) and not on_paper:
+                    sweeping = melodic and self._transition_state_for_col(col_idx)[1]
+                    ink = P.ACCENT if sweeping else mix(fg, bg, 0.3 if sounding else NOTE_FAINT)
+                    g.draw_text(note_label(note) if melodic else ICON_DRUM, max(10, int(size * 0.15)), tile.centerx,
+                                tile.bottom - int(size * 0.17), "mono-bold-italic", ink, anchor="center", tr=False)
+        if not on_paper:
+            gap = round(size * 0.06)
+            self._draw_tape(g, pygame.Rect(xs[0], ys[4] + gap, xs[10] - xs[0], round(size * NOTE_STRIP) - gap), size)
 
     @staticmethod
     def _strip_px(size) -> int:
@@ -943,48 +964,6 @@ class MusicRoom(Room):
         px = self._strip_px(size)
         labels = [(name, px) for name in FRIENDLY_KEY_NAMES] + [("Key", round(px * KEY_WORD))]
         return max(g.measure(text, text_px, "mono-heavy-italic", tr=False)[0] for text, text_px in labels) + self._bar_h(size)
-
-    def _draw_word_strip(self, g, bar, px):
-        """The word the letters spell, with its picture if it has one, and Space to hear it unless Space is the loop's."""
-        picture = get_content().exact_emoji(self.word)
-        hint = WORD_HINT if self.loop.state == IDLE else ""
-        text, word_px, gap = f"{self.word} {picture}" if picture else self.word, round(px * 1.4), px * 2 if hint else 0
-        text_w = g.measure(text, word_px, "mono-heavy", tr=False)[0]
-        x = bar.centerx - (text_w + gap + key_hint_width(g, hint, px)) // 2
-        g.draw_text(text, word_px, x, bar.centery, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
-        if hint:
-            draw_key_hint(g, hint, px, x + text_w + gap, bar.centery)
-
-    def _draw_note_strip(self, g, xs, grid_bottom, bar, px, on_paper):
-        """Every letter row plays the same note in a column, so each column is named once, on a plain ledge
-        as wide as the grid; ♪ marks the names as notes, not keys. A sounding note's color bridges its column to
-        its name, which goes bold so the eye stays on the keys; the key-change sweep gets the selection plate."""
-        size = xs[1] - xs[0]
-        ink = paper.INK_MUTED if on_paper else P.MUTED
-        ground = mix(paper.WHITE, ink, 0.15) if on_paper else P.TILE
-        g.rect(ground, bar)
-        plate = pygame.Rect(0, 0, round(size * 0.8), bar.h - 2 * max(2, bar.h // 8))
-        for col in range(10):
-            root_idx, sweeping = self._transition_state_for_col(col)
-            note = note_label(note_name(col, root_idx))
-            sweeping = sweeping and not on_paper
-            sounding = None if on_paper else next((row[col] for row in reversed(GRID_KEYS[1:])
-                                                   if row[col] in self._note_labels), None)
-            played = sounding is not None
-            if played:
-                hue = self.get_color(sounding)
-                g.rect(mix(P.SURFACE, hue, 0.26), self._column(xs, col, grid_bottom, bar.y))
-                g.rect(mix(ground, hue, 0.14), self._column(xs, col, bar.y, bar.bottom))
-            plate.center = ((xs[col] + xs[col + 1]) // 2, bar.centery)
-            if sweeping:
-                g.rect(P.PRIMARY, plate, radius=plate.h // 2)
-            color = P.ON_PRIMARY if sweeping else P.TEXT if played else ink
-            g.draw_text(note, px, plate.centerx, plate.centery, "mono-heavy-italic" if played else "mono-bold-italic",
-                        color, anchor="center", tr=False)
-
-    @staticmethod
-    def _column(xs, col, top, bottom) -> pygame.Rect:
-        return pygame.Rect(xs[col], top, xs[col + 1] - xs[col], bottom - top)
 
     def _draw_noscreen(self, g, rect):
         cy = rect.centery

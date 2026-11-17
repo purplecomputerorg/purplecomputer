@@ -858,8 +858,8 @@ class MusicRoom(Room):
             played = sounding is not None
             if played:
                 hue = self.get_color(sounding)
-                self._draw_bridge(g, mix(P.SURFACE, hue, 0.43), xs, col, grid_bottom, bar)
-                self._tint_column(g, mix(ground, hue, 0.24), xs, col, bar)
+                self._draw_bridge(g, mix(P.SURFACE, hue, 0.26), xs, col, grid_bottom, bar)
+                self._tint_column(g, mix(ground, hue, 0.14), xs, col, bar)
             plate.center = ((xs[col] + xs[col + 1]) // 2, bar.centery)
             if sweeping:
                 g.rect(P.PRIMARY, plate, radius=plate.h // 2)

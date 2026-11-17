@@ -2,7 +2,7 @@
 
 import pytest
 
-from purplecomputer.loop_station import IDLE, LOOPING, MAX_LOOP_DURATION, LoopStation
+from purplecomputer.loop_station import IDLE, LOOPING, LoopStation
 from purplecomputer.rooms.music_room import MODE_LETTERS, MODE_MUSIC
 
 
@@ -57,12 +57,10 @@ def test_progress_runs_through_each_cycle():
     assert loop.loop_progress(now=7.0) == pytest.approx(0.5)
 
 
-def test_loop_events_is_a_copy_and_max_duration_has_a_default():
+def test_loop_events_is_a_copy():
     loop = _looping()
     loop.loop_events.clear()
     assert len(loop.loop_events) == 1
-    assert LoopStation().max_duration == MAX_LOOP_DURATION
-    assert LoopStation(max_duration=15.0).max_duration == 15.0
 
 
 def test_opening_code_while_looping_stops_the_loop():

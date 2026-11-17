@@ -390,15 +390,16 @@ def test_a_word_typed_since_the_last_rest_wins_but_a_slow_speller_still_gets_the
 
 def test_the_rest_clock_empties_a_step_a_second_until_the_letters_clear():
     import time
-    from purplecomputer.rooms.music_room import TAPE_TICK_S, WORD_REST_S
+    from purplecomputer.rooms.music_room import LETTER_REST_STEPS, WORD_REST_S
+    tick = WORD_REST_S / LETTER_REST_STEPS
 
     async def go():
         room = make_app(room="music").room
         room.letters_mode = True
         room._spell("A", time.monotonic())
         assert room._rest_left() == 1.0
-        room._typed_at[-1] = time.monotonic() - 2.5 * TAPE_TICK_S
-        assert room._rest_left() == 1 - 2 * TAPE_TICK_S / WORD_REST_S
+        room._typed_at[-1] = time.monotonic() - 2.5 * tick
+        assert room._rest_left() == 1 - 2 / LETTER_REST_STEPS
         room._typed_at[-1] = time.monotonic() - WORD_REST_S
         assert room._rest_left() == 0
     run(go())
@@ -425,4 +426,34 @@ def test_the_hints_after_the_tape_hold_still_whatever_it_holds(monkeypatch):
         notes = [hints([(k, "music", 0, i * 0.1) for i, k in enumerate(keys)]) for keys in ("QQQ", "RYR", "PPP")]
         assert notes[0] and notes[0] == notes[1] == notes[2]
         assert hints(letters="iii") and hints(letters="iii") == hints(letters="www") == hints(letters="mmm")
+    run(go())
+
+
+def test_a_long_tape_shows_its_end_and_playback_scrolls_to_the_note_playing():
+    async def go():
+        room = make_app(room="music").room
+        spans = [10] * 20
+        assert room._tape_window(spans, 100, 10) == (11, 19), "its end, with … before it"
+        room._tape_at = 3
+        assert room._tape_window(spans, 100, 10) == (3, 10), "from the note playing, with … on both sides"
+        room._tape_at = 15
+        assert room._tape_window(spans, 100, 10) == (11, 19)
+        assert room._tape_window([10] * 5, 100, 10) == (0, 4), "a tape that fits shows whole"
+    run(go())
+
+
+def test_a_phrase_rest_runs_down_and_then_marks_the_phrase_finished():
+    import time
+    from purplecomputer.rooms.music_room import ECHO_PAUSE_S, PHRASE_REST_STEPS
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        room._tape_add("Q", time.monotonic())
+        assert room._rest_left() == 1.0
+        room._tape[-1] = room._tape[-1][:3] + (time.monotonic() - ECHO_PAUSE_S * 1.5 / PHRASE_REST_STEPS,)
+        assert room._rest_left() == 1 - 1 / PHRASE_REST_STEPS
+        room._tape[-1] = room._tape[-1][:3] + (time.monotonic() - ECHO_PAUSE_S,)
+        assert room._rest_left() == 0 and room._tape, "finished, but kept to play, loop and save"
+        app._draw()
     run(go())

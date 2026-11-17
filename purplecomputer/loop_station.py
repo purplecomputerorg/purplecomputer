@@ -7,8 +7,6 @@ sound on the next cycle. stop() goes back to IDLE.
 
 import time
 
-MAX_LOOP_DURATION = 20.0  # seconds; a longer phrase loops its last stretch
-
 IDLE = 'idle'
 LOOPING = 'looping'
 
@@ -18,9 +16,8 @@ class LoopStation:
     start of a cycle, instrument the index the note was played with, so a
     layered loop keeps each note's sound."""
 
-    def __init__(self, time_fn=None, max_duration: float = MAX_LOOP_DURATION):
+    def __init__(self, time_fn=None):
         self._time_fn = time_fn or time.monotonic
-        self._max_duration = max_duration
         self._state = IDLE
         self._loop_events: list[tuple[str, str, float, int]] = []
         self._loop_duration: float = 0.0
@@ -38,10 +35,6 @@ class LoopStation:
     def loop_events(self) -> list[tuple[str, str, float, int]]:
         """Current loop events (may grow as new notes are added during looping)."""
         return list(self._loop_events)
-
-    @property
-    def max_duration(self) -> float:
-        return self._max_duration
 
     def play(self, events: list[tuple[str, str, float, int]], duration: float,
              now: float | None = None) -> None:

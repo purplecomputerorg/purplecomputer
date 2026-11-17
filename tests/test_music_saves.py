@@ -96,13 +96,14 @@ def test_hold_enter_loops_the_tape_and_notes_played_along_join_it(monkeypatch):
     run(go())
 
 
-def test_a_long_tape_loops_its_last_stretch():
+def test_a_long_tape_loops_whole_just_as_space_plays_it():
     async def go():
         room = make_app(room="music").room
         for i in range(30):
             room._tape_add("A", i * 1.0)
         room._loop_tune()
-        assert room.loop.loop_duration <= room.loop.max_duration + music_room.TUNE_GAP_MAX_S
+        assert len(room.loop.loop_events) == 30
+        assert room.loop.loop_duration == pytest.approx(29 + 1.0), "the whole tape, then its usual gap"
         room._stop_loop()
     run(go())
 

@@ -46,7 +46,8 @@ ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed not
 TAPE_GAP_S = 0.8              # a rest this long shows as a gap on the music tape
 TAPE_MAX = 40                 # notes kept on the music tape
 TAPE_FADE_S = (3.0, 6.0)      # the letters tape dims at each; it clears at WORD_REST_S
-TAPE_TICK_S = 1.0             # the letters tape's timer empties a step this often
+LETTER_REST_STEPS = 10        # the letters tape's timer empties in this many steps over WORD_REST_S
+PHRASE_REST_STEPS = 4         # the music tape's, over ECHO_PAUSE_S
 TAPE_HINT = "{Space} play it"
 TUNE_GAP_MAX_S = 1.5          # a longer rest in a tune plays back this long, so a pause to think isn't silence
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
@@ -110,7 +111,7 @@ class MusicRoom(Room):
         self._tape: list = []     # (key, mode, instrument, when) of the phrase just played in Notes
         self._tape_task = None
         self._tape_at = None      # the tape note playing back now
-        self._fade_timers: list = []
+        self._rest_timers: list = []
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HeldKey(app, self._enter_hold_fired)
         self.code_panel = None
@@ -192,7 +193,7 @@ class MusicRoom(Room):
         if self.letters_mode and letters:
             self._spelled, self._typed_at = "".join(k.lower() for k, _ in letters), [t for _, t in letters]
             self.word = self._word_at_end()
-            self._schedule_fade()
+            self._schedule_rest(self._fade_out)
         self._tape = [n for n in tune if n[1] == MODE_MUSIC]
 
     def on_open_save(self):
@@ -358,8 +359,6 @@ class MusicRoom(Room):
         if not tune:
             return
         offsets = self._tune_offsets(tune)
-        while offsets[-1] - offsets[0] > self.loop.max_duration:
-            tune, offsets = tune[1:], offsets[1:]
         gaps = [b - a for a, b in zip(offsets, offsets[1:])]
         tail = min(max(sum(gaps) / len(gaps), 0.25), TUNE_GAP_MAX_S) if gaps else 0.6
         self._stop_tape()
@@ -487,6 +486,7 @@ class MusicRoom(Room):
         if self._tape and now - self._tape[-1][3] >= ECHO_PAUSE_S:
             self._tape = []
         self._tape = (self._tape + [(key, MODE_MUSIC, self.instrument_index, now)])[-TAPE_MAX:]
+        self._schedule_rest(self.app.invalidate)
 
     def _tune(self) -> list:
         """What the tape holds, as (key, mode, instrument, when): the phrase in Notes, the letters in Letters."""
@@ -578,21 +578,27 @@ class MusicRoom(Room):
             self._spelled = (self._spelled + key.lower())[-SPELL_MAX:]
             self._typed_at = (self._typed_at + [now])[-SPELL_MAX:]
             self.word = self._word_at_end()
-            self._schedule_fade()
+            self._schedule_rest(self._fade_out)
 
-    def _schedule_fade(self):
-        """The letters tape's timer empties a step at a time and the letters dim as the rest grows; it clears
-        when the rest starts a new word."""
-        for timer in self._fade_timers:
+    def _rest(self) -> tuple:
+        """(how long the rest runs, timer steps, when it began) for the tape now: Letters clear after theirs, a
+        Music phrase is finished after its own."""
+        if self.letters_mode:
+            return WORD_REST_S, LETTER_REST_STEPS, self._typed_at[-1] if self._typed_at else None
+        return ECHO_PAUSE_S, PHRASE_REST_STEPS, self._tape[-1][3] if self._tape else None
+
+    def _schedule_rest(self, end):
+        """The tape's timer empties a step at a time while the rest runs, then `end`."""
+        for timer in self._rest_timers:
             timer.stop()
-        steps = round(WORD_REST_S / TAPE_TICK_S)
-        self._fade_timers = [self.app.timers.after(i * TAPE_TICK_S, self.app.invalidate) for i in range(1, steps)]
-        self._fade_timers.append(self.app.timers.after(WORD_REST_S, self._fade_out))
+        rest, steps, _ = self._rest()
+        self._rest_timers = [self.app.timers.after(rest * i / steps, self.app.invalidate) for i in range(1, steps)]
+        self._rest_timers.append(self.app.timers.after(rest, end))
 
     def _rest_left(self) -> float:
-        """How much of the rest before the letters clear is left, in whole timer steps."""
-        steps = round(WORD_REST_S / TAPE_TICK_S)
-        passed = int((time.monotonic() - self._typed_at[-1]) / TAPE_TICK_S) if self._typed_at else steps
+        """How much of the rest is left, in whole timer steps."""
+        rest, steps, began = self._rest()
+        passed = steps if began is None else int((time.monotonic() - began) * steps / rest)
         return max(0, steps - passed) / steps
 
     def _fade_out(self):
@@ -769,48 +775,76 @@ class MusicRoom(Room):
         return mix(P.TEXT, P.SURFACE, sum(0.35 for s in TAPE_FADE_S if age >= s))
 
     def _draw_tape(self, g, x, right, cy):
-        """What was just played or typed, left to right along the hint row, a rest as a gap and the oldest
-        dropping off the left; the word the letters end with is underlined. Laid out on the face's cell width,
-        so what follows only moves when the tape gains or loses a character, never with which ones it holds."""
+        """What was just played or typed, left to right along the hint row, a rest as a gap; the word the letters
+        end with is underlined. Too long for the row, it shows its end, or follows the note playing back, with
+        … where it goes on. Laid out on the face's cell width, and with the timer and hints pinned while it
+        overflows, so nothing after it moves with which notes it holds."""
         texts, rests, face, lead, word_at, hint = self._tape_parts()
         if not texts:
             return
         px = g.em(1.0)
         cell = g.measure("M", px, face, tr=False)[0]
-        step, rest_w = px // 4, px
-        widths = [cell * len(t) for t in texts]
-        clock_r = round(px * 0.32) if self.letters_mode else 0
-        fixed = (cell + px // 2 if lead else 0) + (px + key_hint_width(g, hint, g.em(0.92)) if hint else 0)
-        fixed += 2 * clock_r + px // 2 if clock_r else 0
-        first = 0
-        while first < len(texts) - 1 and fixed + sum(w + step + rest_w * r for w, r in zip(widths[first:], rests[first:])) > right - x:
-            first += 1
+        step, rest_w, clock_r = px // 4, px, round(px * 0.32)
+        hint_w = key_hint_width(g, hint, g.em(0.92)) if hint else 0
+        lead_w = cell + px // 2 if lead else 0
+        room = right - x - lead_w - (2 * clock_r + px) - (px + hint_w if hint else 0)
+        spans = [cell * len(t) + step + (rest_w if r else 0) for t, r in zip(texts, rests)]
+        first, last = self._tape_window(spans, room, cell + step)
+        clipped = first > 0 or last < len(texts) - 1
+        end = x + lead_w + room
         ink = self._tape_ink()
         if lead:
             g.draw_text(lead, px, x, cy, face, P.MUTED, anchor="midleft", tr=False)
-            x += cell + px // 2
+            x += lead_w
+        if first > 0:
+            g.draw_text("…", px, x, cy, face, P.MUTED, anchor="midleft", tr=False)
+            x += cell + step
         under = None
-        for i in range(first, len(texts)):
+        for i in range(first, last + 1):
             x += rest_w if rests[i] and i > first else 0
             lead_in = word_at is not None and i < word_at   # letters before the word step back
             color = P.ACCENT if i == self._tape_at else mix(ink, P.SURFACE, 0.5) if lead_in else ink
             g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False)
             if word_at is not None and i >= word_at:
-                slot = pygame.Rect(x, cy, widths[i], px // 2)
+                slot = pygame.Rect(x, cy, cell * len(texts[i]), px // 2)
                 under = slot if under is None else under.union(slot)
-            x += widths[i] + step
+            x += cell * len(texts[i]) + step
+        if last < len(texts) - 1:
+            g.draw_text("…", px, x, cy, face, P.MUTED, anchor="midleft", tr=False)
+            x += cell + step
         if under is not None:
             line = pygame.Rect(under.x, under.bottom + max(2, px // 8), under.w, max(2, px // 8))
             g.rect(P.ACCENT, line, radius=line.h // 2)
-        if clock_r:
-            x = self._draw_rest_clock(g, x + px // 4 + clock_r, cy, clock_r) + px // 4
+        x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
         if hint:
             draw_key_hint(g, hint, g.em(0.92), x + px, cy)
 
-    def _draw_rest_clock(self, g, cx, cy, r) -> int:
-        """A small pie that empties as the rest runs out; the letters clear when it's gone. Returns its right edge."""
-        pygame.draw.circle(g.surface, rgb(P.LINE), (cx, cy), r, width=max(1, r // 6))
+    def _tape_window(self, spans: list, room: int, ellipsis: int) -> tuple:
+        """(first, last) of the tape that fit in `room`: its end, or from the note playing back once that has
+        scrolled off; each cut side gives up an ellipsis' worth."""
+        n = len(spans)
+
+        def fits(a, b):
+            return sum(spans[a:b + 1]) + ellipsis * ((a > 0) + (b < n - 1)) <= room
+        first, last = 0, n - 1
+        while first < last and not fits(first, last):
+            first += 1
+        if self._tape_at is not None and self._tape_at < first:
+            first = last = self._tape_at
+            while last + 1 < n and fits(first, last + 1):
+                last += 1
+        return first, last
+
+    def _draw_rest_mark(self, g, cx, cy, r) -> int:
+        """While a rest runs, a small pie that empties; once a Music phrase's rest is over, the double bar sheet
+        music ends a piece with, since the next note starts a new tape. Returns its right edge."""
         left = self._rest_left()
+        if left == 0 and not self.letters_mode:
+            h, thin = round(r * 2.2), max(1, r // 5)
+            g.rect(P.MUTED, pygame.Rect(cx - r, cy - h // 2, thin, h))
+            g.rect(P.MUTED, pygame.Rect(cx - r + 3 * thin, cy - h // 2, 3 * thin, h))
+            return cx + r
+        pygame.draw.circle(g.surface, rgb(P.LINE), (cx, cy), r, width=max(1, r // 6))
         if left > 0:
             arc = [(cx + r * math.sin(2 * math.pi * left * k / 24), cy - r * math.cos(2 * math.pi * left * k / 24))
                    for k in range(25)]

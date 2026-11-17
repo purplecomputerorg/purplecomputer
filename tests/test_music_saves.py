@@ -10,7 +10,6 @@ from purplecomputer.harness import make_app, press, run, type_text
 from purplecomputer.loop_station import IDLE, LOOPING
 from purplecomputer.panels import LoopPanel
 from purplecomputer.rooms import music_room
-from purplecomputer.rooms.music_room import MusicRoom
 
 
 @pytest.fixture(autouse=True)
@@ -139,10 +138,6 @@ def test_space_while_looping_starts_the_sound_over_with_the_bar():
     run(go())
 
 
-def test_an_instrument_from_a_removed_pack_plays_as_the_first():
-    assert MusicRoom._instrument_index("no-such-pack-instrument") == 0
-
-
 def test_a_loop_going_around_leaves_the_picture_alone(monkeypatch):
     monkeypatch.setattr(music_room, "TUNE_GAP_MAX_S", 0.01)
 
@@ -230,4 +225,19 @@ def test_restoring_a_song_records_it_as_it_was():
         state = app.room_state("music")
         app.apply_room_state("music", state)
         assert app.room_state("music") == state
+    run(go())
+
+
+def test_the_song_plays_back_on_the_instrument_set_now(monkeypatch):
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "qw")
+        room.instrument_index = 1
+        heard = []
+        monkeypatch.setattr(room, "play_sound_with_instrument",
+                            lambda key, instrument, volume_scale=1.0: heard.append(instrument))
+        room._play_tape()
+        await room._tape_task
+        assert heard == [1, 1]
     run(go())

@@ -12,14 +12,13 @@ LOOPING = 'looping'
 
 
 class LoopStation:
-    """Events are (key, mode, offset, instrument): offset is seconds from the
-    start of a cycle, instrument the index the note was played with, so a
-    layered loop keeps each note's sound."""
+    """Events are (key, mode, offset): offset is seconds from the start of a
+    cycle. They all play on the room's current instrument."""
 
     def __init__(self, time_fn=None):
         self._time_fn = time_fn or time.monotonic
         self._state = IDLE
-        self._loop_events: list[tuple[str, str, float, int]] = []
+        self._loop_events: list[tuple[str, str, float]] = []
         self._loop_duration: float = 0.0
         self._cycle_start: float = 0.0
 
@@ -32,11 +31,11 @@ class LoopStation:
         return self._loop_duration
 
     @property
-    def loop_events(self) -> list[tuple[str, str, float, int]]:
+    def loop_events(self) -> list[tuple[str, str, float]]:
         """Current loop events (may grow as new notes are added during looping)."""
         return list(self._loop_events)
 
-    def play(self, events: list[tuple[str, str, float, int]], duration: float,
+    def play(self, events: list[tuple[str, str, float]], duration: float,
              now: float | None = None) -> None:
         """Loop these events right away."""
         self._loop_events = sorted(events, key=lambda e: e[2])
@@ -44,13 +43,12 @@ class LoopStation:
         self._state = LOOPING
         self._cycle_start = now if now is not None else self._time_fn()
 
-    def record_event(self, key: str, mode: str, now: float | None = None,
-                     instrument: int = 0) -> None:
+    def record_event(self, key: str, mode: str, now: float | None = None) -> None:
         """While looping, a note joins the loop where it falls in the cycle and plays from the next one."""
         if self._state != LOOPING or self._loop_duration <= 0:
             return
         now = now if now is not None else self._time_fn()
-        self._loop_events.append((key, mode, (now - self._cycle_start) % self._loop_duration, instrument))
+        self._loop_events.append((key, mode, (now - self._cycle_start) % self._loop_duration))
         self._loop_events.sort(key=lambda e: e[2])
 
     def start_new_cycle(self, now: float | None = None) -> None:

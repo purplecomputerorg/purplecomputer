@@ -27,20 +27,20 @@ Row 2:  A   S   D   F   G   H   J   K   L   ;
 Row 3:  Z   X   C   V   B   N   M   ,   .   /
 ```
 
-Each cell displays its key character and can be colored. A note key also shows its note name (`♪ C`), faint (`NOTE_FAINT`) until it sounds; every row of a column plays the same note. Printed pages leave the names off.
+Each cell displays its key character and can be colored. A note key also shows its note name (`♪ C`), faint (`NOTE_FAINT`) until it sounds; every row of a column plays the same note. Letters and printed pages leave the names off.
 
 ## Other Controls
 
 - **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds) in `packs/core-sounds/content/letter-sounds/`). Hold Enter to loop the tape (below).
 - **Tab**: switch between Notes and Letters, which says each pressed letter aloud.
-- **Left/Right**: shift the musical key (B♭ / F / C / G / D).
+- **Left/Right**: shift the musical key (B♭ / F / C / G / D); not in Letters, which has no key to show.
 - **Space**: in Notes, plays the tape back; in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop plays, starts it over.
 
 ## The Tape
 
-The row under the grid shows what was just played; the hint row below it says what Space and hold Enter do with it, the same in both modes. In Letters the found word and its picture sit on the tape's row, centered in the space after the letters. It is the one thing a kid hears again: Space plays it, hold Enter loops it, and a save keeps it.
+The row under the grid shows what was just played; the hint row below it says what Space and hold Enter do with it, the same in both modes. In Letters the found word, its picture and "Space say it" follow the letters, the row centered as a whole. It is the one thing a kid hears again: Space plays it, hold Enter loops it, and a save keeps it. It plays on whichever instrument is set now, so Enter tries the whole song on another; only code mixes instruments (`choose`). While the code panel is open the tape is hidden: the code is its own composition.
 
-- **Notes**: the note names of the phrase (`♪ CDEFG  CCC`), each under the key that played it, in that key's color. A rest of `TAPE_GAP_S` shows as a gap; a rest of `ECHO_PAUSE_S` ends the phrase: a small clock empties over it, then turns into a double bar (‖), and the next note starts another phrase in the same song. Space plays it back with its rhythm (rests capped at `TUNE_GAP_MAX_S`), sound and lit note names only, so the colors and the loop are untouched. Any other key stops it.
+- **Notes**: the note names of the phrase (`♪ CDEFG  CCC`), each under the key that played it, in that key's color. A rest of `TAPE_GAP_S` shows as a gap; a rest of `ECHO_PAUSE_S` ends the phrase with a double bar (‖), and the next note starts another phrase in the same song. Space plays it back with its rhythm (rests capped at `TUNE_GAP_MAX_S`), sound and lit note names only, so the colors and the loop are untouched. Any other key stops it.
 - **Letters**: every letter typed, the word they end with underlined and the letters before it dimmer. A word typed since the last rest wins over a longer one across it, so the gap means a new word; a slow speller's word still spans rests when nothing after the last one is a word. A small clock empties a step a second, and the letters clear with the word at `WORD_REST_S`.
 - **Too long for the row**: the tape shows its end with `…` before it; during playback the row follows the note playing, so all of it is seen. Space, the loop and the save always use the whole tape (up to `TAPE_MAX` notes), the hints stay put while it overflows.
 - **Erase**: Backspace takes the last note (in Letters, the last letter); held past `ERASE_MORE_S` it takes whole phrases (words), so holding it clears the song, as Backspace does in Write and Art.

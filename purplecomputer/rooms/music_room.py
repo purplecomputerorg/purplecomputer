@@ -27,7 +27,7 @@ from .. import paper
 from ..gfx import is_one_emoji, mix, rgb
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel
 from ..sounds import SoundBank
-from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
+from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, key_hint_width, draw_label,
                   draw_mode_switch, draw_status_row, HeldKey, hold_status, status_row_h)
 from .base import Room
 
@@ -50,7 +50,6 @@ ERASE_MORE_S = 1.0            # seconds of holding Backspace before it takes who
 ERASE_HINT = "{Backspace} erase"
 TAPE_FADE_S = (3.0, 6.0)      # the letters tape dims at each; it clears at WORD_REST_S
 LETTER_REST_STEPS = 10        # the letters tape's timer empties in this many steps over WORD_REST_S
-PHRASE_REST_STEPS = 4         # the music tape's, over ECHO_PAUSE_S
 TAPE_HINT = "{Space} play it"
 TUNE_GAP_MAX_S = 1.5          # a longer rest in a tune plays back this long, so a pause to think isn't silence
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
@@ -111,7 +110,7 @@ class MusicRoom(Room):
         self._spelled = ""
         self._typed_at: list = []  # when each letter of _spelled was typed
         self.word = None          # the real word the letters just typed end with
-        self._tape: list = []     # (key, mode, instrument, when) of the song played in Notes
+        self._tape: list = []     # (key, mode, when) of the song played in Notes, on whichever instrument is set
         self._tape_origin = 0.0   # when the song began, and how many notes have dropped off its front,
         self._tape_base = 0       # so each note keeps its timeline key while the song grows
         self._erasing_since = None
@@ -164,15 +163,14 @@ class MusicRoom(Room):
 
     def _tape_state(self) -> dict:
         """The song a note per key, numbered from its start, so a Time Travel step adds only the notes new in it."""
-        return {f"t:{self._tape_base + i}": [k, self._instrument(inst)[0], round((t - self._tape_origin) * 1000)]
-                for i, (k, _, inst, t) in enumerate(self._tape)}
+        return {f"t:{self._tape_base + i}": [k, round((t - self._tape_origin) * 1000)] for i, (k, _, t) in enumerate(self._tape)}
 
     def _restore_tape(self, state: dict) -> list:
         """The song in a state, as a tune to load, numbered on from where it was."""
         notes = sorted((int(k[2:]), v) for k, v in state.items()
-                       if k.startswith("t:") and k[2:].isdigit() and isinstance(v, list) and len(v) == 3)
+                       if k.startswith("t:") and k[2:].isdigit() and isinstance(v, list) and len(v) == 2)
         self._tape_base = notes[0][0] if notes else 0
-        return [[k, MODE_MUSIC, inst, ms] for _, (k, inst, ms) in notes]
+        return [[k, MODE_MUSIC, ms] for _, (k, ms) in notes]
 
     def restore_timeline_state(self, state: dict):
         self._stop_loop()
@@ -201,23 +199,24 @@ class MusicRoom(Room):
     def save_extras(self) -> dict:
         """In Letters, the letters on the tape, which the save says when it opens (the song is in the state)."""
         tune = self._tune() if self.letters_mode else []
-        return {"tune": [[k, m, self._instrument(i)[0], round((t - tune[0][3]) * 1000)] for k, m, i, t in tune]} if tune else {}
+        return {"tune": [[k, m, round((t - tune[0][2]) * 1000)] for k, m, t in tune]} if tune else {}
 
     def _load_tune(self, notes: list):
-        """A tune onto the tape, ending a phrase's rest ago so the next note starts a new phrase."""
-        notes = [n for n in notes if isinstance(n, list) and len(n) == 4][-TAPE_MAX:]
+        """A tune of [key, mode, ms] onto the tape, ending a phrase's rest ago so the next note starts a new
+        phrase. Older saves' notes also name an instrument, before the ms; the room's own plays them."""
+        notes = [n for n in notes if isinstance(n, list) and len(n) in (3, 4)][-TAPE_MAX:]
         if not notes:
             return
         end = time.monotonic() - ECHO_PAUSE_S
-        tune = [(k, m, self._instrument_index(i), end + (ms - notes[-1][3]) / 1000) for k, m, i, ms in notes]
-        letters = [(k, t) for k, m, _, t in tune if m == MODE_LETTERS and k.isalpha()][-SPELL_MAX:]
+        tune = [(n[0], n[1], end + (n[-1] - notes[-1][-1]) / 1000) for n in notes]
+        letters = [(k, t) for k, m, t in tune if m == MODE_LETTERS and k.isalpha()][-SPELL_MAX:]
         if self.letters_mode and letters:
             self._spelled, self._typed_at = "".join(k.lower() for k, _ in letters), [t for _, t in letters]
             self.word = self._word_at_end()
             self._schedule_rest(self._fade_out)
         if any(n[1] == MODE_MUSIC for n in tune):
             self._tape = [n for n in tune if n[1] == MODE_MUSIC]
-            self._tape_origin = end - notes[-1][3] / 1000
+            self._tape_origin = end - notes[-1][-1] / 1000
 
     def on_open_save(self):
         """The saved picture as it was, and its tune played once."""
@@ -289,12 +288,6 @@ class MusicRoom(Room):
         inst_id, name = cls._instrument(index)
         return f"{instrument_icon(inst_id)} {name}"
 
-    @staticmethod
-    def _instrument_index(instrument_id: str) -> int:
-        """A saved instrument whose pack was removed plays as the first one."""
-        ids = [i for i, _ in instruments()]
-        return ids.index(instrument_id) if instrument_id in ids else 0
-
     def cleanup_sounds(self):
         try:
             if pygame.mixer.get_init():
@@ -308,12 +301,11 @@ class MusicRoom(Room):
         self._note_timers.clear()
         self._note_labels.clear()
 
-    def _play_key(self, key: str, mode: str, instrument: int | None = None):
-        instrument = self.instrument_index if instrument is None else instrument
+    def _play_key(self, key: str, mode: str):
         if mode == MODE_LETTERS and key in self.sounds.letters():
             self.play_letter(key)
         else:
-            self.play_sound_with_instrument(key, instrument)
+            self.play_sound_with_instrument(key, self.instrument_index)
 
     # ---------------------------------------------------------------- grid state
     def next_color(self, key: str):
@@ -385,7 +377,7 @@ class MusicRoom(Room):
         gaps = [b - a for a, b in zip(offsets, offsets[1:])]
         tail = min(max(sum(gaps) / len(gaps), 0.25), TUNE_GAP_MAX_S) if gaps else 0.6
         self._stop_tape()
-        self.loop.play([(k, m, o - offsets[0], i) for (k, m, i, _), o in zip(tune, offsets)], offsets[-1] - offsets[0] + tail)
+        self.loop.play([(k, m, o - offsets[0]) for (k, m, _), o in zip(tune, offsets)], offsets[-1] - offsets[0] + tail)
         self._start_loop_playback()
         self._sync_panels()
 
@@ -423,7 +415,7 @@ class MusicRoom(Room):
                     break
                 cycle_start = asyncio.get_event_loop().time()
                 self.loop.start_new_cycle()
-                for key, mode, offset, instrument in sorted(events, key=lambda e: e[2]):
+                for key, mode, offset in sorted(events, key=lambda e: e[2]):
                     if self.loop.state != LOOPING:
                         return
                     wait = offset - (asyncio.get_event_loop().time() - cycle_start)
@@ -431,20 +423,20 @@ class MusicRoom(Room):
                         await asyncio.sleep(wait)
                     if self.loop.state != LOOPING:
                         return
-                    self._hit(key, mode, instrument, paint=False)
+                    self._hit(key, mode, paint=False)
                 remaining = duration - (asyncio.get_event_loop().time() - cycle_start)
                 if remaining > 0:
                     await asyncio.sleep(remaining)
         except asyncio.CancelledError:
             pass
 
-    def _hit(self, key: str, mode: str, instrument: int | None = None, paint: bool = True):
+    def _hit(self, key: str, mode: str, paint: bool = True):
         """A key sounding; paint moves its color on, which a loop going around leaves alone."""
         if mode == MODE_LETTERS:
             self._spell(key, time.monotonic())
         if paint:
             self.next_color(key)
-        self._play_key(key, mode, instrument)
+        self._play_key(key, mode)
         if self.app.active_room == self.name:
             self.app.set_legend(KEY_COLORS.get(key.lower()), fade=True)
         if mode == MODE_MUSIC:
@@ -508,15 +500,15 @@ class MusicRoom(Room):
         """The song grows; a long enough rest before a note marks a new phrase in it."""
         if not self._tape:
             self._tape_origin, self._tape_base = now, 0
-        tape = self._tape + [(key, MODE_MUSIC, self.instrument_index, now)]
+        tape = self._tape + [(key, MODE_MUSIC, now)]
         self._tape_base += max(0, len(tape) - TAPE_MAX)
         self._tape = tape[-TAPE_MAX:]
         self._schedule_rest(self.app.invalidate)
 
     def _tune(self) -> list:
-        """What the tape holds, as (key, mode, instrument, when): the phrase in Notes, the letters in Letters."""
+        """What the tape holds, as (key, mode, when): the song in Notes, the letters in Letters."""
         if self.letters_mode:
-            return [(c.upper(), MODE_LETTERS, self.instrument_index, t) for c, t in zip(self._spelled, self._typed_at)]
+            return [(c.upper(), MODE_LETTERS, t) for c, t in zip(self._spelled, self._typed_at)]
         return list(self._tape)
 
     @staticmethod
@@ -524,7 +516,7 @@ class MusicRoom(Room):
         """When each note plays back, from the first: its rests as played, a long one cut short."""
         offsets = [0.0]
         for a, b in zip(tune, tune[1:]):
-            offsets.append(offsets[-1] + min(b[3] - a[3], TUNE_GAP_MAX_S))
+            offsets.append(offsets[-1] + min(b[2] - a[2], TUNE_GAP_MAX_S))
         return offsets
 
     def _play_tape(self):
@@ -536,10 +528,10 @@ class MusicRoom(Room):
         and nothing joins the loop or the code."""
         try:
             played = 0.0
-            for i, ((key, mode, instrument, _), at) in enumerate(zip(tune, self._tune_offsets(tune))):
+            for i, ((key, mode, _), at) in enumerate(zip(tune, self._tune_offsets(tune))):
                 await asyncio.sleep(at - played)
                 played, self._tape_at = at, i
-                self._play_key(key, mode, instrument)
+                self._play_key(key, mode)
                 if mode == MODE_MUSIC:
                     self.flash_note(key)
             await asyncio.sleep(0.3)
@@ -607,10 +599,10 @@ class MusicRoom(Room):
 
     def _rest(self) -> tuple:
         """(how long the rest runs, timer steps, when it began) for the tape now: Letters clear after theirs, a
-        Music phrase is finished after its own."""
+        Music phrase is finished after its own, which has no timer, only the double bar once it's over."""
         if self.letters_mode:
             return WORD_REST_S, LETTER_REST_STEPS, self._typed_at[-1] if self._typed_at else None
-        return ECHO_PAUSE_S, PHRASE_REST_STEPS, self._tape[-1][3] if self._tape else None
+        return ECHO_PAUSE_S, 1, self._tape[-1][2] if self._tape else None
 
     def _schedule_rest(self, end):
         """The tape's timer empties a step at a time while the rest runs, then `end`."""
@@ -687,7 +679,7 @@ class MusicRoom(Room):
             if action.is_repeat or self.app._littles_mode:
                 return
             self._flush_enter()
-            if action.direction in ("left", "right"):
+            if action.direction in ("left", "right") and not self.letters_mode:   # Letters has no key to change
                 step = 1 if action.direction == "right" else -1
                 self.shift_root((self.root_index + step) % len(FRIENDLY_KEYS), step)
                 self.announce(f"{ICON_MUSIC}  {key_label(self.root_index)}")
@@ -702,7 +694,7 @@ class MusicRoom(Room):
             if self.letters_mode and self._letters_mash_drop(time.monotonic()):
                 return
             mode = self._current_mode()
-            self.loop.record_event(lookup, mode, instrument=self.instrument_index)
+            self.loop.record_event(lookup, mode)
             self._hit(lookup, mode)
             if mode == MODE_MUSIC and self.loop.state == IDLE:
                 self._tape_add(lookup, time.monotonic())
@@ -729,7 +721,7 @@ class MusicRoom(Room):
             return
         gap = WORD_GAP_S if self.letters_mode else ECHO_PAUSE_S
         n = 1
-        while whole and n < len(tune) and tune[-n][3] - tune[-n - 1][3] < gap:
+        while whole and n < len(tune) and tune[-n][2] - tune[-n - 1][2] < gap:
             n += 1
         if self.letters_mode:
             self._spelled, self._typed_at = self._spelled[:-n], self._typed_at[:-n]
@@ -816,7 +808,7 @@ class MusicRoom(Room):
             draw_key_hint(g, "{Enter} sound", px, (left + right) // 2, cy, anchor="center")
             return
         tune = self._tune()
-        space = (WORD_HINT if self.word else "") if self.letters_mode else (TAPE_HINT if tune else "")
+        space = "" if self.letters_mode else TAPE_HINT if tune else ""   # Letters says it beside the word
         hint = "   ".join(h for h in (space, self._hint_text() if tune else "", ERASE_HINT if tune else "") if h)
         if hint:
             draw_key_hint(g, hint, px, (left + right) // 2, cy, anchor="center")
@@ -832,7 +824,7 @@ class MusicRoom(Room):
         names = [ICON_DRUM if key not in _KEY_TO_RC else note_name(_KEY_TO_RC[key][1], self.root_index)
                  for key, *_ in self._tape]
         keys = [(KID_MATH_REMAP.get(key, key), KEY_COLORS.get(key.lower(), P.MUTED)) for key, *_ in self._tape]
-        rests = [0] + [(b[3] - a[3] >= TAPE_GAP_S) + (b[3] - a[3] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
+        rests = [0] + [(b[2] - a[2] >= TAPE_GAP_S) + (b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
         return names, keys, rests, "mono-heavy-italic", "♪", None
 
     def _tape_ink(self) -> str:
@@ -860,6 +852,9 @@ class MusicRoom(Room):
         spans = [cell * len(t) + step + rest_w * r for t, r in zip(texts, rests)]
         first, last = self._tape_window(spans, room, cell + step)
         clipped = first > 0 or last < len(texts) - 1
+        if self.letters_mode:   # the letters, their timer, and the word with its hint, centered together
+            word_w = self._draw_word(g, None, cy, round(px * 1.15)) + px if self.word else 0
+            x = max(x, row.centerx - (lead_w + sum(spans[first:last + 1]) + px // 4 + 2 * clock_r + word_w) // 2)
         end = x + lead_w + room
         ink = self._tape_ink()
         if lead:
@@ -891,14 +886,19 @@ class MusicRoom(Room):
             g.rect(P.ACCENT, line, radius=line.h // 2)
         x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
         if self.letters_mode and self.word:
-            self._draw_word(g, x + px, row.right, cy, round(px * 1.15))
+            self._draw_word(g, x + px, cy, round(px * 1.15))
 
-    def _draw_word(self, g, left, right, cy, px):
-        """The word the letters found, with its picture, centered in the tape row's free space."""
+    def _draw_word(self, g, x, cy, px) -> int:
+        """The word the letters found, with its picture, and what Space does with it; returns its width, and
+        with x None only measures it."""
         picture = get_content().exact_emoji(self.word)
         text = f"{self.word} {picture}" if picture else self.word
-        w = g.measure(text, px, "mono-heavy", tr=False)[0]
-        g.draw_text(text, px, max(left, (left + right - w) // 2), cy, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
+        hint_px = g.em(0.92)
+        w = g.measure(text, px, "mono-heavy", tr=False)[0] + px
+        if x is not None:
+            g.draw_text(text, px, x, cy, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
+            draw_key_hint(g, WORD_HINT, hint_px, x + w, cy)
+        return w + key_hint_width(g, WORD_HINT, hint_px)
 
     def _tape_window(self, spans: list, room: int, ellipsis: int) -> tuple:
         """(first, last) of the tape that fit in `room`: its end, or from the note playing back once that has
@@ -924,11 +924,13 @@ class MusicRoom(Room):
         g.rect(P.MUTED, pygame.Rect(cx + thin, cy - h // 2, 3 * thin, h))
 
     def _draw_rest_mark(self, g, cx, cy, r) -> int:
-        """While a rest runs, a small pie that empties; once a Music phrase's rest is over, a double bar: the
-        phrase is done, and the next note starts another after it. Returns its right edge."""
+        """In Letters, a small pie that empties while the rest runs, till they clear; in Music, once a phrase's
+        rest is over, a double bar: the phrase is done, and the next note starts another after it. Returns its
+        right edge."""
         left = self._rest_left()
-        if left == 0 and not self.letters_mode:
-            self._draw_double_bar(g, cx, cy, r)
+        if not self.letters_mode:
+            if left == 0:
+                self._draw_double_bar(g, cx, cy, r)
             return cx + r
         pygame.draw.circle(g.surface, rgb(P.LINE), (cx, cy), r, width=max(1, r // 6))
         if left > 0:
@@ -968,6 +970,8 @@ class MusicRoom(Room):
     def arrow_hint(self) -> str:
         if self.app._littles_mode:
             return key_label(DEFAULT_ROOT_INDEX)
+        if self.letters_mode:
+            return ""
         return f"{LEFT} {RIGHT} key: {FRIENDLY_KEY_NAMES[self.root_index]}"
 
     def paper(self, g, size, on_screen=False):
@@ -1005,12 +1009,13 @@ class MusicRoom(Room):
                 g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 sounding = key in self._note_labels
-                if (melodic or sounding) and not on_paper:
+                label = (note_label(note) if not self.letters_mode else None) if melodic else ICON_DRUM if sounding else None
+                if label and not on_paper:
                     sweeping = melodic and self._transition_state_for_col(col_idx)[1]
                     ink = P.ACCENT if sweeping else mix(fg, bg, 0.3 if sounding else NOTE_FAINT)
-                    g.draw_text(note_label(note) if melodic else ICON_DRUM, max(10, int(size * 0.15)), tile.centerx,
+                    g.draw_text(label, max(10, int(size * 0.15)), tile.centerx,
                                 tile.bottom - int(size * 0.17), "mono-bold-italic", ink, anchor="center", tr=False)
-        if not on_paper:
+        if not on_paper and self.code_panel is None:   # the code is its own composition
             gap = round(size * 0.06)
             self._draw_tape(g, pygame.Rect(xs[0], ys[4] + gap, xs[10] - xs[0], round(size * NOTE_STRIP) - gap), size)
 

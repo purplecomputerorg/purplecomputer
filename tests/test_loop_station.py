@@ -9,14 +9,14 @@ from purplecomputer.rooms.music_room import MODE_LETTERS, MODE_MUSIC
 def _looping(now=2.0, duration=2.0):
     """A loop of A half a second in, two seconds long, its cycle starting at `now`."""
     loop = LoopStation()
-    loop.play([("A", MODE_MUSIC, 0.5, 0)], duration, now=now)
+    loop.play([("A", MODE_MUSIC, 0.5)], duration, now=now)
     return loop
 
 
 def test_play_loops_and_stop_goes_back_to_idle():
     loop = LoopStation()
     assert loop.state == IDLE
-    loop.play([("B", MODE_MUSIC, 1.0, 0), ("A", MODE_MUSIC, 0.2, 0)], 2.0, now=0.0)
+    loop.play([("B", MODE_MUSIC, 1.0), ("A", MODE_MUSIC, 0.2)], 2.0, now=0.0)
     assert loop.state == LOOPING and [e[0] for e in loop.loop_events] == ["A", "B"]
     loop.stop()
     assert loop.state == IDLE and loop.loop_events == [] and loop.loop_duration == 0.0
@@ -30,9 +30,9 @@ def test_a_note_while_idle_is_ignored():
 
 def test_a_note_played_along_joins_where_it_falls_in_the_cycle():
     loop = _looping()
-    loop.record_event("B", MODE_LETTERS, now=2.3, instrument=2)
+    loop.record_event("B", MODE_LETTERS, now=2.3)
     assert [e[0] for e in loop.loop_events] == ["B", "A"]
-    assert loop.loop_events[0] == pytest.approx(("B", MODE_LETTERS, 0.3, 2))
+    assert loop.loop_events[0] == pytest.approx(("B", MODE_LETTERS, 0.3))
     assert loop.loop_duration == 2.0
 
 

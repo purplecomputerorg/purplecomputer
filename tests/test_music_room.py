@@ -266,7 +266,7 @@ def test_a_looping_word_shows_each_time_it_comes_around(monkeypatch):
         room = _letters_room(monkeypatch).room
         seen = []
         monkeypatch.setattr(room, "_play_key", lambda key, mode, instrument=None: seen.append(room.word))
-        room.loop.play([(k, MODE_LETTERS, i * 0.01, 0) for i, k in enumerate("CATDOG")], 0.1)
+        room.loop.play([(k, MODE_LETTERS, i * 0.01) for i, k in enumerate("CATDOG")], 0.1)
         room._start_loop_playback()
         await asyncio.sleep(0.08)
         room._stop_loop()
@@ -470,18 +470,33 @@ def test_a_long_tape_shows_its_end_and_playback_scrolls_to_the_note_playing():
     run(go())
 
 
-def test_a_phrase_rest_runs_down_and_then_marks_the_phrase_finished():
+def test_a_phrase_is_finished_once_its_rest_is_over():
     import time
-    from purplecomputer.rooms.music_room import ECHO_PAUSE_S, PHRASE_REST_STEPS
+    from purplecomputer.rooms.music_room import ECHO_PAUSE_S
 
     async def go():
         app = make_app(room="music")
         room = app.room
         room._tape_add("Q", time.monotonic())
         assert room._rest_left() == 1.0
-        room._tape[-1] = room._tape[-1][:3] + (time.monotonic() - ECHO_PAUSE_S * 1.5 / PHRASE_REST_STEPS,)
-        assert room._rest_left() == 1 - 1 / PHRASE_REST_STEPS
-        room._tape[-1] = room._tape[-1][:3] + (time.monotonic() - ECHO_PAUSE_S,)
+        room._tape[-1] = room._tape[-1][:2] + (time.monotonic() - ECHO_PAUSE_S / 2,)
+        assert room._rest_left() == 1.0
+        room._tape[-1] = room._tape[-1][:2] + (time.monotonic() - ECHO_PAUSE_S,)
         assert room._rest_left() == 0 and room._tape, "finished, but kept to play, loop and save"
         app._draw()
+    run(go())
+
+
+def test_letters_has_no_key_to_change():
+    from purplecomputer.keyboard import NavigationAction
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        room.letters_mode = True
+        root = room.root_index
+        await room.handle(NavigationAction(direction="right"))
+        assert room.root_index == root and room.arrow_hint() == ""
+        room.letters_mode = False
+        assert room.arrow_hint()
     run(go())

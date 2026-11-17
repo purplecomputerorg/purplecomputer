@@ -432,7 +432,8 @@ class FakeKeyScreen(Picker):
     title = "Press a Key"
     DESCRIPTION = "Sent to Purple once this menu closes"
     OPTIONS = [(KeyCode.KEY_VOLUMEUP, "Volume Up"), (KeyCode.KEY_VOLUMEDOWN, "Volume Down"), (KeyCode.KEY_MUTE, "Mute"),
-               (KeyCode.KEY_BRIGHTNESSUP, "Brightness Up"), ("tap", "Power Button")]
+               (KeyCode.KEY_BRIGHTNESSUP, "Brightness Up"), (KeyCode.KEY_CAPSLOCK, "Caps Lock"),
+               ("tap", "Power Button")]
     escape_value = CANCELLED
 
 

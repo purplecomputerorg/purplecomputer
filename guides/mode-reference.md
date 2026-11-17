@@ -38,7 +38,7 @@ Each cell displays its key character and can be colored. A note key also shows i
 
 ## The Tape
 
-The row under the grid shows what was just played; the hint row below it says what Space and hold Enter do with it (in Letters, after the found word and its picture). It is the one thing a kid hears again: Space plays it, hold Enter loops it, and a save keeps it.
+The row under the grid shows what was just played; the hint row below it says what Space and hold Enter do with it, the same in both modes. In Letters the found word and its picture sit on the tape's row, centered in the space after the letters. It is the one thing a kid hears again: Space plays it, hold Enter loops it, and a save keeps it.
 
 - **Notes**: the note names of the phrase (`♪ CDEFG  CCC`), each under the key that played it, in that key's color. A rest of `TAPE_GAP_S` shows as a gap; a rest of `ECHO_PAUSE_S` ends the phrase: a small clock empties over it, then turns into a double bar (‖), and the next note starts a new tape. Space plays it back with its rhythm (rests capped at `TUNE_GAP_MAX_S`), sound and lit note names only, so the colors and the loop are untouched. Any other key stops it.
 - **Letters**: every letter typed, the word they end with underlined and the letters before it dimmer. A word typed since the last rest wins over a longer one across it, so the gap means a new word; a slow speller's word still spans rests when nothing after the last one is a word. A small clock empties a step a second, and the letters clear with the word at `WORD_REST_S`.

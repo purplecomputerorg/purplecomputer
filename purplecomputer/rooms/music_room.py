@@ -28,7 +28,7 @@ from ..gfx import is_one_emoji, mix, rgb
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel
 from ..sounds import SoundBank
 from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, draw_label,
-                  draw_mode_switch, draw_status_row, HeldKey, hold_status, key_hint_width, status_row_h)
+                  draw_mode_switch, draw_status_row, HeldKey, hold_status, status_row_h)
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -754,8 +754,7 @@ class MusicRoom(Room):
             self._draw_hints(g, rect.x + pad, right_edge, cy)
 
     def _draw_hints(self, g, left, right, cy):
-        """The hint row, centered: what Space and Enter do with the tape now; in Letters a found word leads it,
-        with its picture."""
+        """The hint row, centered: what Space and holding Enter do with the tape now, the same in both modes."""
         px = g.em(0.92)
         if self.app._littles_mode:
             draw_key_hint(g, "{Enter} sound", px, (left + right) // 2, cy, anchor="center")
@@ -763,17 +762,8 @@ class MusicRoom(Room):
         tune = self._tune()
         space = (WORD_HINT if self.word else "") if self.letters_mode else (TAPE_HINT if tune else "")
         hint = "   ".join(h for h in (space, self._hint_text() if tune else "") if h)
-        word = ""
-        if self.letters_mode and self.word:
-            picture = get_content().exact_emoji(self.word)
-            word = f"{self.word} {picture}" if picture else self.word
-        word_px = round(px * 1.3)
-        word_w = g.measure(word, word_px, "mono-heavy", tr=False)[0] + px * 2 if word else 0
-        x = (left + right - word_w - key_hint_width(g, hint, px)) // 2
-        if word:
-            g.draw_text(word, word_px, x, cy, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
         if hint:
-            draw_key_hint(g, hint, px, x + word_w, cy)
+            draw_key_hint(g, hint, px, (left + right) // 2, cy, anchor="center")
 
     def _tape_parts(self) -> tuple:
         """(texts, keys over them, rest before each, face, lead, underline from) for what the tape shows now: the
@@ -840,7 +830,16 @@ class MusicRoom(Room):
         if under is not None:
             line = pygame.Rect(under.x, under.bottom + max(2, px // 10), under.w, max(2, px // 8))
             g.rect(P.ACCENT, line, radius=line.h // 2)
-        self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
+        x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
+        if self.letters_mode and self.word:
+            self._draw_word(g, x + px, row.right, cy, round(px * 1.15))
+
+    def _draw_word(self, g, left, right, cy, px):
+        """The word the letters found, with its picture, centered in the tape row's free space."""
+        picture = get_content().exact_emoji(self.word)
+        text = f"{self.word} {picture}" if picture else self.word
+        w = g.measure(text, px, "mono-heavy", tr=False)[0]
+        g.draw_text(text, px, max(left, (left + right - w) // 2), cy, "mono-heavy", P.TEXT, anchor="midleft", tr=False)
 
     def _tape_window(self, spans: list, room: int, ellipsis: int) -> tuple:
         """(first, last) of the tape that fit in `room`: its end, or from the note playing back once that has

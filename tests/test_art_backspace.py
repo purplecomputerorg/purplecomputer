@@ -165,9 +165,9 @@ def test_only_a_held_backspace_says_arrows_clean():
     async def go():
         app, room = _art()
         await _down(app, repeat=False)
-        assert room._hint_key() != "clean" and room.arrow_hint().startswith("Arrows move"), "a tap doesn't flash it"
+        assert room._hint_key() != "clean" and room.arrow_hint().endswith("move"), "a tap doesn't flash it"
         await _down(app)
-        assert room._hint_key() == "clean" and room.arrow_hint().startswith("Arrows clean")
+        assert room._hint_key() == "clean" and room.arrow_hint().endswith("clean")
         await app._dispatch_keyboard_action(ControlAction(action="backspace", is_down=False))
-        assert room._hint_key() != "clean" and room.arrow_hint().startswith("Arrows move")
+        assert room._hint_key() != "clean" and room.arrow_hint().endswith("move")
     run(go())

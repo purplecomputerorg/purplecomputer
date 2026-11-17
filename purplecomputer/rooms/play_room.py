@@ -263,7 +263,7 @@ class PlayRoom(Room):
         self.app.set_legend(None, visible=True)
 
     def arrow_hint(self) -> str:
-        return f"Arrows scroll  {UP} {DOWN}"
+        return f"{UP} {DOWN} see more"
 
     def cursor_fraction(self, vp):
         return (0.07, 0.9)

@@ -744,7 +744,7 @@ class MusicRoom(Room):
     def arrow_hint(self) -> str:
         if self.app._littles_mode:
             return key_label(DEFAULT_ROOT_INDEX)
-        return f"Arrows change key: {FRIENDLY_KEY_NAMES[self.root_index]}  {LEFT} {RIGHT}"
+        return f"{LEFT} {RIGHT} key: {FRIENDLY_KEY_NAMES[self.root_index]}"
 
     def paper(self, g, size, on_screen=False):
         """The kid's colors on the keyboard grid; quiet keys print as outlined letters."""

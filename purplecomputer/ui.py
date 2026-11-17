@@ -20,8 +20,8 @@ from .keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationActio
 # nf-md-arrow_*_bold: big heads stay readable at hint size, unlike Plex's or DejaVu's arrows.
 LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"
 TURN = "\U000F0467"   # nf-md-rotate_right
-MOVE_HINT = f"Arrows move  {LEFT} {UP} {DOWN} {RIGHT}"
-CLEAN_HINT = f"Arrows clean  {LEFT} {UP} {DOWN} {RIGHT}"
+MOVE_HINT = f"{LEFT} {UP} {DOWN} {RIGHT} move"
+CLEAN_HINT = f"{LEFT} {UP} {DOWN} {RIGHT} clean"
 PICK_HINT = "Type to pick {hints/rainbow.png}"  # while a tap of Shift waits: Shift+letter picks without painting
 KID_MATH_REMAP = {"=": "+", "/": "÷", "*": "×"}
 KID_MATH_KEYS = {v: k for k, v in KID_MATH_REMAP.items() if k != "="}  # + is also its own key

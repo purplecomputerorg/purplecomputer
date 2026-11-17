@@ -58,12 +58,12 @@ def test_overlays_and_panels_draw():
         from purplecomputer.rooms.parent_menu import (ComputerNameScreen, DisplaySettingsScreen, InstallConfirmScreen,
                                                    LittlesModeScreen, ParentVolumeModal, PinEntry, ReinstallConfirmScreen,
                                                    TerminalScreen, UnreadableReinstallScreen)
-        from purplecomputer.rooms.help_videos import FridgeScreen, HelpVideosScreen
+        from purplecomputer.rooms.help_videos import HelpVideosScreen
         from purplecomputer.rooms.sleep_screen import FirstBootPowerCycleScreen, LiveBootSplash, ShutdownConfirmScreen, SleepScreen
         from purplecomputer.rooms.support_info import SupportInfoScreen
         for overlay in (LittlesModeScreen(app), ComputerNameScreen(app), InstallConfirmScreen(app), PinEntry(app),
                         ReinstallConfirmScreen(app), UnreadableReinstallScreen(app),
-                        ParentVolumeModal(app), DisplaySettingsScreen(app), HelpVideosScreen(app), FridgeScreen(app),
+                        ParentVolumeModal(app), DisplaySettingsScreen(app), HelpVideosScreen(app),
                         SupportInfoScreen(app), FirstBootPowerCycleScreen(app), LiveBootSplash(app),
                         ShutdownConfirmScreen(app), SleepScreen(app), TerminalScreen(app)):
             app.push(overlay)

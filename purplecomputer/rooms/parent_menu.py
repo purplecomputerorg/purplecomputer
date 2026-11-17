@@ -1263,7 +1263,7 @@ def _rename_label(app) -> str:
 def _get_menu_items(app) -> list:
     """(id, label) rows; ids starting with sec- are section headers."""
     from ..settings import get_all_caps, get_littles_mode, get_parent_pin, get_voice, get_volume_lock
-    items = [("menu-help", "Help & Videos"), ("menu-fridge", "Share What They Made")]
+    items = [("menu-help", "Help & Share What They Made")]
     if is_live_boot():
         items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
     else:
@@ -1404,7 +1404,6 @@ class ParentMenu(Overlay):
             "menu-demo": lambda: (self.close(), self.app.start_demo()),
             "menu-bash": lambda: (self.close(), self.app.exit()), "menu-system": lambda: (self.close(), self.app.exit()),
             "menu-help": lambda: self.app.push(__import__("purplecomputer.rooms.help_videos", fromlist=["HelpVideosScreen"]).HelpVideosScreen(self.app)),
-            "menu-fridge": lambda: self.app.push(__import__("purplecomputer.rooms.help_videos", fromlist=["FridgeScreen"]).FridgeScreen(self.app)),
             "menu-support": lambda: self.app.push(__import__("purplecomputer.rooms.support_info", fromlist=["SupportInfoScreen"]).SupportInfoScreen(self.app)),
             "menu-shutdown": lambda: (self.close(), self.app._show_bye_screen()),
         }.get(item_id)

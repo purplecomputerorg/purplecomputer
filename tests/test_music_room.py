@@ -554,6 +554,8 @@ def test_shift_and_a_note_letter_plays_that_note_in_the_middle_octave():
         await room.handle(CharacterAction(char="H", shift_held=True))
         await room.handle(CharacterAction(char="!", shift_held=True))
         assert [k for k, *_ in room._tape] == ["A", "G"], "C is the A key in C; with Shift, keys that aren't notes are quiet"
+        await room.handle(CharacterAction(char="C", shifted=True))
+        assert room._tape[-1][0] == "C", "a tap of Shift isn't held, so the next letter plays as itself"
         room.root_index = FRIENDLY_KEYS.index(7)   # G: the row runs G A B C D E F#
         assert room._note_key("C") == "F" and room._note_key("F") == "J"
         app._music_note_names_enabled = False

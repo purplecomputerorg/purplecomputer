@@ -213,6 +213,7 @@
   "Features: Code {0}, Looping {1}, Note Names {2}": "玩法：代码{0}，循环{1}，音名{2}",
   "Note Names: {0}": "按音名弹奏：{0}",
   "Hold Shift in Music and press C to play the note C": "在音乐里按住 Shift 再按 C，就能弹出 C 音",
+  "{hold Shift} + a letter plays its note": "{hold Shift} + 字母，弹出它的音",
   "{Space} last song": "{Space} 上一首",
   "Code Space: {0}": "代码空间：{0}",
   "Music Looping: {0}": "音乐循环：{0}",

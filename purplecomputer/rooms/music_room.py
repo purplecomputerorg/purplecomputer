@@ -60,6 +60,7 @@ NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the
 SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
 TAPE_HINT = "{Space} play it"
 LAST_SONG_HINT = "{Space} last song"
+NOTE_NAMES_HINT = "{hold Shift} + a letter plays its note"
 TUNE_GAP_MAX_S = 1.5          # a longer rest in a tune plays back this long, so a pause to think isn't silence
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
 WORD_GAP_S = 1.5              # a two-letter word counts only after a rest this long
@@ -741,7 +742,7 @@ class MusicRoom(Room):
                 return
             char = action.char
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
-            by_name = action.with_shift and self._shift_notes(held=False)
+            by_name = action.shift_held and self._shift_notes(held=False)
             named = by_name and self._note_key(lookup)
             echo = ("notes", lookup.lower()) if named else ("", None)
             lookup = named or lookup
@@ -765,9 +766,10 @@ class MusicRoom(Room):
         self.echo.letter(way, ch)
 
     def _shift_notes(self, held: bool = True) -> bool:
-        """Shift plays notes by name: in Notes, when a parent left it on; `held` asks whether Shift is down now."""
+        """Held Shift plays notes by name (not a tap, so a stray one can't): in Notes, when a parent left it on;
+        `held` asks whether Shift is down now."""
         on = self.app._music_note_names_enabled and not self.letters_mode and not self.app._littles_mode
-        return on and (not held or self.app._keyboard_state_machine.shift_active)
+        return on and (not held or self.app._keyboard_state_machine.shift_held)
 
     def _note_key(self, letter: str):
         """The middle row's key that plays the note named `letter` (F plays F♯ in G): its one octave from the root."""
@@ -923,6 +925,20 @@ class MusicRoom(Room):
         the quiet grows, nearly gone when it clears."""
         fade = (1 - self._rest_left()) * TAPE_FADE
         return mix(color, P.SURFACE, max(fade, TAPE_PLAYING_FADE) if self._playing_along() else fade)
+
+    def _draw_note_names(self, g, xs, ys, letter_px):
+        """Shift's seven notes in a row of their own, centered in the grid's place so they don't read as keys, each
+        lit in its key's color while it sounds, with a few words on what they are under them."""
+        tw, th = xs[1] - xs[0], ys[1] - ys[0]
+        row = pygame.Rect(0, 0, tw * 7, th)
+        row.center = ((xs[0] + xs[10]) // 2, (ys[0] + ys[4]) // 2 - th // 4)
+        for col, key in enumerate(GRID_KEYS[NOTE_ROW][:7]):
+            tile = pygame.Rect(row.x + col * tw, row.y, tw, th).inflate(-max(4, tw // 12), -max(4, tw // 12))
+            bg = self.get_color(key)
+            g.rect(bg, tile, radius=tw // 8) if bg != P.TILE else g.rect(P.LINE, tile, width=2, radius=tw // 8)
+            ink = P.TEXT if bg == P.TILE else text_color_for(bg)
+            self._draw_big_note(g, note_name(col, self.root_index), round(letter_px * 1.3), tile.center, ink)
+        draw_key_hint(g, NOTE_NAMES_HINT, g.em(0.92), row.centerx, row.bottom + th // 2, anchor="center")
 
     @staticmethod
     def _draw_big_note(g, note: str, px: int, center: tuple, ink):
@@ -1098,12 +1114,12 @@ class MusicRoom(Room):
         xs = [round(r.x + tab_w + i * w) for i in range(11)]
         ys = [round(top + i * size) for i in range(5)]
         letter_px = max(12, int(size * 0.3))
-        swap = not on_paper and self._shift_notes()   # Shift down: only the notes it plays, each name big, key small
-        for row_idx, row in enumerate(GRID_KEYS):
+        named = not on_paper and self._shift_notes()   # Shift down: just the notes it plays, apart from the keys
+        if named:
+            self._draw_note_names(g, xs, ys, letter_px)
+        for row_idx, row in enumerate(() if named else GRID_KEYS):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
-                if swap and not (row_idx == NOTE_ROW and col_idx < 7):
-                    continue
                 bg = self.get_color(key)
                 note = note_name(col_idx, self._transition_state_for_col(col_idx)[0]) if melodic else None
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
@@ -1114,20 +1130,17 @@ class MusicRoom(Room):
                     g.rect(PAPER_OUTLINE, tile, width=2)
                 fg = (paper.INK_MUTED if on_paper else P.MUTED) if quiet else text_color_for(bg)
                 letter = KID_MATH_REMAP.get(key, key)
-                if swap:
-                    self._draw_big_note(g, note, letter_px, tile.center, fg)
-                else:
-                    g.draw_text(letter, letter_px, tile.centerx, tile.centery,
-                                "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
+                g.draw_text(letter, letter_px, tile.centerx, tile.centery,
+                            "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 sounding = key in self._note_labels
-                label = ((letter if swap else note_label(note)) if not self.letters_mode else None) if melodic \
+                label = (note_label(note) if not self.letters_mode else None) if melodic \
                     else drum_picture(key) if sounding else None
                 if label and not on_paper:
                     sweeping = melodic and self._transition_state_for_col(col_idx)[1]
                     ink = P.ACCENT if sweeping else mix(fg, bg, 0.3 if sounding else NOTE_FAINT)
                     label_px, at = max(10, int(size * 0.15)), (tile.centerx, tile.bottom - int(size * 0.17))
                     if melodic:
-                        g.draw_text(label, label_px, *at, "mono-bold" if swap else "mono-bold-italic", ink,
+                        g.draw_text(label, label_px, *at, "mono-bold-italic", ink,
                                     anchor="center", tr=False)
                     else:
                         pic = g.image(label, round(label_px * 1.1), ink)

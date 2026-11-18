@@ -208,6 +208,7 @@
   "Features: Code {0}, Looping {1}, Note Names {2}": "Funciones: Código {0}, Bucles {1}, Notas {2}",
   "Note Names: {0}": "Notas por nombre: {0}",
   "Hold Shift in Music and press C to play the note C": "Mantén Mayús en Música y pulsa C para tocar la nota C",
+  "{hold Shift} + a letter plays its note": "{hold Shift} + una letra toca su nota",
   "{Space} last song": "{Space} última canción",
   "Code Space: {0}": "Código con Espacio: {0}",
   "Music Looping: {0}": "Bucles en Música: {0}",

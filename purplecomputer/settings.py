@@ -17,6 +17,7 @@ _defaults = {
     "littles_mode": None,        # None = off, "music", "music_noscreen", or "art"
     "code_panel": True,          # Whether the code panel can be opened (space hold)
     "music_looping": True,       # Whether music room loop recording can be triggered (enter hold)
+    "music_note_names": True,    # Whether Shift plus a note's letter plays that note in Music
     "music_key_switching": True, # Whether music room key switching (arrows) is enabled
     "rooms_off": [],             # Built-in rooms a parent turned off, hidden from the Esc menu
     "rooms_turned_on": [],       # Built-in rooms a parent turned on, which matters for ones that start off (Write)
@@ -189,6 +190,17 @@ def get_music_looping() -> bool:
 def set_music_looping(enabled: bool) -> None:
     settings = load_settings()
     settings["music_looping"] = enabled
+    save_settings(settings)
+
+
+def get_music_note_names() -> bool:
+    """Whether Shift plus a note's letter plays that note in Music."""
+    return load_settings()["music_note_names"]
+
+
+def set_music_note_names(enabled: bool) -> None:
+    settings = load_settings()
+    settings["music_note_names"] = enabled
     save_settings(settings)
 
 

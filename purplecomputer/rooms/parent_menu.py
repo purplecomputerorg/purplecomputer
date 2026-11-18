@@ -232,6 +232,8 @@ FEATURES = {  # key: (name, what it does, setting, app flag, undo when turned of
              "code_panel", "_code_panel_enabled", lambda app: app.room.close_code_panel()),
     "looping": ("Music Looping", "Hold Enter in Music to loop what was just played",
                 "music_looping", "_music_looping_enabled", lambda app: app.rooms["music"].stop_sound()),
+    "notes": ("Note Names", "Hold Shift in Music and press C to play the note C",
+              "music_note_names", "_music_note_names_enabled", lambda app: None),
 }
 
 
@@ -245,7 +247,8 @@ def _yes(on) -> str:
 
 
 def _features_label() -> str:
-    return f"Features: Code {_yes(_feature_on('code'))}, Looping {_yes(_feature_on('looping'))}"
+    return (f"Features: Code {_yes(_feature_on('code'))}, Looping {_yes(_feature_on('looping'))}, "
+            f"Note Names {_yes(_feature_on('notes'))}")
 
 
 class FeaturesScreen(Picker):

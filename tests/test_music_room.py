@@ -540,3 +540,43 @@ def test_erasing_starts_the_letters_quiet_over():
         await room.handle(ControlAction(action="backspace", is_down=True))
         assert room._rest_left() == 1.0
     run(go())
+
+
+def test_shift_and_a_note_letter_plays_that_note_in_the_middle_octave():
+    from purplecomputer.keyboard import CharacterAction
+    from purplecomputer.music_constants import FRIENDLY_KEYS
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await room.handle(CharacterAction(char="C", shift_held=True))
+        await room.handle(CharacterAction(char="G", shift_held=True))
+        await room.handle(CharacterAction(char="H", shift_held=True))
+        assert [k for k, *_ in room._tape] == ["A", "G", "H"], "C is the A key in C; H isn't a note, so it plays as itself"
+        room.root_index = FRIENDLY_KEYS.index(7)   # G: the row runs G A B C D E F#
+        assert room._note_key("C") == "F" and room._note_key("F") == "J"
+        app._music_note_names_enabled = False
+        await room.handle(CharacterAction(char="C", shift_held=True))
+        assert room._tape[-1][0] == "C", "turned off in the parent menu, Shift does nothing"
+    run(go())
+
+
+def test_space_and_hold_enter_bring_back_the_song_quiet_cleared():
+    async def go():
+        app = make_app(room="music")
+        app._music_looping_enabled = True
+        room = app.room
+        await type_text(app, "qw")
+        room._quiet()
+        assert room._tape == [] and room._hint_text()
+        room._space_tap()
+        assert [k for k, *_ in room._tape] == ["Q", "W"] and room._last_song is None
+        room._stop_tape()
+        room._quiet()
+        room._loop_tune()
+        assert [e[0] for e in room.loop.loop_events] == ["Q", "W"]
+        room._stop_loop()
+        room._quiet()
+        room.clear()
+        assert room._last_song is None, "starting fresh forgets it"
+    run(go())

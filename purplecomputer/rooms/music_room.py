@@ -55,8 +55,10 @@ ERASE_EVERY_S = (0.15, 0.6)   # a held Backspace takes a note, or later a phrase
 ERASE_HINT = "{Backspace} erase"
 TAPE_FADE = (0.3, 0.6)        # the tape dims at each share of its quiet rest
 REST_STEPS = 10               # the tape's clock empties in this many steps over its quiet rest
-SONG_REST_S = 30.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
+NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the middle octave
+SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
 TAPE_HINT = "{Space} play it"
+LAST_SONG_HINT = "{Space} last song"
 TUNE_GAP_MAX_S = 1.5          # a longer rest in a tune plays back this long, so a pause to think isn't silence
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
 WORD_GAP_S = 1.5              # a two-letter word counts only after a rest this long
@@ -119,6 +121,7 @@ class MusicRoom(Room):
         self._tape: list = []     # (key, mode, when) of the song played in Notes, on whichever instrument is set
         self._tape_origin = 0.0   # when the song began, and how many notes have dropped off its front,
         self._tape_base = 0       # so each note keeps its timeline key while the song grows
+        self._last_song = None    # (tape, origin, base) of the song quiet cleared, which Space or hold Enter brings back
         self._erasing_since = None
         self._erased_at = 0.0
         self._tape_task = None
@@ -202,6 +205,7 @@ class MusicRoom(Room):
         self.app.invalidate()
 
     def clear(self):
+        self._last_song = None
         self.restore_timeline_state({})
 
     # ---------------------------------------------------------------- saved music
@@ -378,9 +382,9 @@ class MusicRoom(Room):
     # ---------------------------------------------------------------- loop station
     def _loop_tune(self):
         """Hold Enter: the song plays over and over, its rests as played back, and notes played along join in."""
-        tune = list(self._tape)
-        if not self._loopable():
+        if not self._loopable() or not self._bring_back():
             return
+        tune = list(self._tape)
         offsets = self._tune_offsets(tune)
         gaps = [b - a for a, b in zip(offsets, offsets[1:])]
         tail = min(max(sum(gaps) / len(gaps), 0.25), TUNE_GAP_MAX_S) if gaps else 0.6
@@ -501,9 +505,16 @@ class MusicRoom(Room):
             from ..tts import speak_many
             speak_many([self.word], family=False)
             self._busy()
-        elif not self.letters_mode and self._tape:
+        elif not self.letters_mode and self._bring_back():
             self._play_tape()
         self.app.invalidate()
+
+    def _bring_back(self) -> bool:
+        """The song on the tape, the one quiet cleared if the tape is empty: whether there is one."""
+        if not self._tape and self._last_song:
+            self._tape, self._tape_origin, self._tape_base = self._last_song
+            self._last_song = None
+        return bool(self._tape)
 
     # ---------------------------------------------------------------- tape
     def _tape_add(self, key: str, now: float):
@@ -642,7 +653,7 @@ class MusicRoom(Room):
         if self.letters_mode:
             self._forget_word()
         elif self._tape:
-            self._tape = []
+            self._last_song, self._tape = (self._tape, self._tape_origin, self._tape_base), []
             self.app.timeline_capture_now(self.name)
         self.app.invalidate()
 
@@ -713,6 +724,8 @@ class MusicRoom(Room):
                 return
             char = action.char
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
+            if action.with_shift and self._shift_notes(held=False):
+                lookup = self._note_key(lookup) or lookup
             if lookup not in ALL_KEYS:
                 return
             if self.letters_mode and self._letters_mash_drop(time.monotonic()):
@@ -723,6 +736,16 @@ class MusicRoom(Room):
             if mode == MODE_MUSIC and self.loop.state == IDLE:
                 self._tape_add(lookup, time.monotonic())
             self.echo.letter("", lookup.lower())
+
+    def _shift_notes(self, held: bool = True) -> bool:
+        """Shift plays notes by name: in Notes, when a parent left it on; `held` asks whether Shift is down now."""
+        on = self.app._music_note_names_enabled and not self.letters_mode and not self.app._littles_mode
+        return on and (not held or self.app._keyboard_state_machine.shift_active)
+
+    def _note_key(self, letter: str):
+        """The middle row's key that plays the note named `letter` (F plays F♯ in G): its one octave from the root."""
+        col = next((c for c in range(7) if note_name(c, self.root_index)[0] == letter), None)
+        return None if col is None else GRID_KEYS[NOTE_ROW][col]
 
     def _handle_backspace(self, action):
         """Erases from the end of the tape a note (in Letters, a letter) at a time, held after a while whole
@@ -797,7 +820,7 @@ class MusicRoom(Room):
 
     def _loopable(self) -> bool:
         """Only a Notes song loops: Letters has Space to say its word, and its letters clear."""
-        return self.app._music_looping_enabled and not self.letters_mode and bool(self._tape)
+        return self.app._music_looping_enabled and not self.letters_mode and bool(self._tape or self._last_song)
 
     def hold_progress(self):
         held = self.enter_hold.progress()
@@ -844,7 +867,7 @@ class MusicRoom(Room):
             draw_key_hint(g, "{Enter} sound", px, (left + right) // 2, cy, anchor="center")
             return
         tune = self._tune()
-        space = "" if self.letters_mode else TAPE_HINT if tune else ""   # Letters says it beside the word
+        space = "" if self.letters_mode else TAPE_HINT if tune else LAST_SONG_HINT if self._last_song else ""
         hint = "   ".join(h for h in (space, self._hint_text(), ERASE_HINT if tune else "") if h)
         if hint:
             draw_key_hint(g, hint, px, (left + right) // 2, cy, anchor="center")
@@ -1032,6 +1055,7 @@ class MusicRoom(Room):
         xs = [round(r.x + tab_w + i * w) for i in range(11)]
         ys = [round(top + i * size) for i in range(5)]
         letter_px = max(12, int(size * 0.3))
+        swap = not on_paper and self._shift_notes()   # Shift down: each note's name big, its key letter small
         for row_idx, row in enumerate(GRID_KEYS):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
@@ -1044,16 +1068,23 @@ class MusicRoom(Room):
                 elif on_paper:
                     g.rect(PAPER_OUTLINE, tile, width=2)
                 fg = (paper.INK_MUTED if on_paper else P.MUTED) if quiet else text_color_for(bg)
-                g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
-                            "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
+                letter = KID_MATH_REMAP.get(key, key)
+                if swap and melodic:   # the keys Shift plays stand out from the other octaves'
+                    big = fg if row_idx == NOTE_ROW and col_idx < 7 else mix(fg, bg, 0.5)
+                    g.draw_text(note_label(note), letter_px, tile.centerx, tile.centery, "mono-heavy-italic", big, anchor="center", tr=False)
+                else:
+                    g.draw_text(letter, letter_px, tile.centerx, tile.centery,
+                                "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 sounding = key in self._note_labels
-                label = (note_label(note) if not self.letters_mode else None) if melodic else drum_picture(key) if sounding else None
+                label = ((letter if swap else note_label(note)) if not self.letters_mode else None) if melodic \
+                    else drum_picture(key) if sounding else None
                 if label and not on_paper:
                     sweeping = melodic and self._transition_state_for_col(col_idx)[1]
                     ink = P.ACCENT if sweeping else mix(fg, bg, 0.3 if sounding else NOTE_FAINT)
                     label_px, at = max(10, int(size * 0.15)), (tile.centerx, tile.bottom - int(size * 0.17))
                     if melodic:
-                        g.draw_text(label, label_px, *at, "mono-bold-italic", ink, anchor="center", tr=False)
+                        g.draw_text(label, label_px, *at, "mono-bold" if swap else "mono-bold-italic", ink,
+                                    anchor="center", tr=False)
                     else:
                         pic = g.image(label, round(label_px * 1.1), ink)
                         g.surface.blit(pic, pic.get_rect(center=at))

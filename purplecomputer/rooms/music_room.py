@@ -1019,14 +1019,14 @@ class MusicRoom(Room):
             color = lit or (mix(ink, P.SURFACE, 0.5) if lead_in else ink)
             if pic := drum(texts[i]):
                 pic = g.image(texts[i], pic_h, color).subsurface(pic.get_offset(), pic.get_size())
-                g.surface.blit(pic, pic.get_rect(bottomleft=(x, cy + round(px * 0.37))))
-            else:
-                g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False)
+                mid = g.surface.blit(pic, pic.get_rect(bottomleft=(x, cy + round(px * 0.37)))).centerx
+            else:   # what's over and under it centers on its ink, as B♭ draws narrower than its two cells
+                mid = g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False).centerx
             if lit:   # a dot under what's sounding, in its key's color, below the word's underline in Letters
                 dot_y = cy + round(px * (1.1 if word_at is not None else 0.85))
-                pygame.draw.circle(g.surface, rgb(lit), (x + w // 2, dot_y), max(3, px // 4))
+                pygame.draw.circle(g.surface, rgb(lit), (mid, dot_y), max(3, px // 4))
             if keys:
-                g.draw_text(keys[i][0], key_px, x + w // 2, cy - round(px * 0.85), "mono-bold", self._tape_ink(keys[i][1]),
+                g.draw_text(keys[i][0], key_px, mid, cy - round(px * 0.85), "mono-bold", self._tape_ink(keys[i][1]),
                             anchor="center", tr=False)
             if word_at is not None and i >= word_at:
                 slot = pygame.Rect(x, cy, w, round(px * 0.6))

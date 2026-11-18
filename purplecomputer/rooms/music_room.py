@@ -13,7 +13,7 @@ from .. import palette as P
 from ..audio import play_safe
 from ..code_runner import MusicCodeRunner
 from ..content import get_content
-from ..constants import ICON_DRUM, ICON_KEYBOARD, ICON_MUSIC
+from ..constants import ICON_KEYBOARD, ICON_MUSIC
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..loop_station import IDLE, LOOPING, LoopStation
 from ..mixer import warm_mixer
@@ -860,13 +860,20 @@ class MusicRoom(Room):
         key_px = round(px * 0.7)
         cell = g.measure("M", px, face, tr=False)[0]
         step, rest_w, clock_r = px // 3, px, round(px * 0.32)
+        pic_h = round(px * 0.87)   # drums a little taller than the notes, on their baseline
 
-        def width(t):   # a drum's picture gets a slot wider than itself, so drums side by side don't touch
-            return round(px * 1.4) if t.endswith(".png") else cell * len(t)
+        def drum(t):   # just its ink, so drums side by side sit as close as letters
+            return (pic := g.image(t, pic_h)).subsurface(pic.get_bounding_rect()) if t.endswith(".png") else None
+
+        def width(t):
+            return d.get_width() if (d := drum(t)) else cell * len(t)
+
+        def after(t):
+            return max(2, px // 8) if t.endswith(".png") else step
         x, cy = row.x, row.centery + (key_px // 2 if keys else 0)
         lead_w = cell + px // 2 if lead else 0
         room = row.right - x - lead_w - (2 * clock_r + px)
-        spans = [width(t) + step + rest_w * r for t, r in zip(texts, rests)]
+        spans = [width(t) + after(t) + rest_w * r for t, r in zip(texts, rests)]
         first, last = self._tape_window(spans, room, cell + step)
         clipped = first > 0 or last < len(texts) - 1
         end = x + lead_w + room
@@ -885,9 +892,9 @@ class MusicRoom(Room):
             playing = i == self._tape_at
             lit = (keys[i][1] if keys else KEY_COLORS.get(texts[i].lower(), P.ACCENT)) if playing else None
             color = lit or (mix(ink, P.SURFACE, 0.5) if lead_in else ink)
-            if texts[i].endswith(".png"):
-                pic = g.image(texts[i], round(px * 0.87), color)   # a little taller than the notes, on their baseline
-                g.surface.blit(pic, pic.get_rect(midbottom=(x + w // 2, cy + round(px * 0.37))))
+            if pic := drum(texts[i]):
+                pic = g.image(texts[i], pic_h, color).subsurface(pic.get_offset(), pic.get_size())
+                g.surface.blit(pic, pic.get_rect(bottomleft=(x, cy + round(px * 0.37))))
             else:
                 g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False)
             if lit:   # a dot under what's sounding, in its key's color, below the word's underline in Letters
@@ -898,7 +905,7 @@ class MusicRoom(Room):
             if word_at is not None and i >= word_at:
                 slot = pygame.Rect(x, cy, w, round(px * 0.6))
                 under = slot if under is None else under.union(slot)
-            x += w + step
+            x += w + after(texts[i])
         if last < len(texts) - 1:
             g.draw_text("…", px, x, cy, face, P.MUTED, anchor="midleft", tr=False)
             x += cell + step
@@ -1019,12 +1026,16 @@ class MusicRoom(Room):
                 g.draw_text(KID_MATH_REMAP.get(key, key), letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 sounding = key in self._note_labels
-                label = (note_label(note) if not self.letters_mode else None) if melodic else ICON_DRUM if sounding else None
+                label = (note_label(note) if not self.letters_mode else None) if melodic else drum_picture(key) if sounding else None
                 if label and not on_paper:
                     sweeping = melodic and self._transition_state_for_col(col_idx)[1]
                     ink = P.ACCENT if sweeping else mix(fg, bg, 0.3 if sounding else NOTE_FAINT)
-                    g.draw_text(label, max(10, int(size * 0.15)), tile.centerx,
-                                tile.bottom - int(size * 0.17), "mono-bold-italic", ink, anchor="center", tr=False)
+                    label_px, at = max(10, int(size * 0.15)), (tile.centerx, tile.bottom - int(size * 0.17))
+                    if melodic:
+                        g.draw_text(label, label_px, *at, "mono-bold-italic", ink, anchor="center", tr=False)
+                    else:
+                        pic = g.image(label, round(label_px * 1.1), ink)
+                        g.surface.blit(pic, pic.get_rect(center=at))
         if not on_paper and self.code_panel is None:   # the code is its own composition
             gap = round(size * 0.06)
             self._draw_tape(g, pygame.Rect(xs[0], ys[4] + gap, xs[10] - xs[0], round(size * NOTE_STRIP) - gap), size)

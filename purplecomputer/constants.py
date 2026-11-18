@@ -58,7 +58,6 @@ VOLUME_ICONS = [ICON_VOLUME_OFF] + [ICON_VOLUME_LOW] * 3 + [ICON_VOLUME_MED] * 4
 ICON_SAVE = "󰆓"             # nf-md-content_save
 ICON_PALETTE = "󰏘"          # nf-md-palette
 ICON_MUSIC = "\uf001"       # nf-fa-music
-ICON_DRUM = "\uee32"        # nf-fa-drum
 ICON_CHAT = "󰭹"             # nf-md-chat_question
 ICON_MENU = "󰀻"             # nf-md-apps (grid icon for room picker)
 ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)

@@ -394,6 +394,7 @@ class MusicRoom(Room):
         self._sync_panels()
 
     def _stop_loop(self):
+        looped = self.loop.state != IDLE
         self.loop.stop()
         if self._loop_timer:
             self._loop_timer.stop()
@@ -401,7 +402,8 @@ class MusicRoom(Room):
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
         self._loop_task = None
-        self._busy()
+        if looped:   # the quiet starts when the loop does
+            self._busy()
         self._sync_panels()
 
     def _start_loop_timer(self):
@@ -599,7 +601,7 @@ class MusicRoom(Room):
         self._stop_loop()
         self.letters_mode = not self.letters_mode
         self._forget_word()
-        self._busy()
+        self._schedule_quiet()   # switching isn't a sound: the song's quiet goes on
         self._announce_voice()
         self.app.invalidate()
 
@@ -632,12 +634,23 @@ class MusicRoom(Room):
 
     def _busy(self):
         """Something just sounded or changed on the tape: its clock starts over."""
+        self._active_at = time.monotonic()
+        self._schedule_quiet()
+
+    def _schedule_quiet(self):
+        """The clock's steps and the clear for the tape showing now, from where its quiet already is: a song
+        left quiet past its rest while Letters was on clears as soon as it shows again."""
         for timer in self._rest_timers:
             timer.stop()
-        self._active_at = time.monotonic()
-        rest, steps, _ = self._rest()
-        self._rest_timers = [self.app.timers.after(rest * i / steps, self.app.invalidate) for i in range(1, steps)]
-        self._rest_timers.append(self.app.timers.after(rest, self._quiet))
+        rest, steps, began = self._rest()
+        now = time.monotonic()
+        if began is not None and now - began >= rest:
+            self._rest_timers = []
+            return self._quiet()
+        start = now if began is None else began
+        self._rest_timers = [self.app.timers.after(start + rest * i / steps - now, self.app.invalidate)
+                             for i in range(1, steps) if start + rest * i / steps > now]
+        self._rest_timers.append(self.app.timers.after(start + rest - now, self._quiet))
 
     def _rest_left(self) -> float:
         """How much of the quiet is left, in whole clock steps; all of it while the tape or a loop plays."""

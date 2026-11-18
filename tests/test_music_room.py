@@ -593,3 +593,35 @@ def test_a_note_played_by_name_echoes_as_notes_on_its_own_line():
         await room.handle(CharacterAction(char="G", shift_held=True))
         assert room.echo.fresh == "as" and room.echo.line() == "notes cg"
     run(go())
+
+
+def test_switching_to_letters_and_back_does_not_wake_an_old_song():
+    import time
+    from purplecomputer.harness import press
+    from purplecomputer.rooms import music_room
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "qw")
+        room._active_at = time.monotonic() - music_room.SONG_REST_S - 1
+        await press(app, "tab")
+        assert room._tape, "Letters doesn't touch the song"
+        await press(app, "tab")
+        assert room._tape == [] and room._last_song, "back in Notes, its quiet is long over: it clears, Space brings it back"
+    run(go())
+
+
+def test_switching_keeps_a_young_songs_clock_where_it_was():
+    import time
+    from purplecomputer.harness import press
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "qw")
+        room._active_at = time.monotonic() - 5
+        await press(app, "tab")
+        await press(app, "tab")
+        assert room._tape and room._rest_left() < 1.0
+    run(go())

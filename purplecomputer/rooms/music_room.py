@@ -741,10 +741,11 @@ class MusicRoom(Room):
                 return
             char = action.char
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
-            named = action.with_shift and self._shift_notes(held=False) and self._note_key(lookup)
+            by_name = action.with_shift and self._shift_notes(held=False)
+            named = by_name and self._note_key(lookup)
             echo = ("notes", lookup.lower()) if named else ("", None)
             lookup = named or lookup
-            if lookup not in ALL_KEYS:
+            if lookup not in ALL_KEYS or (by_name and not named):   # with Shift, only the note names play
                 return
             if self.letters_mode and self._letters_mash_drop(time.monotonic()):
                 return
@@ -1097,10 +1098,12 @@ class MusicRoom(Room):
         xs = [round(r.x + tab_w + i * w) for i in range(11)]
         ys = [round(top + i * size) for i in range(5)]
         letter_px = max(12, int(size * 0.3))
-        swap = not on_paper and self._shift_notes()   # Shift down: each note's name big, its key letter small
+        swap = not on_paper and self._shift_notes()   # Shift down: only the notes it plays, each name big, key small
         for row_idx, row in enumerate(GRID_KEYS):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
+                if swap and not (row_idx == NOTE_ROW and col_idx < 7):
+                    continue
                 bg = self.get_color(key)
                 note = note_name(col_idx, self._transition_state_for_col(col_idx)[0]) if melodic else None
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
@@ -1111,9 +1114,8 @@ class MusicRoom(Room):
                     g.rect(PAPER_OUTLINE, tile, width=2)
                 fg = (paper.INK_MUTED if on_paper else P.MUTED) if quiet else text_color_for(bg)
                 letter = KID_MATH_REMAP.get(key, key)
-                if swap and melodic:   # the keys Shift plays stand out from the other octaves'
-                    big = fg if row_idx == NOTE_ROW and col_idx < 7 else mix(fg, bg, 0.5)
-                    self._draw_big_note(g, note, letter_px, tile.center, big)
+                if swap:
+                    self._draw_big_note(g, note, letter_px, tile.center, fg)
                 else:
                     g.draw_text(letter, letter_px, tile.centerx, tile.centery,
                                 "mono-bold" if quiet else "mono-heavy", fg, anchor="center")

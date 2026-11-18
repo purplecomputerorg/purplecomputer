@@ -25,7 +25,7 @@ from ..music_constants import (
 from ..palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..gfx import is_one_emoji, mix, rgb
-from ..panels import ECHO_MAX, FOOTER_EM, CodePanel, Echo, LoopPanel
+from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel
 from ..sounds import SoundBank
 from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, key_hint_width, draw_label,
                   draw_mode_switch, draw_status_row, HeldKey, hold_status, status_row_h)
@@ -555,8 +555,8 @@ class MusicRoom(Room):
         return [n[:3] for n in self._tape]
 
     def _tape_code(self) -> str:
-        """The song as code: a part per phrase, `choose` where its instrument changes from the one set, `notes`
-        where Shift played it by name and `music` back from that; too long for the line, its end."""
+        """The whole song as code, the line scrolling if it's long: a part per phrase, `choose` where its
+        instrument changes from the one set, `notes` where Shift played it by name and `music` back from that."""
         if self.letters_mode:
             return ""
         parts = []   # [instrument, by name, keys]
@@ -566,20 +566,13 @@ class MusicRoom(Room):
             if not parts or rest or (inst or parts[-1][0]) != parts[-1][0] or bool(name) != parts[-1][1]:
                 parts.append([inst or (parts[-1][0] if parts else None), bool(name), ""])
             parts[-1][2] += (name or key).lower()
-
-        def code(parts):
-            inst, by_name, words = self._instrument(self.instrument_index)[0], False, []
-            for p_inst, p_name, keys in parts:
-                lead = [f"choose {p_inst}"] if p_inst and p_inst != inst else []
-                lead += [("notes" if p_name else "music")] if p_name != by_name else []
-                words.append(" ".join(lead + [keys]))
-                inst, by_name = p_inst or inst, p_name
-            return ", ".join(words)
-        while len(parts) > 1 and len(code(parts)) > ECHO_MAX:
-            parts = parts[1:]
-        if parts and (over := len(code(parts)) - ECHO_MAX) > 0:
-            parts[0][2] = parts[0][2][over:]
-        return code(parts)
+        inst, by_name, words = self._instrument(self.instrument_index)[0], False, []
+        for p_inst, p_name, keys in parts:
+            lead = [f"choose {p_inst}"] if p_inst and p_inst != inst else []
+            lead += [("notes" if p_name else "music")] if p_name != by_name else []
+            words.append(" ".join(lead + [keys]))
+            inst, by_name = p_inst or inst, p_name
+        return ", ".join(words)
 
     @staticmethod
     def _tune_offsets(tune: list) -> list:

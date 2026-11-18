@@ -41,7 +41,7 @@ Each cell displays its key character and can be colored. A note key also shows i
 
 The words follow the grid: Tab's two sides are `notes` and `letters`, Enter's choice is `choose`. A mode, voice or speed word holds to the end of its line, through commas and `repeat`, in either order (`slow notes cc` or `notes slow cc`); the next line starts with keys again.
 
-In Notes, code opens holding the song on the tape: a part per phrase, `choose` where the instrument it was played on changes from the one set, `notes` where Shift played it by name and `music` after; too long for the line (`ECHO_MAX`), its end. Each tape note keeps its instrument for this only; Space and the loop play the song on the one set. In Letters, or with no song, it opens holding the newest thing done by hand.
+In Notes, code opens holding the song on the tape: a part per phrase, `choose` where the instrument it was played on changes from the one set, `notes` where Shift played it by name and `music` after, all of it however long, the line scrolling. Each tape note keeps its instrument for this only; Space and the loop play the song on the one set. In Letters, or with no song, it opens holding the newest thing done by hand.
 
 - `asdf`: those keys, in whichever mode is on (`1234` drums).
 - `notes ccggaag`: notes by name, as Shift plays them; letters past G play as keys. Also leaves Letters.

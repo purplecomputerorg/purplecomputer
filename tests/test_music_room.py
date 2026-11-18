@@ -657,11 +657,8 @@ def test_the_shift_badge_shows_a_tap_only_where_a_tap_does_something():
     run(go())
 
 
-def test_code_opens_holding_the_song_with_its_instruments_and_names(monkeypatch):
+def test_code_opens_holding_the_whole_song_with_its_instruments_and_names():
     import time
-    from purplecomputer.rooms import music_room
-
-    monkeypatch.setattr(music_room, "ECHO_MAX", 100)
 
     async def go():
         app = make_app(room="music")
@@ -675,13 +672,13 @@ def test_code_opens_holding_the_song_with_its_instruments_and_names(monkeypatch)
         second = room._instrument(room.instrument_index)[0]
         room._tape_add("G", now - 4, "g")         # Shift G
         room._tape_add("F", now - 3.8)
-        room._next_voice()
-        room._next_voice()
-        assert room._tape_code() == f"choose {first} as, d, choose {second} notes g, music f"
-        room.instrument_index -= 1                # code opening on the instrument the song ends on
-        assert room._tape_code().startswith(f"choose {first} as, d, choose {second} notes g")
-        monkeypatch.setattr(music_room, "ECHO_MAX", 35)
-        assert room._tape_code() == f"choose {second} notes g, music f", "too long for the line, its end"
-        room._tape = [room._tape[0]] * 60
-        assert len(room._tape_code()) <= 35
+        for name in ("Q", "Z"):                   # two more instruments, past what one line shows
+            room._next_voice()
+            room._tape_add(name, now - 3)
+        song = room._tape_code()
+        assert song.startswith(f"choose {first} as, d, choose {second} notes g, music f, choose ")
+        while room._instrument(room.instrument_index)[0] != first:
+            room._next_voice()
+        assert room._tape_code().startswith("as, d, "), "no choose for the instrument already set"
+        assert song.endswith(" z") and len(song) > 40, "all of it, however many instruments"
     run(go())

@@ -25,7 +25,7 @@ from ..music_constants import (
 from ..palette import KEY_COLORS, text_color_for
 from .. import paper
 from ..gfx import is_one_emoji, mix, rgb
-from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel
+from ..panels import ECHO_MAX, FOOTER_EM, CodePanel, Echo, LoopPanel
 from ..sounds import SoundBank
 from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, key_hint_width, draw_label,
                   draw_mode_switch, draw_status_row, HeldKey, hold_status, status_row_h)
@@ -122,7 +122,8 @@ class MusicRoom(Room):
         self._spelled = ""
         self._typed_at: list = []  # when each letter of _spelled was typed
         self.word = None          # the real word the letters just typed end with
-        self._tape: list = []     # (key, mode, when) of the song played in Notes, on whichever instrument is set
+        self._tape: list = []     # (key, mode, when, (instrument, name)) of the song played in Notes; it plays back
+                                  # on whichever instrument is set, and the instruments and names go into its code
         self._tape_origin = 0.0   # when the song began, and how many notes have dropped off its front,
         self._tape_base = 0       # so each note keeps its timeline key while the song grows
         self._last_song = None    # (tape, origin, base) of the song quiet cleared, which Space or hold Enter brings back
@@ -179,7 +180,7 @@ class MusicRoom(Room):
 
     def _tape_state(self) -> dict:
         """The song a note per key, numbered from its start, so a Time Travel step adds only the notes new in it."""
-        return {f"t:{self._tape_base + i}": [k, round((t - self._tape_origin) * 1000)] for i, (k, _, t) in enumerate(self._tape)}
+        return {f"t:{self._tape_base + i}": [k, round((t - self._tape_origin) * 1000)] for i, (k, _, t, _) in enumerate(self._tape)}
 
     def _restore_tape(self, state: dict) -> list:
         """The song in a state, as a tune to load, numbered on from where it was."""
@@ -232,7 +233,7 @@ class MusicRoom(Room):
             self._spelled, self._typed_at = "".join(k.lower() for k, _ in letters), [t for _, t in letters]
             self.word = self._word_at_end()
         if any(n[1] == MODE_MUSIC for n in tune):
-            self._tape = [n for n in tune if n[1] == MODE_MUSIC]
+            self._tape = [(*n, None) for n in tune if n[1] == MODE_MUSIC]
             self._tape_origin = end - notes[-1][-1] / 1000
 
     def on_open_save(self):
@@ -394,7 +395,7 @@ class MusicRoom(Room):
         gaps = [b - a for a, b in zip(offsets, offsets[1:])]
         tail = min(max(sum(gaps) / len(gaps), 0.25), TUNE_GAP_MAX_S) if gaps else 0.6
         self._stop_tape()
-        events = [(k, m, o - offsets[0]) for (k, m, _), o in zip(tune, offsets)]
+        events = [(k, m, o - offsets[0]) for (k, m, *_), o in zip(tune, offsets)]
         self._loop_tape = {e: i for i, e in enumerate(events)}   # the tape's own notes, which the dot follows
         self.loop.play(events, offsets[-1] - offsets[0] + tail)
         self._start_loop_playback()
@@ -505,7 +506,8 @@ class MusicRoom(Room):
             if self.loop.state != IDLE:
                 self._stop_loop()
             self.cleanup_sounds()
-            self.code_panel = CodePanel(self.app, "music", self.echo.take())
+            fresh = self.echo.take()
+            self.code_panel = CodePanel(self.app, "music", self._tape_code() or fresh)
             self.app.set_panel(self.code_panel)
 
     def close_code_panel(self):
@@ -536,11 +538,12 @@ class MusicRoom(Room):
         return bool(self._tape)
 
     # ---------------------------------------------------------------- tape
-    def _tape_add(self, key: str, now: float):
-        """The song grows; a long enough rest before a note marks a new phrase in it."""
+    def _tape_add(self, key: str, now: float, name: str | None = None):
+        """The song grows, each note with the instrument it was played on and the note `name` Shift played it by;
+        a long enough rest before a note marks a new phrase in it."""
         if not self._tape:
             self._tape_origin, self._tape_base = now, 0
-        tape = self._tape + [(key, MODE_MUSIC, now)]
+        tape = self._tape + [(key, MODE_MUSIC, now, (self._instrument(self.instrument_index)[0], name))]
         self._tape_base += max(0, len(tape) - TAPE_MAX)
         self._tape = tape[-TAPE_MAX:]
         self._busy()
@@ -549,7 +552,34 @@ class MusicRoom(Room):
         """What the tape holds, as (key, mode, when): the song in Notes, the letters in Letters."""
         if self.letters_mode:
             return [(c.upper(), MODE_LETTERS, t) for c, t in zip(self._spelled, self._typed_at)]
-        return list(self._tape)
+        return [n[:3] for n in self._tape]
+
+    def _tape_code(self) -> str:
+        """The song as code: a part per phrase, `choose` where its instrument changes from the one set, `notes`
+        where Shift played it by name and `music` back from that; too long for the line, its end."""
+        if self.letters_mode:
+            return ""
+        parts = []   # [instrument, by name, keys]
+        for i, (key, _, t, how) in enumerate(self._tape):
+            inst, name = how or (None, None)
+            rest = i > 0 and t - self._tape[i - 1][2] >= ECHO_PAUSE_S
+            if not parts or rest or (inst or parts[-1][0]) != parts[-1][0] or bool(name) != parts[-1][1]:
+                parts.append([inst or (parts[-1][0] if parts else None), bool(name), ""])
+            parts[-1][2] += (name or key).lower()
+
+        def code(parts):
+            inst, by_name, words = self._instrument(self.instrument_index)[0], False, []
+            for p_inst, p_name, keys in parts:
+                lead = [f"choose {p_inst}"] if p_inst and p_inst != inst else []
+                lead += [("notes" if p_name else "music")] if p_name != by_name else []
+                words.append(" ".join(lead + [keys]))
+                inst, by_name = p_inst or inst, p_name
+            return ", ".join(words)
+        while len(parts) > 1 and len(code(parts)) > ECHO_MAX:
+            parts = parts[1:]
+        if parts and (over := len(code(parts)) - ECHO_MAX) > 0:
+            parts[0][2] = parts[0][2][over:]
+        return code(parts)
 
     @staticmethod
     def _tune_offsets(tune: list) -> list:
@@ -568,7 +598,7 @@ class MusicRoom(Room):
         loop or the code."""
         try:
             played = 0.0
-            for i, ((key, mode, _), at) in enumerate(zip(tune, self._tune_offsets(tune))):
+            for i, ((key, mode, *_), at) in enumerate(zip(tune, self._tune_offsets(tune))):
                 await asyncio.sleep(at - played)
                 played, self._tape_at = at, i
                 self._replay(key, mode, paint)
@@ -765,7 +795,7 @@ class MusicRoom(Room):
             self.loop.record_event(lookup, mode)
             self._hit(lookup, mode)
             if mode == MODE_MUSIC and self.loop.state != LOOPING:
-                self._tape_add(lookup, time.monotonic())
+                self._tape_add(lookup, time.monotonic(), echo[1])
             self._echo_key(echo[0], echo[1] or lookup.lower())
 
     def _echo_key(self, way: str, ch: str):

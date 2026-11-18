@@ -655,3 +655,33 @@ def test_the_shift_badge_shows_a_tap_only_where_a_tap_does_something():
         assert app.room.uses_sticky_shift
         app.room.code_panel = None
     run(go())
+
+
+def test_code_opens_holding_the_song_with_its_instruments_and_names(monkeypatch):
+    import time
+    from purplecomputer.rooms import music_room
+
+    monkeypatch.setattr(music_room, "ECHO_MAX", 100)
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        first = room._instrument(room.instrument_index)[0]
+        now = time.monotonic()
+        room._tape_add("A", now - 9)
+        room._tape_add("S", now - 8.8)
+        room._tape_add("D", now - 5)              # a rest before it: a new phrase
+        room._next_voice()
+        second = room._instrument(room.instrument_index)[0]
+        room._tape_add("G", now - 4, "g")         # Shift G
+        room._tape_add("F", now - 3.8)
+        room._next_voice()
+        room._next_voice()
+        assert room._tape_code() == f"choose {first} as, d, choose {second} notes g, music f"
+        room.instrument_index -= 1                # code opening on the instrument the song ends on
+        assert room._tape_code().startswith(f"choose {first} as, d, choose {second} notes g")
+        monkeypatch.setattr(music_room, "ECHO_MAX", 35)
+        assert room._tape_code() == f"choose {second} notes g, music f", "too long for the line, its end"
+        room._tape = [room._tape[0]] * 60
+        assert len(room._tape_code()) <= 35
+    run(go())

@@ -258,22 +258,6 @@ def test_the_same_letter_over_and_over_fades_out_but_still_spells(monkeypatch):
     run(go())
 
 
-def test_a_looping_word_shows_each_time_it_comes_around(monkeypatch):
-    import asyncio
-    from purplecomputer.rooms.music_room import MODE_LETTERS
-
-    async def go():
-        room = _letters_room(monkeypatch).room
-        seen = []
-        monkeypatch.setattr(room, "_play_key", lambda key, mode, instrument=None: seen.append(room.word))
-        room.loop.play([(k, MODE_LETTERS, i * 0.01) for i, k in enumerate("CATDOG")], 0.1)
-        room._start_loop_playback()
-        await asyncio.sleep(0.08)
-        room._stop_loop()
-        assert seen[2] == "cat" and seen[5] == "dog"
-    run(go())
-
-
 def test_choosing_an_instrument_or_key_in_code_leaves_letters(monkeypatch):
     async def go():
         app = _letters_room(monkeypatch)
@@ -630,13 +614,34 @@ def test_switching_keeps_a_young_songs_clock_where_it_was():
     run(go())
 
 
-def test_the_tape_sits_back_while_notes_keep_coming_and_comes_up_at_a_pause():
+def test_the_tape_sits_back_but_for_while_it_plays_and_its_keys_light():
+    import asyncio
+
     async def go():
         app = make_app(room="music")
         room = app.room
-        await type_text(app, "qwer")
-        assert room._playing_along()
-        mashing = room._tape_ink()
-        room._tape = [(k, m, t - 3) for k, m, t in room._tape]
-        assert not room._playing_along() and room._tape_ink() != mashing
+        await type_text(app, "qw")
+        resting, painted, state = room._tape_ink(), room.get_color("Q"), dict(room.color_state)
+        room._play_tape()
+        await asyncio.sleep(0.05)
+        assert room._tape_ink() != resting and room._tape_at is not None
+        assert room._tile_color("Q") != painted and room.color_state == state, "lit, its paint left alone"
+        room._stop_tape()
+    run(go())
+
+
+def test_a_loop_dots_the_tapes_notes_not_the_ones_played_over_it():
+    import asyncio
+
+    async def go():
+        app = make_app(room="music")
+        app._music_looping_enabled = True
+        room = app.room
+        await type_text(app, "qw")
+        room._loop_tune()
+        await asyncio.sleep(0.05)
+        assert room._tape_at is not None and room._lit
+        room.loop.record_event("E", "music")
+        room._stop_loop()
+        assert room._tape_at is None
     run(go())

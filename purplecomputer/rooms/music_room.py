@@ -54,7 +54,8 @@ ERASE_MORE_S = 1.0            # seconds of holding Backspace before it takes who
 ERASE_EVERY_S = (0.15, 0.6)   # a held Backspace takes a note, or later a phrase, this often, not at key repeat
 ERASE_HINT = "{Backspace} erase"
 TAPE_FADE = 0.9               # how far the tape has faded into the background by the time it clears
-TAPE_PLAYING_FADE = 0.65      # how far back the Notes tape sits while notes keep coming, till a pause brings it up
+TAPE_REST_FADE = 0.65         # how far back the Notes tape sits, except while it plays back or loops
+REPLAY_LIGHT_S = 0.25         # how long a key the tape or loop plays lights in its color
 REST_STEPS = 20               # the tape fades and its clock empties in this many steps over its quiet rest
 NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the middle octave
 SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
@@ -127,7 +128,9 @@ class MusicRoom(Room):
         self._erasing_since = None
         self._erased_at = 0.0
         self._tape_task = None
-        self._tape_at = None      # the tape note playing back now
+        self._tape_at = None      # the tape note playing back now, or looping
+        self._loop_tape: dict = {}
+        self._lit: dict = {}      # keys the tape or loop just played: their timers
         self._rest_timers: list = []
         self._active_at = 0.0     # the last sound, play back or erase: the tape clears once it's quiet this long
         self.echo = Echo(pause=ECHO_PAUSE_S)
@@ -338,6 +341,12 @@ class MusicRoom(Room):
             return P.TILE
         return KEY_COLORS.get(key.lower(), P.TILE) if state == COLOR_KEYCAP else state
 
+    def _tile_color(self, key: str, on_paper=False) -> str:
+        """Its color, or lit brighter than any it takes while the tape or a loop plays it."""
+        if key in self._lit and not on_paper:
+            return mix(KEY_COLORS.get(key.lower(), P.ACCENT), "#ffffff", 0.35)
+        return self.get_color(key)
+
     def flash_note(self, key: str):
         if key in self._note_timers:
             self._note_timers[key].stop()
@@ -391,7 +400,9 @@ class MusicRoom(Room):
         gaps = [b - a for a, b in zip(offsets, offsets[1:])]
         tail = min(max(sum(gaps) / len(gaps), 0.25), TUNE_GAP_MAX_S) if gaps else 0.6
         self._stop_tape()
-        self.loop.play([(k, m, o - offsets[0]) for (k, m, _), o in zip(tune, offsets)], offsets[-1] - offsets[0] + tail)
+        events = [(k, m, o - offsets[0]) for (k, m, _), o in zip(tune, offsets)]
+        self._loop_tape = {e: i for i, e in enumerate(events)}   # the tape's own notes, which the dot follows
+        self.loop.play(events, offsets[-1] - offsets[0] + tail)
         self._start_loop_playback()
         self._sync_panels()
 
@@ -404,6 +415,7 @@ class MusicRoom(Room):
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
         self._loop_task = None
+        self._tape_at = None
         if looped:   # the quiet starts when the loop does
             self._busy()
         self._sync_panels()
@@ -432,27 +444,41 @@ class MusicRoom(Room):
                     break
                 cycle_start = asyncio.get_event_loop().time()
                 self.loop.start_new_cycle()
-                for key, mode, offset in sorted(events, key=lambda e: e[2]):
+                for event in sorted(events, key=lambda e: e[2]):
                     if self.loop.state != LOOPING:
                         return
-                    wait = offset - (asyncio.get_event_loop().time() - cycle_start)
+                    wait = event[2] - (asyncio.get_event_loop().time() - cycle_start)
                     if wait > 0:
                         await asyncio.sleep(wait)
                     if self.loop.state != LOOPING:
                         return
-                    self._hit(key, mode, paint=False)
+                    self._tape_at = self._loop_tape.get(event, self._tape_at)
+                    self._replay(event[0], event[1])
                 remaining = duration - (asyncio.get_event_loop().time() - cycle_start)
                 if remaining > 0:
                     await asyncio.sleep(remaining)
         except asyncio.CancelledError:
             pass
 
-    def _hit(self, key: str, mode: str, paint: bool = True):
-        """A key sounding; paint moves its color on, which a loop going around leaves alone."""
+    def _hit(self, key: str, mode: str):
+        """A key played: its color moves on."""
         if mode == MODE_LETTERS:
             self._spell(key, time.monotonic())
-        if paint:
-            self.next_color(key)
+        self.next_color(key)
+        self._sound(key, mode)
+
+    def _replay(self, key: str, mode: str):
+        """A key the tape or a loop plays: it lights a moment in its color, and the colors the kid made stay put."""
+        if key in self._lit:
+            self._lit[key].stop()
+
+        def _off():
+            self._lit.pop(key, None)
+            self.app.invalidate()
+        self._lit[key] = self.app.timers.after(REPLAY_LIGHT_S, _off)
+        self._sound(key, mode)
+
+    def _sound(self, key: str, mode: str):
         self._play_key(key, mode)
         if self.app.active_room == self.name:
             self.app.set_legend(KEY_COLORS.get(key.lower()), fade=True)
@@ -549,16 +575,13 @@ class MusicRoom(Room):
         self._tape_task = asyncio.create_task(self._tape_playback(self._tune()))
 
     async def _tape_playback(self, tune: list):
-        """The tape again as it was played; only sound and the note's name, so the colors the kid made stay put
-        and nothing joins the loop or the code."""
+        """The tape again as it was played, its keys lit, nothing joining the loop or the code."""
         try:
             played = 0.0
             for i, ((key, mode, _), at) in enumerate(zip(tune, self._tune_offsets(tune))):
                 await asyncio.sleep(at - played)
                 played, self._tape_at = at, i
-                self._play_key(key, mode)
-                if mode == MODE_MUSIC:
-                    self.flash_note(key)
+                self._replay(key, mode)
             await asyncio.sleep(0.3)
         finally:
             self._tape_at = None
@@ -653,8 +676,6 @@ class MusicRoom(Room):
         self._rest_timers = [self.app.timers.after(start + rest * i / steps - now, self.app.invalidate)
                              for i in range(1, steps) if start + rest * i / steps > now]
         self._rest_timers.append(self.app.timers.after(start + rest - now, self._quiet))
-        if self._playing_along():
-            self._rest_timers.append(self.app.timers.after(self._tape[-1][2] + ECHO_PAUSE_S - now, self.app.invalidate))
 
     def _rest_left(self) -> float:
         """How much of the quiet is left, in whole clock steps; all of it while the tape or a loop plays."""
@@ -915,16 +936,12 @@ class MusicRoom(Room):
         rests = [0] + [int(b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
         return names, keys, rests, "note", "♪", None
 
-    def _playing_along(self) -> bool:
-        """Notes are still coming, with no pause yet to look at the song."""
-        return (not self.letters_mode and bool(self._tape) and not self._sounding()
-                and time.monotonic() - self._tape[-1][2] < ECHO_PAUSE_S)
-
     def _tape_ink(self, color=P.TEXT) -> str:
-        """The tape sits back while notes keep coming, comes up at a pause, then fades a little each clock step as
-        the quiet grows, nearly gone when it clears."""
+        """The Notes tape sits back but for while it plays, and fades a little each clock step as the quiet grows,
+        nearly gone when it clears."""
         fade = (1 - self._rest_left()) * TAPE_FADE
-        return mix(color, P.SURFACE, max(fade, TAPE_PLAYING_FADE) if self._playing_along() else fade)
+        sits_back = not self.letters_mode and not self._sounding()
+        return mix(color, P.SURFACE, max(fade, TAPE_REST_FADE) if sits_back else fade)
 
     def _draw_note_names(self, g, xs, ys, letter_px):
         """Shift's seven notes in a row of their own, centered in the grid's place so they don't read as keys, each
@@ -934,7 +951,7 @@ class MusicRoom(Room):
         row.center = ((xs[0] + xs[10]) // 2, (ys[0] + ys[4]) // 2 - th // 4)
         for col, key in enumerate(GRID_KEYS[NOTE_ROW][:7]):
             tile = pygame.Rect(row.x + col * tw, row.y, tw, th).inflate(-max(4, tw // 12), -max(4, tw // 12))
-            bg = self.get_color(key)
+            bg = self._tile_color(key)
             g.rect(bg, tile, radius=tw // 8) if bg != P.TILE else g.rect(P.LINE, tile, width=2, radius=tw // 8)
             ink = P.TEXT if bg == P.TILE else text_color_for(bg)
             self._draw_big_note(g, note_name(col, self.root_index), round(letter_px * 1.3), tile.center, ink)
@@ -1120,7 +1137,7 @@ class MusicRoom(Room):
         for row_idx, row in enumerate(() if named else GRID_KEYS):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
-                bg = self.get_color(key)
+                bg = self._tile_color(key, on_paper)
                 note = note_name(col_idx, self._transition_state_for_col(col_idx)[0]) if melodic else None
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
                 quiet = bg == P.TILE

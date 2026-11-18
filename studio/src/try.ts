@@ -31,18 +31,20 @@ const EXAMPLES: Partial<Record<Room, string[]>> = {
 };
 
 // The demo and code keys: under the rooms, with the phone keys, for a room that has them.
-const demoKey = h("button", { class: "demo-key", type: "button", onclick: () => demo(stage.live.place.room) });
+const demoKeys = [0, 1].map((i) => h("button", { class: "demo-key", type: "button", onclick: () => demo(stage.live.place.room, i) }));
 const codeLabel = h("span");
 const codeKey = h("button", { class: "demo-key", type: "button", onclick: () => { stage.showKeys(["escape", "space"], 0); code(); } }, codeLabel, keycaps("Esc", "Space"));
-const trayKeys = h("div", { class: "demo-keys", hidden: true }, demoKey, codeKey);
+const trayKeys = h("div", { class: "demo-keys", hidden: true }, ...demoKeys, codeKey);
 const moved = () => {
   const room = stage.live.place.room;
-  const d = ready ? DEMOS[room] : undefined;
-  demoKey.hidden = !d;
-  demoKey.textContent = d ? `▶ ${d.label}` : "";
+  const ds = ready ? DEMOS[room] ?? [] : [];
+  demoKeys.forEach((key, i) => {
+    key.hidden = !ds[i];
+    key.textContent = ds[i] ? `▶ ${ds[i].label}` : "";
+  });
   codeKey.hidden = !ready || !EXAMPLES[room];
   codeLabel.textContent = stage.live.place.code ? "Close code" : "Try code";
-  trayKeys.hidden = demoKey.hidden && codeKey.hidden;
+  trayKeys.hidden = !ds.length && codeKey.hidden;
   hint();
   tip();
   tell();
@@ -140,14 +142,19 @@ addEventListener(KEY_EVENT, () => { if (stage.live.place.room === "art") artUsed
 const LINES = ["cat * 5", "red + blue", "3 x 4 bananas", "say I love you"];
 let lines = 0;
 
-// Each room's demo: keys Purple gets on the laptop, ms apart ("_" waits a beat).
-const DEMOS: Partial<Record<Room, { label: string; keys: () => string[]; ms: number }>> = {
-  art: { label: "Paint a heart", keys: () => [...(artUsed ? [] : [...repeat(10, "down"), ...repeat(30, "right")]), ...paint(HEART)], ms: 35 },
-  // Twinkle Twinkle Little Star, on the middle row's scale.
-  music: { label: "Play a song", keys: () => "a a g g h h g _ f f d d s s a".split(" "), ms: 330 },
-  play: { label: "Type something", keys: () => line(LINES[lines++ % LINES.length]), ms: TYPE_MS },
+// Each room's demos: keys Purple gets on the laptop, ms apart ("_" waits a beat).
+type Demo = { label: string; keys: () => string[]; ms: number; letters?: boolean };
+const DEMOS: Partial<Record<Room, Demo[]>> = {
+  art: [{ label: "Paint a heart", keys: () => [...(artUsed ? [] : [...repeat(10, "down"), ...repeat(30, "right")]), ...paint(HEART)], ms: 35 }],
+  music: [
+    // Twinkle Twinkle Little Star, on the middle row's scale.
+    { label: "Play a song", keys: () => "a a g g h h g _ f f d d s s a".split(" "), ms: 330 },
+    // In Letters saying sounds: c, a, t, then Space says the word they spell.
+    { label: "Spell cat", keys: () => "_ c _ a _ t _ _ space".split(" "), ms: 500, letters: true },
+  ],
+  play: [{ label: "Type something", keys: () => line(LINES[lines++ % LINES.length]), ms: TYPE_MS }],
   // A pyramid: letters climb over the blocks under them, so each row back over the last goes a level up.
-  blocks: { label: "Build a pyramid", keys: () => "down down down down left left left left right e r t y t r e left left d f g f d right right c v c left left b".split(" "), ms: 110 },
+  blocks: [{ label: "Build a pyramid", keys: () => "down down down down left left left left right e r t y t r e left left d f g f d right right c v c left left b".split(" "), ms: 110 }],
 };
 
 // What's playing; a new one, typing, or another room stops it.
@@ -167,13 +174,13 @@ function play(keys: string[], ms: number, done: () => void) {
   step(0);
 }
 
-function demo(room: Room) {
-  const d = DEMOS[room];
+function demo(room: Room, i: number) {
+  const d = DEMOS[room]?.[i];
   if (!d || stage.live.place.room !== room) return;
   // Its keys are for the room itself, not the code line.
-  if (stage.live.place.code) return code(() => demo(room));
+  if (stage.live.place.code) return code(() => demo(room, i));
   tell({ demoed: room });
-  stage.live.demo();
+  stage.live.demo(d.letters);
   play(d.keys(), d.ms, () => stage.live.prompt("Your turn!"));
 }
 

@@ -137,13 +137,16 @@ def code(on):
     _app.invalidate()
 
 
-def demo():
-    """The room in the mode its Try demo's keys are for, whatever Tab left it in."""
+def demo(letters=False):
+    """The room in the mode its Try demo's keys are for, whatever Tab left it in; letters: Music's Letters, saying sounds."""
     room = _app.room
     if _app.active_room == "art":
         room._set_paint_mode(True)
-    elif _app.active_room == "music" and room.letters_mode:
-        room._toggle_letters()
+    elif _app.active_room == "music":
+        room.say_sounds = room.say_sounds or letters
+        if room.letters_mode != letters:
+            room._toggle_letters()
+            room._stop_letter()  # the switch's sample "A" would sound like the demo's first letter
     elif _app.active_room == "blocks":
         if room._back:
             room.turn_around()  # first: it does nothing while the view is moving

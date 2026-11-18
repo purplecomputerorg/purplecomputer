@@ -12,7 +12,7 @@ export type ToFrame =
   | { type: "setup"; setup: RoomSetup }
   | { type: "key"; char: string }
   | { type: "code"; on: boolean }
-  | { type: "demo" }
+  | { type: "demo"; letters: boolean }
   | { type: "focus" }
   | { type: "hush" }
   | { type: "voice" }
@@ -91,7 +91,7 @@ const handle = (live: LivePurple, m: ToFrame): Promise<void> => {
   if (m.type === "setup") return live.setup(m.setup);
   if (m.type === "key") return live.key(m.char);
   if (m.type === "code") return live.code(m.on);
-  if (m.type === "demo") return live.demo();
+  if (m.type === "demo") return live.demo(m.letters);
   if (m.type === "hush") return live.hush();
   if (m.type === "voice") return Promise.resolve(startVoice());
   if (m.type === "filter") return live.filter(m.text).then((value) => post({ type: "answer", id: m.id, value }));

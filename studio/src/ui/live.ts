@@ -215,9 +215,9 @@ class LiveScreen {
     if (this.ready) this.post({ type: "code", on });
   }
 
-  // The room in its demo's mode, before the demo's keys.
-  demo(): void {
-    if (this.ready) this.post({ type: "demo" });
+  // The room in its demo's mode, before the demo's keys; letters: Music's Letters, saying sounds.
+  demo(letters = false): void {
+    if (this.ready) this.post({ type: "demo", letters });
   }
 
   focus(): void {

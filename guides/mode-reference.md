@@ -39,13 +39,13 @@ Each cell displays its key character and can be colored. A note key also shows i
 
 ## Code
 
-The words follow the grid: Tab's two sides are `notes` and `letters`, Enter's choice is `choose`. A mode or voice word holds to the end of its line, through `fast`, commas and `repeat`; the next line starts with keys again.
+The words follow the grid: Tab's two sides are `notes` and `letters`, Enter's choice is `choose`. A mode, voice or speed word holds to the end of its line, through commas and `repeat`, in either order (`slow notes cc` or `notes slow cc`); the next line starts with keys again.
 
 - `asdf`: those keys, in whichever mode is on (`1234` drums).
 - `notes ccggaag`: notes by name, as Shift plays them; letters past G play as keys. Also leaves Letters.
 - `letters cat`: Letters on, saying what follows. `music` (alone or before keys) goes back to notes.
 - `choose ukulele zxcv`: an instrument (leaves Letters), then keys. `choose sounds cat` / `choose names cat`: Letters on with that voice, then says what follows.
-- `fast` / `slow`, `key g`, `repeat 3 …` as the help shows.
+- `fast` / `slow` until another speed or the line's end, `key g`, `repeat 3 …` as the help shows.
 - Older code's `letters sounds`, `letters names`, `letters on`/`off` still work, and run what follows them. `sounds` alone is no word: it plays its letters as keys. Nothing shows an error; what isn't a word plays as keys.
 
 ## The Tape

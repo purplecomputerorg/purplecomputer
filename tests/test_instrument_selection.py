@@ -253,6 +253,17 @@ class TestNotesByNameAndVoices:
         keys, *_ = self._run(["notes fast c choose ukulele d"])
         assert keys == ["A", "S"]
 
+    def test_a_speed_holds_to_the_end_of_the_line_and_any_command_can_follow_it(self, monkeypatch):
+        monkeypatch.setattr(MusicCodeRunner, "SPEED_SLOW", 0)
+        delays = []
+        real_sleep = asyncio.sleep
+        monkeypatch.setattr(asyncio, "sleep", lambda d: delays.append(d) or real_sleep(0))
+        keys, *_ = self._run(["slow notes cc"])
+        assert keys == ["A", "A"]
+        delays.clear()
+        self._run(["slow c, d", "e"])
+        assert delays == [0, 0, MusicCodeRunner.SPEED_NORMAL], "slow to the line's end, the next line as usual"
+
     def test_the_next_line_plays_keys_again(self):
         keys, *_ = self._run(["notes c", "c"])
         assert keys == ["A", "C"]

@@ -258,6 +258,7 @@ class MusicCodeRunner:
         self.play_key = play_key_fn
         self.note_key = note_key_fn     # the key that plays a note by its name, as Shift does on the grid
         self._by_name = False
+        self._delay = self.SPEED_NORMAL
         self.set_instrument = set_instrument_fn
         self.color_fn = color_fn
         self.flash_fn = flash_fn
@@ -313,7 +314,7 @@ class MusicCodeRunner:
         self._mode = mode
         self._all_keys = ALL_KEYS
         for line in lines:
-            self._by_name = False   # `notes` plays names to the end of its line
+            self._by_name, self._delay = False, self.SPEED_NORMAL   # `notes`, `slow` and `fast` hold to the line's end
             await self._run_lines(self._peel_mode_before_repeat(line))
 
     def _peel_mode_before_repeat(self, line: str) -> list[str]:
@@ -359,8 +360,7 @@ class MusicCodeRunner:
 
         # Stage 2: fuzzy-correct a misspelled keyword (e.g. "chooze marimba"),
         # then retry the table. A keyword may correct to a speed word
-        # (fast/slow), which has no table entry; record the fix and let stage 3
-        # parse the speed prefix.
+        # (fast/slow), which has no table entry; stage 3 plays the fixed line.
         words = text.strip().split(None, 1)
         if words and len(words[0]) >= 3:
             from .fuzzy import fuzzy_match_small
@@ -372,6 +372,7 @@ class MusicCodeRunner:
                 self.corrections.append((text, corrected))
                 if await self._run_command_table(corrected):
                     return
+                text = corrected if corrected_kw in ('fast', 'slow') else text
 
         # Stage 3: not a command, play the line as notes.
         await self._play_notes(text)
@@ -503,23 +504,14 @@ class MusicCodeRunner:
         return True
 
     async def _play_notes(self, text: str) -> None:
-        """Parse speed prefix and play characters as notes."""
-        delay = self.SPEED_NORMAL
-        m = re.match(r'^(fast|slow)\s+(.+)$', text, re.IGNORECASE)
-        if m:
-            delay = self.SPEED_FAST if m.group(1).lower() == 'fast' else self.SPEED_SLOW
-            text = m.group(2)
-        else:
-            # Fuzzy speed prefix
-            words = text.split(None, 1)
-            if words and len(words) > 1 and len(words[0]) >= 3:
-                from .fuzzy import fuzzy_match_small
-                speed = fuzzy_match_small(words[0].lower(), ['fast', 'slow'], cutoff=0.7)
-                if speed:
-                    self.corrections.append((text, f'{speed} {words[1]}'))
-                    delay = self.SPEED_FAST if speed == 'fast' else self.SPEED_SLOW
-                    text = words[1]
-
+        """Play characters as notes; a fast or slow before them holds to the end of the line, and whatever
+        command follows it runs, so `slow notes cc` plays by name."""
+        first, _, rest = text.strip().partition(' ')
+        if first.lower() in ('fast', 'slow'):
+            self._delay = self.SPEED_FAST if first.lower() == 'fast' else self.SPEED_SLOW
+            if rest and not await self._run_command_table(rest.strip()):
+                await self._play_notes(rest)
+            return
         for ch in text:
             lookup = ch.upper() if ch.isalpha() else ch
             if self._by_name:
@@ -530,7 +522,7 @@ class MusicCodeRunner:
                 self.play_key(lookup, self._mode)
                 if self.flash_fn:
                     self.flash_fn(lookup)
-                await asyncio.sleep(delay)
+                await asyncio.sleep(self._delay)
 
 
 # Vocabulary lists for fuzzy matching

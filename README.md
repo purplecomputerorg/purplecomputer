@@ -41,7 +41,7 @@ Purple Computer turns your old laptop into a calm, creative computer for kids. W
 
 No. There's no chatbot, no LLM in the product, nothing that generates unpredictable output. The one ML component is speak-out-loud, which uses [Piper](https://github.com/rhasspy/piper) for text-to-speech (or [flite](https://github.com/festvox/flite) as the Quick voice); it runs entirely on the laptop, offline, with nothing sent anywhere. Purple Studio voices a family room's fixed lines with [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), in the parent's browser, before the pack ever reaches Purple.
 
-A lot of the code is LLM-generated, and LLMs are also used to make the demo videos, but no LLM ships in the product. The image gets `purplecomputer/`, `packs/`, and a named list of files from `scripts/` (see `build-scripts/00-build-golden-image.sh`); `anthropic` is only in `tools/requirements.txt`. Generated assets are checked in as fixed data, like the keypress list in `purplecomputer/demo/segments/`. See [DISCLOSURE.md](/docs/DISCLOSURE.md).
+A lot of the code is LLM-generated, and LLMs are also used to make the demo videos, but no LLM ships in the product. The image gets `purplecomputer/`, `packs/`, and a named list of files from `scripts/` (see `build-scripts/00-build-golden-image.sh`); `anthropic` is only in `tools/requirements.txt`. Generated assets are checked in as fixed data, like a demo's keypress list in `purplecomputer/demo/segments/`. See [DISCLOSURE.md](/docs/DISCLOSURE.md).
 
 ---
 

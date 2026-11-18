@@ -15,7 +15,8 @@ def test_autostart_fires_with_zero_preroll(tmp_path, monkeypatch):
     monkeypatch.setenv("PURPLE_DEMO_AUTOSTART", "1")
     monkeypatch.setenv("PURPLE_RECORD_GO_FILE", str(go_file))
     monkeypatch.setenv("PURPLE_RECORD_READY_FILE", str(tmp_path / "ready"))
-    monkeypatch.setenv("PURPLE_DEMO_COMPOSITION", "everything.json")
+    import purplecomputer.demo as demo
+    monkeypatch.setattr(demo, "get_demo_script", lambda: [demo.Pause(5)])
 
     async def go():
         app = make_app()

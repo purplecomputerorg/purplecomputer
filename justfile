@@ -167,42 +167,6 @@ record-demo-no-music:
     @echo "Recording demo (no background music)..."
     PURPLE_NO_MUSIC=1 ./recording-setup/record-demo.sh
 
-# Record the everything walkthrough footage (voiceover added later, no music)
-record-everything:
-    @echo "Generating voice clips (if needed)..."
-    PURPLE_DEMO_COMPOSITION=everything.json {{venv}}/bin/python scripts/generate_voice_clips.py
-    @echo "Recording everything walkthrough footage..."
-    PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=everything.json PURPLE_RECORD_NO_POSTFX=1 \
-        ./recording-setup/record-demo.sh recordings/everything.mp4 420
-
-# Record the ad screen footage (no music; add your own in the editor)
-record-ad:
-    @echo "Generating voice clips (if needed)..."
-    PURPLE_DEMO_COMPOSITION=ad.json {{venv}}/bin/python scripts/generate_voice_clips.py
-    @echo "Recording ad screen footage..."
-    @rm -f recordings/ad_zoom_events.json
-    PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=ad.json \
-        PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/ad_zoom_events.json" \
-        ./recording-setup/record-demo.sh recordings/ad.mp4 60
-
-# Record the short ad screen footage (Play + Art beats; no music)
-record-short-ad:
-    @echo "Generating voice clips (if needed)..."
-    PURPLE_DEMO_COMPOSITION=short_ad.json {{venv}}/bin/python scripts/generate_voice_clips.py
-    @echo "Recording short ad screen footage..."
-    @rm -f recordings/short_ad_zoom_events.json
-    PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=short_ad.json \
-        PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/short_ad_zoom_events.json" \
-        ./recording-setup/record-demo.sh recordings/short_ad.mp4 60
-
-# Record the "Available now!" Art-room beat (no music, no voice)
-record-available-now:
-    @echo "Recording Available-now Art beat..."
-    @rm -f recordings/available_now_zoom_events.json
-    PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=available_now.json \
-        PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/available_now_zoom_events.json" \
-        ./recording-setup/record-demo.sh recordings/available_now.mp4 30
-
 # Record while you drive Purple yourself (no music, no scripted demo; stops on exit or after 5 min)
 record-manual:
     @echo "Recording (manual, no music)... exit Purple to end, or it stops after 5 minutes."

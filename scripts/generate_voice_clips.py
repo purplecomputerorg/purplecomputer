@@ -36,7 +36,7 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
 def _stub_ui_modules():
     """The evaluator lives in purplecomputer.play_eval with no UI dependencies now; nothing to stub."""
 def _collect_all_actions() -> list:
-    """Collect all demo actions from composition segments and fallback script."""
+    """Collect all demo actions from the active composition's segments."""
     import importlib
     import json
 
@@ -53,16 +53,11 @@ def _collect_all_actions() -> list:
                 f"purplecomputer.demo.segments.{name}"
             )
             actions.extend(mod.SEGMENT)
-
-    # Also scan the default script as fallback
-    from purplecomputer.demo.default_script import DEMO_SCRIPT
-    actions.extend(DEMO_SCRIPT)
-
     return actions
 
 
 def extract_demo_phrases() -> list[str]:
-    """Extract speakable phrases from demo segments and default script.
+    """Extract speakable phrases from demo segments.
 
     Uses the Play room's own speech-trigger and speakable logic, so a
     `repeat N ...` line yields the per-item phrases the room looks up.

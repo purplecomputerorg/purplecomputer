@@ -29,7 +29,6 @@ from .script import (
     segment_duration,
 )
 from .player import DemoPlayer
-from .default_script import DEMO_SCRIPT, DEMO_SCRIPT_SHORT
 
 
 def _load_composition(path: Path) -> list:
@@ -71,7 +70,7 @@ def _composition_path() -> Path:
     """Path to the active composition json.
 
     PURPLE_DEMO_COMPOSITION selects an alternate composition (e.g. "ad.json"
-    for the ad screen footage) without disturbing the default demo.json.
+    for an ad) without disturbing the default demo.json.
     """
     name = os.environ.get("PURPLE_DEMO_COMPOSITION", "demo.json")
     return Path(__file__).parent / name
@@ -83,7 +82,7 @@ def get_demo_script() -> list:
     Priority:
     1. composition json (if it exists)
     2. Pre-recorded script (recorded_script.py)
-    3. Default hand-crafted demo
+    3. Nothing: no demo is checked in until one is made for today's Purple
     """
     demo_json = _composition_path()
     if demo_json.exists():
@@ -92,7 +91,7 @@ def get_demo_script() -> list:
         from .recorded_script import RECORDED_DRAWING
         return RECORDED_DRAWING
     except ImportError:
-        return DEMO_SCRIPT
+        return []
 
 
 def get_speed_multiplier() -> float:
@@ -127,8 +126,6 @@ __all__ = [
     "Comment",
     "ZoomTarget",
     "DemoPlayer",
-    "DEMO_SCRIPT",
-    "DEMO_SCRIPT_SHORT",
     "get_demo_script",
     "get_speed_multiplier",
 ]

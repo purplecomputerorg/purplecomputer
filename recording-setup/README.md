@@ -23,7 +23,7 @@ The recording will be saved to `recordings/demo.mp4`.
 3. The demo script waits for the go-file, then plays; when it finishes it touches a done-file and recording stops immediately, while Purple is still on screen
 4. Nothing is trimmed or re-timed, so captured audio stays perfectly aligned with video
 5. **Background music** is mixed in with automatic ducking (music gets quieter when app sounds play); the video stream is stream-copied, never re-encoded
-6. Set `PURPLE_RECORD_NO_POSTFX=1` to skip the cropped and zoomed versions (used by `just record-everything`)
+6. Set `PURPLE_RECORD_NO_POSTFX=1` to skip the cropped and zoomed versions
 
 ## Background Music
 
@@ -41,7 +41,7 @@ Source: https://soundcloud.com/royalty-free-audio-loops/antarcticbreeze-happy-uk
 
 ## Customizing the Demo
 
-Edit `purplecomputer/demo/default_script.py` to change what the demo shows.
+Compose what the demo shows from segments in `purplecomputer/demo/segments/` listed in `demo.json` (see `guides/demo-system.md`); none are checked in now.
 
 The script uses simple actions:
 

@@ -2,7 +2,7 @@
 
 How to create, generate, and compose demo screencasts for Purple Computer.
 
-This is a recording rig for producing the marketing and walkthrough video, not a product feature: customers cannot reach it. It runs only when `PURPLE_DEMO_AUTOSTART=1` is set, which the dev launcher passes through and the shipped image never sets. A demo is a fixed list of keypresses composed ahead of time; the app replays them while the screen is captured.
+This is a recording rig for producing the marketing and walkthrough video, not a product feature: customers cannot reach it. It runs only when `PURPLE_DEMO_AUTOSTART=1` is set, which the dev launcher passes through and the shipped image never sets. A demo is a fixed list of keypresses composed ahead of time; the app replays them while the screen is captured. No demo is checked in right now: the old videos' segments had fallen behind the rooms, so make new ones for today's Purple before recording.
 
 ## Table of Contents
 
@@ -200,9 +200,7 @@ The demo system checks these in order:
 
 1. **`demo.json`** exists: load composed segments
 2. **`recorded_script.py`** exists: use the monolithic recorded script (legacy)
-3. **`default_script.py`**: the hand-crafted default
-
-Delete `demo.json` to fall back to option 2 or 3.
+3. Neither: the demo plays nothing
 
 ---
 
@@ -232,7 +230,6 @@ Key files:
 - `purplecomputer/demo/player.py`: executes scripts by dispatching actions
 - `purplecomputer/demo/__init__.py`: `get_demo_script()` and composition loading
 - `purplecomputer/demo/segments/`: one file per segment
-- `purplecomputer/demo/default_script.py`: the hand-crafted fallback
 
 ### Segment Format
 
@@ -442,7 +439,7 @@ Check which keyboard row the key is on (QWERTY=red, ASDF=yellow, ZXCV=blue).
 Check that `demo.json` exists in `purplecomputer/demo/` and that the segment names match files in `purplecomputer/demo/segments/`.
 
 **Demo plays the old monolithic script.**
-Delete `demo.json` to fall back to `recorded_script.py`, or delete both to fall back to `default_script.py`.
+Delete `demo.json` to fall back to `recorded_script.py`.
 
 **Tempo reference:**
 - 90 bpm = 0.67s per note

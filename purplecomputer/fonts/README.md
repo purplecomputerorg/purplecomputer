@@ -7,11 +7,13 @@ Vendored from IBM's Plex release and Google Fonts, all under the SIL Open Font L
   site and box match. Static instances of the Google Fonts variable build, cut with
   `fonttools varLib.instancer Figtree[wght].ttf wght=400` (and 600, 700; the italic from
   `Figtree-Italic[wght].ttf` at 400). The italic sets the word guide's notes.
-- IBM Plex Mono (Regular 400, SemiBold 600, Bold 700, Italic 400, 600 and 700): the prompt line, code,
+- IBM Plex Mono (Regular 400, SemiBold 600, Bold 700, Italic 400): the prompt line, code,
   every piece of chrome (titles, room tabs, keycaps, hints), and the menus (Parent Menu
   and Picker option lists). Plex is IBM's own face, so the DOS-era callback is literal, and
-  it stays calm at small sizes. The italics set the Parent Menu's section headers
-  and Music's note names.
+  it stays calm at small sizes. The italic sets the Parent Menu's section headers.
+- Patrick Hand (Regular, SIL Open Font License 1.1): Music's note names, handwritten so they never read as
+  key letters. `PatrickHand-Slanted.ttf` is the Google Fonts static leaned 10 degrees with fontTools (each
+  glyph through a `TransformPen` shear), since the family has no italic.
 - Caveat (Regular 400): the handwritten name that signs printed pages. Static instance of the
   Google Fonts variable build, cut with `fonttools varLib.instancer Caveat[wght].ttf wght=400`.
 - Martian Mono Art (Bold): letters written on the Art grid. Martian Mono at

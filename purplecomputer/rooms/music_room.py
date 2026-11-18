@@ -913,7 +913,7 @@ class MusicRoom(Room):
                  for key, *_ in self._tape]
         keys = [(KID_MATH_REMAP.get(key, key), KEY_COLORS.get(key.lower(), P.MUTED)) for key, *_ in self._tape]
         rests = [0] + [int(b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
-        return names, keys, rests, "mono-heavy-italic", "♪", None
+        return names, keys, rests, "note", "♪", None
 
     def _playing_along(self) -> bool:
         """Notes are still coming, with no pause yet to look at the song."""
@@ -945,10 +945,10 @@ class MusicRoom(Room):
         """A note's name big, with a small ♪ before it, centered together."""
         sym_px = round(px * 0.55)
         sym_w = g.measure("♪", sym_px, "mono-bold", tr=False)[0] + px // 8
-        note_w = g.measure(note, px, "mono-heavy-italic", tr=False)[0]
+        note_w = g.measure(note, px, "note", tr=False)[0]
         x = center[0] - (sym_w + note_w) // 2
         g.draw_text("♪", sym_px, x, center[1] + px // 8, "mono-bold", ink, anchor="midleft", tr=False)
-        g.draw_text(note, px, x + sym_w, center[1], "mono-heavy-italic", ink, anchor="midleft", tr=False)
+        g.draw_text(note, px, x + sym_w, center[1], "note", ink, anchor="midleft", tr=False)
 
     def _draw_tape(self, g, row: pygame.Rect, size: float):
         """What was just played or typed, left to right under the grid, a rest as a gap; the word the letters end
@@ -1140,7 +1140,7 @@ class MusicRoom(Room):
                     ink = P.ACCENT if sweeping else mix(fg, bg, 0.3 if sounding else NOTE_FAINT)
                     label_px, at = max(10, int(size * 0.15)), (tile.centerx, tile.bottom - int(size * 0.17))
                     if melodic:
-                        g.draw_text(label, label_px, *at, "mono-bold-italic", ink,
+                        g.draw_text(label, label_px, *at, "note", ink,
                                     anchor="center", tr=False)
                     else:
                         pic = g.image(label, round(label_px * 1.1), ink)
@@ -1161,7 +1161,7 @@ class MusicRoom(Room):
         """The margin either side of the grid, the same in every key so the grid holds still."""
         px = self._strip_px(size)
         labels = [(name, px) for name in FRIENDLY_KEY_NAMES] + [("Key", round(px * KEY_WORD))]
-        return max(g.measure(text, text_px, "mono-heavy-italic", tr=False)[0] for text, text_px in labels) + self._bar_h(size)
+        return max(g.measure(text, text_px, "note", tr=False)[0] for text, text_px in labels) + self._bar_h(size)
 
     def _draw_noscreen(self, g, rect):
         cy = rect.centery

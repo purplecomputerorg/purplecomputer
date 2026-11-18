@@ -33,15 +33,26 @@ Each cell displays its key character and can be colored. A note key also shows i
 
 - **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds) in `packs/core-sounds/content/letter-sounds/`). In Notes, hold Enter to loop the song (below); in Letters a hold is a tap.
 - **Tab**: switch between Notes and Letters, which says each pressed letter aloud.
-- **Shift + a note's letter** (A to G): plays that note on the middle row (`NOTE_ROW`), whose first seven keys are one octave from the key's root, so Shift+F plays F♯ in G; it is that key pressed, so it lights, colors and goes on the tape. Other letters play as themselves. While Shift is down (or a tap of it waits) every note key shows its note big and its key letter small, the middle row's seven at full strength. Notes only; the parent menu's Features turns it off (`music_note_names`), and Littles Mode leaves it off.
+- **Shift + a note's letter** (A to G): plays that note on the middle row (`NOTE_ROW`), whose first seven keys are one octave from the key's root, so Shift+F plays F♯ in G; it is that key pressed, so it lights, colors and goes on the tape. Other letters play as themselves; code's `notes ccggaag` plays by name the same way, to the end of its line, and Shift echoes into code as `notes c`. While Shift is down (or a tap of it waits) every note key shows its note big and its key letter small, the middle row's seven at full strength. Notes only; the parent menu's Features turns it off (`music_note_names`), and Littles Mode leaves it off.
 - **Left/Right**: shift the musical key (B♭ / F / C / G / D); not in Letters, which has no key to show.
 - **Space**: in Notes, plays the tape back; in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop plays, starts it over.
+
+## Code
+
+The words follow the grid: Tab's two sides are `notes` and `letters`, Enter's choice is `choose`. A mode or voice word holds to the end of its line, through `fast`, commas and `repeat`; the next line starts with keys again.
+
+- `asdf`: those keys, in whichever mode is on (`1234` drums).
+- `notes ccggaag`: notes by name, as Shift plays them; letters past G play as keys. Also leaves Letters.
+- `letters cat`: Letters on, saying what follows. `music` (alone or before keys) goes back to notes.
+- `choose ukulele zxcv`: an instrument (leaves Letters), then keys. `choose sounds cat` / `choose names cat`: Letters on with that voice, then says what follows.
+- `fast` / `slow`, `key g`, `repeat 3 …` as the help shows.
+- Older code's `letters sounds`, `letters names`, `letters on`/`off` still work, and run what follows them. `sounds` alone is no word: it plays its letters as keys. Nothing shows an error; what isn't a word plays as keys.
 
 ## The Tape
 
 The row under the grid shows what was just played; the hint row below it says what Space, hold Enter and Backspace do with it. In Letters the letters start at the left as notes do, and the found word, its picture and "Space say it" sit centered on the row after them. It is the one thing a kid hears again: Space plays it, hold Enter loops it (Notes only), and a save keeps it. It plays on whichever instrument is set now, so Enter tries the whole song on another; only code mixes instruments (`choose`). While the code panel is open the tape is hidden: the code is its own composition.
 
-**Quiet clears it.** One rule in both modes: once Music has been quiet for `SONG_REST_S` (Notes) or `WORD_REST_S` (Letters), the tape clears; it dims at the `TAPE_FADE` shares of that, and a small clock empties over it in `REST_STEPS`. Any note, letter, playback, loop or erase starts the quiet over, and nothing clears while the tape or a loop plays or Time Travel is open. A cleared song is a Time Travel step, so it comes back from there; the picture stays. Until a new song clears or the room starts fresh, Space ("Space last song") or hold Enter brings the cleared one back onto the tape and plays or loops it.
+**Quiet clears it.** One rule in both modes: once Music has been quiet for `SONG_REST_S` (Notes) or `WORD_REST_S` (Letters), the tape clears; it fades toward the background a little each step and a small clock empties, both in `REST_STEPS` steps, so it is nearly gone (`TAPE_FADE`) when it clears. Any note, letter, playback, loop or erase starts the quiet over, and nothing clears while the tape or a loop plays or Time Travel is open. A cleared song is a Time Travel step, so it comes back from there; the picture stays. Until a new song clears or the room starts fresh, Space ("Space last song") or hold Enter brings the cleared one back onto the tape and plays or loops it.
 
 - **Notes**: the note names of the phrase (`♪ CDEFG  CCC`), each under the key that played it, in that key's color. A rest of `ECHO_PAUSE_S` starts another phrase in the same song, shown as a space; shorter rests show nothing, and nothing marks the end, so erasing leaves no mark behind. Space plays it back with its rhythm (rests capped at `TUNE_GAP_MAX_S`), sound and the note playing lit in its key's color with a dot under it, so the colors and the loop are untouched. Any other key stops it.
 - **Letters**: every letter typed, the word they end with underlined and the letters before it dimmer. A word typed since the last rest wins over a longer one across it, so the gap means a new word; a slow speller's word still spans rests when nothing after the last one is a word.

@@ -53,8 +53,8 @@ TAPE_MAX = 100                # notes kept on the music tape
 ERASE_MORE_S = 1.0            # seconds of holding Backspace before it takes whole phrases (whole words in Letters)
 ERASE_EVERY_S = (0.15, 0.6)   # a held Backspace takes a note, or later a phrase, this often, not at key repeat
 ERASE_HINT = "{Backspace} erase"
-TAPE_FADE = (0.3, 0.6)        # the tape dims at each share of its quiet rest
-REST_STEPS = 10               # the tape's clock empties in this many steps over its quiet rest
+TAPE_FADE = 0.9               # how far the tape has faded into the background by the time it clears
+REST_STEPS = 20               # the tape fades and its clock empties in this many steps over its quiet rest
 NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the middle octave
 SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
 TAPE_HINT = "{Space} play it"
@@ -164,7 +164,7 @@ class MusicRoom(Room):
 
     @property
     def keys_word(self):
-        return "notes" if self.letters_mode else None
+        return "music" if self.letters_mode else None
 
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
@@ -585,6 +585,7 @@ class MusicRoom(Room):
                 set_letters_fn=lambda on: setattr(self, "letters_mode", on),
                 set_letter_sounds_fn=lambda on: setattr(self, "say_sounds", on),
                 set_key_fn=self.set_key,
+                note_key_fn=lambda letter: self._note_key(letter) if self.app._music_note_names_enabled else None,
             )
             await self.run_shown(runner, lines, self._current_mode())
         except asyncio.CancelledError:
@@ -724,8 +725,9 @@ class MusicRoom(Room):
                 return
             char = action.char
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
-            if action.with_shift and self._shift_notes(held=False):
-                lookup = self._note_key(lookup) or lookup
+            named = action.with_shift and self._shift_notes(held=False) and self._note_key(lookup)
+            echo = ("notes", lookup.lower()) if named else ("", None)
+            lookup = named or lookup
             if lookup not in ALL_KEYS:
                 return
             if self.letters_mode and self._letters_mash_drop(time.monotonic()):
@@ -735,7 +737,15 @@ class MusicRoom(Room):
             self._hit(lookup, mode)
             if mode == MODE_MUSIC and self.loop.state == IDLE:
                 self._tape_add(lookup, time.monotonic())
-            self.echo.letter("", lookup.lower())
+            self._echo_key(echo[0], echo[1] or lookup.lower())
+
+    def _echo_key(self, way: str, ch: str):
+        """Code for a key played: `notes c` for one played by name, which `notes` keeps to the end of its
+        line, so a switch between names and keys starts a new line."""
+        last = self.echo.parts[-1][0] if self.echo.parts else None
+        if last is not None and "notes" in (way, last) and last != way:
+            self.echo.flush()
+        self.echo.letter(way, ch)
 
     def _shift_notes(self, held: bool = True) -> bool:
         """Shift plays notes by name: in Notes, when a parent left it on; `held` asks whether Shift is down now."""
@@ -887,9 +897,18 @@ class MusicRoom(Room):
         return names, keys, rests, "mono-heavy-italic", "♪", None
 
     def _tape_ink(self, color=P.TEXT) -> str:
-        """The tape dims in steps as the quiet grows toward clearing it."""
-        gone = 1 - self._rest_left()
-        return mix(color, P.SURFACE, sum(0.35 for share in TAPE_FADE if gone >= share))
+        """The tape fades a little each clock step as the quiet grows, nearly gone when it clears."""
+        return mix(color, P.SURFACE, (1 - self._rest_left()) * TAPE_FADE)
+
+    @staticmethod
+    def _draw_big_note(g, note: str, px: int, center: tuple, ink):
+        """A note's name big, with a small ♪ before it, centered together."""
+        sym_px = round(px * 0.55)
+        sym_w = g.measure("♪", sym_px, "mono-bold", tr=False)[0] + px // 8
+        note_w = g.measure(note, px, "mono-heavy-italic", tr=False)[0]
+        x = center[0] - (sym_w + note_w) // 2
+        g.draw_text("♪", sym_px, x, center[1] + px // 8, "mono-bold", ink, anchor="midleft", tr=False)
+        g.draw_text(note, px, x + sym_w, center[1], "mono-heavy-italic", ink, anchor="midleft", tr=False)
 
     def _draw_tape(self, g, row: pygame.Rect, size: float):
         """What was just played or typed, left to right under the grid, a rest as a gap; the word the letters end
@@ -922,10 +941,10 @@ class MusicRoom(Room):
         end = x + lead_w + room
         ink = self._tape_ink()
         if lead:
-            g.draw_text(lead, px, x, cy, face, P.MUTED, anchor="midleft", tr=False)
+            g.draw_text(lead, px, x, cy, face, self._tape_ink(P.MUTED), anchor="midleft", tr=False)
             x += lead_w
         if first > 0:
-            g.draw_text("…", px, x, cy, face, P.MUTED, anchor="midleft", tr=False)
+            g.draw_text("…", px, x, cy, face, self._tape_ink(P.MUTED), anchor="midleft", tr=False)
             x += cell + step
         under = None
         for i in range(first, last + 1):
@@ -951,11 +970,11 @@ class MusicRoom(Room):
                 under = slot if under is None else under.union(slot)
             x += w + after(texts[i])
         if last < len(texts) - 1:
-            g.draw_text("…", px, x, cy, face, P.MUTED, anchor="midleft", tr=False)
+            g.draw_text("…", px, x, cy, face, self._tape_ink(P.MUTED), anchor="midleft", tr=False)
             x += cell + step
         if under is not None:
             line = pygame.Rect(under.x, under.bottom + max(2, px // 10), under.w, max(2, px // 8))
-            g.rect(P.ACCENT, line, radius=line.h // 2)
+            g.rect(self._tape_ink(P.ACCENT), line, radius=line.h // 2)
         x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
         if self.letters_mode:
             if self.word:   # centered on the row, unless the letters reach past where it would start
@@ -1071,7 +1090,7 @@ class MusicRoom(Room):
                 letter = KID_MATH_REMAP.get(key, key)
                 if swap and melodic:   # the keys Shift plays stand out from the other octaves'
                     big = fg if row_idx == NOTE_ROW and col_idx < 7 else mix(fg, bg, 0.5)
-                    g.draw_text(note_label(note), letter_px, tile.centerx, tile.centery, "mono-heavy-italic", big, anchor="center", tr=False)
+                    self._draw_big_note(g, note, letter_px, tile.center, big)
                 else:
                     g.draw_text(letter, letter_px, tile.centerx, tile.centery,
                                 "mono-bold" if quiet else "mono-heavy", fg, anchor="center")

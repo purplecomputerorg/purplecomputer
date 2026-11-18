@@ -391,9 +391,9 @@ def test_the_letters_tape_underlines_the_word_dims_as_the_rest_grows_and_clears_
         texts, *_, word_at = room._tape_parts()
         assert texts == list("ZQCAT") and room.word == "cat" and word_at == 2
         assert rgb(room._tape_ink()) == rgb(P.TEXT)
-        room._active_at = now - music_room.TAPE_FADE[0] * music_room.WORD_REST_S - 0.1
+        room._active_at = now - 0.3 * music_room.WORD_REST_S
         dimmer = room._tape_ink()
-        room._active_at = now - music_room.TAPE_FADE[1] * music_room.WORD_REST_S - 0.1
+        room._active_at = now - 0.6 * music_room.WORD_REST_S
         assert rgb(P.TEXT) != rgb(dimmer) != rgb(room._tape_ink())
         monkeypatch.setattr(music_room, "WORD_REST_S", 0.05)
         room._spell("S", time.monotonic())
@@ -579,4 +579,17 @@ def test_space_and_hold_enter_bring_back_the_song_quiet_cleared():
         room._quiet()
         room.clear()
         assert room._last_song is None, "starting fresh forgets it"
+    run(go())
+
+
+def test_a_note_played_by_name_echoes_as_notes_on_its_own_line():
+    from purplecomputer.keyboard import CharacterAction
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "as")
+        await room.handle(CharacterAction(char="C", shift_held=True))
+        await room.handle(CharacterAction(char="G", shift_held=True))
+        assert room.echo.fresh == "as" and room.echo.line() == "notes cg"
     run(go())

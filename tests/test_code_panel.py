@@ -222,7 +222,7 @@ def test_up_leaves_the_cards_and_typing_edits_the_recipe():
 
 @pytest.mark.parametrize("room, word, set_mode", [
     ("art", "paint", lambda r: r._set_paint_mode(False)),
-    ("music", "notes", lambda r: setattr(r, "letters_mode", True)),
+    ("music", "music", lambda r: setattr(r, "letters_mode", True)),
 ])
 def test_a_card_whose_keys_need_the_first_mode_says_so_and_switches_back(room, word, set_mode):
     async def go():

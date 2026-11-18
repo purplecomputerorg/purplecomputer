@@ -28,7 +28,8 @@ from .ui import (AUTO, BACK, CODE_KEYS, DOWN, KEEP, LEFT, LOOP, RIGHT, TURN, UP,
                  keycap_size, marked_width)
 
 ROOM_KEYWORDS = {
-    'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'repeat', 'key',
+    'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters', 'notes', 'music', 'repeat', 'key',
+              'names', 'sounds',
               'marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', 'piano', 'electric'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step', 'turn', 'color',
             'paint', 'write', 'lift', 'brush', 'pen', 'penup', 'pendown', 'repeat', 'colors', 'wheel'],
@@ -81,12 +82,12 @@ GUIDE = {
         ("Letters", [("write hi", "")]),
     ],
     'music': [
-        ("Notes", [("asdf", "play those keys"), ("1234", "drums")]),
+        ("Notes", [("asdf", "play those keys"), ("notes ccggaag", "notes by name"), ("1234", "drums")]),
         ("Speed", [("fast asdf", "quick"), ("fast asdf slow jkl", "")]),
         ("Sound", [("choose ukulele", "or marimba, accordion, glockenspiel")]),
         ("Key", [("key g", "same keys, new notes")]),
         ("Again", [("repeat 3 asdf", "three times")]),
-        ("Letters", [("letters", "keys say letters"), ("notes", "back to notes")]),
+        ("Letters", [("letters cat", "say the letters"), ("choose sounds", "a says ah"), ("music", "back to notes")]),
     ],
     'blocks': [
         ("Colors", [(COLORS, "")]),
@@ -120,15 +121,19 @@ TOPICS = {
     'music': [
         ("choose select use instrument play marimba ukulele uke accordion glockenspiel", "Sound",
          [("choose marimba", ""), ("choose ukulele", ""), ("choose accordion", ""), ("choose glockenspiel", ""),
-          ("play uke", "same as choose"), ("choose ukulele zxcv", "then play")]),
+          ("play uke", "same as choose"), ("choose ukulele zxcv", "then play"),
+          ("choose sounds", "letters say ah"), ("choose names", "letters say ay")]),
         ("fast slow", "Speed", [("fast asdf", "quick"), ("slow asdf", "slow"), ("fast 1234", "quick drums"),
                                 ("fast asdf slow jkl", "quick, then slow"),
                                 ("fast asdf, slow jkl", "commas and ; work too")]),
         ("key", "Key", [("key c", "where you start"), ("key g", "brighter"), ("key d", "brighter still"),
                         ("key f", "warmer"), ("key b flat", "warmer still")]),
         ("repeat", "Again", [("repeat 3 asdf", "three times"), ("repeat 2 asdf, jkl", "both, each time"), ("repeat asdf", "with no number: twice")]),
-        ("letters notes music sounds", "Letters", [("letters", "keys say letters"), ("letters names", "a says ay"),
-                                                   ("letters sounds", "a says ah"), ("notes", "keys play notes again")]),
+        ("notes", "Note names", [("notes ccggaag", "notes by name"), ("notes fast cdefg", "quick, by name"),
+                            ("notes c choose uke c", "names to the end of the line"), ("asdf", "keys, as always")]),
+        ("letters music names sounds", "Letters", [("letters", "keys say letters"), ("letters cat", "says c a t"),
+                                                   ("choose sounds cat", "a says ah"), ("choose names cat", "a says ay"),
+                                                   ("music", "keys play notes again")]),
     ],
     'blocks': [
         ("right left up down back front forward go", "Build",
@@ -198,6 +203,7 @@ ECHO_MAX = 40
 ECHO_STALE_S = 30.0       # older than this, code opens empty instead of holding the echo
 TYPE_IN_S = 0.5           # how long the echoed line takes to type itself in
 _INSTRUMENT_NAMES = ['marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', 'piano']
+_VOICE_NAMES = ['names', 'sounds']   # what choose picks in Letters
 _INSTRUMENT_PREFIX = re.compile(r'.*\b(?:choose|select|use|play|instrument)\s+\S*$', re.IGNORECASE)
 _DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
 _MAX_CONTEXT_RESULTS = 7
@@ -211,7 +217,8 @@ SCRUB_CROSS_S = 1.0       # up to crossing a whole session in this long
 SCRUB_REST_S = 0.6        # a held arrow rests this long on each landmark
 
 
-def keyword_autocomplete(room: str):
+def keyword_autocomplete(room: str, letters=lambda: False):
+    """`letters` says whether Music is in Letters, where choose picks names or sounds, not an instrument."""
     keywords = set(ROOM_KEYWORDS[room])
     color_aware, instrument_aware = room == 'art', room == 'music'
 
@@ -227,9 +234,10 @@ def keyword_autocomplete(room: str):
                 colors = sorted((n, h, "") for n, h in content.colors.items() if n.startswith(last_word))
             return colors[:_MAX_CONTEXT_RESULTS]
         if instrument_aware and _INSTRUMENT_PREFIX.match(full_text):
-            if last_word in _INSTRUMENT_NAMES:
+            names = _VOICE_NAMES if letters() else _INSTRUMENT_NAMES
+            if last_word in names:
                 return [(last_word, "", "")]
-            return [(n, "", "") for n in sorted(n for n in _INSTRUMENT_NAMES if n.startswith(last_word))[:_MAX_CONTEXT_RESULTS]]
+            return [(n, "", "") for n in sorted(n for n in names if n.startswith(last_word))[:_MAX_CONTEXT_RESULTS]]
         if last_word in keywords:
             return [(last_word, "", "")]
         return [(kw, "", "") for kw in sorted(kw for kw in keywords if kw.startswith(last_word))[:_MAX_CONTEXT_RESULTS]]
@@ -345,7 +353,9 @@ class CodePanel:
         self.app = app
         self.room = room
         keywords = set(ROOM_KEYWORDS[room])
-        self.field = TextField(keyword_autocomplete(room), validator=lambda w: w.lower() in keywords, context_autocomplete=True,
+        def in_letters():
+            return getattr(app.rooms[room], "letters_mode", False)
+        self.field = TextField(keyword_autocomplete(room, in_letters), validator=lambda w: w.lower() in keywords, context_autocomplete=True,
                                tints=color_spans if room != 'music' else None)
         self.field.remember(prefill)
         self.note = (prefill, "You just did this!  {Enter} again")

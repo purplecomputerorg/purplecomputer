@@ -163,7 +163,8 @@ write hi                          # Art: letters on the grid
 choose ukulele zxcvbnm            # Music: pick a sound, then play keys
 fast asdf slow jkl                # Music: quick notes, then slow
 key g                             # Music: same keys, new notes
-letters sounds                    # Music: keys say their letter sounds
+notes ccggaag                     # Music: notes by name, to the end of the line
+choose sounds cat                 # Music: Letters, saying c a t by their sounds
 green repeat 4 right 1 up 1       # Blocks: stairs
 right hello                       # Blocks: a block per letter
 red up 3 blue right 2             # Blocks: a new color as you go

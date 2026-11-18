@@ -202,12 +202,12 @@ class TestModeWordThenKeys:
         asyncio.run(runner.run(lines, mode))
         return played, letters
 
-    def test_notes_then_keys_from_letters(self):
-        played, letters = self._run(["notes fast asd"], "letters")
+    def test_music_then_keys_from_letters(self):
+        played, letters = self._run(["music fast asd"], "letters")
         assert played == [(k, "music") for k in "ASD"] and letters == [False]
 
-    def test_notes_before_repeat_loops_every_clause(self):
-        played, _ = self._run(["notes repeat 2 as, d"], "letters")
+    def test_music_before_repeat_loops_every_clause(self):
+        played, _ = self._run(["music repeat 2 as, d"], "letters")
         assert [k for k, _ in played] == list("ASDASD")
 
     def test_mode_stays_for_the_next_line(self):
@@ -227,3 +227,45 @@ class TestSpeedPrefix:
         runner, state = _make_runner()
         asyncio.run(runner.run(["slow qwe"]))
         assert state["played"] == ["Q", "W", "E"]
+
+
+class TestNotesByNameAndVoices:
+    """`notes` plays notes by name to the end of its line; `choose sounds` and `letters sounds` say what follows."""
+
+    def _run(self, lines, mode="music"):
+        from purplecomputer.music_constants import GRID_KEYS
+        played, letters, sounds = [], [], []
+        row = GRID_KEYS[2]
+        names = dict(zip("CDEFGAB", row))   # the key of C: the middle row from its root
+        runner = MusicCodeRunner(play_key_fn=lambda k, m: played.append((k, m)), set_letters_fn=letters.append,
+                                 set_letter_sounds_fn=sounds.append, note_key_fn=names.get,
+                                 set_instrument_fn=lambda name: None)
+        asyncio.run(runner.run(lines, mode))
+        return [k for k, _ in played], letters, sounds, played
+
+    def test_notes_play_by_name_and_other_letters_play_as_keys(self):
+        keys, *_ = self._run(["notes ccgh"])
+        assert keys == ["A", "A", "G", "H"]
+
+    def test_names_last_to_the_end_of_the_line_through_commas_loops_and_choose(self):
+        keys, *_ = self._run(["notes repeat 2 c, g"])
+        assert keys == ["A", "G", "A", "G"]
+        keys, *_ = self._run(["notes fast c choose ukulele d"])
+        assert keys == ["A", "S"]
+
+    def test_the_next_line_plays_keys_again(self):
+        keys, *_ = self._run(["notes c", "c"])
+        assert keys == ["A", "C"]
+
+    def test_letters_sounds_then_letters_says_them(self):
+        keys, letters, sounds, played = self._run(["letters sounds ab"])
+        assert keys == ["A", "B"] and letters == [True] and sounds == [True] and {m for _, m in played} == {"letters"}
+
+    def test_choose_sounds_or_names_turns_letters_on_and_says_what_follows(self):
+        keys, letters, sounds, played = self._run(["choose names cat"])
+        assert keys == ["C", "A", "T"] and letters == [True] and sounds == [False]
+        assert {m for _, m in played} == {"letters"}
+
+    def test_sounds_alone_is_just_keys(self):
+        keys, letters, *_ = self._run(["sounds"])
+        assert keys == list("SOUNDS") and letters == []

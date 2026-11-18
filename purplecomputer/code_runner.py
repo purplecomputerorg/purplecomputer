@@ -239,19 +239,25 @@ class MusicCodeRunner:
     # Command table: (compiled_regex, handler_method_name)
     _COMMANDS = [
         (re.compile(r'^letters(?:\s+(.+?))?\s*$', re.I), '_do_letters'),
-        (re.compile(r'^(?:notes|music|sounds)(?:\s+(.+?))?\s*$', re.I), '_do_notes'),
+        (re.compile(r'^notes(?:\s+(.+?))?\s*$', re.I), '_do_notes'),
+        (re.compile(r'^music(?:\s+(.+?))?\s*$', re.I), '_do_music'),
         (re.compile(r'^(?:choose|instrument|select|use)\s+(.+)$', re.I), '_do_instrument'),
         (re.compile(r'^play\s+(.+)$', re.I), '_do_play'),
         (re.compile(r'^key\s+(?:of\s+)?(.+?)\s*$', re.I), '_do_key'),
     ]
 
     # Command keywords for fuzzy matching
-    _KEYWORD_VOCAB = ['letters', 'notes', 'music', 'sounds', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
-    _MODE_WORDS = ('letters', 'notes', 'music', 'sounds')
+    _KEYWORD_VOCAB = ['letters', 'notes', 'music', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
+    _MODE_WORDS = ('letters', 'notes', 'music')
+    _CHOOSE_WORDS = ('choose', 'instrument', 'select', 'use')
+    _VOICES = ('names', 'sounds')    # what Enter picks in Letters, as an instrument is in Notes
 
     def __init__(self, play_key_fn, set_instrument_fn=None,
-                 color_fn=None, flash_fn=None, set_letters_fn=None, set_key_fn=None, set_letter_sounds_fn=None):
+                 color_fn=None, flash_fn=None, set_letters_fn=None, set_key_fn=None, set_letter_sounds_fn=None,
+                 note_key_fn=None):
         self.play_key = play_key_fn
+        self.note_key = note_key_fn     # the key that plays a note by its name, as Shift does on the grid
+        self._by_name = False
         self.set_instrument = set_instrument_fn
         self.color_fn = color_fn
         self.flash_fn = flash_fn
@@ -306,12 +312,19 @@ class MusicCodeRunner:
 
         self._mode = mode
         self._all_keys = ALL_KEYS
-        await self._run_lines([part for line in lines for part in self._peel_mode_before_repeat(line)])
+        for line in lines:
+            self._by_name = False   # `notes` plays names to the end of its line
+            await self._run_lines(self._peel_mode_before_repeat(line))
 
     def _peel_mode_before_repeat(self, line: str) -> list[str]:
-        """`notes repeat 2 asdf, jkl` loops both, as it would without `notes`."""
+        """`notes repeat 2 cc, g` loops both by name, as it would without `notes`; so do `letters sounds` and
+        `choose ukulele` before a loop."""
         words = line.split()
-        return peel_before_repeat(words, int(bool(words) and words[0].lower() in self._MODE_WORDS), self.corrections)
+        first = words[0].lower() if words else ""
+        second = words[1].lower() if len(words) > 1 else ""
+        lead = 2 if (first == 'letters' and second in self._VOICES + ('on', 'off')) or first in self._CHOOSE_WORDS \
+            else int(first in self._MODE_WORDS)
+        return peel_before_repeat(words, lead, self.corrections)
 
     async def _run_lines(self, lines: list[str]) -> None:
         for cmd in flatten_commands(parse_lines(lines, corrections=self.corrections)):
@@ -368,32 +381,51 @@ class MusicCodeRunner:
     # ------------------------------------------------------------------
 
     async def _do_letters(self, m) -> bool:
-        """letters (on), letters off, letters names / sounds to turn letters on saying
-        that, or letters then keys: Letters stays on and the keys say their letters."""
-        arg = (m.group(1) or 'on').lower()
-        choice = self._letters_choice(arg)
-        self._mode = "music" if choice == 'off' else "letters"
+        """letters, then keys to say: Letters stays on. Older code's letters on, off, names or sounds still
+        work, and run whatever follows them too."""
+        first, _, rest = (m.group(1) or '').partition(' ')
+        choice = self._letters_choice(first.lower()) if first else None
+        if choice == 'off':
+            self._to_music()
+            self._by_name = False
+        else:
+            self._to_letters(choice if choice in self._VOICES else None)
+        rest = rest if choice else m.group(1)
+        if rest:
+            await self._run_rest(rest)
+        return True
+
+    def _letters_choice(self, word: str) -> str | None:
+        """on, off, names or sounds, fixing a typo; None when `word` is keys to say."""
+        choices = ['on', 'off', *self._VOICES] if self.set_letter_sounds else ['on', 'off']
+        if word in choices:
+            return word
+        from .fuzzy import fuzzy_match_small
+        if len(word) >= 3 and (corrected := fuzzy_match_small(word, choices, cutoff=0.7)):
+            self.corrections.append((f'letters {word}', f'letters {corrected}'))
+            return corrected
+        return None
+
+    def _to_letters(self, voice: str | None = None) -> None:
+        self._mode, self._by_name = "letters", False
         if self.set_letters:
-            self.set_letters(choice != 'off')
-        if choice in ('names', 'sounds'):
-            self.set_letter_sounds(choice == 'sounds')
-        if not choice:
+            self.set_letters(True)
+        if voice and self.set_letter_sounds:
+            self.set_letter_sounds(voice == 'sounds')
+
+    async def _do_notes(self, m) -> bool:
+        """notes ccggaag: notes by name to the end of the line, in the middle octave as Shift plays them, and
+        out of Letters."""
+        self._to_music()
+        self._by_name = self.note_key is not None
+        if m.group(1):
             await self._run_rest(m.group(1))
         return True
 
-    def _letters_choice(self, arg: str) -> str | None:
-        """on, off, names or sounds, fixing a typo; None when `arg` is keys to say."""
-        choices = ['on', 'off', 'names', 'sounds'] if self.set_letter_sounds else ['on', 'off']
-        if arg in choices or ' ' in arg:
-            return arg if arg in choices else None
-        from .fuzzy import fuzzy_match_small
-        if corrected := fuzzy_match_small(arg, choices, cutoff=0.7):
-            self.corrections.append((f'letters {arg}', f'letters {corrected}'))
-        return corrected
-
-    async def _do_notes(self, m) -> bool:
-        """notes, music or sounds: keys play notes again, like letters off, then any code after it."""
+    async def _do_music(self, m) -> bool:
+        """music: keys play notes again, then any code after it."""
         self._to_music()
+        self._by_name = False
         if m.group(1):
             await self._run_rest(m.group(1))
         return True
@@ -427,6 +459,11 @@ class MusicCodeRunner:
     async def _do_instrument(self, m) -> bool | None:
         keyword = m.group(0).split()[0]
         words = m.group(1).split()
+        if words[0].lower() in self._VOICES and self.set_letter_sounds:   # choose sounds: Letters says them
+            self._to_letters(words[0].lower())
+            if rest := " ".join(words[1:]):
+                await self._run_rest(rest)
+            return True
         resolved, used = self._resolve_leading_instrument(words)
         if not (resolved and self.set_instrument):
             return None
@@ -485,6 +522,8 @@ class MusicCodeRunner:
 
         for ch in text:
             lookup = ch.upper() if ch.isalpha() else ch
+            if self._by_name:
+                lookup = self.note_key(lookup) or lookup
             if lookup in self._all_keys:
                 if self.color_fn:
                     self.color_fn(lookup)

@@ -336,7 +336,7 @@ def test_backspace_in_letters_takes_a_letter_and_the_word_follows():
     run(go())
 
 
-def test_space_plays_the_tape_back_without_touching_the_colors_the_save_or_the_tape(monkeypatch):
+def test_space_plays_the_tape_back_moving_its_colors_on_but_not_the_tape(monkeypatch):
     from purplecomputer.harness import press
     from purplecomputer.rooms import music_room
     monkeypatch.setattr(music_room, "TUNE_GAP_MAX_S", 0.01)
@@ -352,7 +352,7 @@ def test_space_plays_the_tape_back_without_touching_the_colors_the_save_or_the_t
         await press(app, "space")
         await room._tape_task
         assert played == ["Q", "W", "E"]
-        assert room.color_state == colors and room._tape == tape
+        assert room.color_state != colors and room._tape == tape
         await press(app, "space")
         await press(app, "a")
         assert room._tape_task is None, "any other key stops it"
@@ -614,18 +614,18 @@ def test_switching_keeps_a_young_songs_clock_where_it_was():
     run(go())
 
 
-def test_the_tape_sits_back_but_for_while_it_plays_and_its_keys_light():
+def test_the_tape_sits_back_but_for_while_it_plays_and_its_keys_change_color():
     import asyncio
 
     async def go():
         app = make_app(room="music")
         room = app.room
         await type_text(app, "qw")
-        resting, painted, state = room._tape_ink(), room.get_color("Q"), dict(room.color_state)
+        resting, state = room._tape_ink(), room.color_state["Q"]
         room._play_tape()
         await asyncio.sleep(0.05)
         assert room._tape_ink() != resting and room._tape_at is not None
-        assert room._tile_color("Q") != painted and room.color_state == state, "lit, its paint left alone"
+        assert room.color_state["Q"] != state, "its color moves on as by hand"
         room._stop_tape()
     run(go())
 
@@ -640,7 +640,7 @@ def test_a_loop_dots_the_tapes_notes_not_the_ones_played_over_it():
         await type_text(app, "qw")
         room._loop_tune()
         await asyncio.sleep(0.05)
-        assert room._tape_at is not None and room._lit
+        assert room._tape_at is not None
         room.loop.record_event("E", "music")
         room._stop_loop()
         assert room._tape_at is None

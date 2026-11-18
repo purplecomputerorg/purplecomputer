@@ -55,7 +55,6 @@ ERASE_EVERY_S = (0.15, 0.6)   # a held Backspace takes a note, or later a phrase
 ERASE_HINT = "{Backspace} erase"
 TAPE_FADE = 0.9               # how far the tape has faded into the background by the time it clears
 TAPE_REST_FADE = 0.65         # how far back the Notes tape sits, except while it plays back or loops
-REPLAY_LIGHT_S = 0.25         # how long a key the tape or loop plays lights in its color
 REST_STEPS = 20               # the tape fades and its clock empties in this many steps over its quiet rest
 NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the middle octave
 SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
@@ -130,7 +129,6 @@ class MusicRoom(Room):
         self._tape_task = None
         self._tape_at = None      # the tape note playing back now, or looping
         self._loop_tape: dict = {}
-        self._lit: dict = {}      # keys the tape or loop just played: their timers
         self._rest_timers: list = []
         self._active_at = 0.0     # the last sound, play back or erase: the tape clears once it's quiet this long
         self.echo = Echo(pause=ECHO_PAUSE_S)
@@ -236,9 +234,9 @@ class MusicRoom(Room):
             self._tape_origin = end - notes[-1][-1] / 1000
 
     def on_open_save(self):
-        """The saved picture as it was, and its tune played once."""
+        """The saved picture as it was, and its tune played once over it."""
         if self._tune():
-            self._play_tape()
+            self._play_tape(paint=False)
 
     # ---------------------------------------------------------------- sounds
     def _pitch_stem_for_key(self, key: str):
@@ -340,12 +338,6 @@ class MusicRoom(Room):
         if state is None:
             return P.TILE
         return KEY_COLORS.get(key.lower(), P.TILE) if state == COLOR_KEYCAP else state
-
-    def _tile_color(self, key: str, on_paper=False) -> str:
-        """Its color, or lit brighter than any it takes while the tape or a loop plays it."""
-        if key in self._lit and not on_paper:
-            return mix(KEY_COLORS.get(key.lower(), P.ACCENT), "#ffffff", 0.35)
-        return self.get_color(key)
 
     def flash_note(self, key: str):
         if key in self._note_timers:
@@ -461,24 +453,15 @@ class MusicRoom(Room):
             pass
 
     def _hit(self, key: str, mode: str):
-        """A key played: its color moves on."""
+        """A key played by hand: in Letters it spells."""
         if mode == MODE_LETTERS:
             self._spell(key, time.monotonic())
-        self.next_color(key)
-        self._sound(key, mode)
+        self._replay(key, mode)
 
-    def _replay(self, key: str, mode: str):
-        """A key the tape or a loop plays: it lights a moment in its color, and the colors the kid made stay put."""
-        if key in self._lit:
-            self._lit[key].stop()
-
-        def _off():
-            self._lit.pop(key, None)
-            self.app.invalidate()
-        self._lit[key] = self.app.timers.after(REPLAY_LIGHT_S, _off)
-        self._sound(key, mode)
-
-    def _sound(self, key: str, mode: str):
+    def _replay(self, key: str, mode: str, paint: bool = True):
+        """A key sounding, by hand, the tape or a loop: its color moves on the same either way."""
+        if paint:
+            self.next_color(key)
         self._play_key(key, mode)
         if self.app.active_room == self.name:
             self.app.set_legend(KEY_COLORS.get(key.lower()), fade=True)
@@ -570,18 +553,19 @@ class MusicRoom(Room):
             offsets.append(offsets[-1] + min(b[2] - a[2], TUNE_GAP_MAX_S))
         return offsets
 
-    def _play_tape(self):
+    def _play_tape(self, paint: bool = True):
         self._stop_tape()
-        self._tape_task = asyncio.create_task(self._tape_playback(self._tune()))
+        self._tape_task = asyncio.create_task(self._tape_playback(self._tune(), paint))
 
-    async def _tape_playback(self, tune: list):
-        """The tape again as it was played, its keys lit, nothing joining the loop or the code."""
+    async def _tape_playback(self, tune: list, paint: bool):
+        """The tape again as it was played, its keys' colors moving on unless `paint` is off, nothing joining the
+        loop or the code."""
         try:
             played = 0.0
             for i, ((key, mode, _), at) in enumerate(zip(tune, self._tune_offsets(tune))):
                 await asyncio.sleep(at - played)
                 played, self._tape_at = at, i
-                self._replay(key, mode)
+                self._replay(key, mode, paint)
             await asyncio.sleep(0.3)
         finally:
             self._tape_at = None
@@ -956,7 +940,7 @@ class MusicRoom(Room):
         row.center = ((xs[0] + xs[10]) // 2, (ys[0] + ys[4]) // 2 - th // 4)
         for col, key in enumerate(GRID_KEYS[NOTE_ROW][:7]):
             tile = pygame.Rect(row.x + col * tw, row.y, tw, th).inflate(-max(4, tw // 12), -max(4, tw // 12))
-            bg = self._tile_color(key)
+            bg = self.get_color(key)
             g.rect(bg, tile, radius=tw // 8) if bg != P.TILE else g.rect(P.LINE, tile, width=2, radius=tw // 8)
             ink = P.TEXT if bg == P.TILE else text_color_for(bg)
             self._draw_big_note(g, note_name(col, self.root_index), round(letter_px * 1.3), tile.center, ink)
@@ -1142,7 +1126,7 @@ class MusicRoom(Room):
         for row_idx, row in enumerate(() if named else GRID_KEYS):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
-                bg = self._tile_color(key, on_paper)
+                bg = self.get_color(key)
                 note = note_name(col_idx, self._transition_state_for_col(col_idx)[0]) if melodic else None
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
                 quiet = bg == P.TILE

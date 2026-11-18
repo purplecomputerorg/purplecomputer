@@ -138,7 +138,7 @@ def test_space_while_looping_starts_the_sound_over_with_the_bar():
     run(go())
 
 
-def test_a_loop_going_around_leaves_the_picture_alone(monkeypatch):
+def test_a_loop_going_around_moves_its_keys_colors_on_as_playing_them_does(monkeypatch):
     monkeypatch.setattr(music_room, "TUNE_GAP_MAX_S", 0.01)
 
     async def go():
@@ -149,7 +149,7 @@ def test_a_loop_going_around_leaves_the_picture_alone(monkeypatch):
         room._loop_tune()
         await asyncio.sleep(0.15)
         room._stop_loop()
-        assert room.color_state == colors
+        assert room.color_state["Q"] != colors["Q"] and room.color_state["W"] != colors["W"]
     run(go())
 
 

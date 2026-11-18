@@ -695,6 +695,7 @@ class LongHoldAction(KeyAction):
 
 EDIT_KEYS = {KeyCode.KEY_HOME: 'home', KeyCode.KEY_END: 'end',
              KeyCode.KEY_PAGEUP: 'page_up', KeyCode.KEY_PAGEDOWN: 'page_down'}
+ARROW_KEYS = (KeyCode.KEY_UP, KeyCode.KEY_DOWN, KeyCode.KEY_LEFT, KeyCode.KEY_RIGHT)
 RELEASED_CONTROLS = {KeyCode.KEY_ENTER: 'enter', KeyCode.KEY_TAB: 'tab', KeyCode.KEY_BACKSPACE: 'backspace'}
 
 
@@ -815,6 +816,8 @@ class KeyboardStateMachine:
         # Any non-shift fresh key press interrupts shift double-tap sequence
         if not is_repeat and keycode not in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
             self._shift_double_tap.reset()
+            if (not event.char or keycode == KeyCode.KEY_SPACE) and keycode not in ARROW_KEYS:
+                self._consume_sticky_shift()   # a tap of Shift waits for a letter or arrow; any other key lets it go
 
         # Handle Escape (only on fresh press for long-hold tracking)
         if keycode == KeyCode.KEY_ESC:

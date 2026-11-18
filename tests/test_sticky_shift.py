@@ -231,3 +231,16 @@ class TestStickyShiftArrows:
         assert first.with_shift and repeat.with_shift and not sm.sticky_shift
         sm.process(key_up(KeyCode.KEY_UP, 1.1))
         assert not get_action(sm.process(key_down(KeyCode.KEY_UP, 1.5)), NavigationAction).with_shift
+
+
+class TestStickyShiftLetGo:
+    """A tap of Shift waits only for a letter or arrow: any other key lets it go, so it never sits armed."""
+
+    def test_space_enter_tab_and_escape_let_sticky_go(self):
+        for keycode in (KeyCode.KEY_SPACE, KeyCode.KEY_ENTER, KeyCode.KEY_TAB, KeyCode.KEY_ESC, KeyCode.KEY_BACKSPACE):
+            sm = KeyboardStateMachine()
+            sm.process(shift_down(0.0))
+            sm.process(shift_up(0.1))
+            assert sm.shift_active
+            sm.process(key_down(keycode, 0.2))
+            assert not sm.shift_active, keycode

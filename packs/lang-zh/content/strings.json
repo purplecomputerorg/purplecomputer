@@ -210,7 +210,7 @@
   "Yes": "是",
   "Features": "玩法",
   "Extras for older kids": "给大一点的孩子用",
-  "Features: Code {0}, Looping {1}, Note Names {2}": "玩法：代码{0}，循环{1}，音名{2}",
+  "Features: {0} of {1} On": "玩法：开了 {0} 个，共 {1} 个",
   "Note Names: {0}": "按音名弹奏：{0}",
   "Hold Shift in Music and press C to play the note C": "在音乐里按住 Shift 再按 C，就能弹出 C 音",
   "{hold Shift} + a letter plays its note": "{hold Shift} + 字母，弹出它的音",

@@ -247,8 +247,7 @@ def _yes(on) -> str:
 
 
 def _features_label() -> str:
-    return (f"Features: Code {_yes(_feature_on('code'))}, Looping {_yes(_feature_on('looping'))}, "
-            f"Note Names {_yes(_feature_on('notes'))}")
+    return f"Features: {sum(map(_feature_on, FEATURES))} of {len(FEATURES)} On"
 
 
 class FeaturesScreen(Picker):

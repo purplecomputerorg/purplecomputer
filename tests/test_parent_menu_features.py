@@ -12,7 +12,7 @@ def test_features_toggle_in_place(tmp_path, monkeypatch):
         app = make_app()
         app.action_parent_menu()
         menu = app.top
-        assert ("menu-features", "Features: Code Yes, Looping Yes, Note Names Yes") in menu.items
+        assert ("menu-features", "Features: 3 of 3 On") in menu.items
         menu.selected = [i for i, _ in menu.items].index("menu-features")
         await press(app, "enter")
         screen = app.top
@@ -23,5 +23,5 @@ def test_features_toggle_in_place(tmp_path, monkeypatch):
         assert app.top is screen and screen.options[1][1] == "Music Looping: No"
         assert not settings.get_music_looping() and not app._music_looping_enabled
         await press(app, "escape")
-        assert ("menu-features", "Features: Code Yes, Looping No, Note Names Yes") in menu.items
+        assert ("menu-features", "Features: 2 of 3 On") in menu.items
     run(go())

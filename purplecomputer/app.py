@@ -1901,7 +1901,8 @@ class PurpleApp:
             right = f"{ICON_VOLUME_OFF}  {right}".strip()
         if right:
             x = g.draw_text(right, px, x, y, "mono", P.MUTED, anchor="midright").x - px
-        if self._keyboard_state_machine.shift_active:
+        sm = self._keyboard_state_machine
+        if sm.shift_held or (sm.sticky_shift and self.room.uses_sticky_shift):
             draw_key(g, "⇧ Shift", round(px * 0.85), x, y, anchor="midright", fill=P.PRIMARY, ink=P.ON_PRIMARY)
 
     def _legend_metrics(self) -> tuple:

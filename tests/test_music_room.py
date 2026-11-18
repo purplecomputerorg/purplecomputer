@@ -645,3 +645,13 @@ def test_a_loop_dots_the_tapes_notes_not_the_ones_played_over_it():
         room._stop_loop()
         assert room._tape_at is None
     run(go())
+
+
+def test_the_shift_badge_shows_a_tap_only_where_a_tap_does_something():
+    async def go():
+        app = make_app(room="music")
+        assert not app.room.uses_sticky_shift
+        app.room.code_panel = object()
+        assert app.room.uses_sticky_shift
+        app.room.code_panel = None
+    run(go())

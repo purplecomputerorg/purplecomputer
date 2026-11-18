@@ -786,6 +786,11 @@ class MusicRoom(Room):
             self.echo.flush()
         self.echo.letter(way, ch)
 
+    @property
+    def uses_sticky_shift(self) -> bool:
+        """Only its code takes a tap of Shift; the grid plays the same either way and Shift notes need it held."""
+        return self.code_panel is not None
+
     def _shift_notes(self, held: bool = True) -> bool:
         """Held Shift plays notes by name (not a tap, so a stray one can't): in Notes, when a parent left it on;
         `held` asks whether Shift is down now."""

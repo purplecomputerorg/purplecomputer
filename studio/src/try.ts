@@ -68,7 +68,7 @@ type Tip = { text: string; key: string; hold?: keyof Place };
 const TIPS: Record<Room | "letters", Tip[]> = {
   music: [
     { text: "Press Enter for a new instrument", key: "enter" },
-    { text: "*Hold* Enter to record a loop", key: "enter", hold: "looping" },
+    { text: "*Hold* Enter to loop your tune", key: "enter", hold: "looping" },
     { text: "Press Tab to hear the letters", key: "tab" },
   ],
   letters: [

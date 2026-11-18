@@ -39,7 +39,7 @@
     ("asdf", [4 notes, one per letter]),
     ("fast asdf slow jkl", [quick notes, then slow]),
     ("choose ukulele zxcvbnm", [zxcvbnm on a ukulele]),
-    ("letters", [switch to saying letter names]),
+    ("notes ccggaag", [Twinkle Twinkle, by note name]),
   )
 ]
 #gap

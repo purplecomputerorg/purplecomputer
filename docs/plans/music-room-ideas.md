@@ -2,7 +2,7 @@
 
 Current thinking on extending Music Room to stay fun and interesting across a wide age range, from toddlers banging on keys to older kids who are genuinely into music.
 
-**Status: Active.** Several ideas below have since shipped: looping is the loop station (`loop_station.py`, recorded by holding Enter), and multiple instruments cycle with Enter (`INSTRUMENTS` in `music_constants.py`). Chords, held-number beats and progressive hints are still unbuilt.
+**Status: Active.** Several ideas below have since shipped: looping is the loop station (`loop_station.py`: holding Enter loops the tape, or records first when there is nothing to loop), and multiple instruments cycle with Enter (`INSTRUMENTS` in `music_constants.py`). Chords, held-number beats and progressive hints are still unbuilt.
 
 ## What Works Now
 

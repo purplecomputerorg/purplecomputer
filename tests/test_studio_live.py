@@ -80,7 +80,7 @@ def test_each_page_sets_up_its_room_and_hears_where_purple_went(live, tmp_path):
         assert live.moved()["setup"] and live.moved() is None
         music = app.rooms["music"]
         assert music.letters_mode and live.place()["letters"] and not live.place()["looping"]
-        music.loop.start_recording()
+        music.loop.record(10)
         assert live.place()["looping"]
         music._stop_loop()
         assert instruments()[music.instrument_index][0].endswith("kitchen")

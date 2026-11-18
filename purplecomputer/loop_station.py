@@ -2,12 +2,14 @@
 
 Pure logic with no UI or audio. IDLE until play() hands it a phrase (the
 room's tape), then LOOPING; notes played while looping join the loop and
-sound on the next cycle. stop() goes back to IDLE.
+sound on the next cycle. With nothing to loop, record() counts down while the
+room's tape fills (RECORDING), and the room then plays it. stop() goes back to IDLE.
 """
 
 import time
 
 IDLE = 'idle'
+RECORDING = 'recording'
 LOOPING = 'looping'
 
 
@@ -42,6 +44,20 @@ class LoopStation:
         self._loop_duration = duration
         self._state = LOOPING
         self._cycle_start = now if now is not None else self._time_fn()
+
+    def record(self, seconds: float, now: float | None = None) -> None:
+        """Count down `seconds` while the room's tape fills."""
+        self._loop_events = []
+        self._loop_duration = seconds
+        self._state = RECORDING
+        self._cycle_start = now if now is not None else self._time_fn()
+
+    def recording_left(self, now: float | None = None) -> float:
+        """Seconds left to record; 0 if not recording."""
+        if self._state != RECORDING:
+            return 0.0
+        now = now if now is not None else self._time_fn()
+        return max(0.0, self._loop_duration - (now - self._cycle_start))
 
     def record_event(self, key: str, mode: str, now: float | None = None) -> None:
         """While looping, a note joins the loop where it falls in the cycle and plays from the next one."""

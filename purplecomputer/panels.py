@@ -18,7 +18,7 @@ from . import palette as P
 from .code_runner import _COMMAND_VOCAB, _MODE_WORDS, _TURN_VOCAB, MusicCodeRunner
 from .content import get_content
 from .keyboard import CharacterAction, ControlAction, NavigationAction
-from .loop_station import LOOPING
+from .loop_station import LOOPING, RECORDING
 from .music_constants import GRID_KEYS
 from .palette import get_key_color
 from .timeline import SESSION_GAP_S
@@ -676,7 +676,11 @@ class LoopPanel:
         return g.em(FOOTER_EM)
 
     def draw(self, g, rect):
-        if self.loop.state == LOOPING:
+        if self.loop.state == RECORDING:
+            left = self.loop.recording_left()
+            draw_status_row(g, rect, "● Recording", P.DANGER, f"{{Space}} {LOOP}   {{Esc}} {{hints/stop.png}}",
+                            1 - left / self.loop.loop_duration, f"{math.ceil(left)}s")
+        elif self.loop.state == LOOPING:
             draw_status_row(g, rect, f"{LOOP} Looping", P.PRIMARY, "{Esc} {hints/stop.png}",
                             self.loop.loop_progress())
 

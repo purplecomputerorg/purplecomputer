@@ -7,7 +7,7 @@ import time
 import pytest
 
 from purplecomputer.harness import make_app, press, run, type_text
-from purplecomputer.loop_station import IDLE, LOOPING
+from purplecomputer.loop_station import IDLE, LOOPING, RECORDING
 from purplecomputer.panels import LoopPanel
 from purplecomputer.rooms import music_room
 
@@ -97,7 +97,8 @@ def test_hold_enter_loops_the_tape_and_notes_played_along_join_it(monkeypatch):
         app._music_looping_enabled = True
         room = app.room
         room._enter_hold_fired()
-        assert room.loop.state == IDLE and room._recording, "nothing to loop yet: it records"
+        assert room.loop.state == RECORDING, "nothing to loop yet: it records"
+        room._stop_loop()
         await type_text(app, "as")
         room._enter_hold_fired()
         assert room.loop.state == LOOPING and isinstance(app._panel, LoopPanel)
@@ -109,28 +110,25 @@ def test_hold_enter_loops_the_tape_and_notes_played_along_join_it(monkeypatch):
     run(go())
 
 
-def test_with_nothing_to_loop_hold_enter_records_till_its_clock_runs_out_then_loops(monkeypatch):
-    monkeypatch.setattr(music_room, "RECORD_S", 0.2)
+def test_with_nothing_to_loop_hold_enter_records_then_loops_what_was_played(monkeypatch):
+    monkeypatch.setattr(music_room, "RECORD_S", 0.3)
 
     async def go():
         app = make_app(room="music")
         app._music_looping_enabled = True
         room = app.room
-        assert room._hint_text() == music_room.RECORD_HINT
+        assert room._hint_text(), "hold Enter loops even with nothing played yet"
         room._enter_hold_fired()
-        assert room._recording and room.loop.state == IDLE
-        await asyncio.sleep(0.1)
+        assert room.loop.state == RECORDING and isinstance(app._panel, LoopPanel)
         await type_text(app, "as")
-        await asyncio.sleep(0.15)
-        assert room._recording, "its time counts from the first note"
-        await asyncio.sleep(0.15)
-        assert not room._recording and room.loop.state == LOOPING
-        assert [e[0] for e in room.loop.loop_events] == ["A", "S"]
+        assert [k for k, *_ in room._tape] == ["A", "S"], "the recording fills the tape"
+        await asyncio.sleep(0.45)
+        assert room.loop.state == LOOPING and [e[0] for e in room.loop.loop_events] == ["A", "S"]
         room._stop_loop()
     run(go())
 
 
-def test_space_or_esc_ends_a_recording_and_untouched_it_lets_go(monkeypatch):
+def test_space_ends_a_recording_esc_stops_it_and_nothing_played_ends_it_quietly(monkeypatch):
     monkeypatch.setattr(music_room, "RECORD_S", 0.1)
 
     async def go():
@@ -140,28 +138,31 @@ def test_space_or_esc_ends_a_recording_and_untouched_it_lets_go(monkeypatch):
         room._enter_hold_fired()
         await type_text(app, "a")
         await press(app, "space")
-        assert room.loop.state == LOOPING and not room._recording
+        assert room.loop.state == LOOPING
         room._stop_loop()
         room._tape = []
         room._enter_hold_fired()
         await press(app, "escape")
-        assert not room._recording and app.room is room
+        assert room.loop.state == IDLE and app.room is room
         room._enter_hold_fired()
-        await asyncio.sleep(0.15)
-        assert not room._recording and room.loop.state == IDLE, "nothing played: back as it was"
+        await asyncio.sleep(0.3)
+        assert room.loop.state == IDLE and app._panel is None, "nothing played: back as it was"
     run(go())
 
 
-def test_backspace_on_an_empty_tape_lets_the_last_song_go_so_hold_enter_records():
+def test_backspace_on_an_empty_tape_clears_the_last_song_so_hold_enter_records():
     async def go():
         app = make_app(room="music")
         app._music_looping_enabled = True
         room = app.room
         await type_text(app, "qw")
         room._quiet()
-        assert room._last_song and room._hint_text() != music_room.RECORD_HINT
+        assert room._last_song
         await press(app, "backspace")
-        assert room._last_song is None and room._hint_text() == music_room.RECORD_HINT
+        assert room._last_song is None
+        room._enter_hold_fired()
+        assert room.loop.state == RECORDING
+        room._stop_loop()
     run(go())
 
 

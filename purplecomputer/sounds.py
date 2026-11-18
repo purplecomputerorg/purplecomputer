@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pygame
 
+from .content import BUNDLED_PACKS
 from .mixer import mixer_generation, mixer_ready_for_play
 from .music_constants import ALL_KEYS, PERCUSSION
 
@@ -17,9 +18,7 @@ SAMPLE_VOLUME = 0.4
 
 
 def core_sounds() -> Path:
-    paths = [Path(__file__).parents[1] / "packs" / "core-sounds" / "content",
-             Path.home() / ".purple" / "packs" / "core-sounds" / "content"]
-    return next((p for p in paths if p.exists()), paths[0])
+    return BUNDLED_PACKS / "core-sounds" / "content"
 
 
 def find_sound(base: Path, name: str):

@@ -28,6 +28,7 @@ from .i18n import fold, read_words
 WORD_PICTURE_FIRST = 0x100000
 WORD_PICTURE_SPAN = 0xFFFE
 INSTRUMENT_PICTURES = Path(__file__).parent / "images" / "instruments"
+BUNDLED_PACKS = Path(__file__).parent.parent / "packs"
 
 
 def is_word_picture(char: str) -> bool:
@@ -264,8 +265,7 @@ class ContentManager:
         self._load_defaults()
 
         # Load from source-relative packs dir (works in dev and production)
-        source_packs = Path(__file__).parent.parent / "packs"
-        for pack_dir in _pack_dirs(source_packs):
+        for pack_dir in _pack_dirs(BUNDLED_PACKS):
             self._load_pack(pack_dir)
 
         # Then user-installed packs, newest last so it wins a word two packs both define
@@ -652,7 +652,7 @@ class ContentManager:
         rankings: dict[str, int] = {}
         rank = 0
         # Check source-relative packs first, then user packs
-        for packs_dir in [Path(__file__).parent.parent / "packs", self.packs_dir]:
+        for packs_dir in [BUNDLED_PACKS, self.packs_dir]:
             for pack_dir in _pack_dirs(packs_dir):
                 rankings_file = pack_dir / "content" / "rankings.txt"
                 if not rankings_file.exists():
@@ -909,10 +909,16 @@ def json_icon(data) -> str:
     return icon if isinstance(icon, str) and len(icon) <= ROOM_ICON_MAX else ""
 
 
+def is_bundled(pack_id: str) -> bool:
+    return (BUNDLED_PACKS / pack_id).is_dir()
+
+
 def _pack_dirs(packs_dir: Path, newest_last: bool = False) -> list[Path]:
+    """An installed copy of one of Purple's own packs is skipped: it would pass for a family's."""
     if not packs_dir.exists():
         return []
-    dirs = sorted(p for p in packs_dir.iterdir() if p.is_dir() and not p.name.startswith("."))
+    dirs = sorted(p for p in packs_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
+                  and (packs_dir == BUNDLED_PACKS or not is_bundled(p.name)))
     return sorted(dirs, key=_made_at) if newest_last else dirs
 
 

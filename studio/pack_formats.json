@@ -60,8 +60,8 @@
  "fingerprint": {
   "studio/sdk/src/pack.ts": "301a6edc4dd7d522",
   "studio/src/pack.ts": "1c116cf864839672",
-  "purplecomputer/content.py": "871f72970f88aa2c",
-  "purplecomputer/pack_manager.py": "41f6ab779c96aafd",
+  "purplecomputer/content.py": "3117555d50f53d99",
+  "purplecomputer/pack_manager.py": "9692730b3d590e0a",
   "purplecomputer/theme.py": "d23cc5c34fba9eb4",
   "purplecomputer/rooms/family_room.py": "2173ec9530067fb3",
   "purplecomputer/roomkit/purple.py": "579c13698a86002a",

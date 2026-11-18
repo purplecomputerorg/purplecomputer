@@ -232,6 +232,15 @@ class TestInstaller:
         assert [p["id"] for p in installer.list_installed()] == ["the-tests-pack"]
         assert not (tmp_path / "packs" / ".tmp" / "the-tests-pack").exists()
 
+    def test_a_copy_of_purples_own_pack_is_ignored_and_refused(self, tmp_path):
+        """A stray core-sounds in ~/.purple/packs once passed for a family's and its letter names drowned out the sounds."""
+        make_pack(tmp_path, "core-sounds")
+        cm = ContentManager(packs_dir=tmp_path)
+        cm.load_all()
+        assert cm.pack_dirs("letters") == []
+        ok, msg = PackInstaller(tmp_path / "packs").install_pack(build_pack(make_pack(tmp_path / "src", "core-sounds")))
+        assert not ok and "Purple's own" in msg
+
     def test_refuses_broken_content_and_symlinks(self, tmp_path):
         d = make_pack(tmp_path / "src")
         (d / "content" / "run.py").write_text("")

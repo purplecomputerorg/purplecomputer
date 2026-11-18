@@ -23,7 +23,7 @@ import wave
 from pathlib import Path
 from typing import Optional
 
-from .content import ASSET_NAME, PACK_FORMAT, ROOM_LIB, ROOM_NAME, is_letter_op, is_paint_op, picture_grid, png_size, read_manifest
+from .content import ASSET_NAME, PACK_FORMAT, ROOM_LIB, ROOM_NAME, is_bundled, is_letter_op, is_paint_op, picture_grid, png_size, read_manifest
 
 # Valid content-only pack types (no executable code)
 VALID_PACK_TYPES = ['emoji', 'sounds', 'stories', 'language']
@@ -334,6 +334,8 @@ class PackInstaller:
         if problems := check_pack(pack_dir):
             return False, "Pack not installed: " + "; ".join(problems[:5])
         manifest = read_manifest(pack_dir) or {}
+        if is_bundled(manifest['id']):
+            return False, f"Pack not installed: {manifest['id']} is one of Purple's own"
         final_dir = self.packs_dir / manifest['id']
         try:
             if final_dir.exists():

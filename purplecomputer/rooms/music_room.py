@@ -54,6 +54,7 @@ ERASE_MORE_S = 1.0            # seconds of holding Backspace before it takes who
 ERASE_EVERY_S = (0.15, 0.6)   # a held Backspace takes a note, or later a phrase, this often, not at key repeat
 ERASE_HINT = "{Backspace} erase"
 TAPE_FADE = 0.9               # how far the tape has faded into the background by the time it clears
+TAPE_PLAYING_FADE = 0.65      # how far back the Notes tape sits while notes keep coming, till a pause brings it up
 REST_STEPS = 20               # the tape fades and its clock empties in this many steps over its quiet rest
 NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the middle octave
 SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
@@ -651,6 +652,8 @@ class MusicRoom(Room):
         self._rest_timers = [self.app.timers.after(start + rest * i / steps - now, self.app.invalidate)
                              for i in range(1, steps) if start + rest * i / steps > now]
         self._rest_timers.append(self.app.timers.after(start + rest - now, self._quiet))
+        if self._playing_along():
+            self._rest_timers.append(self.app.timers.after(self._tape[-1][2] + ECHO_PAUSE_S - now, self.app.invalidate))
 
     def _rest_left(self) -> float:
         """How much of the quiet is left, in whole clock steps; all of it while the tape or a loop plays."""
@@ -909,9 +912,16 @@ class MusicRoom(Room):
         rests = [0] + [int(b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
         return names, keys, rests, "mono-heavy-italic", "♪", None
 
+    def _playing_along(self) -> bool:
+        """Notes are still coming, with no pause yet to look at the song."""
+        return (not self.letters_mode and bool(self._tape) and not self._sounding()
+                and time.monotonic() - self._tape[-1][2] < ECHO_PAUSE_S)
+
     def _tape_ink(self, color=P.TEXT) -> str:
-        """The tape fades a little each clock step as the quiet grows, nearly gone when it clears."""
-        return mix(color, P.SURFACE, (1 - self._rest_left()) * TAPE_FADE)
+        """The tape sits back while notes keep coming, comes up at a pause, then fades a little each clock step as
+        the quiet grows, nearly gone when it clears."""
+        fade = (1 - self._rest_left()) * TAPE_FADE
+        return mix(color, P.SURFACE, max(fade, TAPE_PLAYING_FADE) if self._playing_along() else fade)
 
     @staticmethod
     def _draw_big_note(g, note: str, px: int, center: tuple, ink):

@@ -625,3 +625,15 @@ def test_switching_keeps_a_young_songs_clock_where_it_was():
         await press(app, "tab")
         assert room._tape and room._rest_left() < 1.0
     run(go())
+
+
+def test_the_tape_sits_back_while_notes_keep_coming_and_comes_up_at_a_pause():
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "qwer")
+        assert room._playing_along()
+        mashing = room._tape_ink()
+        room._tape = [(k, m, t - 3) for k, m, t in room._tape]
+        assert not room._playing_along() and room._tape_ink() != mashing
+    run(go())

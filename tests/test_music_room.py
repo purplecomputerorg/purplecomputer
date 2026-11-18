@@ -391,9 +391,9 @@ def test_the_letters_tape_underlines_the_word_dims_as_the_rest_grows_and_clears_
         texts, *_, word_at = room._tape_parts()
         assert texts == list("ZQCAT") and room.word == "cat" and word_at == 2
         assert rgb(room._tape_ink()) == rgb(P.TEXT)
-        room._typed_at[-1] = now - music_room.TAPE_FADE_S[0] - 0.1
+        room._active_at = now - music_room.TAPE_FADE[0] * music_room.WORD_REST_S - 0.1
         dimmer = room._tape_ink()
-        room._typed_at[-1] = now - music_room.TAPE_FADE_S[1] - 0.1
+        room._active_at = now - music_room.TAPE_FADE[1] * music_room.WORD_REST_S - 0.1
         assert rgb(P.TEXT) != rgb(dimmer) != rgb(room._tape_ink())
         monkeypatch.setattr(music_room, "WORD_REST_S", 0.05)
         room._spell("S", time.monotonic())
@@ -422,17 +422,17 @@ def test_a_word_typed_since_the_last_rest_wins_but_a_slow_speller_still_gets_the
 
 def test_the_rest_clock_empties_a_step_a_second_until_the_letters_clear():
     import time
-    from purplecomputer.rooms.music_room import LETTER_REST_STEPS, WORD_REST_S
-    tick = WORD_REST_S / LETTER_REST_STEPS
+    from purplecomputer.rooms.music_room import REST_STEPS, WORD_REST_S
+    tick = WORD_REST_S / REST_STEPS
 
     async def go():
         room = make_app(room="music").room
         room.letters_mode = True
         room._spell("A", time.monotonic())
         assert room._rest_left() == 1.0
-        room._typed_at[-1] = time.monotonic() - 2.5 * tick
-        assert room._rest_left() == 1 - 2 / LETTER_REST_STEPS
-        room._typed_at[-1] = time.monotonic() - WORD_REST_S
+        room._active_at = time.monotonic() - 2.5 * tick
+        assert room._rest_left() == 1 - 2 / REST_STEPS
+        room._active_at = time.monotonic() - WORD_REST_S
         assert room._rest_left() == 0
     run(go())
 
@@ -501,4 +501,42 @@ def test_letters_has_no_loop_and_a_hold_of_enter_is_a_tap():
         room._enter_hold_fired()
         assert room.loop.state == "idle" and room.say_sounds != sounds and "loop" not in room._hint_text()
         assert room.hold_progress() is None
+    run(go())
+
+
+def test_a_quiet_song_clears_but_never_while_it_plays_or_after_new_sound(monkeypatch):
+    import asyncio
+    from purplecomputer.rooms import music_room
+
+    async def go():
+        monkeypatch.setattr(music_room, "SONG_REST_S", 0.1)
+        app = make_app(room="music")
+        room = app.room
+        await type_text(app, "qw")
+        await asyncio.sleep(0.06)
+        await type_text(app, "e")
+        await asyncio.sleep(0.06)
+        assert [k for k, *_ in room._tape] == ["Q", "W", "E"], "a new note starts the quiet over"
+        app._music_looping_enabled = True
+        room._loop_tune()
+        await asyncio.sleep(0.2)
+        assert room._tape, "a loop playing isn't quiet"
+        room._stop_loop()
+        await asyncio.sleep(0.2)
+        assert room._tape == [] and "t:0" not in app._timelines["music"].tip()
+    run(go())
+
+
+def test_erasing_starts_the_letters_quiet_over():
+    import time
+    from purplecomputer.keyboard import ControlAction
+
+    async def go():
+        room = make_app(room="music").room
+        room.letters_mode = True
+        for key in "CATS":
+            room._spell(key, time.monotonic())
+        room._active_at -= 5
+        await room.handle(ControlAction(action="backspace", is_down=True))
+        assert room._rest_left() == 1.0
     run(go())

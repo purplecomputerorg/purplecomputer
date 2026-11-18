@@ -53,8 +53,9 @@ TAPE_MAX = 100                # notes kept on the music tape
 ERASE_MORE_S = 1.0            # seconds of holding Backspace before it takes whole phrases (whole words in Letters)
 ERASE_EVERY_S = (0.15, 0.6)   # a held Backspace takes a note, or later a phrase, this often, not at key repeat
 ERASE_HINT = "{Backspace} erase"
-TAPE_FADE_S = (3.0, 6.0)      # the letters tape dims at each; it clears at WORD_REST_S
-LETTER_REST_STEPS = 10        # the letters tape's timer empties in this many steps over WORD_REST_S
+TAPE_FADE = (0.3, 0.6)        # the tape dims at each share of its quiet rest
+REST_STEPS = 10               # the tape's clock empties in this many steps over its quiet rest
+SONG_REST_S = 30.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
 TAPE_HINT = "{Space} play it"
 TUNE_GAP_MAX_S = 1.5          # a longer rest in a tune plays back this long, so a pause to think isn't silence
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
@@ -123,6 +124,7 @@ class MusicRoom(Room):
         self._tape_task = None
         self._tape_at = None      # the tape note playing back now
         self._rest_timers: list = []
+        self._active_at = 0.0     # the last sound, play back or erase: the tape clears once it's quiet this long
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HeldKey(app, self._enter_hold_fired)
         self.code_panel = None
@@ -195,6 +197,7 @@ class MusicRoom(Room):
         old = state.get("replay")   # saves from before the tape kept the last minute of playing; it plays as their tune
         self._load_tune(self._restore_tape(state) or (old.get("notes") if isinstance(old, dict) else None) or [])
         self._load_tune(state.get("tune") or [])
+        self._busy()
         self.echo.reset()
         self.app.invalidate()
 
@@ -219,7 +222,6 @@ class MusicRoom(Room):
         if self.letters_mode and letters:
             self._spelled, self._typed_at = "".join(k.lower() for k, _ in letters), [t for _, t in letters]
             self.word = self._word_at_end()
-            self._schedule_rest(self._fade_out)
         if any(n[1] == MODE_MUSIC for n in tune):
             self._tape = [n for n in tune if n[1] == MODE_MUSIC]
             self._tape_origin = end - notes[-1][-1] / 1000
@@ -395,6 +397,7 @@ class MusicRoom(Room):
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
         self._loop_task = None
+        self._busy()
         self._sync_panels()
 
     def _start_loop_timer(self):
@@ -497,6 +500,7 @@ class MusicRoom(Room):
         elif self.letters_mode and self.word:
             from ..tts import speak_many
             speak_many([self.word], family=False)
+            self._busy()
         elif not self.letters_mode and self._tape:
             self._play_tape()
         self.app.invalidate()
@@ -509,6 +513,7 @@ class MusicRoom(Room):
         tape = self._tape + [(key, MODE_MUSIC, now)]
         self._tape_base += max(0, len(tape) - TAPE_MAX)
         self._tape = tape[-TAPE_MAX:]
+        self._busy()
 
     def _tune(self) -> list:
         """What the tape holds, as (key, mode, when): the song in Notes, the letters in Letters."""
@@ -542,6 +547,7 @@ class MusicRoom(Room):
             await asyncio.sleep(0.3)
         finally:
             self._tape_at = None
+            self._busy()
             self.app.invalidate()
 
     def _stop_tape(self):
@@ -581,6 +587,7 @@ class MusicRoom(Room):
         self._stop_loop()
         self.letters_mode = not self.letters_mode
         self._forget_word()
+        self._busy()
         self._announce_voice()
         self.app.invalidate()
 
@@ -601,28 +608,42 @@ class MusicRoom(Room):
             self._spelled = (self._spelled + key.lower())[-SPELL_MAX:]
             self._typed_at = (self._typed_at + [now])[-SPELL_MAX:]
             self.word = self._word_at_end()
-            self._schedule_rest(self._fade_out)
+            self._busy()
 
     def _rest(self) -> tuple:
-        """(how long the rest runs, timer steps, when it began) before the letters clear."""
-        return WORD_REST_S, LETTER_REST_STEPS, self._typed_at[-1] if self._typed_at else None
+        """(how long the quiet runs before the tape clears, clock steps, when it began)."""
+        held = self._typed_at if self.letters_mode else self._tape
+        return (WORD_REST_S if self.letters_mode else SONG_REST_S), REST_STEPS, self._active_at if held else None
 
-    def _schedule_rest(self, end):
-        """The tape's timer empties a step at a time while the rest runs, then `end`."""
+    def _sounding(self) -> bool:
+        return (self._tape_task is not None and not self._tape_task.done()) or self.loop.state != IDLE
+
+    def _busy(self):
+        """Something just sounded or changed on the tape: its clock starts over."""
         for timer in self._rest_timers:
             timer.stop()
+        self._active_at = time.monotonic()
         rest, steps, _ = self._rest()
         self._rest_timers = [self.app.timers.after(rest * i / steps, self.app.invalidate) for i in range(1, steps)]
-        self._rest_timers.append(self.app.timers.after(rest, end))
+        self._rest_timers.append(self.app.timers.after(rest, self._quiet))
 
     def _rest_left(self) -> float:
-        """How much of the rest is left, in whole timer steps."""
+        """How much of the quiet is left, in whole clock steps; all of it while the tape or a loop plays."""
         rest, steps, began = self._rest()
+        if self._sounding():
+            return 1.0
         passed = steps if began is None else int((time.monotonic() - began) * steps / rest)
         return max(0, steps - passed) / steps
 
-    def _fade_out(self):
-        self._forget_word()
+    def _quiet(self):
+        """Quiet long enough: the tape clears, the letters or the song. Not while it plays or in Time Travel."""
+        if self._sounding() or self.app._time_travel is not None:
+            return self._busy()
+        if self.letters_mode:
+            self._forget_word()
+        elif self._tape:
+            self._tape = []
+            self.app.timeline_capture_now(self.name)
         self.app.invalidate()
 
     def _word_at_end(self):
@@ -736,6 +757,7 @@ class MusicRoom(Room):
             self.word = self._word_at_end() if self._spelled else None
         else:
             self._tape = self._tape[:-n]
+        self._busy()
 
     def _handle_enter(self, action):
         if self.enter_hold.fired:
@@ -841,12 +863,10 @@ class MusicRoom(Room):
         rests = [0] + [int(b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
         return names, keys, rests, "mono-heavy-italic", "♪", None
 
-    def _tape_ink(self) -> str:
-        """The letters tape dims in steps as the rest grows; the music tape stays until it's erased."""
-        if not self.letters_mode or not self._typed_at:
-            return P.TEXT
-        age = time.monotonic() - self._typed_at[-1]
-        return mix(P.TEXT, P.SURFACE, sum(0.35 for s in TAPE_FADE_S if age >= s))
+    def _tape_ink(self, color=P.TEXT) -> str:
+        """The tape dims in steps as the quiet grows toward clearing it."""
+        gone = 1 - self._rest_left()
+        return mix(color, P.SURFACE, sum(0.35 for share in TAPE_FADE if gone >= share))
 
     def _draw_tape(self, g, row: pygame.Rect, size: float):
         """What was just played or typed, left to right under the grid, a rest as a gap; the word the letters end
@@ -901,7 +921,8 @@ class MusicRoom(Room):
                 dot_y = cy + round(px * (1.1 if word_at is not None else 0.85))
                 pygame.draw.circle(g.surface, rgb(lit), (x + w // 2, dot_y), max(3, px // 4))
             if keys:
-                g.draw_text(keys[i][0], key_px, x + w // 2, cy - round(px * 0.85), "mono-bold", keys[i][1], anchor="center", tr=False)
+                g.draw_text(keys[i][0], key_px, x + w // 2, cy - round(px * 0.85), "mono-bold", self._tape_ink(keys[i][1]),
+                            anchor="center", tr=False)
             if word_at is not None and i >= word_at:
                 slot = pygame.Rect(x, cy, w, round(px * 0.6))
                 under = slot if under is None else under.union(slot)
@@ -912,8 +933,8 @@ class MusicRoom(Room):
         if under is not None:
             line = pygame.Rect(under.x, under.bottom + max(2, px // 10), under.w, max(2, px // 8))
             g.rect(P.ACCENT, line, radius=line.h // 2)
+        x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
         if self.letters_mode:
-            x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
             if self.word:   # centered on the row, unless the letters reach past where it would start
                 word_w = self._draw_word(g, None, cy, round(px * 1.15))
                 self._draw_word(g, max(x + px, row.centerx - word_w // 2), cy, round(px * 1.15))
@@ -947,7 +968,7 @@ class MusicRoom(Room):
         return first, last
 
     def _draw_rest_mark(self, g, cx, cy, r) -> int:
-        """A small pie that empties while the letters' rest runs, till they clear. Returns its right edge."""
+        """A small pie that empties while it's quiet, till the tape clears. Returns its right edge."""
         left = self._rest_left()
         pygame.draw.circle(g.surface, rgb(P.LINE), (cx, cy), r, width=max(1, r // 6))
         if left > 0:

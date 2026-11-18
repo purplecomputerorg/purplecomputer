@@ -60,6 +60,10 @@ NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the
 SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
 TAPE_HINT = "{Space} play it"
 LAST_SONG_HINT = "{Space} last song"
+RECORD_S = 10.0               # hold Enter with no song to bring back: this long from the first note, then it loops
+RECORD_HINT = "{hold Enter} ● record"
+RECORDING_HINT = "● recording"
+RECORDED_HINT = "{Space} loop it"
 NOTE_NAMES_HINT = "{hold Shift} + a letter plays its note"
 TUNE_GAP_MAX_S = 1.5          # a longer rest in a tune plays back this long, so a pause to think isn't silence
 WORD_REST_S = 10.0            # a rest this long starts a new word; slow spellers pause between letters
@@ -124,6 +128,7 @@ class MusicRoom(Room):
         self._tape_origin = 0.0   # when the song began, and how many notes have dropped off its front,
         self._tape_base = 0       # so each note keeps its timeline key while the song grows
         self._last_song = None    # (tape, origin, base) of the song quiet cleared, which Space or hold Enter brings back
+        self._recording = False   # hold Enter with nothing to loop: the tape fills for RECORD_S, then loops
         self._erasing_since = None
         self._erased_at = 0.0
         self._tape_task = None
@@ -385,6 +390,7 @@ class MusicRoom(Room):
     # ---------------------------------------------------------------- loop station
     def _loop_tune(self):
         """Hold Enter: the song plays over and over, its rests as played back, and notes played along join in."""
+        self._recording = False
         if not self._loopable() or not self._bring_back():
             return
         tune = list(self._tape)
@@ -399,7 +405,8 @@ class MusicRoom(Room):
         self._sync_panels()
 
     def _stop_loop(self):
-        looped = self.loop.state != IDLE
+        looped = self.loop.state != IDLE or self._recording
+        self._recording = False
         self.loop.stop()
         if self._loop_timer:
             self._loop_timer.stop()
@@ -518,6 +525,8 @@ class MusicRoom(Room):
             from ..tts import speak_many
             speak_many([self.word], family=False)
             self._busy()
+        elif self._recording and self._tape:
+            self._loop_tune()
         elif not self.letters_mode and self._bring_back():
             self._play_tape()
         self.app.invalidate()
@@ -634,7 +643,10 @@ class MusicRoom(Room):
             self._busy()
 
     def _rest(self) -> tuple:
-        """(how long the quiet runs before the tape clears, clock steps, when it began)."""
+        """(how long the quiet runs before the tape clears, clock steps, when it began); while recording, the
+        time from the first note till it loops."""
+        if self._recording:
+            return RECORD_S, REST_STEPS, self._tape_origin if self._tape else None
         held = self._typed_at if self.letters_mode else self._tape
         return (WORD_REST_S if self.letters_mode else SONG_REST_S), REST_STEPS, self._active_at if held else None
 
@@ -670,10 +682,13 @@ class MusicRoom(Room):
         return max(0, steps - passed) / steps
 
     def _quiet(self):
-        """Quiet long enough: the tape clears, the letters or the song. Not while it plays or in Time Travel."""
-        if self._sounding() or self.app._time_travel is not None:
+        """Quiet long enough: the tape clears, the letters or the song. Not while it plays or in Time Travel. A
+        recording's time up: it loops."""
+        if self._recording:
+            self._loop_tune()
+        elif self._sounding() or self.app._time_travel is not None:
             return self._busy()
-        if self.letters_mode:
+        elif self.letters_mode:
             self._forget_word()
         elif self._tape:
             self._last_song, self._tape = (self._tape, self._tape_origin, self._tape_base), []
@@ -723,7 +738,7 @@ class MusicRoom(Room):
                 return
             if action.is_down:
                 self._flush_enter()
-                if action.action == "escape" and self.loop.state != IDLE:
+                if action.action == "escape" and (self.loop.state != IDLE or self._recording):
                     self._stop_loop()
                     self.app._escape_consumed_by_mode = True
                 elif action.action == "tab":
@@ -797,7 +812,10 @@ class MusicRoom(Room):
         now = time.monotonic()
         if not action.is_repeat or self._erasing_since is None:
             self._erasing_since = self._erased_at = now
-            self._erase(whole=False)
+            if self._tune() or self.letters_mode:
+                self._erase(whole=False)
+            else:   # nothing left to erase: the last song goes too, so hold Enter records anew
+                self._last_song = None
         else:
             whole = now - self._erasing_since >= ERASE_MORE_S
             if now - self._erased_at >= ERASE_EVERY_S[whole]:
@@ -849,24 +867,31 @@ class MusicRoom(Room):
     def _enter_hold_fired(self):
         if self.app._littles_mode or self.code_panel is not None:
             return
-        if self.loop.state != IDLE:
+        if self.loop.state != IDLE or (self._recording and not self._tape):
             self._stop_loop()
         elif self._loopable():
             self._loop_tune()
+        elif self._can_record():
+            self._stop_tape()
+            self._recording = True
+            self._schedule_quiet()   # nothing played in RECORD_S, and it's as it was
         elif self.letters_mode:   # Letters has nothing to loop, so a hold is a tap
             self._next_voice()
-            self.app.invalidate()
+        self.app.invalidate()
 
     def _loopable(self) -> bool:
         """Only a Notes song loops: Letters has Space to say its word, and its letters clear."""
         return self.app._music_looping_enabled and not self.letters_mode and bool(self._tape or self._last_song)
 
+    def _can_record(self) -> bool:
+        """Notes with nothing on the tape or to bring back: hold Enter records, then loops."""
+        return self.app._music_looping_enabled and not self.letters_mode and not self._loopable()
+
     def hold_progress(self):
         held = self.enter_hold.progress()
-        looping = self.loop.state != IDLE
-        if held is not None and (looping or self._loopable()):
-            return hold_status(held, "Enter", LOOP, "stop the loop" if looping else "loop it")
-        return None
+        doing = "stop the loop" if self.loop.state != IDLE else "loop it" if self._loopable() else \
+            "stop recording" if self._recording else "record" if self._can_record() else None
+        return hold_status(held, "Enter", LOOP, doing) if held is not None and doing else None
 
     def footer_h(self, g) -> int:
         return g.em(FOOTER_EM)
@@ -906,7 +931,8 @@ class MusicRoom(Room):
             draw_key_hint(g, "{Enter} sound", px, (left + right) // 2, cy, anchor="center")
             return
         tune = self._tune()
-        space = "" if self.letters_mode else TAPE_HINT if tune else LAST_SONG_HINT if self._last_song else ""
+        space = "" if self.letters_mode else (RECORDED_HINT if self._recording else TAPE_HINT) if tune \
+            else LAST_SONG_HINT if self._last_song else ""
         hint = "   ".join(h for h in (space, self._hint_text(), ERASE_HINT if tune else "") if h)
         if hint:
             draw_key_hint(g, hint, px, (left + right) // 2, cy, anchor="center")
@@ -928,6 +954,8 @@ class MusicRoom(Room):
     def _tape_ink(self, color=P.TEXT) -> str:
         """The Notes tape sits back but for while it plays, and fades a little each clock step as the quiet grows,
         nearly gone when it clears."""
+        if self._recording:   # a tape filling stays bright: its clock counts to the loop, not to clearing
+            return color
         fade = (1 - self._rest_left()) * TAPE_FADE
         sits_back = not self.letters_mode and not self._sounding()
         return mix(color, P.SURFACE, max(fade, TAPE_REST_FADE) if sits_back else fade)
@@ -1066,8 +1094,10 @@ class MusicRoom(Room):
         return cx + r
 
     def _hint_text(self) -> str:
-        """Hold Enter loops the tape, so this shows beside one."""
-        return f"{{hold Enter}} {LOOP} to loop" if self._loopable() else ""
+        """What holding Enter does: loop the tape, or with none, record one; while recording, that it is."""
+        if self._recording:
+            return RECORDING_HINT
+        return f"{{hold Enter}} {LOOP} to loop" if self._loopable() else RECORD_HINT if self._can_record() else ""
 
     def _draw_header(self, g, rect):
         """The same header as Art and Blocks: the Enter chip beside the Notes / Letters switch."""

@@ -82,6 +82,7 @@ export class Laptop {
     };
     typing(false);
     for (const ev of ["focus", "blur"]) this.typing.addEventListener(ev, () => typing(ev === "focus"));
+    this.blurWhenKeyboardCloses();
     this.typing.addEventListener("keydown", (e) => {
       const name = NAMED[e.key];
       if (!name || name === "backspace") return;
@@ -96,6 +97,22 @@ export class Laptop {
     });
     this.paint();
     for (const ev of [KEY_EVENT, MODIFIER_EVENT]) addEventListener(ev, (e) => this.press((e as CustomEvent<string>).detail));
+  }
+
+  // Android's back gesture hides the keyboard but leaves the box focused; the visible page growing back says it closed.
+  // The keyboard resizes the top window (the landing page's frame is same-origin); a cross-origin one throws, and nothing watches.
+  private blurWhenKeyboardCloses(): void {
+    let v: VisualViewport | null = null;
+    try { v = top?.visualViewport ?? null; } catch { return; }
+    if (!v) return;
+    const seen = () => v.height * v.scale;
+    let [full, shrank] = [0, false];
+    this.typing.addEventListener("focus", () => [full, shrank] = [seen(), false]);
+    v.addEventListener("resize", () => {
+      if (document.activeElement !== this.typing) return;
+      if (seen() < full * 0.85) shrank = true;
+      else if (shrank) this.typing.blur();
+    });
   }
 
   // Redraws the stickers when the family's colors, the tray's keys or the tip's key change. A tip's key joins the tray.

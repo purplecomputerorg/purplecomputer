@@ -31,20 +31,28 @@ const EXAMPLES: Partial<Record<Room, string[]>> = {
 };
 
 // The demo and code keys: under the rooms, with the phone keys, for a room that has them.
-const demoKeys = [0, 1].map((i) => h("button", { class: "demo-key", type: "button", onclick: () => demo(stage.live.place.room, i) }));
-const codeLabel = h("span");
-const codeKey = h("button", { class: "demo-key", type: "button", onclick: () => { stage.showKeys(["escape", "space"], 0); code(); } }, codeLabel, keycaps("Esc", "Space"));
-const trayKeys = h("div", { class: "demo-keys", hidden: true }, ...demoKeys, codeKey);
-const moved = () => {
+// Until Purple is ready they show their labels, disabled, with a spinner.
+const labelled = (onclick: () => void, ...after: Node[]) => {
+  const label = h("span");
+  return { label, key: h("button", { class: "demo-key", type: "button", onclick }, h("span", {}, h("i", { class: "spin" }), label), ...after) };
+};
+const demoKeys = [0, 1].map((i) => labelled(() => demo(stage.live.place.room, i)));
+const codeKey = labelled(() => { stage.showKeys(["escape", "space"], 0); code(); }, keycaps("Esc", "Space"));
+const trayKeys = h("div", { class: "demo-keys", hidden: true }, ...demoKeys.map((d) => d.key), codeKey.key);
+const showKeys = () => {
   const room = stage.live.place.room;
-  const ds = ready ? DEMOS[room] ?? [] : [];
-  demoKeys.forEach((key, i) => {
+  const ds = DEMOS[room] ?? [];
+  demoKeys.forEach(({ key, label }, i) => {
     key.hidden = !ds[i];
-    key.textContent = ds[i] ? `▶ ${ds[i].label}` : "";
+    label.textContent = ds[i] ? `${ready ? "▶ " : ""}${ds[i].label}` : "";
   });
-  codeKey.hidden = !ready || !EXAMPLES[room];
-  codeLabel.textContent = stage.live.place.code ? "Close code" : "Try code";
-  trayKeys.hidden = !ds.length && codeKey.hidden;
+  codeKey.key.hidden = !EXAMPLES[room];
+  codeKey.label.textContent = stage.live.place.code ? "Close code" : "Try code";
+  [...demoKeys, codeKey].forEach(({ key }) => key.disabled = !ready);
+  trayKeys.hidden = !ds.length && codeKey.key.hidden;
+};
+const moved = () => {
+  showKeys();
   hint();
   tip();
   tell();
@@ -217,3 +225,4 @@ const tell = embed(app, (data) => {
 app.append(stage.element);
 void startEmojiPictures();
 stage.show({ live: { room: START && isRoom(START) ? START : "art" } });
+showKeys();

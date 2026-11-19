@@ -30,7 +30,8 @@
 * { box-sizing: border-box; }
 /* Everything in Caveat, hidden until fonts.ts has it loaded. */
 :root:not(.handwriting) :is(.stage h3, .sticker-callout, .screen-note) { visibility: hidden; }
-html { color-scheme: light; }
+/* Android's tap highlight is a square box over rounded keys; every tappable thing has its own press look */
+html { color-scheme: light; -webkit-tap-highlight-color: transparent; }
 body {
   margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans);
   font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
@@ -1153,3 +1154,7 @@ html.embed.alone { overflow: auto; }
 .demo-key { height: 46px; padding: 0 22px; border: 0; border-radius: 9px; background: #ebe2fd; color: var(--purple); font: 600 16px var(--sans); white-space: nowrap; box-shadow: 0 3px 0 #c4aee0; cursor: pointer; }
 .demo-key:hover { background: #f4eefe; }
 .demo-key:active { transform: translateY(3px); box-shadow: none; }
+.demo-key:disabled { background: #ebe2fd; color: var(--dim); cursor: progress; transform: none; box-shadow: 0 3px 0 #c4aee0; }
+.demo-key .spin { display: none; }
+.demo-key:disabled .spin { display: inline-block; width: 0.8em; height: 0.8em; margin-right: 0.45em; vertical-align: -0.05em; border-radius: 99px; border: 2px solid var(--border); border-top-color: var(--purple); animation: spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .demo-key .spin { animation: none; } }

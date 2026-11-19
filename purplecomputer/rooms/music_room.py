@@ -13,7 +13,7 @@ from .. import palette as P
 from ..audio import play_safe
 from ..code_runner import MusicCodeRunner
 from ..content import get_content
-from ..constants import ICON_KEYBOARD, ICON_MUSIC
+from ..constants import ICON_BROOM, ICON_KEYBOARD, ICON_MUSIC
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ..mixer import warm_mixer
@@ -50,9 +50,7 @@ LETTER_FADE_REST_S = 1.0      # a rest this long, or another letter, brings it b
 LETTER_AFTER_GAP_S = 0.15     # between Purple saying a key and the family's recording after it
 ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes, and a new phrase on the tape
 TAPE_MAX = 100                # notes kept on the music tape
-ERASE_MORE_S = 1.0            # seconds of holding Backspace before it takes whole phrases (whole words in Letters)
-ERASE_EVERY_S = (0.15, 0.6)   # a held Backspace takes a note, or later a phrase, this often, not at key repeat
-ERASE_HINT = "{Backspace} erase"
+ERASE_HINT = "{Backspace} erase, hold to clear"
 TAPE_FADE = 0.9               # how far the tape has faded into the background by the time it clears
 TAPE_REST_FADE = 0.65         # how far back the Notes tape sits, except while it plays back or loops
 REST_STEPS = 20               # the tape fades and its clock empties in this many steps over its quiet rest
@@ -123,8 +121,6 @@ class MusicRoom(Room):
         self._tape_origin = 0.0   # when the song began, and how many notes have dropped off its front,
         self._tape_base = 0       # so each note keeps its timeline key while the song grows
         self._last_song = None    # (tape, origin, base) of the song quiet cleared, which Space or hold Enter brings back
-        self._erasing_since = None
-        self._erased_at = 0.0
         self._tape_task = None
         self._tape_at = None      # the tape note playing back now, or looping
         self._loop_tape: dict = {}
@@ -132,6 +128,7 @@ class MusicRoom(Room):
         self._active_at = 0.0     # the last sound, play back or erase: the tape clears once it's quiet this long
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HeldKey(app, self._enter_hold_fired)
+        self.erase_hold = HeldKey(app, self._erase_hold_fired)
         self.code_panel = None
         self._noscreen_dot = None
         self._noscreen_timer = None
@@ -770,6 +767,7 @@ class MusicRoom(Room):
         if isinstance(action, CharacterAction):
             if action.is_repeat or not action.char:
                 return
+            self.erase_hold.other_key()
             char = action.char
             lookup = char.upper() if char.isalpha() else KID_MATH_KEYS.get(char, char)
             by_name = action.shift_held and self._shift_notes(held=False)
@@ -812,36 +810,29 @@ class MusicRoom(Room):
         return None if col is None else GRID_KEYS[NOTE_ROW][col]
 
     def _handle_backspace(self, action):
-        """Erases from the end of the tape a note (in Letters, a letter) at a time, held after a while whole
-        phrases (words), as Backspace does in Write and Art."""
+        """A tap erases the last note (in Letters, letter); held, the hold bar fills and the whole tape goes."""
         if not action.is_down:
-            self._erasing_since = None
+            self.erase_hold.up()
             return
-        if self.app._littles_mode or self.loop.state != IDLE:
+        if action.is_repeat or self.app._littles_mode or self.loop.state != IDLE:
             return
-        now = time.monotonic()
-        if not action.is_repeat or self._erasing_since is None:
-            self._erasing_since = self._erased_at = now
-            if self._tune() or self.letters_mode:
-                self._erase(whole=False)
-            else:   # nothing left to erase: the last song goes, so hold Enter records anew
-                self._last_song = None
-        else:
-            whole = now - self._erasing_since >= ERASE_MORE_S
-            if now - self._erased_at >= ERASE_EVERY_S[whole]:
-                self._erased_at = now
-                self._erase(whole)
+        if self._tune():
+            self._erase()
+            if self._tune():
+                self.erase_hold.down()
+        else:   # nothing left to erase: the last song goes, so hold Enter records anew
+            self._last_song = None
         self.app.invalidate()
 
-    def _erase(self, whole: bool):
-        """The last note or letter, or with `whole` back to the start of its phrase or word."""
-        tune = self._tune()
-        if not tune:
+    def _erase_hold_fired(self):
+        if self.loop.state == IDLE:
+            self._erase(len(self._tune()))
+        self.app.invalidate()
+
+    def _erase(self, n: int = 1):
+        """The last `n` notes or letters."""
+        if not n:
             return
-        gap = WORD_GAP_S if self.letters_mode else ECHO_PAUSE_S
-        n = 1
-        while whole and n < len(tune) and tune[-n][2] - tune[-n - 1][2] < gap:
-            n += 1
         if self.letters_mode:
             self._spelled, self._typed_at = self._spelled[:-n], self._typed_at[:-n]
             self.word = self._word_at_end() if self._spelled else None
@@ -873,6 +864,7 @@ class MusicRoom(Room):
 
     def _flush_enter(self):
         self.enter_hold.other_key()
+        self.erase_hold.other_key()
 
     def _enter_hold_fired(self):
         if self.app._littles_mode or self.code_panel is not None:
@@ -899,6 +891,8 @@ class MusicRoom(Room):
         return self.app._music_looping_enabled and not self.letters_mode
 
     def hold_progress(self):
+        if (erasing := self.erase_hold.progress()) is not None:
+            return hold_status(erasing, "Backspace", ICON_BROOM, "clear the letters" if self.letters_mode else "clear the song")
         held = self.enter_hold.progress()
         doing = "stop the loop" if self.loop.state == LOOPING else "loop it" if self._can_loop() else None
         return hold_status(held, "Enter", LOOP, doing) if held is not None and doing else None

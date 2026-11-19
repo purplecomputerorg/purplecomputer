@@ -126,7 +126,8 @@ Unchanged: evdev events go through `KeyboardStateMachine` into
 is no evdev (`PURPLE_NO_EVDEV=1`, macOS), `sdl_input.pump` turns the window's
 key events into the same `RawKeyEvent`s.
 
-The Enter hold (loop station) shows a bar (`ui.draw_hold_bar`), and one let go
+The Enter hold (loop station) and Music's Backspace hold (clear the tape) show a bar
+(`ui.draw_hold_bar`), and one let go
 early leaves a "Hold Enter longer to ..." hint up for a moment; the Esc hold for
 the Parent Menu shows nothing. Space never holds for anything: holding it in Art
 and Blocks keeps painting or building while the arrows move. Code opens with Esc + Space,

@@ -250,7 +250,7 @@ def test_an_erased_song_comes_back_through_time_travel():
         room = app.room
         await type_text(app, "qwe")
         app.timeline_capture_now("music")
-        room._erase(whole=True)
+        room._erase(len(room._tape))
         app.timeline_capture_now("music")
         assert room._tape == []
         app._start_time_travel()

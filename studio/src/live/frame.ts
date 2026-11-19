@@ -52,7 +52,8 @@ Object.assign(globalThis, {
 onVoiceNote((text) => post({ type: "voice", text }));
 canvas.addEventListener("focus", () => post({ type: "focus", on: true }));
 canvas.addEventListener("blur", () => post({ type: "focus", on: false }));
-addEventListener("pointerdown", (e) => e.pointerType === "mouse" && post({ type: "click" }));
+// pointerup, not down: a finger that scrolls the page past Purple gets pointercancel instead.
+addEventListener("pointerup", () => post({ type: "click" }));
 addEventListener("keydown", (e) => {
   const key = browserKey(e);
   if (key) post({ type: "keydown", key });

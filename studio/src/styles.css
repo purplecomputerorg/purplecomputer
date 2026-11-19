@@ -1141,7 +1141,7 @@ html.embed.alone { overflow: auto; }
   .embed .room-buttons button[aria-pressed="true"] { background: var(--purple); }
   .embed .tray-bar { width: auto; margin: 0; padding: 12px 0 3px; border-top: 1px solid var(--line); border-radius: 0; background: none; }
   .embed .demo-keys { flex-direction: column; }
-  .embed .demo-keys > .demo-key { flex: none; height: 42px; font-size: 15px; }
+  .embed .demo-keys > .demo-key { flex: none; height: auto; min-height: 42px; padding-block: 6px; font-size: 15px; white-space: normal; text-align: left; }
   /* Each button's keys, like a menu's shortcuts: Esc, then the room's number; Esc + Space for code */
   .embed .room-buttons button, .embed .demo-key:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-inline: 12px; }
   .embed .key-hint { display: inline-flex; align-items: center; gap: 3px; font: 600 12px var(--sans); color: var(--dim); }
@@ -1155,6 +1155,7 @@ html.embed.alone { overflow: auto; }
 .demo-key:hover { background: #f4eefe; }
 .demo-key:active { transform: translateY(3px); box-shadow: none; }
 .demo-key:disabled { background: #ebe2fd; color: var(--dim); cursor: progress; transform: none; box-shadow: 0 3px 0 #c4aee0; }
+.demo-key code { padding: 0; background: none; color: inherit; font-size: 0.8em; white-space: nowrap; }
 .demo-key .spin { display: none; }
 .demo-key:disabled .spin { display: inline-block; width: 0.8em; height: 0.8em; margin-right: 0.45em; vertical-align: -0.05em; border-radius: 99px; border: 2px solid var(--border); border-top-color: var(--purple); animation: spin 0.9s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .demo-key .spin { animation: none; } }

@@ -51,6 +51,8 @@ export class Laptop {
   private keyboard = h("div", { class: "laptop-keys" });
   readonly tray = h("div", { class: "tray-keys" });
   private trayNames: string[] = [];
+  // Tip keys stay in their tray once shown, so a key that switches modes (Tab) can switch back.
+  private kept = new Map<string, string[]>();
   private keys = new Map<string, HTMLElement[]>();
   private painted = "";
   // Holds one space, so a phone keyboard's backspace has something to delete and shows up.
@@ -99,7 +101,8 @@ export class Laptop {
   // Redraws the stickers when the family's colors, the tray's keys or the tip's key change. A tip's key joins the tray.
   paint(tray = this.trayNames): void {
     const colors = stickerColors();
-    const painted = JSON.stringify([colors, tray, this.tipped]);
+    const kept = (this.kept.get(tray.join(" ")) ?? []).filter((k) => !tray.includes(k));
+    const painted = JSON.stringify([colors, tray, kept, this.tipped]);
     if (painted === this.painted) return;
     this.painted = painted;
     this.trayNames = tray;
@@ -116,8 +119,7 @@ export class Laptop {
       return el;
     };
     this.keyboard.replaceChildren(...ROWS.map((row) => h("div", { class: "laptop-row" }, ...row.map((k) => key(k, "laptop-key")))));
-    const tipped = this.tipped && !tray.includes(this.tipped) ? [this.tipped] : [];
-    this.tray.replaceChildren(...[...tipped, ...tray].map((name) => key([name, BY_NAME.get(name)?.[1] ?? name], "laptop-key tray-key")));
+    this.tray.replaceChildren(...[...kept, ...tray].map((name) => key([name, BY_NAME.get(name)?.[1] ?? name], "laptop-key tray-key")));
     this.phoneKeys.hidden = !tray.length;
     for (const [name, els] of this.keys) for (const el of els) el.classList.toggle("tip", name === this.tipped);
   }
@@ -126,6 +128,9 @@ export class Laptop {
   // apart sets it lower and farther off, so a second tip for the same key doesn't look like the first.
   tip(text: string | null, key: string | null = null, apart = false): void {
     this.tipped = text ? key : null;
+    const id = this.trayNames.join(" ");
+    const kept = this.kept.get(id) ?? [];
+    if (this.tipped && !kept.includes(this.tipped)) this.kept.set(id, [...kept, this.tipped]);
     this.paint();
     const words = arched(text ?? STICKERS);
     this.callout.replaceChildren(...this.tipped ? [] : [ARROW], words);

@@ -44,7 +44,8 @@ const showKeys = () => {
   const ds = DEMOS[room] ?? [];
   demoKeys.forEach(({ key, label }, i) => {
     key.hidden = !ds[i];
-    label.textContent = ds[i] ? `${ready ? "▶ " : ""}${ds[i].label}` : "";
+    const d = ds[i];
+    label.replaceChildren(...d ? [`${ready ? "▶ " : ""}${d.label}`, ...d.typed ? [" ", h("code", {}, d.typed)] : []] : []);
   });
   codeKey.key.hidden = !EXAMPLES[room];
   codeKey.label.textContent = stage.live.place.code ? "Close code" : "Try code";
@@ -146,12 +147,10 @@ const HEART = [".ee...ee.", "errr.rrre", "rrrrrrrrr", "ttttttttt", ".ttttttt.", 
 // Art's brush starts in the top corner; until someone has painted, the heart goes in the middle.
 let artUsed = false;
 addEventListener(KEY_EVENT, () => { if (stage.live.place.room === "art") artUsed = true; });
-// Play's demo types the next of these each time.
-const LINES = ["cat * 5", "red + blue", "3 x 4 bananas", "say I love you"];
-let lines = 0;
 
 // Each room's demos: keys Purple gets on the laptop, ms apart ("_" waits a beat).
-type Demo = { label: string; keys: () => string[]; ms: number; letters?: boolean };
+// typed: the line Purple gets, shown in code type after the label.
+type Demo = { label: string; typed?: string; keys: () => string[]; ms: number; letters?: boolean };
 const DEMOS: Partial<Record<Room, Demo[]>> = {
   art: [{ label: "Paint a heart", keys: () => [...(artUsed ? [] : [...repeat(10, "down"), ...repeat(30, "right")]), ...paint(HEART)], ms: 35 }],
   music: [
@@ -160,7 +159,7 @@ const DEMOS: Partial<Record<Room, Demo[]>> = {
     // In Letters saying sounds: c, a, t, then Space says the word they spell.
     { label: "Spell cat", keys: () => "_ c _ a _ t _ _ space".split(" "), ms: 500, letters: true },
   ],
-  play: [{ label: "Type something", keys: () => line(LINES[lines++ % LINES.length]), ms: TYPE_MS }],
+  play: ["red + blue", "say cat + cat x 5"].map((typed) => ({ label: "Type", typed, keys: () => line(typed), ms: TYPE_MS })),
   // A pyramid: letters climb over the blocks under them, so each row back over the last goes a level up.
   blocks: [{ label: "Build a pyramid", keys: () => "down down down down left left left left right e r t y t r e left left d f g f d right right c v c left left b".split(" "), ms: 110 }],
 };

@@ -300,17 +300,27 @@ def test_only_a_phrase_rest_shows_on_the_song_as_a_space():
     run(go())
 
 
-def test_backspace_tap_erases_a_note_and_a_hold_fills_the_bar_then_clears_the_song():
+def test_held_backspace_erases_a_few_notes_then_the_bar_fills_and_clears_the_song():
     from purplecomputer.keyboard import ControlAction
+    from purplecomputer.rooms import music_room
 
     async def go():
         app = make_app(room="music")
         room = app.room
-        for key, at in (("Q", 0.0), ("W", 0.1), ("E", 5.0)):
+        for key, at in (("Q", 0.0), ("W", 0.1), ("E", 5.0), ("R", 5.1)):
             room._tape_add(key, at)
+        held = ControlAction(action="backspace", is_down=True, is_repeat=True)
         await room.handle(ControlAction(action="backspace", is_down=True))
-        await room.handle(ControlAction(action="backspace", is_down=True, is_repeat=True))
-        assert [k for k, *_ in room._tape] == ["Q", "W"], "key repeat doesn't race through the notes"
+        await room.handle(held)
+        assert [k for k, *_ in room._tape] == ["Q", "W", "E"], "key repeat doesn't race through the notes"
+        room._erased_at -= music_room.ERASE_EVERY_S
+        await room.handle(held)
+        assert [k for k, *_ in room._tape] == ["Q", "W"]
+        assert room.hold_progress() is None, "no bar yet, so a short hold just erases"
+        room._erasing_since -= music_room.ERASE_BAR_AFTER_S
+        room._erased_at -= music_room.ERASE_EVERY_S
+        await room.handle(held)
+        assert [k for k, *_ in room._tape] == ["Q", "W"]
         assert room.hold_progress()[1].endswith("Clear the song")
         room._erase_hold_fired()
         assert room._tape == []
@@ -319,7 +329,7 @@ def test_backspace_tap_erases_a_note_and_a_hold_fills_the_bar_then_clears_the_so
     run(go())
 
 
-def test_letting_backspace_go_early_keeps_the_rest_and_says_to_hold_longer():
+def test_a_short_backspace_hold_erases_one_note_without_a_nudge():
     from purplecomputer.harness import press
 
     async def go():
@@ -328,7 +338,7 @@ def test_letting_backspace_go_early_keeps_the_rest_and_says_to_hold_longer():
             app.room._tape_add(key, at)
         await press(app, "backspace", hold=0.4)
         assert [k for k, *_ in app.room._tape] == ["Q", "W"]
-        assert app._hold_nudge == "Hold Backspace longer to clear the song"
+        assert app._hold_nudge is None
     run(go())
 
 

@@ -51,6 +51,8 @@ LETTER_AFTER_GAP_S = 0.15     # between Purple saying a key and the family's rec
 ECHO_PAUSE_S = 2.0            # a rest this long starts a new line of echoed notes, and a new phrase on the tape
 TAPE_MAX = 100                # notes kept on the music tape
 ERASE_HINT = "{Backspace} erase, hold to clear"
+ERASE_EVERY_S = 0.2           # a held Backspace takes a note this often, not at key repeat,
+ERASE_BAR_AFTER_S = 0.6       # until it's held this long; then the hold bar starts toward clearing it all
 TAPE_FADE = 0.9               # how far the tape has faded into the background by the time it clears
 TAPE_REST_FADE = 0.65         # how far back the Notes tape sits, except while it plays back or loops
 REST_STEPS = 20               # the tape fades and its clock empties in this many steps over its quiet rest
@@ -129,6 +131,8 @@ class MusicRoom(Room):
         self.echo = Echo(pause=ECHO_PAUSE_S)
         self.enter_hold = HeldKey(app, self._enter_hold_fired)
         self.erase_hold = HeldKey(app, self._erase_hold_fired)
+        self._erasing_since = None
+        self._erased_at = 0.0
         self.code_panel = None
         self._noscreen_dot = None
         self._noscreen_timer = None
@@ -810,18 +814,27 @@ class MusicRoom(Room):
         return None if col is None else GRID_KEYS[NOTE_ROW][col]
 
     def _handle_backspace(self, action):
-        """A tap erases the last note (in Letters, letter); held, the hold bar fills and the whole tape goes."""
+        """Erases the last note (in Letters, letter), a few more while held; held on, the hold bar fills and the whole tape goes."""
         if not action.is_down:
+            self._erasing_since = None
             self.erase_hold.up()
             return
-        if action.is_repeat or self.app._littles_mode or self.loop.state != IDLE:
+        if self.app._littles_mode or self.loop.state != IDLE:
             return
-        if self._tune():
-            self._erase()
+        now = time.monotonic()
+        if not action.is_repeat:
+            self._erasing_since = self._erased_at = now
             if self._tune():
+                self._erase()
+            else:   # nothing left to erase: the last song goes, so hold Enter records anew
+                self._last_song = None
+        elif self._erasing_since is not None and self._tune() and now - self._erased_at >= ERASE_EVERY_S:
+            if now - self._erasing_since < ERASE_BAR_AFTER_S:
+                self._erased_at = now
+                self._erase()
+            else:
+                self._erasing_since = None
                 self.erase_hold.down()
-        else:   # nothing left to erase: the last song goes, so hold Enter records anew
-            self._last_song = None
         self.app.invalidate()
 
     def _erase_hold_fired(self):

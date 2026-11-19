@@ -11,9 +11,8 @@ Vendored from IBM's Plex release and Google Fonts, all under the SIL Open Font L
   every piece of chrome (titles, room tabs, keycaps, hints), and the menus (Parent Menu
   and Picker option lists). Plex is IBM's own face, so the DOS-era callback is literal, and
   it stays calm at small sizes. The italic sets the Parent Menu's section headers.
-- Bitter (Bold Italic 700, SIL Open Font License 1.1): Music's note names, a slab serif so they never read
-  as key letters. Static instance of the Google Fonts variable build, cut with
-  `fonttools varLib.instancer Bitter-Italic[wght].ttf wght=700`.
+- Kalam (Bold 700): Music's note names, a slanted handwriting so they never read as key
+  letters. Google Fonts' static `Kalam-Bold.ttf`; Kalam has no italic, its slant is built in.
 - Caveat (Regular 400): the handwritten name that signs printed pages. Static instance of the
   Google Fonts variable build, cut with `fonttools varLib.instancer Caveat[wght].ttf wght=400`.
 - Martian Mono Art (Bold): letters written on the Art grid. Martian Mono at

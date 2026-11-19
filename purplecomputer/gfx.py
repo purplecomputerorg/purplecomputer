@@ -42,7 +42,7 @@ FACES = {
     "mono-bold": "IBMPlexMono-SemiBold.ttf",
     "mono-heavy": "IBMPlexMono-Bold.ttf",
     "mono-italic": "IBMPlexMono-Italic.ttf",  # parent-menu section headers
-    "note": "Kalam-Bold.ttf",  # Music note names, handwritten so they don't read as keys
+    "note": "MuseJazzText.otf",  # Music note names, a lead-sheet hand so they don't read as keys
     "hand": "Caveat-Regular.ttf",  # the name signed on printed pages
     "block": "MartianMonoArt-Bold.ttf",  # one letter per square Art cell
     "nerd": "SymbolsNerdFontMono-Regular.ttf",  # mono-tinted UI icon glyphs

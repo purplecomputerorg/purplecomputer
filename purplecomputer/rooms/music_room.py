@@ -84,10 +84,6 @@ def note_name(col: int, root_index: int) -> str:
     return SHARP_TO_FLAT.get(note, note) if root in FLAT_KEYS else note.replace("#", "♯")
 
 
-def note_label(note: str) -> str:
-    return f"♪ {note}"
-
-
 def instrument_icon(instrument_id: str) -> str:
     """Its picture, or a pack's emoji; anything that isn't one emoji gets the music glyph, as rooms do."""
     icon = get_content().instrument_icon(instrument_id)
@@ -983,18 +979,18 @@ class MusicRoom(Room):
             bg = self.get_color(key)
             g.rect(bg, tile, radius=tw // 8) if bg != P.TILE else g.rect(P.LINE, tile, width=2, radius=tw // 8)
             ink = P.TEXT if bg == P.TILE else text_color_for(bg)
-            self._draw_big_note(g, note_name(col, self.root_index), round(letter_px * 1.3), tile.center, ink)
+            self._draw_note(g, note_name(col, self.root_index), round(letter_px * 1.3), tile.center, ink)
         draw_key_hint(g, NOTE_NAMES_HINT, g.em(0.92), row.centerx, row.bottom + th // 2, anchor="center")
 
     @staticmethod
-    def _draw_big_note(g, note: str, px: int, center: tuple, ink):
-        """A note's name big, with a small ♪ before it, centered together."""
-        sym_px = round(px * 0.55)
-        sym_w = g.measure("♪", sym_px, "mono-bold", tr=False)[0] + px // 8
-        note_w = g.measure(note, px, "note", tr=False)[0]
-        x = center[0] - (sym_w + note_w) // 2
-        g.draw_text("♪", sym_px, x, center[1] + px // 8, "mono-bold", ink, anchor="midleft", tr=False)
-        g.draw_text(note, px, x + sym_w, center[1], "note", ink, anchor="midleft", tr=False)
+    def _draw_note(g, note: str, px: int, center: tuple, ink, sym: float = 0.55):
+        """A note's name with a smaller ♪ before it, `sym` of its size, their ink centered together."""
+        mark, big = (s.subsurface(s.get_bounding_rect()) for s in
+                     (g.text("♪", round(px * sym), "mono-bold", ink, tr=False), g.text(note, px, "note", ink, tr=False)))
+        gap = px // 5
+        x = center[0] - (mark.get_width() + gap + big.get_width()) // 2
+        g.surface.blit(mark, mark.get_rect(midleft=(x, center[1])))
+        g.surface.blit(big, big.get_rect(midleft=(x + mark.get_width() + gap, center[1])))
 
     def _draw_tape(self, g, row: pygame.Rect, size: float):
         """What was just played or typed, left to right under the grid, a rest as a gap; the word the letters end
@@ -1049,7 +1045,7 @@ class MusicRoom(Room):
                 dot_y = cy + round(px * (1.1 if word_at is not None else 0.85))
                 pygame.draw.circle(g.surface, rgb(lit), (mid, dot_y), max(3, px // 4))
             if keys:
-                g.draw_text(keys[i][0], key_px, mid, cy - round(px * 0.85), "mono-bold", self._tape_ink(keys[i][1]),
+                g.draw_text(keys[i][0], key_px, mid, cy - round(px * 0.95), "mono-bold", self._tape_ink(keys[i][1]),
                             anchor="center", tr=False)
             if word_at is not None and i >= word_at:
                 slot = pygame.Rect(x, cy, w, round(px * 0.6))
@@ -1179,15 +1175,14 @@ class MusicRoom(Room):
                 g.draw_text(letter, letter_px, tile.centerx, tile.centery,
                             "mono-bold" if quiet else "mono-heavy", fg, anchor="center")
                 sounding = key in self._note_labels
-                label = (note_label(note) if not self.letters_mode else None) if melodic \
+                label = (note if not self.letters_mode else None) if melodic \
                     else drum_picture(key) if sounding else None
                 if label and not on_paper:
                     sweeping = melodic and self._transition_state_for_col(col_idx)[1]
                     ink = P.ACCENT if sweeping else mix(fg, bg, 0.3 if sounding else NOTE_FAINT)
                     label_px, at = max(10, int(size * 0.15)), (tile.centerx, tile.bottom - int(size * 0.17))
                     if melodic:
-                        g.draw_text(label, label_px, *at, "note", ink,
-                                    anchor="center", tr=False)
+                        self._draw_note(g, label, label_px, at, ink, sym=1)
                     else:
                         pic = g.image(label, round(label_px * 1.1), ink)
                         g.surface.blit(pic, pic.get_rect(center=at))

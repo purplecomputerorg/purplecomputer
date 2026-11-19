@@ -275,16 +275,16 @@ def test_every_key_names_its_note_faintly_and_brighter_while_it_sounds(monkeypat
     async def go():
         app = make_app(room="music")
         inks = {}
-        real = app.g.draw_text
-        monkeypatch.setattr(app.g, "draw_text", lambda text, px, x, y, face="sans", color="#ffffff", *a, **k:
-                            inks.setdefault(text, []).append(color) or real(text, px, x, y, face, color, *a, **k))
+        real = app.room._draw_note
+        monkeypatch.setattr(app.room, "_draw_note", lambda g, note, px, center, ink, **k:
+                            inks.setdefault(note, []).append(ink) or real(g, note, px, center, ink, **k))
         app._draw()
-        assert len(inks["♪ F"]) == 3, "R, F and V all play F"
-        quiet = inks["♪ F"][1]
+        assert len(inks["F"]) == 3, "R, F and V all play F"
+        quiet = inks["F"][1]
         await type_text(app, "f")
         inks.clear()
         app._draw()
-        assert inks["♪ F"][1] != quiet and inks["♪ F"][0] == quiet, "only the F key that sounds lights up"
+        assert inks["F"][1] != quiet and inks["F"][0] == quiet, "only the F key that sounds lights up"
     run(go())
 
 

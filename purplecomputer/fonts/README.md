@@ -1,6 +1,6 @@
 # UI fonts
 
-Vendored from IBM's Plex release and Google Fonts, all under the SIL Open Font License 1.1.
+Vendored from IBM's Plex release, Google Fonts and MuseScore, all under the SIL Open Font License 1.1.
 
 - Figtree (Regular 400, SemiBold 600, Bold 700, Italic 400): the sans face, for system screens like the
   live-boot welcome, glosses and family room text. The landing site's body font, so screen,
@@ -11,8 +11,9 @@ Vendored from IBM's Plex release and Google Fonts, all under the SIL Open Font L
   every piece of chrome (titles, room tabs, keycaps, hints), and the menus (Parent Menu
   and Picker option lists). Plex is IBM's own face, so the DOS-era callback is literal, and
   it stays calm at small sizes. The italic sets the Parent Menu's section headers.
-- Kalam (Bold 700): Music's note names, a slanted handwriting so they never read as key
-  letters. Google Fonts' static `Kalam-Bold.ttf`; Kalam has no italic, its slant is built in.
+- MuseJazz Text (© 2016 Torsten Hämmerle, Abraham Lee; Reserved Font Name "MuseJazz"): Music's
+  note names, the handwriting of jazz lead sheets so they never read as key letters, with its own ♯
+  and ♭. MuseScore's `fonts/musejazz/MuseJazzText.otf`, unmodified, so it keeps its name.
 - Caveat (Regular 400): the handwritten name that signs printed pages. Static instance of the
   Google Fonts variable build, cut with `fonttools varLib.instancer Caveat[wght].ttf wght=400`.
 - Martian Mono Art (Bold): letters written on the Art grid. Martian Mono at

@@ -184,7 +184,7 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .laptop-deck { transform: rotateX(52deg); transform-origin: 50% 0; padding: 3% 4% 4.5%; border-radius: 4px 4px 22px 22px; background: linear-gradient(#45444d, #2a2930); box-shadow: inset 0 2px 0 #55545e, 0 14px 0 #1c1b20; }
 .laptop-keys { container-type: inline-size; }
 .laptop-row { display: flex; gap: 0.7cqw; margin-bottom: 0.7cqw; }
-.laptop-key { flex: 1; height: 6.1cqw; min-width: 0; padding: 0; border: 0; border-radius: 0.9cqw; background: #141317; color: #8f8d9c; font: 600 1.55cqw/1 var(--sans); display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 0.45cqw 0 #060608; transition: transform 0.08s, box-shadow 0.08s, filter 0.08s; }
+.laptop-key { flex: 1; height: 6.1cqw; min-width: 0; padding: 0; border: 0; border-radius: 0.9cqw; background: #141317; color: #8f8d9c; font: 600 1.55cqw/1 var(--sans); display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: manipulation; box-shadow: 0 0.45cqw 0 #060608; transition: transform 0.08s, box-shadow 0.08s, filter 0.08s; }
 .laptop-key.idle { cursor: default; color: #5e5c69; }
 .laptop-key:not(.idle):hover { filter: brightness(1.25); }
 .laptop-key.down { animation: keydown 0.22s; }
@@ -205,10 +205,9 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .tip-arrow { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; overflow: visible; pointer-events: none; fill: none; stroke: var(--purple); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .tip-arrow.off, .laptop:not(:has(.sticker-callout.tip)) .tip-arrow { display: none; }
 .laptop-key.tip { outline: max(2px, 0.35cqw) solid #c9a7ff; outline-offset: max(1px, 0.2cqw); }
-/* Typing from a phone: a tap anywhere on the laptop focuses the hidden box, which brings up the
+/* Typing from a phone: the button under the tray keys focuses the hidden box, which brings up the
    phone's keyboard. 16px keeps iOS from zooming in on it. */
 .laptop-typing { position: absolute; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; font-size: 16px; pointer-events: none; }
-.laptop-touch { display: none; }
 /* On a phone (PHONE in ui/live.ts), under the laptop: the rooms, and a few big keys for the one
    Purple is in */
 /* Above the tilted keyboard and the sticker note, whose boxes reach down over it */
@@ -247,24 +246,22 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 .words-grab { right: auto; bottom: auto; left: calc(50% - 13px); top: -34px; width: 26px; height: 26px; font-size: 15px; cursor: move; }
 .words-box.below .words-grab { top: auto; bottom: -34px; }
 .words-field { width: 100%; min-height: 3.2em; font: 18px/1.4 PurpleArt; resize: vertical; }
-.phone-bar .tray-keys, .phone-hint { display: none; }
+.phone-bar .tray-keys, .phone-keys { display: none; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   /* Snug enough that all four rooms fit one row on a 360px phone */
   .room-buttons { margin-bottom: 10px; gap: 4px; }
   .room-buttons button { padding-inline: 9px; }
-  /* Six keys (a tip's key joins the room's five) in one row on a 360px phone */
+  /* Seven keys (the room's five, Esc, a tip's key) in one row on a 360px phone */
   .phone-bar .tray-keys { display: flex; flex-wrap: wrap; justify-content: center; gap: min(6px, 1.5vw); width: fit-content; max-width: 100%; margin: 0 auto; padding: 8px; border-radius: 14px; background: linear-gradient(#45444d, #2a2930); }
   .phone-bar .tray-keys:empty { display: none; }
   .tray-key { flex: 0 0 auto !important; min-width: min(46px, 11.5vw); height: 46px; padding: 0; border-radius: 9px; font-size: 14px; box-shadow: 0 3px 0 #060608; }
   .tray-key .sticker { font-size: 17px; }
   .tray-key > span { padding: 0 min(10px, 1.5vw); }
   .tray-key.down { animation: traydown 0.22s; }
-  .phone-hint { display: block; margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--dim); }
+  .phone-keys:not([hidden]) { display: block; margin: 10px auto 0; font: 600 14px var(--sans); padding: 9px 16px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; touch-action: manipulation; }
+  .phone-keys[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
 }
-@media (pointer: coarse) and (max-width: 700px), (pointer: coarse) and (max-height: 500px) {
-  .laptop-touch { display: block; position: absolute; inset: 0; z-index: 2; border: 0; padding: 0; background: none; cursor: text; }
-}
-@media (max-width: 700px) and (pointer: fine) { .phone-hint { display: none; } }
+@media (max-width: 700px) and (pointer: fine) { .phone-keys:not([hidden]) { display: none; } }
 .zoom-toggle { position: absolute; top: 6px; right: 6px; z-index: 3; padding: 4px 10px; border: 0; border-radius: 999px; background: rgba(20, 10, 35, 0.7); color: #fff; font: 600 11px var(--sans); cursor: pointer; }
 /* A phone turned sideways: just the screen, as tall as the phone, with the rooms and keys beside it */
 @media (max-height: 500px) and (pointer: coarse) and (orientation: landscape) {
@@ -284,7 +281,10 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--fil
 /* Purple's keyboard stickers */
 .sticker { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 2.25em; height: 2.25em; box-sizing: border-box; border: 0.32em solid #6633aa; border-radius: 0.5em; background: var(--key); color: var(--ink); font-family: Nunito, var(--sans); font-weight: 800; line-height: 1; flex-shrink: 0; }
 .sticker b { font-size: 1em; font-weight: 800; }
-.sticker small { position: absolute; left: 0.18em; top: 0.12em; font-size: 0.5em; font-weight: 800; }
+/* A shift symbol beside a smaller key label, as the printed stickers lay them out (cards/make_keyboard_sticker_sheet.py) */
+.sticker small, .sticker:has(small) b { position: absolute; translate: -50% -50%; }
+.sticker small { left: 27%; top: 40%; font-size: 0.49em; font-weight: 800; }
+.sticker:has(small) b { left: 73%; top: 52%; font-size: 0.82em; }
 .sticker-row { display: flex; flex-wrap: wrap; gap: 3px; font-size: 11px; }
 .sticker-row.tiny { font-size: 8px; }
 

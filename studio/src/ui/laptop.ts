@@ -1,9 +1,8 @@
 // A pretend laptop around the preview: a bezel, and below it a keyboard tilted away like a real
 // one, with Purple's stickers on the keys. Tapping a key types it into whatever the screen holds;
 // every key the screen gets presses down here, so the stickers and the screen visibly match.
-// On a phone the keys are too small to hit, so a tap anywhere on the laptop opens the phone's own
-// keyboard instead, and what's typed there goes to the screen the same way. A few big keys for the
-// room (the tray) sit below for trying it without typing.
+// On a phone the keys are small but still tappable; a few big keys for the room (the tray) sit below,
+// and a button under them opens and closes the phone's own keyboard, whose typing goes to the screen the same way.
 import { KEY_EVENT, MODIFIER_EVENT } from "../keys";
 import { h } from "./dom";
 import { hasSticker, sticker, stickerColors } from "./stickers";
@@ -59,6 +58,12 @@ export class Laptop {
     class: "laptop-typing", type: "text", value: " ", autocomplete: "off", autocapitalize: "none", spellcheck: false,
     enterkeyhint: "go", "aria-label": "Type to Purple", tabindex: -1,
   });
+  // Keeps the box's focus on mousedown, so a tap that closes the keyboard doesn't first blur it and reopen it.
+  readonly phoneKeys = h("button", {
+    type: "button", class: "phone-keys", tabindex: -1,
+    onmousedown: (e: Event) => e.preventDefault(),
+    onclick: () => document.activeElement === this.typing ? this.typing.blur() : this.typing.focus({ preventScroll: true }),
+  });
 
   constructor(private tap: (key: string) => void) {
     this.element = h("div", { class: "laptop" },
@@ -66,10 +71,15 @@ export class Laptop {
       h("div", { class: "laptop-base" }, h("div", { class: "laptop-deck" }, this.keyboard)),
       this.callout,
       this.pointer,
-      this.typing,
-      h("button", { type: "button", class: "laptop-touch", "aria-label": "Type with your keyboard", onclick: () => this.typing.focus({ preventScroll: true }) }));
+      this.typing);
     this.typing.setAttribute("autocorrect", "off");
     this.pointer.classList.add("tip-arrow");
+    const typing = (on: boolean) => {
+      this.phoneKeys.textContent = `⌨️ ${on ? "Hide" : "Use"} my phone's keyboard`;
+      this.phoneKeys.setAttribute("aria-pressed", String(on));
+    };
+    typing(false);
+    for (const ev of ["focus", "blur"]) this.typing.addEventListener(ev, () => typing(ev === "focus"));
     this.typing.addEventListener("keydown", (e) => {
       const name = NAMED[e.key];
       if (!name || name === "backspace") return;
@@ -108,6 +118,7 @@ export class Laptop {
     this.keyboard.replaceChildren(...ROWS.map((row) => h("div", { class: "laptop-row" }, ...row.map((k) => key(k, "laptop-key")))));
     const tipped = this.tipped && !tray.includes(this.tipped) ? [this.tipped] : [];
     this.tray.replaceChildren(...[...tipped, ...tray].map((name) => key([name, BY_NAME.get(name)?.[1] ?? name], "laptop-key tray-key")));
+    this.phoneKeys.hidden = !tray.length;
     for (const [name, els] of this.keys) for (const el of els) el.classList.toggle("tip", name === this.tipped);
   }
 

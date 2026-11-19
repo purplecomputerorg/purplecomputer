@@ -38,7 +38,7 @@ export function createStage({ stays = true, onMove = () => {}, trayKey, keyHints
   // Lights keys on the laptop without typing them, ms apart (0 for a chord).
   const showKeys = (keys: string[], ms = 200) => keys.forEach((k, i) => setTimeout(() => laptop.press(k), i * ms));
   const roomsHead = keyHints ? h("p", { class: "key-hint rooms-head" }, "On the laptop, press ", h("kbd", {}, "Esc"), " then a number, or just click these buttons") : null;
-  const phoneBar = h("div", { class: "phone-bar" }, roomsHead, roomButtons, trayKey ? h("div", { class: "tray-bar" }, trayKey, laptop.tray) : laptop.tray, h("p", { class: "phone-hint" }, "Or tap the laptop to type with your phone's keyboard."));
+  const phoneBar = h("div", { class: "phone-bar" }, roomsHead, roomButtons, trayKey ? h("div", { class: "tray-bar" }, trayKey, laptop.tray) : laptop.tray, laptop.phoneKeys);
   const caption = h("p", { class: "caption" });
   const element = h("aside", { class: "stage" }, h("div", { class: "stage-inner" },
     h("h3", {}, "This little computer is a real Purple Computer for you to try"), laptop.element, phoneBar, caption,

@@ -1027,13 +1027,24 @@ class PurpleApp:
             set_littles_mode(None)
             self._apply_littles_mode(None)
         elif result == "switch":
-            self.push(LittlesModeScreen(self), on_close=lambda m: m is not CANCELLED and self._apply_littles_mode(m))
+            self.push(LittlesModeScreen(self), on_close=self.choose_littles_mode)
         elif result == "parent":
             self.push(ParentMenu(self), on_close=self._on_parent_menu_dismissed)
 
     def _on_parent_menu_dismissed(self, result):
         self.clear_notifications()
         self.key_save.changed()  # settings live on the Key too
+
+    def choose_littles_mode(self, mode):
+        """Picked from a menu: a mode closes every menu and starts right away."""
+        if mode is CANCELLED:
+            return
+        self._apply_littles_mode(mode)
+        if mode:
+            from .rooms.parent_menu import littles_name
+            for o in reversed(list(self._overlays)):
+                o.close()
+            self.notify(f"Littles Mode: {littles_name(mode)}. Hold Esc to exit.", timeout=4)
 
     def _apply_littles_mode(self, mode):
         self._littles_mode = mode

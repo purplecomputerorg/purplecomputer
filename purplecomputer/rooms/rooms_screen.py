@@ -7,7 +7,7 @@ from .. import palette as P
 from ..keyboard import ControlAction, NavigationAction
 from ..room_picker import (MAX_FAMILY_ROOMS, ROOM_CARD, cards, short_title, draw_card, draw_section, nearest, row_centers,
                            row_width)
-from ..ui import CANCELLED, DOWN, KEEP, LEFT, RIGHT, UP, Dialog
+from ..ui import DOWN, KEEP, LEFT, RIGHT, UP, Dialog
 from .family_room import ICON_FAMILY, room_icon
 
 ICON_CHECKED = "\U000F0132"  # nf-md-checkbox_marked
@@ -60,17 +60,23 @@ class RoomsScreen(Dialog):
     hint = f"{LEFT} {RIGHT} {UP} {DOWN} move   {{Enter}} check or uncheck   {{Esc}} {KEEP}"
     DESCRIPTION = "Checked rooms show in the Esc menu."
     JUST_ADDED = "Check the rooms to turn on now. You can change this later in the Parent Menu, under Rooms."
-    LITTLES_ON = "Littles Mode is on, so there's no Esc menu. These rooms come back when it's off."
+    LITTLES_ON = "Littles Mode is on: one activity, no Esc menu. Turn it off to choose rooms."
 
     def __init__(self, app, packs=None):
         super().__init__(app)
         self.packs = packs or set()
-        self.rows, self.labels = self._rows()
-        self.inner_w = max(MIN_W, row_width(*cards(max(map(len, self.rows)), ROOM_CARD)))
-        self.row, self.col = 1, 0
-        if packs:
-            self.row = next((i for i, row in enumerate(self.rows) if row[0][0] == "family" and row[0][1].pack in packs), 1)
+        self._layout()
+        self.row = next((i for i, row in enumerate(self.rows) if row[0][0] == "family" and row[0][1].pack in self.packs),
+                        min(1, len(self.rows) - 1))
+        self.col = 0
         self._first = 1
+
+    def _layout(self):
+        """With Littles Mode on, only its pill; the box keeps the width the rooms need so it doesn't jump."""
+        from ..settings import get_littles_mode
+        rows, labels = self._rows()
+        self.inner_w = max(MIN_W, row_width(*cards(max(map(len, rows)), ROOM_CARD)))
+        self.rows, self.labels = (rows[:1], {}) if get_littles_mode() else (rows, labels)
 
     def _rows(self) -> tuple:
         """Navigable rows, Littles Mode first, and the section label over each group's first row."""
@@ -128,7 +134,10 @@ class RoomsScreen(Dialog):
         kind, x = item
         if kind == "littles":
             from .parent_menu import LittlesModeScreen
-            return self.app.push(LittlesModeScreen(self.app), on_close=lambda m: m is not CANCELLED and self.app._apply_littles_mode(m))
+            def picked(mode):
+                self.app.choose_littles_mode(mode)
+                self._layout()
+            return self.app.push(LittlesModeScreen(self.app), on_close=picked)
         if kind == "core":
             on = core_on(self.app)
             if on == [x]:
@@ -155,7 +164,7 @@ class RoomsScreen(Dialog):
     def _shown(self, g) -> int:
         """How many card rows fit on screen."""
         desc, pill, card = self._heights(g)
-        return max(1, min(len(self.rows) - 1, (self.body_limit(g) - desc - pill) // card))
+        return min(len(self.rows) - 1, max(1, (self.body_limit(g) - desc - pill) // card))
 
     def body_height(self, g) -> int:
         desc, pill, card = self._heights(g)

@@ -27,8 +27,8 @@ from .. import paper
 from ..gfx import is_one_emoji, mix, rgb
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel
 from ..sounds import SoundBank
-from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, key_hint_width, draw_label,
-                  draw_mode_switch, draw_status_row, HeldKey, hold_status, status_row_h)
+from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, key_hint_width,
+                  draw_lone_stepper, draw_mode_switch, draw_status_row, HeldKey, hold_status, status_row_h)
 from .base import Room
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
@@ -932,7 +932,6 @@ class MusicRoom(Room):
         """The hint row, centered: what Space and holding Enter do with the tape now, the same in both modes."""
         px = g.em(0.92)
         if self.app._littles_mode:
-            draw_key_hint(g, "{Enter} sound", px, (left + right) // 2, cy, anchor="center")
             return
         tune = self._tune()
         space = "" if self.letters_mode else TAPE_HINT if tune else LAST_SONG_HINT if self._last_song else ""
@@ -1102,8 +1101,7 @@ class MusicRoom(Room):
     def _draw_header(self, g, rect):
         """The same header as Art and Blocks: the Enter chip beside the Notes / Letters switch."""
         if self.app._littles_mode:
-            plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else self._instrument_label(self.instrument_index)
-            draw_label(g, plate, g.em(1.0), rect.centerx, rect.y + g.em(1.9), P.TEXT, anchor="center", on=True)
+            draw_lone_stepper(g, rect.centerx, self.header_band(g, rect).centery, *self._header_chips()[0])
             return
         draw_mode_switch(g, self.header_band(g, rect), ("modes/notes.png", ABC_PICTURE), 1 if self.letters_mode else 0,
                          chips=self._header_chips(),

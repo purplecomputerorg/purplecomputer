@@ -958,6 +958,14 @@ def _draw_stepper(g: Gfx, px: int, right: int, cy: int, key_name: str, active: i
     return pill
 
 
+def draw_lone_stepper(g: Gfx, cx: int, cy: int, key_name: str, active: int, marks: tuple) -> pygame.Rect:
+    """A header stepper with no switch beside it, centered on cx."""
+    px = header_px(g)
+    with g.drawing_on(pygame.Surface((1, 1))):
+        w = _draw_stepper(g, px, 0, cy, key_name, active, marks).w
+    return _draw_stepper(g, px, cx + w // 2, cy, key_name, active, marks)
+
+
 def _faded(pic: pygame.Surface) -> pygame.Surface:
     """A stepper's picture for a value it isn't on: a bit smaller and dim."""
     small = pygame.transform.smoothscale(pic, (max(1, pic.get_width() * 4 // 5), max(1, pic.get_height() * 4 // 5)))

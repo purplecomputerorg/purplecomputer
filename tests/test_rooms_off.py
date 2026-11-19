@@ -77,7 +77,7 @@ def test_arrows_move_between_littles_mode_and_the_rooms():
     run(go())
 
 
-def test_littles_mode_is_picked_in_rooms_and_the_parent_menu_follows():
+def test_picking_a_littles_mode_in_rooms_closes_the_menus_and_starts_it():
     async def go():
         app = make_app()
         menu = ParentMenu(app)
@@ -91,11 +91,31 @@ def test_littles_mode_is_picked_in_rooms_and_the_parent_menu_follows():
         await press(app, "down")
         await press(app, "enter")  # Art
         assert app._littles_mode == "art" and app.active_room == "art"
-        assert "Littles Mode is on" in app.top.description
-        await press(app, "escape")
-        assert app.top is menu
+        assert app.top is None
+        assert any("Hold Esc to exit" in t.text for t in app._toasts)
+    run(go())
+
+
+def test_rooms_shows_only_littles_mode_while_it_is_on_and_off_brings_the_rooms_back():
+    settings.set_littles_mode("art")
+
+    async def go():
+        app = make_app()
+        menu = ParentMenu(app)
+        app.push(menu)
         assert dict(menu.items)["menu-rooms"] == "Rooms: Littles Mode, Art"
         assert "menu-features" not in dict(menu.items)
+        menu._open_rooms()
+        rooms = app.top
+        assert rooms.rows == [[("littles", None)]] and "Littles Mode is on" in rooms.description
+        await press(app, "enter")
+        await press(app, "up")
+        await press(app, "up")
+        await press(app, "up")
+        await press(app, "enter")  # Off
+        assert app._littles_mode is None and app.top is rooms and len(rooms.rows) > 1
+        await press(app, "escape")
+        assert app.top is menu and "menu-features" in dict(menu.items)
     run(go())
 
 

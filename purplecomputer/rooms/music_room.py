@@ -1007,7 +1007,7 @@ class MusicRoom(Room):
 
         def after(t):
             return max(2, px // 8) if t.endswith(".png") else step
-        x, cy = row.x, row.centery + (key_px // 2 if keys else 0)
+        x, cy = row.x, row.centery + (key_px // 2 if keys else 0) + px // 4   # a little clear of the grid above
         lead_w = cell + px // 2 if lead else 0
         room = row.right - x - lead_w - (2 * clock_r + px)
         spans = [width(t) + after(t) + rest_w * r for t, r in zip(texts, rests)]

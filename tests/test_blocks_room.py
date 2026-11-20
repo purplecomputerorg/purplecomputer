@@ -4,12 +4,14 @@ cursor's height up and starts over from the floor (not while held), Shift
 with Up or Down moves it either way, that height carries to other columns, a
 block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
-one dropped, holding a letter or Space while arrowing lays a line, Tab flips
-to the back with arrows still moving the way they point and held looks down from above, blocks in front of the
+one dropped, holding a letter or Space while arrowing lays a line, Tab turns the
+floor a quarter of the way around, as Shift with Left or Right does either way, with arrows still moving the way
+they point, and held looks down from above, blocks in front of the
 cursor fade, a whole tower at a time, where they hide its glass column or landing block, and the Esc picker reaches the room with
 4."""
 
 import asyncio
+import math
 import time
 
 from purplecomputer.harness import make_app, press, run, type_text
@@ -17,7 +19,8 @@ from purplecomputer.rooms import blocks_room
 from purplecomputer import palette as P
 from purplecomputer.rooms.blocks_room import (DEPTH, HEIGHT, RISE, SINK, TILT_S, TURN_DETAIL_BLOCKS,
                                                  TURN_S, WIDTH)
-from purplecomputer.rooms.blocks_view import RIBBON_ALPHA, TOP, tint
+from purplecomputer.rooms.blocks_view import PLATTER_TOP_LIGHT, REST_PITCH, RIBBON_ALPHA, SLAB, TOP, Camera, tint
+from purplecomputer.gfx import mix
 from purplecomputer.constants import HOLD_OR_TAP_THRESHOLD
 from purplecomputer.color_mixing import mix_colors_paint
 from purplecomputer.input import KeyCode, RawKeyEvent
@@ -411,22 +414,89 @@ def test_a_front_block_over_only_the_thread_stays_solid():
     run(go())
 
 
-def test_flip_keeps_blocks_and_arrows_follow_the_screen():
+def test_a_turn_keeps_blocks_and_arrows_follow_the_screen():
     async def go():
         app, room = _blocks()
         await press(app, "r")
+        for side in (1, 2, 3, 0):
+            await press(app, "tab")
+            room._motion = None
+            assert room._side == side and (5, 5, 0) in room._blocks
+            for way, step in blocks_room.STEPS.items():
+                before = room._view(room._x, room._z)
+                await press(app, way)
+                after = room._view(room._x, room._z)
+                assert (after[0] - before[0], after[1] - before[1]) == step
+            app._draw()
         await press(app, "tab")
-        assert room._back and (5, 5, 0) in room._blocks
-        before = room._view(room._x, room._z)
         await press(app, "right")
-        after = room._view(room._x, room._z)
-        assert (after[0] - before[0], after[1] - before[1]) == (1, 0)
-        assert room._x == 4
-        await press(app, "tab")                 # mid-turn: ignored
-        assert room._back
+        assert (room._x, room._z) == (5, 4)     # the front edge went right, so right on screen is toward the old front
+    run(go())
+
+
+def test_shift_with_left_or_right_turns_either_way_a_quarter_at_a_time():
+    async def go():
+        app, room = _blocks()
+        await press(app, "right", shift_held=True)
+        assert room._side == 1 and room._motion[3][0] == 1
+        await press(app, "right", shift_held=True, is_repeat=True)     # held: waits for the turn to finish
+        assert room._side == 1
+        await press(app, "right", shift_held=True)                     # pressed again mid-turn: carries on around
+        assert room._side == 2 and room._motion[3][0] == 2
         room._motion = None
-        await press(app, "tab")
-        assert not room._back
+        await press(app, "right", shift_held=True, is_repeat=True)
+        assert room._side == 3
+        room._motion = None
+        await press(app, "right", shift_held=True)
+        assert room._side == 0 and room._motion[2][0] == 3 and room._motion[3][0] == 4    # on around, not back
+        room._motion = None
+        await press(app, "left", shift_held=True)
+        assert room._side == 3 and room._motion[3][0] == -1 and (room._x, room._z) == (5, 5)
+    run(go())
+
+
+def test_every_side_shows_the_same_floor_and_turns_back_the_short_way():
+    async def go():
+        app, room = _blocks()
+        cells = {(x, z) for x in range(WIDTH) for z in range(DEPTH)}
+        for side in range(4):
+            room._side = side
+            assert {room._view(*c) for c in cells} == cells
+            assert all(room._world(*room._view(*c)) == c for c in cells)
+            room._motion = None
+            room.face_front()
+            turned = round(room._motion[3][0] - side) if room._motion else 0
+            assert room._side == 0 and turned == (0, -1, -2, 1)[side]
+    run(go())
+
+
+def test_a_quarter_turn_lands_on_the_next_side_at_the_same_size():
+    rest = Camera(0.0, REST_PITCH, 900, 400)
+    for quarters in range(1, 4):
+        cam = Camera(math.pi / 2 * quarters, REST_PITCH, 900, 400)
+        assert math.isclose(cam.s, rest.s)
+        for x, z in ((0, 0), (WIDTH, 0), (3, 7)):
+            vx, vz = x, z
+            for _ in range(quarters):
+                vx, vz = WIDTH - vz, vx
+            assert all(math.isclose(a, b, abs_tol=1e-6) for a, b in zip(cam.at(x, 2, z), rest.at(vx, 2, vz)))
+    assert math.isclose(Camera(0.7, REST_PITCH, 900, 400).s, rest.s)      # mid-turn too
+
+
+def test_the_floor_sits_on_a_platter_that_runs_under_the_foot_and_stays_out_of_prints():
+    async def go():
+        app, room = _blocks()
+        await type_text(app, "a")
+        app._draw()
+        platter = mix(P.SURFACE, "#ffffff", PLATTER_TOP_LIGHT)
+        ox, oy = room._origin
+        beside, near = room._cam.at(-2, -SLAB, DEPTH / 2), room._cam.at(WIDTH / 2, -SLAB, -1.5)
+        assert app.g.surface.get_at((round(ox + beside[0]), round(oy + beside[1])))[:3] == platter
+        assert near[1] > room.bar_foot.top - oy
+        assert app.g.surface.get_at((round(ox + near[0]), round(oy + near[1])))[:3] == platter
+        page = room.paper(app.g, (900, 400), on_screen=True)
+        colors = {page.get_at((x, y))[:3] for x in range(0, 900, 6) for y in range(0, 400, 6)}
+        assert platter not in colors
     run(go())
 
 
@@ -446,9 +516,9 @@ def test_tapping_real_tab_turns_once_and_leaves_no_hold_behind():
         app, room = _blocks()
         sm = KeyboardStateMachine()
         await _real_tab(app, sm, True)
-        assert room.hold_progress() is not None and not room._back
+        assert room.hold_progress() is not None and not room._side
         await _real_tab(app, sm, False)
-        assert room._back and not room._peek and room.hold_progress() is None
+        assert room._side == 1 and not room._peek and room.hold_progress() is None
     run(go())
 
 
@@ -463,14 +533,14 @@ def test_holding_tab_looks_from_above_until_the_next_hold_and_both_hands_can_bui
         app, room = _blocks()
         sm = KeyboardStateMachine()
         await _hold_real_tab(app, sm)
-        assert room._peek and not room._back and room.hold_progress() is None
+        assert room._peek and not room._side and room.hold_progress() is None
         room._motion = None
         await press(app, "right")
         await type_text(app, "a")
         app._draw()
         assert room._x == 7 and (6, 5, 0) in room._blocks and room._peek
-        await press(app, "tab")                 # a tap still turns around, staying above
-        assert room._back and room._peek
+        await press(app, "tab")                 # a tap still turns, staying above
+        assert room._side == 1 and room._peek
         room._motion = None
         await _hold_real_tab(app, sm)
         assert not room._peek
@@ -554,11 +624,11 @@ def test_timeline_round_trip():
         await press(app, "tab")
         room.restore_timeline_state(state)
         assert len(room._blocks) == 3 and room._hover == 4 and (room._x, room._z) == (5, 5)
-        assert room._back                       # front or back is the viewer's, not the history's
+        assert room._side == 1                  # the side is the viewer's, not the history's
     run(go())
 
 
-def test_tab_turns_around_while_time_traveling(monkeypatch, tmp_path):
+def test_tab_turns_while_time_traveling(monkeypatch, tmp_path):
     monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
 
     async def go():
@@ -567,9 +637,9 @@ def test_tab_turns_around_while_time_traveling(monkeypatch, tmp_path):
         app._start_time_travel()
         app._step_time_travel(-1)
         await press(app, "tab")
-        assert room._back and app._time_travel is not None
+        assert room._side == 1 and app._time_travel is not None
         app._cancel_time_travel()
-        assert room._back and len(room._blocks) == 2
+        assert room._side == 1 and len(room._blocks) == 2
     run(go())
 
 

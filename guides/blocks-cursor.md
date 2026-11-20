@@ -19,6 +19,15 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **Ribbon on the cursor's row**: blocks in that row get a soft light band, no border, across the middle of the top and front faces, running along the row like the frame's edges; their color shows through it, so you can tell a block beside the landing spot from one a row in front or behind. Built into the scene, which already rebuilds only when the cursor changes rows.
 - **Faded towers** in the way, at `FRONT_ALPHA`.
 
+## Turning the floor
+
+One view can't tell "farther back" from "higher up": both go up the screen. So the floor turns, and the kid looks from another side. It is square and sits on a round platter with notches around its rim, so it reads as something that spins before any key is pressed. Tab turns it a quarter of the way around, and the header's four pictures show which side faces you; Shift with Left or Right turns it either way, the platter's near edge going the arrow's way.
+
+- **Four stops, and the arrows follow the screen.** The floor has four directions, so the view has four sides, and at each one the arrows and typing go the way they point. A view at any other angle, or one that turned by itself as typing changed direction, would change what an arrow means under the kid's fingers.
+- **A turn never changes the size.** The camera fits the floor as it sits at rest, whatever its angle, so a turn is only a turn. The floor's near corner swings out under the footer for a moment.
+- **The platter is not fitted.** It runs on under the footer hints, and the frame cuts off the last of its near rim. Fitting all of it made blocks a sixth smaller.
+- **Square, 16 by 16.** The old 30 by 12 floor from its side was 30 rows deep with blocks 64% the size, or the size changed on every turn.
+
 ## Tried and dropped
 
 - **Fade every row in front** whenever anything hid the landing spot: focused the eye but hid half the build for one block in the way.

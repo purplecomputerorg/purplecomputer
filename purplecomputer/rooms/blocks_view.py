@@ -1,6 +1,7 @@
-"""How Blocks looks: one perspective camera on the floor's center, which Tab turns around and held Tab tips
-down to look from above, and the floor, blocks and shadows painted through it, far to near. Coordinates are
-(x, z, y) cells with y up, in whatever frame the caller passes: view coordinates at rest, world ones mid-turn."""
+"""How Blocks looks: one perspective camera on the floor's center, which turns around it a quarter at a time
+and held Tab tips down to look from above, and the round platter, floor, blocks and shadows painted through it,
+far to near. Coordinates are (x, z, y) cells with y up, in whatever frame the caller passes: view coordinates
+at rest, world ones mid-turn."""
 
 import copy
 import math
@@ -14,8 +15,12 @@ from .. import paper
 from ..gfx import mix, rgb
 from . import art_room
 
-WIDTH, DEPTH, HEIGHT = 30, 12, 12
+WIDTH, DEPTH, HEIGHT = 16, 16, 12   # square, so every side is the same floor after a quarter turn
 SLAB = 0.35                   # the floor's thickness, in cells
+PLATTER_R = math.hypot(WIDTH, DEPTH) / 2 + 0.3   # the round platter under the floor, which shows it turns
+PLATTER_THICK, PLATTER_TOP_LIGHT = 0.3, 0.1   # the top is the ground color, this much lighter
+PLATTER_ROUND = 144           # points around its rim
+NOTCHES, NOTCH_FROM = 24, 0.955   # marks around the rim that move as it turns, and where each starts along the radius
 REST_PITCH, PEEK_PITCH = math.radians(30), math.radians(76)
 EYE_DISTANCE = (44, 70)       # cells from the floor's center at rest and looking down; nearer is stronger perspective
 TARGET_Y = 2.0                # the height the camera looks at, over the floor's center
@@ -72,6 +77,12 @@ def hull(points) -> list:
     return half(pts) + half(reversed(pts))
 
 
+@cache
+def ring(radius: float, points: int = PLATTER_ROUND) -> list:
+    """Points around a circle, as (x, z) from its center."""
+    return [(radius * math.cos(math.tau * i / points), radius * math.sin(math.tau * i / points)) for i in range(points)]
+
+
 def bbox(points) -> pygame.Rect:
     xs, ys = zip(*points)
     left, top = math.floor(min(xs)), math.floor(min(ys))
@@ -80,7 +91,8 @@ def bbox(points) -> pygame.Rect:
 
 class Camera:
     """Looks at the floor's center from `yaw` around it and `pitch` down, scaled so the floor up to
-    `top` (the ceiling) fills a w by h box at `origin`. Grid points are projected once and remembered."""
+    `top` (the ceiling) fills a w by h box at `origin`: the floor as it sits at rest, so a turn never
+    changes the size. Grid points are projected once and remembered."""
 
     def __init__(self, yaw: float, pitch: float, w: int, h: int, origin=(0, 0), top: float = HEIGHT):
         sy, cy, sp, cp = math.sin(yaw), math.cos(yaw), math.sin(pitch), math.cos(pitch)
@@ -95,7 +107,8 @@ class Camera:
                      for side in ((0, -1), (0, 1), (-1, 0), (1, 0))}
         self._ahead, self._memo, self.rects, self.floor = ahead, {}, {}, None
         self.s, self.ox, self.oy = 1.0, 0.0, 0.0
-        xs, ys = zip(*(self._flat(x, y, z) for x in (0, WIDTH) for y in (-SLAB, top) for z in (0, DEPTH)))
+        xs, ys = zip(*(self._flat(WIDTH / 2 + a * cy + b * sy, y, DEPTH / 2 - a * sy + b * cy)
+                       for a in (-WIDTH / 2, WIDTH / 2) for b in (-DEPTH / 2, DEPTH / 2) for y in (-SLAB, top)))
         self.s = min(w / (max(xs) - min(xs)), h / (max(ys) - min(ys)))
         self.ox = origin[0] + (w - self.s * (max(xs) + min(xs))) / 2
         self.oy = origin[1] + (h - self.s * (max(ys) + min(ys))) / 2
@@ -178,8 +191,8 @@ class Painter:
     cursor's row (a stripe on the floor, a ribbon on its blocks) and splits the blocks into the ones
     behind it, on it and in front of it, so the cursor can be drawn between them."""
 
-    def __init__(self, cam: Camera, blocks: dict, row=None, hazy: bool = True, detail: bool = True, floor=None):
-        self.cam, self.blocks, self.row, self.hazy, self.detail = cam, blocks, row, hazy, detail
+    def __init__(self, cam: Camera, blocks: dict, row=None, hazy: bool = True, detail: bool = True, floor=None, platter: bool = True):
+        self.cam, self.blocks, self.row, self.hazy, self.detail, self.platter = cam, blocks, row, hazy, detail, platter
         self.floor = floor or screen_floor()
         items = []
         for (x, z, y), color in blocks.items():
@@ -223,8 +236,10 @@ class Painter:
 
     # ------------------------------------------------------------ painting
     def paint_floor(self, surf):
-        """The slab's sides, then the checkerboard: one fill for the floor, then every other tile."""
+        """The platter, the slab's sides, then the checkerboard: one fill for the floor, then every other tile."""
         cam, (_, tile, alt, slab_front, slab_side) = self.cam, self.floor
+        if self.platter:
+            self.paint_platter(surf)
         for n, poly in cam.box((0, -SLAB, 0), (WIDTH, 0, DEPTH), shown=lambda n: n is not TOP):
             pygame.draw.polygon(surf, rgb(slab_front if n == (0, -1) else slab_side), poly)
         pygame.draw.polygon(surf, rgb(tile), [cam.at(0, 0, 0), cam.at(WIDTH, 0, 0), cam.at(WIDTH, 0, DEPTH), cam.at(0, 0, DEPTH)])
@@ -232,9 +247,19 @@ class Painter:
             for z in range(1 - x % 2, DEPTH, 2):
                 pygame.draw.polygon(surf, rgb(alt), self._tile_poly(x, z))
 
+    def paint_platter(self, surf):
+        """The round platter the floor sits on: its wall, its top, and the notches around its rim."""
+        at, (ground, _, _, _, slab_side) = self.cam.at, self.floor
+        cx, cz = WIDTH / 2, DEPTH / 2
+        top = [at(cx + x, -SLAB, cz + z) for x, z in ring(PLATTER_R)]
+        pygame.draw.polygon(surf, rgb(slab_side), hull(top + [at(cx + x, -SLAB - PLATTER_THICK, cz + z) for x, z in ring(PLATTER_R)]))
+        pygame.draw.polygon(surf, mix(ground, "#ffffff", PLATTER_TOP_LIGHT), top)
+        for x, z in ring(PLATTER_R, NOTCHES):
+            pygame.draw.line(surf, rgb(P.LINE), at(cx + x * NOTCH_FROM, -SLAB, cz + z * NOTCH_FROM), at(cx + x, -SLAB, cz + z), 2)
+
     def floor_picture(self, size) -> pygame.Surface:
-        """The floor on its ground color, painted once per camera."""
-        if self.cam.floor is None:
+        """The floor on its ground color, painted once per camera and size."""
+        if self.cam.floor is None or self.cam.floor.get_size() != size:
             self.cam.floor = pygame.Surface(size)
             self.cam.floor.fill(rgb(self.floor[0]))
             self.paint_floor(self.cam.floor)

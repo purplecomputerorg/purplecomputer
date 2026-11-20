@@ -148,8 +148,7 @@ def demo(letters=False):
             room._toggle_letters()
             room._stop_letter()  # the switch's sample "A" would sound like the demo's first letter
     elif _app.active_room == "blocks":
-        if room._back:
-            room.turn_around()  # first: it does nothing while the view is moving
+        room.face_front()
         room._tilt(False)
     _app.invalidate()
 

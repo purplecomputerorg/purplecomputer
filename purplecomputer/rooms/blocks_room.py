@@ -52,6 +52,7 @@ CLOSE_REACH = ((-3, 4), (-1, 2))   # (along, up) cells around its center it fram
 CLOSE_SLACK = (2, 1)          # (along, up) cells the cursor moves from the center before the close-up slides along
 CLOSE_SLIDE_S, CLOSE_TURN_S = 0.2, 0.4
 CLOSE_MARGIN = 1.5            # cells of picture past each edge, so a slide only shifts the picture
+CLOSE_PRINT_ALPHA, CLOSE_PRINT_INSET = 110, 0.12   # footprints of the towers in the rows beside the slice
 CLOSE_KEEP = (7, 6)           # (along either way, up) cells from the center whose blocks are painted; the rest is out of frame
 # The direction arrow as (along, across) points in cells, from the box center outward.
 POINTER = ((0.1, -0.09), (0.75, -0.09), (0.75, -0.3), (1.2, 0), (0.75, 0.3), (0.75, 0.09), (0.1, 0.09))
@@ -802,15 +803,37 @@ class BlocksRoom(Room):
                               fit=((x0, y0, z0), (x1, y1, z1)))
             m = math.ceil(camera((0, 0)).cell(*goal) * CLOSE_MARGIN)
             ka, ky = CLOSE_KEEP
-            near = {b: c for b, c in self._view_blocks().items()
+            blocks = self._view_blocks()
+            near = {b: c for b, c in blocks.items()
                     if (b[0], b[2], b[1])[across] == cursor[across] and abs((b[0], b[2], b[1])[axis] - goal[axis]) <= ka and b[2] <= cy + ky}   # all below, or what they stand on would go
             p = Painter(camera((m, m)), near)
             s = pygame.Surface((size[0] + 2 * m, size[1] + 2 * m))
             s.fill(rgb(p.floor[0]))
             p.paint_floor(s)        # no sun shadows: barely seen this small, and the slowest part on big builds
+            self._slice_marks(s, p.cam, blocks, cursor[across], axis, goal)
             p.paint(s, p.items)
             self._close_scene = key, s, p
         return self._close_scene[1:]
+
+    def _slice_marks(self, s, cam, blocks, at, axis, goal):
+        """On the floor: a line along each side of the slice, and a footprint in its color for each tower
+        just beside it, so what the slice leaves out is seen to be there."""
+        span = range(goal[axis] - CLOSE_KEEP[0], goal[axis] + CLOSE_KEEP[0] + 1)
+
+        def floor(a, c):    # the floor point at (along, across)
+            return cam.at(*((a, 0, c) if axis == 0 else (c, 0, a)))
+        prints = {}         # (along, across): (height, color) of each tower's bottom block
+        for (x, z, y), color in blocks.items():
+            a, c = (x, z) if axis == 0 else (z, x)
+            if abs(c - at) == 1 and a in span and y < prints.get((a, c), (HEIGHT,))[0]:
+                prints[(a, c)] = y, color
+        layer = pygame.Surface(s.get_size(), pygame.SRCALPHA)
+        lo, hi = CLOSE_PRINT_INSET, 1 - CLOSE_PRINT_INSET
+        for (a, c), (_, color) in prints.items():
+            pygame.draw.polygon(layer, (*rgb(color), CLOSE_PRINT_ALPHA), [floor(a + i, c + j) for i, j in ((lo, lo), (hi, lo), (hi, hi), (lo, hi))])
+        s.blit(layer, (0, 0))
+        for c in (at, at + 1):
+            pygame.draw.line(s, rgb(P.TEXT), floor(span[0], c), floor(span[-1] + 1, c), 2)
 
     # ---------------------------------------------------------------- cursor
     def _cursor_box(self, vx, vz) -> pygame.Rect:

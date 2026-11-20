@@ -45,10 +45,11 @@ SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab sw
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
 CLOSE_YAW, CLOSE_PITCH, CLOSE_AWAY = math.radians(-20), math.radians(32), 200   # far off, so nearly flat: a slide never looks like a turn
-CLOSE_REACH = ((-3, -1, -1), (4, 1, 2))   # (x, y, z) cells around its center it frames
+CLOSE_REACH = ((-3, -1, -1), (4, 2, 2))   # (x, y, z) cells around its center it frames
 CLOSE_SLACK = (2, 1, 1)       # (x, y, z) cells the cursor moves from the center before the close-up slides along
 CLOSE_SLIDE_S = 0.2
-CLOSE_KEEP = (6, 5)           # (x either way, z behind) cells of blocks around the center painted; the rest is out of frame
+CLOSE_MARGIN = 1.5            # cells of picture past each edge, so a slide only shifts the picture
+CLOSE_KEEP = (7, 6, 6)        # (x either way, z behind, y either way) cells of blocks around the center painted; the rest is out of frame
 # The direction arrow as (along, across) points in cells, from the box center outward.
 POINTER = ((0.1, -0.09), (0.75, -0.09), (0.75, -0.3), (1.2, 0), (0.75, 0.3), (0.75, 0.09), (0.1, 0.09))
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -78,6 +79,9 @@ class Glide:
         self._move, self.goal = (time.monotonic(), seconds, frm), to
         if self._timer is None:
             self._timer = self.app.timers.every(1 / 60, self._tick)
+
+    def stop(self):
+        self._move = None
 
     def now(self):
         """Where it is on the way, or None once it has landed."""
@@ -142,7 +146,8 @@ class BlocksRoom(Room):
         self._scene = self._front = self._composed = self._layer = None
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
         self._faded, self._fade_key = frozenset(), None
-        self._close = None            # (what it shows, picture) of the close-up
+        self._close = None            # (what it shows, picture, camera) of the close-up
+        self._close_scene = None      # (what it shows, picture, painter) of the close-up without the cursor
         self._close_at = None         # (back, view cell) the close-up centers on
         self._close_slide = Glide(app)
         self.echo = Echo()
@@ -371,7 +376,7 @@ class BlocksRoom(Room):
             self._scene = None
         else:
             self._dirty.add(self._view(*cell[:2]))
-        self._close = None
+        self._close = self._close_scene = None
         self.app.invalidate()
 
     @property
@@ -715,12 +720,15 @@ class BlocksRoom(Room):
         was = self._close_at
         goal = self._close_center((vx, y, vz))
         if was and was[0] == self._back and was[1] != goal:     # slides rather than jumps, so the eye can follow
-            self._close_slide.start(self._close_slide.now() or was[1], goal, CLOSE_SLIDE_S)
-        center = self._close_slide.now() or goal
-        key = (vx, vz, y, center, self._color, self._dir, rect.size)
-        if self._close is None or self._close[0] != key:
-            self._close = key, self._paint_closeup(vx, vz, y, center, rect.size)
-        g.surface.blit(self._close[1], rect)
+            frm = self._close_slide.now() or was[1]
+            if max(abs(a - b) for a, b in zip(frm, goal)) <= CLOSE_MARGIN:   # farther, the picture's edge would show
+                self._close_slide.start(frm, goal, CLOSE_SLIDE_S)
+            else:
+                self._close_slide.stop()
+        pic, cam = self._closeup(vx, vz, y, goal, rect.size)
+        (gx, gy), (cx, cy) = (cam.at(*(n + 0.5 for n in p)) for p in (goal, self._close_slide.now() or goal))
+        mx, my = (pic.get_width() - rect.w) // 2, (pic.get_height() - rect.h) // 2
+        g.surface.blit(pic, rect, pygame.Rect(round(mx + cx - gx), round(my + cy - gy), *rect.size))
         pygame.draw.rect(g.surface, rgb(P.HAIR), rect.inflate(2, 2), 1, border_radius=g.em(0.3))
 
     def _close_center(self, cursor) -> tuple:
@@ -733,26 +741,44 @@ class BlocksRoom(Room):
         self._close_at = self._back, center
         return center
 
-    def _paint_closeup(self, vx, vz, y, center, size) -> pygame.Surface:
-        cx, cy, cz = center
-        lo, hi = ((cx + a, cy + b, cz + c) for a, b, c in CLOSE_REACH)
-        cam = Camera(CLOSE_YAW, CLOSE_PITCH, *size, target=(cx + 0.5, cy + 0.5, cz + 0.5), away=CLOSE_AWAY, fit=(lo, hi))
-        near = {b: c for b, c in self._view_blocks().items() if abs(b[0] - cx) <= CLOSE_KEEP[0] and vz <= b[1] <= cz + CLOSE_KEEP[1]}
-        p = Painter(cam, near, row=vz)
-        s = pygame.Surface(size)
-        s.fill(rgb(p.floor[0]))
-        p.paint_floor(s)
-        p.paint_sun(s)
-        p.paint(s, p.behind, s.get_rect())
-        p.frame_row(s)
-        p.paint(s, p.on_row_items, s.get_rect())
-        layer = pygame.Surface(size, pygame.SRCALPHA)
-        p.shadow(layer, vx, vz, self._ground(y), y, self._color, alpha=255)
-        p.block(layer, vx, vz, y, self._color, alpha=170, solo=True)
-        self._cage(layer, vx, vz, y, cam)
-        self._pointer(layer, vx, vz, y, cam)
-        s.blit(layer, (0, 0))
-        return s
+    def _closeup(self, vx, vz, y, goal, size) -> tuple:
+        """(picture, camera) of the close-up centered on `goal`, with a margin all round to slide over;
+        the scene is kept apart, so a cursor move without a slide repaints only the cursor."""
+        key = (vx, vz, y, goal, self._color, self._dir, size, self._back)
+        if self._close is None or self._close[0] != key:
+            scene, p = self._closeup_scene(vz, goal, size)
+            pic = scene.copy()
+            layer = pygame.Surface(pic.get_size(), pygame.SRCALPHA)
+            p.shadow(layer, vx, vz, self._ground(y), y, self._color, alpha=255)
+            p.block(layer, vx, vz, y, self._color, alpha=170, solo=True)
+            self._cage(layer, vx, vz, y, p.cam)
+            self._pointer(layer, vx, vz, y, p.cam)
+            pic.blit(layer, (0, 0))
+            self._close = key, pic, p.cam
+        return self._close[1:]
+
+    def _closeup_scene(self, vz, goal, size) -> tuple:
+        """(picture, painter) of the blocks around `goal` from the cursor's row back."""
+        key = (vz, goal, size, self._back)
+        if self._close_scene is None or self._close_scene[0] != key:
+            cx, cy, cz = goal
+            lo, hi = ((cx + a, cy + b, cz + c) for a, b, c in CLOSE_REACH)
+
+            def camera(origin):
+                return Camera(CLOSE_YAW, CLOSE_PITCH, *size, origin, target=(cx + 0.5, cy + 0.5, cz + 0.5), away=CLOSE_AWAY, fit=(lo, hi))
+            m = math.ceil(camera((0, 0)).cell(cx, cy, cz) * CLOSE_MARGIN)
+            kx, kz, ky = CLOSE_KEEP
+            near = {b: c for b, c in self._view_blocks().items()
+                    if abs(b[0] - cx) <= kx and vz <= b[1] <= cz + kz and abs(b[2] - cy) <= ky}
+            p = Painter(camera((m, m)), near, row=vz)
+            s = pygame.Surface((size[0] + 2 * m, size[1] + 2 * m))
+            s.fill(rgb(p.floor[0]))
+            p.paint_floor(s)        # no sun shadows: barely seen this small, and the slowest part on big builds
+            p.paint(s, p.behind)
+            p.frame_row(s)
+            p.paint(s, p.on_row_items)
+            self._close_scene = key, s, p
+        return self._close_scene[1:]
 
     # ---------------------------------------------------------------- cursor
     def _cursor_box(self, vx, vz) -> pygame.Rect:

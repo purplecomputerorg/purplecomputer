@@ -44,12 +44,14 @@ TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers t
 SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab switch's words and pictures
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
+CLOSE_STRIP = 0.15            # the view's share on the right the scene leaves for the close-up
+CLOSE_TALL = 1.4              # the close-up's height over its width
 CLOSE_YAW, CLOSE_PITCH, CLOSE_AWAY = math.radians(-20), math.radians(32), 200   # far off, so nearly flat: a slide never looks like a turn
-CLOSE_REACH = ((-3, -1, -1), (4, 2, 2))   # (x, y, z) cells around its center it frames
-CLOSE_SLACK = (2, 1, 1)       # (x, y, z) cells the cursor moves from the center before the close-up slides along
+CLOSE_REACH = ((-3, -1, 0), (4, 2, 1))    # (x, y, z) cells around its center it frames: the cursor's row only
+CLOSE_SLACK = (2, 1, 0)       # (x, y, z) cells the cursor moves from the center before the close-up slides along
 CLOSE_SLIDE_S = 0.2
 CLOSE_MARGIN = 1.5            # cells of picture past each edge, so a slide only shifts the picture
-CLOSE_KEEP = (7, 6, 6)        # (x either way, z behind, y either way) cells of blocks around the center painted; the rest is out of frame
+CLOSE_KEEP = (7, 6)           # (x, y) cells either way of the center whose blocks are painted; the rest is out of frame
 # The direction arrow as (along, across) points in cells, from the box center outward.
 POINTER = ((0.1, -0.09), (0.75, -0.09), (0.75, -0.3), (1.2, 0), (0.75, 0.3), (0.75, 0.09), (0.1, 0.09))
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -99,6 +101,11 @@ class Glide:
             self._timer.stop()
             self._timer = None
         self.app.invalidate()
+
+
+def scene_size(size) -> tuple:
+    """The part of the view the floor fits in: all but a strip on the right, kept for the close-up."""
+    return size[0] - round(size[0] * CLOSE_STRIP), size[1]
 
 
 @lru_cache(maxsize=4)
@@ -556,7 +563,7 @@ class BlocksRoom(Room):
     def _layers(self, size):
         """Bring the cached layers up to date: everything for a new camera, the scene for a new
         cursor row, else only around the columns whose blocks changed; then the towers in the cursor's way."""
-        cam = resting_camera(PEEK_PITCH if self._peek else REST_PITCH, *size)
+        cam = resting_camera(PEEK_PITCH if self._peek else REST_PITCH, *scene_size(size))
         vx, row = self._view(self._x, self._z)
         fresh = self._scene is None or cam is not self._cam
         if fresh or self._dirty or row != self._painter.row:
@@ -675,6 +682,7 @@ class BlocksRoom(Room):
             self._layers(area.size)
             g.surface.blit(self._composed, area)
             self._draw_cursor(g, area.topleft)
+            self._draw_closeup(g, area)
             self._draw_hold_badge(g, area)
         else:
             self._draw_moving(g, area, *moving)
@@ -699,7 +707,7 @@ class BlocksRoom(Room):
         `half_turns` around and tipped `tilt` of the way down, so both ends land on those pictures; only
         the cursor sits it out. A frame over budget drops seams and shadows for builds this big from then on."""
         start = time.monotonic()
-        cam = Camera(math.pi * half_turns, REST_PITCH + (PEEK_PITCH - REST_PITCH) * tilt, area.w, area.h, area.topleft)
+        cam = Camera(math.pi * half_turns, REST_PITCH + (PEEK_PITCH - REST_PITCH) * tilt, *scene_size(area.size), area.topleft)
         detailed = len(self._blocks) <= self._turn_detail_limit
         painter = Painter(cam, self._blocks, detail=detailed)
         painter.paint_floor(g.surface)
@@ -710,11 +718,15 @@ class BlocksRoom(Room):
             self._turn_detail_limit = len(self._blocks) - 1
 
     # ---------------------------------------------------------------- close-up
-    def draw_corner(self, g, rect):
-        """The cursor up close, under the frame, from a side the main view doesn't show, with the
-        rows in front of it cut away so nothing hides it. guides/blocks-cursor.md"""
-        if not self._blocks or self._cam is None or self._moving() is not None:
+    def _draw_closeup(self, g, area):
+        """The cursor's row up close, alone, in the strip the scene leaves at the view's bottom right, from
+        a little to the side: what the next block goes beside and on, nothing in front or behind. guides/blocks-cursor.md"""
+        if not self._blocks:
             return
+        pad = g.em(0.4)
+        w = area.w - scene_size(area.size)[0] - pad
+        rect = pygame.Rect(0, 0, w, min(round(w * CLOSE_TALL), area.h - 2 * pad))
+        rect.bottomright = (area.right - pad, area.bottom - pad)
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
         was = self._close_at
@@ -729,7 +741,7 @@ class BlocksRoom(Room):
         (gx, gy), (cx, cy) = (cam.at(*(n + 0.5 for n in p)) for p in (goal, self._close_slide.now() or goal))
         mx, my = (pic.get_width() - rect.w) // 2, (pic.get_height() - rect.h) // 2
         g.surface.blit(pic, rect, pygame.Rect(round(mx + cx - gx), round(my + cy - gy), *rect.size))
-        pygame.draw.rect(g.surface, rgb(P.HAIR), rect.inflate(2, 2), 1, border_radius=g.em(0.3))
+        g.rect(P.LINE, rect.inflate(2, 2), width=1, radius=g.em(0.4))     # the frame's own line
 
     def _close_center(self, cursor) -> tuple:
         """Where the close-up looks: it holds still while the cursor moves near its middle, so the
@@ -758,7 +770,7 @@ class BlocksRoom(Room):
         return self._close[1:]
 
     def _closeup_scene(self, vz, goal, size) -> tuple:
-        """(picture, painter) of the blocks around `goal` from the cursor's row back."""
+        """(picture, painter) of the blocks around `goal` in the cursor's row."""
         key = (vz, goal, size, self._back)
         if self._close_scene is None or self._close_scene[0] != key:
             cx, cy, cz = goal
@@ -767,16 +779,13 @@ class BlocksRoom(Room):
             def camera(origin):
                 return Camera(CLOSE_YAW, CLOSE_PITCH, *size, origin, target=(cx + 0.5, cy + 0.5, cz + 0.5), away=CLOSE_AWAY, fit=(lo, hi))
             m = math.ceil(camera((0, 0)).cell(cx, cy, cz) * CLOSE_MARGIN)
-            kx, kz, ky = CLOSE_KEEP
-            near = {b: c for b, c in self._view_blocks().items()
-                    if abs(b[0] - cx) <= kx and vz <= b[1] <= cz + kz and abs(b[2] - cy) <= ky}
-            p = Painter(camera((m, m)), near, row=vz)
+            kx, ky = CLOSE_KEEP
+            near = {b: c for b, c in self._view_blocks().items() if b[1] == vz and abs(b[0] - cx) <= kx and abs(b[2] - cy) <= ky}
+            p = Painter(camera((m, m)), near)
             s = pygame.Surface((size[0] + 2 * m, size[1] + 2 * m))
             s.fill(rgb(p.floor[0]))
             p.paint_floor(s)        # no sun shadows: barely seen this small, and the slowest part on big builds
-            p.paint(s, p.behind)
-            p.frame_row(s)
-            p.paint(s, p.on_row_items)
+            p.paint(s, p.items)
             self._close_scene = key, s, p
         return self._close_scene[1:]
 

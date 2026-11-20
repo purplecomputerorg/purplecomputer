@@ -18,7 +18,7 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **Frame around the cursor's row**: a faint upright rectangle on the back of the row, floor to ceiling and wall to wall, so the row reads as one slice of the world rather than a line of unrelated blocks. Drawn behind the row's blocks, so it never crosses over them.
 - **Ribbon on the cursor's row**: blocks in that row get a soft light band, no border, across the middle of the top and front faces, running along the row like the frame's edges; their color shows through it, so you can tell a block beside the landing spot from one a row in front or behind. Built into the scene, which already rebuilds only when the cursor changes rows.
 - **Faded towers** in the way, at `FRONT_ALPHA`.
-- **Close-up** under the frame's bottom right, across from the sticker keyboard, once there are blocks: the cursor's neighborhood from 20° to the side, with every row in front of the cursor cut away, so nothing ever hides it and the side angle shows how far back it sits. It holds still while the cursor moves near its middle, so the cursor moves rather than the world, and eases along when the cursor nears its edge. Its camera is far off (nearly flat), so a slide reads as a slide, never a turn. Its scene is painted once per spot, with a margin to slide over, so a slide only shifts the picture and a cursor move that doesn't slide redraws just the cursor; it skips the sun shadows, which barely show this small and cost the most on big builds.
+- **Close-up** of the cursor's row alone, once there are blocks, in a strip the floor leaves free at the view's bottom right (the floor fits the rest, so nothing is covered): from 20° to the side and a little above, so it shows what the next block goes beside and lands on, with nothing in front or behind. It holds still while the cursor moves near its middle, so the cursor moves rather than the world, and eases along when the cursor nears its edge. Its camera is far off (nearly flat), so a slide reads as a slide, never a turn. Its scene is painted once per spot, with a margin to slide over, so a slide only shifts the picture and a cursor move that doesn't slide redraws just the cursor; it skips the sun shadows, which barely show this small.
 
 ## Tried and dropped
 
@@ -27,6 +27,8 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **A close-up with the front rows see-through** rather than cut away: a see-through house fills the window with murk.
 - **A close-up centered on the cursor at every step,** in perspective: the cursor never moved and the world seemed to turn around it.
 - **The close-up inside the view**, in a top corner: covered tall builds, and switching to the corner away from the cursor made it jump side to side.
+- **A close-up of the rows behind the cursor too:** in a dense build it fills with a wall of blocks; one row behind is still busy.
+- **The close-up under the frame**, across from the sticker keyboard: too far from the build.
 
 - **Fade every row in front** whenever anything hid the landing spot: focused the eye but hid half the build for one block in the way.
 - **Fade only the overlapping blocks:** one see-through block in a same-colored wall reads as a dark hole.

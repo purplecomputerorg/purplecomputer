@@ -6,8 +6,8 @@ block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab flips
 to the back with arrows still moving the way they point and held looks down from above, blocks in front of the
-cursor fade, a whole tower at a time, where they hide its glass column or landing block, a close-up of the cursor sits under the
-frame's bottom right, and the Esc picker reaches the room with 4."""
+cursor fade, a whole tower at a time, where they hide its glass column or landing block, a close-up of the cursor's row sits
+in the view's bottom right, and the Esc picker reaches the room with 4."""
 
 import asyncio
 import time
@@ -595,7 +595,7 @@ def test_restoring_blocks_past_the_walls_drops_them():
     run(go())
 
 
-def test_closeup_shows_under_the_frame_once_there_are_blocks():
+def test_closeup_shows_once_there_are_blocks():
     async def go():
         app, room = _blocks()
         app._draw()

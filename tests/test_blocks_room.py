@@ -6,8 +6,8 @@ block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab flips
 to the back with arrows still moving the way they point and held looks down from above, blocks in front of the
-cursor fade, a whole tower at a time, where they hide its glass column or landing block, a close-up of the cursor's row sits
-in the view's bottom right, and the Esc picker reaches the room with 4."""
+cursor fade, a whole tower at a time, where they hide its glass column or landing block, a close-up of the slice the cursor is
+typing along sits in the view's bottom right, and the Esc picker reaches the room with 4."""
 
 import asyncio
 import time
@@ -630,14 +630,31 @@ def test_closeup_holds_still_as_the_cursor_moves_near_its_middle_then_slides_alo
         room._dir = "right"
         await type_text(app, "a")
         app._draw()
-        center = room._close_at[1]
+        center = room._close_at[2]
         for _ in range(blocks_room.CLOSE_SLACK[0]):
             await press(app, "right")
             app._draw()
-        assert room._close_at[1] == center and room._close_slide.now() is None
+        assert room._close_at[2] == center and room._close_slide.now() is None
         await press(app, "right")
         app._draw()
-        assert room._close_at[1][0] == center[0] + 1 and room._close_slide.now() is not None
+        assert room._close_at[2][0] == center[0] + 1 and room._close_slide.now() is not None
+    run(go())
+
+
+def test_closeup_shows_the_slice_typing_runs_along_so_a_line_back_stays_in_it():
+    async def go():
+        app, room = _blocks()
+        await press(app, "right")
+        await type_text(app, "a")
+        app._draw()
+        assert room._close_axis == 0
+        await press(app, "up")
+        app._draw()
+        assert room._close_axis == 2 and room._close_turn.now() is not None
+        await type_text(app, "aaa")
+        app._draw()
+        line = {b for b in room._view_blocks() if b[0] == room._view(room._x, room._z)[0]}
+        assert len(line) == 3 and line <= set(room._close_scene[2].blocks)
     run(go())
 
 

@@ -44,10 +44,11 @@ TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers t
 SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab switch's words and pictures
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
-CLOSE_W, CLOSE_H = 0.2, 0.3  # the close-up's share of the view
-CLOSE_YAW, CLOSE_PITCH, CLOSE_AWAY = math.radians(-30), math.radians(32), 22   # far enough to look down on the ceiling
-CLOSE_REACH = ((-2, -1, -1), (3, 2, 2))   # (x, y, z) cells around the cursor it frames
-CLOSE_KEEP = (6, 5)           # (x either way, z behind) cells of blocks around the cursor painted; the rest is out of frame
+CLOSE_YAW, CLOSE_PITCH, CLOSE_AWAY = math.radians(-20), math.radians(32), 200   # far off, so nearly flat: a slide never looks like a turn
+CLOSE_REACH = ((-3, -1, -1), (4, 1, 2))   # (x, y, z) cells around its center it frames
+CLOSE_SLACK = (2, 1, 1)       # (x, y, z) cells the cursor moves from the center before the close-up slides along
+CLOSE_SLIDE_S = 0.2
+CLOSE_KEEP = (6, 5)           # (x either way, z behind) cells of blocks around the center painted; the rest is out of frame
 # The direction arrow as (along, across) points in cells, from the box center outward.
 POINTER = ((0.1, -0.09), (0.75, -0.09), (0.75, -0.3), (1.2, 0), (0.75, 0.3), (0.75, 0.09), (0.1, 0.09))
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -65,6 +66,35 @@ SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
 
 def ease(p: float) -> float:
     return p * p * (3 - 2 * p)
+
+
+class Glide:
+    """A tuple easing to `goal` over some seconds, the screen redrawn every frame until it lands."""
+
+    def __init__(self, app):
+        self.app, self.goal, self._move, self._timer = app, None, None, None
+
+    def start(self, frm: tuple, to: tuple, seconds: float):
+        self._move, self.goal = (time.monotonic(), seconds, frm), to
+        if self._timer is None:
+            self._timer = self.app.timers.every(1 / 60, self._tick)
+
+    def now(self):
+        """Where it is on the way, or None once it has landed."""
+        if self._move is None:
+            return None
+        start, seconds, frm = self._move
+        p = (time.monotonic() - start) / seconds
+        if p >= 1:
+            self._move = None
+            return None
+        return tuple(a + (b - a) * ease(p) for a, b in zip(frm, self.goal))
+
+    def _tick(self):
+        if self.now() is None:
+            self._timer.stop()
+            self._timer = None
+        self.app.invalidate()
 
 
 @lru_cache(maxsize=4)
@@ -102,8 +132,7 @@ class BlocksRoom(Room):
         self._next = None             # where a run up or down the column (or a code run) goes on from
         self._dir = "right"           # the way typing builds: a key of WRAP
         self._peek = False
-        self._motion = None           # (start, seconds, (half turns, tilt) from, to) while the view moves
-        self._motion_timer = None
+        self._turning = Glide(app)    # (half turns, tilt) while the view moves
         self._tab = HeldKey(app, lambda: self._tilt(not self._peek))
         self._turn_detail_limit = TURN_DETAIL_BLOCKS
         self._arrow_repeat_dir = None
@@ -114,6 +143,8 @@ class BlocksRoom(Room):
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
         self._faded, self._fade_key = frozenset(), None
         self._close = None            # (what it shows, picture) of the close-up
+        self._close_at = None         # (back, view cell) the close-up centers on
+        self._close_slide = Glide(app)
         self.echo = Echo()
         self.code_panel = None
         self._space_pending = False
@@ -385,33 +416,18 @@ class BlocksRoom(Room):
         """Held Tab eases the view up to look down from above; letting go eases it back."""
         if peek == self._peek:
             return
-        self._move_camera(TILT_S, lambda half, tilt: (self._motion[3][0] if self._motion else half, float(peek)))
+        self._move_camera(TILT_S, lambda half, tilt: (self._turning.goal[0] if self._turning.now() else half, float(peek)))
         self._peek = peek
 
     def _move_camera(self, seconds: float, to):
         """From wherever the view is now, even mid-move, to `to` of it."""
         start = self._moving() or (float(self._back), float(self._peek))
-        self._motion = (time.monotonic(), seconds, start, to(*start))
-        if self._motion_timer is None:
-            self._motion_timer = self.app.timers.every(1 / 60, self._motion_tick)
+        self._turning.start(start, to(*start), seconds)
         self._changed()
-
-    def _motion_tick(self):
-        if self._moving() is None:
-            self._motion_timer.stop()
-            self._motion_timer = None
-        self.app.invalidate()
 
     def _moving(self):
         """(half turns, tilt) while the view is moving, else None."""
-        if self._motion is None:
-            return None
-        start, seconds, frm, to = self._motion
-        p = (time.monotonic() - start) / seconds
-        if p >= 1:
-            self._motion = None
-            return None
-        return tuple(a + (b - a) * ease(p) for a, b in zip(frm, to))
+        return self._turning.now()
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
@@ -654,7 +670,6 @@ class BlocksRoom(Room):
             self._layers(area.size)
             g.surface.blit(self._composed, area)
             self._draw_cursor(g, area.topleft)
-            self._draw_closeup(g, area)
             self._draw_hold_badge(g, area)
         else:
             self._draw_moving(g, area, *moving)
@@ -690,26 +705,39 @@ class BlocksRoom(Room):
             self._turn_detail_limit = len(self._blocks) - 1
 
     # ---------------------------------------------------------------- close-up
-    def _draw_closeup(self, g, area):
-        """The cursor up close, in the top corner away from it, from a side the main view doesn't show,
-        with the rows in front of it cut away so nothing hides it; returns where. guides/blocks-cursor.md"""
-        if not self._blocks:
-            return None
+    def draw_corner(self, g, rect):
+        """The cursor up close, under the frame, from a side the main view doesn't show, with the
+        rows in front of it cut away so nothing hides it. guides/blocks-cursor.md"""
+        if not self._blocks or self._cam is None or self._moving() is not None:
+            return
         vx, vz = self._view(self._x, self._z)
-        w, h, pad = round(area.w * CLOSE_W), round(area.h * CLOSE_H), g.em(0.4)
-        left = self._cam.at(vx + 0.5, 0, vz + 0.5)[0] > area.w / 2
-        rect = pygame.Rect(area.x + pad if left else area.right - w - pad, area.y + pad, w, h)
-        key = (vx, vz, self._cursor_y(), self._color, self._dir, rect.size)
+        y = self._cursor_y()
+        was = self._close_at
+        goal = self._close_center((vx, y, vz))
+        if was and was[0] == self._back and was[1] != goal:     # slides rather than jumps, so the eye can follow
+            self._close_slide.start(self._close_slide.now() or was[1], goal, CLOSE_SLIDE_S)
+        center = self._close_slide.now() or goal
+        key = (vx, vz, y, center, self._color, self._dir, rect.size)
         if self._close is None or self._close[0] != key:
-            self._close = key, self._paint_closeup(vx, vz, key[2], rect.size)
+            self._close = key, self._paint_closeup(vx, vz, y, center, rect.size)
         g.surface.blit(self._close[1], rect)
-        pygame.draw.rect(g.surface, rgb(P.TEXT), rect.inflate(4, 4), 2, border_radius=g.em(0.3))
-        return rect
+        pygame.draw.rect(g.surface, rgb(P.HAIR), rect.inflate(2, 2), 1, border_radius=g.em(0.3))
 
-    def _paint_closeup(self, vx, vz, y, size) -> pygame.Surface:
-        lo, hi = ((vx + a, y + b, vz + c) for a, b, c in CLOSE_REACH)
-        cam = Camera(CLOSE_YAW, CLOSE_PITCH, *size, target=(vx + 0.5, y + 0.5, vz + 0.5), away=CLOSE_AWAY, fit=(lo, hi))
-        near = {b: c for b, c in self._view_blocks().items() if abs(b[0] - vx) <= CLOSE_KEEP[0] and 0 <= b[1] - vz <= CLOSE_KEEP[1]}
+    def _close_center(self, cursor) -> tuple:
+        """Where the close-up looks: it holds still while the cursor moves near its middle, so the
+        cursor moves rather than the world, and slides along only as far as keeps the cursor in."""
+        back, center = self._close_at or (self._back, cursor)
+        if back != self._back:
+            center = cursor
+        center = tuple(min(max(c, n - m), n + m) for c, n, m in zip(center, cursor, CLOSE_SLACK))
+        self._close_at = self._back, center
+        return center
+
+    def _paint_closeup(self, vx, vz, y, center, size) -> pygame.Surface:
+        cx, cy, cz = center
+        lo, hi = ((cx + a, cy + b, cz + c) for a, b, c in CLOSE_REACH)
+        cam = Camera(CLOSE_YAW, CLOSE_PITCH, *size, target=(cx + 0.5, cy + 0.5, cz + 0.5), away=CLOSE_AWAY, fit=(lo, hi))
+        near = {b: c for b, c in self._view_blocks().items() if abs(b[0] - cx) <= CLOSE_KEEP[0] and vz <= b[1] <= cz + CLOSE_KEEP[1]}
         p = Painter(cam, near, row=vz)
         s = pygame.Surface(size)
         s.fill(rgb(p.floor[0]))

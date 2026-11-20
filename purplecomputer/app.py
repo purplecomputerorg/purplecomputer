@@ -1890,8 +1890,13 @@ class PurpleApp:
     def _draw_footer(self, frame):
         """The status strip and, beside it, the sticker keyboard: the same under every room."""
         esc_pill = self._draw_status(frame, left="" if self._legend_visible else None)
+        bottom = esc_pill.bottom if esc_pill else self.g.stage.bottom - self.g.vh(2)
         if self._legend_visible and not self._code_panel_active:   # keys type code there, not colors
-            self._draw_legend(frame, esc_pill.bottom if esc_pill else self.g.stage.bottom - self.g.vh(2))
+            self._draw_legend(frame, bottom)
+        top = frame.bottom + self.g.vh(1)
+        corner = pygame.Rect(0, top, self._legend_width(), bottom - top)
+        corner.right = frame.right
+        self.room.draw_corner(self.g, corner)
 
     def _draw_title(self, frame, title=None):
         """The strip above the frame: computer name, screen title, battery.

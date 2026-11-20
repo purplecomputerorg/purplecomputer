@@ -82,6 +82,9 @@ class Room:
         """Height under the room's canvas: the hold bar covers exactly this."""
         return hint_row_h(g) + g.em(1.1)   # Art and Blocks: pad, hint row, gap
 
+    def draw_corner(self, g, rect):
+        """The bottom right corner under the frame, across from the sticker keyboard; empty by default."""
+
     def timeline_state(self) -> dict:
         return {}
 

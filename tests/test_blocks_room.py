@@ -6,13 +6,11 @@ block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab flips
 to the back with arrows still moving the way they point and held looks down from above, blocks in front of the
-cursor fade, a whole tower at a time, where they hide its glass column or landing block, a close-up of the cursor sits in the
-top corner away from it, and the Esc picker reaches the room with 4."""
+cursor fade, a whole tower at a time, where they hide its glass column or landing block, a close-up of the cursor sits under the
+frame's bottom right, and the Esc picker reaches the room with 4."""
 
 import asyncio
 import time
-
-import pygame
 
 from purplecomputer.harness import make_app, press, run, type_text
 from purplecomputer.rooms import blocks_room
@@ -426,7 +424,7 @@ def test_flip_keeps_blocks_and_arrows_follow_the_screen():
         assert room._x == 4
         await press(app, "tab")                 # mid-turn: ignored
         assert room._back
-        room._motion = None
+        room._turning._move = None
         await press(app, "tab")
         assert not room._back
     run(go())
@@ -434,7 +432,7 @@ def test_flip_keeps_blocks_and_arrows_follow_the_screen():
 
 def _at(room, seconds):
     """The view's move as if it started `seconds` ago."""
-    room._motion = (time.monotonic() - seconds, *room._motion[1:])
+    room._turning._move = (time.monotonic() - seconds, *room._turning._move[1:])
 
 
 async def _real_tab(app, sm, is_down):
@@ -466,14 +464,14 @@ def test_holding_tab_looks_from_above_until_the_next_hold_and_both_hands_can_bui
         sm = KeyboardStateMachine()
         await _hold_real_tab(app, sm)
         assert room._peek and not room._back and room.hold_progress() is None
-        room._motion = None
+        room._turning._move = None
         await press(app, "right")
         await type_text(app, "a")
         app._draw()
         assert room._x == 7 and (6, 5, 0) in room._blocks and room._peek
         await press(app, "tab")                 # a tap still turns around, staying above
         assert room._back and room._peek
-        room._motion = None
+        room._turning._move = None
         await _hold_real_tab(app, sm)
         assert not room._peek
         for p in (0.3, 0.6):
@@ -486,10 +484,10 @@ def test_esc_from_above_goes_back_to_the_front_view_without_the_menu():
     async def go():
         app, room = _blocks()
         await _hold_real_tab(app, KeyboardStateMachine())
-        room._motion = None
+        room._turning._move = None
         await press(app, "escape")
         assert not room._peek and app.room is room and not app._overlays
-        room._motion = None
+        room._turning._move = None
         await press(app, "escape")              # back in front, Esc opens the menu as usual
         assert app._overlays
     run(go())
@@ -506,8 +504,8 @@ def test_turn_draws_and_stops_its_timer():
             app._draw()
         _at(room, TURN_S + 0.05)
         app._draw()
-        room._motion_tick()
-        assert room._motion_timer is None
+        room._turning._tick()
+        assert room._turning._timer is None
     run(go())
 
 
@@ -597,21 +595,14 @@ def test_restoring_blocks_past_the_walls_drops_them():
     run(go())
 
 
-def _closeup(app, room):
-    room.draw(app.g, app.g.surface.get_rect())
-    return room._draw_closeup(app.g, pygame.Rect(room._origin, room._composed.get_size()))
-
-
-def test_closeup_shows_once_there_are_blocks_in_the_top_corner_away_from_the_cursor():
+def test_closeup_shows_under_the_frame_once_there_are_blocks():
     async def go():
         app, room = _blocks()
-        assert _closeup(app, room) is None
+        app._draw()
+        assert room._close is None
         await type_text(app, "a")
-        middle = room._origin[0] + room._composed.get_width() / 2
-        room._x = WIDTH - 1
-        assert _closeup(app, room).right < middle
-        room._x = 0
-        assert _closeup(app, room).left > middle
+        app._draw()
+        assert room._close is not None
     run(go())
 
 
@@ -619,17 +610,34 @@ def test_closeup_repaints_when_a_block_lands_or_the_cursor_moves():
     async def go():
         app, room = _blocks()
         await type_text(app, "a")
-        _closeup(app, room)
+        app._draw()
         first = room._close
-        _closeup(app, room)
+        app._draw()
         assert room._close is first
         await type_text(app, "a")
         assert room._close is None
-        _closeup(app, room)
+        app._draw()
         shown = room._close
         await press(app, "right")
-        _closeup(app, room)
+        app._draw()
         assert room._close is not shown
+    run(go())
+
+
+def test_closeup_holds_still_as_the_cursor_moves_near_its_middle_then_slides_along():
+    async def go():
+        app, room = _blocks()
+        room._dir = "right"
+        await type_text(app, "a")
+        app._draw()
+        center = room._close_at[1]
+        for _ in range(blocks_room.CLOSE_SLACK[0]):
+            await press(app, "right")
+            app._draw()
+        assert room._close_at[1] == center and room._close_slide.now() is None
+        await press(app, "right")
+        app._draw()
+        assert room._close_at[1][0] == center[0] + 1 and room._close_slide.now() is not None
     run(go())
 
 

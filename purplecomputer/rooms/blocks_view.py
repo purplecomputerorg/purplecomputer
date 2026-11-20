@@ -1,6 +1,6 @@
-"""How Blocks looks: one perspective camera on the floor's center, which Tab turns around and held Tab tips
-down to look from above, and the floor, blocks and shadows painted through it, far to near. Coordinates are
-(x, z, y) cells with y up, in whatever frame the caller passes: view coordinates at rest, world ones mid-turn."""
+"""How Blocks looks: one perspective camera on the floor's center, a little off straight on, which Tab
+turns around and held Tab tips down to look from above, and the floor, blocks and shadows painted through
+it, far to near. Coordinates are (x, z, y) cells with y up, in whatever frame the caller passes: view coordinates at rest, world ones mid-turn."""
 
 import copy
 import math
@@ -16,8 +16,9 @@ from . import art_room
 
 WIDTH, DEPTH, HEIGHT = 30, 12, 12
 SLAB = 0.35                   # the floor's thickness, in cells
-REST_PITCH, PEEK_PITCH = math.radians(30), math.radians(76)
-EYE_DISTANCE = (44, 70)       # cells from the floor's center at rest and looking down; nearer is stronger perspective
+REST_PITCH, PEEK_PITCH = math.radians(36), math.radians(76)
+YAW = math.radians(-15)       # straight on, a row back and a level up both point up the screen; turned, they part
+EYE_DISTANCE = (64, 70)       # cells from the floor's center at rest and looking down; nearer is stronger perspective
 TARGET_Y = 2.0                # the height the camera looks at, over the floor's center
 SUN = (0.3, 0.55)             # a level's shadow reach, (right, away) from the camera, in cells
 SUN_ALPHA, SUN_INK = 40, (10, 0, 25)
@@ -36,6 +37,11 @@ STAMPS_KEPT = 20000           # block pictures a camera keeps before starting ov
 
 def lerp(a, b, t):
     return a + (b - a) * t
+
+
+def turned(pitch: float) -> float:
+    """The camera's turn off straight on: YAW at rest, none looking straight down from above."""
+    return YAW * (PEEK_PITCH - pitch) / (PEEK_PITCH - REST_PITCH)
 
 
 @cache

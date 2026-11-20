@@ -9,6 +9,10 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 3. **Fade only what's in the way, a whole tower at a time.** A front tower fades when any of its blocks is drawn over the glass column or the landing block, by a pixel or more; all of it fades, floor to top, as one flat layer. Everything else stays solid.
 4. **One more line costs more than it explains.** Every block already has edges; a cursor mark has to be clearly bolder than them or it's noise.
 
+## The camera
+
+Straight on, "one row back" and "one level up" both move a block straight up the screen, so a tall tower near the front and a short one at the back look alike, and no cursor mark fully makes up for it. The camera is turned 15° off straight on (`YAW`), so rows run back diagonally, levels go straight up, and the arrows still mostly match the screen. It's far enough away (`EYE_DISTANCE`) that rows lean the same way across the whole floor; nearer, perspective stands them upright again at the near corner. The turn eases out as held Tab tips the view down, so from above the floor sits square. The cost: the turned floor fits the screen with blocks about 78% as wide as straight on.
+
 ## What the cursor draws
 
 - **Glass column** from the ceiling down to the landing block, plus a faint ceiling patch: which floor spot you're over.
@@ -20,6 +24,13 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **Faded towers** in the way, at `FRONT_ALPHA`.
 
 ## Tried and dropped
+
+- **Tipping the camera down alone** (45°, 55°): rows spread apart, but towers squash, so height gets as ambiguous as depth was.
+- **Moving the camera closer:** stronger perspective, but the whole floor still has to fit, so everything got smaller.
+- **Turning 20° or more:** a little clearer than 15°, but blocks shrink further; 12° starts to lose the sides of things.
+- **Fitting only the lower part of the room** to win back size: the ceiling and the cursor's glass column run off the top at the near corner.
+- **A camera that follows the cursor:** keeps blocks big, but the view moving under a kid is more to track, and turning on its own would change what the arrows mean.
+- **Edge ticks** marking the cursor's row and column on the floor's rim: too small to notice.
 
 - **Fade every row in front** whenever anything hid the landing spot: focused the eye but hid half the build for one block in the way.
 - **Fade only the overlapping blocks:** one see-through block in a same-colored wall reads as a dark hole.

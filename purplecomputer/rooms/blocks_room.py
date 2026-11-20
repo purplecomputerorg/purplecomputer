@@ -35,7 +35,7 @@ from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
-from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, PEEK_PITCH, REST_PITCH, WIDTH, Camera, Painter, bbox
+from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, PEEK_PITCH, REST_PITCH, WIDTH, Camera, Painter, bbox, turned
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 TURN_S, TILT_S = 0.5, 0.3
@@ -65,7 +65,7 @@ def ease(p: float) -> float:
 
 @lru_cache(maxsize=4)
 def resting_camera(pitch: float, w: int, h: int) -> Camera:
-    return Camera(0.0, pitch, w, h)
+    return Camera(turned(pitch), pitch, w, h)
 
 
 class BlocksRoom(Room):
@@ -672,7 +672,8 @@ class BlocksRoom(Room):
         `half_turns` around and tipped `tilt` of the way down, so both ends land on those pictures; only
         the cursor sits it out. A frame over budget drops seams and shadows for builds this big from then on."""
         start = time.monotonic()
-        cam = Camera(math.pi * half_turns, REST_PITCH + (PEEK_PITCH - REST_PITCH) * tilt, area.w, area.h, area.topleft)
+        pitch = REST_PITCH + (PEEK_PITCH - REST_PITCH) * tilt
+        cam = Camera(turned(pitch) + math.pi * half_turns, pitch, area.w, area.h, area.topleft)
         detailed = len(self._blocks) <= self._turn_detail_limit
         painter = Painter(cam, self._blocks, detail=detailed)
         painter.paint_floor(g.surface)

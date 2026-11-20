@@ -44,6 +44,10 @@ TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers t
 SIDES = (("Front", "modes/front.png"), ("Back", "modes/back.png"))  # the Tab switch's words and pictures
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
+CLOSE_W, CLOSE_H = 0.2, 0.3  # the close-up's share of the view
+CLOSE_YAW, CLOSE_PITCH, CLOSE_AWAY = math.radians(-30), math.radians(32), 22   # far enough to look down on the ceiling
+CLOSE_REACH = ((-2, -1, -1), (3, 2, 2))   # (x, y, z) cells around the cursor it frames
+CLOSE_KEEP = (6, 5)           # (x either way, z behind) cells of blocks around the cursor painted; the rest is out of frame
 # The direction arrow as (along, across) points in cells, from the box center outward.
 POINTER = ((0.1, -0.09), (0.75, -0.09), (0.75, -0.3), (1.2, 0), (0.75, 0.3), (0.75, 0.09), (0.1, 0.09))
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -109,6 +113,7 @@ class BlocksRoom(Room):
         self._scene = self._front = self._composed = self._layer = None
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
         self._faded, self._fade_key = frozenset(), None
+        self._close = None            # (what it shows, picture) of the close-up
         self.echo = Echo()
         self.code_panel = None
         self._space_pending = False
@@ -335,6 +340,7 @@ class BlocksRoom(Room):
             self._scene = None
         else:
             self._dirty.add(self._view(*cell[:2]))
+        self._close = None
         self.app.invalidate()
 
     @property
@@ -648,6 +654,7 @@ class BlocksRoom(Room):
             self._layers(area.size)
             g.surface.blit(self._composed, area)
             self._draw_cursor(g, area.topleft)
+            self._draw_closeup(g, area)
             self._draw_hold_badge(g, area)
         else:
             self._draw_moving(g, area, *moving)
@@ -681,6 +688,43 @@ class BlocksRoom(Room):
         painter.paint(g.surface, painter.items)
         if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
             self._turn_detail_limit = len(self._blocks) - 1
+
+    # ---------------------------------------------------------------- close-up
+    def _draw_closeup(self, g, area):
+        """The cursor up close, in the top corner away from it, from a side the main view doesn't show,
+        with the rows in front of it cut away so nothing hides it; returns where. guides/blocks-cursor.md"""
+        if not self._blocks:
+            return None
+        vx, vz = self._view(self._x, self._z)
+        w, h, pad = round(area.w * CLOSE_W), round(area.h * CLOSE_H), g.em(0.4)
+        left = self._cam.at(vx + 0.5, 0, vz + 0.5)[0] > area.w / 2
+        rect = pygame.Rect(area.x + pad if left else area.right - w - pad, area.y + pad, w, h)
+        key = (vx, vz, self._cursor_y(), self._color, self._dir, rect.size)
+        if self._close is None or self._close[0] != key:
+            self._close = key, self._paint_closeup(vx, vz, key[2], rect.size)
+        g.surface.blit(self._close[1], rect)
+        pygame.draw.rect(g.surface, rgb(P.TEXT), rect.inflate(4, 4), 2, border_radius=g.em(0.3))
+        return rect
+
+    def _paint_closeup(self, vx, vz, y, size) -> pygame.Surface:
+        lo, hi = ((vx + a, y + b, vz + c) for a, b, c in CLOSE_REACH)
+        cam = Camera(CLOSE_YAW, CLOSE_PITCH, *size, target=(vx + 0.5, y + 0.5, vz + 0.5), away=CLOSE_AWAY, fit=(lo, hi))
+        near = {b: c for b, c in self._view_blocks().items() if abs(b[0] - vx) <= CLOSE_KEEP[0] and 0 <= b[1] - vz <= CLOSE_KEEP[1]}
+        p = Painter(cam, near, row=vz)
+        s = pygame.Surface(size)
+        s.fill(rgb(p.floor[0]))
+        p.paint_floor(s)
+        p.paint_sun(s)
+        p.paint(s, p.behind, s.get_rect())
+        p.frame_row(s)
+        p.paint(s, p.on_row_items, s.get_rect())
+        layer = pygame.Surface(size, pygame.SRCALPHA)
+        p.shadow(layer, vx, vz, self._ground(y), y, self._color, alpha=255)
+        p.block(layer, vx, vz, y, self._color, alpha=170, solo=True)
+        self._cage(layer, vx, vz, y, cam)
+        self._pointer(layer, vx, vz, y, cam)
+        s.blit(layer, (0, 0))
+        return s
 
     # ---------------------------------------------------------------- cursor
     def _cursor_box(self, vx, vz) -> pygame.Rect:
@@ -747,10 +791,10 @@ class BlocksRoom(Room):
             top = [at(x, HEIGHT, z), at(x + 1, HEIGHT, z), at(x + 1, HEIGHT, z + 1), at(x, HEIGHT, z + 1)]
             pygame.draw.polygon(layer, (*rgb(P.TEXT), round(CEILING_ALPHA[dx * dx + dz * dz] * strength)), top)
 
-    def _cage(self, layer, vx, vz, y):
+    def _cage(self, layer, vx, vz, y, cam=None):
         """Twelve wire edges a little outside the landing block: the three hidden ones
         thin and faint, the rest bold over a dark edge so they read against any block."""
-        cam = self._cam
+        cam = cam or self._cam
         lo, hi = -CAGE_PAD, 1 + CAGE_PAD
         ex, _, ez = cam.eye
         hidden = (lo if ex > vx + 0.5 else hi, hi if ez < vz + 0.5 else lo, lo)   # (x, z, y): the corner away from the eye
@@ -768,13 +812,13 @@ class BlocksRoom(Room):
         axis, step = WRAP[self._dir][0]
         return {a: (step if a == axis else 0) for a in SIZE}
 
-    def _pointer(self, layer, vx, vz, y):
+    def _pointer(self, layer, vx, vz, y, cam=None):
         """An arrow out of the wire box's top (or bottom, going down) the way
         the next typed block goes, laid flat in the scene so depth foreshortens it."""
         d = self._step()
         across = {"x": 0, "z": 1} if d["x"] else {"x": 1, "z": 0}
         base = y - CAGE_PAD if self._dir == SINK else y + 1 + CAGE_PAD
-        arrow = [self._cam.at(vx + 0.5 + u * d["x"] + v * across["x"], base + u * d["y"], vz + 0.5 + u * d["z"] + v * across["z"])
+        arrow = [(cam or self._cam).at(vx + 0.5 + u * d["x"] + v * across["x"], base + u * d["y"], vz + 0.5 + u * d["z"] + v * across["z"])
                  for u, v in POINTER]
         pygame.draw.polygon(layer, (*rgb(P.TEXT), 240), arrow)
         pygame.draw.polygon(layer, (*rgb(art_room.CANVAS_BG), 200), arrow, 1)

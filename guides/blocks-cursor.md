@@ -18,8 +18,14 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **Frame around the cursor's row**: a faint upright rectangle on the back of the row, floor to ceiling and wall to wall, so the row reads as one slice of the world rather than a line of unrelated blocks. Drawn behind the row's blocks, so it never crosses over them.
 - **Ribbon on the cursor's row**: blocks in that row get a soft light band, no border, across the middle of the top and front faces, running along the row like the frame's edges; their color shows through it, so you can tell a block beside the landing spot from one a row in front or behind. Built into the scene, which already rebuilds only when the cursor changes rows.
 - **Faded towers** in the way, at `FRONT_ALPHA`.
+- **Close-up** in the top corner away from the cursor, once there are blocks: the cursor's neighborhood from 30° to the side and nearer, with every row in front of the cursor cut away, so nothing ever hides it and the side angle shows how far back it sits. Repainted only when the cursor or a block changes, from the blocks near the cursor.
 
 ## Tried and dropped
+
+- **A close-up from the main view's angle** (zoomed copy, or a nearer eye): blows up the same ambiguity, and whatever stands in front hides the cursor.
+- **A close-up from above:** loses height, and towers beside the cursor cover it.
+- **A close-up with the front rows see-through** rather than cut away: a see-through house fills the window with murk.
+- **The close-up in a fixed corner:** covers tall builds on that side; it goes in the corner away from the cursor.
 
 - **Fade every row in front** whenever anything hid the landing spot: focused the eye but hid half the build for one block in the way.
 - **Fade only the overlapping blocks:** one see-through block in a same-colored wall reads as a dark hole.

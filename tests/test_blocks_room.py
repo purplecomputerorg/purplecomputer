@@ -6,11 +6,13 @@ block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab flips
 to the back with arrows still moving the way they point and held looks down from above, blocks in front of the
-cursor fade, a whole tower at a time, where they hide its glass column or landing block, and the Esc picker reaches the room with
-4."""
+cursor fade, a whole tower at a time, where they hide its glass column or landing block, a close-up of the cursor sits in the
+top corner away from it, and the Esc picker reaches the room with 4."""
 
 import asyncio
 import time
+
+import pygame
 
 from purplecomputer.harness import make_app, press, run, type_text
 from purplecomputer.rooms import blocks_room
@@ -592,6 +594,42 @@ def test_restoring_blocks_past_the_walls_drops_them():
         assert (room._x, room._z) == (WIDTH - 1, DEPTH - 1)
         await press(app, "tab")
         room.draw(app.g, app.g.surface.get_rect())
+    run(go())
+
+
+def _closeup(app, room):
+    room.draw(app.g, app.g.surface.get_rect())
+    return room._draw_closeup(app.g, pygame.Rect(room._origin, room._composed.get_size()))
+
+
+def test_closeup_shows_once_there_are_blocks_in_the_top_corner_away_from_the_cursor():
+    async def go():
+        app, room = _blocks()
+        assert _closeup(app, room) is None
+        await type_text(app, "a")
+        middle = room._origin[0] + room._composed.get_width() / 2
+        room._x = WIDTH - 1
+        assert _closeup(app, room).right < middle
+        room._x = 0
+        assert _closeup(app, room).left > middle
+    run(go())
+
+
+def test_closeup_repaints_when_a_block_lands_or_the_cursor_moves():
+    async def go():
+        app, room = _blocks()
+        await type_text(app, "a")
+        _closeup(app, room)
+        first = room._close
+        _closeup(app, room)
+        assert room._close is first
+        await type_text(app, "a")
+        assert room._close is None
+        _closeup(app, room)
+        shown = room._close
+        await press(app, "right")
+        _closeup(app, room)
+        assert room._close is not shown
     run(go())
 
 

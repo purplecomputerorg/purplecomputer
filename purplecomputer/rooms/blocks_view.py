@@ -79,14 +79,16 @@ def bbox(points) -> pygame.Rect:
 
 
 class Camera:
-    """Looks at the floor's center from `yaw` around it and `pitch` down, scaled so the floor up to
-    `top` (the ceiling) fills a w by h box at `origin`. Grid points are projected once and remembered."""
+    """Looks at `target` (the floor's center) from `yaw` around it and `pitch` down, `away` cells off, scaled
+    so the box `fit` (the floor up to `top`) fills a w by h box at `origin`. Grid points are projected once and remembered."""
 
-    def __init__(self, yaw: float, pitch: float, w: int, h: int, origin=(0, 0), top: float = HEIGHT):
+    def __init__(self, yaw: float, pitch: float, w: int, h: int, origin=(0, 0), top: float = HEIGHT,
+                 target=(WIDTH / 2, TARGET_Y, DEPTH / 2), away=None, fit=None):
         sy, cy, sp, cp = math.sin(yaw), math.cos(yaw), math.sin(pitch), math.cos(pitch)
         self.f, self.r, self.u = (sy * cp, -sp, cy * cp), (cy, 0.0, -sy), (sy * sp, cp, cy * sp)
-        away = lerp(*EYE_DISTANCE, (pitch - REST_PITCH) / (PEEK_PITCH - REST_PITCH))   # rises as it tips down, so tall towers lean less
-        self.eye = (WIDTH / 2 - away * self.f[0], TARGET_Y - away * self.f[1], DEPTH / 2 - away * self.f[2])
+        if away is None:
+            away = lerp(*EYE_DISTANCE, (pitch - REST_PITCH) / (PEEK_PITCH - REST_PITCH))   # rises as it tips down, so tall towers lean less
+        self.eye = tuple(t - away * f for t, f in zip(target, self.f))
         ahead = (sy, cy)
         self.sun = (SUN[0] * cy + SUN[1] * ahead[0], SUN[0] * -sy + SUN[1] * ahead[1])
         light = (-0.45 * cy - ahead[0], 0.45 * sy - ahead[1])
@@ -95,7 +97,8 @@ class Camera:
                      for side in ((0, -1), (0, 1), (-1, 0), (1, 0))}
         self._ahead, self._memo, self.rects, self.floor = ahead, {}, {}, None
         self.s, self.ox, self.oy = 1.0, 0.0, 0.0
-        xs, ys = zip(*(self._flat(x, y, z) for x in (0, WIDTH) for y in (-SLAB, top) for z in (0, DEPTH)))
+        (x0, y0, z0), (x1, y1, z1) = fit or ((0, -SLAB, 0), (WIDTH, top, DEPTH))
+        xs, ys = zip(*(self._flat(x, y, z) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)))
         self.s = min(w / (max(xs) - min(xs)), h / (max(ys) - min(ys)))
         self.ox = origin[0] + (w - self.s * (max(xs) + min(xs))) / 2
         self.oy = origin[1] + (h - self.s * (max(ys) + min(ys))) / 2

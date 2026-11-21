@@ -386,14 +386,16 @@ def test_blocks_code_back_and_front_go_in_depth():
     run(go())
 
 
-def test_blocks_esc_then_space_opens_code_and_tab_still_turns():
+def test_blocks_esc_then_space_opens_code_and_tab_still_goes_to_the_front():
     async def go():
         app, blocks = await _room("blocks")
+        blocks._aim(yaw=90)
+        blocks._look = list(blocks._goal)
         await press(app, "escape")
         await press(app, "space")
         assert blocks.code_panel is not None and app._panel is blocks.code_panel
         await press(app, "tab")
-        assert blocks._side == 1
+        assert blocks._goal[0] == 0
     run(go())
 
 

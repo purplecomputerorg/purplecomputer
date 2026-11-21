@@ -1,5 +1,5 @@
-"""How Blocks looks: one perspective camera on the floor's center, which turns around it a quarter at a time
-and held Tab tips down to look from above, and the round platter, floor, blocks and shadows painted through it,
+"""How Blocks looks: one perspective camera on the floor's center, which turns around it to any angle and
+tips from the side to nearly straight down, and the round platter, floor, blocks and shadows painted through it,
 far to near. Coordinates are (x, z, y) cells with y up, in whatever frame the caller passes: view coordinates
 at rest, world ones mid-turn."""
 
@@ -21,6 +21,9 @@ PLATTER_R = math.hypot(WIDTH, DEPTH) / 2 + 0.3   # the round platter under the f
 PLATTER_THICK, PLATTER_TOP_LIGHT = 0.3, 0.1   # the top is the ground color, this much lighter
 PLATTER_ROUND = 144           # points around its rim
 NOTCHES, NOTCH_FROM = 24, 0.955   # marks around the rim that move as it turns, and where each starts along the radius
+# An arrowhead on the platter off each edge of the floor, as (out from the edge, across) cells: the four ways
+# the arrow keys go, whichever way the floor is turned.
+WAY_MARK, WAY_LIGHT = ((0.8, -0.7), (2.0, 0.0), (0.8, 0.7)), 0.3
 REST_PITCH, PEEK_PITCH = math.radians(30), math.radians(76)
 EYE_DISTANCE = (44, 70)       # cells from the floor's center at rest and looking down; nearer is stronger perspective
 TARGET_Y = 2.0                # the height the camera looks at, over the floor's center
@@ -91,13 +94,15 @@ def bbox(points) -> pygame.Rect:
 
 class Camera:
     """Looks at the floor's center from `yaw` around it and `pitch` down, scaled so the floor up to
-    `top` (the ceiling) fills a w by h box at `origin`: the floor as it sits at rest, so a turn never
-    changes the size. Grid points are projected once and remembered."""
+    `top` (the ceiling) fills a w by h box at `origin`: the floor as it sits turned `fit` off straight
+    on, either way, whatever its yaw, so a turn from one side to the next keeps one size and the
+    floor's middle stays put. Grid points are projected once and remembered."""
 
-    def __init__(self, yaw: float, pitch: float, w: int, h: int, origin=(0, 0), top: float = HEIGHT):
+    def __init__(self, yaw: float, pitch: float, w: int, h: int, origin=(0, 0), top: float = HEIGHT, fit: float = 0.0):
         sy, cy, sp, cp = math.sin(yaw), math.cos(yaw), math.sin(pitch), math.cos(pitch)
         self.f, self.r, self.u = (sy * cp, -sp, cy * cp), (cy, 0.0, -sy), (sy * sp, cp, cy * sp)
-        away = lerp(*EYE_DISTANCE, (pitch - REST_PITCH) / (PEEK_PITCH - REST_PITCH))   # rises as it tips down, so tall towers lean less
+        # The eye backs off as it tips down from rest, so tall towers lean less.
+        away = lerp(*EYE_DISTANCE, min(1.0, max(0.0, (pitch - REST_PITCH) / (PEEK_PITCH - REST_PITCH))))
         self.eye = (WIDTH / 2 - away * self.f[0], TARGET_Y - away * self.f[1], DEPTH / 2 - away * self.f[2])
         ahead = (sy, cy)
         self.sun = (SUN[0] * cy + SUN[1] * ahead[0], SUN[0] * -sy + SUN[1] * ahead[1])
@@ -107,8 +112,9 @@ class Camera:
                      for side in ((0, -1), (0, 1), (-1, 0), (1, 0))}
         self._ahead, self._memo, self.rects, self.floor = ahead, {}, {}, None
         self.s, self.ox, self.oy = 1.0, 0.0, 0.0
-        xs, ys = zip(*(self._flat(WIDTH / 2 + a * cy + b * sy, y, DEPTH / 2 - a * sy + b * cy)
-                       for a in (-WIDTH / 2, WIDTH / 2) for b in (-DEPTH / 2, DEPTH / 2) for y in (-SLAB, top)))
+        sf, cf = math.sin(fit), math.cos(fit)
+        corners = [(a * cf - b * s, a * s + b * cf) for a in (-WIDTH / 2, WIDTH / 2) for b in (-DEPTH / 2, DEPTH / 2) for s in (sf, -sf)]
+        xs, ys = zip(*(self._flat(WIDTH / 2 + a * cy + b * sy, y, DEPTH / 2 - a * sy + b * cy) for a, b in corners for y in (-SLAB, top)))
         self.s = min(w / (max(xs) - min(xs)), h / (max(ys) - min(ys)))
         self.ox = origin[0] + (w - self.s * (max(xs) + min(xs))) / 2
         self.oy = origin[1] + (h - self.s * (max(ys) + min(ys))) / 2
@@ -248,7 +254,7 @@ class Painter:
                 pygame.draw.polygon(surf, rgb(alt), self._tile_poly(x, z))
 
     def paint_platter(self, surf):
-        """The round platter the floor sits on: its wall, its top, and the notches around its rim."""
+        """The round platter the floor sits on: its wall, its top, the notches around its rim, and an arrowhead off each edge of the floor."""
         at, (ground, _, _, _, slab_side) = self.cam.at, self.floor
         cx, cz = WIDTH / 2, DEPTH / 2
         top = [at(cx + x, -SLAB, cz + z) for x, z in ring(PLATTER_R)]
@@ -256,6 +262,9 @@ class Painter:
         pygame.draw.polygon(surf, mix(ground, "#ffffff", PLATTER_TOP_LIGHT), top)
         for x, z in ring(PLATTER_R, NOTCHES):
             pygame.draw.line(surf, rgb(P.LINE), at(cx + x * NOTCH_FROM, -SLAB, cz + z * NOTCH_FROM), at(cx + x, -SLAB, cz + z), 2)
+        for dx, dz in SIDES[1:]:
+            mark = [at(cx + dx * (WIDTH / 2 + out) - dz * across, -SLAB, cz + dz * (DEPTH / 2 + out) + dx * across) for out, across in WAY_MARK]
+            pygame.draw.polygon(surf, mix(ground, "#ffffff", WAY_LIGHT), mark)
 
     def floor_picture(self, size) -> pygame.Surface:
         """The floor on its ground color, painted once per camera and size."""

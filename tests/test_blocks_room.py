@@ -5,23 +5,19 @@ with Up or Down moves it either way, that height carries to other columns, a
 block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, Tab turns the
-floor a quarter of the way around, as Shift with Left or Right does either way, with arrows still moving the way
-they point, and held looks down from above, blocks in front of the
+floor to its next side, Tab held with the arrows (or Shift with Left or Right) looks around it to any angle and
+tilts the view, with arrows still moving the way they point most, blocks in front of the
 cursor fade, a whole tower at a time, where they hide its glass column or landing block, and the Esc picker reaches the room with
 4."""
 
-import asyncio
 import math
-import time
 
 from purplecomputer.harness import make_app, press, run, type_text
 from purplecomputer.rooms import blocks_room
 from purplecomputer import palette as P
-from purplecomputer.rooms.blocks_room import (DEPTH, HEIGHT, RISE, SINK, TILT_S, TURN_DETAIL_BLOCKS,
-                                                 TURN_S, WIDTH)
-from purplecomputer.rooms.blocks_view import PLATTER_TOP_LIGHT, REST_PITCH, RIBBON_ALPHA, SLAB, TOP, Camera, tint
+from purplecomputer.rooms.blocks_room import DEPTH, HEIGHT, LOOKS, REST_TILT, RISE, SINK, TILTS, TURN_DETAIL_BLOCKS, WIDTH
+from purplecomputer.rooms.blocks_view import PLATTER_TOP_LIGHT, REST_PITCH, RIBBON_ALPHA, SLAB, TOP, WAY_LIGHT, Camera, tint
 from purplecomputer.gfx import mix
-from purplecomputer.constants import HOLD_OR_TAP_THRESHOLD
 from purplecomputer.color_mixing import mix_colors_paint
 from purplecomputer.input import KeyCode, RawKeyEvent
 from purplecomputer.keyboard import CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction
@@ -414,14 +410,21 @@ def test_a_front_block_over_only_the_thread_stays_solid():
     run(go())
 
 
+def _settle(room):
+    """The view lands where it is headed, as its timer would bring it."""
+    room._look = list(room._goal)
+    if room._look_timer:
+        room._look_tick()
+
+
 def test_a_turn_keeps_blocks_and_arrows_follow_the_screen():
     async def go():
         app, room = _blocks()
         await press(app, "r")
         for side in (1, 2, 3, 0):
             await press(app, "tab")
-            room._motion = None
-            assert room._side == side and (5, 5, 0) in room._blocks
+            _settle(room)
+            assert room._side == side and room._goal[0] == 90 * side and (5, 5, 0) in room._blocks
             for way, step in blocks_room.STEPS.items():
                 before = room._view(room._x, room._z)
                 await press(app, way)
@@ -434,53 +437,102 @@ def test_a_turn_keeps_blocks_and_arrows_follow_the_screen():
     run(go())
 
 
-def test_shift_with_left_or_right_turns_either_way_a_quarter_at_a_time():
+def test_shift_with_left_or_right_turns_a_little_at_a_time_and_the_arrows_go_the_way_they_point_most():
     async def go():
         app, room = _blocks()
-        await press(app, "right", shift_held=True)
-        assert room._side == 1 and room._motion[3][0] == 1
-        await press(app, "right", shift_held=True, is_repeat=True)     # held: waits for the turn to finish
-        assert room._side == 1
-        await press(app, "right", shift_held=True)                     # pressed again mid-turn: carries on around
-        assert room._side == 2 and room._motion[3][0] == 2
-        room._motion = None
-        await press(app, "right", shift_held=True, is_repeat=True)
-        assert room._side == 3
-        room._motion = None
-        await press(app, "right", shift_held=True)
-        assert room._side == 0 and room._motion[2][0] == 3 and room._motion[3][0] == 4    # on around, not back
-        room._motion = None
+        step = LOOKS["right"][1]
+        for turns in range(1, 6):
+            await press(app, "right", shift_held=True)
+            _settle(room)
+            app._draw()
+            assert room._goal[0] == step * turns and room._side == (turns * step + 45) // 90
+            assert abs(room._off()) < 45
+        assert room._goal[0] == 90 and room._side == 1              # five turns is a quarter of the way around
         await press(app, "left", shift_held=True)
-        assert room._side == 3 and room._motion[3][0] == -1 and (room._x, room._z) == (5, 5)
+        await press(app, "right")
+        assert room._side == 1 and (room._x, room._z) == (5, 4)     # a little off the side still moves as that side does
+        for _ in range(5):
+            await press(app, "left", shift_held=True)
+            _settle(room)
+        assert room._side == 0 and room._goal[0] == 342             # on past the front, with no turns left behind it
     run(go())
 
 
-def test_every_side_shows_the_same_floor_and_turns_back_the_short_way():
+def test_a_held_turn_keeps_the_view_just_moving_and_a_press_mid_turn_carries_on():
+    async def go():
+        app, room = _blocks()
+        step = LOOKS["right"][1]
+        await press(app, "right", shift_held=True)
+        await press(app, "right", shift_held=True, is_repeat=True)     # held: waits until the view has nearly caught up
+        assert room._goal[0] == step and room._look_timer is not None
+        await press(app, "right", shift_held=True)                     # pressed again: carries on around
+        assert room._goal[0] == 2 * step
+        room._look[0] = 2 * step - 1
+        await press(app, "right", shift_held=True, is_repeat=True)
+        assert room._goal[0] == 3 * step
+        await press(app, "tab")                                        # from between sides, Tab goes on to the next one, straight on
+        assert room._goal[0] == 90
+        room._goal[0] = room._look[0] = 100.0
+        room.turn_view(-1)
+        assert room._goal[0] == 90
+    run(go())
+
+
+def test_the_view_eases_to_where_it_is_headed_then_its_timer_stops(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        await type_text(app, "abc")
+        app._draw()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        await press(app, "tab")
+        was = 0.0
+        for _ in range(200):
+            if room._look_timer is None:
+                break
+            now[0] += 1 / 60
+            room._look_tick()
+            assert was <= room._look[0] <= 90 and room._look[0] - was <= blocks_room.LOOK_SPEED / 60 + 1e-6
+            was = room._look[0]
+            app._draw()
+        assert room._look == room._goal == [90.0, REST_TILT, 0.0] and room._moving() is None
+        assert 0.3 < now[0] - 100 < 1.2
+    run(go())
+
+
+def test_every_side_shows_the_same_floor_and_the_front_is_the_short_way_back():
     async def go():
         app, room = _blocks()
         cells = {(x, z) for x in range(WIDTH) for z in range(DEPTH)}
         for side in range(4):
-            room._side = side
+            room._aim(yaw=90 * side + 18, tilt=TILTS[1])
+            _settle(room)
+            assert room._side == side
             assert {room._view(*c) for c in cells} == cells
             assert all(room._world(*room._view(*c)) == c for c in cells)
-            room._motion = None
             room.face_front()
-            turned = round(room._motion[3][0] - side) if room._motion else 0
-            assert room._side == 0 and turned == (0, -1, -2, 1)[side]
+            assert room._goal == [(0, 0, 360, 360)[side], REST_TILT, 0]
+            _settle(room)
+            assert room._goal[0] == 0 and room._side == 0
     run(go())
 
 
-def test_a_quarter_turn_lands_on_the_next_side_at_the_same_size():
-    rest = Camera(0.0, REST_PITCH, 900, 400)
-    for quarters in range(1, 4):
-        cam = Camera(math.pi / 2 * quarters, REST_PITCH, 900, 400)
-        assert math.isclose(cam.s, rest.s)
-        for x, z in ((0, 0), (WIDTH, 0), (3, 7)):
-            vx, vz = x, z
-            for _ in range(quarters):
-                vx, vz = WIDTH - vz, vx
-            assert all(math.isclose(a, b, abs_tol=1e-6) for a, b in zip(cam.at(x, 2, z), rest.at(vx, 2, vz)))
-    assert math.isclose(Camera(0.7, REST_PITCH, 900, 400).s, rest.s)      # mid-turn too
+def test_a_turn_lands_on_its_side_s_picture_and_a_quarter_turn_keeps_one_size():
+    for off in (0.0, math.radians(18), math.radians(-36)):
+        rest = Camera(off, REST_PITCH, 900, 400, fit=off)
+        for quarters in range(4):
+            cam = Camera(math.pi / 2 * quarters + off, REST_PITCH, 900, 400, fit=abs(off))
+            for x, z in ((0, 0), (WIDTH, 0), (3, 7)):
+                vx, vz = x, z
+                for _ in range(quarters):
+                    vx, vz = WIDTH - vz, vx
+                assert all(math.isclose(a, b, abs_tol=1e-6) for a, b in zip(cam.at(x, 2, z), rest.at(vx, 2, vz)))
+    straight = Camera(0.0, REST_PITCH, 900, 400)
+    assert math.isclose(Camera(0.7, REST_PITCH, 900, 400).s, straight.s)      # mid-turn between two sides
+    turned = Camera(0.6, REST_PITCH, 900, 400, fit=0.6)
+    assert turned.s < straight.s                                               # a turned floor needs more room
+    corners = [turned.at(x, y, z) for x in (0, WIDTH) for z in (0, DEPTH) for y in (-SLAB, HEIGHT)]
+    assert all(-1e-6 <= px <= 900 + 1e-6 and -1e-6 <= py <= 400 + 1e-6 for px, py in corners)
 
 
 def test_the_floor_sits_on_a_platter_that_runs_under_the_foot_and_stays_out_of_prints():
@@ -490,9 +542,11 @@ def test_the_floor_sits_on_a_platter_that_runs_under_the_foot_and_stays_out_of_p
         app._draw()
         platter = mix(P.SURFACE, "#ffffff", PLATTER_TOP_LIGHT)
         ox, oy = room._origin
-        beside, near = room._cam.at(-2, -SLAB, DEPTH / 2), room._cam.at(WIDTH / 2, -SLAB, -1.5)
+        beside, near = room._cam.at(-2, -SLAB, DEPTH / 4), room._cam.at(WIDTH / 4, -SLAB, -1.5)
         assert app.g.surface.get_at((round(ox + beside[0]), round(oy + beside[1])))[:3] == platter
         assert near[1] > room.bar_foot.top - oy
+        way = room._cam.at(-1.4, -SLAB, DEPTH / 2)      # an arrowhead off the floor's left edge
+        assert app.g.surface.get_at((round(ox + way[0]), round(oy + way[1])))[:3] == mix(P.SURFACE, "#ffffff", WAY_LIGHT)
         assert app.g.surface.get_at((round(ox + near[0]), round(oy + near[1])))[:3] == platter
         page = room.paper(app.g, (900, 400), on_screen=True)
         colors = {page.get_at((x, y))[:3] for x in range(0, 900, 6) for y in range(0, 400, 6)}
@@ -500,82 +554,67 @@ def test_the_floor_sits_on_a_platter_that_runs_under_the_foot_and_stays_out_of_p
     run(go())
 
 
-def _at(room, seconds):
-    """The view's move as if it started `seconds` ago."""
-    room._motion = (time.monotonic() - seconds, *room._motion[1:])
-
-
-async def _real_tab(app, sm, is_down):
-    """Tab as the keyboard reports it, through the same state machine as real keys."""
-    for action in sm.process(RawKeyEvent(keycode=KeyCode.KEY_TAB, is_down=is_down, timestamp=0.0)):
+async def _real_key(app, sm, keycode, is_down):
+    """A key as the keyboard reports it, through the same state machine as real keys."""
+    for action in sm.process(RawKeyEvent(keycode=keycode, is_down=is_down, timestamp=0.0)):
         await app._dispatch_keyboard_action(action)
 
 
-def test_tapping_real_tab_turns_once_and_leaves_no_hold_behind():
+def test_tapping_real_tab_turns_once_when_it_is_let_go():
     async def go():
         app, room = _blocks()
         sm = KeyboardStateMachine()
-        await _real_tab(app, sm, True)
-        assert room.hold_progress() is not None and not room._side
-        await _real_tab(app, sm, False)
-        assert room._side == 1 and not room._peek and room.hold_progress() is None
+        await _real_key(app, sm, KeyCode.KEY_TAB, True)
+        assert room._goal[0] == 0 and room._tab is False
+        await _real_key(app, sm, KeyCode.KEY_TAB, False)
+        assert room._side == 1 and room._goal == [90, REST_TILT, 0] and room._tab is None
     run(go())
 
 
-async def _hold_real_tab(app, sm):
-    await _real_tab(app, sm, True)
-    await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.1)
-    await _real_tab(app, sm, False)
-
-
-def test_holding_tab_looks_from_above_until_the_next_hold_and_both_hands_can_build():
+def test_real_tab_held_with_the_arrows_looks_around_and_then_does_not_turn():
     async def go():
         app, room = _blocks()
         sm = KeyboardStateMachine()
-        await _hold_real_tab(app, sm)
-        assert room._peek and not room._side and room.hold_progress() is None
-        room._motion = None
+        await _real_key(app, sm, KeyCode.KEY_TAB, True)
+        await _real_key(app, sm, KeyCode.KEY_UP, True)
+        await _real_key(app, sm, KeyCode.KEY_UP, False)
+        _settle(room)
+        await _real_key(app, sm, KeyCode.KEY_LEFT, True)
+        await _real_key(app, sm, KeyCode.KEY_LEFT, False)
+        assert room._goal[:2] == [LOOKS["left"][1], REST_TILT + LOOKS["up"][1]] and (room._x, room._z) == (5, 5)
+        await _real_key(app, sm, KeyCode.KEY_TAB, False)
+        _settle(room)
+        assert room._goal[:2] == [360 + LOOKS["left"][1], REST_TILT + LOOKS["up"][1]] and room._side == 0
         await press(app, "right")
         await type_text(app, "a")
         app._draw()
-        assert room._x == 7 and (6, 5, 0) in room._blocks and room._peek
-        await press(app, "tab")                 # a tap still turns, staying above
-        assert room._side == 1 and room._peek
-        room._motion = None
-        await _hold_real_tab(app, sm)
-        assert not room._peek
-        for p in (0.3, 0.6):
-            _at(room, TILT_S * p)
-            app._draw()
+        assert room._x == 7 and (6, 5, 0) in room._blocks    # both hands build again, in the view as it was left
     run(go())
 
 
-def test_esc_from_above_goes_back_to_the_front_view_without_the_menu():
+def test_the_tilt_stops_at_the_side_and_at_nearly_straight_down():
     async def go():
         app, room = _blocks()
-        await _hold_real_tab(app, KeyboardStateMachine())
-        room._motion = None
+        await app._dispatch_keyboard_action(ControlAction(action="tab", is_down=True))
+        for way, end in (("up", TILTS[1]), ("down", TILTS[0])):
+            for _ in range(8):
+                await press(app, way)
+                _settle(room)
+                app._draw()
+            assert room._goal[1] == end
+    run(go())
+
+
+def test_esc_with_the_view_tilted_puts_it_back_without_the_menu():
+    async def go():
+        app, room = _blocks()
+        room._aim(yaw=18, tilt=60)
+        _settle(room)
         await press(app, "escape")
-        assert not room._peek and app.room is room and not app._overlays
-        room._motion = None
-        await press(app, "escape")              # back in front, Esc opens the menu as usual
+        assert room._goal == [18, REST_TILT, 18] and app.room is room and not app._overlays
+        _settle(room)
+        await press(app, "escape")              # as it was, Esc opens the menu as usual
         assert app._overlays
-    run(go())
-
-
-def test_turn_draws_and_stops_its_timer():
-    async def go():
-        app, room = _blocks()
-        await type_text(app, "abc")
-        app._draw()
-        await press(app, "tab")
-        for p in (0.25, 0.5, 0.75):
-            _at(room, TURN_S * p)
-            app._draw()
-        _at(room, TURN_S + 0.05)
-        app._draw()
-        room._motion_tick()
-        assert room._motion_timer is None
     run(go())
 
 
@@ -585,7 +624,7 @@ def test_big_builds_still_turn():
         room._blocks = {(x, z, y): "#ff0000" for x in range(WIDTH) for z in range(DEPTH) for y in range(HEIGHT)}
         assert len(room._blocks) > TURN_DETAIL_BLOCKS
         await press(app, "tab")
-        _at(room, TURN_S * 0.5)
+        room._look[0] = 45.0
         app._draw()
         assert room._moving() is not None
     run(go())
@@ -598,7 +637,7 @@ def test_slow_turn_frames_lower_the_detail_limit(monkeypatch):
         app, room = _blocks()
         await type_text(app, "abc")
         await press(app, "tab")
-        _at(room, TURN_S * 0.5)
+        room._look[0] = 45.0
         app._draw()
         assert room._turn_detail_limit == 2     # three blocks went over budget, so three now turn plain
     run(go())

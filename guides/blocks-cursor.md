@@ -21,12 +21,18 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 
 ## Turning the floor
 
-One view can't tell "farther back" from "higher up": both go up the screen. So the floor turns, and the kid looks from another side. It is square and sits on a round platter with notches around its rim, so it reads as something that spins before any key is pressed. Tab turns it a quarter of the way around, and the header's four pictures show which side faces you; Shift with Left or Right turns it either way, the platter's near edge going the arrow's way.
+One view can't tell "farther back" from "higher up": both go up the screen. So the kid looks around the build. The floor is square and sits on a round platter with notches around its rim, so it reads as something that spins before any key is pressed.
 
-- **Four stops, and the arrows follow the screen.** The floor has four directions, so the view has four sides, and at each one the arrows and typing go the way they point. A view at any other angle, or one that turned by itself as typing changed direction, would change what an arrow means under the kid's fingers.
-- **A turn never changes the size.** The camera fits the floor as it sits at rest, whatever its angle, so a turn is only a turn. The floor's near corner swings out under the footer for a moment.
+- **Tab** turns the floor to its next side, straight on; the header's four pictures show which side faces you.
+- **Tab held with the arrows** looks around: Left and Right turn the floor a step at a time to any angle, the platter's near edge going the arrow's way, and Up and Down tilt the view from the side to nearly straight down. Shift with Left or Right turns it too. Esc puts a tilted view back.
+
+Rules:
+
+- **The arrows go the way they point most.** The floor has four directions, so moving and typing use the side that faces the viewer most. An arrowhead on the platter off each edge of the floor shows the four ways. The turn's step (18 degrees) never stops on a diagonal, where two arrows would point the same way, and five steps make a quarter turn, so straight on is always reachable.
+- **A view at rest shows the whole floor.** Each angle is sized to fit the floor turned that far, so a turned view is smaller than a straight one. A turn between two views of the same size (Tab's, side to side) keeps that size all the way, so it is only a turn; the floor's near corner swings out under the footer for a moment.
 - **The platter is not fitted.** It runs on under the footer hints, and the frame cuts off the last of its near rim. Fitting all of it made blocks a sixth smaller.
-- **Square, 16 by 16.** The old 30 by 12 floor from its side was 30 rows deep with blocks 64% the size, or the size changed on every turn.
+- **The tilt stops at 15 and 75 degrees.** Lower, the eye would sink under tall towers and see blocks from below; higher or over the top, the eye would pass the front rows, which the layers around the cursor are split by. Under the floor there is only the floor.
+- **Square, 16 by 16.** The old 30 by 12 floor from its side was 30 rows deep with blocks 64% the size.
 
 ## Tried and dropped
 

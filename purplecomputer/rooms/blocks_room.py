@@ -13,10 +13,11 @@ blocks; only the code line keeps the height it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
-opens the color bar, Tab turns the floor a quarter of the way around on its
-platter, as Shift with Left or Right does either way, the arrows always going
-the way they point on screen; holding Tab tilts the view to look down from
-above, and the code line opens from the Esc menu."""
+opens the color bar, Tab turns the floor on its platter to its next side, and
+holding Tab with the arrows looks around it: Left and Right turn it a little
+at a time to any angle (as Shift with them does), Up and Down tilt the view
+from the side to nearly straight down. The arrows always go the way they
+point most on screen. The code line opens from the Esc menu."""
 
 import asyncio
 import math
@@ -32,20 +33,24 @@ from .. import color_recipe
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import rgb
 from ..panels import CodePanel, Echo
-from ..ui import DOWN, LEFT, MOVE_HINT, PICK_HINT, RIGHT, UP, HeldKey, draw_key_hint, draw_mode_switch, hint_row_h, hold_status
+from ..ui import DOWN, LEFT, MOVE_HINT, PICK_HINT, RIGHT, UP, draw_key_hint, draw_mode_switch, hint_row_h
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
-from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, PEEK_PITCH, REST_PITCH, WIDTH, Camera, Painter, bbox
+from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
-TURN_S, TILT_S = 0.4, 0.3   # a quarter turn, and tipping up or down
+REST_TILT = round(math.degrees(REST_PITCH))
+# What a press with Tab (or Shift, sideways) does to the view, as (0 to turn or 1 to tilt, degrees). A quarter
+# turn is five turns and none stops on a diagonal, where two arrows would point the same way.
+LOOKS = {"left": (0, -18), "right": (0, 18), "up": (1, 15), "down": (1, -15)}
+TILTS = (15, 75)             # degrees down the view looks, from the side to nearly straight down: the eye stays over every block and in front of every row
+LOOK_PULL, LOOK_SPEED, LOOK_NEAR = 10.0, 240.0, 0.5   # the view closes this share of the way to its goal a second, at most this many degrees a second, and lands within this
 TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops seams and shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
 # The Tab switch's words and pictures, by quarter turns: the side of the build that faces you.
 SIDES = (("Front", "modes/front.png"), ("Side", "modes/right.png"), ("Back", "modes/back.png"), ("Side", "modes/left.png"))
-TURNS = {"left": -1, "right": 1}   # Shift + arrow: the platter's near edge goes the arrow's way
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
 # The direction arrow as (along, across) points in cells, from the box center outward.
@@ -58,9 +63,9 @@ SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), ("y", 1)),
         "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
         RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
-PEEK_PIC = "hints/peek.png"
+TURN_PIC = "hints/turn.png"
 HINT = "Type to build!  {Enter} goes up {hints/up.png}"
-SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}   {LEFT} {RIGHT} {{hints/turn.png}}"
+SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}   {LEFT} {RIGHT} {{{TURN_PIC}}}"
 
 
 def turned(x: int, z: int, quarters: int) -> tuple:
@@ -70,19 +75,16 @@ def turned(x: int, z: int, quarters: int) -> tuple:
     return x, z
 
 
-def ease(p: float) -> float:
-    return p * p * (3 - 2 * p)
-
-
 @lru_cache(maxsize=4)
-def resting_camera(pitch: float, w: int, h: int) -> Camera:
-    return Camera(0.0, pitch, w, h)
+def resting_camera(yaw: float, tilt: float, w: int, h: int) -> Camera:
+    """The camera for a view at rest, in degrees: `yaw` is how far the floor sits off its side's straight-on view."""
+    return Camera(math.radians(yaw), math.radians(tilt), w, h, fit=math.radians(yaw))
 
 
 class BlocksRoom(Room):
     """Blocks live in a dict keyed by world (x, z, y), y up. Drawing and the
-    arrows work in view coordinates, which are world (x, z) turned with the
-    floor, a quarter at a time. The floor and blocks paint (blocks_view) into two cached
+    arrows work in view coordinates, which are world (x, z) turned to the
+    side that faces the viewer most. The floor and blocks paint (blocks_view) into two cached
     layers split at the cursor's row: the rows from the cursor's back, then the
     cursor, then the rows in front of it, with the towers in the way faded. A
     block's change repaints only around its column; the cursor changing rows, the
@@ -97,7 +99,6 @@ class BlocksRoom(Room):
         super().__init__(app)
         self._blocks: dict = {}
         self._x, self._z = WIDTH // 2, DEPTH // 2
-        self._side = 0                # quarter turns the floor has made: an index of SIDES
         self._hover = 0               # chosen cursor height; 0 = resting on the column
         self._color = DEFAULT_BRUSH_COLOR
         self._key = ""
@@ -108,10 +109,12 @@ class BlocksRoom(Room):
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where a run up or down the column (or a code run) goes on from
         self._dir = "right"           # the way typing builds: a key of WRAP
-        self._peek = False
-        self._motion = None           # (start, seconds, (quarter turns, tilt) from, to) while the view moves
-        self._motion_timer = None
-        self._tab = HeldKey(app, lambda: self._tilt(not self._peek))
+        # Where the view is headed, in degrees: how far the floor has turned, how far down the view looks,
+        # and how far off straight on the floor it is sized to fit sits. Then where it is now.
+        self._goal = [0.0, float(REST_TILT), 0.0]
+        self._look = list(self._goal)
+        self._look_timer = self._looked = None
+        self._tab = None              # while Tab is down: whether an arrow has looked around with it
         self._turn_detail_limit = TURN_DETAIL_BLOCKS
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
@@ -130,13 +133,7 @@ class BlocksRoom(Room):
 
     def on_leave(self):
         self.code_panel = None
-        self._tab.other_key()
-        self._tilt(False)
-
-    def hold_progress(self):
-        held = self._tab.progress()
-        verb = "look from the front" if self._peek else "look from above"
-        return None if held is None else hold_status(held, "Tab", f"{{{PEEK_PIC}}}", verb)
+        self._tab = None
 
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
@@ -379,50 +376,69 @@ class BlocksRoom(Room):
     def _world(self, vx: int, vz: int) -> tuple:
         return turned(vx, vz, -self._side)
 
-    # ---------------------------------------------------------------- turning
+    # ---------------------------------------------------------------- looking around
+    @property
+    def _quarters(self) -> int:
+        """The quarter turn nearest where the floor is headed: the side that faces the viewer."""
+        return math.floor((self._goal[0] + 45) / 90)
+
+    @property
+    def _side(self) -> int:
+        return self._quarters % 4
+
+    def _off(self) -> float:
+        """Degrees the floor is headed for off its side's straight-on view, -45 up to 45."""
+        return self._goal[0] - 90 * self._quarters
+
     def turn_view(self, quarters: int = 1):
-        """Tab, here or in Time Travel, or Shift with Left or Right: a live quarter turn, the platter's
-        near edge going right, or left for -1. One more while it turns carries on around."""
-        self._move_camera(TURN_S, turn=quarters)
-        self._side = (self._side + quarters) % 4
+        """Tab, here or in Time Travel: the floor turns to its next side, straight on, the platter's near
+        edge going right, or left for -1. One more while it turns carries on around."""
+        whole = math.floor if quarters > 0 else math.ceil
+        self._aim(yaw=90.0 * (whole(self._goal[0] / 90) + quarters))
         self.announce(*SIDES[self._side])
 
     def face_front(self):
-        """Back to the front, the short way around."""
-        if self._side:
-            self.turn_view((2 - self._side) % 4 - 2)
+        """Back to the front and the resting tilt, the short way around."""
+        self._aim(yaw=360.0 * round(self._goal[0] / 360), tilt=REST_TILT)
 
-    def _tilt(self, peek: bool):
-        """Held Tab eases the view up to look down from above; letting go eases it back."""
-        if peek != self._peek:
-            self._move_camera(TILT_S, peek=peek)
-            self._peek = peek
+    def _look_around(self, direction: str, held: bool):
+        """Tab (or Shift) with an arrow: one step around or up or down. A held arrow keeps the view just moving."""
+        axis, step = LOOKS[direction]
+        if held and abs(self._goal[axis] - self._look[axis]) > abs(step) / 4:
+            return
+        goal = self._goal[axis] + step
+        self._aim(**{"tilt" if axis else "yaw": goal})
 
-    def _move_camera(self, seconds: float, turn: int = 0, peek=None):
-        """From wherever the view is now, even mid-move, on to `turn` more quarter turns or the other tilt."""
-        start = self._moving() or (float(self._side), float(self._peek))
-        turns, tilt = self._motion[3] if self._motion else start
-        self._motion = (time.monotonic(), seconds, start, (turns + turn, tilt if peek is None else float(peek)))
-        if self._motion_timer is None:
-            self._motion_timer = self.app.timers.every(1 / 60, self._motion_tick)
-        self._changed()
+    def _aim(self, yaw=None, tilt=None):
+        """Set where the view is headed; it eases there from wherever it is now, even mid-move."""
+        if yaw is not None:
+            self._goal[0] = float(yaw)
+            self._goal[2] = abs(self._off())
+        if tilt is not None:
+            self._goal[1] = float(min(max(tilt, TILTS[0]), TILTS[1]))
+        if self._look != self._goal and self._look_timer is None:
+            self._looked = time.monotonic()
+            self._look_timer = self.app.timers.every(1 / 60, self._look_tick)
+        self.app.invalidate()
 
-    def _motion_tick(self):
-        if self._moving() is None:
-            self._motion_timer.stop()
-            self._motion_timer = None
+    def _look_tick(self):
+        now = time.monotonic()
+        dt, self._looked = now - self._looked, now
+        for axis, goal in enumerate(self._goal):
+            gap = goal - self._look[axis]
+            step = min(abs(gap) * min(1.0, LOOK_PULL * dt), LOOK_SPEED * dt)
+            self._look[axis] = goal if abs(gap) - step < LOOK_NEAR else self._look[axis] + math.copysign(step, gap)
+        if self._look == self._goal:
+            self._look_timer.stop()
+            self._look_timer = None
+            turns = 360.0 * (self._goal[0] // 360)      # the same view, without the turns behind it
+            self._goal[0] -= turns
+            self._look[0] -= turns
         self.app.invalidate()
 
     def _moving(self):
-        """(quarter turns, tilt) while the view is moving, else None."""
-        if self._motion is None:
-            return None
-        start, seconds, frm, to = self._motion
-        p = (time.monotonic() - start) / seconds
-        if p >= 1:
-            self._motion = None
-            return None
-        return tuple(a + (b - a) * ease(p) for a, b in zip(frm, to))
+        """(turn, tilt, fit) in degrees while the view is on its way to its goal, else None."""
+        return None if self._look == self._goal else tuple(self._look)
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
@@ -430,9 +446,9 @@ class BlocksRoom(Room):
             self._stamps.clear()
         if self.code_panel is None and isinstance(action, ControlAction) and action.action == "space":
             return self._space(action)
-        if isinstance(action, ControlAction) and action.action == "tab" and (self.code_panel is None or self._tab.fired):
+        if self.code_panel is None and isinstance(action, ControlAction) and action.action == "tab":
             return self._tab_key(action)
-        if self._escape_from_above(action):
+        if self._escape_tilt(action):
             return
         stacking = isinstance(action, ControlAction) and action.action == "enter" and action.space_held
         if stacking and self.code_panel is None:
@@ -462,19 +478,21 @@ class BlocksRoom(Room):
             self._lay_pending()
 
     def _tab_key(self, action):
-        """A tap of Tab turns the floor once it is let go; a hold switches between looking from
-        the front and from above, which stays until the next hold or Esc."""
+        """Tab held with the arrows looks around; let go with no arrow pressed, it turns the floor to its next side."""
         if action.is_down and not action.is_repeat:
-            self._tab.down()
-        elif not action.is_down and self._tab.up():
-            self.turn_view()
+            self._tab = False
+        elif not action.is_down:
+            if self._tab is False:
+                self.turn_view()
+            self._tab = None
+        self.app.invalidate()
 
-    def _escape_from_above(self, action) -> bool:
-        """Esc from above goes back to the front view instead of opening the menu, as it stops Music's loop."""
-        if not (self._peek and self.code_panel is None and isinstance(action, ControlAction)
+    def _escape_tilt(self, action) -> bool:
+        """Esc with the view tilted puts it back as it was instead of opening the menu, as it stops Music's loop."""
+        if not (self._goal[1] != REST_TILT and self.code_panel is None and isinstance(action, ControlAction)
                 and action.action == "escape" and action.is_down and not action.is_repeat):
             return False
-        self._tilt(False)
+        self._aim(tilt=REST_TILT)
         self.app._escape_consumed_by_mode = True
         return True
 
@@ -516,13 +534,15 @@ class BlocksRoom(Room):
             self._erase()
 
     def _navigate(self, action):
-        if action.with_shift:
+        looking = self._tab is not None
+        if looking or action.with_shift:
             self.echo.flush()
-            if action.direction not in TURNS:
+            if looking or not LOOKS[action.direction][0]:
+                self._tab = looking or None
+                self._look_around(action.direction, action.is_repeat)
+            else:
                 self._step_height(STEPS[action.direction][1], wrap=not action.is_repeat)
                 self._face(RISE if action.direction == "up" else SINK)
-            elif not (action.is_repeat and self._moving()):    # held, it turns a quarter at a time
-                self.turn_view(TURNS[action.direction])
             return
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
             self._arrow_repeat_count += 1
@@ -550,7 +570,7 @@ class BlocksRoom(Room):
         """Bring the cached layers, `size` big with the floor fitted to `fit`, up to date: everything for
         a new camera, the scene for a new cursor row, else only around the columns whose blocks changed;
         then the towers in the cursor's way."""
-        cam = resting_camera(PEEK_PITCH if self._peek else REST_PITCH, *fit)
+        cam = resting_camera(self._off(), self._goal[1], *fit)
         vx, row = self._view(self._x, self._z)
         fresh = self._scene is None or cam is not self._cam or self._scene.get_size() != size
         if fresh or self._dirty or row != self._painter.row:
@@ -678,7 +698,8 @@ class BlocksRoom(Room):
             g.surface.set_clip(None)
         self.bar_row = draw_mode_switch(g, self.header_band(g, rect), tuple(pic for _, pic in SIDES),
                                         self._side, self._color, wheel=None if self.code_panel else wheel_chip(self),
-                                        after=("hold Tab", PEEK_PIC, self._peek), reserve=self.header_reserve(g))
+                                        after=("Tab", TURN_PIC, self._tab is not None, f"+ {LEFT} {UP} {DOWN} {RIGHT}"),
+                                        reserve=self.header_reserve(g))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
@@ -692,12 +713,13 @@ class BlocksRoom(Room):
             top = bbox([at(vx + a, by + 1, vz + b) for a in (0, 1) for b in (0, 1)]).move(area.topleft)
             self._badge.draw(g, self.app, self._last[1], self._mix, self._color, top, area)
 
-    def _draw_moving(self, g, area, quarter_turns, tilt):
+    def _draw_moving(self, g, area, turn, tilt, fit):
         """One frame of the view moving: the world through the same camera as the resting views, turned
-        `quarter_turns` around and tipped `tilt` of the way down, so both ends land on those pictures; only
+        `turn` degrees around, looking `tilt` degrees down and sized as from `fit` degrees off straight
+        on, so both ends land on those pictures; only
         the cursor sits it out. A frame over budget drops seams and shadows for builds this big from then on."""
         start = time.monotonic()
-        cam = Camera(math.pi / 2 * quarter_turns, REST_PITCH + (PEEK_PITCH - REST_PITCH) * tilt, area.w, area.h, area.topleft)
+        cam = Camera(math.radians(turn), math.radians(tilt), area.w, area.h, area.topleft, fit=math.radians(fit))
         detailed = len(self._blocks) <= self._turn_detail_limit
         painter = Painter(cam, self._blocks, detail=detailed)
         painter.paint_floor(g.surface)

@@ -1015,7 +1015,7 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     Slides right when the chips would run past r's left edge, as far as the
     widest of chips and the other chip sets in also, so it holds still when a
     room swaps its chips. `after` = (key, picture, on) is a chip right of the switch
-    for what else Tab does, lit while that is on. Slides left, if it must, to keep clear
+    for what else Tab does, lit while that is on; a fourth item is words after its key. Slides left, if it must, to keep clear
     of the `reserve` px at r's right end. Returns the color bar's row: r from its left edge
     to the color wheel chip's right, or None without the chip."""
     px = header_px(g)
@@ -1038,8 +1038,8 @@ def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, s
                          active)
     right = piece.right
     if after:
-        key, picture, on = after
-        chip = (key, _switch_picture(g, px, picture), "", on)
+        key, picture, on, *noun = after
+        chip = (key, _switch_picture(g, px, picture), "", on, *noun)
         with g.drawing_on(pygame.Surface((1, 1))):
             w = _draw_key_chip(g, px, 0, cy, *chip).w
         right = _draw_key_chip(g, px, piece.right + gap + w, cy, *chip).right

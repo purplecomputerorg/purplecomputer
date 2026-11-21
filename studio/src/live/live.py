@@ -149,7 +149,6 @@ def demo(letters=False):
             room._stop_letter()  # the switch's sample "A" would sound like the demo's first letter
     elif _app.active_room == "blocks":
         room.face_front()
-        room._tilt(False)
     _app.invalidate()
 
 

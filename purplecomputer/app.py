@@ -1294,11 +1294,8 @@ class PurpleApp:
                 isinstance(action, ControlAction) and action.is_down and action.action in ("space", "backspace")):
             self._land_time_travel()
             return False
-        room = self.rooms[self._time_travel["room"]]     # its view is not history: look at any moment from any side
         if isinstance(action, NavigationAction):
-            if action.with_shift and hasattr(room, "look_around"):
-                room.look_around(action.direction, action.is_repeat)
-            elif action.direction in ("left", "right") and not action.is_repeat:
+            if action.direction in ("left", "right") and not action.is_repeat:
                 self._press_time_travel(action.direction)
         elif isinstance(action, ControlAction) and action.is_down and not action.is_repeat:
             if action.action == "enter":
@@ -1306,8 +1303,8 @@ class PurpleApp:
             elif action.action == "escape":
                 self._escape_consumed_by_mode = True
                 self._cancel_time_travel()
-            elif action.action == "tab" and hasattr(room, "face_front"):
-                room.face_front()
+            elif action.action == "tab" and (look := getattr(self.rooms[self._time_travel["room"]], "look_around", None)):
+                look()                          # a view, not history: look at any moment from any side
         return True
 
     # ------------------------------------------------------------------ volume

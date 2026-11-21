@@ -178,13 +178,13 @@ def test_blocks_echo_writes_typing_and_space():
     async def go():
         app, blocks = await _room("blocks")
         await type_text(app, "ab")
-        await press(app, "enter")       # turns typing upward, ending the stroke
+        await press(app, "enter")       # builds up on the b, ending the stroke
         blocks.set_brush_color("#48D370")
         blocks._control("space")
-        blocks._control("space")
+        blocks._control("enter")
         assert blocks.echo.fresh == "right ab"
         blocks.open_code_panel()
-        assert blocks.code_panel.note[0] == "green up 2"
+        assert blocks.code_panel.note[0] == "blue up 1 green up 2"
     run(go())
 
 
@@ -386,16 +386,14 @@ def test_blocks_code_back_and_front_go_in_depth():
     run(go())
 
 
-def test_blocks_esc_then_space_opens_code_and_tab_still_goes_to_the_front():
+def test_blocks_esc_then_space_opens_code_and_tab_still_turns():
     async def go():
         app, blocks = await _room("blocks")
-        blocks._aim(yaw=90)
-        blocks._look = list(blocks._goal)
         await press(app, "escape")
         await press(app, "space")
         assert blocks.code_panel is not None and app._panel is blocks.code_panel
         await press(app, "tab")
-        assert blocks._goal[0] == 0
+        assert blocks._goal[0] == 18
     run(go())
 
 

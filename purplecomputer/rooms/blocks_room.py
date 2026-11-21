@@ -1,10 +1,11 @@
 """Blocks room: a floor seen from above and in front, where every letter (or
 Space, in the current color) drops a block of its sticker color into the
 cursor's column, then moves on the way the cursor last went: along an arrow,
-or up after Enter or Shift+Up/Down. Enter (once already going up) walks the
-cursor up a level at a time, onto blocks too (typing there mixes into
-them), starting over at the floor after a pause at the top, and Tab held with
-Up or Down moves it either way; that height stays put as
+or up. Enter builds up: it drops a block in the current color on top of the
+one just laid (or over the cursor, if it has moved since) and goes on up, so
+holding it grows a tower, until the column is full. Shift with Up or Down moves
+the cursor's height without building, onto blocks too (typing there mixes
+into them), and typing then goes that way; that height stays put as
 the arrows move, for building sideways. At the top, letters mix into the top
 block.
 Every block goes in the first free spot at or above the cursor's height, so
@@ -13,11 +14,11 @@ blocks; only the code line keeps the height it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
-opens the color bar, and Shift with the arrows looks around the build: Left
-and Right turn it a little at a time to any angle, Up and Down tilt the view
-from the side to nearly straight down, and a tap of Tab goes back to the
-front. The arrows always go the way they point most on screen. The code line
-opens from the Esc menu."""
+opens the color bar. A tap of Tab turns the build a little, and Tab held with
+the arrows looks around it: Left and Right turn it a little at a time to any
+angle, Up and Down tilt the view from the side to nearly straight down. The
+arrows always go the way they point most on screen. The code line opens from
+the Esc menu."""
 
 import asyncio
 import math
@@ -42,14 +43,13 @@ from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, 
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 REST_TILT = round(math.degrees(REST_PITCH))
-# What Shift with an arrow does to the view, as (0 to turn or 1 to tilt, degrees). A quarter turn is
+# What Tab with an arrow does to the view, as (0 to turn or 1 to tilt, degrees). A quarter turn is
 # five turns and none stops on a diagonal, where two arrows would point the same way.
 LOOKS = {"left": (0, -18), "right": (0, 18), "up": (1, 15), "down": (1, -15)}
 TILTS = (15, 75)             # degrees down the view looks, from the side to nearly straight down: the eye stays over every block and in front of every row
 LOOK_PULL, LOOK_SPEED, LOOK_NEAR = 10.0, 240.0, 0.5   # the view closes this share of the way to its goal a second, at most this many degrees a second, and lands within this
 TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
-FRONT = ("Front", "modes/front.png")   # Tab's word and picture
 CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
 CAGE_PAD = 0.18               # in cells: the wire box around the landing block
 # The direction arrow as (along, across) points in cells, from the box center outward.
@@ -63,10 +63,10 @@ WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), (
         "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
         RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
 TURN_PIC = "hints/turn.png"
-HINT = "Type to build!  {Enter} goes up {hints/up.png}"
+HINT = "Type to build!  {Enter} builds up {hints/up.png}"
 ARROWS = f"{LEFT} {UP} {DOWN} {RIGHT}"
-SHIFT_HINT = f"{PICK_HINT}   {ARROWS} {{{TURN_PIC}}}"
-TAB_HINT = f"{UP} {DOWN} {{hints/up_down.png}}"
+SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
+TAB_HINT = f"{ARROWS} {{{TURN_PIC}}}"
 
 
 def turned(x: int, z: int, quarters: int) -> tuple:
@@ -108,6 +108,7 @@ class BlocksRoom(Room):
         self._badge = color_recipe.HoldBadge()
         self._mixed = None                # (keycaps, color) of the last block that mixed
         self._last = None             # (pos, key) of the block just dropped
+        self._left = None             # (column, cursor) when typing moved on from the block it laid
         self._next = None             # where a run up or down the column (or a code run) goes on from
         self._dir = "right"           # the way typing builds: a key of WRAP
         # Where the view is headed, in degrees: how far the floor has turned, how far down the view looks,
@@ -115,7 +116,7 @@ class BlocksRoom(Room):
         self._goal = [0.0, float(REST_TILT), 0.0]
         self._look = list(self._goal)
         self._look_timer = self._looked = None
-        self._tab = None              # while Tab is down: whether an arrow has moved the cursor's height with it
+        self._tab = None              # while Tab is down: whether an arrow has looked around with it
         self._turn_detail_limit = TURN_DETAIL_BLOCKS
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
@@ -181,7 +182,7 @@ class BlocksRoom(Room):
         self._x, self._z = min(max(x, 0), WIDTH - 1), min(max(z, 0), DEPTH - 1)
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._last = self._next = self._mixed = None
+        self._last = self._next = self._mixed = self._left = None
         self._stamps.clear()
         self._dir = "right"
         self.echo.reset()
@@ -251,8 +252,9 @@ class BlocksRoom(Room):
 
     def _build(self, keep_height: bool = False):
         """A typed block, then on to the next cell the way the cursor last went."""
-        y = self._cursor_y()
+        y, column = self._cursor_y(), (self._x, self._z)
         self._advance(y, keep_height, inside=self._place(y))
+        self._left = column, (self._x, self._z)
 
     def _advance(self, y: int, keep_height: bool = False, inside: bool = False):
         """On from the cursor's column at height y the way it last went,
@@ -394,15 +396,12 @@ class BlocksRoom(Room):
         return self._goal[0] - 90 * self._quarters
 
     def face_front(self):
-        """Tab, here or in Time Travel: back to the front and the resting tilt, the short way around."""
-        home = [360.0 * round(self._goal[0] / 360), REST_TILT, 0]
-        if self._goal != home:
-            self._aim(*home[:2])
-            self.announce(*FRONT)
+        """Back to the front and the resting tilt, the short way around."""
+        self._aim(yaw=360.0 * round(self._goal[0] / 360), tilt=REST_TILT)
 
-    def look_around(self, direction: str, held: bool = False):
-        """Shift with an arrow, here or in Time Travel: one step around, the near edge going the arrow's
-        way, or up or down. A held arrow keeps the view just moving."""
+    def look_around(self, direction: str = "right", held: bool = False):
+        """A tap of Tab, here or in Time Travel, or Tab with an arrow: one step around, the near edge
+        going the arrow's way, or up or down. A held arrow keeps the view just moving."""
         axis, step = LOOKS[direction]
         if not (held and abs(self._goal[axis] - self._look[axis]) > abs(step) / 4):
             self._aim(**{"tilt" if axis else "yaw": self._goal[axis] + step})
@@ -446,20 +445,17 @@ class BlocksRoom(Room):
             return self._space(action)
         if self.code_panel is None and isinstance(action, ControlAction) and action.action == "tab":
             return self._tab_key(action)
-        stacking = isinstance(action, ControlAction) and action.action == "enter" and action.space_held
-        if stacking and self.code_panel is None:
-            self._dir = RISE    # Space + Enter lays a column, as Space + arrows lay a line
         self._lay_pending()
         if self.code_panel is not None:
             result = await self.code_panel.handle(action)
             if result == "tab_fallthrough":
-                self.face_front()
+                self.look_around()
             elif result == "close":
                 self.close_code_panel()
             return
         if isinstance(action, ControlAction):
             if action.is_down and (not action.is_repeat or action.action in ("backspace", "enter")):
-                self._control("space" if stacking else action.action, action.is_repeat)
+                self._control(action.action)
         elif isinstance(action, NavigationAction):
             self._navigate(action)
         elif isinstance(action, CharacterAction):
@@ -467,19 +463,19 @@ class BlocksRoom(Room):
         self.app.invalidate()
 
     def _space(self, action):
-        """Space's block waits for release or the next key, so Space + Enter knows to go up first."""
+        """Space's block waits for release or the next key."""
         if action.is_down and not action.is_repeat:
             self._space_pending = True
         elif not action.is_down:
             self._lay_pending()
 
     def _tab_key(self, action):
-        """Tab held with Up or Down moves the cursor's height; let go with no arrow pressed, it goes back to the front."""
+        """Tab held with the arrows looks around; let go with no arrow pressed, it turns the build a little."""
         if action.is_down and not action.is_repeat:
             self._tab = False
         elif not action.is_down:
             if self._tab is False:
-                self.face_front()
+                self.look_around()
             self._tab = None
         self.app.invalidate()
 
@@ -507,28 +503,40 @@ class BlocksRoom(Room):
         self.echo.color(self._color)
         self.echo.step(WORDS[way])
 
-    def _control(self, name: str, is_repeat: bool = False):
-        if name != "space":
-            self.echo.flush()
+    def _control(self, name: str):
         if name == "space":
             self._lay(self._dir)
             self._build()
-        elif name == "enter" and self._dir != RISE:
-            self._dir = RISE                            # first, just turn typing upward
         elif name == "enter":
-            self._step_height(1, wrap=not is_repeat)    # a held Enter stops at the top
+            self._stack()
         elif name == "backspace":
+            self.echo.flush()
             self._erase()
 
-    def _navigate(self, action):
-        if action.with_shift or self._tab is not None:
+    def _stack(self):
+        """Enter: a block in the brush color in the first free spot over the one typing just laid, if
+        the cursor is still where that left it, else over the cursor; then on up. A full column stops it."""
+        if self._dir != RISE:
             self.echo.flush()
-            if action.with_shift:
-                self.look_around(action.direction, action.is_repeat)
-            elif LOOKS[action.direction][0]:
-                self._tab = True
-                self._step_height(STEPS[action.direction][1], wrap=not action.is_repeat)
-                self._face(RISE if action.direction == "up" else SINK)
+            if self._left and self._left[1] == (self._x, self._z):
+                self._x, self._z = self._left[0]
+            self._dir = RISE
+        column, self._next = (self._x, self._z), None
+        if self._free(range(self._hover, HEIGHT)):
+            self._lay(RISE)
+            self._build()
+            self._x, self._z = column       # the top block laid, it stays there rather than start the next column
+
+    def _navigate(self, action):
+        if self._tab is not None:
+            self._tab = True
+            self.echo.flush()
+            self.look_around(action.direction, action.is_repeat)
+            return
+        if action.with_shift and LOOKS[action.direction][0]:
+            self.echo.flush()
+            self._step_height(STEPS[action.direction][1], wrap=not action.is_repeat)
+            self._face(RISE if action.direction == "up" else SINK)
             return
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
             self._arrow_repeat_count += 1
@@ -680,10 +688,9 @@ class BlocksRoom(Room):
             g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
             self._draw_moving(g, area, *moving)
             g.surface.set_clip(None)
-        home = self._goal[:2] == [0, REST_TILT]
-        self.bar_row = draw_mode_switch(g, self.header_band(g, rect), FRONT[1:], 0 if home else 1, self._color,
-                                        wheel=None if self.code_panel else wheel_chip(self),
-                                        after=("Shift", TURN_PIC, not home, f"+ {ARROWS}"), reserve=self.header_reserve(g))
+        self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._tab is not None else 1,
+                                        self._color, wheel=None if self.code_panel else wheel_chip(self),
+                                        reserve=self.header_reserve(g))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)

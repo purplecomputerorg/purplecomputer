@@ -1,12 +1,12 @@
 """Blocks room: letters and Space drop blocks at the cursor and move on the
-way it last went (along an arrow, or up after Enter), Enter walks the
-cursor's height up and starts over from the floor (not while held), Tab
-with Up or Down moves it either way, that height carries to other columns, a
+way it last went (along an arrow, or up), Enter drops a block on top of the
+one just laid and goes on up (held, it stops at the top), Shift
+with Up or Down moves the cursor's height either way, that height carries to other columns, a
 block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
-one dropped, holding a letter or Space while arrowing lays a line, Shift with the
-arrows looks around the build to any angle and tilts the view, with arrows still moving the way they point most,
-Tab goes back to the front, blocks in front of the
+one dropped, holding a letter or Space while arrowing lays a line, a tap of Tab
+turns the build a little and Tab held with the arrows looks around it to any angle and tilts the view, with arrows
+still moving the way they point most, blocks in front of the
 cursor fade, a whole tower at a time, where they hide its glass column or landing block, and the Esc picker reaches the room with
 4."""
 
@@ -23,7 +23,7 @@ from purplecomputer.palette import get_key_color
 
 
 def _hold_tab(room):
-    """Tab down, as the room sees it: Up and Down now move the cursor's height."""
+    """Tab down, as the room sees it: the arrows now look around."""
     room._tab = False
 
 
@@ -107,23 +107,21 @@ def test_in_the_right_hand_corner_typing_turns_left():
     run(go())
 
 
-def test_tab_up_to_the_ceiling_turns_typing_right():
+def test_shift_up_to_the_ceiling_turns_typing_right():
     async def go():
         app, room = _blocks()
-        _hold_tab(room)
         for i in range(HEIGHT):
-            await app._dispatch_keyboard_action(NavigationAction(direction="up", is_repeat=i > 0))
+            await app._dispatch_keyboard_action(NavigationAction(direction="up", shift_held=True, is_repeat=i > 0))
         await type_text(app, "ab")
         assert {(5, 5, HEIGHT - 1), (6, 5, HEIGHT - 1)} == set(room._blocks)
     run(go())
 
 
-def test_tab_down_builds_downward():
+def test_shift_down_builds_downward():
     async def go():
         app, room = _blocks()
         room._hover = 3
-        _hold_tab(room)
-        await press(app, "down")
+        await press(app, "down", shift_held=True)
         await type_text(app, "ab")
         assert set(room._blocks) == {(5, 5, 2), (5, 5, 1)}
     run(go())
@@ -135,59 +133,75 @@ def test_typing_builds_the_way_the_cursor_last_moved():
         await press(app, "right")
         await type_text(app, "abc")
         assert set(room._blocks) == {(6, 5, 0), (7, 5, 0), (8, 5, 0)} and room._x == 9
-        await press(app, "enter")               # first Enter only turns typing upward
-        assert room._cursor_y() == 0
+        await press(app, "enter")               # Enter builds up on the block just laid, in its color
+        assert room._blocks[(8, 5, 1)] == get_key_color("c") and (room._x, room._cursor_y()) == (8, 2)
         await type_text(app, "ab")
-        assert {(9, 5, 0), (9, 5, 1)} <= set(room._blocks)
+        assert {(8, 5, 2), (8, 5, 3)} <= set(room._blocks)
+        await press(app, "right")               # nothing is locked in: off sideways again
+        await type_text(app, "a")
+        assert (9, 5, 0) in room._blocks and room._x == 10
+        await press(app, "right")
+        await press(app, "enter")               # the cursor has moved since: Enter builds where it is
+        assert (11, 5, 0) in room._blocks and (9, 5, 1) not in room._blocks
     run(go())
 
 
-def test_enter_walks_up_and_starts_over_from_the_floor():
+def test_holding_enter_grows_a_tower_and_stops_at_the_top():
     async def go():
         app, room = _blocks()
-        await type_text(app, "aaa")                 # the cursor starts at 3
-        for y in range(4, HEIGHT):
-            await press(app, "enter", is_repeat=y > 4)
-            assert room._cursor_y() == y
-        await press(app, "enter", is_repeat=True)   # held: sticks at the top
-        assert room._cursor_y() == HEIGHT - 1
-        await press(app, "enter")                   # pressed again: the floor, inside the block there
-        assert room._cursor_y() == 0 and len(room._blocks) == 3
+        await press(app, "right")
+        await press(app, "q", shift_held=True)      # pick a color, then build up in it
+        for i in range(HEIGHT + 3):
+            await press(app, "enter", is_repeat=i > 0)
+        assert room._blocks == {(6, 5, y): get_key_color("q") for y in range(HEIGHT)}
+        assert (room._x, room._z) == (6, 5)
     run(go())
 
 
-def test_tab_up_and_down_held_stop_at_the_ends_and_a_fresh_press_wraps():
+def test_space_then_enter_stacks_on_the_block_space_laid():
+    async def go():
+        app, room = _blocks()
+        await press(app, "right")
+        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True, space_held=True))
+        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True, space_held=True))
+        assert set(room._blocks) == {(6, 5, 0), (6, 5, 1), (6, 5, 2)}
+    run(go())
+
+
+def test_shift_up_and_down_held_stop_at_the_ends_and_a_fresh_press_wraps():
     async def go():
         app, room = _blocks()
         await press(app, "a")
-        _hold_tab(room)
         for i in range(HEIGHT + 2):
-            await press(app, "up", is_repeat=i > 0)
+            await press(app, "up", shift_held=True, is_repeat=i > 0)
         assert room._cursor_y() == HEIGHT - 1 and (room._x, room._z) == (5, 5)
         for i in range(HEIGHT + 2):
-            await press(app, "down", is_repeat=i > 0)
+            await press(app, "down", shift_held=True, is_repeat=i > 0)
         assert room._cursor_y() == 0                # on the block at 0
-        await press(app, "down")
+        await press(app, "down", shift_held=True)
         assert room._cursor_y() == HEIGHT - 1
-        await press(app, "up")
+        await press(app, "up", shift_held=True)
         assert room._cursor_y() == 0
     run(go())
 
 
-def test_a_tap_of_shift_then_an_arrow_looks_around_too():
+def test_a_tap_of_shift_then_up_or_down_moves_the_height():
     async def go():
         app, room = _blocks()
         await press(app, "up", shifted=True)
-        assert room._goal[1] == REST_TILT + LOOKS["up"][1] and room._cursor_y() == 0 and (room._x, room._z) == (5, 5)
+        assert room._cursor_y() == 1 and (room._x, room._z) == (5, 5)
+        await press(app, "down", shifted=True)
+        assert room._cursor_y() == 0
     run(go())
 
 
-def test_enter_stops_on_blocks_in_the_way_and_typing_mixes_into_them():
+def test_shift_up_steps_onto_blocks_in_the_way_and_typing_mixes_into_them():
     async def go():
         app, room = _blocks()
         room._blocks[(5, 5, 2)] = room._blocks[(5, 5, HEIGHT - 1)] = "#ff0000"
         for y in range(1, HEIGHT):
-            await press(app, "enter")
+            await press(app, "up", shift_held=True)
             assert room._cursor_y() == y
         await press(app, "a")
         assert len(room._blocks) == 2 and room._blocks[(5, 5, HEIGHT - 1)] != "#ff0000"
@@ -213,7 +227,7 @@ def test_chosen_height_stays_while_walking():
     async def go():
         app, room = _blocks()
         for _ in range(3):
-            await press(app, "enter")
+            await press(app, "up", shift_held=True)
         await press(app, "right")
         await press(app, "right")
         await type_text(app, "qq")
@@ -228,14 +242,13 @@ def test_backspace_eats_down_from_the_cursor_then_steps_left():
         app, room = _blocks()
         await type_text(app, "aaa")
         await press(app, "right")
-        await press(app, "enter")               # stack here rather than along
-        await type_text(app, "aa")
-        await press(app, "enter")
-        await press(app, "enter")
+        await type_text(app, "a")
+        await press(app, "enter")               # on top of it rather than along
+        for _ in range(2):
+            await press(app, "up", shift_held=True)
         await type_text(app, "b")               # floating above the column
-        await press(app, "enter")
-        await press(app, "enter")
-        await press(app, "enter")
+        for _ in range(3):
+            await press(app, "up", shift_held=True)
         await press(app, "backspace")           # the floating block first, the one nearest below
         assert (6, 5, 4) not in room._blocks and room._cursor_y() == 4
         await press(app, "backspace")
@@ -450,22 +463,25 @@ def test_from_every_side_blocks_stay_put_and_arrows_follow_the_screen():
     run(go())
 
 
-def test_shift_with_left_or_right_turns_a_little_at_a_time_and_the_arrows_go_the_way_they_point_most():
+def test_tab_with_left_or_right_turns_a_little_at_a_time_and_the_arrows_go_the_way_they_point_most():
     async def go():
         app, room = _blocks()
+        _hold_tab(room)
         step = LOOKS["right"][1]
         for turns in range(1, 6):
-            await press(app, "right", shift_held=True)
+            await press(app, "right")
             _settle(room)
             app._draw()
             assert room._goal[0] == step * turns and room._side == (turns * step + 45) // 90
             assert abs(room._off()) < 45
         assert room._goal[0] == 90 and room._side == 1              # five turns is a quarter of the way around
-        await press(app, "left", shift_held=True)
+        await press(app, "left")
+        room._tab = None
         await press(app, "right")
+        _hold_tab(room)
         assert room._side == 1 and (room._x, room._z) == (5, 4)     # a little off the side still moves as that side does
         for _ in range(5):
-            await press(app, "left", shift_held=True)
+            await press(app, "left")
             _settle(room)
         assert room._side == 0 and room._goal[0] == 342             # on past the front, with no turns left behind it
     run(go())
@@ -474,14 +490,15 @@ def test_shift_with_left_or_right_turns_a_little_at_a_time_and_the_arrows_go_the
 def test_a_held_turn_keeps_the_view_just_moving_and_a_press_mid_turn_carries_on():
     async def go():
         app, room = _blocks()
+        _hold_tab(room)
         step = LOOKS["right"][1]
-        await press(app, "right", shift_held=True)
-        await press(app, "right", shift_held=True, is_repeat=True)     # held: waits until the view has nearly caught up
+        await press(app, "right")
+        await press(app, "right", is_repeat=True)     # held: waits until the view has nearly caught up
         assert room._goal[0] == step and room._look_timer is not None
-        await press(app, "right", shift_held=True)                     # pressed again: carries on around
+        await press(app, "right")                     # pressed again: carries on around
         assert room._goal[0] == 2 * step
         room._look[0] = 2 * step - 1
-        await press(app, "right", shift_held=True, is_repeat=True)
+        await press(app, "right", is_repeat=True)
         assert room._goal[0] == 3 * step
     run(go())
 
@@ -549,65 +566,57 @@ async def _real_key(app, sm, keycode, is_down):
         await app._dispatch_keyboard_action(action)
 
 
-def test_tapping_real_tab_goes_back_to_the_front_when_it_is_let_go():
+def test_tapping_real_tab_turns_a_little_when_it_is_let_go():
     async def go():
         app, room = _blocks()
         sm = KeyboardStateMachine()
-        room._aim(yaw=234, tilt=60)
-        _settle(room)
         await _real_key(app, sm, KeyCode.KEY_TAB, True)
-        assert room._goal[:2] == [234, 60] and room._tab is False
+        assert room._goal[0] == 0 and room._tab is False
         await _real_key(app, sm, KeyCode.KEY_TAB, False)
-        assert room._goal == [360, REST_TILT, 0] and room._tab is None      # the short way around
-        _settle(room)
-        assert room._goal[0] == 0 and room._side == 0
-        toast = room._toast
-        await press(app, "tab")
-        assert room._toast is toast and room._look_timer is None            # already there: nothing to say or do
+        assert room._goal == [LOOKS["right"][1], REST_TILT, LOOKS["right"][1]] and room._tab is None
     run(go())
 
 
-def test_real_tab_held_with_up_or_down_moves_the_height_and_then_keeps_the_view():
+def test_real_tab_held_with_the_arrows_looks_around_and_then_does_not_turn():
     async def go():
         app, room = _blocks()
         sm = KeyboardStateMachine()
-        room._aim(yaw=18)
-        _settle(room)
         await _real_key(app, sm, KeyCode.KEY_TAB, True)
-        for key in (KeyCode.KEY_UP, KeyCode.KEY_UP, KeyCode.KEY_DOWN, KeyCode.KEY_LEFT):
-            await _real_key(app, sm, key, True)
-            await _real_key(app, sm, key, False)
-        assert room._hover == 1 and room._dir == SINK and (room._x, room._z) == (5, 5)
-        await _real_key(app, sm, KeyCode.KEY_TAB, False)
-        assert room._goal[0] == 18 and room._tab is None
-    run(go())
-
-
-def test_real_shift_with_the_arrows_looks_around_and_both_hands_build_in_that_view():
-    async def go():
-        app, room = _blocks()
-        sm = KeyboardStateMachine()
-        await _real_key(app, sm, KeyCode.KEY_LEFTSHIFT, True)
         for key in (KeyCode.KEY_UP, KeyCode.KEY_LEFT):
             await _real_key(app, sm, key, True)
             await _real_key(app, sm, key, False)
             _settle(room)
-        await _real_key(app, sm, KeyCode.KEY_LEFTSHIFT, False)
-        assert room._goal[:2] == [360 + LOOKS["left"][1], REST_TILT + LOOKS["up"][1]] and (room._x, room._z) == (5, 5)
-        assert room._hover == 0 and room._side == 0
+        look = [360 + LOOKS["left"][1], REST_TILT + LOOKS["up"][1]]
+        assert room._goal[:2] == look and (room._x, room._z) == (5, 5) and room._hover == 0
+        await _real_key(app, sm, KeyCode.KEY_TAB, False)
+        assert room._goal[:2] == look and room._side == 0
         await press(app, "right")
         await type_text(app, "a")
         app._draw()
-        assert room._x == 7 and (6, 5, 0) in room._blocks
+        assert room._x == 7 and (6, 5, 0) in room._blocks    # both hands build again, in the view as it was left
+    run(go())
+
+
+def test_real_shift_with_up_or_down_moves_the_height_and_sideways_just_moves():
+    async def go():
+        app, room = _blocks()
+        sm = KeyboardStateMachine()
+        await _real_key(app, sm, KeyCode.KEY_LEFTSHIFT, True)
+        for key in (KeyCode.KEY_UP, KeyCode.KEY_UP, KeyCode.KEY_DOWN, KeyCode.KEY_RIGHT):
+            await _real_key(app, sm, key, True)
+            await _real_key(app, sm, key, False)
+        await _real_key(app, sm, KeyCode.KEY_LEFTSHIFT, False)
+        assert room._hover == 1 and (room._x, room._z) == (6, 5) and room._goal[:2] == [0, REST_TILT]
     run(go())
 
 
 def test_the_tilt_stops_at_the_side_and_at_nearly_straight_down():
     async def go():
         app, room = _blocks()
+        _hold_tab(room)
         for way, end in (("up", TILTS[1]), ("down", TILTS[0])):
             for _ in range(8):
-                await press(app, way, shift_held=True)
+                await press(app, way)
                 _settle(room)
                 app._draw()
             assert room._goal[1] == end
@@ -652,18 +661,18 @@ def test_timeline_round_trip():
     async def go():
         app, room = _blocks()
         await type_text(app, "qwe")
-        await press(app, "enter")
+        await press(app, "up", shift_held=True)
         state = room.timeline_state()
         room.clear()
         assert not room.has_content() and room._hover == 0
-        await press(app, "right", shift_held=True)
+        await press(app, "tab")
         room.restore_timeline_state(state)
         assert len(room._blocks) == 3 and room._hover == 4 and (room._x, room._z) == (5, 5)
         assert room._goal[0] == LOOKS["right"][1]   # the view is the viewer's, not the history's
     run(go())
 
 
-def test_shift_looks_around_and_tab_goes_to_the_front_while_time_traveling(monkeypatch, tmp_path):
+def test_tab_turns_the_build_while_time_traveling(monkeypatch, tmp_path):
     monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
 
     async def go():
@@ -671,16 +680,10 @@ def test_shift_looks_around_and_tab_goes_to_the_front_while_time_traveling(monke
         await type_text(app, "ab")
         app._start_time_travel()
         app._step_time_travel(-1)
-        index = app._time_travel["index"]
-        await press(app, "right", shift_held=True)
-        await press(app, "up", shift_held=True)
-        assert room._goal[:2] == [LOOKS["right"][1], REST_TILT + LOOKS["up"][1]]
-        assert app._time_travel["index"] == index           # a look, not a step through time
+        await press(app, "tab")
+        assert room._goal[0] == LOOKS["right"][1] and app._time_travel is not None
         app._cancel_time_travel()
         assert room._goal[0] == LOOKS["right"][1] and len(room._blocks) == 2
-        app._start_time_travel()
-        await press(app, "tab")
-        assert room._goal[:2] == [0, REST_TILT] and app._time_travel is not None
     run(go())
 
 

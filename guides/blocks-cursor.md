@@ -22,8 +22,16 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 
 One view can't tell "farther back" from "higher up": both go up the screen. So the kid looks around the build.
 
-- **Shift with the arrows** looks around: Left and Right turn the floor a step at a time to any angle, its near edge going the arrow's way, and Up and Down tilt the view from the side to nearly straight down.
-- **Tab** goes back to the front. Held with Up or Down, it moves the cursor's height, as Shift did before it meant looking.
+- **A tap of Tab** turns the build one step, so a little kid can walk all the way around it with one key.
+- **Tab held with the arrows** looks around: Left and Right turn the floor a step at a time to any angle, its near edge going the arrow's way, and Up and Down tilt the view from the side to nearly straight down. The footer shows this while Tab is down.
+- **Shift with Up or Down** moves the cursor's height, and is not a way to look.
+
+## Building up
+
+- **Enter builds up.** It drops a block in the current color in the first free spot over the block typing just laid, and goes on up, so a letter then Enter, Enter is a tower in that letter's color, and holding Enter grows it until the column is full. If the cursor has moved since the last block, Enter builds over the cursor.
+- **Nothing locks in.** An arrow takes typing sideways again, and Enter brings it back up.
+- **Shift with Up or Down** moves the cursor's height without building, for bridges and floating blocks, and typing then goes that way.
+- Tried and dropped: **Enter that first only turned typing upward, then walked the cursor up.** Two meanings on one key, and building up took a second key that nobody remembered.
 
 Rules:
 

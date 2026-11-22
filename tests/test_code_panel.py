@@ -177,6 +177,8 @@ def test_music_echo_writes_notes_and_instrument():
 def test_blocks_echo_writes_typing_and_space():
     async def go():
         app, blocks = await _room("blocks")
+        await type_text(app, "a")
+        await press(app, "right")
         await type_text(app, "ab")
         await press(app, "enter")       # builds up on the b, ending the stroke
         blocks.set_brush_color("#48D370")

@@ -1,13 +1,14 @@
 """Blocks room: a floor seen from above and in front, where every letter (or
 Space, in the current color) drops a block of its sticker color into the
-cursor's column, then moves on the way the cursor last went: along an arrow,
-or up. Enter builds up: it drops a block in the current color on top of the
-one just laid (or over the cursor, if it has moved since) and goes on up, so
-holding it grows a tower, until the column is full. Shift with Up or Down moves
-the cursor's height without building, onto blocks too (typing there mixes
-into them), and typing then goes that way; that height stays put as
-the arrows move, for building sideways. At the top, letters mix into the top
-block.
+cursor's column. Typing then repeats the step that brought the cursor there
+from the block before: on the same spot it stacks, and after one step across
+the floor between two blocks it goes on that way by itself, a row. Enter
+builds up: it drops a block in the current color on top of the one just laid
+(or over the cursor, if it has moved since) and goes on up, so holding it
+grows a tower, until the column is full. Shift with Up or Down moves the
+cursor's height without building, onto blocks too (typing there mixes into
+them); that height stays put as the arrows move, for building sideways. At
+the top, letters mix into the top block.
 Every block goes in the first free spot at or above the cursor's height, so
 a line climbs over whatever is in its way and a stack passes floating
 blocks; only the code line keeps the height it reached when it moves on.
@@ -112,7 +113,7 @@ class BlocksRoom(Room):
         self._last = None             # (pos, key) of the block just dropped
         self._left = None             # (column, cursor) when typing moved on from the block it laid
         self._next = None             # where a run up or down the column (or a code run) goes on from
-        self._dir = "right"           # the way typing builds: a key of WAYS
+        self._dir = "right"           # the way the last block went on: a key of WAYS
         # Where the view is headed, in degrees: how far the floor has turned, how far down the view looks,
         # and how far off straight on the floor it is sized to fit sits. Then where it is now.
         self._goal = [0.0, float(REST_TILT), 0.0]
@@ -263,11 +264,28 @@ class BlocksRoom(Room):
             self._blocks[pos] = old
         self._changed(pos)
 
-    def _build(self, keep_height: bool = False):
-        """A typed block, then on to the next cell the way the cursor last went."""
+    def _build(self, way=None, keep_height: bool = False):
+        """A block, then on to the next cell `way`: by default the way typing is going (_ahead)."""
         y, column = self._cursor_y(), (self._x, self._z)
+        self._dir = way or self._ahead()
         self._advance(y, keep_height, inside=self._place(y))
         self._left = column, (self._x, self._z)
+
+    def _ahead(self) -> str:
+        """The way typing goes on from the cursor: it repeats the step that brought the cursor here
+        from the block laid last. Over or under that block, on up or down; one cell across the floor
+        from it, on across that way; anywhere else, or with none laid, up. So typing in one spot
+        stacks, and a step sideways between two blocks starts a row."""
+        was, pos = self._last and self._last[0], (self._x, self._z, self._cursor_y())
+        if not was:
+            return RISE
+        if was == pos:
+            return self._dir
+        (ax, az), (bx, bz) = self._view(*was[:2]), self._view(*pos[:2])
+        step = (bx - ax, bz - az)
+        if step == (0, 0):
+            return RISE if pos[2] > was[2] else SINK
+        return next((way for way, across in STEPS.items() if across == step), RISE)
 
     def _advance(self, y: int, keep_height: bool = False, inside: bool = False):
         """On from the cursor's column at height y the way it last went, as far as the wall or
@@ -286,15 +304,6 @@ class BlocksRoom(Room):
         vx, vz = self._view(self._x, self._z)
         return {"x": vx, "z": vz, "y": self._cursor_y() if y is None else y}
 
-    def _face(self, way: str):
-        """Typing goes the way the cursor walked, unless a wall is right there,
-        since the kid walked to it on purpose: then along it, right, or left
-        in the right-hand corner."""
-        def room_ahead(w):
-            axis, step = WAYS[w]
-            return 0 <= self._spot()[axis] + step < SIZE[axis]
-        self._dir = next((w for w in (way, "right", "left") if room_ahead(w)), way)
-
     # What code drives: the same moves as the keys, minus the echo.
     def set_way(self, way: str):
         """Turning straight back after a run starts on its last block, like Art's."""
@@ -309,7 +318,7 @@ class BlocksRoom(Room):
         self._dir = way
 
     def build(self):
-        self._build(keep_height=True)
+        self._build(self._dir, keep_height=True)
 
     def build_letter(self, ch: str) -> bool:
         if not self._set_color(ch):
@@ -347,6 +356,7 @@ class BlocksRoom(Room):
                 return
             below = self._column()
         self._hover = max(below, default=0)
+        self._last = None               # typing starts over from here, upward
         if below:
             del self._blocks[(self._x, self._z, self._hover)]
             self._changed((self._x, self._z))
@@ -504,7 +514,7 @@ class BlocksRoom(Room):
         if not (chord or self._set_color(char, hold=action.is_repeat)) or action.with_shift:
             return
         if char.isalpha():
-            self.echo.letter(WORDS[self._dir], char)
+            self.echo.letter(WORDS[self._ahead()], char)
         else:
             self.echo.flush()       # a digit would read as a count
         self._stamps.press(chord and action.chord_meant)
@@ -516,7 +526,7 @@ class BlocksRoom(Room):
 
     def _control(self, name: str):
         if name == "space":
-            self._lay(self._dir)
+            self._lay(self._ahead())
             self._build()
         elif name == "enter":
             self._stack()
@@ -527,15 +537,14 @@ class BlocksRoom(Room):
     def _stack(self):
         """Enter: a block in the brush color in the first free spot over the one typing just laid, if
         the cursor is still where that left it, else over the cursor; then on up. A full column stops it."""
-        if self._dir != RISE:
+        if self._ahead() != RISE:
             self.echo.flush()
-            if self._left and self._left[1] == (self._x, self._z):
-                self._x, self._z = self._left[0]
-            self._dir = RISE
+        if self._left and self._left[1] == (self._x, self._z):
+            self._x, self._z = self._left[0]
         self._next = None
         if self._free(range(self._hover, HEIGHT)):
             self._lay(RISE)
-            self._build()
+            self._build(RISE)
 
     def _navigate(self, action):
         if self._tab is not None:
@@ -546,7 +555,6 @@ class BlocksRoom(Room):
         if action.with_shift and LOOKS[action.direction][0]:
             self.echo.flush()
             self._step_height(STEPS[action.direction][1])
-            self._face(RISE if action.direction == "up" else SINK)
             return
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
             self._arrow_repeat_count += 1
@@ -564,7 +572,6 @@ class BlocksRoom(Room):
                 if laying:
                     self._lay(direction)
                     self._place()
-        self._face(action.direction)
 
     # ---------------------------------------------------------------- painting
     def _view_blocks(self, falling: bool = True) -> dict:
@@ -796,7 +803,7 @@ class BlocksRoom(Room):
 
     def _way(self, world: bool = False):
         """The (x, z) step typing takes across the floor, in view coordinates or the world's; None when it goes up or down."""
-        axis, step = WAYS[self._dir]
+        axis, step = WAYS[self._ahead()]
         if axis == "y":
             return None
         dx, dz = (step, 0) if axis == "x" else (0, step)

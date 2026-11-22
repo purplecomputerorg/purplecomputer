@@ -30,13 +30,6 @@ One view can't tell "farther back" from "higher up": both go up the screen. So t
 - **Tab held with the arrows** looks around: Left and Right turn the floor a step at a time to any angle, its near edge going the arrow's way, and Up and Down tilt the view from the side to nearly straight down. The footer shows this while Tab is down.
 - **Shift with Up or Down** moves the cursor's height, and is not a way to look.
 
-## Building up
-
-- **Enter builds up.** It drops a block in the current color in the first free spot over the block typing just laid, and goes on up, so a letter then Enter, Enter is a tower in that letter's color, and holding Enter grows it until the column is full. If the cursor has moved since the last block, Enter builds over the cursor.
-- **Nothing locks in.** An arrow takes typing sideways again, and Enter brings it back up.
-- **Shift with Up or Down** moves the cursor's height without building, for bridges and floating blocks, and typing then goes that way.
-- Tried and dropped: **Enter that first only turned typing upward, then walked the cursor up.** Two meanings on one key, and building up took a second key that nobody remembered.
-
 Rules:
 
 - **The arrows go the way they point most.** The floor has four directions, so moving and typing use the side that faces the viewer most. The turn's step (18 degrees) never stops on a diagonal, where two arrows would point the same way, and five steps make a quarter turn, so straight on is always reachable.
@@ -45,6 +38,26 @@ Rules:
 - **Square, 16 by 16.** The old 30 by 12 floor from its side was 30 rows deep with blocks 64% the size.
 
 Tried and dropped: **a round platter under the floor, turning a quarter at a time**, with arrowheads on it for the four ways. Once the view went to any angle, the stops and the platter said less than the view itself.
+
+## Which way typing goes
+
+Letters build towers and rows alike, with no mode to set first: **typing repeats the step that brought the cursor here from the block laid last** (`_ahead`).
+
+- **In one spot it stacks.** Each letter lands on the last one and the cursor stays.
+- **A step across the floor between two blocks starts a row.** Type, step right, type: from then on each letter moves on to the right by itself. The same goes for any of the four ways, and a block laid under the last one builds on downward.
+- **Anywhere else it starts over, upward:** after walking away, after Backspace, or with nothing laid yet.
+- **Walking never sets the way.** It used to: typing went the way the cursor last walked, so walking to a spot to build a tower there turned the typing into a row.
+- **The arrow on the waiting block is the guess, shown before the key is pressed.** An arrow means the cursor will move on that way; none means it stays and stacks.
+- **Enter builds up.** It drops a block in the current color in the first free spot over the block typing just laid, and goes on up, so holding Enter grows a tower until the column is full. If the cursor has moved since the last block, Enter builds over the cursor.
+- **Holding a letter with the arrows lays a line**, the cursor ending on its last block, so the next letter alone stacks there.
+- **Shift with Up or Down** moves the cursor's height without building, for bridges and floating blocks.
+
+Known wrong guess: a tower, one step sideways, then another tower. The first block of the second tower reads as the start of a row, so the cursor moves on; one step back fixes it.
+
+Tried and dropped:
+
+- **Typing goes the way the cursor last walked**, with Enter or Shift Up to turn it upward: a hidden mode, set as a side effect of moving.
+- **Enter that first only turned typing upward, then walked the cursor up.** Two meanings on one key, and building up took a second key that nobody remembered.
 
 ## Tried and dropped
 

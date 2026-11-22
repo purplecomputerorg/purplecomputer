@@ -177,14 +177,13 @@ def test_music_echo_writes_notes_and_instrument():
 def test_blocks_echo_writes_typing_and_space():
     async def go():
         app, blocks = await _room("blocks")
-        await type_text(app, "a")
-        await press(app, "right")
         await type_text(app, "ab")
-        await press(app, "enter")       # builds up on the b, ending the stroke
+        await press(app, "right")       # a step ends the stroke
+        await press(app, "enter")
         blocks.set_brush_color("#48D370")
         blocks._control("space")
         blocks._control("enter")
-        assert blocks.echo.fresh == "right ab"
+        assert blocks.echo.fresh == "up ab"
         blocks.open_code_panel()
         assert blocks.code_panel.note[0] == "blue up 1 green up 2"
     run(go())
@@ -395,7 +394,7 @@ def test_blocks_esc_then_space_opens_code_and_tab_still_turns():
         await press(app, "space")
         assert blocks.code_panel is not None and app._panel is blocks.code_panel
         await press(app, "tab")
-        assert blocks._goal[0] == 18
+        assert blocks._goal[0] == 90
     run(go())
 
 

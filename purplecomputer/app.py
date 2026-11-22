@@ -1303,7 +1303,7 @@ class PurpleApp:
             elif action.action == "escape":
                 self._escape_consumed_by_mode = True
                 self._cancel_time_travel()
-            elif action.action == "tab" and (look := getattr(self.rooms[self._time_travel["room"]], "look_around", None)):
+            elif action.action == "tab" and (look := getattr(self.rooms[self._time_travel["room"]], "turn", None)):
                 look()                          # a view, not history: look at any moment from any side
         return True
 

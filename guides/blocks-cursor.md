@@ -9,14 +9,13 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 3. **Nothing is see-through, and nothing is cut open.** The line down the column and the landing spot sit in the scene, so nearer blocks hide them like any block. An arrowhead where the line goes behind them says the rest is back there; Tab turns the build to see it.
 4. **One more line costs more than it explains.** A wall of one color reads better as one wall, and with no lines on the blocks, the cursor's are the only lines on screen. Seams between blocks, a line from each floating block down to its shadow, and a band across the cursor row's blocks were all drawn once; the build looked cleaner without them, and paints faster: a column's touching blocks of one color are one tall box (`shape` in `blocks_view.py`).
 5. **The cursor never looks like a laid block.** A laid block fills its cell; the cursor's block is about half that size.
-6. **The edge is the edge.** The walls and the top stop the cursor, the height and typing; nothing wraps around to the far side. A run typed into a wall piles up there.
+6. **The edge is the edge.** The walls, the floor and the top stop the cursor and typing; nothing wraps around to the far side.
 
 ## What the cursor draws
 
 - **Waiting block** on the top level over the column: a small block in the brush color inside a bold edge, white over a dark edge so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
 - **Line** from the waiting block down the column's free cells, ending in a bold arrowhead on the landing spot. Dashed, it read as clutter.
 - **Landing spot**, edged, with the **shadow square** every floating block gets when it floats.
-- **The spot after it**, thinly edged, and for a row a flat arrow across the floor to it: which way typing is going, shown where the eye already is. On top of the landing spot means a tower; beside it, a row. A small arrow up on the waiting block said the same and went unseen.
 - **Arrowhead over the rows in front** at the lowest point of the line they leave in view, when they hide its end.
 - **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size.
 
@@ -24,15 +23,14 @@ While the view turns the cursor is drawn too, in its place among the blocks.
 
 ## Looking around
 
-One view can't tell "farther back" from "higher up": both go up the screen. So the kid looks around the build.
+One view can't tell "farther back" from "higher up": both go up the screen. So Up and Down mean only one of them, the height, and the kid turns the build to reach the other.
 
-- **A tap of Tab** turns the build one step, so a little kid can walk all the way around it with one key.
+- **A tap of Tab** turns the build to its next side, straight on: a quarter of the way around. Left and Right then run along the floor's other side, so a kid who never finds Shift reaches every cell with the arrows and Tab.
 - **Tab held with the arrows** looks around: Left and Right turn the floor a step at a time to any angle, its near edge going the arrow's way, and Up and Down tilt the view from the side to nearly straight down. The footer shows this while Tab is down.
-- **Shift with Up or Down** moves the cursor's height, and is not a way to look.
 
 Rules:
 
-- **The arrows go the way they point most.** The floor has four directions, so moving and typing use the side that faces the viewer most. The turn's step (18 degrees) never stops on a diagonal, where two arrows would point the same way, and five steps make a quarter turn, so straight on is always reachable.
+- **Left and Right go the way they point most.** The floor has four directions, so moving uses the side that faces the viewer most. Looking around, the turn's step (18 degrees) never stops on a diagonal, where two arrows would point the same way, and five steps make a quarter turn, so straight on is always reachable.
 - **A view at rest shows the whole floor.** Each angle is sized to fit the floor turned that far, so a turned view is smaller than a straight one. The size eases between the two as the view moves.
 - **A tilt stop answers back.** Tab with Up or Down at a stop springs the view a few degrees back off it, the way that still goes, and the footer's arrows drop the one with nowhere left to go. Silence there read as a broken key.
 - **The tilt stops at 15 and 75 degrees.** Lower, the eye would sink under tall towers and see blocks from below; higher or over the top, the eye would pass the front rows, which the layers around the cursor are split by.
@@ -40,25 +38,25 @@ Rules:
 
 Tried and dropped: **a round platter under the floor, turning a quarter at a time**, with arrowheads on it for the four ways. Once the view went to any angle, the stops and the platter said less than the view itself.
 
-## Which way typing goes
+## The keys
 
-Letters build towers and rows alike, with no mode to set first: **typing repeats the step that brought the cursor here from the block laid last** (`_ahead`).
+The slice facing the viewer works like Art stood on end: the arrows go where they point on screen.
 
-- **In one spot it stacks.** Each letter lands on the last one and the cursor stays.
-- **A step across the floor between two blocks starts a row.** Type, step right, type: from then on each letter moves on to the right by itself. The same goes for any of the four ways, and a block laid under the last one builds on downward.
-- **Anywhere else it starts over, upward:** after walking away, after Backspace, or with nothing laid yet.
-- **Walking never sets the way.** It used to: typing went the way the cursor last walked, so walking to a spot to build a tower there turned the typing into a row.
-- **The spot after the next is the guess, shown before the key is pressed** (`_then`): edged on top of the landing spot when typing will stack, beside it with an arrow when it will move on.
-- **Enter builds up.** It drops a block in the current color in the first free spot over the block typing just laid, and goes on up, so holding Enter grows a tower until the column is full. If the cursor has moved since the last block, Enter builds over the cursor.
-- **Holding a letter with the arrows lays a line**, the cursor ending on its last block, so the next letter alone stacks there.
-- **Shift with Up or Down** moves the cursor's height without building, for bridges and floating blocks.
+- **Left and Right** move the cursor along the floor. **Up and Down** move its height, onto blocks too (typing there mixes into them). That height stays put as the cursor moves, for bridges and floating blocks.
+- **Shift with Up or Down** steps the cursor away from the viewer and toward them: the direct way to the third direction, for a kid who knows Shift. The footer shows it while Shift is down.
+- **Letters always build up.** A block drops into the column and lands on top of what is there; the cursor stays. That is the contrast with Art, where typing runs along.
+- **A row is a letter held while Left or Right moves the cursor** (or Shift with Up or Down): each cell it reaches gets a block. Or a letter, a step, a letter.
+- **Enter** drops a block in the current color on top, and never mixes into a block, so holding it grows a tower until the column is full.
 
-Known wrong guess: a tower, one step sideways, then another tower. The first block of the second tower reads as the start of a row, so the cursor moves on; one step back fixes it.
+This follows what 3D editors do, a modifier for the third direction, with the choice of which two get the bare arrows made for the view: the two that are flat on the screen. Turning the world to reach the third is how the game Fez plays.
 
 Tried and dropped:
 
+- **Arrows on the floor, Shift with Up or Down for the height.** Up meant "away", which on screen looks the same as "higher", and building up, the point of a 3D room, was the one thing behind a modifier.
 - **Typing goes the way the cursor last walked**, with Enter or Shift Up to turn it upward: a hidden mode, set as a side effect of moving.
+- **Typing repeats the step that brought the cursor here from the block laid last**, so one spot stacked and a step between two blocks started a row, with the spot after the next edged to show the guess. Nothing to set, but too much to work out, and it guessed wrong for two towers side by side.
 - **Enter that first only turned typing upward, then walked the cursor up.** Two meanings on one key, and building up took a second key that nobody remembered.
+- **A tap of Tab turning the build 18 degrees.** Fine for looking, but it took three taps before Left and Right changed sides.
 
 ## Tried and dropped
 

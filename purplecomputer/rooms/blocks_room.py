@@ -1,24 +1,23 @@
 """Blocks room: a floor seen from above and in front, where every letter (or
 Space, in the current color) drops a block of its sticker color into the
-cursor's column. Typing then repeats the step that brought the cursor there
-from the block before: on the same spot it stacks, and after one step across
-the floor between two blocks it goes on that way by itself, a row. Enter
-builds up: it drops a block in the current color on top of the one just laid
-(or over the cursor, if it has moved since) and goes on up, so holding it
-grows a tower, until the column is full. Shift with Up or Down moves the
-cursor's height without building, onto blocks too (typing there mixes into
-them); that height stays put as the arrows move, for building sideways. At
-the top, letters mix into the top block.
+cursor's column, on top of what is there: typing builds up. Left and Right
+move the cursor along the floor and Up and Down move its height, onto blocks
+too (typing there mixes into them); Shift with Up or Down steps it away and
+toward the viewer. That height stays put as the cursor moves, for building
+sideways, and holding a letter while it moves across the floor lays a line.
+Enter drops a block in the current color on top too, and held, grows a tower
+until the column is full. At the top, letters mix into the top block.
 Every block goes in the first free spot at or above the cursor's height, so
 a line climbs over whatever is in its way and a stack passes floating
 blocks; only the code line keeps the height it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
-opens the color bar. A tap of Tab turns the build a little, and Tab held with
-the arrows looks around it: Left and Right turn it a little at a time to any
-angle, Up and Down tilt the view from the side to nearly straight down. The
-arrows always go the way they point most on screen. The walls and the top
+opens the color bar. A tap of Tab turns the build a quarter of the way around,
+so Left and Right run along the floor's other side, and Tab held with the
+arrows looks around it: Left and Right turn it a little at a time to any
+angle, Up and Down tilt the view from the side to nearly straight down. Left
+and Right always go the way they point most on screen. The walls and the top
 stop the cursor and typing: nothing wraps around. The code line opens from
 the Esc menu."""
 
@@ -59,16 +58,14 @@ CURSOR_REACH = 2.0            # cells around the cursor's block that it repaints
 DROP_S = 0.16                 # a new block falls into place this long
 ARROWHEAD = 0.36              # half the width of the arrowhead on the landing spot, in cells
 CLEAR = (0, 0, 0, 0)
-# The arrow from the landing spot to the spot after it, as (along, across) points in cells from the landing spot's middle.
-POINTER = ((0.5, -0.2), (0.95, -0.2), (0.95, -0.55), (1.5, 0), (0.95, 0.55), (0.95, 0.2), (0.5, 0.2))
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 # Where typing goes next, by way: one step along an axis, as far as the wall or the ceiling.
 WAYS = {"right": ("x", 1), "left": ("x", -1), "up": ("z", 1), "down": ("z", -1), RISE: ("y", 1), SINK: ("y", -1)}
 TURN_PIC = "hints/turn.png"
-HINT = "Type to build!  {Enter} builds up {hints/up.png}"
-SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
+HINT = f"Type to build!  Hold a letter with {LEFT} {RIGHT} for a row"
+SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/away.png}}"
 
 
 def turned(x: int, z: int, quarters: int) -> tuple:
@@ -110,9 +107,9 @@ class BlocksRoom(Room):
         self._badge = color_recipe.HoldBadge()
         self._mixed = None                # (keycaps, color) of the last block that mixed
         self._last = None             # (pos, key) of the block just dropped
-        self._left = None             # (column, cursor) when typing moved on from the block it laid
         self._next = None             # where a run up or down the column (or a code run) goes on from
-        self._dir = "right"           # the way the last block went on: a key of WAYS
+        self._dir = RISE              # the way the last block went on, a key of WAYS: up, but for code
+        self._code_dir = "right"      # the way code builds until it says another
         # Where the view is headed, in degrees: how far the floor has turned, how far down the view looks,
         # and how far off straight on the floor it is sized to fit sits. Then where it is now.
         self._goal = [0.0, float(REST_TILT), 0.0]
@@ -186,11 +183,11 @@ class BlocksRoom(Room):
         self._x, self._z = min(max(x, 0), WIDTH - 1), min(max(z, 0), DEPTH - 1)
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._last = self._next = self._mixed = self._left = None
+        self._last = self._next = self._mixed = None
         self._falls.clear()
         self._hide.clear()
         self._stamps.clear()
-        self._dir = "right"
+        self._dir, self._code_dir = RISE, "right"
         self.echo.reset()
         self._changed()
 
@@ -266,28 +263,11 @@ class BlocksRoom(Room):
             self._blocks[pos] = old
         self._changed(pos)
 
-    def _build(self, way=None, keep_height: bool = False):
-        """A block, then on to the next cell `way`: by default the way typing is going (_ahead)."""
-        y, column = self._cursor_y(), (self._x, self._z)
-        self._dir = way or self._ahead()
+    def _build(self, way=RISE, keep_height: bool = False):
+        """A block, then on to the next cell `way`: up, for everything but code."""
+        self._dir = way
+        y = self._cursor_y()
         self._advance(y, keep_height, inside=self._place(y))
-        self._left = column, (self._x, self._z)
-
-    def _ahead(self) -> str:
-        """The way typing goes on from the cursor: it repeats the step that brought the cursor here
-        from the block laid last. Over or under that block, on up or down; one cell across the floor
-        from it, on across that way; anywhere else, or with none laid, up. So typing in one spot
-        stacks, and a step sideways between two blocks starts a row."""
-        was, pos = self._last and self._last[0], (self._x, self._z, self._cursor_y())
-        if not was:
-            return RISE
-        if was == pos:
-            return self._dir
-        (ax, az), (bx, bz) = self._view(*was[:2]), self._view(*pos[:2])
-        step = (bx - ax, bz - az)
-        if step == (0, 0):
-            return RISE if pos[2] > was[2] else SINK
-        return next((way for way, across in STEPS.items() if across == step), RISE)
 
     def _advance(self, y: int, keep_height: bool = False, inside: bool = False):
         """On from the cursor's column at height y the way it last went, as far as the wall or
@@ -317,10 +297,10 @@ class BlocksRoom(Room):
             if back == self._last[0]:
                 self._x, self._z = back[:2]
                 self._next = (*back, True)
-        self._dir = way
+        self._dir = self._code_dir = way
 
     def build(self):
-        self._build(self._dir, keep_height=True)
+        self._build(self._code_dir, keep_height=True)
 
     def build_letter(self, ch: str) -> bool:
         if not self._set_color(ch):
@@ -329,6 +309,7 @@ class BlocksRoom(Room):
         return True
 
     def skip(self):
+        self._dir = self._code_dir
         self._advance(self._cursor_y(), keep_height=True)
 
     def _chord_color(self, held_key: str, char: str) -> bool:
@@ -341,12 +322,14 @@ class BlocksRoom(Room):
         self.set_brush_color(self._mix[1], brush[0])
         return True
 
-    def _step_height(self, rise: int):
+    def _step_height(self, rise: int) -> bool:
         """One level up or down, onto a block if one is there, as far as the floor or the top."""
         y = self._cursor_y() + rise
-        if 0 <= y < HEIGHT:
-            self._hover = y
-            self._next = (self._x, self._z, y, True)
+        if not 0 <= y < HEIGHT:
+            return False
+        self._hover = y
+        self._next = (self._x, self._z, y, True)
+        return True
 
     def _erase(self):
         """Backspace: the highest block at or below the cursor goes, and the cursor
@@ -358,7 +341,6 @@ class BlocksRoom(Room):
                 return
             below = self._column()
         self._hover = max(below, default=0)
-        self._last = None               # typing starts over from here, upward
         if below:
             del self._blocks[(self._x, self._z, self._hover)]
             self._changed((self._x, self._z))
@@ -423,9 +405,13 @@ class BlocksRoom(Room):
         """Back to the front and the resting tilt, the short way around."""
         self._aim(yaw=360.0 * round(self._goal[0] / 360), tilt=REST_TILT)
 
-    def look_around(self, direction: str = "right", held: bool = False):
-        """A tap of Tab, here or in Time Travel, or Tab with an arrow: one step around, the near edge
-        going the arrow's way, or up or down. A held arrow keeps the view just moving."""
+    def turn(self):
+        """A tap of Tab, here or in Time Travel: on to the floor's next side, straight on."""
+        self._aim(yaw=90.0 * (self._quarters + 1))
+
+    def look_around(self, direction: str, held: bool = False):
+        """Tab with an arrow: one step around, the near edge going the arrow's way, or up or down.
+        A held arrow keeps the view just moving."""
         axis, step = LOOKS[direction]
         if axis and self._goal[1] in TILTS and not TILTS[0] < self._goal[1] + step < TILTS[1]:
             if not held and self._look == self._goal:       # at a stop: it springs back off it, the way that still goes
@@ -482,7 +468,7 @@ class BlocksRoom(Room):
         if self.code_panel is not None:
             result = await self.code_panel.handle(action)
             if result == "tab_fallthrough":
-                self.look_around()
+                self.turn()
             elif result == "close":
                 self.close_code_panel()
             return
@@ -503,12 +489,12 @@ class BlocksRoom(Room):
             self._lay_pending()
 
     def _tab_key(self, action):
-        """Tab held with the arrows looks around; let go with no arrow pressed, it turns the build a little."""
+        """Tab held with the arrows looks around; let go with no arrow pressed, it turns the build a quarter."""
         if action.is_down and not action.is_repeat:
             self._tab = False
         elif not action.is_down:
             if self._tab is False:
-                self.look_around()
+                self.turn()
             self._tab = None
         self.app.invalidate()
 
@@ -526,7 +512,7 @@ class BlocksRoom(Room):
         if not (chord or self._set_color(char, hold=action.is_repeat)) or action.with_shift:
             return
         if char.isalpha():
-            self.echo.letter(WORDS[self._ahead()], char)
+            self.echo.letter(WORDS[RISE], char)
         else:
             self.echo.flush()       # a digit would read as a count
         self._stamps.press(chord and action.chord_meant)
@@ -538,7 +524,7 @@ class BlocksRoom(Room):
 
     def _control(self, name: str):
         if name == "space":
-            self._lay(self._ahead())
+            self._lay(RISE)
             self._build()
         elif name == "enter":
             self._stack()
@@ -547,16 +533,12 @@ class BlocksRoom(Room):
             self._erase()
 
     def _stack(self):
-        """Enter: a block in the brush color in the first free spot over the one typing just laid, if
-        the cursor is still where that left it, else over the cursor; then on up. A full column stops it."""
-        if self._ahead() != RISE:
-            self.echo.flush()
-        if self._left and self._left[1] == (self._x, self._z):
-            self._x, self._z = self._left[0]
+        """Enter: a block in the brush color in the first free spot at or over the cursor's height.
+        Unlike Space it never mixes into a block, so held, it grows a tower and a full column stops it."""
         self._next = None
         if self._free(range(self._hover, HEIGHT)):
             self._lay(RISE)
-            self._build(RISE)
+            self._build()
 
     def _navigate(self, action):
         if self._tab is not None:
@@ -564,26 +546,29 @@ class BlocksRoom(Room):
             self.echo.flush()
             self.look_around(action.direction, action.is_repeat)
             return
-        if action.with_shift and LOOKS[action.direction][0]:
-            self.echo.flush()
-            self._step_height(STEPS[action.direction][1])
-            return
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
             self._arrow_repeat_count += 1
         else:
             self._arrow_repeat_dir = action.direction
             self._arrow_repeat_count = 1 if action.is_repeat else 0
-        laying = (bool(action.char_held) and self._set_color(action.char_held, hold=True)) or action.space_held
+        across = action.with_shift or not LOOKS[action.direction][0]
+        laying = across and ((bool(action.char_held) and self._set_color(action.char_held, hold=True)) or action.space_held)
         if not laying:
             self.echo.flush()
-        fast = not laying and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
+        fast = across and not laying and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(HOLD_ACCEL_MULTIPLIER if fast else 1):
-                if not self._move(direction):
+                if not self._go(direction, action.with_shift):
                     break
                 if laying:
                     self._lay(direction)
                     self._place()
+
+    def _go(self, direction: str, shift: bool) -> bool:
+        """One step: Left and Right along the floor, Up and Down in height, and with Shift, away and toward the viewer."""
+        if LOOKS[direction][0] and not shift:
+            return self._step_height(STEPS[direction][1])
+        return self._move(direction)
 
     # ---------------------------------------------------------------- painting
     def _view_blocks(self, falling: bool = False) -> dict:
@@ -727,8 +712,7 @@ class BlocksRoom(Room):
         x, z, items = self._x, self._z, painter.items
         behind = sum(1 for i in items if i[0][:2] <= cam.key(x, z, 0)[:2])     # sorted far to near: these come first
         painter.paint(g.surface, items[:behind])
-        y = self._cursor_y()
-        self._drop_marks(g.surface, painter, x, z, y, self._way(world=True), self._then(y))
+        self._drop_marks(g.surface, painter, x, z, self._cursor_y())
         painter.paint(g.surface, items[behind:])
         self._hover_marks(g.surface, painter, x, z)
         if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
@@ -737,8 +721,8 @@ class BlocksRoom(Room):
     # ---------------------------------------------------------------- cursor
     # The cursor is its column: a small block in the brush color waits in a bold edge on the top
     # level, over the column, and a line runs down the column's free cells to the spot the
-    # next block lands in, with the spot after that edged too and an arrow to it. The block and its
-    # edge go over everything; the rest sits in the scene, so nearer blocks hide it. guides/blocks-cursor.md
+    # next block lands in. The block and its edge go over everything; the rest sits in the scene,
+    # so nearer blocks hide it. guides/blocks-cursor.md
     def _cursor_boxes(self, vx, vz) -> tuple:
         """Layer pixels the cursor can touch, and those its waiting block can."""
         cam, layer = self._cam, self._composed.get_rect()
@@ -753,37 +737,27 @@ class BlocksRoom(Room):
         marks where it goes behind."""
         painter, sub = self._painter, g.surface.subsurface(area)
         vx, vz = self._view(self._x, self._z)
-        y, way = self._cursor_y(), self._way()
-        then = self._then(y)
-        then = then and (*self._view(*then[:2]), then[2])
+        y = self._cursor_y()
         whole, over = self._cursor_boxes(vx, vz)
 
         def paint(clip, bright):
             sub.set_clip(clip)
             sub.blit(self._scene, clip, clip)
-            self._drop_marks(sub, painter, vx, vz, y, way, then)
+            self._drop_marks(sub, painter, vx, vz, y)
             sub.blit(self._front, clip, clip)
             self._mark_cut(sub, vx, vz, y)
             self._hover_marks(sub, painter, vx, vz, bright)
             sub.set_clip(None)
         g.draw_caret(over.move(area.topleft), lambda: paint(whole, True), lambda: paint(over, False))
 
-    def _drop_marks(self, surf, painter, x, z, y, way, then):
+    def _drop_marks(self, surf, painter, x, z, y):
         """The spot the next block lands in, edged, with its shadow square if it floats, and the
-        line down to it through the column's free cells, ending in an arrowhead. Then which way
-        typing is going: the spot after it, `then`, thinly edged, and an arrow to it across the floor, `way`."""
+        line down to it through the column's free cells, ending in an arrowhead."""
         if y >= HOVER:
             return
         cam, ink, dark = painter.cam, rgb(P.TEXT), rgb(art_room.CANVAS_BG)
         if self._ground(y) < y:
             painter.shadow(surf, x, z, self._ground(y))
-        if then and then[2] < HOVER:
-            self._stroke(surf, self._edge(cam, *then), 1, 2)
-        if way:
-            dx, dz = way
-            arrow = [cam.at(x + 0.5 + u * dx - v * dz, y + 1, z + 0.5 + u * dz + v * dx) for u, v in POINTER]
-            pygame.draw.polygon(surf, ink, arrow)
-            pygame.draw.polygon(surf, dark, arrow, 2)
         self._stroke(surf, self._edge(cam, x, z, y), 2, 3)
         taken, width = set(self._column()), max(2, round(cam.cell(x, y, z)) // 14)
         spans = [[cam.at(x + 0.5, h + end, z + 0.5) for end in (0, 1)] for h in range(y + 1, HOVER) if h not in taken]
@@ -814,21 +788,6 @@ class BlocksRoom(Room):
             painter.box(surf, x, z, HOVER, HOVER, self._color, inset=CURSOR_INSET)
         self._stroke(surf, self._edge(cam, x, z, HOVER), max(3, round(cam.cell(x, HOVER, z)) // 9), 4)
 
-    def _then(self, y):
-        """The spot the block after the next one goes in, world (x, z, y): a step on the way typing
-        is going (_ahead), or on top where a wall stops it. None when the column has no room left."""
-        axis, step = WAYS[self._ahead()]
-        pos = self._spot(y)
-        if axis != "y":
-            on = min(max(pos[axis] + step, 0), SIZE[axis] - 1)
-            if on != pos[axis]:
-                pos[axis] = on
-                x, z = self._world(pos["x"], pos["z"])
-                return next(((x, z, h) for h in range(self._hover, HEIGHT) if (x, z, h) not in self._blocks), None)
-            step = 1
-        levels = range(y + 1, HEIGHT) if step > 0 else range(y - 1, -1, -1)
-        return next(((self._x, self._z, h) for h in levels if (self._x, self._z, h) not in self._blocks), None)
-
     def _edge(self, cam, x, z, y) -> list:
         return hull([p for _, poly in cam.box((x, y, z), (x + 1, y + 1, z + 1)) for p in poly])
 
@@ -848,13 +807,3 @@ class BlocksRoom(Room):
     def _ground(self, y: int) -> int:
         """The level the cursor's block would rest on below height y."""
         return max((h + 1 for h in self._column() if h < y), default=0)
-
-    def _way(self, world: bool = False):
-        """The (x, z) step typing takes across the floor, in view coordinates or the world's; None when it goes up or down."""
-        axis, step = WAYS[self._ahead()]
-        if axis == "y":
-            return None
-        dx, dz = (step, 0) if axis == "x" else (0, step)
-        for _ in range(-self._side % 4 if world else 0):
-            dx, dz = -dz, dx
-        return dx, dz

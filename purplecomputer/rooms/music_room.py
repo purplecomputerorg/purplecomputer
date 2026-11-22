@@ -6,6 +6,7 @@ In Letters, a real word typed shows under the grid and Space says it."""
 import asyncio
 import math
 import time
+from functools import lru_cache
 
 import pygame
 
@@ -37,15 +38,49 @@ _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c
 _STEPS = {key: (2 - r) * 7 + c for key, (r, c) in _KEY_TO_RC.items()}   # scale steps up from the bottom row's first key
 
 
+def _smooth(d: int, paint) -> pygame.Surface:
+    """A d by d mark painted 4x big and scaled down, so its edges are smooth at a few pixels."""
+    big = pygame.Surface((d * 4, d * 4), pygame.SRCALPHA)
+    paint(big, 4, d * 2)
+    return pygame.transform.smoothscale(big, (d, d))
+
+
+@lru_cache(maxsize=256)
+def _bead(r: float, color: tuple, drum: bool, glow: bool) -> pygame.Surface:
+    """A note's round bead or a drum's short tick; the one playing has a soft glow around it."""
+    def paint(s, k, c):
+        if glow:
+            pygame.draw.circle(s, (*color, 60), (c, c), r * 2.2 * k)
+        if drum:
+            pygame.draw.rect(s, color, pygame.Rect(c - r * 0.35 * k, c - r * 1.3 * k, r * 0.7 * k, r * 2.6 * k),
+                             border_radius=round(r * 0.35 * k))
+        else:
+            pygame.draw.circle(s, color, (c, c), r * k)
+    return _smooth(2 * math.ceil(r * (2.2 if glow else 1.4)) + 2, paint)
+
+
+@lru_cache(maxsize=64)
+def _rest_clock(r: int, left: float, track: tuple, ink: tuple) -> pygame.Surface:
+    """A thin ring with `left` of it drawn round from the top, hollow so it never reads as a bead."""
+    def paint(s, k, c):
+        w, n = max(2, round(r * 0.35 * k)), 48
+        pygame.draw.circle(s, (*track, 90), (c, c), r * k, width=w)
+        if left > 0:
+            rad = r * k - w / 2
+            pygame.draw.lines(s, ink, False, [(c + rad * math.sin(2 * math.pi * left * i / n),
+                                               c - rad * math.cos(2 * math.pi * left * i / n)) for i in range(n + 1)], w)
+    return _smooth(2 * r + 2, paint)
+
+
 def drum_picture(key: str) -> str:
     return f"drums/{PERCUSSION[key].replace('-', '_')}.png"
 
 PITCH_TRANSITION_DURATION = 0.25
 LETTER_PICTURES = ("letters/names.png", "letters/sounds.png")
 KEY_WORD = 0.75               # sizes the grid's side margin; changing it moves the grid
-NOTE_STRIP = 0.55             # height of the tape's row under the grid, in keys
+NOTE_STRIP = 0.62             # height of the tape's row under the grid, in keys
 KEY_BAR = 0.28                # width of the key bar beside the grid, in keys
-BEAD_STEP = 0.2               # between the song's beads, in keys; a phrase rest adds a little more
+BEAD_STEP = 0.14              # between the song's beads, in keys; a phrase rest adds two more
 BEAD_LIT_FADE_S = 1.0         # after playback, the lit beads sink back this slowly
 NOTE_FAINT = 0.72             # how far a key's note name sinks into the key until it sounds
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
@@ -1022,16 +1057,16 @@ class MusicRoom(Room):
             self._draw_beads(g, row, size)
 
     def _draw_beads(self, g, row: pygame.Rect, size: float):
-        """The song as a line of beads under the grid, a higher note higher and a drum a ring along the bottom, a
-        phrase rest a wider gap. Too long for the row, it shows its end, or follows the note playing back."""
-        r, px = max(3, round(size * 0.04)), max(12, int(size * 0.2))
+        """The song as a line of beads under the grid, a higher note higher and a drum a tick in a lane below them,
+        a phrase rest a wider gap. Too long for the row, it shows its end, or follows the note playing back."""
+        r, px = max(2.5, size * 0.035), max(12, int(size * 0.2))
         step = round(size * BEAD_STEP)
-        band = row.inflate(0, -4 * r)
+        band = pygame.Rect(row.x, row.y + round(2 * r), row.w, row.h - round(7 * r))
         cell = g.measure("…", px, "note", tr=False)[0]
-        lead_w, clock_r = cell + px // 2, round(px * 0.32)
+        lead_w, clock_r = cell + px // 2, round(r * 1.6)
         room = row.w - lead_w - (2 * clock_r + px)
         rests = self._song_rests()
-        first, last = self._tape_window([step + step * rest for rest in rests], room, cell + step // 2)
+        first, last = self._tape_window([step + 2 * step * rest for rest in rests], room, cell + step // 2)
         clipped = first > 0 or last < len(rests) - 1
         mark = self._tape_ink(P.MUTED)
         g.draw_text("♪", px, row.x, row.centery, "note", mark, anchor="midleft", tr=False)
@@ -1039,18 +1074,17 @@ class MusicRoom(Room):
         if first > 0:
             x = g.draw_text("…", px, x, row.centery, "note", mark, anchor="midleft", tr=False).right + step // 2
         for i in range(first, last + 1):
-            x += step * rests[i] if i > first else 0
+            x += 2 * step * rests[i] if i > first else 0
             steps = _STEPS.get(self._tape[i][0])
             lit = self._bead_lit(i)
             ink = mix(P.ACCENT, "#ffffff", 0.6) if i == self._tape_at else self._tape_ink(P.ACCENT, lit)
-            size_r = r + 1 if i == self._tape_at else r
-            y = round(band.bottom - band.h * (steps or 0) / max(_STEPS.values()))
-            pygame.draw.circle(g.surface, rgb(ink), (x, y), size_r, width=0 if steps is not None else max(1, r // 2))
+            y = round(band.bottom - band.h * steps / max(_STEPS.values()) if steps is not None else band.bottom + 3 * r)
+            dot = _bead(r, rgb(ink), steps is None, i == self._tape_at)
+            g.surface.blit(dot, dot.get_rect(center=(x, y)))
             x += step
         if clipped:
             g.draw_text("…", px, x, row.centery, "note", mark, anchor="midleft", tr=False)
-        self._draw_rest_mark(g, row.x + lead_w + room + px // 4 + clock_r if clipped else x + clock_r, row.centery,
-                             clock_r)
+        self._draw_rest_mark(g, (row.x + lead_w + room + px // 4 if clipped else x + step) + clock_r, row.centery, clock_r)
 
     def _draw_letters(self, g, row: pygame.Rect, size: float):
         """What was just typed, left to right under the grid, a rest as a gap, the word it ends with underlined.
@@ -1124,13 +1158,9 @@ class MusicRoom(Room):
         return first, last
 
     def _draw_rest_mark(self, g, cx, cy, r) -> int:
-        """A small pie that empties while it's quiet, till the tape clears. Returns its right edge."""
-        left = self._rest_left()
-        pygame.draw.circle(g.surface, rgb(P.LINE), (cx, cy), r, width=max(1, r // 6))
-        if left > 0:
-            arc = [(cx + r * math.sin(2 * math.pi * left * k / 24), cy - r * math.cos(2 * math.pi * left * k / 24))
-                   for k in range(25)]
-            pygame.draw.polygon(g.surface, rgb(P.MUTED), [(cx, cy), *arc])
+        """A small ring that empties while it's quiet, till the tape clears. Returns its right edge."""
+        clock = _rest_clock(r, self._rest_left(), rgb(P.LINE), rgb(P.MUTED))
+        g.surface.blit(clock, clock.get_rect(center=(cx, cy)))
         return cx + r
 
     def _hint_text(self) -> str:

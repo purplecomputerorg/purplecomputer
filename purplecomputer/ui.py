@@ -108,6 +108,7 @@ class TextField:
         self.value = ""
         self.cursor = 0
         self.selected = None   # (start, end) of the word the arrows picked; typing replaces it
+        self._pad = None       # where the arrows opened a gap between words with an extra space
         self._autocomplete_fn = autocomplete_fn
         self._validator = validator
         self._context = context_autocomplete
@@ -123,7 +124,7 @@ class TextField:
     # --- editing ---
     def set(self, value: str, cursor: int | None = None):
         self.value = value
-        self.selected = None
+        self.selected = self._pad = None
         self._correction = None
         self.cursor = len(value) if cursor is None else max(0, min(cursor, len(value)))
         self._check_autocomplete()
@@ -152,16 +153,27 @@ class TextField:
         self.cursor = max(0, min(self.cursor + delta, len(self.value)))
 
     def jump(self, step: int):
-        """Arrows a word at a time: pick the word before or after; past the last one is the end again."""
+        """Arrows a word at a time, stopping in the gap between two words too,
+        where typing adds a new one; past the last word is the end again."""
+        if self._pad is not None:
+            self.set(self.value[:self._pad] + self.value[self._pad + 1:], self._pad)
         if self.selected == (0, len(self.value)):   # the whole line: step in from its far end
             self.selected, self.cursor = None, 0 if step > 0 else len(self.value)
-        at = self.selected[0] + (step > 0) if self.selected else self.cursor
-        spans = [m.span() for m in re.finditer(r"\S+", self.value) if (m.start() < at if step < 0 else m.start() >= at)]
-        if spans:
-            self.selected = spans[-1] if step < 0 else spans[0]
-            self.cursor = self.selected[1]
-        elif step > 0:
-            self.selected, self.cursor = None, len(self.value)
+        words = [m.span() for m in re.finditer(r"\S+", self.value)]
+        gaps = [b for (_, b), _ in zip(words, words[1:])]
+        stops = sorted([(a, (a, b)) for a, b in words] + [(g, None) for g in gaps + [len(self.value)]], key=lambda st: st[0])
+        ends = {b for _, b in words}
+        # a caret just after a word already sits in that word's gap
+        at = self.selected[0] if self.selected else self.cursor - (self.cursor not in ends) / 2
+        ahead = [st for st in stops if (st[0] - at) * step > 0]
+        if not ahead:
+            return
+        pos, word = ahead[0] if step > 0 else ahead[-1]
+        if pos in gaps:
+            self.set(self.value[:pos] + " " + self.value[pos:], pos + 1)
+            self._pad = pos
+        else:
+            self.selected, self.cursor = word, word[1] if word else pos
 
     def clear(self):
         self.set("")

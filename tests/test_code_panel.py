@@ -133,15 +133,15 @@ def test_arrows_pick_a_word_to_retype_or_remove():
         app, _ = await _room("art")
         panel = CodePanel(app, "art", "red repeat 4 forward 6 turn")
         f = panel.field
-        for _ in range(9):
+        for _ in range(12):
             await panel.handle(NavigationAction(direction="left"))
         assert f.selected == (0, 3)                     # stops at the first word
         await type_text_into(panel, "blue")
         assert f.value == "blue repeat 4 forward 6 turn" and f.selected is None
-        await panel.handle(NavigationAction(direction="right"))
-        await panel.handle(NavigationAction(direction="right"))
-        await panel.handle(NavigationAction(direction="right"))
+        for _ in range(5):                              # repeat, gap, 4, gap, forward
+            await panel.handle(NavigationAction(direction="right"))
         assert f.value[slice(*f.selected)] == "forward"
+        await panel.handle(NavigationAction(direction="right"))
         await panel.handle(NavigationAction(direction="right"))
         await type_text_into(panel, "10")
         assert f.value == "blue repeat 4 forward 10 turn"
@@ -151,6 +151,22 @@ def test_arrows_pick_a_word_to_retype_or_remove():
         await panel.handle(NavigationAction(direction="left"))
         await press_control(panel, "backspace")
         assert f.value == "blue repeat 4 forward 10 "
+    run(go())
+
+
+def test_arrows_stop_between_words_to_add_one():
+    async def go():
+        app, _ = await _room("music")
+        panel = CodePanel(app, "music", "notes aaggaa")
+        f = panel.field
+        await panel.handle(NavigationAction(direction="left"))
+        await panel.handle(NavigationAction(direction="left"))
+        assert f.selected is None and f.value[:f.cursor] == "notes "
+        await panel.handle(NavigationAction(direction="left"))
+        assert f.value == "notes aaggaa" and f.selected == (0, 5)   # passing by leaves no extra space
+        await panel.handle(NavigationAction(direction="right"))
+        await type_text_into(panel, "fast")
+        assert f.value == "notes fast aaggaa"
     run(go())
 
 

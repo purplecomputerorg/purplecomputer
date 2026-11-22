@@ -26,8 +26,6 @@ DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the fl
 TOP_LIGHT, TOP_LIGHT_PER_LEVEL = 0.18, 0.015   # tops light up toward white, a little more each level up
 SIDE_DARK = 0.36              # the darkest side, turned away from the light
 SHADOW_ALPHA = 140            # the square under a floating block
-STRIPE_ALPHA, FRAME_ALPHA = 22, 90
-FRONT_ALPHA = 70              # front towers in the way of the cursor's glass column or landing block fade to this
 TOP = None                    # a face's normal: None for the top, else (x, z)
 FACES = (TOP, (0, -1), (0, 1), (-1, 0), (1, 0))
 
@@ -211,9 +209,9 @@ class Camera:
 
 class Painter:
     """One camera and one set of blocks {(x, z, y): color}, as its `shape` (worked out here unless
-    `built` passes it), sorted far to near once. `row` marks the cursor's row (a stripe on the floor,
-    a frame behind it) and splits the build into what is behind it, on it and in front of it, so the
-    cursor can be drawn between them. Without `detail`, floating blocks cast no shadow."""
+    `built` passes it), sorted far to near once. `row` is the cursor's row: it splits the build into
+    that row and those behind it, and the rows in front, so the cursor can be drawn between them.
+    Without `detail`, floating blocks cast no shadow."""
 
     def __init__(self, cam: Camera, blocks: dict, row=None, hazy: bool = True, detail: bool = True, floor=None, built=None):
         self.cam, self.blocks, self.row, self.hazy = cam, blocks, row, hazy
@@ -235,13 +233,8 @@ class Painter:
 
     def _split(self):
         row, items = self.row, self.items
-        if row is None:
-            self.behind, self.on_row_items, self.in_front = items, [], []
-        else:
-            self.behind = [i for i in items if i[2][1] > row]
-            self.on_row_items = [i for i in items if i[2][1] == row]
-            self.in_front = [i for i in items if i[2][1] < row]
-        self.front_blocks = [] if row is None else [(x, z, y, color) for (x, z, y), color in self.blocks.items() if z < row]
+        self.back = items if row is None else [i for i in items if i[2][1] >= row]
+        self.in_front = [] if row is None else [i for i in items if i[2][1] < row]
 
     # ------------------------------------------------------------ colors
     def base(self, x, z, color) -> tuple:
@@ -253,8 +246,7 @@ class Painter:
         return tint(base, "#000000", self.cam.dark[normal])
 
     def tile(self, x, z) -> tuple:
-        color = rgb(self.floor[2] if (x + z) % 2 else self.floor[1])
-        return tint(color, P.TEXT, STRIPE_ALPHA / 255) if z == self.row else color
+        return rgb(self.floor[2] if (x + z) % 2 else self.floor[1])
 
     # ------------------------------------------------------------ painting
     def paint_floor(self, surf):
@@ -274,18 +266,6 @@ class Painter:
             self.cam.floor.fill(rgb(self.floor[0]))
             self.paint_floor(self.cam.floor)
         return self.cam.floor
-
-    def stripe(self) -> tuple:
-        """(picture, where) of the light wash over the cursor row's floor, kept by the camera."""
-        key = ("stripe", self.row)
-        if key not in self.cam.rects:
-            polys = [self._tile_poly(x, self.row) for x in range(WIDTH)]
-            rect = bbox([p for poly in polys for p in poly])
-            s = pygame.Surface(rect.size, pygame.SRCALPHA)
-            for poly in polys:
-                pygame.draw.polygon(s, (*rgb(P.TEXT), STRIPE_ALPHA), [(px - rect.x, py - rect.y) for px, py in poly])
-            self.cam.rects[key] = s, rect.topleft
-        return self.cam.rects[key]
 
     def _tile_poly(self, x, z, y=0) -> list:
         at = self.cam.at
@@ -309,28 +289,23 @@ class Painter:
             self._sun = [self.cam.sun_shadow(*stack) for stack in self.stacks]
         return self._sun
 
-    def paint(self, surf, items, clip=None, faded=frozenset()):
-        """Runs and the shadows under floating ones, in paint order; with `clip`, only what touches it.
-        Columns in `faded` go see-through, replacing what is under them in `surf`."""
+    def paint(self, surf, items, clip=None):
+        """Runs and the shadows under floating ones, in paint order; with `clip`, only what touches it."""
         cam = self.cam
         if clip is not None and clip.contains(surf.get_rect()):
             clip = None
         for _, kind, d in items:
             if clip is not None and not (self._shadow_rect(*d) if kind else cam.run_rect(*d[:4])).colliderect(clip):
                 continue
-            alpha = FRONT_ALPHA if faded and d[:2] in faded else 255
-            if kind:
-                self.shadow(surf, *d, alpha=alpha if alpha < 255 else None)
-            else:
-                self.box(surf, *d, alpha=alpha)
+            (self.shadow if kind else self.box)(surf, *d)
 
-    def box(self, surf, x, z, bottom, top, color, open=FACES, alpha=255):
-        """One column's blocks from bottom to top as one tall box in one color: its `open` faces that
-        the eye can see. Nearer columns paint over whatever they hide."""
+    def box(self, surf, x, z, bottom, top, color, open=FACES, inset: float = 0.0):
+        """One column's blocks from bottom to top as one tall box in one color, `inset` cells smaller
+        all around: its `open` faces that the eye can see. Nearer columns paint over whatever they hide."""
         base = self.base(x, z, color)
-        for n, poly in self.cam.box((x, bottom, z), (x + 1, top + 1, z + 1), open):
-            shade = self.face(base, n, top)
-            pygame.draw.polygon(surf, shade if alpha == 255 else (*shade, alpha), poly)
+        lo, hi = (x + inset, bottom + inset, z + inset), (x + 1 - inset, top + 1 - inset, z + 1 - inset)
+        for n, poly in self.cam.box(lo, hi, open):
+            pygame.draw.polygon(surf, self.face(base, n, top), poly)
 
     def shadow(self, surf, x, z, ground, alpha=None):
         """The square a floating block casts straight down onto what it would land on.
@@ -346,10 +321,3 @@ class Painter:
         if key not in rects:
             rects[key] = bbox(self._tile_poly(x, z, ground))
         return rects[key]
-
-    def frame_row(self, surf):
-        """An upright frame on the back of the cursor's row, floor to ceiling, wall to wall, so the row reads as one slice."""
-        if self.row is not None:
-            at, z = self.cam.at, self.row + 1
-            ink = tint(rgb(art_room.CANVAS_BG), P.TEXT, FRAME_ALPHA / 255)
-            pygame.draw.polygon(surf, ink, [at(0, 0, z), at(WIDTH, 0, z), at(WIDTH, HEIGHT, z), at(0, HEIGHT, z)], 2)

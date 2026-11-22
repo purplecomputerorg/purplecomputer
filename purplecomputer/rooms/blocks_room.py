@@ -39,7 +39,7 @@ from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
-from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox, shape
+from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox, hull, shape
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 REST_TILT = round(math.degrees(REST_PITCH))
@@ -50,8 +50,11 @@ TILTS = (15, 75)             # degrees down the view looks, from the side to nea
 LOOK_PULL, LOOK_SPEED, LOOK_NEAR = 10.0, 240.0, 0.5   # the view closes this share of the way to its goal a second, at most this many degrees a second, and lands within this
 TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
-CEILING_ALPHA = {0: 70, 1: 30, 2: 12}   # by squared distance from the cursor's column
-CAGE_PAD = 0.18               # in cells: the wire box around the landing block
+CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its spot
+CURSOR_REACH = 2.0            # cells around the spot's middle that the cursor repaints: its window and its arrow
+WINDOW, WINDOW_COVER = 1.25, 0.33   # the window's radius in cells, opened in rows in front that hide more than this share of the spot
+GLIDE_S, GLIDE_OVER = 0.15, 1.6     # the cursor glides this long to a spot more than this many cells away on screen
+CLEAR = (0, 0, 0, 0)
 # The direction arrow as (along, across) points in cells, from the box center outward.
 POINTER = ((0.1, -0.09), (0.75, -0.09), (0.75, -0.3), (1.2, 0), (0.75, 0.3), (0.75, 0.09), (0.1, 0.09))
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -87,7 +90,7 @@ class BlocksRoom(Room):
     arrows work in view coordinates, which are world (x, z) turned to the
     side that faces the viewer most. The floor and blocks paint (blocks_view) into two cached
     layers split at the cursor's row: the rows from the cursor's back, then the
-    cursor, then the rows in front of it, with the towers in the way faded. A
+    cursor, then the rows in front of it, with a round window where they hide it. A
     block's change repaints only around its column; the cursor changing rows, the
     room turning or tilting repaints all."""
 
@@ -125,7 +128,8 @@ class BlocksRoom(Room):
         self._built = None             # the build's shape for a moving view, until a block changes
         self._scene = self._front = self._composed = self._layer = None
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
-        self._faded, self._fade_key = frozenset(), None
+        self._drawn = None             # (camera, spot, screen point) of the cursor as last drawn
+        self._glide = self._glide_timer = None   # (when, from which screen point) the cursor set off for a far spot
         self.echo = Echo()
         self.code_panel = None
         self._space_pending = False
@@ -137,6 +141,7 @@ class BlocksRoom(Room):
     def on_leave(self):
         self.code_panel = None
         self._tab = None
+        self._stop_glide()
 
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
@@ -182,7 +187,7 @@ class BlocksRoom(Room):
         self._x, self._z = min(max(x, 0), WIDTH - 1), min(max(z, 0), DEPTH - 1)
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._last = self._next = self._mixed = self._left = None
+        self._last = self._next = self._mixed = self._left = self._drawn = None
         self._stamps.clear()
         self._dir = "right"
         self.echo.reset()
@@ -197,16 +202,6 @@ class BlocksRoom(Room):
     # ---------------------------------------------------------------- blocks
     def _column(self) -> list:
         return [y for (x, z, y) in self._blocks if (x, z) == (self._x, self._z)]
-
-    def _stacks(self) -> list:
-        """(bottom, top) of each run of touching blocks in the cursor's column."""
-        runs = []
-        for y in sorted(self._column()):
-            if runs and runs[-1][1] == y - 1:
-                runs[-1][1] = y
-            else:
-                runs.append([y, y])
-        return runs
 
     def _free(self, ys) -> list:
         return [y for y in ys if (self._x, self._z, y) not in self._blocks]
@@ -562,32 +557,25 @@ class BlocksRoom(Room):
 
     def _layers(self, size):
         """Bring the cached layers up to date: everything for a new camera, the scene for a new
-        cursor row, else only around the columns whose blocks changed; then the towers in the cursor's way."""
+        cursor row, else only around the columns whose blocks changed."""
         cam = resting_camera(self._off(), self._goal[1], *size)
-        vx, row = self._view(self._x, self._z)
+        row = self._view(self._x, self._z)[1]
         fresh = self._scene is None or cam is not self._cam
-        if fresh or self._dirty or row != self._painter.row:
-            whole = fresh or row != self._painter.row
-            moved_only = not fresh and not self._dirty
-            self._painter = self._painter.on_row(row) if moved_only else Painter(cam, self._view_blocks(), row=row)
-            if fresh:
-                self._cam, self._faded = cam, frozenset()
-                self._land, self._scene, self._composed = (pygame.Surface(size) for _ in range(3))
-                self._front = pygame.Surface(size, pygame.SRCALPHA)
-            rects = [cam.column_rect(x, z) for x, z in self._dirty] or [self._scene.get_rect()]
-            dirty = self._scene.get_rect() if fresh else rects[0].unionall(rects[1:])
-            if fresh or self._dirty:
-                self._paint_ground(dirty)
-            self._dirty, self._fade_key = set(), None
-            self._repaint(self._scene.get_rect() if whole else dirty)
-        key = (vx, self._cursor_y())
-        if key != self._fade_key:
-            self._fade_key = key
-            faded = self._hiding(vx, row, key[1])
-            if faded != self._faded:
-                rects = [cam.block_rect(*b[:3]) for b in faded | self._faded]
-                self._faded = faded
-                self._repaint(rects[0].unionall(rects[1:]), scene=False)
+        if not (fresh or self._dirty or row != self._painter.row):
+            return
+        whole = fresh or row != self._painter.row
+        moved_only = not fresh and not self._dirty
+        self._painter = self._painter.on_row(row) if moved_only else Painter(cam, self._view_blocks(), row=row)
+        if fresh:
+            self._cam = cam
+            self._land, self._scene, self._composed = (pygame.Surface(size) for _ in range(3))
+            self._front = pygame.Surface(size, pygame.SRCALPHA)
+        rects = [cam.column_rect(x, z) for x, z in self._dirty] or [self._scene.get_rect()]
+        dirty = self._scene.get_rect() if fresh else rects[0].unionall(rects[1:])
+        if fresh or self._dirty:
+            self._paint_ground(dirty)
+        self._dirty = set()
+        self._repaint(self._scene.get_rect() if whole else dirty)
 
     def _paint_ground(self, rect):
         """The floor and the sun's shadows on it: they change with blocks, never with the cursor."""
@@ -597,65 +585,21 @@ class BlocksRoom(Room):
         self._painter.paint_sun(g, rect)
         g.set_clip(None)
 
-    def _repaint(self, rect, scene: bool = True):
-        """Repaint `rect` of the layers: the scene (ground, row stripe, the rows behind the cursor,
-        the row's frame, the cursor's row) and the rows in front, then their composite."""
+    def _repaint(self, rect):
+        """Repaint `rect` of the layers: the scene (the ground, the cursor's row and the rows behind
+        it) and the rows in front, then their composite."""
         p, rect = self._painter, rect.clip(self._composed.get_rect())
-        if scene:
-            s = self._scene
-            s.set_clip(rect)
-            s.blit(self._land, rect, rect)
-            s.blit(*p.stripe())
-            p.paint(s, p.behind, rect)
-            p.frame_row(s)
-            p.paint(s, p.on_row_items, rect)
-            s.set_clip(None)
-        f = self._front
+        s, f = self._scene, self._front
+        s.set_clip(rect)
+        s.blit(self._land, rect, rect)
+        p.paint(s, p.back, rect)
+        s.set_clip(None)
         f.set_clip(rect)
-        f.fill((0, 0, 0, 0), rect)
-        p.paint(f, p.in_front, rect, frozenset(b[:2] for b in self._faded))
+        f.fill(CLEAR, rect)
+        p.paint(f, p.in_front, rect)
         f.set_clip(None)
-        self._composed.blit(self._scene, rect, rect)
+        self._composed.blit(s, rect, rect)
         self._composed.blit(f, rect, rect)
-
-    def _hiding(self, vx, vz, y) -> frozenset:
-        """Every block of each front tower that has a block whose picture overlaps the glass
-        column or the landing block by a pixel or more. The block just laid stays solid while
-        the cursor sits right behind it, and what it hides doesn't count."""
-        cam, front = self._cam, self._painter.front_blocks
-        polys = [poly for lo, hi in (((vx, y + 1, vz), (vx + 1, HEIGHT, vz + 1)), ((vx, y, vz), (vx + 1, y + 1, vz + 1)))
-                 for _, poly in cam.box(lo, hi)]
-        if not front or not polys:
-            return frozenset()
-        box = bbox([p for poly in polys for p in poly])
-        near = [b for b in front if cam.block_rect(*b[:3]).colliderect(box)]
-        if not near:
-            return frozenset()
-        s = pygame.Surface(box.size, pygame.SRCALPHA)
-        polys = [[(px - box.x, py - box.y) for px, py in poly] for poly in polys]
-        for poly in polys:
-            pygame.draw.polygon(s, (255, 255, 255), poly)
-        for poly in polys:      # trimmed by a pixel: a block just in front shares an edge with them without hiding them
-            pygame.draw.polygon(s, (0, 0, 0, 0), poly, 1)
-        spot = pygame.mask.from_surface(s)
-        laid = self._last and (*self._view(*self._last[0][:2]), self._last[0][2])
-        solid = next((b for b in near if b[:3] == laid and laid[:2] == (vx, vz - 1)), None)
-        if solid:
-            s.fill((0, 0, 0, 0))
-            self._silhouette(s, solid, box)
-            spot.erase(pygame.mask.from_surface(s), (0, 0))
-        towers = set()
-        for b in near:
-            if b is not solid and b[:2] not in towers:
-                s.fill((0, 0, 0, 0))
-                self._silhouette(s, b, box)
-                if spot.overlap(pygame.mask.from_surface(s), (0, 0)):
-                    towers.add(b[:2])
-        return frozenset(b for b in front if b[:2] in towers and b is not solid)
-
-    def _silhouette(self, s, b, box):
-        for _, poly in self._cam.box((b[0], b[2], b[1]), (b[0] + 1, b[2] + 1, b[1] + 1)):
-            pygame.draw.polygon(s, (255, 255, 255), [(px - box.x, py - box.y) for px, py in poly])
 
     def paper(self, g, size, on_screen=False):
         """The build for printing, on a pale floor (the screen's floor on screen), nothing see-through and no cursor."""
@@ -685,6 +629,8 @@ class BlocksRoom(Room):
             self._draw_cursor(g, area.topleft)
             self._draw_hold_badge(g, area)
         else:
+            self._stop_glide()
+            self._drawn = None
             g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
             self._draw_moving(g, area, *moving)
             g.surface.set_clip(None)
@@ -723,97 +669,131 @@ class BlocksRoom(Room):
             self._turn_detail_limit = len(self._blocks) - 1
 
     # ---------------------------------------------------------------- cursor
-    def _cursor_box(self, vx, vz) -> pygame.Rect:
-        """Layer pixels the cursor can touch: its column and the ceiling cells around it,
-        below the floor to over the ceiling, with room for the wire box and pointer."""
-        at = self._cam.at
-        box = bbox([at(vx + dx, y, vz + dz) for dx in (-1, 2) for dz in (-1, 2) for y in (-2, HEIGHT + 2)])
-        pad = math.ceil(self._cam.cell(vx, HEIGHT, vz))
-        return box.inflate(pad, pad).clip(self._composed.get_rect())
+    def _cursor_box(self, vx, vz, y) -> pygame.Rect:
+        """Layer pixels the cursor can touch: CURSOR_REACH cells around its spot's middle."""
+        reach = round(CURSOR_REACH * self._cam.cell(vx, y, vz))
+        box = pygame.Rect(0, 0, 2 * reach, 2 * reach)
+        box.center = self._middle(vx, vz, y)
+        return box.clip(self._composed.get_rect())
+
+    def _middle(self, vx, vz, y) -> tuple:
+        return tuple(map(round, self._cam.at(vx + 0.5, y + 0.5, vz + 0.5)))
 
     def _draw_cursor(self, g, origin):
-        """A blinking glass column from the ceiling down onto the see-through
-        landing block, with its shadow on whatever it would land on and a ring
-        around each run of blocks in its column; then the rows in front, which
-        hide those rings like any block; then a patch of ceiling fading out around
-        the column, the column's edges faint through it, and a bold wire box around
-        the landing block on top of everything. Only the patch around the column
-        is redrawn; Gfx.blink swaps it bright and dim. guides/blocks-cursor.md"""
+        """Where the next block goes: a bold edge around its spot and an arrow the way typing goes,
+        over everything; in the spot, behind the rows in front, a small block in the brush color
+        that blinks and, under a floating spot, its shadow square. Rows in front that hide the spot
+        get a round window. Only a patch around the spot is redrawn; Gfx.blink swaps it. A jump
+        glides there, the edge, block and arrow alone. guides/blocks-cursor.md"""
         cam, painter = self._cam, self._painter
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
-        box = self._cursor_box(vx, vz)
+        cell, middle, box = cam.cell(vx, y, vz), self._middle(vx, vz, y), self._cursor_box(vx, vz, y)
         at = box.move(origin)
         if self._layer is None or self._layer.get_size() != self._composed.get_size():
             self._layer = pygame.Surface(self._composed.get_size(), pygame.SRCALPHA)
         layer = self._layer
-        column = [poly for _, poly in cam.box((vx, y + 1, vz), (vx + 1, HEIGHT, vz + 1))]
+        edge = hull([p for _, poly in cam.box((vx, y, vz), (vx + 1, y + 1, vz + 1)) for p in poly])
+        width = max(3, round(cell) // 9)
+
+        def block(bright, shadow=True):
+            layer.fill(CLEAR, box)
+            if shadow and self._ground(y) < y:
+                painter.shadow(layer, vx, vz, self._ground(y), alpha=255)
+            if bright:
+                painter.box(layer, vx, vz, y, y, self._color, inset=CURSOR_INSET)
+
+        def marks():
+            for color, w in ((rgb(art_room.CANVAS_BG), width + 4), (rgb(P.TEXT), width)):
+                pygame.draw.polygon(layer, color, edge, w)
+                for corner in edge:         # a wide line's corners come out notched
+                    pygame.draw.circle(layer, color, corner, w // 2)
+            self._pointer(layer, vx, vz, y)
+
+        slide = self._slide((vx, vz, y), middle, cell)
+        if slide is not None:
+            block(True, shadow=False)
+            marks()
+            g.surface.blit(layer, at.move(slide), box)
+            return
+        laid = self._laid_ahead(vx, vz)
+        window = self._hidden(edge, laid)
 
         def draw(bright):
-            fill, edge = (40, 150) if bright else (16, 70)
             g.surface.blit(self._scene, at, box)
-            layer.fill((0, 0, 0, 0), box)
-            self._outline(layer, column, edge, fill)
-            painter.shadow(layer, vx, vz, self._ground(y), alpha=255)
-            painter.box(layer, vx, vz, y, y, self._color, alpha=170 if bright else 100)
-            for lo, hi in self._stacks():       # its blocks, ringed so they read as part of it among many columns
-                for _, poly in cam.box((vx, lo, vz), (vx + 1, hi + 1, vz + 1)):
-                    pygame.draw.polygon(layer, (*rgb(P.TEXT), 220 if bright else 120), poly, 2)
-            layer.blit(self._front, box, box)
+            block(bright)
             g.surface.blit(layer, at, box)
-            layer.fill((0, 0, 0, 0), box)       # draw calls replace pixels rather than blend, so the see-through top goes on fresh
-            self._ceiling_patch(layer, vx, vz, 0.3 if y == HEIGHT - 1 else 1)   # faint when the box is up against it
-            self._outline(layer, column, edge // 3)
-            self._cage(layer, vx, vz, y)
-            self._pointer(layer, vx, vz, y)
+            layer.fill(CLEAR, box)
+            layer.blit(self._front, box, box)
+            if window:
+                pygame.draw.circle(layer, CLEAR, middle, round(WINDOW * cell))
+                if laid:
+                    painter.box(layer, *laid)
+            marks()
             g.surface.blit(layer, at, box)
         g.draw_caret(at, lambda: draw(True), lambda: draw(False))
 
-    def _outline(self, layer, polys, edge, fill=0):
-        for poly in polys:
-            if fill:
-                pygame.draw.polygon(layer, (*rgb(self._color), fill), poly)
-            pygame.draw.polygon(layer, (*rgb(P.TEXT), edge), poly, 1)
+    def _laid_ahead(self, vx, vz):
+        """The block just laid, as the painter's (x, z, bottom, top, color), if it sits right in front of the cursor."""
+        pos = self._last and self._last[0]
+        if pos in self._blocks and self._view(*pos[:2]) == (vx, vz - 1):
+            return vx, vz - 1, pos[2], pos[2], self._blocks[pos]
+
+    def _hidden(self, edge, laid) -> bool:
+        """Whether the rows in front cover more than WINDOW_COVER of the cursor's spot on screen.
+        The block just laid right in front of it doesn't count, nor what that one hides."""
+        box = bbox(edge).clip(self._front.get_rect())
+        s = pygame.Surface(box.size, pygame.SRCALPHA)
+
+        def mask(polys):
+            s.fill(CLEAR)
+            for poly in polys:
+                pygame.draw.polygon(s, (255, 255, 255), [(px - box.x, py - box.y) for px, py in poly])
+            return pygame.mask.from_surface(s)
+        spot, cover = mask([edge]), pygame.mask.from_surface(self._front.subsurface(box))
+        if laid:
+            x, z, y = laid[:3]
+            cover.erase(mask([poly for _, poly in self._cam.box((x, y, z), (x + 1, y + 1, z + 1))]), (0, 0))
+        return cover.overlap_area(spot, (0, 0)) > WINDOW_COVER * spot.count()
+
+    def _slide(self, spot, middle, cell):
+        """How far off its spot to draw the cursor mid-glide, in pixels, else None. It glides to a
+        spot more than GLIDE_OVER cells on screen from where it was last drawn in this view."""
+        now = time.monotonic()
+        cam, was, drawn = self._drawn or (None, None, None)
+        if cam is not self._cam:
+            self._stop_glide()
+        elif was != spot:
+            self._stop_glide()
+            if math.dist(drawn, middle) > GLIDE_OVER * cell:
+                self._glide = (now, drawn)
+                self._glide_timer = self.app.timers.every(1 / 60, self.app.invalidate)
+        left = 1 - (now - self._glide[0]) / GLIDE_S if self._glide else 0
+        if left <= 0:
+            self._stop_glide()
+        slide = tuple(round((a - b) * left ** 3) for a, b in zip(self._glide[1], middle)) if self._glide else None
+        self._drawn = (self._cam, spot, tuple(a + b for a, b in zip(middle, slide or (0, 0))))
+        return slide
+
+    def _stop_glide(self):
+        if self._glide_timer:
+            self._glide_timer.stop()
+        self._glide = self._glide_timer = None
 
     def _ground(self, y: int) -> int:
         """The level the cursor's block would rest on below height y."""
         return max((h + 1 for h in self._column() if h < y), default=0)
-
-    def _ceiling_patch(self, layer, vx, vz, strength=1.0):
-        at = self._cam.at
-        cells = [(dx, dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1) if 0 <= vx + dx < WIDTH and 0 <= vz + dz < DEPTH]
-        for dx, dz in cells:
-            x, z = vx + dx, vz + dz
-            top = [at(x, HEIGHT, z), at(x + 1, HEIGHT, z), at(x + 1, HEIGHT, z + 1), at(x, HEIGHT, z + 1)]
-            pygame.draw.polygon(layer, (*rgb(P.TEXT), round(CEILING_ALPHA[dx * dx + dz * dz] * strength)), top)
-
-    def _cage(self, layer, vx, vz, y):
-        """Twelve wire edges a little outside the landing block: the three hidden ones
-        thin and faint, the rest bold over a dark edge so they read against any block."""
-        cam = self._cam
-        lo, hi = -CAGE_PAD, 1 + CAGE_PAD
-        ex, _, ez = cam.eye
-        hidden = (lo if ex > vx + 0.5 else hi, hi if ez < vz + 0.5 else lo, lo)   # (x, z, y): the corner away from the eye
-        corners = [(a, b, h) for a in (lo, hi) for b in (lo, hi) for h in (lo, hi)]
-        edges = [[cam.at(vx + a, y + h, vz + b) for a, b, h in (p, q)] + [hidden in (p, q)]
-                 for i, p in enumerate(corners) for q in corners[i + 1:] if sum(m != n for m, n in zip(p, q)) == 1]
-        w = max(2, round(cam.cell(vx, y, vz)) // 10)
-        for color, width, back in (((*rgb(art_room.CANVAS_BG), 220), w + 4, False), ((*rgb(P.TEXT), 90), 1, True),
-                                   ((*rgb(P.TEXT), 240), w, False)):
-            for start, end, behind in edges:
-                if behind == back:
-                    pygame.draw.line(layer, color, start, end, width)
 
     def _step(self) -> dict:
         axis, step = WRAP[self._dir][0]
         return {a: (step if a == axis else 0) for a in SIZE}
 
     def _pointer(self, layer, vx, vz, y):
-        """An arrow out of the wire box's top (or bottom, going down) the way
+        """An arrow out of the spot's top (or bottom, going down) the way
         the next typed block goes, laid flat in the scene so depth foreshortens it."""
         d = self._step()
         across = {"x": 0, "z": 1} if d["x"] else {"x": 1, "z": 0}
-        base = y - CAGE_PAD if self._dir == SINK else y + 1 + CAGE_PAD
+        base = y if self._dir == SINK else y + 1
         arrow = [self._cam.at(vx + 0.5 + u * d["x"] + v * across["x"], base + u * d["y"], vz + 0.5 + u * d["z"] + v * across["z"])
                  for u, v in POINTER]
         pygame.draw.polygon(layer, (*rgb(P.TEXT), 240), arrow)

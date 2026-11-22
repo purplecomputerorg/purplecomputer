@@ -6,8 +6,8 @@ block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, a tap of Tab
 turns the build a little and Tab held with the arrows looks around it to any angle and tilts the view, with arrows
-still moving the way they point most, blocks in front of the
-cursor fade, a whole tower at a time, where they hide its glass column or landing block, and the Esc picker reaches the room with
+still moving the way they point most, rows in front of the
+cursor get a round window where they hide its spot, the cursor glides to a far spot, and the Esc picker reaches the room with
 4."""
 
 import math
@@ -369,24 +369,37 @@ def test_holding_space_while_pressing_enter_lays_a_column():
     run(go())
 
 
-def _faded(room) -> set:
-    return {b[:3] for b in room._faded}
+def _on_screen(app, room, x, y, z) -> tuple:
+    """The color drawn at view point (x, y, z)."""
+    px, py = room._cam.at(x, y, z)
+    return tuple(app.g.surface.get_at((round(px + room._origin[0]), round(py + room._origin[1])))[:3])
 
 
-def test_front_towers_in_the_way_of_the_landing_spot_fade_whole():
+def _shades(room, x, z, y, color) -> set:
+    return {room._painter.face(room._painter.base(x, z, color), n, y) for n in (TOP, (0, -1))}
+
+
+def test_a_wall_in_front_of_the_cursor_opens_a_round_window_onto_it():
     async def go():
         app, room = _blocks()
-        room._blocks.update({(15, 4, y): "#ff0000" for y in range(3)})
-        room._blocks[(2, 5, 0)] = "#00ff00"
-        room._x, room._z = 15, 6
+        room._blocks.update({(x, 4, y): "#ff0000" for x in range(WIDTH) for y in range(4)})
+        room._z = 6
+        room._changed()
         app._draw()
-        assert _faded(room) == {(15, 4, y) for y in range(3)}
-        room._x = 20                            # the same row, clear of that tower
+        assert _on_screen(app, room, 5.5, 0.5, 6.5) in _shades(room, 5, 6, 0, room._color)   # the cursor's small block
+        assert _on_screen(app, room, 0.5, 3.5, 4) in _shades(room, 0, 4, 3, "#ff0000")       # the wall, away from it
+        assert room._front.get_at(tuple(map(round, room._cam.at(5.5, 0.5, 6.5))))[3]         # and whole in its own layer
+    run(go())
+
+
+def test_blocks_in_front_that_leave_the_spot_in_view_stay_whole():
+    async def go():
+        app, room = _blocks()
+        room._blocks[(5, 4, 0)] = "#ff0000"
+        room._z = 6
+        room._changed()
         app._draw()
-        assert not room._faded
-        room._x, room._z = 5, 2
-        app._draw()
-        assert not room._front.get_bounding_rect().w
+        assert _on_screen(app, room, 5.3, 0.8, 4) in _shades(room, 5, 4, 0, "#ff0000")      # inside where a window would be
     run(go())
 
 
@@ -422,17 +435,41 @@ def test_building_backward_keeps_the_block_just_laid_solid():
         await press(app, "up")
         await type_text(app, "aaa")
         app._draw()
-        assert room._front.get_bounding_rect().w and not room._faded
+        assert (room._x, room._z) == (5, 9)
+        assert _on_screen(app, room, 5.5, 1, 8.5) in _shades(room, 5, 8, 0, get_key_color("a"))
+        room._blocks.update({(x, 3, y): "#ff0000" for x in range(WIDTH) for y in range(8)})    # a wall in front of both
+        room._changed()
+        app._draw()
+        assert _on_screen(app, room, 5.5, 1, 8.5) in _shades(room, 5, 8, 0, get_key_color("a"))
     run(go())
 
 
-def test_a_front_block_over_only_the_thread_stays_solid():
+def test_the_cursor_glides_to_a_far_spot_and_steps_next_door_at_once(monkeypatch):
     async def go():
         app, room = _blocks()
-        room._blocks.update({(6, 2, y): "#ff0000" for y in range(4)})
-        room._z, room._hover = 6, 8
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
         app._draw()
-        assert room._front.get_bounding_rect().w and not room._faded
+        await press(app, "right")
+        app._draw()
+        assert room._glide is None and room._drawn[2] == room._middle(6, 5, 0)
+        was = room._drawn[2]
+        room._x, room._z = 14, 12
+        app._draw()
+        assert room._glide and room._drawn[2] == was and app.g.caret is None
+        now[0] += blocks_room.GLIDE_S / 2
+        app._draw()
+        goal = room._middle(14, 12, 0)
+        assert math.dist(room._drawn[2], goal) < math.dist(was, goal) / 4      # most of the way there, slowing
+        now[0] += blocks_room.GLIDE_S
+        app._draw()
+        assert room._glide is None and room._glide_timer is None and room._drawn[2] == goal and app.g.caret
+        room._x = 2
+        room.look_around()                                                      # a moving view starts over
+        app._draw()
+        _settle(room)
+        app._draw()
+        assert room._glide is None
     run(go())
 
 
@@ -749,8 +786,8 @@ def test_a_code_row_still_climbs_over_a_tower_in_its_way():
 
 
 def test_cursor_paints_only_inside_its_redraw_box():
-    """The cursor redraws just a patch around its column, so nothing it draws
-    (ceiling patch, wire box, pointer, rings) may reach past that patch."""
+    """The cursor redraws just a patch around its spot, so nothing it draws
+    (edge, small block, arrow, window) may reach past that patch."""
     async def go():
         app, room = _blocks()
         for x, z in ((0, 0), (WIDTH - 1, 0), (0, DEPTH - 1), (WIDTH - 1, DEPTH - 1)):
@@ -760,7 +797,7 @@ def test_cursor_paints_only_inside_its_redraw_box():
                     room._blocks = {(x, z, y): "#ff0000" for y in range(HEIGHT - 1)} if top else {}
                     room._scene = None
                     app._draw()
-                    box = room._cursor_box(*room._view(x, z))
+                    box = room._cursor_box(*room._view(x, z), room._cursor_y())
                     assert box.contains(room._layer.get_bounding_rect()), (x, z, top, way)
     run(go())
 

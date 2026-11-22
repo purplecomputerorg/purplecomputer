@@ -5,18 +5,19 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 ## Rules
 
 1. **Never change a block's color.** Blocks is a color room; a block that looks darker when the cursor moves away teaches the wrong color. Blocks are plain faces with no lines on them: the cursor's marks are its own, never the blocks'.
-2. **Only the cursor's own lines draw over everything.** The wire box and its arrow go on top. Anything else the cursor marks (the rings around its column's blocks) sits in the scene, so blocks in front hide it like any block.
-3. **Fade only what's in the way, a whole tower at a time.** A front tower fades when any of its blocks is drawn over the glass column or the landing block, by a pixel or more; all of it fades, floor to top, as one flat layer. Everything else stays solid.
-4. **One more line costs more than it explains.** A wall of one color reads better as one wall. Seams between blocks, a line from each floating block down to its shadow, and a band across the cursor row's blocks were all drawn once; the build looked cleaner without them, and paints faster: a column's touching blocks of one color are one tall box (`shape` in `blocks_view.py`).
+2. **Only the cursor's edge and arrow draw over everything.** Its small block and shadow sit in the scene, so blocks in front hide them like any block.
+3. **Nothing is see-through.** Where the rows in front hide the cursor's spot, they get a round window onto it: a crisp hole, everything in it solid. Everything else stays whole.
+4. **One more line costs more than it explains.** A wall of one color reads better as one wall, and with no lines on the blocks, the cursor's edge is the only line on screen, which is what makes it easy to find. Seams between blocks, a line from each floating block down to its shadow, and a band across the cursor row's blocks were all drawn once; the build looked cleaner without them, and paints faster: a column's touching blocks of one color are one tall box (`shape` in `blocks_view.py`).
+5. **The cursor never looks like a laid block.** A laid block fills its cell; the cursor's block is about half that size.
 
 ## What the cursor draws
 
-- **Glass column** from the ceiling down to the landing block, plus a faint ceiling patch: which floor spot you're over.
-- **Bold wire box** around the landing block: white over a dark edge, width scaled with the cell size, so it reads over any color.
-- **Shadow square** under a floating landing spot, the same mark every floating block gets, with no line up to the block.
-- **Rings** around each run of blocks in the cursor's column, hidden by blocks in front.
-- **Frame around the cursor's row**: a faint upright rectangle on the back of the row, floor to ceiling and wall to wall, so the row reads as one slice of the world rather than a line of unrelated blocks. Drawn behind the row's blocks, so it never crosses over them.
-- **Faded towers** in the way, at `FRONT_ALPHA`.
+- **Bold edge** around the spot the next block goes: white over a dark edge, width scaled with the cell size, so it reads over any color.
+- **Small block** in the brush color in the middle of the spot. It blinks; the edge stays.
+- **Arrow** out of the spot the way typing goes.
+- **Shadow square** under a floating spot, the same mark every floating block gets, with no line up to the block.
+- **Round window** in the rows in front when they hide more than `WINDOW_COVER` of the spot. The block just laid right in front of the cursor doesn't count and stays solid in the window, so typing away from the viewer still shows each block land; the cursor then shows as its edge over that block.
+- **A glide** when the spot lands more than `GLIDE_OVER` cells away on screen, as when typing along a row of uneven towers: the edge, block and arrow slide there in `GLIDE_S`, slowing down, so the eye follows. A step next door is instant, and nothing moves unless a key was pressed.
 
 ## Looking around
 
@@ -44,10 +45,13 @@ Tried and dropped: **a round platter under the floor, turning a quarter at a tim
 
 ## Tried and dropped
 
+- **A cursor of many marks:** a glass column from the ceiling, a patch on the ceiling, rings around the column's blocks, a frame and a floor stripe on the cursor's row, a padded wire box and a see-through landing block. Each answered a question, and together they hid the answer.
+- **Fading the front towers in the way:** a see-through tower shows every edge behind it. The window shows less and says more.
+- **A full-size solid block as the cursor:** it looks laid already, and blinking it doesn't help, since half the time it still looks laid.
+- **Only the edge showing through a wall, with no window:** fewest marks, but the block just typed can't be seen, and the edge reads as sitting on the wall's face.
 - **Fade every row in front** whenever anything hid the landing spot: focused the eye but hid half the build for one block in the way.
 - **Fade only the overlapping blocks:** one see-through block in a same-colored wall reads as a dark hole.
 - **Glass blocks** (faint fill, bright edges per block): stacked glass shows every hidden face and turns into wireframe noise.
-- **Fade the landing spot's neighbors too:** too much glass in dense builds.
 - **Outline down to the floor** from a floating landing spot: a second tall box crossing everything; the shadow square says the same thing.
 - **Spotlight** (screen darkens away from the cursor): keeps the noisy part, right around the cursor, bright.
 - **Tint rows other than the cursor's:** a good depth cue, but it changes colors most of the time (rule 1).

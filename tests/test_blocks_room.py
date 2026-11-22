@@ -6,15 +6,15 @@ block goes in the first free spot at or above it, Backspace eats down the column
 then steps left, a chord mixes the second key's color into the block the first
 one dropped, holding a letter or Space while arrowing lays a line, a tap of Tab
 turns the build a little and Tab held with the arrows looks around it to any angle and tilts the view, with arrows
-still moving the way they point most, rows in front of the
-cursor get a round window where they hide its spot, the cursor glides to a far spot, and the Esc picker reaches the room with
-4."""
+still moving the way they point most, the cursor's block waits on the top level
+over its column and a new block falls from it, the walls and the top stop everything rather than wrap, and the Esc picker
+reaches the room with 4."""
 
 import math
 
 from purplecomputer.harness import make_app, press, run, type_text
 from purplecomputer.rooms import blocks_room
-from purplecomputer.rooms.blocks_room import DEPTH, HEIGHT, LOOKS, REST_TILT, RISE, SINK, TILTS, TURN_DETAIL_BLOCKS, WIDTH
+from purplecomputer.rooms.blocks_room import DEPTH, DROP_S, HEIGHT, HOVER, LOOKS, REST_TILT, RISE, SINK, TILTS, TURN_DETAIL_BLOCKS, WIDTH
 from purplecomputer.rooms.blocks_view import REST_PITCH, SLAB, TOP, Camera, shape
 from purplecomputer.color_mixing import mix_colors_paint
 from purplecomputer.input import KeyCode, RawKeyEvent
@@ -56,11 +56,11 @@ def test_held_letter_repeats_like_in_art():
     run(go())
 
 
-def test_stacking_past_the_top_starts_the_next_column_from_the_floor():
+def test_stacking_past_the_top_stays_on_the_top_block():
     async def go():
         app, room = _blocks()
-        await type_text(app, "a" * (HEIGHT + 1))
-        assert all((5, 5, y) in room._blocks for y in range(HEIGHT)) and (6, 5, 0) in room._blocks
+        await type_text(app, "a" * (HEIGHT + 2))
+        assert set(room._blocks) == {(5, 5, y) for y in range(HEIGHT)} and (room._x, room._z) == (5, 5)
     run(go())
 
 
@@ -75,18 +75,18 @@ def test_a_full_column_puts_the_cursor_on_its_top_block():
     run(go())
 
 
-def test_typing_goes_right_by_default_and_wraps_like_lines_of_text():
+def test_typing_goes_right_by_default_and_piles_up_at_the_wall():
     async def go():
         app = make_app()
         app.action_switch_room("blocks")
         room = app.rooms["blocks"]
         room._x, room._z = WIDTH - 2, DEPTH - 1
         await type_text(app, "abc")
-        assert {(WIDTH - 2, DEPTH - 1, 0), (WIDTH - 1, DEPTH - 1, 0), (0, 0, 0)} == set(room._blocks)
+        assert {(WIDTH - 2, DEPTH - 1, 0), (WIDTH - 1, DEPTH - 1, 0), (WIDTH - 1, DEPTH - 1, 1)} == set(room._blocks)
     run(go())
 
 
-def test_walking_into_a_wall_turns_typing_along_it_instead_of_wrapping():
+def test_walking_into_a_wall_turns_typing_along_it():
     async def go():
         app, room = _blocks()
         for i in range(DEPTH):
@@ -169,20 +169,18 @@ def test_space_then_enter_stacks_on_the_block_space_laid():
     run(go())
 
 
-def test_shift_up_and_down_held_stop_at_the_ends_and_a_fresh_press_wraps():
+def test_shift_up_and_down_stop_at_the_top_and_the_floor():
     async def go():
         app, room = _blocks()
         await press(app, "a")
         for i in range(HEIGHT + 2):
             await press(app, "up", shift_held=True, is_repeat=i > 0)
+        await press(app, "up", shift_held=True)
         assert room._cursor_y() == HEIGHT - 1 and (room._x, room._z) == (5, 5)
         for i in range(HEIGHT + 2):
             await press(app, "down", shift_held=True, is_repeat=i > 0)
-        assert room._cursor_y() == 0                # on the block at 0
         await press(app, "down", shift_held=True)
-        assert room._cursor_y() == HEIGHT - 1
-        await press(app, "up", shift_held=True)
-        assert room._cursor_y() == 0
+        assert room._cursor_y() == 0                # on the block at 0
     run(go())
 
 
@@ -208,18 +206,16 @@ def test_shift_up_steps_onto_blocks_in_the_way_and_typing_mixes_into_them():
     run(go())
 
 
-def test_held_arrows_stop_at_the_wall_and_a_fresh_press_comes_out_the_far_side():
+def test_the_walls_stop_the_arrows_held_or_pressed_again():
     async def go():
         app, room = _blocks()
         for i in range(WIDTH + 5):
             await press(app, "right", is_repeat=i > 0)
-        assert room._x == WIDTH - 1
         await press(app, "right")
-        assert (room._x, room._z) == (0, 5)
-        await press(app, "up")
+        assert (room._x, room._z) == (WIDTH - 1, 5)
         room._z = DEPTH - 1
         await press(app, "up")
-        assert room._z == 0
+        assert (room._x, room._z) == (WIDTH - 1, DEPTH - 1)
     run(go())
 
 
@@ -379,27 +375,78 @@ def _shades(room, x, z, y, color) -> set:
     return {room._painter.face(room._painter.base(x, z, color), n, y) for n in (TOP, (0, -1))}
 
 
-def test_a_wall_in_front_of_the_cursor_opens_a_round_window_onto_it():
+def test_the_cursor_s_block_waits_on_the_top_level_whatever_is_under_it_and_blinks():
     async def go():
         app, room = _blocks()
-        room._blocks.update({(x, 4, y): "#ff0000" for x in range(WIDTH) for y in range(4)})
-        room._z = 6
-        room._changed()
-        app._draw()
-        assert _on_screen(app, room, 5.5, 0.5, 6.5) in _shades(room, 5, 6, 0, room._color)   # the cursor's small block
-        assert _on_screen(app, room, 0.5, 3.5, 4) in _shades(room, 0, 4, 3, "#ff0000")       # the wall, away from it
-        assert room._front.get_at(tuple(map(round, room._cam.at(5.5, 0.5, 6.5))))[3]         # and whole in its own layer
+        for tower in (0, 7):
+            room._blocks = {(5, 5, y): "#ff0000" for y in range(tower)}
+            room._changed()
+            app._draw()
+            assert room._cursor_y() == tower
+            assert _on_screen(app, room, 5.5, HOVER + 0.5, 5.5) in _shades(room, 5, 5, HOVER, room._color)
+        app.g.dirty = False
+        app.g.blink(0)
+        assert _on_screen(app, room, 5.5, HOVER + 0.5, 5.5) not in _shades(room, 5, 5, HOVER, room._color)
     run(go())
 
 
-def test_blocks_in_front_that_leave_the_spot_in_view_stay_whole():
+def test_a_wall_in_front_hides_the_landing_spot_and_an_arrowhead_marks_where_the_line_goes_behind():
     async def go():
         app, room = _blocks()
-        room._blocks[(5, 4, 0)] = "#ff0000"
         room._z = 6
-        room._changed()
+        tips = []
+        room._arrowhead = lambda surf, tip, cell: tips.append(tip)
         app._draw()
-        assert _on_screen(app, room, 5.3, 0.8, 4) in _shades(room, 5, 4, 0, "#ff0000")      # inside where a window would be
+        assert tips == [room._cam.at(5.5, 1, 6.5)]                  # in the open: just the line's end
+        room._blocks.update({(x, 4, y): "#ff0000" for x in range(WIDTH) for y in range(4)})
+        room._changed()
+        del tips[:]
+        app._draw()
+        assert _on_screen(app, room, 5.5, 0.5, 6.5) in _shades(room, 5, 4, 0, "#ff0000")     # the wall, whole
+        (end, cut), front = tips, room._front
+        assert end == room._cam.at(5.5, 1, 6.5) and cut[1] < end[1]
+        assert not front.get_at((int(cut[0]), int(cut[1])))[3] and front.get_at((int(cut[0]), int(cut[1]) + 3))[3]
+    run(go())
+
+
+def test_a_new_block_falls_to_its_spot_from_the_cursor_s_block(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        await press(app, "a")
+        assert room._falls == {(5, 5, 0): (100.0, HOVER)} and set(room._view_blocks()) == {(5, 5, HOVER)}
+        now[0] += DROP_S / 2
+        app._draw()
+        assert set(room._view_blocks()) == {(5, 5, HOVER * 0.75)} and set(room._view_blocks(falling=False)) == {(5, 5, 0)}
+        now[0] += DROP_S
+        room._fall_tick()
+        assert not room._falls and room._fall_timer is None and set(room._view_blocks()) == {(5, 5, 0)}
+        await press(app, "a")                                       # onto a full spot: mixed in, nothing falls
+        room._next = (5, 5, 0, True)
+        await press(app, "b")
+        assert list(room._falls) == [(5, 5, 1)]
+        room._blocks[(8, 8, 3)] = "#ff0000"                         # under a block: from just under it
+        room._x, room._z, room._next = 8, 8, None
+        await press(app, "a")
+        assert room._falls[(8, 8, 0)][1] == 2
+        room.restore_timeline_state(room.timeline_state())
+        assert not room._falls
+    run(go())
+
+
+def test_the_cursor_shows_while_the_view_turns_with_its_arrow_the_way_typing_will_go():
+    async def go():
+        app, room = _blocks()
+        room._dir = "right"
+        shown = []
+        room._hover_marks = lambda surf, painter, x, z, way, bright=True: shown.append((x, z, way))
+        for _ in range(5):
+            room.look_around()
+        room._look[0] = 40.0
+        app._draw()
+        (wx, wz), (nx, nz) = room._world(*room._view(5, 5)), room._world(room._view(5, 5)[0] + 1, room._view(5, 5)[1])
+        assert room._side == 1 and shown == [(5, 5, (nx - wx, nz - wz))]
     run(go())
 
 
@@ -427,50 +474,6 @@ def test_a_build_is_painted_as_tall_boxes_with_only_the_faces_that_can_show():
     assert faces[(2, 2, 2, 2)] == faces[(2, 2, 5, 6)] == {TOP, (0, -1), (0, 1), (-1, 0), (1, 0)}
     assert floats == [(2, 2, 3)] and stacks == [(2, 2, 0, 2), (2, 2, 5, 6), (3, 2, 0, 1)]
     assert shape({}) == ([], [], [])
-
-
-def test_building_backward_keeps_the_block_just_laid_solid():
-    async def go():
-        app, room = _blocks()
-        await press(app, "up")
-        await type_text(app, "aaa")
-        app._draw()
-        assert (room._x, room._z) == (5, 9)
-        assert _on_screen(app, room, 5.5, 1, 8.5) in _shades(room, 5, 8, 0, get_key_color("a"))
-        room._blocks.update({(x, 3, y): "#ff0000" for x in range(WIDTH) for y in range(8)})    # a wall in front of both
-        room._changed()
-        app._draw()
-        assert _on_screen(app, room, 5.5, 1, 8.5) in _shades(room, 5, 8, 0, get_key_color("a"))
-    run(go())
-
-
-def test_the_cursor_glides_to_a_far_spot_and_steps_next_door_at_once(monkeypatch):
-    async def go():
-        app, room = _blocks()
-        now = [100.0]
-        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
-        app._draw()
-        await press(app, "right")
-        app._draw()
-        assert room._glide is None and room._drawn[2] == room._middle(6, 5, 0)
-        was = room._drawn[2]
-        room._x, room._z = 14, 12
-        app._draw()
-        assert room._glide and room._drawn[2] == was and app.g.caret is None
-        now[0] += blocks_room.GLIDE_S / 2
-        app._draw()
-        goal = room._middle(14, 12, 0)
-        assert math.dist(room._drawn[2], goal) < math.dist(was, goal) / 4      # most of the way there, slowing
-        now[0] += blocks_room.GLIDE_S
-        app._draw()
-        assert room._glide is None and room._glide_timer is None and room._drawn[2] == goal and app.g.caret
-        room._x = 2
-        room.look_around()                                                      # a moving view starts over
-        app._draw()
-        _settle(room)
-        app._draw()
-        assert room._glide is None
-    run(go())
 
 
 def _settle(room):
@@ -782,23 +785,6 @@ def test_a_code_row_still_climbs_over_a_tower_in_its_way():
         room._x, room._next = 4, None
         _code(room, ("right", 3))
         assert {(4, 5, 0), (5, 5, 2), (6, 5, 2)} <= set(room._blocks)
-    run(go())
-
-
-def test_cursor_paints_only_inside_its_redraw_box():
-    """The cursor redraws just a patch around its spot, so nothing it draws
-    (edge, small block, arrow, window) may reach past that patch."""
-    async def go():
-        app, room = _blocks()
-        for x, z in ((0, 0), (WIDTH - 1, 0), (0, DEPTH - 1), (WIDTH - 1, DEPTH - 1)):
-            for top in (False, True):
-                for way in ("right", "left", "up", "down", RISE, SINK):
-                    room._x, room._z, room._dir, room._next, room._layer = x, z, way, None, None
-                    room._blocks = {(x, z, y): "#ff0000" for y in range(HEIGHT - 1)} if top else {}
-                    room._scene = None
-                    app._draw()
-                    box = room._cursor_box(*room._view(x, z), room._cursor_y())
-                    assert box.contains(room._layer.get_bounding_rect()), (x, z, top, way)
     run(go())
 
 

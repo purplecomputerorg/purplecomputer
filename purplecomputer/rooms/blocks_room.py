@@ -17,7 +17,8 @@ mixes the two colors. Backslash
 opens the color bar. A tap of Tab turns the build a little, and Tab held with
 the arrows looks around it: Left and Right turn it a little at a time to any
 angle, Up and Down tilt the view from the side to nearly straight down. The
-arrows always go the way they point most on screen. The code line opens from
+arrows always go the way they point most on screen. The walls and the top
+stop the cursor and typing: nothing wraps around. The code line opens from
 the Esc menu."""
 
 import asyncio
@@ -48,23 +49,21 @@ REST_TILT = round(math.degrees(REST_PITCH))
 LOOKS = {"left": (0, -18), "right": (0, 18), "up": (1, 15), "down": (1, -15)}
 TILTS = (15, 75)             # degrees down the view looks, from the side to nearly straight down: the eye stays over every block and in front of every row
 LOOK_PULL, LOOK_SPEED, LOOK_NEAR = 10.0, 240.0, 0.5   # the view closes this share of the way to its goal a second, at most this many degrees a second, and lands within this
-TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
-TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
-CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its spot
-CURSOR_REACH = 2.0            # cells around the spot's middle that the cursor repaints: its window and its arrow
-WINDOW, WINDOW_COVER = 1.25, 0.33   # the window's radius in cells, opened in rows in front that hide more than this share of the spot
-GLIDE_S, GLIDE_OVER = 0.15, 1.6     # the cursor glides this long to a spot more than this many cells away on screen
+TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows and a new block lands at once
+TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame, or one of a block falling, slower than this lowers that limit to its block count
+HOVER = HEIGHT - 1            # the level the cursor's block waits on, over its column: the top one
+CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its cell
+CURSOR_REACH = 2.0            # cells around the cursor's block that it repaints: its arrow reaches that far
+DROP_S = 0.16                 # a new block falls into place this long
+DASH = (0.25, 0.75)           # the part of each free cell the line from the cursor's block down to the landing spot crosses
 CLEAR = (0, 0, 0, 0)
 # The direction arrow as (along, across) points in cells, from the box center outward.
 POINTER = ((0.1, -0.09), (0.75, -0.09), (0.75, -0.3), (1.2, 0), (0.75, 0.3), (0.75, 0.09), (0.1, 0.09))
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
-# Where typing goes next, by way: along the first axis; off its end, back to
-# its start and one step along the second (a new line); off that, the third.
-WRAP = {"right": (("x", 1), ("z", 1), ("y", 1)), "left": (("x", -1), ("z", 1), ("y", 1)),
-        "up": (("z", 1), ("x", 1), ("y", 1)), "down": (("z", -1), ("x", 1), ("y", 1)),
-        RISE: (("y", 1), ("x", 1), ("z", 1)), SINK: (("y", -1), ("x", 1), ("z", 1))}
+# Where typing goes next, by way: one step along an axis, as far as the wall or the ceiling.
+WAYS = {"right": ("x", 1), "left": ("x", -1), "up": ("z", 1), "down": ("z", -1), RISE: ("y", 1), SINK: ("y", -1)}
 TURN_PIC = "hints/turn.png"
 HINT = "Type to build!  {Enter} builds up {hints/up.png}"
 ARROWS = f"{LEFT} {UP} {DOWN} {RIGHT}"
@@ -90,7 +89,7 @@ class BlocksRoom(Room):
     arrows work in view coordinates, which are world (x, z) turned to the
     side that faces the viewer most. The floor and blocks paint (blocks_view) into two cached
     layers split at the cursor's row: the rows from the cursor's back, then the
-    cursor, then the rows in front of it, with a round window where they hide it. A
+    cursor's marks, then the rows in front of it, which hide them like any block. A
     block's change repaints only around its column; the cursor changing rows, the
     room turning or tilting repaints all."""
 
@@ -113,7 +112,7 @@ class BlocksRoom(Room):
         self._last = None             # (pos, key) of the block just dropped
         self._left = None             # (column, cursor) when typing moved on from the block it laid
         self._next = None             # where a run up or down the column (or a code run) goes on from
-        self._dir = "right"           # the way typing builds: a key of WRAP
+        self._dir = "right"           # the way typing builds: a key of WAYS
         # Where the view is headed, in degrees: how far the floor has turned, how far down the view looks,
         # and how far off straight on the floor it is sized to fit sits. Then where it is now.
         self._goal = [0.0, float(REST_TILT), 0.0]
@@ -126,10 +125,10 @@ class BlocksRoom(Room):
         self._origin = (0, 0)
         self._cam = self._painter = self._floor = None
         self._built = None             # the build's shape for a moving view, until a block changes
-        self._scene = self._front = self._composed = self._layer = None
+        self._scene = self._front = self._composed = None
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
-        self._drawn = None             # (camera, spot, screen point) of the cursor as last drawn
-        self._glide = self._glide_timer = None   # (when, from which screen point) the cursor set off for a far spot
+        self._falls: dict = {}         # blocks still falling into place: (when it was let go, from which level)
+        self._fall_timer = None
         self.echo = Echo()
         self.code_panel = None
         self._space_pending = False
@@ -141,7 +140,6 @@ class BlocksRoom(Room):
     def on_leave(self):
         self.code_panel = None
         self._tab = None
-        self._stop_glide()
 
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
@@ -187,7 +185,8 @@ class BlocksRoom(Room):
         self._x, self._z = min(max(x, 0), WIDTH - 1), min(max(z, 0), DEPTH - 1)
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
-        self._last = self._next = self._mixed = self._left = self._drawn = None
+        self._last = self._next = self._mixed = self._left = None
+        self._falls.clear()
         self._stamps.clear()
         self._dir = "right"
         self.echo.reset()
@@ -228,10 +227,29 @@ class BlocksRoom(Room):
         old = self._blocks.get(pos)
         self._mixed = color_recipe.dab(old, self._mix, (self._key, self._color))
         self._blocks[pos] = self._mixed[1] if self._mixed else self._color
+        if not old:
+            self._drop(pos)
         self._last = (pos, self._key)
         self._badge.dabbed()
         self._changed(pos)
         return bool(old)
+
+    def _drop(self, pos):
+        """A new block falls to its spot from as high as its column is clear, the cursor's block at most."""
+        top = min((h for h in self._column() if h > pos[2]), default=HEIGHT) - 1
+        if top > pos[2] and pos not in self._falls and len(self._blocks) <= self._turn_detail_limit:
+            self._falls[pos] = (time.monotonic(), top)
+            self._fall_timer = self._fall_timer or self.app.timers.every(1 / 60, self._fall_tick)
+
+    def _fall_tick(self):
+        now = time.monotonic()
+        for pos, (since, _) in list(self._falls.items()):
+            if now - since >= DROP_S:
+                del self._falls[pos]
+            self._changed(pos)
+        if not self._falls:
+            self._fall_timer.stop()
+            self._fall_timer = None
 
     def _stamp_spot(self):
         pos = (self._x, self._z, self._cursor_y())
@@ -252,15 +270,12 @@ class BlocksRoom(Room):
         self._left = column, (self._x, self._z)
 
     def _advance(self, y: int, keep_height: bool = False, inside: bool = False):
-        """On from the cursor's column at height y the way it last went,
-        wrapping at the walls like lines of text. Typing into a new column
+        """On from the cursor's column at height y the way it last went, as far as the wall or
+        the ceiling: there it stays, and the next block goes on top. Typing into a new column
         starts again from the chosen height; code keeps the height it reached."""
         pos = self._spot(y)
-        for axis, step in WRAP[self._dir]:
-            pos[axis] += step
-            if 0 <= pos[axis] < SIZE[axis]:
-                break
-            pos[axis] = 0 if step > 0 else SIZE[axis] - 1
+        axis, step = WAYS[self._dir]
+        pos[axis] = min(max(pos[axis] + step, 0), SIZE[axis] - 1)
         column = (self._x, self._z)
         self._x, self._z = self._world(pos["x"], pos["z"])
         keep = keep_height or column == (self._x, self._z)
@@ -274,9 +289,9 @@ class BlocksRoom(Room):
     def _face(self, way: str):
         """Typing goes the way the cursor walked, unless a wall is right there,
         since the kid walked to it on purpose: then along it, right, or left
-        in the right-hand corner. Wrapping is for runs typing carries to a wall."""
+        in the right-hand corner."""
         def room_ahead(w):
-            axis, step = WRAP[w][0]
+            axis, step = WAYS[w]
             return 0 <= self._spot()[axis] + step < SIZE[axis]
         self._dir = next((w for w in (way, "right", "left") if room_ahead(w)), way)
 
@@ -285,7 +300,7 @@ class BlocksRoom(Room):
         """Turning straight back after a run starts on its last block, like Art's."""
         if self._next and self._last:
             pos = self._spot(self._next[2])
-            axis, step = WRAP[way][0]
+            axis, step = WAYS[way]
             pos[axis] += step
             back = (*self._world(pos["x"], pos["z"]), pos["y"])
             if back == self._last[0]:
@@ -315,12 +330,12 @@ class BlocksRoom(Room):
         self.set_brush_color(self._mix[1], brush[0])
         return True
 
-    def _step_height(self, rise: int, wrap: bool = False):
-        """One level up or down, onto a block if one is there; with `wrap`, past the end starts over from the other one."""
+    def _step_height(self, rise: int):
+        """One level up or down, onto a block if one is there, as far as the floor or the top."""
         y = self._cursor_y() + rise
-        if 0 <= y < HEIGHT or wrap:
-            self._hover = y % HEIGHT
-            self._next = (self._x, self._z, self._hover, True)
+        if 0 <= y < HEIGHT:
+            self._hover = y
+            self._next = (self._x, self._z, y, True)
 
     def _erase(self):
         """Backspace: the highest block at or below the cursor goes, and the cursor
@@ -360,10 +375,11 @@ class BlocksRoom(Room):
             self.set_brush_color(brush[1], brush[0])
         return bool(brush)
 
-    def _move(self, direction: str, wrap: bool = False) -> bool:
+    def _move(self, direction: str) -> bool:
+        """One cell that way; the walls stop it."""
         dx, dz = STEPS[direction]
         vx, vz = self._view(self._x, self._z)
-        spot = onto_grid(vx + dx, vz + dz, WIDTH, DEPTH, wrap)
+        spot = onto_grid(vx + dx, vz + dz, WIDTH, DEPTH, False)
         if not spot:
             return False
         self._x, self._z = self._world(*spot)
@@ -516,11 +532,10 @@ class BlocksRoom(Room):
             if self._left and self._left[1] == (self._x, self._z):
                 self._x, self._z = self._left[0]
             self._dir = RISE
-        column, self._next = (self._x, self._z), None
+        self._next = None
         if self._free(range(self._hover, HEIGHT)):
             self._lay(RISE)
             self._build()
-            self._x, self._z = column       # the top block laid, it stays there rather than start the next column
 
     def _navigate(self, action):
         if self._tab is not None:
@@ -530,7 +545,7 @@ class BlocksRoom(Room):
             return
         if action.with_shift and LOOKS[action.direction][0]:
             self.echo.flush()
-            self._step_height(STEPS[action.direction][1], wrap=not action.is_repeat)
+            self._step_height(STEPS[action.direction][1])
             self._face(RISE if action.direction == "up" else SINK)
             return
         if action.is_repeat and action.direction == self._arrow_repeat_dir:
@@ -544,7 +559,7 @@ class BlocksRoom(Room):
         fast = not laying and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
         for direction in [action.direction] + list(action.other_arrows_held or ()):
             for _ in range(HOLD_ACCEL_MULTIPLIER if fast else 1):
-                if not self._move(direction, wrap=not action.is_repeat):
+                if not self._move(direction):
                     break
                 if laying:
                     self._lay(direction)
@@ -552,8 +567,18 @@ class BlocksRoom(Room):
         self._face(action.direction)
 
     # ---------------------------------------------------------------- painting
-    def _view_blocks(self) -> dict:
-        return {(*self._view(x, z), y): color for (x, z, y), color in self._blocks.items()}
+    def _view_blocks(self, falling: bool = True) -> dict:
+        """The blocks in view coordinates; with `falling`, one still on its way down sits at the
+        height it has reached, to a quarter of a cell, so the camera keeps remembering few points."""
+        now, falls = time.monotonic(), self._falls if falling else {}
+
+        def height(pos):
+            if pos not in falls:
+                return pos[2]
+            since, top = falls[pos]
+            left = max(0.0, 1 - ((now - since) / DROP_S) ** 2)
+            return pos[2] + (round((top - pos[2]) * left * 4) / 4 or 0)
+        return {(*self._view(x, z), height((x, z, y))): color for (x, z, y), color in self._blocks.items()}
 
     def _layers(self, size):
         """Bring the cached layers up to date: everything for a new camera, the scene for a new
@@ -563,6 +588,7 @@ class BlocksRoom(Room):
         fresh = self._scene is None or cam is not self._cam
         if not (fresh or self._dirty or row != self._painter.row):
             return
+        start = time.monotonic()
         whole = fresh or row != self._painter.row
         moved_only = not fresh and not self._dirty
         self._painter = self._painter.on_row(row) if moved_only else Painter(cam, self._view_blocks(), row=row)
@@ -576,6 +602,8 @@ class BlocksRoom(Room):
             self._paint_ground(dirty)
         self._dirty = set()
         self._repaint(self._scene.get_rect() if whole else dirty)
+        if self._falls and not whole and time.monotonic() - start > TURN_FRAME_BUDGET_S:
+            self._turn_detail_limit = len(self._blocks) - 1         # too slow here to watch blocks fall
 
     def _paint_ground(self, rect):
         """The floor and the sun's shadows on it: they change with blocks, never with the cursor."""
@@ -606,7 +634,7 @@ class BlocksRoom(Room):
         if not self._blocks:
             return None
         top = 1 + max(y for _, _, y in self._blocks)    # fit the build, not the empty air over it
-        painter = Painter(Camera(0.0, REST_PITCH, *size, top=top), self._view_blocks(), hazy=False,
+        painter = Painter(Camera(0.0, REST_PITCH, *size, top=top), self._view_blocks(falling=False), hazy=False,
                           floor=None if on_screen else PAPER_FLOOR)
         s = pygame.Surface(size)
         s.fill(rgb(painter.floor[0]))
@@ -626,11 +654,9 @@ class BlocksRoom(Room):
         if moving is None:
             self._layers(area.size)
             g.surface.blit(self._composed, area)
-            self._draw_cursor(g, area.topleft)
+            self._draw_cursor(g, area)
             self._draw_hold_badge(g, area)
         else:
-            self._stop_glide()
-            self._drawn = None
             g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
             self._draw_moving(g, area, *moving)
             g.surface.set_clip(None)
@@ -654,8 +680,8 @@ class BlocksRoom(Room):
     def _draw_moving(self, g, area, turn, tilt, fit):
         """One frame of the view moving: the world through the same camera as the resting views, turned
         `turn` degrees around, looking `tilt` degrees down and sized as from `fit` degrees off straight
-        on, so both ends land on those pictures; only
-        the cursor sits it out. A frame over budget drops shadows for builds this big from then on."""
+        on, so both ends land on those pictures, the cursor's marks painted in their place among the
+        blocks. A frame over budget drops shadows for builds this big from then on."""
         start = time.monotonic()
         cam = Camera(math.radians(turn), math.radians(tilt), area.w, area.h, area.topleft, fit=math.radians(fit))
         detailed = len(self._blocks) <= self._turn_detail_limit
@@ -664,137 +690,116 @@ class BlocksRoom(Room):
         painter.paint_floor(g.surface)
         if detailed:
             painter.paint_sun(g.surface, g.surface.get_clip())
-        painter.paint(g.surface, painter.items)
+        x, z, items = self._x, self._z, painter.items
+        behind = sum(1 for i in items if i[0][:2] <= cam.key(x, z, 0)[:2])     # sorted far to near: these come first
+        painter.paint(g.surface, items[:behind])
+        self._drop_marks(g.surface, painter, x, z, self._cursor_y())
+        painter.paint(g.surface, items[behind:])
+        self._hover_marks(g.surface, painter, x, z, self._way(world=True))
         if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
             self._turn_detail_limit = len(self._blocks) - 1
 
     # ---------------------------------------------------------------- cursor
-    def _cursor_box(self, vx, vz, y) -> pygame.Rect:
-        """Layer pixels the cursor can touch: CURSOR_REACH cells around its spot's middle."""
-        reach = round(CURSOR_REACH * self._cam.cell(vx, y, vz))
-        box = pygame.Rect(0, 0, 2 * reach, 2 * reach)
-        box.center = self._middle(vx, vz, y)
-        return box.clip(self._composed.get_rect())
+    # The cursor is its column: a small block in the brush color waits in a bold edge on the top
+    # level, over the column, and a dashed line runs down the column's free cells to the spot the
+    # next block lands in. The block and its edge go over everything; the line and the landing spot
+    # sit in the scene, so nearer blocks hide them. guides/blocks-cursor.md
+    def _cursor_boxes(self, vx, vz) -> tuple:
+        """Layer pixels the cursor can touch, and those its waiting block can."""
+        cam, layer = self._cam, self._composed.get_rect()
+        reach = round(CURSOR_REACH * cam.cell(vx, HOVER, vz))
+        over = pygame.Rect(0, 0, 2 * reach, 2 * reach)
+        over.center = tuple(map(round, cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5)))
+        return over.union(cam.column_rect(vx, vz)).clip(layer), over.clip(layer)
 
-    def _middle(self, vx, vz, y) -> tuple:
-        return tuple(map(round, self._cam.at(vx + 0.5, y + 0.5, vz + 0.5)))
-
-    def _draw_cursor(self, g, origin):
-        """Where the next block goes: a bold edge around its spot and an arrow the way typing goes,
-        over everything; in the spot, behind the rows in front, a small block in the brush color
-        that blinks and, under a floating spot, its shadow square. Rows in front that hide the spot
-        get a round window. Only a patch around the spot is redrawn; Gfx.blink swaps it. A jump
-        glides there, the edge, block and arrow alone. guides/blocks-cursor.md"""
-        cam, painter = self._cam, self._painter
+    def _draw_cursor(self, g, area):
+        """The cursor at rest, drawn between the cached layers. Its waiting block blinks: Gfx.blink
+        swaps the patch around it. Where rows in front hide the line's end, an arrowhead over them
+        marks where it goes behind."""
+        painter, sub = self._painter, g.surface.subsurface(area)
         vx, vz = self._view(self._x, self._z)
-        y = self._cursor_y()
-        cell, middle, box = cam.cell(vx, y, vz), self._middle(vx, vz, y), self._cursor_box(vx, vz, y)
-        at = box.move(origin)
-        if self._layer is None or self._layer.get_size() != self._composed.get_size():
-            self._layer = pygame.Surface(self._composed.get_size(), pygame.SRCALPHA)
-        layer = self._layer
-        edge = hull([p for _, poly in cam.box((vx, y, vz), (vx + 1, y + 1, vz + 1)) for p in poly])
-        width = max(3, round(cell) // 9)
+        y, way = self._cursor_y(), self._way()
+        whole, over = self._cursor_boxes(vx, vz)
 
-        def block(bright, shadow=True):
-            layer.fill(CLEAR, box)
-            if shadow and self._ground(y) < y:
-                painter.shadow(layer, vx, vz, self._ground(y), alpha=255)
-            if bright:
-                painter.box(layer, vx, vz, y, y, self._color, inset=CURSOR_INSET)
+        def paint(clip, bright):
+            sub.set_clip(clip)
+            sub.blit(self._scene, clip, clip)
+            self._drop_marks(sub, painter, vx, vz, y)
+            sub.blit(self._front, clip, clip)
+            self._mark_cut(sub, vx, vz, y)
+            self._hover_marks(sub, painter, vx, vz, way, bright)
+            sub.set_clip(None)
+        g.draw_caret(over.move(area.topleft), lambda: paint(whole, True), lambda: paint(over, False))
 
-        def marks():
-            for color, w in ((rgb(art_room.CANVAS_BG), width + 4), (rgb(P.TEXT), width)):
-                pygame.draw.polygon(layer, color, edge, w)
-                for corner in edge:         # a wide line's corners come out notched
-                    pygame.draw.circle(layer, color, corner, w // 2)
-            self._pointer(layer, vx, vz, y)
-
-        slide = self._slide((vx, vz, y), middle, cell)
-        if slide is not None:
-            block(True, shadow=False)
-            marks()
-            g.surface.blit(layer, at.move(slide), box)
+    def _drop_marks(self, surf, painter, x, z, y):
+        """The spot the next block lands in, thinly edged, with its shadow square if it floats, and
+        the dashed line down to it, ending in an arrowhead."""
+        if y >= HOVER:
             return
-        laid = self._laid_ahead(vx, vz)
-        window = self._hidden(edge, laid)
+        cam = painter.cam
+        if self._ground(y) < y:
+            painter.shadow(surf, x, z, self._ground(y))
+        self._stroke(surf, self._edge(cam, x, z, y), 1, 3)
+        taken, width = set(self._column()), max(2, round(cam.cell(x, y, z)) // 14)
+        dashes = [[cam.at(x + 0.5, h + end, z + 0.5) for end in DASH] for h in range(y + 1, HOVER) if h not in taken]
+        for color, w in ((rgb(art_room.CANVAS_BG), width + 2), (rgb(P.TEXT), width)):
+            for a, b in dashes:
+                pygame.draw.line(surf, color, a, b, w)
+        self._arrowhead(surf, cam.at(x + 0.5, y + 1, z + 0.5), cam.cell(x, y, z))
 
-        def draw(bright):
-            g.surface.blit(self._scene, at, box)
-            block(bright)
-            g.surface.blit(layer, at, box)
-            layer.fill(CLEAR, box)
-            layer.blit(self._front, box, box)
-            if window:
-                pygame.draw.circle(layer, CLEAR, middle, round(WINDOW * cell))
-                if laid:
-                    painter.box(layer, *laid)
-            marks()
-            g.surface.blit(layer, at, box)
-        g.draw_caret(at, lambda: draw(True), lambda: draw(False))
+    def _mark_cut(self, surf, vx, vz, y):
+        """An arrowhead at the lowest point of the line that the rows in front leave in view, if they hide its end."""
+        at, front = self._cam.at, self._front
+        (ax, ay), (bx, by) = at(vx + 0.5, y + 1, vz + 0.5), at(vx + 0.5, HOVER, vz + 0.5)
 
-    def _laid_ahead(self, vx, vz):
-        """The block just laid, as the painter's (x, z, bottom, top, color), if it sits right in front of the cursor."""
-        pos = self._last and self._last[0]
-        if pos in self._blocks and self._view(*pos[:2]) == (vx, vz - 1):
-            return vx, vz - 1, pos[2], pos[2], self._blocks[pos]
+        def hidden(px, py):
+            return front.get_rect().collidepoint(px, py) and front.get_at((int(px), int(py)))[3]
+        steps = int(ay - by) // 2
+        if y >= HOVER or steps < 1 or not hidden(ax, ay):
+            return
+        tip = next(((ax + (bx - ax) * i / steps, ay + (by - ay) * i / steps) for i in range(steps)
+                    if not hidden(ax + (bx - ax) * i / steps, ay + (by - ay) * i / steps)), None)
+        if tip:
+            self._arrowhead(surf, tip, self._cam.cell(vx, y, vz))
 
-    def _hidden(self, edge, laid) -> bool:
-        """Whether the rows in front cover more than WINDOW_COVER of the cursor's spot on screen.
-        The block just laid right in front of it doesn't count, nor what that one hides."""
-        box = bbox(edge).clip(self._front.get_rect())
-        s = pygame.Surface(box.size, pygame.SRCALPHA)
+    def _hover_marks(self, surf, painter, x, z, way, bright: bool = True):
+        """The block waiting over the column, in its bold edge, and an arrow from its top the way typing goes across the floor."""
+        cam = painter.cam
+        if bright:
+            painter.box(surf, x, z, HOVER, HOVER, self._color, inset=CURSOR_INSET)
+        self._stroke(surf, self._edge(cam, x, z, HOVER), max(3, round(cam.cell(x, HOVER, z)) // 9), 4)
+        if way:
+            (dx, dz), ink = way, rgb(P.TEXT)
+            arrow = [cam.at(x + 0.5 + u * dx - v * dz, HEIGHT, z + 0.5 + u * dz + v * dx) for u, v in POINTER]
+            pygame.draw.polygon(surf, ink, arrow)
+            pygame.draw.polygon(surf, rgb(art_room.CANVAS_BG), arrow, 1)
 
-        def mask(polys):
-            s.fill(CLEAR)
-            for poly in polys:
-                pygame.draw.polygon(s, (255, 255, 255), [(px - box.x, py - box.y) for px, py in poly])
-            return pygame.mask.from_surface(s)
-        spot, cover = mask([edge]), pygame.mask.from_surface(self._front.subsurface(box))
-        if laid:
-            x, z, y = laid[:3]
-            cover.erase(mask([poly for _, poly in self._cam.box((x, y, z), (x + 1, y + 1, z + 1))]), (0, 0))
-        return cover.overlap_area(spot, (0, 0)) > WINDOW_COVER * spot.count()
+    def _edge(self, cam, x, z, y) -> list:
+        return hull([p for _, poly in cam.box((x, y, z), (x + 1, y + 1, z + 1)) for p in poly])
 
-    def _slide(self, spot, middle, cell):
-        """How far off its spot to draw the cursor mid-glide, in pixels, else None. It glides to a
-        spot more than GLIDE_OVER cells on screen from where it was last drawn in this view."""
-        now = time.monotonic()
-        cam, was, drawn = self._drawn or (None, None, None)
-        if cam is not self._cam:
-            self._stop_glide()
-        elif was != spot:
-            self._stop_glide()
-            if math.dist(drawn, middle) > GLIDE_OVER * cell:
-                self._glide = (now, drawn)
-                self._glide_timer = self.app.timers.every(1 / 60, self.app.invalidate)
-        left = 1 - (now - self._glide[0]) / GLIDE_S if self._glide else 0
-        if left <= 0:
-            self._stop_glide()
-        slide = tuple(round((a - b) * left ** 3) for a, b in zip(self._glide[1], middle)) if self._glide else None
-        self._drawn = (self._cam, spot, tuple(a + b for a, b in zip(middle, slide or (0, 0))))
-        return slide
+    def _stroke(self, surf, edge, width, casing):
+        """A closed light line with a dark one `casing` wider under it, so it reads on any color."""
+        for color, w in ((rgb(art_room.CANVAS_BG), width + casing), (rgb(P.TEXT), width)):
+            pygame.draw.polygon(surf, color, edge, w)
+            for corner in edge:         # a wide line's corners come out notched
+                pygame.draw.circle(surf, color, corner, w // 2)
 
-    def _stop_glide(self):
-        if self._glide_timer:
-            self._glide_timer.stop()
-        self._glide = self._glide_timer = None
+    def _arrowhead(self, surf, tip, cell):
+        (px, py), half = tip, max(4, round(cell * 0.2))
+        head = [(px, py), (px - half, py - 1.5 * half), (px + half, py - 1.5 * half)]
+        pygame.draw.polygon(surf, rgb(P.TEXT), head)
+        pygame.draw.polygon(surf, rgb(art_room.CANVAS_BG), head, 1)
 
     def _ground(self, y: int) -> int:
         """The level the cursor's block would rest on below height y."""
         return max((h + 1 for h in self._column() if h < y), default=0)
 
-    def _step(self) -> dict:
-        axis, step = WRAP[self._dir][0]
-        return {a: (step if a == axis else 0) for a in SIZE}
-
-    def _pointer(self, layer, vx, vz, y):
-        """An arrow out of the spot's top (or bottom, going down) the way
-        the next typed block goes, laid flat in the scene so depth foreshortens it."""
-        d = self._step()
-        across = {"x": 0, "z": 1} if d["x"] else {"x": 1, "z": 0}
-        base = y if self._dir == SINK else y + 1
-        arrow = [self._cam.at(vx + 0.5 + u * d["x"] + v * across["x"], base + u * d["y"], vz + 0.5 + u * d["z"] + v * across["z"])
-                 for u, v in POINTER]
-        pygame.draw.polygon(layer, (*rgb(P.TEXT), 240), arrow)
-        pygame.draw.polygon(layer, (*rgb(art_room.CANVAS_BG), 200), arrow, 1)
+    def _way(self, world: bool = False):
+        """The (x, z) step typing takes across the floor, in view coordinates or the world's; None when it goes up or down."""
+        axis, step = WAYS[self._dir]
+        if axis == "y":
+            return None
+        dx, dz = (step, 0) if axis == "x" else (0, step)
+        for _ in range(-self._side % 4 if world else 0):
+            dx, dz = -dz, dx
+        return dx, dz

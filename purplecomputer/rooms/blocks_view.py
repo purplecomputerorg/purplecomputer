@@ -89,7 +89,9 @@ def shape(blocks: dict) -> tuple:
             floats.append((x, z, stacks[-1][3] + 1 if stacks and stacks[-1][:2] == [x, z] else 0))
         stacks.append([x, z, y, y])
     def bare(x, z, bottom, top, color):
-        levels = range(bottom, top + 1)
+        if bottom % 1:          # between levels, falling: nothing is against it
+            return FACES
+        levels = range(int(bottom), int(top) + 1)
         return tuple(n for n in FACES if ((x, z, top + 1) not in blocks if n is TOP else
                                           any((x + n[0], z + n[1], y) not in blocks for y in levels)))
     return [(*r, bare(*r)) for r in runs], floats, [tuple(k) for k in stacks]

@@ -3,6 +3,7 @@ tips from the side to nearly straight down, and the floor, blocks and shadows pa
 far to near. Coordinates are (x, z, y) cells with y up, in whatever frame the caller passes: view coordinates
 at rest, world ones mid-turn."""
 
+import bisect
 import copy
 import math
 from functools import cache
@@ -89,9 +90,7 @@ def shape(blocks: dict) -> tuple:
             floats.append((x, z, stacks[-1][3] + 1 if stacks and stacks[-1][:2] == [x, z] else 0))
         stacks.append([x, z, y, y])
     def bare(x, z, bottom, top, color):
-        if bottom % 1:          # between levels, falling: nothing is against it
-            return FACES
-        levels = range(int(bottom), int(top) + 1)
+        levels = range(bottom, top + 1)
         return tuple(n for n in FACES if ((x, z, top + 1) not in blocks if n is TOP else
                                           any((x + n[0], z + n[1], y) not in blocks for y in levels)))
     return [(*r, bare(*r)) for r in runs], floats, [tuple(k) for k in stacks]
@@ -293,13 +292,20 @@ class Painter:
 
     def paint(self, surf, items, clip=None):
         """Runs and the shadows under floating ones, in paint order; with `clip`, only what touches it."""
-        cam = self.cam
         if clip is not None and clip.contains(surf.get_rect()):
             clip = None
-        for _, kind, d in items:
-            if clip is not None and not (self._shadow_rect(*d) if kind else cam.run_rect(*d[:4])).colliderect(clip):
-                continue
-            (self.shadow if kind else self.box)(surf, *d)
+        for item in items:
+            if clip is None or self._rect(item).colliderect(clip):
+                (self.shadow if item[1] else self.box)(surf, *item[2])
+
+    def _rect(self, item) -> pygame.Rect:
+        _, kind, d = item
+        return self._shadow_rect(*d) if kind else self.cam.run_rect(*d[:4])
+
+    def after(self, x, z, y, rect) -> list:
+        """The items painted after a block at (x, z, y) that touch `rect`: all that can stand in front of it there."""
+        start = bisect.bisect_right(self.items, (self.cam.key(x, z, y), 2))
+        return [item for item in self.items[start:] if self._rect(item).colliderect(rect)]
 
     def box(self, surf, x, z, bottom, top, color, open=FACES, inset: float = 0.0):
         """One column's blocks from bottom to top as one tall box in one color, `inset` cells smaller

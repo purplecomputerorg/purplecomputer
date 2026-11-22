@@ -14,13 +14,13 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 ## What the cursor draws
 
 - **Waiting block** on the top level over the column: a small block in the brush color inside a bold edge, white over a dark edge so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
-- **Arrow** from the waiting block's top the way typing goes across the floor. Typing that builds up or down shows none: the block stays over its column.
-- **Dashed line** from the waiting block down the column's free cells, ending in an arrowhead on the landing spot.
-- **Landing spot**, thinly edged, with the **shadow square** every floating block gets when it floats.
+- **Line** from the waiting block down the column's free cells, ending in a bold arrowhead on the landing spot. Dashed, it read as clutter.
+- **Landing spot**, edged, with the **shadow square** every floating block gets when it floats.
+- **The spot after it**, thinly edged, and for a row a flat arrow across the floor to it: which way typing is going, shown where the eye already is. On top of the landing spot means a tower; beside it, a row. A small arrow up on the waiting block said the same and went unseen.
 - **Arrowhead over the rows in front** at the lowest point of the line they leave in view, when they hide its end.
-- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. Builds past the turn's detail limit, or too slow to repaint, skip the fall.
+- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size.
 
-While the view turns the cursor is drawn too, in its place among the blocks, its arrow already pointing the way typing will go from the side the view is headed for.
+While the view turns the cursor is drawn too, in its place among the blocks.
 
 ## Looking around
 
@@ -34,6 +34,7 @@ Rules:
 
 - **The arrows go the way they point most.** The floor has four directions, so moving and typing use the side that faces the viewer most. The turn's step (18 degrees) never stops on a diagonal, where two arrows would point the same way, and five steps make a quarter turn, so straight on is always reachable.
 - **A view at rest shows the whole floor.** Each angle is sized to fit the floor turned that far, so a turned view is smaller than a straight one. The size eases between the two as the view moves.
+- **A tilt stop answers back.** Tab with Up or Down at a stop springs the view a few degrees back off it, the way that still goes, and the footer's arrows drop the one with nowhere left to go. Silence there read as a broken key.
 - **The tilt stops at 15 and 75 degrees.** Lower, the eye would sink under tall towers and see blocks from below; higher or over the top, the eye would pass the front rows, which the layers around the cursor are split by.
 - **Square, 16 by 16.** The old 30 by 12 floor from its side was 30 rows deep with blocks 64% the size.
 
@@ -47,7 +48,7 @@ Letters build towers and rows alike, with no mode to set first: **typing repeats
 - **A step across the floor between two blocks starts a row.** Type, step right, type: from then on each letter moves on to the right by itself. The same goes for any of the four ways, and a block laid under the last one builds on downward.
 - **Anywhere else it starts over, upward:** after walking away, after Backspace, or with nothing laid yet.
 - **Walking never sets the way.** It used to: typing went the way the cursor last walked, so walking to a spot to build a tower there turned the typing into a row.
-- **The arrow on the waiting block is the guess, shown before the key is pressed.** An arrow means the cursor will move on that way; none means it stays and stacks.
+- **The spot after the next is the guess, shown before the key is pressed** (`_then`): edged on top of the landing spot when typing will stack, beside it with an arrow when it will move on.
 - **Enter builds up.** It drops a block in the current color in the first free spot over the block typing just laid, and goes on up, so holding Enter grows a tower until the column is full. If the cursor has moved since the last block, Enter builds over the cursor.
 - **Holding a letter with the arrows lays a line**, the cursor ending on its last block, so the next letter alone stacks there.
 - **Shift with Up or Down** moves the cursor's height without building, for bridges and floating blocks.

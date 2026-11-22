@@ -92,6 +92,24 @@ def test_typing_in_one_spot_stacks_and_a_step_across_between_two_blocks_starts_a
     run(go())
 
 
+def test_the_spot_after_the_next_shows_which_way_typing_goes():
+    async def go():
+        app, room = _blocks()
+        assert room._then(0) == (5, 5, 1) and room._way() is None       # nothing laid: on top
+        await type_text(app, "a")
+        assert room._then(room._cursor_y()) == (5, 5, 2)
+        room._blocks.update({(7, 5, y): "#ff0000" for y in range(3)})
+        await press(app, "right")
+        assert room._then(0) == (7, 5, 3) and room._way() == (1, 0)     # a step across: on that way, onto what is there
+        room._x = WIDTH - 1
+        room._last = ((WIDTH - 2, 5, 0), "a")
+        assert room._then(0) == (WIDTH - 1, 5, 1)                       # at the wall it piles up
+        room._blocks.update({(WIDTH - 1, 5, y): "#ff0000" for y in range(HEIGHT)})
+        assert room._then(HEIGHT - 1) is None
+        app._draw()
+    run(go())
+
+
 def test_a_row_typed_into_a_wall_piles_up_there():
     async def go():
         app, room = _blocks()
@@ -435,16 +453,24 @@ def test_a_new_block_falls_to_its_spot_from_the_cursor_s_block(monkeypatch):
         app, room = _blocks()
         now = [100.0]
         monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        app._draw()
+        painter = room._painter
         await press(app, "a")
-        assert room._falls == {(5, 5, 0): (100.0, HOVER)} and set(room._view_blocks()) == {(5, 5, HOVER)}
+        color = get_key_color("a")
+        assert room._falls == {(5, 5, 0): (100.0, HOVER)} and not room._dirty        # the layers wait for it to land
+        assert room._view_blocks() == {} and room._view_blocks(falling=True) == {(5, 5, 0): color}
+        assert room._falling() == [(5, 5, HOVER, 0, HOVER, color)]
         now[0] += DROP_S / 2
         app._draw()
-        assert set(room._view_blocks()) == {(5, 5, HOVER * 0.75)} and set(room._view_blocks(falling=False)) == {(5, 5, 0)}
+        assert room._falling() == [(5, 5, HOVER * 0.75, 0, HOVER, color)] and room._painter.items is painter.items
+        assert _on_screen(app, room, 5.5, HOVER * 0.75 + 1, 5.5) in _shades(room, 5, 5, HOVER * 0.75, color)
         now[0] += DROP_S
         room._fall_tick()
-        assert not room._falls and room._fall_timer is None and set(room._view_blocks()) == {(5, 5, 0)}
-        await press(app, "a")                                       # onto a full spot: mixed in, nothing falls
-        room._next = (5, 5, 0, True)
+        app._draw()
+        assert not room._falls and not room._hide and room._fall_timer is None and room._view_blocks() == {(5, 5, 0): color}
+        assert _on_screen(app, room, 5.5, 1, 5.5) in _shades(room, 5, 5, 0, color)
+        await press(app, "a")
+        room._next = (5, 5, 1, True)                                # onto a block: mixed in, nothing falls
         await press(app, "b")
         assert list(room._falls) == [(5, 5, 1)]
         room._blocks[(8, 8, 3)] = "#ff0000"                         # under a block: from just under it
@@ -452,7 +478,24 @@ def test_a_new_block_falls_to_its_spot_from_the_cursor_s_block(monkeypatch):
         await press(app, "a")
         assert room._falls[(8, 8, 0)][1] == 2
         room.restore_timeline_state(room.timeline_state())
-        assert not room._falls
+        assert not room._falls and not room._hide
+    run(go())
+
+
+def test_a_falling_block_passes_behind_what_stands_in_front_of_it(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        room._blocks.update({(x, 3, y): "#ff0000" for x in range(WIDTH) for y in range(5)})
+        room._z = 6
+        room._changed()
+        await press(app, "a")
+        now[0] += DROP_S * 0.95                                     # nearly down, behind the wall
+        app._draw()
+        (vx, vz, h, *_), = room._falling()
+        assert h < 2 and _on_screen(app, room, 5.5, h + 0.5, 6) in _shades(room, 5, 3, 0, "#ff0000")
+        assert [item[2][:2] for item in room._hide[(5, 6, 0)][1]] and all(item[2][1] == 3 for item in room._hide[(5, 6, 0)][1])
     run(go())
 
 
@@ -463,12 +506,14 @@ def test_the_cursor_shows_while_the_view_turns_with_its_arrow_the_way_typing_wil
         await press(app, "right")
         await type_text(app, "b")               # a row along the world's x
         shown = []
-        room._hover_marks = lambda surf, painter, x, z, way, bright=True: shown.append((x, z, way))
+        room._hover_marks = lambda surf, painter, x, z, bright=True: shown.append((x, z))
+        room._drop_marks = lambda surf, painter, x, z, y, way, then: shown.append((x, z, y, way, then))
         for _ in range(5):
             room.look_around()
         room._look[0] = 40.0
         app._draw()
-        assert room._side == 1 and room._way() == (0, 1) and shown == [(7, 5, (1, 0))]     # the same way, from the new side
+        assert room._side == 1 and room._way() == (0, 1)            # the same way in the world, from the new side
+        assert shown == [(7, 5, 0, (1, 0), (8, 5, 0)), (7, 5)]
     run(go())
 
 
@@ -682,6 +727,31 @@ def test_the_tilt_stops_at_the_side_and_at_nearly_straight_down():
                 _settle(room)
                 app._draw()
             assert room._goal[1] == end
+    run(go())
+
+
+def test_at_a_tilt_stop_the_view_springs_back_and_the_hint_drops_the_arrow_that_cannot_go():
+    async def go():
+        app, room = _blocks()
+        _hold_tab(room)
+        assert room._tab_hint().split()[:4] == [blocks_room.LEFT, blocks_room.UP, blocks_room.DOWN, blocks_room.RIGHT]
+        await press(app, "down")
+        _settle(room)
+        assert room._goal[1] == TILTS[0] and blocks_room.DOWN not in room._tab_hint() and blocks_room.UP in room._tab_hint()
+        await press(app, "down")                                    # nowhere to go: back off the stop, toward Up
+        assert room._goal[1] == TILTS[0] and room._look[1] == TILTS[0] + blocks_room.LOOK_BOUNCE and room._look_timer
+        app._draw()
+        await press(app, "down", is_repeat=True)                    # held, or already springing: nothing more
+        await press(app, "down")
+        assert room._look[1] == TILTS[0] + blocks_room.LOOK_BOUNCE
+        _settle(room)
+        assert room._moving() is None
+        for _ in range(4):
+            await press(app, "up")
+            _settle(room)
+        await press(app, "up")
+        assert room._goal[1] == TILTS[1] and room._look[1] == TILTS[1] - blocks_room.LOOK_BOUNCE
+        assert blocks_room.UP not in room._tab_hint()
     run(go())
 
 

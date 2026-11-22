@@ -34,6 +34,7 @@ from .base import Room
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 PAPER_OUTLINE = "#d0d0d0"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
+_STEPS = {key: (2 - r) * 7 + c for key, (r, c) in _KEY_TO_RC.items()}   # scale steps up from the bottom row's first key
 
 
 def drum_picture(key: str) -> str:
@@ -42,7 +43,10 @@ def drum_picture(key: str) -> str:
 PITCH_TRANSITION_DURATION = 0.25
 LETTER_PICTURES = ("letters/names.png", "letters/sounds.png")
 KEY_WORD = 0.75               # sizes the grid's side margin; changing it moves the grid
-NOTE_STRIP = 0.45             # height of the tape's row under the grid, in keys
+NOTE_STRIP = 0.55             # height of the tape's row under the grid, in keys
+KEY_BAR = 0.28                # width of the key bar beside the grid, in keys
+BEAD_STEP = 0.3               # between the song's beads, in keys; a phrase rest adds a little more
+BEAD_LIT_FADE_S = 1.0         # after playback, the lit beads sink back this slowly
 NOTE_FAINT = 0.72             # how far a key's note name sinks into the key until it sounds
 LETTERS_MASH_S = 0.06         # letters closer than this are one hand landing at once
 LETTER_FADE = (1, 1, 0.6, 0.35, 0.15)  # the same letter again and again; past the end it's silent
@@ -125,6 +129,7 @@ class MusicRoom(Room):
         self._last_song = None    # (tape, origin, base) of the song quiet cleared, which Space or hold Enter brings back
         self._tape_task = None
         self._tape_at = None      # the tape note playing back now, or looping
+        self._lit = None          # (last bead lit, when playback ended) while the beads sink back
         self._loop_tape: dict = {}
         self._rest_timers: list = []
         self._active_at = 0.0     # the last sound, play back or erase: the tape clears once it's quiet this long
@@ -407,7 +412,7 @@ class MusicRoom(Room):
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
         self._loop_task = None
-        self._tape_at = None
+        self._end_playback()
         if looped:   # the quiet starts when the loop does
             self._busy()
         self._sync_panels()
@@ -594,14 +599,22 @@ class MusicRoom(Room):
                 self._replay(key, mode, paint)
             await asyncio.sleep(0.3)
         finally:
-            self._tape_at = None
+            self._end_playback()
             self._busy()
             self.app.invalidate()
 
     def _stop_tape(self):
         if self._tape_task is not None and not self._tape_task.done():
             self._tape_task.cancel()
-        self._tape_task, self._tape_at = None, None
+        self._tape_task = None
+        self._end_playback()
+
+    def _end_playback(self):
+        if self._tape_at is not None:
+            self._lit = (self._tape_at, time.monotonic())
+            for i in range(1, 11):
+                self.app.timers.after(BEAD_LIT_FADE_S * i / 10, self.app.invalidate)
+        self._tape_at = None
 
     def set_instrument_by_name(self, name: str):
         name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
@@ -954,25 +967,29 @@ class MusicRoom(Room):
             draw_key_hint(g, hint, px, (left + right) // 2, cy, anchor="center")
 
     def _tape_parts(self) -> tuple:
-        """(texts, keys over them, rest before each, face, lead, underline from) for what the tape shows now: the
-        letters in Letters; in Notes each note's name, with the key that played it over it in its color. A rest
-        before each is 1 where a new word or phrase starts, drawn as a space."""
-        if self.letters_mode:
-            run, at = self._spelled.upper(), self._typed_at
-            rests = [int(i > 0 and at[i] - at[i - 1] >= WORD_GAP_S) for i in range(len(run))]
-            return list(run), None, rests, "mono-heavy", "", len(run) - len(self.word) if self.word else None
-        names = [drum_picture(key) if key not in _KEY_TO_RC else note_name(_KEY_TO_RC[key][1], self.root_index)
-                 for key, *_ in self._tape]
-        keys = [(KID_MATH_REMAP.get(key, key), KEY_COLORS.get(key.lower(), P.MUTED)) for key, *_ in self._tape]
-        rests = [0] + [int(b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
-        return names, keys, rests, "note", "♪", None
+        """(letters, rest before each, underline from) for the Letters tape: a rest is 1 where a new word starts."""
+        run, at = self._spelled.upper(), self._typed_at
+        rests = [int(i > 0 and at[i] - at[i - 1] >= WORD_GAP_S) for i in range(len(run))]
+        return list(run), rests, len(run) - len(self.word) if self.word else None
 
-    def _tape_ink(self, color=P.TEXT) -> str:
-        """The Notes tape sits back but for while it plays, and fades a little each clock step as the quiet grows,
-        nearly gone when it clears."""
+    def _song_rests(self) -> list:
+        """1 before each note of the song that starts a new phrase."""
+        return [0] + [int(b[2] - a[2] >= ECHO_PAUSE_S) for a, b in zip(self._tape, self._tape[1:])]
+
+    def _tape_ink(self, color=P.TEXT, lit: float = 0.0) -> str:
+        """The tape fades a little each clock step as the quiet grows, nearly gone when it clears; the song's beads
+        also sit back, but for those `lit` by playback."""
         fade = (1 - self._rest_left()) * TAPE_FADE
-        sits_back = not self.letters_mode and not self._sounding()
-        return mix(color, P.SURFACE, max(fade, TAPE_REST_FADE) if sits_back else fade)
+        back = 0 if self.letters_mode else TAPE_REST_FADE * (1 - lit)
+        return mix(color, P.SURFACE, max(fade, back))
+
+    def _bead_lit(self, i: int) -> float:
+        """How lit bead i is: the beads playback has reached, sinking back once it ends."""
+        if self._tape_at is not None:
+            return float(i <= self._tape_at)
+        if self._lit and i <= self._lit[0]:
+            return max(0.0, 1 - (time.monotonic() - self._lit[1]) / BEAD_LIT_FADE_S)
+        return 0.0
 
     def _draw_note_names(self, g, xs, ys, letter_px):
         """Shift's seven notes in a row of their own, centered in the grid's place so they don't read as keys, each
@@ -999,75 +1016,84 @@ class MusicRoom(Room):
         g.surface.blit(big, big.get_rect(midleft=(x + mark.get_width() + gap, center[1])))
 
     def _draw_tape(self, g, row: pygame.Rect, size: float):
-        """What was just played or typed, left to right under the grid, a rest as a gap; the word the letters end
-        with is underlined. Too long for the row, it shows its end, or follows the note playing back, with …
-        where it goes on. Laid out on the face's cell width, and the timer pinned while it overflows, so nothing
-        moves with which notes it holds."""
-        texts, keys, rests, face, lead, word_at = self._tape_parts()
+        if self.letters_mode:
+            self._draw_letters(g, row, size)
+        elif self._tape:
+            self._draw_beads(g, row, size)
+
+    def _draw_beads(self, g, row: pygame.Rect, size: float):
+        """The song as a line of beads under the grid, a higher note higher and a drum a ring along the bottom, a
+        phrase rest a wider gap. Too long for the row, it shows its end, or follows the note playing back."""
+        r, px = max(3, round(size * 0.04)), max(12, int(size * 0.2))
+        step = round(size * BEAD_STEP)
+        band = row.inflate(0, -4 * r)
+        cell = g.measure("…", px, "note", tr=False)[0]
+        lead_w, clock_r = cell + px // 2, round(px * 0.32)
+        room = row.w - lead_w - (2 * clock_r + px)
+        rests = self._song_rests()
+        first, last = self._tape_window([step + step * rest for rest in rests], room, cell + step // 2)
+        clipped = first > 0 or last < len(rests) - 1
+        mark = self._tape_ink(P.MUTED)
+        g.draw_text("♪", px, row.x, row.centery, "note", mark, anchor="midleft", tr=False)
+        x = row.x + lead_w
+        if first > 0:
+            x = g.draw_text("…", px, x, row.centery, "note", mark, anchor="midleft", tr=False).right + step // 2
+        for i in range(first, last + 1):
+            x += step * rests[i] if i > first else 0
+            steps = _STEPS.get(self._tape[i][0])
+            lit = self._bead_lit(i)
+            ink = mix(P.ACCENT, "#ffffff", 0.6) if i == self._tape_at else self._tape_ink(P.ACCENT, lit)
+            size_r = r + 1 if i == self._tape_at else r
+            y = round(band.bottom - band.h * (steps or 0) / max(_STEPS.values()))
+            pygame.draw.circle(g.surface, rgb(ink), (x, y), size_r, width=0 if steps is not None else max(1, r // 2))
+            x += step
+        if clipped:
+            g.draw_text("…", px, x, row.centery, "note", mark, anchor="midleft", tr=False)
+        self._draw_rest_mark(g, row.x + lead_w + room + px // 4 + clock_r if clipped else x + clock_r, row.centery,
+                             clock_r)
+
+    def _draw_letters(self, g, row: pygame.Rect, size: float):
+        """What was just typed, left to right under the grid, a rest as a gap, the word it ends with underlined.
+        Too long for the row, it shows its end with … before it. Laid out on the face's cell width, and the timer
+        pinned while it overflows, so nothing moves with which letters it holds."""
+        texts, rests, word_at = self._tape_parts()
         if not texts:
             return
         px = max(12, int(size * 0.2))
-        key_px = round(px * 0.7)
-        cell = g.measure("M", px, face, tr=False)[0]
+        cell = g.measure("M", px, "mono-heavy", tr=False)[0]
         step, rest_w, clock_r = px // 3, px, round(px * 0.32)
-        pic_h = round(px * 0.87)   # drums a little taller than the notes, on their baseline
-
-        def drum(t):   # just its ink, so drums side by side sit as close as letters
-            return (pic := g.image(t, pic_h)).subsurface(pic.get_bounding_rect()) if t.endswith(".png") else None
-
-        def width(t):
-            return d.get_width() if (d := drum(t)) else cell * len(t)
-
-        def after(t):
-            return max(2, px // 8) if t.endswith(".png") else step
-        x, cy = row.x, row.centery + (key_px // 2 if keys else 0) + px // 4   # a little clear of the grid above
-        lead_w = cell + px // 2 if lead else 0
-        room = row.right - x - lead_w - (2 * clock_r + px)
-        spans = [width(t) + after(t) + rest_w * r for t, r in zip(texts, rests)]
-        first, last = self._tape_window(spans, room, cell + step)
+        x, cy = row.x, row.centery + px // 4   # a little clear of the grid above
+        room = row.right - x - (2 * clock_r + px)
+        first, last = self._tape_window([cell + step + rest_w * r for r in rests], room, cell + step)
         clipped = first > 0 or last < len(texts) - 1
-        end = x + lead_w + room
+        end = x + room
         ink = self._tape_ink()
-        if lead:
-            g.draw_text(lead, px, x, cy, face, self._tape_ink(P.MUTED), anchor="midleft", tr=False)
-            x += lead_w
         if first > 0:
-            g.draw_text("…", px, x, cy, face, self._tape_ink(P.MUTED), anchor="midleft", tr=False)
+            g.draw_text("…", px, x, cy, "mono-heavy", self._tape_ink(P.MUTED), anchor="midleft", tr=False)
             x += cell + step
         under = None
         for i in range(first, last + 1):
             x += rest_w * rests[i] if i > first else 0
-            w = width(texts[i])
             lead_in = word_at is not None and i < word_at   # letters before the word step back
-            playing = i == self._tape_at
-            lit = (keys[i][1] if keys else KEY_COLORS.get(texts[i].lower(), P.ACCENT)) if playing else None
+            lit = KEY_COLORS.get(texts[i].lower(), P.ACCENT) if i == self._tape_at else None
             color = lit or (mix(ink, P.SURFACE, 0.5) if lead_in else ink)
-            if pic := drum(texts[i]):
-                pic = g.image(texts[i], pic_h, color).subsurface(pic.get_offset(), pic.get_size())
-                mid = g.surface.blit(pic, pic.get_rect(bottomleft=(x, cy + round(px * 0.37)))).centerx
-            else:   # what's over and under it centers on its ink, as B♭ draws narrower than its two cells
-                mid = g.draw_text(texts[i], px, x, cy, face, color, anchor="midleft", tr=False).centerx
-            if lit:   # a dot under what's sounding, in its key's color, below the word's underline in Letters
-                dot_y = cy + round(px * (1.1 if word_at is not None else 0.85))
-                pygame.draw.circle(g.surface, rgb(lit), (mid, dot_y), max(3, px // 4))
-            if keys:
-                g.draw_text(keys[i][0], key_px, mid, cy - round(px * 0.95), "mono-bold", self._tape_ink(keys[i][1]),
-                            anchor="center", tr=False)
+            mid = g.draw_text(texts[i], px, x, cy, "mono-heavy", color, anchor="midleft", tr=False).centerx
+            if lit:   # a dot under what's sounding, in its key's color, below the word's underline
+                pygame.draw.circle(g.surface, rgb(lit), (mid, cy + round(px * 1.1)), max(3, px // 4))
             if word_at is not None and i >= word_at:
-                slot = pygame.Rect(x, cy, w, round(px * 0.6))
+                slot = pygame.Rect(x, cy, cell, round(px * 0.6))
                 under = slot if under is None else under.union(slot)
-            x += w + after(texts[i])
+            x += cell + step
         if last < len(texts) - 1:
-            g.draw_text("…", px, x, cy, face, self._tape_ink(P.MUTED), anchor="midleft", tr=False)
+            g.draw_text("…", px, x, cy, "mono-heavy", self._tape_ink(P.MUTED), anchor="midleft", tr=False)
             x += cell + step
         if under is not None:
             line = pygame.Rect(under.x, under.bottom + max(2, px // 10), under.w, max(2, px // 8))
             g.rect(self._tape_ink(P.ACCENT), line, radius=line.h // 2)
         x = self._draw_rest_mark(g, (end if clipped else x) + px // 4 + clock_r, cy, clock_r)
-        if self.letters_mode:
-            if self.word:   # centered on the row, unless the letters reach past where it would start
-                word_w = self._draw_word(g, None, cy, round(px * 1.15))
-                self._draw_word(g, max(x + px, row.centerx - word_w // 2), cy, round(px * 1.15))
+        if self.word:   # centered on the row, unless the letters reach past where it would start
+            word_w = self._draw_word(g, None, cy, round(px * 1.15))
+            self._draw_word(g, max(x + px, row.centerx - word_w // 2), cy, round(px * 1.15))
 
     def _draw_word(self, g, x, cy, px) -> int:
         """The word the letters found, with its picture, and what Space does with it; returns its width, and
@@ -1201,7 +1227,7 @@ class MusicRoom(Room):
 
     @staticmethod
     def _bar_h(size) -> int:
-        return round(size * NOTE_STRIP * 0.62)
+        return round(size * KEY_BAR)
 
     def _key_tab_width(self, g, size) -> int:
         """The margin either side of the grid, the same in every key so the grid holds still."""

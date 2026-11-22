@@ -295,8 +295,7 @@ def test_only_a_phrase_rest_shows_on_the_song_as_a_space():
         room = make_app(room="music").room
         for key, at in (("Q", 0.0), ("W", 0.2), ("E", 1.2), ("R", 1.2 + ECHO_PAUSE_S)):
             room._tape_add(key, at)
-        texts, _, rests, *_ = room._tape_parts()
-        assert texts == ["C", "D", "E", "F"] and rests == [0, 0, 0, 1]
+        assert room._song_rests() == [0, 0, 0, 1]
     run(go())
 
 
@@ -391,7 +390,7 @@ def test_the_letters_tape_underlines_the_word_dims_as_the_rest_grows_and_clears_
         now = time.monotonic()
         for i, key in enumerate("ZQCAT"):
             room._spell(key, now + i * 0.1)
-        texts, *_, word_at = room._tape_parts()
+        texts, _, word_at = room._tape_parts()
         assert texts == list("ZQCAT") and room.word == "cat" and word_at == 2
         assert rgb(room._tape_ink()) == rgb(P.TEXT)
         room._active_at = now - 0.3 * music_room.WORD_REST_S
@@ -633,17 +632,20 @@ def test_switching_keeps_a_young_songs_clock_where_it_was():
     run(go())
 
 
-def test_the_tape_sits_back_but_for_while_it_plays_and_its_keys_change_color():
+def test_the_song_beads_sit_back_but_for_while_it_plays_and_its_keys_change_color():
     import asyncio
+    from purplecomputer import palette as P
 
     async def go():
         app = make_app(room="music")
         room = app.room
         await type_text(app, "qw")
-        resting, state = room._tape_ink(), room.color_state["Q"]
+        room._tape_add("E", room._tape[-1][2] + 1.0)
+        resting, state = room._tape_ink(P.ACCENT, room._bead_lit(0)), room.color_state["Q"]
         room._play_tape()
         await asyncio.sleep(0.05)
-        assert room._tape_ink() != resting and room._tape_at is not None
+        assert room._tape_ink(P.ACCENT, room._bead_lit(0)) != resting and room._tape_at is not None
+        assert room._bead_lit(2) == 0, "beads ahead of playback stay back"
         assert room.color_state["Q"] != state, "its color moves on as by hand"
         room._stop_tape()
     run(go())

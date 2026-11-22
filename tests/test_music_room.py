@@ -463,16 +463,18 @@ def test_the_hints_after_the_tape_hold_still_whatever_it_holds(monkeypatch):
     run(go())
 
 
-def test_a_long_tape_shows_its_end_and_playback_scrolls_to_the_note_playing():
+def test_a_long_song_shows_its_end_and_playback_scrolls_with_the_note_playing():
     async def go():
         room = make_app(room="music").room
         spans = [10] * 20
-        assert room._tape_window(spans, 100, 10) == (11, 19), "its end, with … before it"
+        assert room._tape_window(spans, 100, 2) == (10, 19), "its end"
         room._tape_at = 3
-        assert room._tape_window(spans, 100, 10) == (3, 10), "from the note playing, with … on both sides"
+        assert room._tape_window(spans, 100, 2) == (1, 10), "the note playing stays clear of the cut"
         room._tape_at = 15
-        assert room._tape_window(spans, 100, 10) == (11, 19)
-        assert room._tape_window([10] * 5, 100, 10) == (0, 4), "a tape that fits shows whole"
+        assert room._tape_window(spans, 100, 2) == (10, 19)
+        room._tape_at = 0
+        assert room._tape_window(spans, 100, 2) == (0, 9)
+        assert room._tape_window([10] * 5, 100, 2) == (0, 4), "a song that fits shows whole"
     run(go())
 
 

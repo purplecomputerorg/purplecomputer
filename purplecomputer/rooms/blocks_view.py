@@ -125,13 +125,21 @@ class Camera:
         # points, as (x, z) of a foot corner and which end, are the same for every stack.
         ends = {(px + self.sun[0] * end, pz + self.sun[1] * end): (px, pz, end) for px in (0, 1) for pz in (0, 1) for end in (0, 1)}
         self._sun_outline = [ends[p] for p in hull(ends)]
-        self.s, self.ox, self.oy = 1.0, 0.0, 0.0
+        self.s, self.ox, self.oy, self.zoom = 1.0, 0.0, 0.0, 1
         sf, cf = math.sin(fit), math.cos(fit)
         corners = [(a * cf - b * s, a * s + b * cf) for a in (-WIDTH / 2, WIDTH / 2) for b in (-DEPTH / 2, DEPTH / 2) for s in (sf, -sf)]
         xs, ys = zip(*(self._flat(WIDTH / 2 + a * cy + b * sy, y, DEPTH / 2 - a * sy + b * cy) for a, b in corners for y in (-SLAB, top)))
         self.s = min(w / (max(xs) - min(xs)), h / (max(ys) - min(ys)))
         self.ox = origin[0] + (w - self.s * (max(xs) + min(xs))) / 2
         self.oy = origin[1] + (h - self.s * (max(ys) + min(ys))) / 2
+
+    def zoomed(self, by: int, corner) -> "Camera":
+        """This camera painting `by` times the size, with screen point `corner` at the picture's corner:
+        for a patch painted large and scaled down, which smooths its edges."""
+        cam = copy.copy(self)
+        cam.s, cam.ox, cam.oy, cam.zoom = self.s * by, (self.ox - corner[0]) * by, (self.oy - corner[1]) * by, self.zoom * by
+        cam._memo, cam.rects, cam.floor = {}, {}, None
+        return cam
 
     def _flat(self, x, y, z) -> tuple:
         dx, dy, dz = x - self.eye[0], y - self.eye[1], z - self.eye[2]
@@ -230,6 +238,12 @@ class Painter:
         other = copy.copy(self)
         other.row = row
         other._split()
+        return other
+
+    def on(self, cam: Camera) -> "Painter":
+        """The same blocks through another camera, for the few things painted one at a time."""
+        other = copy.copy(self)
+        other.cam = cam
         return other
 
     def _split(self):

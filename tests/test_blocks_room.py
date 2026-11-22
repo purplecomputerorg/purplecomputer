@@ -12,6 +12,8 @@ reaches the room with 4."""
 
 import math
 
+import pygame
+
 from purplecomputer.harness import make_app, press, run, type_text
 from purplecomputer.rooms import blocks_room
 from purplecomputer.rooms.blocks_room import DEPTH, DROP_S, HEIGHT, HOVER, LOOKS, REST_TILT, RISE, SINK, TILTS, TURN_DETAIL_BLOCKS, WIDTH
@@ -347,6 +349,11 @@ def _shades(room, x, z, y, color) -> set:
     return {room._painter.face(room._painter.base(x, z, color), n, y) for n in (TOP, (0, -1))}
 
 
+def _close(color, shades) -> bool:
+    """Whether a color is one of the shades, give or take what scaling a picture down smooth does to it."""
+    return any(max(abs(a - b) for a, b in zip(color, shade)) <= 4 for shade in shades)
+
+
 def test_the_cursor_s_block_waits_on_the_top_level_whatever_is_under_it_and_blinks():
     async def go():
         app, room = _blocks()
@@ -355,10 +362,10 @@ def test_the_cursor_s_block_waits_on_the_top_level_whatever_is_under_it_and_blin
             room._changed()
             app._draw()
             assert room._cursor_y() == tower
-            assert _on_screen(app, room, 5.5, HOVER + 0.5, 5.5) in _shades(room, 5, 5, HOVER, room._color)
+            assert _close(_on_screen(app, room, 5.5, HOVER + 0.5, 5.5), _shades(room, 5, 5, HOVER, room._color))
         app.g.dirty = False
         app.g.blink(0)
-        assert _on_screen(app, room, 5.5, HOVER + 0.5, 5.5) not in _shades(room, 5, 5, HOVER, room._color)
+        assert not _close(_on_screen(app, room, 5.5, HOVER + 0.5, 5.5), _shades(room, 5, 5, HOVER, room._color))
     run(go())
 
 
@@ -367,17 +374,17 @@ def test_a_wall_in_front_hides_the_landing_spot_and_an_arrowhead_marks_where_the
         app, room = _blocks()
         room._z = 6
         tips = []
-        room._arrowhead = lambda surf, tip, cell: tips.append(tip)
+        room._arrowhead = lambda surf, cam, x, z, h: tips.append(h)
         app._draw()
-        assert tips == [room._cam.at(5.5, 1, 6.5)]                  # in the open: just the line's end
+        assert tips == [1]                                          # in the open: just the line's end, on the landing spot
         room._blocks.update({(x, 4, y): "#ff0000" for x in range(WIDTH) for y in range(4)})
         room._changed()
         del tips[:]
         app._draw()
         assert _on_screen(app, room, 5.5, 0.5, 6.5) in _shades(room, 5, 4, 0, "#ff0000")     # the wall, whole
         (end, cut), front = tips, room._front
-        assert end == room._cam.at(5.5, 1, 6.5) and cut[1] < end[1]
-        assert not front.get_at((int(cut[0]), int(cut[1])))[3] and front.get_at((int(cut[0]), int(cut[1]) + 3))[3]
+        at = lambda h: tuple(map(int, room._cam.at(5.5, h, 6.5)))
+        assert end == 1 < cut < HOVER and not front.get_at(at(cut))[3] and front.get_at(at(cut - 0.25))[3]
     run(go())
 
 
@@ -599,6 +606,25 @@ async def _real_key(app, sm, keycode, is_down):
     """A key as the keyboard reports it, through the same state machine as real keys."""
     for action in sm.process(RawKeyEvent(keycode=keycode, is_down=is_down, timestamp=0.0)):
         await app._dispatch_keyboard_action(action)
+
+
+def test_a_turn_to_another_side_repaints_the_layers_even_with_the_same_camera():
+    async def go():
+        app, room = _blocks()
+        room._blocks.update({(2, 3, y): "#ff0000" for y in range(4)})
+        room._blocks.update({(x, 12, 0): "#00ff00" for x in range(6, 14)})
+        room._changed()
+        app._draw()
+        cam, front = room._cam, pygame.image.tobytes(room._composed, "RGB")
+        for _ in range(3):
+            room.turn()
+            _settle(room)
+            app._draw()
+            shown = pygame.image.tobytes(room._composed, "RGB")
+            room._changed()
+            app._draw()
+            assert room._cam is cam and shown == pygame.image.tobytes(room._composed, "RGB") != front
+    run(go())
 
 
 def test_tapping_real_tab_turns_a_quarter_when_it_is_let_go():

@@ -40,7 +40,7 @@ from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
-from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox, hull, shape
+from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox, shape
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 REST_TILT = round(math.degrees(REST_PITCH))
@@ -57,6 +57,7 @@ CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far
 CURSOR_REACH = 2.0            # cells around the cursor's block that it repaints: its arrow reaches that far
 DROP_S = 0.16                 # a new block falls into place this long
 ARROWHEAD = 0.36              # half the width of the arrowhead on the landing spot, in cells
+SMOOTH = 3                    # the cursor's marks are painted this many times the size and scaled down: pygame's wide lines come out stepped
 CLEAR = (0, 0, 0, 0)
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 RISE, SINK = "rise", "sink"
@@ -428,8 +429,11 @@ class BlocksRoom(Room):
     def _aim(self, yaw=None, tilt=None):
         """Set where the view is headed; it eases there from wherever it is now, even mid-move."""
         if yaw is not None:
+            side = self._side
             self._goal[0] = float(yaw)
             self._goal[2] = abs(self._off())
+            if self._side != side:
+                self._scene = None      # a side seen straight on shares its camera with the others: the layers are the old side's
         if tilt is not None:
             self._goal[1] = float(min(max(tilt, TILTS[0]), TILTS[1]))
         if self._look != self._goal and self._look_timer is None:
@@ -719,17 +723,20 @@ class BlocksRoom(Room):
             self._turn_detail_limit = len(self._blocks) - 1
 
     # ---------------------------------------------------------------- cursor
-    # The cursor is its column: a small block in the brush color waits in a bold edge on the top
+    # The cursor is its column: a small block in the brush color waits in a wire box on the top
     # level, over the column, and a line runs down the column's free cells to the spot the
-    # next block lands in. The block and its edge go over everything; the rest sits in the scene,
+    # next block lands in. The block and its box go over everything; the rest sits in the scene,
     # so nearer blocks hide it. guides/blocks-cursor.md
     def _cursor_boxes(self, vx, vz) -> tuple:
         """Layer pixels the cursor can touch, and those its waiting block can."""
         cam, layer = self._cam, self._composed.get_rect()
-        reach = round(CURSOR_REACH * cam.cell(vx, HOVER, vz))
-        over = pygame.Rect(0, 0, 2 * reach, 2 * reach)
-        over.center = tuple(map(round, cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5)))
+        over = self._square(cam, vx, vz, HOVER + 0.5, round(CURSOR_REACH * cam.cell(vx, HOVER, vz)))
         return over.union(cam.column_rect(vx, vz)).clip(layer), over.clip(layer)
+
+    def _square(self, cam, x, z, h, reach: int) -> pygame.Rect:
+        """The screen square reaching `reach` pixels each way from the column's middle at height h."""
+        px, py = cam.at(x + 0.5, h, z + 0.5)
+        return pygame.Rect(round(px) - reach, round(py) - reach, 2 * reach, 2 * reach)
 
     def _draw_cursor(self, g, area):
         """The cursor at rest, drawn between the cached layers. Its waiting block blinks: Gfx.blink
@@ -739,70 +746,84 @@ class BlocksRoom(Room):
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
         whole, over = self._cursor_boxes(vx, vz)
+        cut = self._cut(vx, vz, y)
 
         def paint(clip, bright):
             sub.set_clip(clip)
             sub.blit(self._scene, clip, clip)
             self._drop_marks(sub, painter, vx, vz, y)
             sub.blit(self._front, clip, clip)
-            self._mark_cut(sub, vx, vz, y)
+            if cut:
+                self._smooth(sub, painter, self._square(painter.cam, vx, vz, cut, round(painter.cam.cell(vx, cut, vz))),
+                             lambda layer, big: self._arrowhead(layer, big.cam, vx, vz, cut))
             self._hover_marks(sub, painter, vx, vz, bright)
             sub.set_clip(None)
         g.draw_caret(over.move(area.topleft), lambda: paint(whole, True), lambda: paint(over, False))
 
+    def _smooth(self, surf, painter, rect, draw):
+        """Paint with `draw(layer, painter)` SMOOTH times the size and scale it down onto `rect` of `surf`."""
+        rect = rect.clip(surf.get_clip())
+        if rect.w and rect.h:
+            layer = pygame.Surface((rect.w * SMOOTH, rect.h * SMOOTH), pygame.SRCALPHA)
+            draw(layer, painter.on(painter.cam.zoomed(SMOOTH, rect.topleft)))
+            surf.blit(pygame.transform.smoothscale(layer, rect.size), rect)
+
     def _drop_marks(self, surf, painter, x, z, y):
-        """The spot the next block lands in, edged, with its shadow square if it floats, and the
-        line down to it through the column's free cells, ending in an arrowhead."""
+        """The spot the next block lands in as a wire box, with its shadow square if it floats, and
+        the line down to it through the column's free cells, ending in an arrowhead."""
         if y >= HOVER:
             return
-        cam, ink, dark = painter.cam, rgb(P.TEXT), rgb(art_room.CANVAS_BG)
-        if self._ground(y) < y:
-            painter.shadow(surf, x, z, self._ground(y))
-        self._stroke(surf, self._edge(cam, x, z, y), 2, 3)
-        taken, width = set(self._column()), max(2, round(cam.cell(x, y, z)) // 14)
-        spans = [[cam.at(x + 0.5, h + end, z + 0.5) for end in (0, 1)] for h in range(y + 1, HOVER) if h not in taken]
-        for color, w in ((dark, width + 2), (ink, width)):
-            for a, b in spans:
-                pygame.draw.line(surf, color, a, b, w)
-        self._arrowhead(surf, cam.at(x + 0.5, y + 1, z + 0.5), cam.cell(x, y, z))
+        ground, taken = self._ground(y), set(self._column())
 
-    def _mark_cut(self, surf, vx, vz, y):
-        """An arrowhead at the lowest point of the line that the rows in front leave in view, if they hide its end."""
+        def draw(layer, big):
+            cam, unit = big.cam, big.cam.zoom
+            if ground < y:
+                big.shadow(layer, x, z, ground)
+            self._wire(layer, cam, x, z, y, 2 * unit, 2 * unit)
+            width = max(2 * unit, round(cam.cell(x, y, z)) // 14)
+            spans = [[cam.at(x + 0.5, h + end, z + 0.5) for end in (0, 1)] for h in range(y + 1, HOVER) if h not in taken]
+            for color, w in ((rgb(art_room.CANVAS_BG), width + 2 * unit), (rgb(P.TEXT), width)):
+                for a, b in spans:
+                    pygame.draw.line(layer, color, a, b, w)
+            self._arrowhead(layer, cam, x, z, y + 1)
+        pad = round(painter.cam.cell(x, y, z) * ARROWHEAD) + 6
+        self._smooth(surf, painter, painter.cam.run_rect(x, z, ground, HOVER).inflate(2 * pad, 2 * pad), draw)
+
+    def _cut(self, vx, vz, y):
+        """The height of the lowest point of the line that the rows in front leave in view, if they hide its end."""
         at, front = self._cam.at, self._front
-        (ax, ay), (bx, by) = at(vx + 0.5, y + 1, vz + 0.5), at(vx + 0.5, HOVER, vz + 0.5)
 
-        def hidden(px, py):
+        def hidden(h):
+            px, py = at(vx + 0.5, h, vz + 0.5)
             return front.get_rect().collidepoint(px, py) and front.get_at((int(px), int(py)))[3]
-        steps = int(ay - by) // 2
-        if y >= HOVER or steps < 1 or not hidden(ax, ay):
-            return
-        tip = next(((ax + (bx - ax) * i / steps, ay + (by - ay) * i / steps) for i in range(steps)
-                    if not hidden(ax + (bx - ax) * i / steps, ay + (by - ay) * i / steps)), None)
-        if tip:
-            self._arrowhead(surf, tip, self._cam.cell(vx, y, vz))
+        if y < HOVER and hidden(y + 1):
+            return next((h for h in (y + 1 + i / 16 for i in range(1, 16 * (HOVER - y - 1))) if not hidden(h)), None)
 
     def _hover_marks(self, surf, painter, x, z, bright: bool = True):
-        """The block waiting over the column, in its bold edge."""
-        cam = painter.cam
-        if bright:
-            painter.box(surf, x, z, HOVER, HOVER, self._color, inset=CURSOR_INSET)
-        self._stroke(surf, self._edge(cam, x, z, HOVER), max(3, round(cam.cell(x, HOVER, z)) // 9), 4)
+        """The block waiting over the column, in its wire box."""
+        def draw(layer, big):
+            cam = big.cam
+            if bright:
+                big.box(layer, x, z, HOVER, HOVER, self._color, inset=CURSOR_INSET)
+            self._wire(layer, cam, x, z, HOVER, max(2 * cam.zoom, round(cam.cell(x, HOVER, z)) // 12), 3 * cam.zoom)
+        self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(16, 16), draw)
 
-    def _edge(self, cam, x, z, y) -> list:
-        return hull([p for _, poly in cam.box((x, y, z), (x + 1, y + 1, z + 1)) for p in poly])
-
-    def _stroke(self, surf, edge, width, casing):
-        """A closed light line with a dark one `casing` wider under it, so it reads on any color."""
+    def _wire(self, surf, cam, x, z, y, width, casing):
+        """The cell as a wire box: the edges of the faces the eye sees, each a light line with a
+        dark one `casing` wider under it, so it reads on any color."""
+        faces = [poly for _, poly in cam.box((x, y, z), (x + 1, y + 1, z + 1))]
         for color, w in ((rgb(art_room.CANVAS_BG), width + casing), (rgb(P.TEXT), width)):
-            pygame.draw.polygon(surf, color, edge, w)
-            for corner in edge:         # a wide line's corners come out notched
-                pygame.draw.circle(surf, color, corner, w // 2)
+            for poly in faces:
+                pygame.draw.polygon(surf, color, poly, w)
+                for corner in poly:         # a wide line's corners come out notched
+                    pygame.draw.circle(surf, color, corner, w // 2)
 
-    def _arrowhead(self, surf, tip, cell):
-        (px, py), half = tip, max(7, round(cell * ARROWHEAD))
+    def _arrowhead(self, surf, cam, x, z, h):
+        """An arrowhead pointing down the column's middle line, its tip at height h."""
+        (px, py), half = cam.at(x + 0.5, h, z + 0.5), max(7 * cam.zoom, round(cam.cell(x, h, z) * ARROWHEAD))
         head = [(px, py), (px - half, py - 1.4 * half), (px + half, py - 1.4 * half)]
         pygame.draw.polygon(surf, rgb(P.TEXT), head)
-        pygame.draw.polygon(surf, rgb(art_room.CANVAS_BG), head, 2)
+        pygame.draw.polygon(surf, rgb(art_room.CANVAS_BG), head, 2 * cam.zoom)
 
     def _ground(self, y: int) -> int:
         """The level the cursor's block would rest on below height y."""

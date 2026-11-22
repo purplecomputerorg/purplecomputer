@@ -13,9 +13,11 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 
 ## What the cursor draws
 
-- **Waiting block** on the top level over the column: a small block in the brush color inside a bold edge, white over a dark edge so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
+- **Waiting block** on the top level over the column: a small block in the brush color inside a wire box, each wire white over a dark one so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
 - **Line** from the waiting block down the column's free cells, ending in a bold arrowhead on the landing spot. Dashed, it read as clutter.
-- **Landing spot**, edged, with the **shadow square** every floating block gets when it floats.
+- **Landing spot**, a thinner wire box, with the **shadow square** every floating block gets when it floats.
+- **A wire box is the edges of the faces the eye sees**, so it reads as a cube. One line around the cell's outline read as a flat, odd polygon.
+- **The marks are painted three times the size and scaled down** (`_smooth`): pygame's wide lines have hard, stepped edges, and on the only lines on screen that shows.
 - **Arrowhead over the rows in front** at the lowest point of the line they leave in view, when they hide its end.
 - **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size.
 

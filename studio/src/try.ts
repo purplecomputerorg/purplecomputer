@@ -92,7 +92,7 @@ const TIPS: Record<Room | "letters", Tip[]> = {
   play: [{ text: "Press Tab so Purple says it", key: "tab" }],
   blocks: [
     { text: "Press Tab to spin around", key: "tab" },
-    { text: "Press Enter to build up high", key: "enter" },
+    { text: "Press an arrow to move, then type more", key: "right" },
   ],
 };
 const KEYS_BEFORE_TIP = 6;
@@ -126,6 +126,17 @@ addEventListener(KEY_EVENT, (e) => {
 });
 
 const repeat = (n: number, key: string): string[] => Array(Math.abs(n)).fill(key);
+// Row by row from the front, snaking, with as many letters in each column as it stands high.
+const pyramid = (): string[] => [
+  "left", "left", "down", "down",
+  ...[0, 1, 2, 3, 4].flatMap((row) => [
+    ...[0, 1, 2, 3, 4].flatMap((i) => {
+      const col = row % 2 ? 4 - i : i;
+      return [..."cfr".slice(0, 3 - Math.max(Math.abs(col - 2), Math.abs(row - 2))), ...(i < 4 ? [row % 2 ? "left" : "right"] : [])];
+    }),
+    ...(row < 4 ? ["up"] : []),
+  ]),
+];
 const line = (text: string): string[] => [...text.toLowerCase()].map((c) => c === " " ? "space" : c).concat("enter");
 const TYPE_MS = 120;
 
@@ -160,8 +171,8 @@ const DEMOS: Partial<Record<Room, Demo[]>> = {
     { label: "Spell cat", keys: () => "_ c _ a _ t _ _ space".split(" "), ms: 500, letters: true },
   ],
   play: ["red + blue", "say cat + cat x 5"].map((typed) => ({ label: "Type", typed, keys: () => line(typed), ms: TYPE_MS })),
-  // A pyramid: letters climb over the blocks under them, so each row back over the last goes a level up.
-  blocks: [{ label: "Build a pyramid", keys: () => "down down down down left left left left right e r t y t r e left left d f g f d right right c v c left left b".split(" "), ms: 110 }],
+  // A pyramid, five by five and three high: each letter lands on top of the column, a keyboard row a level.
+  blocks: [{ label: "Build a pyramid", keys: pyramid, ms: 90 }],
 };
 
 // What's playing; a new one, typing, or another room stops it.

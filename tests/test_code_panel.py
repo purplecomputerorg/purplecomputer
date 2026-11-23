@@ -368,6 +368,15 @@ def test_blocks_recipe_pictures_match_what_they_build(code, color, rows):
 
 
 # ---------------------------------------------------------------- blocks code
+def test_blocks_code_letters_build_up_as_typing_does():
+    async def go():
+        app, blocks = await _room("blocks")
+        x, z = blocks._x, blocks._z
+        await _run_code(app, blocks, "hi")
+        assert set(blocks._blocks) == {(x, z, 0), (x, z, 1)}
+    run(go())
+
+
 def test_blocks_code_builds_a_tower_then_a_row_from_its_top():
     async def go():
         app, blocks = await _room("blocks")

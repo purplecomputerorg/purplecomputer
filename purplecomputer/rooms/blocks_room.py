@@ -118,8 +118,8 @@ class BlocksRoom(Room):
         self._mixed = None                # (keycaps, color) of the last block that mixed
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where a run up or down the column (or a code run) goes on from
-        self._dir = RISE              # the way the last block went on, a key of WAYS: up, but for code
-        self._code_dir = "right"      # the way code builds until it says another
+        self._dir = RISE              # the way the last block went on, a key of WAYS: up, as code starts out too
+        self._code_dir = RISE         # the way code builds until it says another: up, as typing does
         # Where the view is headed, in degrees: how far the floor has turned, how far down the view looks,
         # and how far off straight on the floor it is sized to fit sits. Then where it is now.
         self._goal = [0.0, float(REST_TILT), 0.0]
@@ -135,7 +135,7 @@ class BlocksRoom(Room):
         self._scene = self._front = self._composed = None
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
         self._seen, self._cols = {}, {}  # the landed blocks in view coordinates, and each view column's shape
-        self._bump = self._bump_timer = None   # (dx, dz, when) while the waiting block knocks against a wall
+        self._bump = self._bump_timer = None   # (dx, dz, dy, when) while the waiting block knocks against a wall or the ceiling
         self._fell: list = []          # where the falling blocks were drawn last, in the layers' pixels
         self._falls: dict = {}         # blocks still falling into place, kept out of the layers: (when it was let go, from which level)
         self._hide: dict = {}          # for each of those, (the painter's items, the ones that can stand in front of it on its way)
@@ -200,7 +200,7 @@ class BlocksRoom(Room):
         self._falls.clear()
         self._hide.clear()
         self._stamps.clear()
-        self._dir, self._code_dir = RISE, "right"
+        self._dir = self._code_dir = RISE
         self.echo.reset()
         self._changed()
 
@@ -281,6 +281,8 @@ class BlocksRoom(Room):
         """A block, then on to the next cell `way`: up, for everything but code."""
         self._dir = way
         y = self._cursor_y()
+        if y == HEIGHT - 1 and (self._x, self._z, y) in self._blocks:
+            self._knock(0, 0, 1)        # a full column: the block mixes into its top one, against the ceiling
         self._advance(y, keep_height, inside=self._place(y))
 
     def _advance(self, y: int, keep_height: bool = False, inside: bool = False):
@@ -340,6 +342,7 @@ class BlocksRoom(Room):
         """One level up or down, onto a block if one is there, as far as the floor or the top."""
         y = self._cursor_y() + rise
         if not 0 <= y < HEIGHT:
+            self._knock(0, 0, rise)
             return False
         self._hover = y
         self._next = (self._x, self._z, y, True)
@@ -396,25 +399,26 @@ class BlocksRoom(Room):
         self._next = None
         return True
 
-    def _knock(self, dx, dz):
-        """The waiting block knocks against the wall (dx, dz) in view coordinates, and springs back."""
+    def _knock(self, dx, dz, dy=0):
+        """The waiting block knocks against the wall (dx, dz) in view coordinates, or with dy the ceiling
+        or the floor, and springs back."""
         if self._bump is None:
-            self._bump = (dx, dz, time.monotonic())
+            self._bump = (dx, dz, dy, time.monotonic())
             self._bump_timer = self.app.timers.every(1 / 60, self._bump_tick)
 
     def _bump_tick(self):
-        if time.monotonic() - self._bump[2] >= BUMP_S:
+        if time.monotonic() - self._bump[3] >= BUMP_S:
             self._bump = None
             self._bump_timer.stop()
         self.app.invalidate()
 
     def _nudge(self) -> tuple:
-        """How far the waiting block is off its column as it knocks against a wall, in view coordinates."""
+        """(x, z, height) the waiting block is off its spot as it knocks against a wall, in view coordinates."""
         if self._bump is None or self._moving() is not None:
-            return 0.0, 0.0
-        dx, dz, since = self._bump
+            return 0.0, 0.0, 0.0
+        dx, dz, dy, since = self._bump
         reach = BUMP * math.sin(math.pi * min(1.0, (time.monotonic() - since) / BUMP_S))
-        return dx * reach, dz * reach
+        return dx * reach, dz * reach, dy * reach
 
     def _view(self, x: int, z: int) -> tuple:
         return turned(x, z, self._side)
@@ -893,13 +897,13 @@ class BlocksRoom(Room):
 
     def _hover_marks(self, surf, painter, x, z, bright: bool = True):
         """The block waiting over the column, in its wire box."""
-        ox, oz = self._nudge()
+        ox, oz, oy = self._nudge()
 
         def draw(layer, big):
             cam = big.cam
             if bright:
-                big.box(layer, x + ox, z + oz, HOVER, HOVER, self._color, inset=CURSOR_INSET)
-            self._wire(layer, cam, x + ox, z + oz, HOVER, max(2 * cam.zoom, round(cam.cell(x, HOVER, z)) // 12), 3 * cam.zoom)
+                big.box(layer, x + ox, z + oz, HOVER + oy, HOVER + oy, self._color, inset=CURSOR_INSET)
+            self._wire(layer, cam, x + ox, z + oz, HOVER + oy, max(2 * cam.zoom, round(cam.cell(x, HOVER, z)) // 12), 3 * cam.zoom)
         reach = 16 + round(painter.cam.cell(x, HOVER, z) * BUMP)
         self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(2 * reach, 2 * reach), draw)
 
@@ -907,7 +911,8 @@ class BlocksRoom(Room):
         """(glyph, lo, hi) of each arrow's key, far to near: a thin slab lying flat out from the waiting block
         the way that arrow moves the cursor. One going away sits level with the box's top and one coming
         toward with its bottom, the rest in between, so the box hides none of them. Where the edge stops
-        the cursor, a thin glass wall stands against that side of the box instead, with no glyph."""
+        the cursor, a thin glass wall stands against that side of the box instead, with no glyph, and at
+        the top level a glass pane lies over it."""
         keys = []
         for way, (dx, dz) in STEPS.items():
             for _ in range(-self._side % 4 if world else 0):
@@ -918,6 +923,9 @@ class BlocksRoom(Room):
             xs = sorted((x + 0.5 + dx * near - dz * half, x + 0.5 + dx * far + dz * half))
             zs = sorted((z + 0.5 + dz * near + dx * half, z + 0.5 + dz * far - dx * half))
             keys.append((None if wall else ARROW_KEYS[way], (xs[0], HOVER - thick if wall else h - thick, zs[0]), (xs[1], h, zs[1])))
+        if self._cursor_y() == HEIGHT - 1:      # nothing goes higher: glass over the box, as the walls are
+            near, _, half, thick = WALL_SPAN
+            keys.append((None, (x + 0.5 - half, HOVER + 1 + thick, z + 0.5 - half), (x + 0.5 + half, HOVER + 1 + thick + near - 0.5, z + 0.5 + half)))
         return sorted(keys, key=lambda k: cam.key(k[1][0], k[1][2], 0))
 
     def _draw_arrow_keys(self, g, surf, painter, x, z, world: bool = False, origin=(0, 0)):

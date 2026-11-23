@@ -707,12 +707,37 @@ def test_at_a_wall_the_key_that_way_is_a_curb_and_pushing_into_it_knocks_the_wai
         await press(app, "right")
         assert (room._x, room._z) == (WIDTH - 1, 0) and room._bump is not None
         now[0] += blocks_room.BUMP_S / 2
-        ox, oz = room._nudge()
-        assert ox > 0.1 and oz == 0                                       # it knocks toward the wall
+        ox, oz, oy = room._nudge()
+        assert ox > 0.1 and oz == oy == 0                                 # it knocks toward the wall
         app._draw()
         now[0] += blocks_room.BUMP_S
         room._bump_tick()
-        assert room._bump is None and room._nudge() == (0.0, 0.0)
+        assert room._bump is None and room._nudge() == (0.0, 0.0, 0.0)
+    run(go())
+
+
+def test_at_the_top_level_glass_lies_over_the_waiting_block_and_going_higher_knocks_it_up(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        vx, vz = room._view(room._x, room._z)
+        panes = lambda: [lo for glyph, lo, hi in room._arrow_keys(room._cam, vx, vz) if glyph is None and lo[1] > HOVER + 1]  # noqa: E731
+        app._draw()
+        assert not panes()
+        room._hover = HOVER
+        assert len(panes()) == 1
+        await press(app, "up", shift_held=True)
+        assert room._hover == HOVER and room._nudge() == (0.0, 0.0, 0.0) and room._bump is not None
+        now[0] += blocks_room.BUMP_S / 2
+        assert room._nudge()[2] > 0.1                                    # up, into the glass
+        now[0] += blocks_room.BUMP_S
+        room._bump_tick()
+        room._blocks.update({(room._x, room._z, y): "#ff0000" for y in range(HEIGHT)})
+        room._hover = 0
+        room._changed()
+        await type_text(app, "a")                                        # a full column: it mixes into the top one
+        assert room._bump is not None and room._bump[2] == 1
     run(go())
 
 

@@ -144,7 +144,7 @@ Families can add their own rooms (games, stories, worlds) from [Purple Studio](#
 - **Esc (tap):** the Esc menu: rooms on top (press a number), then tools for the room you're in: **Code** (Space), **Colors** (\\), **Time Travel** (T), **Save** (S), **Open** (O), **Print** (P, when a USB printer is plugged in), **Clear** (C), and **Volume** (V)
 - **Hold Esc (1s):** Parent Menu
 - **Hold \\ (3s):** Parent Menu (alternate, works on all keyboards)
-- **Tab:** the room's switch: Paint/Letters in Art, Notes/Letters in Music, Front/Back in Blocks (hold it to look down from above), `say` on or off in Play
+- **Tab:** the room's switch: Paint/Letters in Art, Notes/Letters in Music, a quarter turn in Blocks (hold it with the arrows to look around), `say` on or off in Play
 - **Space** (Art, Blocks): put the brush down or lift it; hold it with the arrows to paint a trail or lay a line
 - **Enter** (Music): the next instrument; in Letters, whether letters say their names ("bee") or their sounds ("b")
 - **Space** (Music, in Letters): say the word the letters just spelled, shown under the grid

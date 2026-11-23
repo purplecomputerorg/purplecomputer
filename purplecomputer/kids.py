@@ -3,6 +3,7 @@ Switching kids just exits: xinitrc starts Purple again, now as that kid."""
 
 from pathlib import Path
 
+from . import key_save, settings
 from .settings import add_kid, get_kid, get_kids, kid_path, remove_kid, set_kid
 from .ui import CANCELLED, DOWN, UP, Confirm, Picker
 
@@ -10,7 +11,12 @@ PICKED = Path("/tmp/purple-kid-picked")  # the next start skips Pick your comput
 
 
 def name_file(kid: str | None = None) -> Path:
-    return kid_path(Path.home() / ".purple" / "computer_name.txt", kid)
+    return kid_path(settings.SETTINGS_FILE.parent / "computer_name.txt", kid)
+
+
+def _old_name_file() -> Path:
+    """Where the first kid's name lived before it moved in with the settings a live Key keeps."""
+    return Path.home() / ".purple" / "computer_name.txt"
 
 
 def _read(path: Path) -> str:
@@ -23,7 +29,8 @@ def _read(path: Path) -> str:
 def computer_name(kid: str | None = None) -> str:
     from .rooms.parent_menu import DEFAULT_COMPUTER_NAME
     kid = get_kid() if kid is None else kid
-    return _read(name_file(kid)) or (not kid and _read(Path("/opt/purple/computer_name.txt"))) or DEFAULT_COMPUTER_NAME
+    first = not kid and (_read(_old_name_file()) or _read(Path("/opt/purple/computer_name.txt")))
+    return _read(name_file(kid)) or first or DEFAULT_COMPUTER_NAME
 
 
 def write_computer_name(name: str, kid: str | None = None):
@@ -34,6 +41,8 @@ def write_computer_name(name: str, kid: str | None = None):
             path.write_text(name)
         elif path.exists():
             path.unlink()
+        if not kid:
+            _old_name_file().unlink(missing_ok=True)
     except OSError:
         pass
 
@@ -48,6 +57,8 @@ def switch(app, kid: str):
         PICKED.touch()
     except OSError:
         pass
+    app.key_save.changed()  # the Parent Menu is still open, so nothing has asked for a save yet
+    app.flush_for_power_off()
     app.exit()
 
 
@@ -103,12 +114,19 @@ class KidsScreen(Picker):
     DESCRIPTION = "Each kid gets their own computer here, with their own settings, saved work, and Time Travel."
 
     def __init__(self, app):
-        super().__init__(app, self._options())
+        super().__init__(app)
+        self.options = self._options()
 
     def _options(self) -> list:
-        now = get_kid()
-        return [(k, computer_name(k), "Playing now" if k == now else "{Enter} to switch or remove") for k in get_kids()] \
-            + [("add", "Add a kid"), (None, "Done")]
+        now, why = get_kid(), self._why_locked()
+        self.dim_values = {"add"} if why else set()
+        hint = "{Enter} to switch" if why else "{Enter} to switch or remove"
+        return [(k, computer_name(k), "Playing now" if k == now else hint) for k in get_kids()] \
+            + [("add", "Add a kid", why) if why else ("add", "Add a kid"), (None, "Done")]
+
+    def _why_locked(self) -> str | None:
+        """A live Key that can't keep work right now: kids added or removed would come back wrong after a restart."""
+        return key_save.unavailable() or ("USB is full" if self.app.key_save.full else None)
 
     def _refresh(self, *_):
         self.options = self._options()
@@ -119,7 +137,7 @@ class KidsScreen(Picker):
         if value is None:
             return self.close(True)
         if value == "add":
-            return self._add()
+            return None if self._why_locked() else self._add()
         if value != get_kid():
             self._open(value)
 
@@ -137,7 +155,8 @@ class KidsScreen(Picker):
 
     def _open(self, kid):
         name = computer_name(kid)
-        picker = Picker(self.app, [("switch", f"Switch to {name}")] + ([("remove", f"Remove {name}")] if kid else [])
+        removable = kid and not self._why_locked()
+        picker = Picker(self.app, [("switch", f"Switch to {name}")] + ([("remove", f"Remove {name}")] if removable else [])
                         + [(None, "Never mind")])
         picker.title, picker.dim_values = name, {"remove"}
         self.app.push(picker, on_close=lambda choice: self._chose(kid, name, choice))

@@ -115,3 +115,9 @@ def test_keep_brings_back_the_laptops_packs(tmp_path):
 
 def test_fresh_install_has_no_old_packs(tmp_path):
     assert not (_carry(tmp_path, keep=False) / ".purple").exists()
+
+
+def test_probe_prefers_the_name_kept_with_the_settings(tmp_path):
+    (tmp_path / "oldroot/home/purple/.config/purple").mkdir(parents=True)
+    (tmp_path / "oldroot/home/purple/.config/purple/computer_name.txt").write_text("Ari's Computer")
+    assert _save(tmp_path, probe=True)[0] == "[PURPLE-FOUND] Ari's Computer\n"

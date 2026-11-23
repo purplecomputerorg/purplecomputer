@@ -249,7 +249,7 @@ save_old_purple() {
     if [ -d "$mnt/home/purple/.config/purple" ]; then
         cp -a "$mnt/home/purple/.config/purple" "$keep/config" 2>/dev/null || rc=2
     fi
-    # ~/.purple holds installed packs and a name changed in the parent menu; its TTS cache regenerates.
+    # ~/.purple holds installed packs (and, before Nov 2026, a name changed in the parent menu); its TTS cache regenerates.
     if [ -d "$mnt/home/purple/.purple" ]; then
         tar -C "$mnt/home/purple" --exclude=.purple/cache -cf - .purple 2>/dev/null \
             | tar -C "$keep" -xf - 2>/dev/null || rc=2
@@ -269,7 +269,8 @@ probe() {
     target=$(find_target) || exit 0
     save_old_purple "$(part_prefix "$target")2" "$KEEP_DIR" || rc=$?
     case $rc in
-        0) echo "[PURPLE-FOUND] $(cat "$KEEP_DIR/.purple/computer_name.txt" 2>/dev/null || cat "$KEEP_DIR/computer_name.txt" 2>/dev/null)" ;;
+        0) echo "[PURPLE-FOUND] $(for f in config/computer_name.txt .purple/computer_name.txt computer_name.txt; do
+               [ -s "$KEEP_DIR/$f" ] && { cat "$KEEP_DIR/$f"; break; }; done)" ;;
         2) echo "[PURPLE-FOUND-UNREADABLE]" ;;
     esac
     exit 0

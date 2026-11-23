@@ -115,3 +115,84 @@ def test_kids_wait_for_purple_to_be_installed(monkeypatch):
         assert dict(_get_menu_items(app))["menu-kids"] == "Kid Profiles (install Purple first)"
         assert parent_menu.ParentMenu(app)._disabled("menu-kids")
     run(go())
+
+
+@pytest.fixture
+def live_key(monkeypatch, tmp_path):
+    """A live Key that keeps work; set present[0] = False to pull it out."""
+    from purplecomputer import key_save
+    present = [True]
+    monkeypatch.setattr(parent_menu, "is_live_boot", lambda: True)
+    monkeypatch.setattr(key_save, "is_live_boot", lambda: True)
+    monkeypatch.setattr(key_save, "MARKER", str(tmp_path / "key-save"))
+    monkeypatch.setattr(key_save, "is_usb_present", lambda: present[0])
+    monkeypatch.setattr(key_save, "is_usb_reinserted", lambda: False)
+    (tmp_path / "key-save").write_text("p 0 1")
+    return present
+
+
+def test_a_live_key_that_keeps_work_has_kid_profiles(live_key):
+    async def go():
+        app = make_app()
+        assert dict(_get_menu_items(app))["menu-kids"] == "Kid Profiles"
+        assert not parent_menu.ParentMenu(app)._disabled("menu-kids")
+    run(go())
+
+
+def test_kids_cannot_be_added_or_removed_while_the_key_is_out(live_key):
+    leo = settings.add_kid()
+    kids.write_computer_name("Leo's Computer", leo)
+    live_key[0] = False
+
+    async def go():
+        app = make_app()
+        screen = kids.KidsScreen(app)
+        assert ("add", "Add a kid", "Needs USB") in screen.options and "add" in screen.dim_values
+        screen._on_confirm("add")
+        screen._on_confirm(leo)
+        assert [o[0] for o in app.top.options] == ["switch", None]
+    run(go())
+
+
+def test_the_first_computers_name_is_kept_with_its_settings(home):
+    old = home / ".purple/computer_name.txt"
+    old.parent.mkdir()
+    old.write_text("Sam's Computer")
+    assert kids.computer_name("") == "Sam's Computer"
+    kids.write_computer_name("Ari's Computer", "")
+    assert (home / ".config/purple/computer_name.txt").read_text() == "Ari's Computer" and not old.exists()
+    assert kids.computer_name("") == "Ari's Computer"
+
+
+def test_switching_kids_writes_the_key_first(live_key, monkeypatch):
+    from purplecomputer import key_save
+    writes = []
+    monkeypatch.setattr(key_save.KeySave, "_write", lambda self, timeout=60: writes.append(timeout) or key_save.OK)
+    leo = settings.add_kid()
+
+    async def go():
+        app = make_app()
+        kids.switch(app, leo)
+        assert writes == [key_save.FLUSH_TIMEOUT_S] and not app.running
+    run(go())
+
+
+def test_installing_from_the_key_offers_its_name_and_carries_the_one_typed(live_key, monkeypatch):
+    kids.write_computer_name("Ari's Computer", "")
+    installs = []
+    monkeypatch.setattr(parent_menu, "InstallProgressScreen", lambda app, **k: installs.append(k) or parent_menu.Overlay(app))
+
+    async def go():
+        app = make_app()
+        menu = parent_menu.ParentMenu(app)
+        app.push(menu)
+        menu._ask_install(None, "")
+        assert app.top._name == "Ari's Computer"
+        app.top.close("Sam's Computer")
+        app.top.close(False)
+        assert kids.computer_name("") == "Ari's Computer"
+        menu._ask_install(None, "")
+        app.top.close("Sam's Computer")
+        app.top.close(True)
+        assert kids.computer_name("") == "Sam's Computer" and installs[0]["computer_name"] == "Sam's Computer"
+    run(go())

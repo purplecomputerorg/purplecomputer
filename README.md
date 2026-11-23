@@ -174,7 +174,7 @@ red up 3 blue right 2             # Blocks: a new color as you go
 
 ### Saving, Time Travel and printing
 
-Every room is kept across restarts. **Time Travel** rewinds a room to any earlier moment (← and →, Enter keeps it). **Save** keeps a picture of the work and **Open** brings saves back; plugging in a USB printer adds **Print**, signed with the computer's name. Parents can copy saved work to a USB drive from the Parent Menu. On a live Purple Key, saves live on the Key itself.
+Every room is kept across restarts. **Time Travel** rewinds a room to any earlier moment (← and →, Enter keeps it). **Save** keeps a picture of the work and **Open** brings saves back; plugging in a USB printer adds **Print**, signed with the computer's name. Parents can copy saved work to a USB drive from the Parent Menu. On a live Purple Key, saves and Kid Profiles live on the Key itself.
 
 ### Parent Menu
 

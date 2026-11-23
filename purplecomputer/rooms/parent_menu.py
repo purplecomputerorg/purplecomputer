@@ -358,9 +358,14 @@ def _pack_for(pack_id: str) -> str:
     return "For everyone" if kid is None else f"Just {computer_name(kid)}"
 
 
+def _kids_need_install() -> bool:
+    from .. import key_save
+    return is_live_boot() and not key_save.active()
+
+
 def _kids_label() -> str:
     from ..settings import get_kids
-    if is_live_boot():
+    if _kids_need_install():
         return "Kid Profiles (install Purple first)"
     return f"Kid Profiles: {len(get_kids())}" if many() else "Kid Profiles"
 
@@ -1337,7 +1342,7 @@ class ParentMenu(Overlay):
     def _disabled(self, item_id) -> bool:
         if item_id == "menu-install":
             return self.items[[i for i, _ in self.items].index(item_id)][1] != "Install on this Computer"
-        return item_id == "menu-volume" and self.app.audio_ok is False or item_id == "menu-kids" and is_live_boot()
+        return item_id == "menu-volume" and self.app.audio_ok is False or item_id == "menu-kids" and _kids_need_install()
 
     def _refresh_install_item(self):
         dev = _find_usb_device()
@@ -1515,11 +1520,14 @@ class ParentMenu(Overlay):
 
             def on_confirm(choice):
                 if choice:
+                    write_computer_name(name or "", "")  # the live settings come over whole, name included
                     self.close()
                     self.app._timeline_flush()  # the installer copies the live history
                     self.app.push(InstallProgressScreen(self.app, computer_name=name or "", keep=choice == "keep"))
             self.app.push(_CONFIRM_SCREENS[old](self.app), on_close=on_confirm)
-        self.app.push(ComputerNameScreen(self.app, initial=old_name), on_close=on_name)
+        live_name = computer_name("")
+        initial = old_name or ("" if live_name == DEFAULT_COMPUTER_NAME else live_name)
+        self.app.push(ComputerNameScreen(self.app, initial=initial), on_close=on_name)
 
     def _rename_computer(self):
         current = self.app.computer_name()

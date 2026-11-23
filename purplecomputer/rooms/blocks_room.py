@@ -13,7 +13,7 @@ blocks; only the code line keeps the height it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
-opens the color bar. A tap of Tab turns the build a quarter of the way around,
+opens the color bar. A tap of Tab turns the build a quarter of the way around, clockwise,
 and Tab held with the arrows looks around it: Left and Right turn it a little
 at a time to any angle, Up and Down tilt the view from the side to nearly
 straight down. The arrows always go the way they point most on screen. The walls and the top
@@ -32,7 +32,7 @@ from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAc
 from ..palette import DEFAULT_BRUSH_COLOR
 from .. import color_recipe
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
-from ..gfx import mix, rgb
+from ..gfx import rgb
 from ..panels import CodePanel, Echo
 from ..ui import DOWN, LEFT, MOVE_HINT, PICK_HINT, RIGHT, UP, draw_key, draw_key_hint, draw_mode_switch, hint_row_h, keycap_size
 from .base import Room
@@ -55,6 +55,7 @@ HOVER = HEIGHT - 1            # the level the cursor's block waits on, over its 
 CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its cell
 CURSOR_REACH = 2.5            # cells around the cursor's block that it repaints: the arrows' keycaps sit that near
 DROP_S = 0.16                 # a new block falls into place this long
+GHOST_ALPHA = 90              # a block falling behind others shows through them this faintly
 # The arrow down onto the landing spot, as (up the column from its tip, across) points: a head taller than
 # it is wide on a stub of shaft, since a squat triangle alone reads as pointing sideways as easily as down.
 ARROW = ((0, 0), (0.62, -0.3), (0.62, -0.1), (1.15, -0.1), (1.15, 0.1), (0.62, 0.1), (0.62, 0.3))
@@ -62,13 +63,13 @@ SMOOTH = 3                    # the cursor's marks are painted this many times t
 CLEAR = (0, 0, 0, 0)
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 ARROW_KEYS = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
-WING = (0.5, 1.25, 0.26)     # a wing of the cursor's box, in cells: from this far to this far out from its middle, and half this wide
-KEY_GAP = 3                  # pixels between a wing's end and its arrow's keycap
+KEYS_GAP = 4                 # pixels between the cursor's waiting block and each arrow's keycap
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 # Where typing goes next, by way: one step along an axis, as far as the wall or the ceiling.
 WAYS = {"right": ("x", 1), "left": ("x", -1), "up": ("z", 1), "down": ("z", -1), RISE: ("y", 1), SINK: ("y", -1)}
 TURN_PIC = "hints/turn.png"
+LOOK_HINT = "{hold Tab}+" + "".join(f"{{{a}}}" for a in (LEFT, UP, DOWN, RIGHT)) + " {hints/look.png}"
 HINT = "Type to build!"
 SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
 
@@ -412,7 +413,7 @@ class BlocksRoom(Room):
 
     def turn(self):
         """A tap of Tab, here or in Time Travel: on to the floor's next side, straight on."""
-        self._aim(yaw=90.0 * (self._quarters + 1))
+        self._aim(yaw=90.0 * (self._quarters - 1))      # clockwise, seen from above
 
     def look_around(self, direction: str, held: bool = False):
         """Tab with an arrow: one step around, the near edge going the arrow's way, or up or down.
@@ -594,7 +595,7 @@ class BlocksRoom(Room):
             return
         whole = fresh or row != self._painter.row
         moved_only = not fresh and not self._dirty
-        self._painter = self._painter.on_row(row) if moved_only else Painter(cam, self._view_blocks(), row=row)
+        self._painter = self._painter.on_row(row) if moved_only else Painter(cam, self._view_blocks(), row=row, quarters=self._side)
         if fresh:
             self._cam = cam
             self._land, self._scene, self._composed = (pygame.Surface(size) for _ in range(3))
@@ -636,7 +637,7 @@ class BlocksRoom(Room):
             return None
         top = 1 + max(y for _, _, y in self._blocks)    # fit the build, not the empty air over it
         painter = Painter(Camera(0.0, REST_PITCH, *size, top=top), self._view_blocks(falling=True), hazy=False,
-                          floor=None if on_screen else PAPER_FLOOR)
+                          floor=None if on_screen else PAPER_FLOOR, quarters=self._side)
         s = pygame.Surface(size)
         s.fill(rgb(painter.floor[0]))
         painter.paint_floor(s)
@@ -662,9 +663,9 @@ class BlocksRoom(Room):
             g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
             self._draw_moving(g, area, *moving)
             g.surface.set_clip(None)
-        self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._tab is not None else 1,
+        self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._tab is False else 1,
                                         self._color, wheel=None if self.code_panel else wheel_chip(self),
-                                        reserve=self.header_reserve(g))
+                                        after=(LOOK_HINT, self._tab is True), reserve=self.header_reserve(g))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
@@ -701,7 +702,12 @@ class BlocksRoom(Room):
             rect = cam.run_rect(vx, vz, h, h)
             sub.set_clip(rect)
             painter.box(sub, vx, vz, h, h, color)
-            painter.paint(sub, kept[1], rect)
+            if kept[1]:
+                painter.paint(sub, kept[1], rect)
+                ghost = pygame.Surface(rect.size, pygame.SRCALPHA)
+                painter.on(cam.zoomed(1, rect.topleft)).box(ghost, vx, vz, h, h, color)
+                ghost.set_alpha(GHOST_ALPHA)
+                sub.blit(ghost, rect)
         sub.set_clip(None)
 
     def _draw_moving(self, g, area, turn, tilt, fit):
@@ -722,7 +728,7 @@ class BlocksRoom(Room):
         painter.paint(g.surface, items[:behind])
         self._drop_marks(g.surface, painter, x, z, self._cursor_y())
         painter.paint(g.surface, items[behind:])
-        self._hover_marks(g.surface, painter, x, z, world=True)
+        self._hover_marks(g.surface, painter, x, z)
         self._draw_arrow_keys(g, cam, x, z, world=True)
         if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
             self._turn_detail_limit = len(self._blocks) - 1
@@ -805,62 +811,45 @@ class BlocksRoom(Room):
         if y < HOVER and hidden(y + 1):
             return next((h for h in (y + 1 + i / 16 for i in range(1, 16 * (HOVER - y - 1))) if not hidden(h)), None)
 
-    def _hover_marks(self, surf, painter, x, z, bright: bool = True, world: bool = False):
-        """The block waiting over the column, in its wire box, and the box's four wings."""
+    def _hover_marks(self, surf, painter, x, z, bright: bool = True):
+        """The block waiting over the column, in its wire box."""
         def draw(layer, big):
             cam = big.cam
-            width, casing = max(2 * cam.zoom, round(cam.cell(x, HOVER, z)) // 12), 3 * cam.zoom
-            wings = self._wings(cam, x, z, world)
-            for behind in (True, False):
-                for quad in (w[1] for w in wings if (w[0] > 0) == behind):
-                    pygame.draw.polygon(layer, mix(P.TEXT, art_room.CANVAS_BG, 0.55), quad)
-                    self._stroke(layer, [quad], width // 2, casing)
-                if behind:
-                    if bright:
-                        big.box(layer, x, z, HOVER, HOVER, self._color, inset=CURSOR_INSET)
-                    self._wire(layer, cam, x, z, HOVER, width, casing)
-        reach = round(painter.cam.cell(x, HOVER, z) * (WING[1] + 0.2))
-        self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(2 * reach, 2 * reach), draw)
+            if bright:
+                big.box(layer, x, z, HOVER, HOVER, self._color, inset=CURSOR_INSET)
+            self._wire(layer, cam, x, z, HOVER, max(2 * cam.zoom, round(cam.cell(x, HOVER, z)) // 12), 3 * cam.zoom)
+        self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(16, 16), draw)
 
-    def _wings(self, cam, x, z, world: bool = False) -> list:
-        """(how far away it points, its quad, its arrow's glyph) for each arrow: a flat wing out of
-        the cursor's box the way that arrow moves it, from the box's side to the wing's end and
-        back. A wing pointing away from the viewer comes off the box's top and one pointing toward
-        them off its bottom, so the box hides none of them."""
-        wings, (near, far, half) = [], WING
+    def _arrow_keys(self, cam, x, z, world: bool = False, cap=(0, 0)) -> dict:
+        """Where each arrow's keycap goes, by its glyph: out from the cursor's waiting block the way
+        that arrow moves it on screen, just clear of the box, so the keys read off the floor
+        whichever way it is turned. `cap` is a keycap's size."""
+        box, (mx, my), spots = cam.run_rect(x, z, HOVER, HOVER), cam.at(x + 0.5, HOVER + 0.5, z + 0.5), {}
+        wide, tall = (box.w + cap[0]) / 2 + KEYS_GAP, (box.h + cap[1]) / 2 + KEYS_GAP
         for way, (dx, dz) in STEPS.items():
             for _ in range(-self._side % 4 if world else 0):
                 dx, dz = -dz, dx
-            away = cam.away(dx, dz)
-
-            def at(along, across):
-                return cam.at(x + 0.5 + dx * along - dz * across, HOVER + 0.5 + 0.5 * away, z + 0.5 + dz * along + dx * across)
-            wings.append((away, [at(near, -half), at(far, -half), at(far, half), at(near, half)], ARROW_KEYS[way]))
-        return wings
+            px, py = cam.at(x + 0.5 + dx, HOVER + 0.5, z + 0.5 + dz)
+            out = 1 / max(abs(px - mx) / wide, abs(py - my) / tall)        # onto the frame a keycap's middle keeps to, to clear the box
+            spots[ARROW_KEYS[way]] = (box.centerx + (px - mx) * out, box.centery + (py - my) * out)
+        for key, sign in ((UP, -1), (DOWN, 1)):         # seen from low down, away and toward land on the side keys: over and under them
+            for side in (LEFT, RIGHT):
+                (kx, ky), (sx, sy) = spots[key], spots[side]
+                if abs(kx - sx) < cap[0] and abs(ky - sy) < cap[1]:
+                    spots[key] = (kx, sy + sign * (cap[1] + KEYS_GAP))
+        return spots
 
     def _draw_arrow_keys(self, g, cam, x, z, world: bool = False, origin=(0, 0)):
-        """Each arrow's keycap just off the end of its wing."""
         px = max(g.vh(1.4), round(cam.cell(x, HOVER, z) * 0.3))
-        for _, quad, glyph in self._wings(cam, x, z, world):
-            kx, ky = self._off_end(quad, keycap_size(g, glyph, px))
+        for glyph, (kx, ky) in self._arrow_keys(cam, x, z, world, keycap_size(g, UP, px)).items():
             draw_key(g, glyph, px, round(kx) + origin[0], round(ky) + origin[1], anchor="center")
 
-    def _off_end(self, quad, cap) -> tuple:
-        """The middle of a keycap `cap` in size that sits just past a wing's end, in line with it."""
-        (ax, ay), (bx, by), (cx, cy), (dx, dy) = quad
-        ex, ey, ux, uy = (bx + cx) / 2, (by + cy) / 2, (bx + cx - ax - dx) / 2, (by + cy - ay - dy) / 2
-        long = math.hypot(ux, uy) or 1.0
-        out = (abs(ux) * cap[0] + abs(uy) * cap[1]) / (2 * long) + KEY_GAP
-        return ex + ux / long * out, ey + uy / long * out
-
     def _wire(self, surf, cam, x, z, y, width, casing):
-        """The cell as a wire box: the edges of the faces the eye sees."""
-        self._stroke(surf, [poly for _, poly in cam.box((x, y, z), (x + 1, y + 1, z + 1))], width, casing)
-
-    def _stroke(self, surf, polys, width, casing):
-        """The polygons' edges, each a light line with a dark one `casing` wider under it, so it reads on any color."""
+        """The cell as a wire box: the edges of the faces the eye sees, each a light line with a
+        dark one `casing` wider under it, so it reads on any color."""
+        faces = [poly for _, poly in cam.box((x, y, z), (x + 1, y + 1, z + 1))]
         for color, w in ((rgb(art_room.CANVAS_BG), width + casing), (rgb(P.TEXT), width)):
-            for poly in polys:
+            for poly in faces:
                 pygame.draw.polygon(surf, color, poly, w)
                 for corner in poly:         # a wide line's corners come out notched
                     pygame.draw.circle(surf, color, corner, w // 2)

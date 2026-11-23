@@ -120,7 +120,7 @@ class Camera:
         n = math.hypot(*light)
         self.dark = {side: round(SIDE_DARK * (1 - max(0.0, (side[0] * light[0] + side[1] * light[1]) / n)), 2)
                      for side in ((0, -1), (0, 1), (-1, 0), (1, 0))}
-        self._ahead, self._memo, self.rects, self.floor = ahead, {}, {}, None
+        self._ahead, self._memo, self.rects, self.floor = ahead, {}, {}, {}
         # A stack's shadow is its foot slid along the sun from its bottom to its top: the outline's
         # points, as (x, z) of a foot corner and which end, are the same for every stack.
         ends = {(px + self.sun[0] * end, pz + self.sun[1] * end): (px, pz, end) for px in (0, 1) for pz in (0, 1) for end in (0, 1)}
@@ -138,12 +138,8 @@ class Camera:
         for a patch painted large and scaled down, which smooths its edges."""
         cam = copy.copy(self)
         cam.s, cam.ox, cam.oy, cam.zoom = self.s * by, (self.ox - corner[0]) * by, (self.oy - corner[1]) * by, self.zoom * by
-        cam._memo, cam.rects, cam.floor = {}, {}, None
+        cam._memo, cam.rects, cam.floor = {}, {}, {}
         return cam
-
-    def away(self, dx: float, dz: float) -> float:
-        """How far a step (dx, dz) across the floor goes away from the eye: 1 straight away, -1 straight toward it."""
-        return dx * self._ahead[0] + dz * self._ahead[1]
 
     def _flat(self, x, y, z) -> tuple:
         dx, dy, dz = x - self.eye[0], y - self.eye[1], z - self.eye[2]
@@ -226,8 +222,10 @@ class Painter:
     that row and those behind it, and the rows in front, so the cursor can be drawn between them.
     Without `detail`, floating blocks cast no shadow."""
 
-    def __init__(self, cam: Camera, blocks: dict, row=None, hazy: bool = True, detail: bool = True, floor=None, built=None):
+    def __init__(self, cam: Camera, blocks: dict, row=None, hazy: bool = True, detail: bool = True, floor=None, built=None,
+                 quarters: int = 0):
         self.cam, self.blocks, self.row, self.hazy = cam, blocks, row, hazy
+        self.flip = quarters % 2      # an odd quarter turn swaps which cells are light, since a side is an even 16 cells
         self.floor = floor or screen_floor()
         runs, floats, self.stacks = built or shape(blocks)
         items = [(cam.key(*run[:3]), 0, run) for run in runs]
@@ -265,7 +263,7 @@ class Painter:
         return tint(base, "#000000", self.cam.dark[normal])
 
     def tile(self, x, z) -> tuple:
-        return rgb(self.floor[2] if (x + z) % 2 else self.floor[1])
+        return rgb(self.floor[2] if (x + z + self.flip) % 2 else self.floor[1])
 
     # ------------------------------------------------------------ painting
     def paint_floor(self, surf):
@@ -275,16 +273,16 @@ class Painter:
             pygame.draw.polygon(surf, rgb(slab_front if n == (0, -1) else slab_side), poly)
         pygame.draw.polygon(surf, rgb(tile), [cam.at(0, 0, 0), cam.at(WIDTH, 0, 0), cam.at(WIDTH, 0, DEPTH), cam.at(0, 0, DEPTH)])
         for x in range(WIDTH):
-            for z in range(1 - x % 2, DEPTH, 2):
+            for z in range((1 + x + self.flip) % 2, DEPTH, 2):
                 pygame.draw.polygon(surf, rgb(alt), self._tile_poly(x, z))
 
     def floor_picture(self, size) -> pygame.Surface:
-        """The floor on its ground color, painted once per camera."""
-        if self.cam.floor is None:
-            self.cam.floor = pygame.Surface(size)
-            self.cam.floor.fill(rgb(self.floor[0]))
-            self.paint_floor(self.cam.floor)
-        return self.cam.floor
+        """The floor on its ground color, painted once per camera and checkerboard."""
+        if self.flip not in self.cam.floor:
+            pic = self.cam.floor[self.flip] = pygame.Surface(size)
+            pic.fill(rgb(self.floor[0]))
+            self.paint_floor(pic)
+        return self.cam.floor[self.flip]
 
     def _tile_poly(self, x, z, y=0) -> list:
         at = self.cam.at

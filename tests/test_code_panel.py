@@ -394,7 +394,7 @@ def test_blocks_esc_then_space_opens_code_and_tab_still_turns():
         await press(app, "space")
         assert blocks.code_panel is not None and app._panel is blocks.code_panel
         await press(app, "tab")
-        assert blocks._goal[0] == 90
+        assert blocks._goal[0] == -90
     run(go())
 
 

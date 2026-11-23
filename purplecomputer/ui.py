@@ -1014,7 +1014,7 @@ def draw_mode_switch(g: Gfx, r: pygame.Rect, labels: tuple, active: int, swatch:
     chips = (key, mark, label, on, noun), or (key, active, pictures) for a stepper.
     Slides right when the chips would run past r's left edge, as far as the
     widest of chips and the other chip sets in also, so it holds still when a
-    room swaps its chips. `after` = (key, picture, on) is a chip right of the switch
+    room swaps its chips. `after` = (key hint, on) is a chip right of the switch
     for what else Tab does, lit while that is on. Slides left, if it must, to keep clear
     of the `reserve` px at r's right end. Returns the color bar's row: r from its left edge
     to the color wheel chip's right, or None without the chip."""
@@ -1038,11 +1038,11 @@ def _draw_mode_switch_at(g: Gfx, px: int, start: int, cy: int, labels, active, s
                          active)
     right = piece.right
     if after:
-        key, picture, on = after
-        chip = (key, _switch_picture(g, px, picture), "", on)
-        with g.drawing_on(pygame.Surface((1, 1))):
-            w = _draw_key_chip(g, px, 0, cy, *chip).w
-        right = _draw_key_chip(g, px, piece.right + gap + w, cy, *chip).right
+        hint, on = after
+        w, pad = key_hint_width(g, hint, px), round(px * 0.35)
+        pill = header_pill(g, px, w, piece.right + gap + w + 2 * pad, cy, on)[0]
+        draw_key_hint(g, hint, px, pill.x + pad, cy, P.ON_PRIMARY if on else P.TEXT, on=on)
+        right = pill.right
     mark = icon or (swatch_dot(swatch, round(px * 2.1)) if swatch else None)
     if mark:
         piece = mark.get_rect(midright=(piece.x - gap, cy))

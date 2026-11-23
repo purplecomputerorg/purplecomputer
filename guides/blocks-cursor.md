@@ -14,13 +14,13 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 ## What the cursor draws
 
 - **Waiting block** on the top level over the column: a small block in the brush color inside a wire box, each wire white over a dark one so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
-- **Four wings and the arrow keycaps.** A flat wing comes out of each side of the waiting block's box along the floor, drawn in the same perspective, and each arrow's keycap sits just past the end of the wing that arrow moves the cursor along. The floor's two directions are diagonals in a turned view, and this says which is Left and Right and which is Up and Down. The wing pointing away from the viewer comes off the box's top and the one toward them off its bottom, or the box would hide them. Keycaps alone around the box left it unclear which side each belonged to.
+- **The four arrow keycaps** around the waiting block, each out from it the way that arrow moves the cursor on screen. The floor's two directions are diagonals in a turned view, and this says which is Left and Right and which is Up and Down.
 - **Line** from the waiting block down the column's free cells, ending in a bold arrow down onto the landing spot: a head taller than it is wide, on a stub of shaft. Dashed, the line read as clutter; a squat triangle alone at its end read as pointing sideways as easily as down.
 - **Landing spot**, a thinner wire box, with the **shadow square** every floating block gets when it floats.
 - **A wire box is the edges of the faces the eye sees**, so it reads as a cube. One line around the cell's outline read as a flat, odd polygon.
 - **The marks are painted three times the size and scaled down** (`_smooth`): pygame's wide lines have hard, stepped edges, and on the only lines on screen that shows.
 - **Arrowhead over the rows in front** at the lowest point of the line they leave in view, when they hide its end.
-- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size.
+- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size. Where something stands in front, the block is drawn again over it, faint (`GHOST_ALPHA`), so its fall still shows behind a wall.
 
 While the view turns the cursor is drawn too, in its place among the blocks.
 
@@ -28,7 +28,7 @@ While the view turns the cursor is drawn too, in its place among the blocks.
 
 One view can't tell "farther back" from "higher up": both go up the screen. So the kid turns the build to see it from another side.
 
-- **A tap of Tab** turns the build to its next side, straight on: a quarter of the way around.
+- **A tap of Tab** turns the build to its next side, straight on: a quarter of the way around, clockwise seen from above, as its header picture shows. Beside it, a chip shows Tab held with the four arrows and a 360 picture, lit while Tab is looking around.
 - **Tab held with the arrows** looks around: Left and Right turn the floor a step at a time to any angle, its near edge going the arrow's way, and Up and Down tilt the view from the side to nearly straight down. The footer shows this while Tab is down.
 
 Rules:
@@ -65,6 +65,7 @@ Tried and dropped:
 
 - **A cursor on the landing spot** (a bold edge and small block where the next block goes): it jumps far up and down the screen from one key to the next over uneven towers. **Gliding it there** in 150 ms still read as jumpy.
 - **A round window cut in the rows in front** wherever they hid the landing spot: a hole in a wall confused more than it showed.
+- **Four flat wings out of the waiting block, a keycap at the end of each**, to tie each arrow to a side. More lines at the ceiling than the keycaps alone, and from the resting view the away and toward wings were slivers.
 - **A cursor of many marks:** a glass column from the ceiling, a patch on the ceiling, rings around the column's blocks, a frame and a floor stripe on the cursor's row, a padded wire box and a see-through landing block. Each answered a question, and together they hid the answer.
 - **Fading the front towers in the way:** a see-through tower shows every edge behind it.
 - **A full-size solid block as the cursor:** it looks laid already, and blinking it doesn't help, since half the time it still looks laid.

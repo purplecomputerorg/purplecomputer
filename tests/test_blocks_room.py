@@ -17,7 +17,7 @@ import pygame
 from purplecomputer.harness import make_app, press, run, type_text
 from purplecomputer.rooms import blocks_room
 from purplecomputer.rooms.blocks_room import DEPTH, DROP_S, HEIGHT, HOVER, LOOKS, REST_TILT, RISE, SINK, TILTS, TURN_DETAIL_BLOCKS, WIDTH
-from purplecomputer.rooms.blocks_view import REST_PITCH, SLAB, TOP, Camera, shape
+from purplecomputer.rooms.blocks_view import REST_PITCH, SLAB, TOP, Camera, Painter, shape
 from purplecomputer.color_mixing import mix_colors_paint
 from purplecomputer.input import KeyCode, RawKeyEvent
 from purplecomputer.keyboard import CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine
@@ -434,7 +434,10 @@ def test_a_falling_block_passes_behind_what_stands_in_front_of_it(monkeypatch):
         now[0] += DROP_S * 0.95                                     # nearly down, behind the wall
         app._draw()
         (vx, vz, h, *_), = room._falling()
-        assert h < 2 and _on_screen(app, room, 5.5, h + 0.5, 6) in _shades(room, 5, 3, 0, "#ff0000")
+        seen, wall = _on_screen(app, room, 5.5, h + 0.5, 6), _shades(room, 5, 3, 0, "#ff0000")
+        block = _shades(room, 5, 6, 0, room._color)
+        ghost = {tuple(round(w + (b - w) * blocks_room.GHOST_ALPHA / 255) for w, b in zip(ws, bs)) for ws in wall for bs in block}
+        assert h < 2 and _close(seen, ghost) and seen not in wall      # the wall, with the block faintly through it
         assert [item[2][:2] for item in room._hide[(5, 6, 0)][1]] and all(item[2][1] == 3 for item in room._hide[(5, 6, 0)][1])
     run(go())
 
@@ -443,12 +446,12 @@ def test_the_cursor_shows_while_the_view_turns():
     async def go():
         app, room = _blocks()
         shown = []
-        room._hover_marks = lambda surf, painter, x, z, bright=True, world=False: shown.append((x, z))
+        room._hover_marks = lambda surf, painter, x, z, bright=True: shown.append((x, z))
         room._drop_marks = lambda surf, painter, x, z, y: shown.append((x, z, y))
         room.turn()
-        room._look[0] = 40.0
+        room._look[0] = -40.0
         app._draw()
-        assert room._side == 1 and shown == [(5, 5, 0), (5, 5)]
+        assert room._side == 3 and shown == [(5, 5, 0), (5, 5)]
     run(go())
 
 
@@ -627,24 +630,38 @@ def test_a_turn_to_another_side_repaints_the_layers_even_with_the_same_camera():
     run(go())
 
 
-def test_each_arrow_s_wing_and_keycap_go_the_way_that_arrow_moves_the_cursor_on_screen():
+def test_each_arrow_s_keycap_sits_the_way_that_arrow_moves_the_cursor_on_screen():
     async def go():
         app, room = _blocks()
         for yaw, tilt in ((0, 30), (36, 30), (90, 30), (126, 60), (18, 15), (0, 75)):
             room._aim(yaw=yaw, tilt=tilt)
             _settle(room)
             app._draw()
-            cam, (vx, vz), caps = room._cam, room._view(room._x, room._z), []
-            wings = {glyph: quad for _, quad, glyph in room._wings(cam, vx, vz)}
+            cam, (vx, vz) = room._cam, room._view(room._x, room._z)
+            spots, caps = room._arrow_keys(cam, vx, vz), room._arrow_keys(cam, vx, vz, cap=(26, 20))
             for way, (dx, dz) in blocks_room.STEPS.items():
-                (ax, ay), (bx, by), (cx, cy), (ex, ey) = wings[blocks_room.ARROW_KEYS[way]]
                 (mx, my), (nx, ny) = cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5), cam.at(vx + 0.5 + dx, HOVER + 0.5, vz + 0.5 + dz)
-                out = (bx + cx - ax - ex, by + cy - ay - ey)                    # from the box's side to the wing's end
-                assert out[0] * (nx - mx) + out[1] * (ny - my) > 0
-                kx, ky = room._off_end(wings[blocks_room.ARROW_KEYS[way]], (26, 20))
-                assert (kx - (bx + cx) / 2) * out[0] + (ky - (by + cy) / 2) * out[1] > 0     # the keycap, past that end
-                caps.append(pygame.Rect(0, 0, 26, 20).move(kx - 13, ky - 10))
-            assert all(not a.colliderect(b) for i, a in enumerate(caps) for b in caps[i + 1:]), (yaw, tilt)
+                kx, ky = spots[blocks_room.ARROW_KEYS[way]]
+                cx, cy = cam.run_rect(vx, vz, HOVER, HOVER).center
+                assert (kx - cx) * (nx - mx) + (ky - cy) * (ny - my) > 0 and abs((kx - cx) * (ny - my) - (ky - cy) * (nx - mx)) < 1e-6
+            rects = [pygame.Rect(0, 0, 26, 20).move(x - 13, y - 10) for x, y in caps.values()]      # no two keycaps overlap
+            assert all(not a.colliderect(b) for i, a in enumerate(rects) for b in rects[i + 1:]), (yaw, tilt)
+            assert all(not r.colliderect(cam.run_rect(vx, vz, HOVER, HOVER).inflate(-4, -4)) for r in rects), (yaw, tilt)
+    run(go())
+
+
+def test_each_floor_cell_keeps_its_shade_from_every_side():
+    async def go():
+        app, room = _blocks()
+        world = Painter(room._cam, {})
+        for side in range(4):
+            room._aim(yaw=90 * side)
+            _settle(room)
+            app._draw()
+            for x, z in ((1, 1), (1, 2), (12, 3)):
+                vx, vz = room._view(x, z)
+                spot = tuple(map(round, room._cam.at(vx + 0.5, 0, vz + 0.5)))
+                assert tuple(room._composed.get_at(spot)[:3]) == world.tile(x, z), (side, x, z)
     run(go())
 
 
@@ -655,10 +672,10 @@ def test_tapping_real_tab_turns_a_quarter_when_it_is_let_go():
         await _real_key(app, sm, KeyCode.KEY_TAB, True)
         assert room._goal[0] == 0 and room._tab is False
         await _real_key(app, sm, KeyCode.KEY_TAB, False)
-        assert room._goal == [90, REST_TILT, 0] and room._tab is None
+        assert room._goal == [-90, REST_TILT, 0] and room._tab is None
         room._aim(yaw=126)                          # from a view looked around to: on to the next side, squared up
-        room.turn()
-        assert room._goal == [180, REST_TILT, 0]
+        room.turn()                                 # clockwise, so back to the front
+        assert room._goal == [0, REST_TILT, 0]
     run(go())
 
 
@@ -781,7 +798,7 @@ def test_timeline_round_trip():
         await press(app, "tab")
         room.restore_timeline_state(state)
         assert len(room._blocks) == 3 and room._hover == 4 and (room._x, room._z) == (5, 5)
-        assert room._goal[0] == 90                  # the view is the viewer's, not the history's
+        assert room._goal[0] == -90                  # the view is the viewer's, not the history's
     run(go())
 
 
@@ -794,9 +811,9 @@ def test_tab_turns_the_build_while_time_traveling(monkeypatch, tmp_path):
         app._start_time_travel()
         app._step_time_travel(-1)
         await press(app, "tab")
-        assert room._goal[0] == 90 and app._time_travel is not None
+        assert room._goal[0] == -90 and app._time_travel is not None
         app._cancel_time_travel()
-        assert room._goal[0] == 90 and len(room._blocks) == 2
+        assert room._goal[0] == -90 and len(room._blocks) == 2
     run(go())
 
 

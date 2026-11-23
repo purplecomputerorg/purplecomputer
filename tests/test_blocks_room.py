@@ -694,6 +694,28 @@ def test_a_frame_of_falling_blocks_paints_only_around_them_and_matches_a_whole_f
     run(go())
 
 
+def test_at_a_wall_the_key_that_way_is_a_curb_and_pushing_into_it_knocks_the_waiting_block(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        room._x, room._z = WIDTH - 1, 0
+        app._draw()
+        vx, vz = room._view(room._x, room._z)
+        glyphs = {glyph for glyph, _, _ in room._arrow_keys(room._cam, vx, vz)}
+        assert glyphs == {blocks_room.LEFT, blocks_room.UP, None}       # right and down are walls here
+        await press(app, "right")
+        assert (room._x, room._z) == (WIDTH - 1, 0) and room._bump is not None
+        now[0] += blocks_room.BUMP_S / 2
+        ox, oz = room._nudge()
+        assert ox > 0.1 and oz == 0                                       # it knocks toward the wall
+        app._draw()
+        now[0] += blocks_room.BUMP_S
+        room._bump_tick()
+        assert room._bump is None and room._nudge() == (0.0, 0.0)
+    run(go())
+
+
 def test_layers_kept_up_piece_by_piece_match_a_fresh_paint():
     async def go():
         app, room = _blocks()

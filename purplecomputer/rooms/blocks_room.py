@@ -32,14 +32,14 @@ from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAc
 from ..palette import DEFAULT_BRUSH_COLOR
 from .. import color_recipe
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
-from ..gfx import rgb
+from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo
-from ..ui import DOWN, LEFT, MOVE_HINT, PICK_HINT, RIGHT, UP, draw_key, draw_key_hint, draw_mode_switch, hint_row_h, keycap_size
+from ..ui import DOWN, LEFT, MOVE_HINT, PICK_HINT, RIGHT, UP, draw_key_hint, draw_mode_switch, hint_row_h
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
-from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox, column_shape, joined, shape
+from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, TOP, WIDTH, Camera, Painter, bbox, column_shape, joined, shape
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 REST_TILT = round(math.degrees(REST_PITCH))
@@ -53,7 +53,7 @@ TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
 HOVER = HEIGHT - 1            # the level the cursor's block waits on, over its column: the top one
 CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its cell
-CURSOR_REACH = 2.5            # cells around the cursor's block that it repaints: the arrows' keycaps sit that near
+CURSOR_REACH = 2.8            # cells around the cursor's block that it repaints: the arrows' keys reach that far
 DROP_S = 0.16                 # a new block falls into place this long
 GHOST_ALPHA = 90              # a block falling behind others shows through them this faintly
 # The arrow down onto the landing spot, as (up the column from its tip, across) points: a head taller than
@@ -63,7 +63,7 @@ SMOOTH = 3                    # the cursor's marks are painted this many times t
 CLEAR = (0, 0, 0, 0)
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 ARROW_KEYS = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
-KEYS_GAP = 4                 # pixels between the cursor's waiting block and each arrow's keycap
+KEY_SPAN = (0.85, 1.85, 0.4, 0.1)   # cells: where each arrow's flat key starts and ends out from the column's middle, its half width, its thickness
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 # Where typing goes next, by way: one step along an axis, as far as the wall or the ceiling.
@@ -785,7 +785,7 @@ class BlocksRoom(Room):
         self._drop_marks(g.surface, painter, x, z, self._cursor_y())
         painter.paint(g.surface, items[behind:])
         self._hover_marks(g.surface, painter, x, z)
-        self._draw_arrow_keys(g, cam, x, z, world=True)
+        self._draw_arrow_keys(g, g.surface, painter, x, z, world=True)
         if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
             self._turn_detail_limit = len(self._blocks) - 1
 
@@ -825,7 +825,7 @@ class BlocksRoom(Room):
                              lambda layer, big: self._arrowhead(layer, big.cam, vx, vz, cut))
             self._hover_marks(sub, painter, vx, vz, bright)
             sub.set_clip(None)
-            self._draw_arrow_keys(g, painter.cam, vx, vz, origin=area.topleft)
+            self._draw_arrow_keys(g, sub, painter, vx, vz, origin=area.topleft)
         g.draw_caret(over.move(area.topleft), lambda: paint(whole, True), lambda: paint(over, False))
 
     def _smooth(self, surf, painter, rect, draw):
@@ -876,29 +876,40 @@ class BlocksRoom(Room):
             self._wire(layer, cam, x, z, HOVER, max(2 * cam.zoom, round(cam.cell(x, HOVER, z)) // 12), 3 * cam.zoom)
         self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(16, 16), draw)
 
-    def _arrow_keys(self, cam, x, z, world: bool = False, cap=(0, 0)) -> dict:
-        """Where each arrow's keycap goes, by its glyph: out from the cursor's waiting block the way
-        that arrow moves it on screen, just clear of the box, so the keys read off the floor
-        whichever way it is turned. `cap` is a keycap's size."""
-        box, (mx, my), spots = cam.run_rect(x, z, HOVER, HOVER), cam.at(x + 0.5, HOVER + 0.5, z + 0.5), {}
-        wide, tall = (box.w + cap[0]) / 2 + KEYS_GAP, (box.h + cap[1]) / 2 + KEYS_GAP
+    def _arrow_keys(self, cam, x, z, world: bool = False) -> list:
+        """(glyph, lo, hi) of each arrow's key, far to near: a thin slab lying flat out from the waiting block
+        the way that arrow moves the cursor. One going away sits level with the box's top and one coming
+        toward with its bottom, the rest in between, so the box hides none of them."""
+        near, far, half, thick = KEY_SPAN
+        keys = []
         for way, (dx, dz) in STEPS.items():
             for _ in range(-self._side % 4 if world else 0):
                 dx, dz = -dz, dx
-            px, py = cam.at(x + 0.5 + dx, HOVER + 0.5, z + 0.5 + dz)
-            out = 1 / max(abs(px - mx) / wide, abs(py - my) / tall)        # onto the frame a keycap's middle keeps to, to clear the box
-            spots[ARROW_KEYS[way]] = (box.centerx + (px - mx) * out, box.centery + (py - my) * out)
-        for key, sign in ((UP, -1), (DOWN, 1)):         # seen from low down, away and toward land on the side keys: over and under them
-            for side in (LEFT, RIGHT):
-                (kx, ky), (sx, sy) = spots[key], spots[side]
-                if abs(kx - sx) < cap[0] and abs(ky - sy) < cap[1]:
-                    spots[key] = (kx, sy + sign * (cap[1] + KEYS_GAP))
-        return spots
+            h = HOVER + 0.5 + 0.5 * cam.away(dx, dz)
+            xs = sorted((x + 0.5 + dx * near - dz * half, x + 0.5 + dx * far + dz * half))
+            zs = sorted((z + 0.5 + dz * near + dx * half, z + 0.5 + dz * far - dx * half))
+            keys.append((ARROW_KEYS[way], (xs[0], h - thick, zs[0]), (xs[1], h, zs[1])))
+        return sorted(keys, key=lambda k: cam.key(k[1][0], k[1][2], 0))
 
-    def _draw_arrow_keys(self, g, cam, x, z, world: bool = False, origin=(0, 0)):
-        px = max(g.vh(1.4), round(cam.cell(x, HOVER, z) * 0.3))
-        for glyph, (kx, ky) in self._arrow_keys(cam, x, z, world, keycap_size(g, UP, px)).items():
-            draw_key(g, glyph, px, round(kx) + origin[0], round(ky) + origin[1], anchor="center")
+    def _draw_arrow_keys(self, g, surf, painter, x, z, world: bool = False, origin=(0, 0)):
+        """Each arrow's key lying flat beside the waiting block in faint glass, its arrow upright on it as
+        printed on the real key. `origin` is where `surf` sits on the screen."""
+        cam = painter.cam
+        keys, cell = self._arrow_keys(cam, x, z, world), cam.cell(x, HOVER, z)
+
+        def draw(layer, big):
+            c, top, side, edge = big.cam, (*rgb(P.TEXT), 64), (*mix(P.TEXT, art_room.CANVAS_BG, 0.45), 200), (*rgb(P.TEXT), 150)
+            for _, lo, hi in keys:
+                for n, poly in c.box(lo, hi):
+                    pygame.draw.polygon(layer, top if n is TOP else side, poly)
+                face = [c.at(px, hi[1], pz) for px, pz in ((lo[0], lo[2]), (hi[0], lo[2]), (hi[0], hi[2]), (lo[0], hi[2]))]
+                pygame.draw.polygon(layer, edge, face, c.zoom)
+        self._smooth(surf, painter, self._square(cam, x, z, HOVER + 0.5, round(cell * (KEY_SPAN[1] + 0.9))), draw)
+        px = max(g.vh(1.3), round(cell * 0.34))
+        for glyph, lo, hi in keys:
+            kx, ky = cam.at((lo[0] + hi[0]) / 2, hi[1], (lo[2] + hi[2]) / 2)
+            for color, d in ((art_room.CANVAS_BG, 1), (P.TEXT, 0)):     # a soft shadow, so it reads on any color
+                g.draw_text(glyph, px, round(kx) + origin[0] + d, round(ky) + origin[1] + d, "mono-bold", color, anchor="center")
 
     def _wire(self, surf, cam, x, z, y, width, casing):
         """The cell as a wire box: the edges of the faces the eye sees, each a light line with a

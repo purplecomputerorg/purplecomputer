@@ -14,7 +14,7 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 ## What the cursor draws
 
 - **Waiting block** on the top level over the column: a small block in the brush color inside a wire box, each wire white over a dark one so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
-- **The four arrow keycaps** around the waiting block, each out from it the way that arrow moves the cursor on screen. The floor's two directions are diagonals in a turned view, and this says which is Left and Right and which is Up and Down.
+- **The four arrow keys lie flat** around the waiting block, thin slabs of faint glass in the build's perspective, each out from it the way that arrow moves the cursor, with its arrow upright on it as printed on the real key (`_arrow_keys`, `KEY_SPAN`). Lying flat, the key going away reads as away, never as up. A key going away sits level with the box's top and one coming toward level with its bottom, the sides in between, so the box hides none of them.
 - **Line** from the waiting block down the column's free cells, ending in a bold arrow down onto the landing spot: a head taller than it is wide, on a stub of shaft. Dashed, the line read as clutter; a squat triangle alone at its end read as pointing sideways as easily as down.
 - **Landing spot**, a thinner wire box, with the **shadow square** every floating block gets when it floats.
 - **A wire box is the edges of the faces the eye sees**, so it reads as a cube. One line around the cell's outline read as a flat, odd polygon.
@@ -65,6 +65,7 @@ Tried and dropped:
 
 - **A cursor on the landing spot** (a bold edge and small block where the next block goes): it jumps far up and down the screen from one key to the next over uneven towers. **Gliding it there** in 150 ms still read as jumpy.
 - **A round window cut in the rows in front** wherever they hid the landing spot: a hole in a wall confused more than it showed.
+- **Upright keycaps around the waiting block**, out from it the way each arrow moves it on screen: drawn flat on the screen, the Up key above the box read as up, and the Down key sat on the line.
 - **Four flat wings out of the waiting block, a keycap at the end of each**, to tie each arrow to a side. More lines at the ceiling than the keycaps alone, and from the resting view the away and toward wings were slivers.
 - **A cursor of many marks:** a glass column from the ceiling, a patch on the ceiling, rings around the column's blocks, a frame and a floor stripe on the cursor's row, a padded wire box and a see-through landing block. Each answered a question, and together they hid the answer.
 - **Fading the front towers in the way:** a see-through tower shows every edge behind it.

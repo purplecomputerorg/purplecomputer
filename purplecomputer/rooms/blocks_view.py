@@ -182,6 +182,10 @@ class Camera:
         Right for a grid of cubes while the eye is above all of them, which it always is."""
         return -abs(z + 0.5 - self.eye[2]), -abs(x + 0.5 - self.eye[0]), y
 
+    def away(self, dx, dz) -> float:
+        """How much the floor direction (dx, dz) points away from the eye: 1 straight away, -1 straight toward."""
+        return dx * self._ahead[0] + dz * self._ahead[1]
+
     def row(self, x, z) -> int:
         """How far back a cell sits, 0 to DEPTH - 1, for its haze."""
         back = (x + 0.5 - WIDTH / 2) * self._ahead[0] + (z + 0.5 - DEPTH / 2) * self._ahead[1] + DEPTH / 2 - 0.5

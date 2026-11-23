@@ -58,21 +58,21 @@ def test_held_letter_repeats_like_in_art():
     run(go())
 
 
-def test_stacking_past_the_top_stays_on_the_top_block():
+def test_stacking_past_the_top_wraps_on_to_the_next_column():
     async def go():
         app, room = _blocks()
         await type_text(app, "a" * (HEIGHT + 2))
-        assert set(room._blocks) == {(5, 5, y) for y in range(HEIGHT)} and (room._x, room._z) == (5, 5)
+        assert set(room._blocks) == {(5, 5, y) for y in range(HEIGHT)} | {(6, 5, 0), (6, 5, 1)} and (room._x, room._z) == (6, 5)
     run(go())
 
 
-def test_a_full_column_puts_the_cursor_on_its_top_block():
+def test_a_full_column_puts_the_cursor_on_its_top_block_and_a_letter_there_starts_the_next_column():
     async def go():
         app, room = _blocks()
         room._blocks.update({(5, 5, y): "#ff0000" for y in range(HEIGHT)})
         assert room._cursor_y() == HEIGHT - 1
         await press(app, "b")
-        assert room._blocks[(5, 5, HEIGHT - 1)] == mix_colors_paint(["#ff0000", get_key_color("b")])
+        assert room._blocks[(5, 5, HEIGHT - 1)] == "#ff0000" and room._blocks[(6, 5, 0)] == get_key_color("b")
         app._draw()
     run(go())
 
@@ -98,7 +98,7 @@ def test_shift_with_up_or_down_moves_the_height_and_typing_stacks_from_there_to_
             await press(app, "up", shift_held=True, is_repeat=i > 0)
         assert room._cursor_y() == HEIGHT - 2 and (room._x, room._z) == (5, 5)
         await type_text(app, "abc")
-        assert set(room._blocks) == {(5, 5, HEIGHT - 2), (5, 5, HEIGHT - 1)}
+        assert set(room._blocks) == {(5, 5, HEIGHT - 2), (5, 5, HEIGHT - 1), (6, 5, HEIGHT - 2)}     # then on at that height
     run(go())
 
 
@@ -716,7 +716,7 @@ def test_at_a_wall_the_key_that_way_is_a_curb_and_pushing_into_it_knocks_the_wai
     run(go())
 
 
-def test_at_the_top_level_glass_lies_over_the_waiting_block_and_going_higher_knocks_it_up(monkeypatch):
+def test_at_the_top_level_glass_lies_over_the_box_going_higher_knocks_it_and_a_full_tower_wraps_right(monkeypatch):
     async def go():
         app, room = _blocks()
         now = [100.0]
@@ -736,8 +736,16 @@ def test_at_the_top_level_glass_lies_over_the_waiting_block_and_going_higher_kno
         room._blocks.update({(room._x, room._z, y): "#ff0000" for y in range(HEIGHT)})
         room._hover = 0
         room._changed()
-        await type_text(app, "a")                                        # a full column: it mixes into the top one
-        assert room._bump is not None and room._bump[2] == 1
+        column = (room._x, room._z)
+        await type_text(app, "a")                                        # a full tower: on to the next column
+        vx, vz = room._view(*column)
+        assert room._view(room._x, room._z) == (vx + 1, vz) and (room._x, room._z, 0) in room._blocks
+        room._blocks.update({(room._x, room._z, y): "#ff0000" for y in range(HEIGHT)})
+        room._x, room._z = room._world(WIDTH - 1, vz)
+        room._blocks.update({(room._x, room._z, y): "#ff0000" for y in range(HEIGHT)})
+        room._changed()
+        await type_text(app, "a")                                        # at the wall there's nowhere to go: it knocks
+        assert room._view(room._x, room._z) == (WIDTH - 1, vz) and room._bump is not None
     run(go())
 
 
@@ -772,8 +780,11 @@ def test_tapping_real_tab_turns_a_quarter_when_it_is_let_go():
         assert room._goal[0] == 0 and room._tab is False
         await _real_key(app, sm, KeyCode.KEY_TAB, False)
         assert room._goal == [-90, REST_TILT, 0] and room._tab is None
-        room._aim(yaw=126)                          # from a view looked around to: on to the next side, squared up
-        room.turn()                                 # clockwise, so back to the front
+        room._aim(yaw=126, tilt=60)                 # from a view looked around to: on to the next side, squared up
+        room.turn()                                 # clockwise, so back to the front, at the resting tilt
+        assert room._goal == [0, REST_TILT, 0]
+        room._aim(yaw=126, tilt=60)
+        room.clear()                                # a clear room starts from the front
         assert room._goal == [0, REST_TILT, 0]
     run(go())
 
@@ -925,17 +936,22 @@ def test_picker_number_four_opens_blocks():
     run(go())
 
 
-def test_restoring_blocks_past_the_walls_drops_them():
-    """Steps from an older, bigger floor must not crash the back view."""
+def test_a_step_from_the_old_wide_floor_keeps_its_middle_on_the_floor_s_middle():
+    """History saved on the 30 by 12 floor says no size: its middle lands on today's middle, and what
+    falls past the walls goes, without crashing the back view."""
     async def go():
         app, room = _blocks()
-        room.restore_timeline_state({f"b:3,{DEPTH + 2},0": "#FF0000", "b:3,4,0": "#00FF00",
-                                     "cursor": [WIDTH + 3, DEPTH + 3]})
-        assert room._blocks == {(3, 4, 0): "#00FF00"}
-        assert (room._x, room._z) == (WIDTH - 1, DEPTH - 1)
+        room.restore_timeline_state({"b:15,6,0": "#FF0000", "b:15,6,1": "#FF0000", "b:22,0,0": "#00FF00", "b:2,6,0": "#0000FF",
+                                     "cursor": [15, 6]})
+        assert room._blocks == {(8, 8, 0): "#FF0000", (8, 8, 1): "#FF0000", (15, 2, 0): "#00FF00"}
+        assert (room._x, room._z) == (8, 8)
         room._aim(yaw=180)
         _settle(room)
         room.draw(app.g, app.g.surface.get_rect())
+        state = room.timeline_state()
+        assert state["floor"] == [WIDTH, DEPTH]
+        room.restore_timeline_state(state)                                # today's steps come back as they were
+        assert room._blocks == {(8, 8, 0): "#FF0000", (8, 8, 1): "#FF0000", (15, 2, 0): "#00FF00"}
     run(go())
 
 

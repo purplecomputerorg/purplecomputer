@@ -16,9 +16,9 @@ mixes the two colors. Backslash
 opens the color bar. A tap of Tab turns the build a quarter of the way around, clockwise,
 and Tab held with the arrows looks around it: Left and Right turn it a little
 at a time to any angle, Up and Down tilt the view from the side to nearly
-straight down. The arrows always go the way they point most on screen. The walls and the top
-stop the cursor and typing: nothing wraps around. The code line opens from
-the Esc menu."""
+straight down. The arrows always go the way they point most on screen. The walls stop the
+cursor and nothing wraps around them; only a full tower sends the next letter on to the
+column to its right, as typing wraps to a new line. The code line opens from the Esc menu."""
 
 import asyncio
 import math
@@ -68,6 +68,7 @@ WALL_SPAN = (0.58, 0.64, 0.62, 0.14)   # the same for the glass wall standing in
 BUMP, BUMP_S = 0.18, 0.18          # cells the waiting block knocks toward a wall an arrow pushes it into, and for how long   # cells: where each arrow's flat key starts and ends out from the column's middle, its half width, its thickness
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
+OLD_FLOOR = (30, 12)          # the floor's width and depth before it was square: history saved then doesn't say
 # Where typing goes next, by way: one step along an axis, as far as the wall or the ceiling.
 WAYS = {"right": ("x", 1), "left": ("x", -1), "up": ("z", 1), "down": ("z", -1), RISE: ("y", 1), SINK: ("y", -1)}
 TURN_PIC = "hints/turn.png"
@@ -185,14 +186,16 @@ class BlocksRoom(Room):
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
         state = {f"b:{x},{z},{y}": color for (x, z, y), color in self._blocks.items()}
-        state.update(cursor=[self._x, self._z], color=self._color, hover=self._hover)   # front or back is just a view
+        state.update(cursor=[self._x, self._z], color=self._color, hover=self._hover, floor=[WIDTH, DEPTH])   # the view isn't the build's
         return state
 
     def restore_timeline_state(self, state: dict):
-        # Older builds had a bigger floor; their steps may hold blocks past today's walls.
-        blocks = {tuple(int(n) for n in k[2:].split(",")): v for k, v in state.items() if k.startswith("b:")}
+        # A step saved on another floor size keeps its middle on the floor's middle; what falls past today's walls goes.
+        fw, fd = state.get("floor", OLD_FLOOR)
+        ox, oz = (WIDTH - fw) // 2, (DEPTH - fd) // 2
+        blocks = {(x + ox, z + oz, y): v for k, v in state.items() if k.startswith("b:") for x, z, y in [map(int, k[2:].split(","))]}
         self._blocks = {p: c for p, c in blocks.items() if all(0 <= n < SIZE[a] for n, a in zip(p, "xzy"))}
-        x, z = state.get("cursor", [WIDTH // 2, DEPTH // 2])
+        x, z = (state["cursor"][0] + ox, state["cursor"][1] + oz) if "cursor" in state else (WIDTH // 2, DEPTH // 2)
         self._x, self._z = min(max(x, 0), WIDTH - 1), min(max(z, 0), DEPTH - 1)
         self._color = state.get("color", DEFAULT_BRUSH_COLOR)
         self._hover = state.get("hover", 0)
@@ -206,6 +209,7 @@ class BlocksRoom(Room):
 
     def clear(self):
         self.restore_timeline_state({})
+        self.face_front()
 
     def has_content(self) -> bool:
         return bool(self._blocks)
@@ -281,8 +285,9 @@ class BlocksRoom(Room):
         """A block, then on to the next cell `way`: up, for everything but code."""
         self._dir = way
         y = self._cursor_y()
-        if y == HEIGHT - 1 and (self._x, self._z, y) in self._blocks:
-            self._knock(0, 0, 1)        # a full column: the block mixes into its top one, against the ceiling
+        onto = bool(self._next) and self._next[:2] == (self._x, self._z) and self._next[3]     # put on that block on purpose
+        if way == RISE and y == HEIGHT - 1 and (self._x, self._z, y) in self._blocks and not onto and self._move("right"):
+            y = self._cursor_y()        # a full tower: on to the next column, as typing wraps to a new line
         self._advance(y, keep_height, inside=self._place(y))
 
     def _advance(self, y: int, keep_height: bool = False, inside: bool = False):
@@ -445,8 +450,9 @@ class BlocksRoom(Room):
         self._aim(yaw=360.0 * round(self._goal[0] / 360), tilt=REST_TILT)
 
     def turn(self):
-        """A tap of Tab, here or in Time Travel: on to the floor's next side, straight on."""
-        self._aim(yaw=90.0 * (self._quarters - 1))      # clockwise, seen from above
+        """A tap of Tab, here or in Time Travel: on to the floor's next side, straight on and at the
+        resting tilt, so a tap always lands on a standard view however far the view was looked around."""
+        self._aim(yaw=90.0 * (self._quarters - 1), tilt=REST_TILT)      # clockwise, seen from above
 
     def look_around(self, direction: str, held: bool = False):
         """Tab with an arrow: one step around, the near edge going the arrow's way, or up or down.

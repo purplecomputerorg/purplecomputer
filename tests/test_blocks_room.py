@@ -443,7 +443,7 @@ def test_the_cursor_shows_while_the_view_turns():
     async def go():
         app, room = _blocks()
         shown = []
-        room._hover_marks = lambda surf, painter, x, z, bright=True: shown.append((x, z))
+        room._hover_marks = lambda surf, painter, x, z, bright=True, world=False: shown.append((x, z))
         room._drop_marks = lambda surf, painter, x, z, y: shown.append((x, z, y))
         room.turn()
         room._look[0] = 40.0
@@ -627,23 +627,24 @@ def test_a_turn_to_another_side_repaints_the_layers_even_with_the_same_camera():
     run(go())
 
 
-def test_each_arrow_s_keycap_sits_the_way_that_arrow_moves_the_cursor_on_screen():
+def test_each_arrow_s_wing_and_keycap_go_the_way_that_arrow_moves_the_cursor_on_screen():
     async def go():
         app, room = _blocks()
         for yaw, tilt in ((0, 30), (36, 30), (90, 30), (126, 60), (18, 15), (0, 75)):
             room._aim(yaw=yaw, tilt=tilt)
             _settle(room)
             app._draw()
-            cam, (vx, vz) = room._cam, room._view(room._x, room._z)
-            spots, caps = room._arrow_keys(cam, vx, vz), room._arrow_keys(cam, vx, vz, cap=(26, 20))
+            cam, (vx, vz), caps = room._cam, room._view(room._x, room._z), []
+            wings = {glyph: quad for _, quad, glyph in room._wings(cam, vx, vz)}
             for way, (dx, dz) in blocks_room.STEPS.items():
+                (ax, ay), (bx, by), (cx, cy), (ex, ey) = wings[blocks_room.ARROW_KEYS[way]]
                 (mx, my), (nx, ny) = cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5), cam.at(vx + 0.5 + dx, HOVER + 0.5, vz + 0.5 + dz)
-                kx, ky = spots[blocks_room.ARROW_KEYS[way]]
-                cx, cy = cam.run_rect(vx, vz, HOVER, HOVER).center
-                assert (kx - cx) * (nx - mx) + (ky - cy) * (ny - my) > 0 and abs((kx - cx) * (ny - my) - (ky - cy) * (nx - mx)) < 1e-6
-            rects = [pygame.Rect(0, 0, 26, 20).move(x - 13, y - 10) for x, y in caps.values()]      # no two keycaps overlap
-            assert all(not a.colliderect(b) for i, a in enumerate(rects) for b in rects[i + 1:]), (yaw, tilt)
-            assert all(not r.colliderect(cam.run_rect(vx, vz, HOVER, HOVER).inflate(-4, -4)) for r in rects), (yaw, tilt)
+                out = (bx + cx - ax - ex, by + cy - ay - ey)                    # from the box's side to the wing's end
+                assert out[0] * (nx - mx) + out[1] * (ny - my) > 0
+                kx, ky = room._off_end(wings[blocks_room.ARROW_KEYS[way]], (26, 20))
+                assert (kx - (bx + cx) / 2) * out[0] + (ky - (by + cy) / 2) * out[1] > 0     # the keycap, past that end
+                caps.append(pygame.Rect(0, 0, 26, 20).move(kx - 13, ky - 10))
+            assert all(not a.colliderect(b) for i, a in enumerate(caps) for b in caps[i + 1:]), (yaw, tilt)
     run(go())
 
 

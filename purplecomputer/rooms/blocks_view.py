@@ -141,6 +141,10 @@ class Camera:
         cam._memo, cam.rects, cam.floor = {}, {}, None
         return cam
 
+    def away(self, dx: float, dz: float) -> float:
+        """How far a step (dx, dz) across the floor goes away from the eye: 1 straight away, -1 straight toward it."""
+        return dx * self._ahead[0] + dz * self._ahead[1]
+
     def _flat(self, x, y, z) -> tuple:
         dx, dy, dz = x - self.eye[0], y - self.eye[1], z - self.eye[2]
         f, r, u = self.f, self.r, self.u

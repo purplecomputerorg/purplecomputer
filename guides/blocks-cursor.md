@@ -14,7 +14,7 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 ## What the cursor draws
 
 - **Waiting block** on the top level over the column: a small block in the brush color inside a wire box, each wire white over a dark one so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
-- **The four arrow keycaps** around the waiting block, each out from it the way that arrow moves the cursor on screen. The floor's two directions are diagonals in a turned view, and this says which is Left and Right and which is Up and Down.
+- **Four wings and the arrow keycaps.** A flat wing comes out of each side of the waiting block's box along the floor, drawn in the same perspective, and each arrow's keycap sits just past the end of the wing that arrow moves the cursor along. The floor's two directions are diagonals in a turned view, and this says which is Left and Right and which is Up and Down. The wing pointing away from the viewer comes off the box's top and the one toward them off its bottom, or the box would hide them. Keycaps alone around the box left it unclear which side each belonged to.
 - **Line** from the waiting block down the column's free cells, ending in a bold arrow down onto the landing spot: a head taller than it is wide, on a stub of shaft. Dashed, the line read as clutter; a squat triangle alone at its end read as pointing sideways as easily as down.
 - **Landing spot**, a thinner wire box, with the **shadow square** every floating block gets when it floats.
 - **A wire box is the edges of the faces the eye sees**, so it reads as a cube. One line around the cell's outline read as a flat, odd polygon.

@@ -34,7 +34,7 @@ from .. import color_recipe
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import rgb
 from ..panels import CodePanel, Echo
-from ..ui import DOWN, LEFT, MOVE_HINT, PICK_HINT, RIGHT, UP, draw_key_hint, draw_mode_switch, hint_row_h
+from ..ui import DOWN, LEFT, MOVE_HINT, PICK_HINT, RIGHT, UP, draw_key, draw_key_hint, draw_mode_switch, hint_row_h, keycap_size
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
@@ -53,18 +53,22 @@ TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
 HOVER = HEIGHT - 1            # the level the cursor's block waits on, over its column: the top one
 CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its cell
-CURSOR_REACH = 2.0            # cells around the cursor's block that it repaints: its arrow reaches that far
+CURSOR_REACH = 2.5            # cells around the cursor's block that it repaints: the arrows' keycaps sit that near
 DROP_S = 0.16                 # a new block falls into place this long
-ARROWHEAD = 0.36              # half the width of the arrowhead on the landing spot, in cells
+# The arrow down onto the landing spot, as (up the column from its tip, across) points: a head taller than
+# it is wide on a stub of shaft, since a squat triangle alone reads as pointing sideways as easily as down.
+ARROW = ((0, 0), (0.62, -0.3), (0.62, -0.1), (1.15, -0.1), (1.15, 0.1), (0.62, 0.1), (0.62, 0.3))
 SMOOTH = 3                    # the cursor's marks are painted this many times the size and scaled down: pygame's wide lines come out stepped
 CLEAR = (0, 0, 0, 0)
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
+ARROW_KEYS = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
+KEYS_GAP = 4                 # pixels between the cursor's waiting block and each arrow's keycap
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 # Where typing goes next, by way: one step along an axis, as far as the wall or the ceiling.
 WAYS = {"right": ("x", 1), "left": ("x", -1), "up": ("z", 1), "down": ("z", -1), RISE: ("y", 1), SINK: ("y", -1)}
 TURN_PIC = "hints/turn.png"
-HINT = f"Type to build!  Hold a letter with {LEFT} {UP} {DOWN} {RIGHT} for a row"
+HINT = "Type to build!"
 SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
 
 
@@ -718,6 +722,7 @@ class BlocksRoom(Room):
         self._drop_marks(g.surface, painter, x, z, self._cursor_y())
         painter.paint(g.surface, items[behind:])
         self._hover_marks(g.surface, painter, x, z)
+        self._draw_arrow_keys(g, cam, x, z, world=True)
         if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
             self._turn_detail_limit = len(self._blocks) - 1
 
@@ -753,10 +758,11 @@ class BlocksRoom(Room):
             self._drop_marks(sub, painter, vx, vz, y)
             sub.blit(self._front, clip, clip)
             if cut:
-                self._smooth(sub, painter, self._square(painter.cam, vx, vz, cut, round(painter.cam.cell(vx, cut, vz))),
+                self._smooth(sub, painter, self._square(painter.cam, vx, vz, cut, round(painter.cam.cell(vx, cut, vz) * 1.3)),
                              lambda layer, big: self._arrowhead(layer, big.cam, vx, vz, cut))
             self._hover_marks(sub, painter, vx, vz, bright)
             sub.set_clip(None)
+            self._draw_arrow_keys(g, painter.cam, vx, vz, origin=area.topleft)
         g.draw_caret(over.move(area.topleft), lambda: paint(whole, True), lambda: paint(over, False))
 
     def _smooth(self, surf, painter, rect, draw):
@@ -785,7 +791,7 @@ class BlocksRoom(Room):
                 for a, b in spans:
                     pygame.draw.line(layer, color, a, b, w)
             self._arrowhead(layer, cam, x, z, y + 1)
-        pad = round(painter.cam.cell(x, y, z) * ARROWHEAD) + 6
+        pad = round(painter.cam.cell(x, y, z) * ARROW[1][0]) + 6
         self._smooth(surf, painter, painter.cam.run_rect(x, z, ground, HOVER).inflate(2 * pad, 2 * pad), draw)
 
     def _cut(self, vx, vz, y):
@@ -807,6 +813,30 @@ class BlocksRoom(Room):
             self._wire(layer, cam, x, z, HOVER, max(2 * cam.zoom, round(cam.cell(x, HOVER, z)) // 12), 3 * cam.zoom)
         self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(16, 16), draw)
 
+    def _arrow_keys(self, cam, x, z, world: bool = False, cap=(0, 0)) -> dict:
+        """Where each arrow's keycap goes, by its glyph: out from the cursor's waiting block the way
+        that arrow moves it on screen, just clear of the box, so the keys read off the floor
+        whichever way it is turned. `cap` is a keycap's size."""
+        box, (mx, my), spots = cam.run_rect(x, z, HOVER, HOVER), cam.at(x + 0.5, HOVER + 0.5, z + 0.5), {}
+        wide, tall = (box.w + cap[0]) / 2 + KEYS_GAP, (box.h + cap[1]) / 2 + KEYS_GAP
+        for way, (dx, dz) in STEPS.items():
+            for _ in range(-self._side % 4 if world else 0):
+                dx, dz = -dz, dx
+            px, py = cam.at(x + 0.5 + dx, HOVER + 0.5, z + 0.5 + dz)
+            out = 1 / max(abs(px - mx) / wide, abs(py - my) / tall)        # onto the frame a keycap's middle keeps to, to clear the box
+            spots[ARROW_KEYS[way]] = (box.centerx + (px - mx) * out, box.centery + (py - my) * out)
+        for key, sign in ((UP, -1), (DOWN, 1)):         # seen from low down, away and toward land on the side keys: over and under them
+            for side in (LEFT, RIGHT):
+                (kx, ky), (sx, sy) = spots[key], spots[side]
+                if abs(kx - sx) < cap[0] and abs(ky - sy) < cap[1]:
+                    spots[key] = (kx, sy + sign * (cap[1] + KEYS_GAP))
+        return spots
+
+    def _draw_arrow_keys(self, g, cam, x, z, world: bool = False, origin=(0, 0)):
+        px = max(g.vh(1.4), round(cam.cell(x, HOVER, z) * 0.3))
+        for glyph, (kx, ky) in self._arrow_keys(cam, x, z, world, keycap_size(g, UP, px)).items():
+            draw_key(g, glyph, px, round(kx) + origin[0], round(ky) + origin[1], anchor="center")
+
     def _wire(self, surf, cam, x, z, y, width, casing):
         """The cell as a wire box: the edges of the faces the eye sees, each a light line with a
         dark one `casing` wider under it, so it reads on any color."""
@@ -818,11 +848,14 @@ class BlocksRoom(Room):
                     pygame.draw.circle(surf, color, corner, w // 2)
 
     def _arrowhead(self, surf, cam, x, z, h):
-        """An arrowhead pointing down the column's middle line, its tip at height h."""
-        (px, py), half = cam.at(x + 0.5, h, z + 0.5), max(7 * cam.zoom, round(cam.cell(x, h, z) * ARROWHEAD))
-        head = [(px, py), (px - half, py - 1.4 * half), (px + half, py - 1.4 * half)]
-        pygame.draw.polygon(surf, rgb(P.TEXT), head)
-        pygame.draw.polygon(surf, rgb(art_room.CANVAS_BG), head, 2 * cam.zoom)
+        """An arrow pointing down the column's middle line, its tip at height h. It is as wide as
+        ARROW says in cells, and as long in levels, though never so squat that it stops reading as down."""
+        (px, py), (qx, qy), wide = cam.at(x + 0.5, h, z + 0.5), cam.at(x + 0.5, h + 1, z + 0.5), max(22 * cam.zoom, cam.cell(x, h, z))
+        level = math.hypot(qx - px, qy - py) or 1.0
+        ux, uy, long = (qx - px) / level, (qy - py) / level, max(level, 0.7 * wide)
+        arrow = [(px + ux * a * long - uy * c * wide, py + uy * a * long + ux * c * wide) for a, c in ARROW]
+        pygame.draw.polygon(surf, rgb(P.TEXT), arrow)
+        pygame.draw.polygon(surf, rgb(art_room.CANVAS_BG), arrow, 2 * cam.zoom)
 
     def _ground(self, y: int) -> int:
         """The level the cursor's block would rest on below height y."""

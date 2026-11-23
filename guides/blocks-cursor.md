@@ -14,7 +14,8 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 ## What the cursor draws
 
 - **Waiting block** on the top level over the column: a small block in the brush color inside a wire box, each wire white over a dark one so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
-- **Line** from the waiting block down the column's free cells, ending in a bold arrowhead on the landing spot. Dashed, it read as clutter.
+- **The four arrow keycaps** around the waiting block, each out from it the way that arrow moves the cursor on screen. The floor's two directions are diagonals in a turned view, and this says which is Left and Right and which is Up and Down.
+- **Line** from the waiting block down the column's free cells, ending in a bold arrow down onto the landing spot: a head taller than it is wide, on a stub of shaft. Dashed, the line read as clutter; a squat triangle alone at its end read as pointing sideways as easily as down.
 - **Landing spot**, a thinner wire box, with the **shadow square** every floating block gets when it floats.
 - **A wire box is the edges of the faces the eye sees**, so it reads as a cube. One line around the cell's outline read as a flat, odd polygon.
 - **The marks are painted three times the size and scaled down** (`_smooth`): pygame's wide lines have hard, stepped edges, and on the only lines on screen that shows.

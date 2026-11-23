@@ -627,6 +627,26 @@ def test_a_turn_to_another_side_repaints_the_layers_even_with_the_same_camera():
     run(go())
 
 
+def test_each_arrow_s_keycap_sits_the_way_that_arrow_moves_the_cursor_on_screen():
+    async def go():
+        app, room = _blocks()
+        for yaw, tilt in ((0, 30), (36, 30), (90, 30), (126, 60), (18, 15), (0, 75)):
+            room._aim(yaw=yaw, tilt=tilt)
+            _settle(room)
+            app._draw()
+            cam, (vx, vz) = room._cam, room._view(room._x, room._z)
+            spots, caps = room._arrow_keys(cam, vx, vz), room._arrow_keys(cam, vx, vz, cap=(26, 20))
+            for way, (dx, dz) in blocks_room.STEPS.items():
+                (mx, my), (nx, ny) = cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5), cam.at(vx + 0.5 + dx, HOVER + 0.5, vz + 0.5 + dz)
+                kx, ky = spots[blocks_room.ARROW_KEYS[way]]
+                cx, cy = cam.run_rect(vx, vz, HOVER, HOVER).center
+                assert (kx - cx) * (nx - mx) + (ky - cy) * (ny - my) > 0 and abs((kx - cx) * (ny - my) - (ky - cy) * (nx - mx)) < 1e-6
+            rects = [pygame.Rect(0, 0, 26, 20).move(x - 13, y - 10) for x, y in caps.values()]      # no two keycaps overlap
+            assert all(not a.colliderect(b) for i, a in enumerate(rects) for b in rects[i + 1:]), (yaw, tilt)
+            assert all(not r.colliderect(cam.run_rect(vx, vz, HOVER, HOVER).inflate(-4, -4)) for r in rects), (yaw, tilt)
+    run(go())
+
+
 def test_tapping_real_tab_turns_a_quarter_when_it_is_let_go():
     async def go():
         app, room = _blocks()

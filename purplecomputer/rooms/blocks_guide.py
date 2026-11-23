@@ -73,37 +73,42 @@ class Guide:
                 surf.blit(pic, spot)
 
     def _column(self, g, name, size, lit):
+        """The title, then each row as one unit: its picture, its keys right under it and their words under
+        those. Rows stand further apart than anything inside one, so it's clear what goes together."""
         title, rows = ROWS[name]
         surf = pygame.Surface(size, pygame.SRCALPHA)
         px = g.vh(1.6)
-        row_h = min(g.vh(12), (size[1] - 2 * px) // len(rows))
+        keys_h, words_h, gap = 2 * keycap_size(g, UP, round(px * 0.75))[1], g.line_height(round(px * 0.9)), round(px * 1.5)
+        top = round(px * 1.8)
+        side = min(round(px * 6), (size[1] - top - len(rows) * (keys_h + words_h + gap)) // len(rows))
+        y = top
         with g.drawing_on(surf):
             g.draw_text(title, px, 0, 0, "sans-bold", P.MUTED, anchor="topleft")
-            for i, (row, keys, pic, words) in enumerate(rows):
-                layer = pygame.Surface((size[0], row_h), pygame.SRCALPHA)
+            for row, keys, pic, words in rows:
+                layer = pygame.Surface((size[0], side + keys_h + words_h), pygame.SRCALPHA)
                 with g.drawing_on(layer):
-                    self._row(g, layer, px, keys, pic, words)
+                    picture = g.image(pic, round(side * 0.8)) if isinstance(pic, str) else _scene(side, *pic)
+                    layer.blit(picture, picture.get_rect(midleft=(0, side // 2)))
+                    _keys(g, px, 0, side + keys_h // 2, keys)
+                    g.draw_text(words, round(px * 0.9), 0, side + keys_h, "sans", P.MUTED, anchor="topleft")
                 layer.set_alpha(LIT if row == lit else QUIET)
-                surf.blit(layer, (0, round(px * 2) + i * row_h))
+                surf.blit(layer, (0, y))
+                y += layer.get_height() + gap
         return surf
 
-    def _row(self, g, layer, px, keys, pic, words):
-        w, h = layer.get_size()
-        cy = round(h * 0.38)
-        x = 0
-        for part in keys:
-            if part == "arrows":
-                x = _cluster(g, round(px * 0.75), x, cy) + px // 2
-            elif part == "+":
-                x = g.draw_text("+", px, x, cy, "sans", P.MUTED, anchor="midleft").right + px // 3
-            elif len(part) == 1 and part.isalpha():
-                x = draw_key(g, part, px, x, cy, fill=get_key_color(part.lower()), ink=art_room.CANVAS_BG).right + px // 3
-            else:
-                x = draw_key(g, part, px, x, cy).right + px // 3
-        side = min(h - px, round(w * 0.34))
-        picture = g.image(pic, round(side * 0.8)) if isinstance(pic, str) else _scene(side, *pic)
-        layer.blit(picture, picture.get_rect(midright=(w, cy)))
-        g.draw_text(words, round(px * 0.9), 0, h - px // 2, "sans", P.MUTED, anchor="bottomleft")
+
+def _keys(g, px, x, cy, keys) -> int:
+    """A row's keys left to right from x: names, "+", the arrow keys, sticker-colored letters. Returns the right edge."""
+    for part in keys:
+        if part == "arrows":
+            x = _cluster(g, round(px * 0.75), x, cy) + px // 2
+        elif part == "+":
+            x = g.draw_text("+", px, x, cy, "sans", P.MUTED, anchor="midleft").right + px // 3
+        elif len(part) == 1 and part.isalpha():
+            x = draw_key(g, part, px, x, cy, fill=get_key_color(part.lower()), ink=art_room.CANVAS_BG).right + px // 3
+        else:
+            x = draw_key(g, part, px, x, cy).right + px // 3
+    return x
 
 
 def _cluster(g, px, x, cy) -> int:

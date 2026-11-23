@@ -69,7 +69,7 @@ CLEAR = (0, 0, 0, 0)
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 ARROW_KEYS = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
 KEY_SPAN = (0.85, 1.85, 0.4, 0.1)
-WALL_SPAN = (0.58, 0.64, 0.62, 0.14)   # the same for the glass wall standing in for a key where the edge stops the cursor: its thickness is how far past the box it stands, up and down
+WALL_SPAN = (0.85, 1.05, 0.45, 0.1)    # the same for the flat stop bar lying where a key would, where the edge stops the cursor
 BUMP, BUMP_S = 0.18, 0.18          # cells the waiting block knocks toward a wall an arrow pushes it into, and for how long   # cells: where each arrow's flat key starts and ends out from the column's middle, its half width, its thickness
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
@@ -255,7 +255,11 @@ class BlocksRoom(Room):
     def _drop(self, pos) -> bool:
         """A new block falls to its spot from as high as its column is clear, the cursor's block at most."""
         top = min((h for h in self._column() if h > pos[2]), default=HOVER + 1) - 1
-        if top > pos[2] and pos not in self._falls:
+        under = max((p for p in self._falls if p[:2] == pos[:2] and p[2] < pos[2]), default=None)
+        if under:       # typed while the one under it still falls: it joins that fall, one stack, one drop
+            since, low = self._falls[under]
+            self._falls[pos] = (since, low + pos[2] - under[2])
+        elif top > pos[2] and pos not in self._falls:
             self._falls[pos] = (time.monotonic(), top)
             self._fall_timer = self._fall_timer or self.app.timers.every(1 / 60, self._fall_tick)
         return pos in self._falls
@@ -944,21 +948,17 @@ class BlocksRoom(Room):
         """(glyph, lo, hi) of each arrow's key, far to near: a thin slab lying flat out from the waiting block
         the way that arrow moves the cursor. One going away sits level with the box's top and one coming
         toward with its bottom, the rest in between, so the box hides none of them. Where the edge stops
-        the cursor, a thin glass wall stands against that side of the box instead, with no glyph, and at
-        the top level a glass pane lies at the ceiling."""
+        the cursor, a short bright bar lies flat in the key's place instead, with no glyph: a stop line."""
         keys = []
         for way, (dx, dz) in STEPS.items():
             for _ in range(-self._side % 4 if world else 0):
                 dx, dz = -dz, dx
             wall = not (0 <= x + dx < WIDTH and 0 <= z + dz < DEPTH)
             near, far, half, thick = WALL_SPAN if wall else KEY_SPAN
-            h = HOVER + 1 + thick if wall else HOVER + 0.5 + 0.5 * cam.away(dx, dz)
+            h = HOVER + 0.5 + 0.5 * cam.away(dx, dz)
             xs = sorted((x + 0.5 + dx * near - dz * half, x + 0.5 + dx * far + dz * half))
             zs = sorted((z + 0.5 + dz * near + dx * half, z + 0.5 + dz * far - dx * half))
-            keys.append((None if wall else ARROW_KEYS[way], (xs[0], HOVER - thick if wall else h - thick, zs[0]), (xs[1], h, zs[1])))
-        if self._cursor_y() == HEIGHT - 1:      # nothing goes higher: glass at the ceiling, under the bubble, as the walls are
-            _, _, half, _ = WALL_SPAN
-            keys.append((None, (x + 0.5 - half, HEIGHT - 0.04, z + 0.5 - half), (x + 0.5 + half, HEIGHT + 0.04, z + 0.5 + half)))
+            keys.append((None if wall else ARROW_KEYS[way], (xs[0], h - thick, zs[0]), (xs[1], h, zs[1])))
         return sorted(keys, key=lambda k: cam.key(k[1][0], k[1][2], 0))
 
     def _draw_arrow_keys(self, g, surf, painter, x, z, world: bool = False, origin=(0, 0)):
@@ -970,11 +970,10 @@ class BlocksRoom(Room):
         def draw(layer, big):
             c, edge = big.cam, (*rgb(P.TEXT), 150)
             for glyph, lo, hi in keys:
-                top, side = ((*rgb(P.TEXT), 64), (*mix(P.TEXT, art_room.CANVAS_BG, 0.45), 200)) if glyph else ((*rgb(P.TEXT), 120), (*rgb(P.TEXT), 70))
+                top, side = ((*rgb(P.TEXT), 64), (*mix(P.TEXT, art_room.CANVAS_BG, 0.45), 200)) if glyph else \
+                    ((*rgb(P.TEXT), 210), (*mix(P.TEXT, art_room.CANVAS_BG, 0.3), 240))
                 for n, poly in c.box(lo, hi):
                     pygame.draw.polygon(layer, top if n is TOP else side, poly)
-                    if not glyph:
-                        pygame.draw.polygon(layer, edge, poly, c.zoom)
                 face = [c.at(px, hi[1], pz) for px, pz in ((lo[0], lo[2]), (hi[0], lo[2]), (hi[0], hi[2]), (lo[0], hi[2]))]
                 pygame.draw.polygon(layer, edge, face, c.zoom)
         self._smooth(surf, painter, self._square(cam, x, z, HOVER + 0.5, round(cell * (KEY_SPAN[1] + 0.9))), draw)

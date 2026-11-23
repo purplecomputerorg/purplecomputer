@@ -716,17 +716,13 @@ def test_at_a_wall_the_key_that_way_is_a_curb_and_pushing_into_it_knocks_the_wai
     run(go())
 
 
-def test_at_the_top_level_glass_lies_at_the_ceiling_going_higher_knocks_and_a_full_tower_wraps_right(monkeypatch):
+def test_at_the_top_level_going_higher_knocks_and_a_full_tower_wraps_right(monkeypatch):
     async def go():
         app, room = _blocks()
         now = [100.0]
         monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
-        vx, vz = room._view(room._x, room._z)
-        panes = lambda: [lo for glyph, lo, hi in room._arrow_keys(room._cam, vx, vz) if glyph is None and lo[1] > HEIGHT - 0.1]  # noqa: E731
         app._draw()
-        assert not panes()
         room._hover = HEIGHT - 1
-        assert len(panes()) == 1
         await press(app, "up", shift_held=True)
         assert room._hover == HEIGHT - 1 and room._nudge() == (0.0, 0.0, 0.0) and room._bump is not None
         now[0] += blocks_room.BUMP_S / 2
@@ -746,6 +742,25 @@ def test_at_the_top_level_glass_lies_at_the_ceiling_going_higher_knocks_and_a_fu
         room._changed()
         await type_text(app, "a")                                        # at the wall there's nowhere to go: it knocks
         assert room._view(room._x, room._z) == (WIDTH - 1, vz) and room._bump is not None
+    run(go())
+
+
+def test_letters_typed_while_a_block_falls_join_its_fall_as_one_stack(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        app._draw()
+        await press(app, "a")
+        now[0] += DROP_S / 3
+        await type_text(app, "sd")
+        (since, top), = {room._falls[(5, 5, 0)]}
+        assert room._falls == {(5, 5, 0): (since, top), (5, 5, 1): (since, top + 1), (5, 5, 2): (since, top + 2)}
+        heights = [f[2] - f[3] for f in room._falling()]
+        assert len(set(heights)) == 1                         # all three the same way above their spots: one stack
+        now[0] = since + DROP_S * 1.01
+        room._fall_tick()
+        assert not room._falls and {(5, 5, y) for y in range(3)} <= set(room._blocks)
     run(go())
 
 

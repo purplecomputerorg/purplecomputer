@@ -1,10 +1,10 @@
 """Blocks room: a floor seen from above and in front, where every letter (or
 Space, in the current color) drops a block of its sticker color into the
-cursor's column, on top of what is there: typing builds up. Left and Right
-move the cursor along the floor and Up and Down move its height, onto blocks
-too (typing there mixes into them); Shift with Up or Down steps it away and
-toward the viewer. That height stays put as the cursor moves, for building
-sideways, and holding a letter while it moves across the floor lays a line.
+cursor's column, on top of what is there: typing builds up. The arrows move
+the cursor across the floor, Up away from the viewer and Down toward them, and
+holding a letter while it moves lays a line. Shift with Up or Down moves its
+height without building, onto blocks too (typing there mixes into them), and
+that height stays put as the cursor moves, for building sideways.
 Enter drops a block in the current color on top too, and held, grows a tower
 until the column is full. At the top, letters mix into the top block.
 Every block goes in the first free spot at or above the cursor's height, so
@@ -14,10 +14,9 @@ Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
 opens the color bar. A tap of Tab turns the build a quarter of the way around,
-so Left and Right run along the floor's other side, and Tab held with the
-arrows looks around it: Left and Right turn it a little at a time to any
-angle, Up and Down tilt the view from the side to nearly straight down. Left
-and Right always go the way they point most on screen. The walls and the top
+and Tab held with the arrows looks around it: Left and Right turn it a little
+at a time to any angle, Up and Down tilt the view from the side to nearly
+straight down. The arrows always go the way they point most on screen. The walls and the top
 stop the cursor and typing: nothing wraps around. The code line opens from
 the Esc menu."""
 
@@ -65,8 +64,8 @@ SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 # Where typing goes next, by way: one step along an axis, as far as the wall or the ceiling.
 WAYS = {"right": ("x", 1), "left": ("x", -1), "up": ("z", 1), "down": ("z", -1), RISE: ("y", 1), SINK: ("y", -1)}
 TURN_PIC = "hints/turn.png"
-HINT = f"Type to build!  Hold a letter with {LEFT} {RIGHT} for a row"
-SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/away.png}}"
+HINT = f"Type to build!  Hold a letter with {LEFT} {UP} {DOWN} {RIGHT} for a row"
+SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
 
 
 def turned(x: int, z: int, quarters: int) -> tuple:
@@ -555,7 +554,7 @@ class BlocksRoom(Room):
         else:
             self._arrow_repeat_dir = action.direction
             self._arrow_repeat_count = 1 if action.is_repeat else 0
-        across = action.with_shift or not LOOKS[action.direction][0]
+        across = not (action.with_shift and LOOKS[action.direction][0])
         laying = across and ((bool(action.char_held) and self._set_color(action.char_held, hold=True)) or action.space_held)
         if not laying:
             self.echo.flush()
@@ -569,8 +568,8 @@ class BlocksRoom(Room):
                     self._place()
 
     def _go(self, direction: str, shift: bool) -> bool:
-        """One step: Left and Right along the floor, Up and Down in height, and with Shift, away and toward the viewer."""
-        if LOOKS[direction][0] and not shift:
+        """One step across the floor, or with Shift and Up or Down, in height."""
+        if LOOKS[direction][0] and shift:
             return self._step_height(STEPS[direction][1])
         return self._move(direction)
 

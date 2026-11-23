@@ -25,14 +25,14 @@ While the view turns the cursor is drawn too, in its place among the blocks.
 
 ## Looking around
 
-One view can't tell "farther back" from "higher up": both go up the screen. So Up and Down mean only one of them, the height, and the kid turns the build to reach the other.
+One view can't tell "farther back" from "higher up": both go up the screen. So the kid turns the build to see it from another side.
 
-- **A tap of Tab** turns the build to its next side, straight on: a quarter of the way around. Left and Right then run along the floor's other side, so a kid who never finds Shift reaches every cell with the arrows and Tab.
+- **A tap of Tab** turns the build to its next side, straight on: a quarter of the way around.
 - **Tab held with the arrows** looks around: Left and Right turn the floor a step at a time to any angle, its near edge going the arrow's way, and Up and Down tilt the view from the side to nearly straight down. The footer shows this while Tab is down.
 
 Rules:
 
-- **Left and Right go the way they point most.** The floor has four directions, so moving uses the side that faces the viewer most. Looking around, the turn's step (18 degrees) never stops on a diagonal, where two arrows would point the same way, and five steps make a quarter turn, so straight on is always reachable.
+- **The arrows go the way they point most.** The floor has four directions, so moving uses the side that faces the viewer most. Looking around, the turn's step (18 degrees) never stops on a diagonal, where two arrows would point the same way, and five steps make a quarter turn, so straight on is always reachable.
 - **A view at rest shows the whole floor.** Each angle is sized to fit the floor turned that far, so a turned view is smaller than a straight one. The size eases between the two as the view moves.
 - **A tilt stop answers back.** Tab with Up or Down at a stop springs the view a few degrees back off it, the way that still goes, and the footer's arrows drop the one with nowhere left to go. Silence there read as a broken key.
 - **The tilt stops at 15 and 75 degrees.** Lower, the eye would sink under tall towers and see blocks from below; higher or over the top, the eye would pass the front rows, which the layers around the cursor are split by.
@@ -42,23 +42,23 @@ Tried and dropped: **a round platter under the floor, turning a quarter at a tim
 
 ## The keys
 
-The slice facing the viewer works like Art stood on end: the arrows go where they point on screen.
+The aim is keys nobody has to think about. Height comes from typing, so the arrows are free for the floor.
 
-- **Left and Right** move the cursor along the floor. **Up and Down** move its height, onto blocks too (typing there mixes into them). That height stays put as the cursor moves, for bridges and floating blocks.
-- **Shift with Up or Down** steps the cursor away from the viewer and toward them: the direct way to the third direction, for a kid who knows Shift. The footer shows it while Shift is down.
-- **Letters always build up.** A block drops into the column and lands on top of what is there; the cursor stays. That is the contrast with Art, where typing runs along.
-- **A row is a letter held while Left or Right moves the cursor** (or Shift with Up or Down): each cell it reaches gets a block. Or a letter, a step, a letter.
+- **Letters always build up.** A block drops into the column and lands on top of what is there; the cursor stays. That is the contrast with Art, where typing runs along. Backspace takes the top block off, so typing and Backspace are up and down while building.
+- **The four arrows move the cursor across the floor**, Up away from the viewer and Down toward them: the floor runs up the screen as it goes back, so that is how it looks.
+- **A letter held while an arrow moves the cursor lays a line**, any of the four ways: a row, or a wall's first course.
+- **Shift with Up or Down** moves the cursor's height without building, onto blocks too (typing there mixes into them). That height stays put as the cursor moves, for bridges and floating blocks. The footer shows it while Shift is down.
 - **Enter** drops a block in the current color on top, and never mixes into a block, so holding it grows a tower until the column is full.
 
-This follows what 3D editors do, a modifier for the third direction, with the choice of which two get the bare arrows made for the view: the two that are flat on the screen. Turning the world to reach the third is how the game Fez plays.
+This is what 3D builders do: the plain controls move over the ground, and blocks stack.
 
 Tried and dropped:
 
-- **Arrows on the floor, Shift with Up or Down for the height.** Up meant "away", which on screen looks the same as "higher", and building up, the point of a 3D room, was the one thing behind a modifier.
+- **Up and Down as the height, Left and Right along the floor, and Shift with Up or Down, or a quarter turn, to go away and toward.** Building up felt first-class, but typing already builds up, so the two best keys moved the cursor through empty air while the floor's other direction, needed for every block, sat behind a modifier.
 - **Typing goes the way the cursor last walked**, with Enter or Shift Up to turn it upward: a hidden mode, set as a side effect of moving.
 - **Typing repeats the step that brought the cursor here from the block laid last**, so one spot stacked and a step between two blocks started a row, with the spot after the next edged to show the guess. Nothing to set, but too much to work out, and it guessed wrong for two towers side by side.
 - **Enter that first only turned typing upward, then walked the cursor up.** Two meanings on one key, and building up took a second key that nobody remembered.
-- **A tap of Tab turning the build 18 degrees.** Fine for looking, but it took three taps before Left and Right changed sides.
+- **A tap of Tab turning the build 18 degrees.** Fine for looking, but five taps to see the next side.
 
 ## Tried and dropped
 

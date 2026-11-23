@@ -179,10 +179,10 @@ def test_blocks_echo_writes_typing_and_space():
         app, blocks = await _room("blocks")
         await type_text(app, "ab")
         await press(app, "right")       # a step ends the stroke
-        await press(app, "enter")
+        blocks._control("space")
         blocks.set_brush_color("#48D370")
         blocks._control("space")
-        blocks._control("enter")
+        blocks._control("space")
         assert blocks.echo.fresh == "up ab"
         blocks.open_code_panel()
         assert blocks.code_panel.note[0] == "blue up 1 green up 2"

@@ -5,8 +5,8 @@ the cursor across the floor, Up away from the viewer and Down toward them, and
 holding a letter while it moves lays a line. Shift with Up or Down moves its
 height without building, onto blocks too (typing there mixes into them), and
 that height stays put as the cursor moves, for building sideways.
-Enter drops a block in the current color on top too, and held, grows a tower
-until the column is full. At the top, letters mix into the top block.
+Enter puts the height back on the ground, like a typewriter's return. A letter
+on a full tower starts the column to its right.
 Every block goes in the first free spot at or above the cursor's height, so
 a line climbs over whatever is in its way and a stack passes floating
 blocks; only the code line keeps the height it reached when it moves on.
@@ -553,7 +553,7 @@ class BlocksRoom(Room):
                 self.close_code_panel()
             return
         if isinstance(action, ControlAction):
-            if action.is_down and (not action.is_repeat or action.action in ("backspace", "enter")):
+            if action.is_down and (not action.is_repeat or action.action == "backspace"):
                 self._control(action.action)
         elif isinstance(action, NavigationAction):
             self._navigate(action)
@@ -609,18 +609,18 @@ class BlocksRoom(Room):
             self._lay(RISE)
             self._build()
         elif name == "enter":
-            self._stack()
+            self.echo.flush()
+            self._to_ground()
         elif name == "backspace":
             self.echo.flush()
             self._erase()
 
-    def _stack(self):
-        """Enter: a block in the brush color in the first free spot at or over the cursor's height.
-        Unlike Space it never mixes into a block, so held, it grows a tower and a full column stops it."""
-        self._next = None
-        if self._free(range(self._hover, HEIGHT)):
-            self._lay(RISE)
-            self._build()
+    def _to_ground(self):
+        """Enter, like a typewriter's return: the height goes back to the ground, so blocks land on what the
+        column holds again. On the ground already, the bubble knocks down against it."""
+        if self._hover == 0 and not self._next:
+            return self._knock(0, 0, -1)
+        self._hover, self._next = 0, None
 
     def _navigate(self, action):
         if self._tab is not None:
@@ -832,9 +832,12 @@ class BlocksRoom(Room):
             if not kept or kept[0] is not painter.items:
                 kept = self._hide[pos] = painter.items, painter.after(vx, vz, y, cam.run_rect(vx, vz, y, top))
             rect = cam.run_rect(vx, vz, y, h)       # down to its spot, where its shadow darkens as it comes
+            cut = round(cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5)[1] + BUBBLE * cam.cell(vx, HOVER, vz))
+            rect = rect.clip(pygame.Rect(rect.x, cut, rect.w, max(0, rect.bottom - cut)))   # blocks come out from under the bubble: none over it
             self._fell.append(rect)
             sub.set_clip(rect)
-            painter.shadow(sub, vx, vz, y, dark=FALL_SHADOW + (1 - FALL_SHADOW) * (1 - (h - y) / max(1, top - y)))
+            if (*self._world(vx, vz), y - 1) not in self._falls:        # a stack falling together casts one shadow, under it
+                painter.shadow(sub, vx, vz, y, dark=FALL_SHADOW + (1 - FALL_SHADOW) * (1 - (h - y) / max(1, top - y)))
             painter.box(sub, vx, vz, h, h, color)
             if kept[1]:
                 painter.paint(sub, kept[1], rect)

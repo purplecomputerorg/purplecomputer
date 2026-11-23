@@ -114,39 +114,18 @@ def test_the_arrows_move_across_the_floor_up_away_and_down_toward():
     run(go())
 
 
-def test_enter_builds_in_the_brush_color_on_top():
+def test_enter_puts_the_height_back_on_the_ground_and_on_the_ground_knocks():
     async def go():
         app, room = _blocks()
         await type_text(app, "ab")
+        for _ in range(3):
+            await press(app, "up", shift_held=True)
+        assert room._cursor_y() == 5
         await press(app, "enter")
-        assert room._blocks[(5, 5, 2)] == get_key_color("b") and room._cursor_y() == 3
+        assert room._hover == 0 and room._cursor_y() == 2 and len(room._blocks) == 2     # back onto the column's top
         await press(app, "right")
         await press(app, "enter")
-        await press(app, "enter")
-        assert {(6, 5, 0), (6, 5, 1)} <= set(room._blocks)
-    run(go())
-
-
-def test_holding_enter_grows_a_tower_and_stops_at_the_top():
-    async def go():
-        app, room = _blocks()
-        await press(app, "right")
-        await press(app, "q", shift_held=True)      # pick a color, then build up in it
-        for i in range(HEIGHT + 3):
-            await press(app, "enter", is_repeat=i > 0)
-        assert room._blocks == {(6, 5, y): get_key_color("q") for y in range(HEIGHT)}
-        assert (room._x, room._z) == (6, 5)
-    run(go())
-
-
-def test_space_then_enter_stacks_on_the_block_space_laid():
-    async def go():
-        app, room = _blocks()
-        await press(app, "right")
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
-        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True, space_held=True))
-        await app._dispatch_keyboard_action(ControlAction(action="enter", is_down=True, space_held=True))
-        assert set(room._blocks) == {(6, 5, 0), (6, 5, 1), (6, 5, 2)}
+        assert room._bump is not None and room._bump[2] == -1 and not room._blocks.get((6, 5, 0))   # nothing to lower: a knock
     run(go())
 
 
@@ -221,8 +200,7 @@ def test_backspace_eats_down_from_the_cursor_then_steps_left():
         app, room = _blocks()
         await type_text(app, "aaa")
         await press(app, "right")
-        await type_text(app, "a")
-        await press(app, "enter")
+        await type_text(app, "aa")
         for _ in range(2):
             await press(app, "up", shift_held=True)
         await type_text(app, "b")               # floating above the column
@@ -324,19 +302,6 @@ def test_holding_a_letter_or_space_while_arrowing_lays_a_line():
         count = len(room._blocks)
         await press(app, "up", char_held="z", shift_held=True)      # Shift with Up is the height: it lays nothing
         assert len(room._blocks) == count and room._cursor_y() == 2      # from on top of the last block
-    run(go())
-
-
-def test_holding_space_while_pressing_enter_lays_a_column():
-    async def go():
-        app, room = _blocks()
-        app._code_panel_enabled = True
-        room._dir = "right"
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=True))
-        for i in range(3):
-            await app._dispatch_keyboard_action(ControlAction(action="enter", is_repeat=i > 0, space_held=True))
-        await app._dispatch_keyboard_action(ControlAction(action="space", is_down=False))
-        assert set(room._blocks) == {(5, 5, y) for y in range(4)} and room.code_panel is None
     run(go())
 
 

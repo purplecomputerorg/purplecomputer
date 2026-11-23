@@ -26,6 +26,7 @@ ROWS = {
         ("type", ["A", "Z"], ({}, [((1, 1, 0), 255)], (1, 1), 2.3, (1.35, "a", 3.55)), "letters drop blocks"),
         ("move", ["arrows"], ({}, [((0, 1, 0), 70), ((1, 1, 0), 255)], (0.5, 1), 0.5), "move around the floor"),
         ("height", ["hold Shift", "+", UP, DOWN], ({}, [((1, 1, 2), 255)], (1, 1), 1.4, None, 2), "raise the floor"),
+        ("ground", ["Enter"], ({(1, 1, 0): "a"}, [((1, 1, 1), 255)], (1, 1), 1.0), "back to the ground"),
     ]),
     LOOK: ("Look around", [
         ("turn", ["Tab"], "hints/turn.png", "tap to turn"),

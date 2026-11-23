@@ -22,7 +22,7 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **A wire box is the edges of the faces the eye sees**, so it reads as a cube. One line around the cell's outline read as a flat, odd polygon.
 - **The marks are painted three times the size and scaled down** (`_smooth`): pygame's wide lines have hard, stepped edges, and on the only lines on screen that shows.
 - **Arrowhead over the rows in front** at the lowest point of the line they leave in view, when they hide its end.
-- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size, and it repaints only where the falling blocks were and are, plus the cursor if they touch it (`_fall_patch`, through `app.repaint`). Where something stands in front, the block is drawn again over it, faint (`GHOST_ALPHA`), so its fall still shows behind a wall. Its shadow lies on its spot from the start and darkens as it comes down (`FALL_SHADOW`), so the hover, the fall and the landing read as one drop. A letter typed while the block under it is still falling joins that fall (`_drop`), so fast typing drops one short stack in one animation rather than a string of them.
+- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size, and it repaints only where the falling blocks were and are, plus the cursor if they touch it (`_fall_patch`, through `app.repaint`). Where something stands in front, the block is drawn again over it, faint (`GHOST_ALPHA`), so its fall still shows behind a wall. Its shadow lies on its spot from the start and darkens as it comes down (`FALL_SHADOW`), so the hover, the fall and the landing read as one drop. A letter typed while the block under it is still falling joins that fall (`_drop`), so fast typing drops one short stack in one animation rather than a string of them: only its bottom block casts the shadow, and the stack slides out from under the bubble, nothing of it drawn over it.
 
 While the view turns the cursor is drawn too, in its place among the blocks.
 
@@ -47,13 +47,14 @@ Tried and dropped: **a round platter under the floor, turning a quarter at a tim
 
 ## The keys
 
+- **Enter puts the height back on the ground** (`_to_ground`), like a typewriter's return, so the way back from a lifted floor is the biggest key; on the ground already, the bubble knocks down against it. Enter used to drop a block too, which Space and every letter already do.
+
 The aim is keys nobody has to think about. Height comes from typing, so the arrows are free for the floor.
 
 - **Letters always build up.** A block drops into the column and lands on top of what is there; the cursor stays. That is the contrast with Art, where typing runs along. Backspace takes the top block off, so typing and Backspace are up and down while building.
 - **The four arrows move the cursor across the floor**, Up away from the viewer and Down toward them: the floor runs up the screen as it goes back, so that is how it looks.
 - **A letter held while an arrow moves the cursor lays a line**, any of the four ways: a row, or a wall's first course.
 - **Shift with Up or Down** moves the cursor's height without building, onto blocks too (typing there mixes into them). That height stays put as the cursor moves, for bridges and floating blocks. The footer shows it while Shift is down.
-- **Enter** drops a block in the current color on top, and never mixes into a block, so holding it grows a tower until the column is full.
 
 This is what 3D builders do: the plain controls move over the ground, and blocks stack.
 

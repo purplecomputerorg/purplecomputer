@@ -17,7 +17,7 @@ INK = ("#352a4a", "#6b5e7d", (255, 255, 255))  # theme.typ ink, ink-med, white p
 PAPER_LIGHTNESS = 0.64  # the abacus pastels are picked for the dark screen and wash out on white
 ART_CELL_PX, ART_CELL_PT = 24, 5.4
 ART_GROUND = ((246, 241, 252), (238, 231, 248))  # a pale checkerboard, so a gap in the paint still shows
-BLOCKS_SIZE, BLOCKS_DPI = (1200, 800), 540
+BLOCKS_SIZE, BLOCKS_DPI = (1200, 800), 960   # dpi: a block prints about as tall as a line of the card's text
 SETTLE_S = 1.5       # blocks drop in and fade up; draw them once they've landed
 
 

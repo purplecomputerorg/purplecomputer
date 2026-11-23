@@ -8,10 +8,11 @@ import pygame
 from . import palette as P
 from .color_mixing import mix_colors_paint
 from .palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
-from .ui import CODE_HINT, draw_key_hint
+from .ui import CODE_HINT, HINT_PICTURES, draw_key_hint
 
 HUE_ROWS = [[k for k in row if k.isalpha()] for row in (QWERTY_ROW, ASDF_ROW, ZXCV_ROW)]   # red, yellow, blue
 EXAMPLE_KEY = "f"
+PICK_KEY = "a"          # the letter the pick hint shows
 MAX_TERMS = 3
 NO_MIX = ((), None)
 BADGE_DABS, BADGE_FADE = 10, 6   # dabs under one badge at full strength, then dabs it takes to fade
@@ -74,6 +75,18 @@ def draw_recipe(g, terms, result, px: int, x: int, y: int, anchor="midright", in
         else:
             draw_color_cap(g, text, fill, cap, px)
     return box
+
+
+def _pick_picture(g, px: int, h: int) -> pygame.Surface:
+    """'[A] = ■' for a hint line: a tap of Shift, then a letter, makes that letter's color the brush."""
+    terms, color = [(PICK_KEY, get_key_color(PICK_KEY))], get_key_color(PICK_KEY)
+    surf = pygame.Surface(recipe_size(g, terms, color, px), pygame.SRCALPHA)
+    with g.drawing_on(surf):
+        draw_recipe(g, terms, color, px, 0, surf.get_height() // 2, anchor="midleft")
+    return surf
+
+
+HINT_PICTURES["pick"] = _pick_picture
 
 
 def draw_color_cap(g, text: str, fill: str, cap: pygame.Rect, px: int, radius: int | None = None):

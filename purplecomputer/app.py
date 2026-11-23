@@ -109,6 +109,9 @@ class _Offscreen:
     def invalidate(self, *_):
         pass
 
+    def repaint(self, fn):
+        pass
+
     def set_panel(self, panel):
         pass
 
@@ -313,13 +316,20 @@ class PurpleApp:
                 self.g.dirty = True
             if self._save_flash_at is not None:
                 self.g.dirty = True
-            if self.g.dirty:
-                self.g.dirty = False   # before drawing, so a request made mid-frame gets its own frame
+            patches, self.g.patches = self.g.patches, []
+            if self.g.dirty or patches:
+                full, self.g.dirty = self.g.dirty, False   # before drawing, so a request made mid-frame gets its own frame
                 start = time.monotonic()
-                self._draw()
+                if full:
+                    self._draw()
+                else:
+                    rects = [r for r in (fn() for fn in patches) if r]
                 drawn = time.monotonic()
-                self.g.present()
-                self._frame_stats.frame(start, drawn, time.monotonic())
+                if full:
+                    self.g.present()
+                elif rects:
+                    self.g.present(rects[0].unionall(rects[1:]))
+                self._frame_stats.frame(start, drawn, time.monotonic(), self.room.name if full else f"{self.room.name}:part")
                 if self._frame_note:
                     boot_log.heartbeat(f"frame drawn {self._frame_note}")
                     self._frame_note = None
@@ -332,7 +342,7 @@ class PurpleApp:
     async def _idle(self, since: float):
         """Sleep until something asks for a frame, a toast is due to go, or the next window-event poll."""
         self._wake.clear()
-        if self.g.dirty or self._save_flash_at is not None or not self.running:
+        if self.g.dirty or self.g.patches or self._save_flash_at is not None or not self.running:
             return
         until = since + (FRAME_S if self._sdl_is_keyboard else IDLE_POLL_S)
         if self._toasts:
@@ -402,6 +412,15 @@ class PurpleApp:
 
     def invalidate(self, *_):
         self.g.dirty = True
+        self._wake_loop()
+
+    def repaint(self, fn):
+        """Redraw only what `fn()` paints, the screen rect it returns, instead of the whole screen: for a room
+        animating inside itself. Anything drawn over the room, or a full redraw already due, redraws it all."""
+        if (self.g.dirty or self._overlays or self._toasts or self._panel is not None or self.viewport_panel()
+                or self.hold_progress() or self._hold_nudge or self._save_flash_at is not None):
+            return self.invalidate()
+        self.g.patches.append(fn)
         self._wake_loop()
 
     def call_from_thread(self, fn, *args):
@@ -1303,8 +1322,8 @@ class PurpleApp:
             elif action.action == "escape":
                 self._escape_consumed_by_mode = True
                 self._cancel_time_travel()
-            elif action.action == "tab" and (turn := getattr(self.rooms[self._time_travel["room"]], "turn_around", None)):
-                turn()                          # a view, not history: look at any moment from either side
+            elif action.action == "tab" and (look := getattr(self.rooms[self._time_travel["room"]], "turn", None)):
+                look()                          # a view, not history: look at any moment from any side
         return True
 
     # ------------------------------------------------------------------ volume

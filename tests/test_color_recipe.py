@@ -99,6 +99,7 @@ def test_dropping_a_block_onto_one_shows_its_color_first():
     async def go():
         app, room = _room("blocks")
         room._blocks.update({(room._x, room._z, y): "#ff0000" for y in range(HEIGHT)})
+        room._next = (room._x, room._z, HEIGHT - 1, True)              # on the top block on purpose, as Shift puts it
         await press(app, "b")
         assert [k for k, _ in _hint(room)["terms"]] == ["", "b"] and _hint(room)["terms"][0][1] == "#ff0000"
     run(go())
@@ -137,3 +138,17 @@ def test_badge_fades_after_a_long_stroke_and_comes_back_for_a_new_recipe(monkeyp
     assert len(drawn) == BADGE_DABS + BADGE_FADE         # gone once faded
     paint("f")
     assert drawn[-1] == 1                                 # a new recipe shows in full again
+
+
+def test_the_pick_hint_shows_a_sticker_key_equal_to_its_color():
+    from purplecomputer.gfx import rgb
+    from purplecomputer.ui import PICK_HINT, hint_picture
+
+    async def go():
+        app, _ = _room("art")
+        g = app.g
+        pic = hint_picture(g, "pick", g.vh(1.9))
+        assert "{pick}" in PICK_HINT and pic.get_width() > 2 * pic.get_height()   # '[A] = ■', in the mixing hint's pieces
+        sticker = rgb(get_key_color("a"))
+        assert any(tuple(pic.get_at((x, pic.get_height() // 2)))[:3] == sticker for x in range(pic.get_width()))
+    run(go())

@@ -1,7 +1,9 @@
-"""How Blocks looks: one perspective camera on the floor's center, which Tab turns around and held Tab tips
-down to look from above, and the floor, blocks and shadows painted through it, far to near. Coordinates are
-(x, z, y) cells with y up, in whatever frame the caller passes: view coordinates at rest, world ones mid-turn."""
+"""How Blocks looks: one perspective camera on the floor's center, which turns around it to any angle and
+tips from the side to nearly straight down, and the floor, blocks and shadows painted through it,
+far to near. Coordinates are (x, z, y) cells with y up, in whatever frame the caller passes: view coordinates
+at rest, world ones mid-turn."""
 
+import bisect
 import copy
 import math
 from functools import cache
@@ -14,7 +16,7 @@ from .. import paper
 from ..gfx import mix, rgb
 from . import art_room
 
-WIDTH, DEPTH, HEIGHT = 30, 12, 12
+WIDTH, DEPTH, HEIGHT = 16, 16, 12   # square, so every side is the same floor
 SLAB = 0.35                   # the floor's thickness, in cells
 REST_PITCH, PEEK_PITCH = math.radians(30), math.radians(76)
 EYE_DISTANCE = (44, 70)       # cells from the floor's center at rest and looking down; nearer is stronger perspective
@@ -25,13 +27,8 @@ DEPTH_FADE = 0.3              # how far the back row's blocks lean toward the fl
 TOP_LIGHT, TOP_LIGHT_PER_LEVEL = 0.18, 0.015   # tops light up toward white, a little more each level up
 SIDE_DARK = 0.36              # the darkest side, turned away from the light
 SHADOW_ALPHA = 140            # the square under a floating block
-STEM_ALPHA, STEM_DARKEN = 150, 0.35
-RIBBON_FROM, RIBBON_TO, RIBBON_ALPHA = 0.38, 0.62, 70   # the cursor row's band across a face
-STRIPE_ALPHA, FRAME_ALPHA = 22, 90
-FRONT_ALPHA = 70              # front towers in the way of the cursor's glass column or landing block fade to this
 TOP = None                    # a face's normal: None for the top, else (x, z)
-SIDES = (TOP, (0, -1), (0, 1), (-1, 0), (1, 0))
-STAMPS_KEPT = 20000           # block pictures a camera keeps before starting over
+FACES = (TOP, (0, -1), (0, 1), (-1, 0), (1, 0))
 
 
 def lerp(a, b, t):
@@ -72,6 +69,55 @@ def hull(points) -> list:
     return half(pts) + half(reversed(pts))
 
 
+def shape(blocks: dict) -> tuple:
+    """A build as it is painted, whatever the camera: (runs, floats, stacks). A run is one column's
+    touching blocks of one color, (x, z, bottom, top, color, open), painted as one tall box: `open` is
+    the faces with no blocks all along them, the only ones that can show. Floats are the shadows under
+    runs with air below them, (x, z, ground); stacks are a column's touching blocks whatever their
+    colors, (x, z, bottom, top), for the sun's shadows."""
+    cols: dict = {}
+    for x, z, y in blocks:
+        cols.setdefault((x, z), []).append(y)
+    return joined(column_shape(blocks, x, z, sorted(ys)) for (x, z), ys in sorted(cols.items()))
+
+
+def joined(parts) -> tuple:
+    """Columns' shapes as one build's."""
+    runs, floats, stacks = [], [], []
+    for r, f, s in parts:
+        runs += r
+        floats += f
+        stacks += s
+    return runs, floats, stacks
+
+
+def column_shape(blocks: dict, x: int, z: int, ys=None) -> tuple:
+    """shape() of one column, its blocks at heights `ys` (bottom up), or found by looking. Its runs' faces
+    depend on the columns beside it too."""
+    if ys is None:
+        ys = [y for y in range(HEIGHT) if (x, z, y) in blocks]
+    runs, floats, stacks = [], [], []
+    for y in ys:
+        color = blocks[(x, z, y)]
+        touching = bool(stacks) and stacks[-1][3] == y - 1
+        if touching and runs[-1][4] == color:
+            runs[-1][3] = y
+        else:
+            runs.append([x, z, y, y, color])
+        if touching:
+            stacks[-1][3] = y
+            continue
+        if y:
+            floats.append((x, z, stacks[-1][3] + 1 if stacks else 0))
+        stacks.append([x, z, y, y])
+
+    def bare(x, z, bottom, top, color):
+        levels = range(bottom, top + 1)
+        return tuple(n for n in FACES if ((x, z, top + 1) not in blocks if n is TOP else
+                                          any((x + n[0], z + n[1], y) not in blocks for y in levels)))
+    return [(*r, bare(*r)) for r in runs], floats, [tuple(k) for k in stacks]
+
+
 def bbox(points) -> pygame.Rect:
     xs, ys = zip(*points)
     left, top = math.floor(min(xs)), math.floor(min(ys))
@@ -80,12 +126,15 @@ def bbox(points) -> pygame.Rect:
 
 class Camera:
     """Looks at the floor's center from `yaw` around it and `pitch` down, scaled so the floor up to
-    `top` (the ceiling) fills a w by h box at `origin`. Grid points are projected once and remembered."""
+    `top` (the ceiling) fills a w by h box at `origin`: the floor as it sits turned `fit` off straight
+    on, either way, whatever its yaw, so a turn from one side to the next keeps one size and the
+    floor's middle stays put. Grid points are projected once and remembered."""
 
-    def __init__(self, yaw: float, pitch: float, w: int, h: int, origin=(0, 0), top: float = HEIGHT):
+    def __init__(self, yaw: float, pitch: float, w: int, h: int, origin=(0, 0), top: float = HEIGHT, fit: float = 0.0):
         sy, cy, sp, cp = math.sin(yaw), math.cos(yaw), math.sin(pitch), math.cos(pitch)
         self.f, self.r, self.u = (sy * cp, -sp, cy * cp), (cy, 0.0, -sy), (sy * sp, cp, cy * sp)
-        away = lerp(*EYE_DISTANCE, (pitch - REST_PITCH) / (PEEK_PITCH - REST_PITCH))   # rises as it tips down, so tall towers lean less
+        # The eye backs off as it tips down from rest, so tall towers lean less.
+        away = lerp(*EYE_DISTANCE, min(1.0, max(0.0, (pitch - REST_PITCH) / (PEEK_PITCH - REST_PITCH))))
         self.eye = (WIDTH / 2 - away * self.f[0], TARGET_Y - away * self.f[1], DEPTH / 2 - away * self.f[2])
         ahead = (sy, cy)
         self.sun = (SUN[0] * cy + SUN[1] * ahead[0], SUN[0] * -sy + SUN[1] * ahead[1])
@@ -93,12 +142,26 @@ class Camera:
         n = math.hypot(*light)
         self.dark = {side: round(SIDE_DARK * (1 - max(0.0, (side[0] * light[0] + side[1] * light[1]) / n)), 2)
                      for side in ((0, -1), (0, 1), (-1, 0), (1, 0))}
-        self._ahead, self._memo, self.rects, self.floor = ahead, {}, {}, None
-        self.s, self.ox, self.oy = 1.0, 0.0, 0.0
-        xs, ys = zip(*(self._flat(x, y, z) for x in (0, WIDTH) for y in (-SLAB, top) for z in (0, DEPTH)))
+        self._ahead, self._memo, self.rects, self.floor = ahead, {}, {}, {}
+        # A stack's shadow is its foot slid along the sun from its bottom to its top: the outline's
+        # points, as (x, z) of a foot corner and which end, are the same for every stack.
+        ends = {(px + self.sun[0] * end, pz + self.sun[1] * end): (px, pz, end) for px in (0, 1) for pz in (0, 1) for end in (0, 1)}
+        self._sun_outline = [ends[p] for p in hull(ends)]
+        self.s, self.ox, self.oy, self.zoom = 1.0, 0.0, 0.0, 1
+        sf, cf = math.sin(fit), math.cos(fit)
+        corners = [(a * cf - b * s, a * s + b * cf) for a in (-WIDTH / 2, WIDTH / 2) for b in (-DEPTH / 2, DEPTH / 2) for s in (sf, -sf)]
+        xs, ys = zip(*(self._flat(WIDTH / 2 + a * cy + b * sy, y, DEPTH / 2 - a * sy + b * cy) for a, b in corners for y in (-SLAB, top)))
         self.s = min(w / (max(xs) - min(xs)), h / (max(ys) - min(ys)))
         self.ox = origin[0] + (w - self.s * (max(xs) + min(xs))) / 2
         self.oy = origin[1] + (h - self.s * (max(ys) + min(ys))) / 2
+
+    def zoomed(self, by: int, corner) -> "Camera":
+        """This camera painting `by` times the size, with screen point `corner` at the picture's corner:
+        for a patch painted large and scaled down, which smooths its edges."""
+        cam = copy.copy(self)
+        cam.s, cam.ox, cam.oy, cam.zoom = self.s * by, (self.ox - corner[0]) * by, (self.oy - corner[1]) * by, self.zoom * by
+        cam._memo, cam.rects, cam.floor = {}, {}, {}
+        return cam
 
     def _flat(self, x, y, z) -> tuple:
         dx, dy, dz = x - self.eye[0], y - self.eye[1], z - self.eye[2]
@@ -119,6 +182,10 @@ class Camera:
         Right for a grid of cubes while the eye is above all of them, which it always is."""
         return -abs(z + 0.5 - self.eye[2]), -abs(x + 0.5 - self.eye[0]), y
 
+    def away(self, dx, dz) -> float:
+        """How much the floor direction (dx, dz) points away from the eye: 1 straight away, -1 straight toward."""
+        return dx * self._ahead[0] + dz * self._ahead[1]
+
     def row(self, x, z) -> int:
         """How far back a cell sits, 0 to DEPTH - 1, for its haze."""
         back = (x + 0.5 - WIDTH / 2) * self._ahead[0] + (z + 0.5 - DEPTH / 2) * self._ahead[1] + DEPTH / 2 - 0.5
@@ -129,37 +196,39 @@ class Camera:
         (ax, ay), (bx, by) = self.at(x, y, z), self.at(x + 1, y, z)
         return math.hypot(bx - ax, by - ay)
 
-    def box(self, lo, hi, shown=None) -> list:
-        """(normal, polygon) for each face the eye sees of the box from lo to hi, both (x, y, z).
-        A side's polygon runs along its bottom edge, then back along its top."""
+    def box(self, lo, hi, open=FACES) -> list:
+        """(normal, polygon) for each face of the box from lo to hi, both (x, y, z), that the eye sees
+        and is in `open`. A side's polygon runs along its bottom edge, then back along its top."""
         (x0, y0, z0), (x1, y1, z1) = lo, hi
         ex, ey, ez = self.eye
-        faces = []
-        if ey > y1:
-            faces.append((TOP, ((x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1))))
-        if ez < z0:
-            faces.append(((0, -1), ((x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0))))
-        if ez > z1:
-            faces.append(((0, 1), ((x1, y0, z1), (x0, y0, z1), (x0, y1, z1), (x1, y1, z1))))
-        if ex < x0:
-            faces.append(((-1, 0), ((x0, y0, z1), (x0, y0, z0), (x0, y1, z0), (x0, y1, z1))))
-        if ex > x1:
-            faces.append(((1, 0), ((x1, y0, z0), (x1, y0, z1), (x1, y1, z1), (x1, y1, z0))))
-        return [(n, [self.at(*p) for p in pts]) for n, pts in faces if shown is None or shown(n)]
+        at, faces = self.at, []
+        if ey > y1 and TOP in open:
+            faces.append((TOP, [at(x0, y1, z0), at(x1, y1, z0), at(x1, y1, z1), at(x0, y1, z1)]))
+        if ez < z0 and (0, -1) in open:
+            faces.append(((0, -1), [at(x0, y0, z0), at(x1, y0, z0), at(x1, y1, z0), at(x0, y1, z0)]))
+        if ez > z1 and (0, 1) in open:
+            faces.append(((0, 1), [at(x1, y0, z1), at(x0, y0, z1), at(x0, y1, z1), at(x1, y1, z1)]))
+        if ex < x0 and (-1, 0) in open:
+            faces.append(((-1, 0), [at(x0, y0, z1), at(x0, y0, z0), at(x0, y1, z0), at(x0, y1, z1)]))
+        if ex > x1 and (1, 0) in open:
+            faces.append(((1, 0), [at(x1, y0, z0), at(x1, y0, z1), at(x1, y1, z1), at(x1, y1, z0)]))
+        return faces
+
+    def run_rect(self, x, z, bottom, top) -> pygame.Rect:
+        key = ("b", x, z, bottom, top)
+        if key not in self.rects:
+            self.rects[key] = bbox([self.at(x + a, h, z + b) for a in (0, 1) for b in (0, 1) for h in (bottom, top + 1)])
+        return self.rects[key]
 
     def block_rect(self, x, z, y) -> pygame.Rect:
-        key = ("b", x, z, y)
-        if key not in self.rects:
-            self.rects[key] = bbox([self.at(x + a, y + h, z + b) for a in (0, 1) for b in (0, 1) for h in (0, 1)])
-        return self.rects[key]
+        return self.run_rect(x, z, y, y)
 
     def sun_shadow(self, x, z, lo, hi) -> tuple:
         """(polygon, rect) of the shadow on the floor of the run of blocks lo to hi high in cell (x, z)."""
         key = ("sun", x, z, lo, hi)
         if key not in self.rects:
-            sx, sz = self.sun
-            square = ((x, z), (x + 1, z), (x + 1, z + 1), (x, z + 1))
-            poly = [self.at(px, 0, pz) for px, pz in hull([(px + sx * h, pz + sz * h) for px, pz in square for h in (lo, hi + 1)])]
+            (sx, sz), reach = self.sun, (lo, hi + 1)
+            poly = [self.at(x + px + sx * reach[end], 0, z + pz + sz * reach[end]) for px, pz, end in self._sun_outline]
             self.rects[key] = poly, bbox(poly)
         return self.rects[key]
 
@@ -174,19 +243,20 @@ class Camera:
 
 
 class Painter:
-    """One camera and one set of blocks {(x, z, y): color}, sorted far to near once. `row` marks the
-    cursor's row (a stripe on the floor, a ribbon on its blocks) and splits the blocks into the ones
-    behind it, on it and in front of it, so the cursor can be drawn between them."""
+    """One camera and one set of blocks {(x, z, y): color}, as its `shape` (worked out here unless
+    `built` passes it), sorted far to near once. `row` is the cursor's row: it splits the build into
+    that row and those behind it, and the rows in front, so the cursor can be drawn between them.
+    Without `detail`, floating blocks cast no shadow."""
 
-    def __init__(self, cam: Camera, blocks: dict, row=None, hazy: bool = True, detail: bool = True, floor=None):
-        self.cam, self.blocks, self.row, self.hazy, self.detail = cam, blocks, row, hazy, detail
+    def __init__(self, cam: Camera, blocks: dict, row=None, hazy: bool = True, detail: bool = True, floor=None, built=None,
+                 quarters: int = 0):
+        self.cam, self.blocks, self.row, self.hazy = cam, blocks, row, hazy
+        self.flip = quarters % 2      # an odd quarter turn swaps which cells are light, since a side is an even 16 cells
         self.floor = floor or screen_floor()
-        items = []
-        for (x, z, y), color in blocks.items():
-            items.append((cam.key(x, z, y), 0, (x, z, y, color)))
-            if detail and y and (x, z, y - 1) not in blocks:
-                ground = max((h + 1 for h in range(y) if (x, z, h) in blocks), default=0)
-                items.append((cam.key(x, z, ground - 0.5), 1, (x, z, ground, y, color)))
+        runs, floats, self.stacks = built or shape(blocks)
+        items = [(cam.key(*run[:3]), 0, run) for run in runs if run[5]]     # a run closed in on every side never shows
+        if detail:
+            items += [(cam.key(x, z, ground - 0.5), 1, (x, z, ground)) for x, z, ground in floats]
         items.sort(key=itemgetter(0))
         self.items, self._sun = items, None
         self._split()
@@ -198,15 +268,21 @@ class Painter:
         other._split()
         return other
 
+    def on(self, cam: Camera) -> "Painter":
+        """The same blocks through another camera, for the few things painted one at a time."""
+        other = copy.copy(self)
+        other.cam = cam
+        return other
+
+    def crossed(self, a, b) -> list:
+        """Where things go from one layer to the other as the cursor's row moves from `a` to `b`."""
+        lo, hi = sorted((a, b))
+        return [self._rect(item) for item in self.items if lo <= item[2][1] < hi]
+
     def _split(self):
         row, items = self.row, self.items
-        if row is None:
-            self.behind, self.on_row_items, self.in_front = items, [], []
-        else:
-            self.behind = [i for i in items if i[2][1] > row]
-            self.on_row_items = [i for i in items if i[2][1] == row]
-            self.in_front = [i for i in items if i[2][1] < row]
-        self.front_blocks = [i[2] for i in self.in_front if i[1] == 0]
+        self.back = items if row is None else [i for i in items if i[2][1] >= row]
+        self.in_front = [] if row is None else [i for i in items if i[2][1] < row]
 
     # ------------------------------------------------------------ colors
     def base(self, x, z, color) -> tuple:
@@ -218,153 +294,85 @@ class Painter:
         return tint(base, "#000000", self.cam.dark[normal])
 
     def tile(self, x, z) -> tuple:
-        color = rgb(self.floor[2] if (x + z) % 2 else self.floor[1])
-        return tint(color, P.TEXT, STRIPE_ALPHA / 255) if z == self.row else color
+        return rgb(self.floor[2] if (x + z + self.flip) % 2 else self.floor[1])
 
     # ------------------------------------------------------------ painting
     def paint_floor(self, surf):
         """The slab's sides, then the checkerboard: one fill for the floor, then every other tile."""
         cam, (_, tile, alt, slab_front, slab_side) = self.cam, self.floor
-        for n, poly in cam.box((0, -SLAB, 0), (WIDTH, 0, DEPTH), shown=lambda n: n is not TOP):
+        for n, poly in cam.box((0, -SLAB, 0), (WIDTH, 0, DEPTH), FACES[1:]):
             pygame.draw.polygon(surf, rgb(slab_front if n == (0, -1) else slab_side), poly)
         pygame.draw.polygon(surf, rgb(tile), [cam.at(0, 0, 0), cam.at(WIDTH, 0, 0), cam.at(WIDTH, 0, DEPTH), cam.at(0, 0, DEPTH)])
         for x in range(WIDTH):
-            for z in range(1 - x % 2, DEPTH, 2):
+            for z in range((1 + x + self.flip) % 2, DEPTH, 2):
                 pygame.draw.polygon(surf, rgb(alt), self._tile_poly(x, z))
 
     def floor_picture(self, size) -> pygame.Surface:
-        """The floor on its ground color, painted once per camera."""
-        if self.cam.floor is None:
-            self.cam.floor = pygame.Surface(size)
-            self.cam.floor.fill(rgb(self.floor[0]))
-            self.paint_floor(self.cam.floor)
-        return self.cam.floor
+        """The floor on its ground color, painted once per camera and checkerboard."""
+        if self.flip not in self.cam.floor:
+            pic = self.cam.floor[self.flip] = pygame.Surface(size)
+            pic.fill(rgb(self.floor[0]))
+            self.paint_floor(pic)
+        return self.cam.floor[self.flip]
 
-    def stripe(self) -> tuple:
-        """(picture, where) of the light wash over the cursor row's floor, kept by the camera."""
-        key = ("stripe", self.row)
-        if key not in self.cam.rects:
-            polys = [self._tile_poly(x, self.row) for x in range(WIDTH)]
-            rect = bbox([p for poly in polys for p in poly])
-            s = pygame.Surface(rect.size, pygame.SRCALPHA)
-            for poly in polys:
-                pygame.draw.polygon(s, (*rgb(P.TEXT), STRIPE_ALPHA), [(px - rect.x, py - rect.y) for px, py in poly])
-            self.cam.rects[key] = s, rect.topleft
-        return self.cam.rects[key]
-
-    def _tile_poly(self, x, z) -> list:
+    def _tile_poly(self, x, z, y=0) -> list:
         at = self.cam.at
-        return [at(x, 0, z), at(x + 1, 0, z), at(x + 1, 0, z + 1), at(x, 0, z + 1)]
+        return [at(x, y, z), at(x + 1, y, z), at(x + 1, y, z + 1), at(x, y, z + 1)]
 
     def paint_sun(self, surf, clip=None):
         """Each run of blocks' shadow on the floor, away from the light, in one see-through layer so overlaps don't darken twice."""
         area = clip or surf.get_rect()
-        shadows = [poly for poly, rect in self._sun_shadows() if rect.colliderect(area)]
+        shadows = [s for s in self._sun_shadows() if s[1].colliderect(area)]
         if shadows:
+            area = shadows[0][1].unionall([rect for _, rect in shadows[1:]]).clip(area)
             layer = pygame.Surface(area.size, pygame.SRCALPHA)
-            for poly in shadows:
-                pygame.draw.polygon(layer, (*SUN_INK, 255), [(px - area.x, py - area.y) for px, py in poly])
+            for poly, _ in shadows:
+                pygame.draw.polygon(layer, (*SUN_INK, 255), [(round(px) - area.x, round(py) - area.y) for px, py in poly])   # whole pixels first: a patch's offset must not move an edge
             layer.set_alpha(SUN_ALPHA)
             surf.blit(layer, area.topleft)
 
     def _sun_shadows(self) -> list:
-        """(polygon, rect) of each run of touching blocks' shadow, the camera remembering each run's."""
+        """(polygon, rect) of each stack's shadow, the camera remembering each one's."""
         if self._sun is None:
-            runs = []
-            for x, z, y in sorted(self.blocks):
-                if runs and runs[-1][:2] == (x, z) and runs[-1][3] == y - 1:
-                    runs[-1][3] = y
-                else:
-                    runs.append([x, z, y, y])
-            self._sun = [self.cam.sun_shadow(*run) for run in runs]
+            self._sun = [self.cam.sun_shadow(*stack) for stack in self.stacks]
         return self._sun
 
-    def paint(self, surf, items, clip=None, faded=frozenset(), stamp=False):
-        """Blocks and the shadows under floating ones, in paint order; with `clip`, only what touches it.
-        Columns in `faded` go see-through, replacing what is under them in `surf`. With `stamp`, solid
-        blocks are pictures the camera keeps, so a repaint redraws only blocks that changed."""
-        cam = self.cam
-        for _, kind, d in items:
-            if clip is not None and not (cam.block_rect(*d[:3]) if kind == 0 else self._shadow_rect(*d[:4])).colliderect(clip):
-                continue
-            alpha = FRONT_ALPHA if d[:2] in faded else 255
-            if kind == 1:
-                self.shadow(surf, *d, alpha=alpha if alpha < 255 else None)
-            elif stamp and alpha == 255:
-                picture = self._stamp(*d)
-                if picture:
-                    surf.blit(*picture)
-            else:
-                self.block(surf, *d, alpha=alpha)
+    def paint(self, surf, items, clip=None):
+        """Runs and the shadows under floating ones, in paint order; with `clip`, only what touches it."""
+        if clip is not None and clip.contains(surf.get_rect()):
+            clip = None
+        for item in items:
+            if clip is None or self._rect(item).colliderect(clip):
+                (self.shadow if item[1] else self.box)(surf, *item[2])
 
-    def _stamp(self, x, z, y, color):
-        """(picture, where) of a block as `block` draws it, kept by the camera until its look changes;
-        None for a block with no face to show, buried in the build."""
-        key = ("stamp", x, z, y, color, self._shown(x, z, y), z == self.row)
-        stamps = self.cam.rects
-        if key not in stamps:
-            if len(stamps) > STAMPS_KEPT:
-                stamps.clear()
-            rect = self.cam.block_rect(x, z, y)
-            s = pygame.Surface(rect.size, pygame.SRCALPHA)
-            stamps[key] = (s, rect.topleft) if self.block(s, x, z, y, color, at=rect.topleft) else None
-        return stamps[key]
+    def _rect(self, item) -> pygame.Rect:
+        _, kind, d = item
+        return self._shadow_rect(*d) if kind else self.cam.run_rect(*d[:4])
 
-    def _shown(self, x, z, y) -> tuple:
-        """For each of SIDES, whether that face of block (x, z, y) is clear of a neighbor."""
-        b = self.blocks
-        return ((x, z, y + 1) not in b, (x, z - 1, y) not in b, (x, z + 1, y) not in b,
-                (x - 1, z, y) not in b, (x + 1, z, y) not in b)
+    def after(self, x, z, y, rect) -> list:
+        """The items painted after a block at (x, z, y) that touch `rect`: all that can stand in front of it there."""
+        start = bisect.bisect_right(self.items, (self.cam.key(x, z, y), 2))
+        return [item for item in self.items[start:] if self._rect(item).colliderect(rect)]
 
-    def block(self, surf, x, z, y, color, alpha=255, solo=False, at=(0, 0)):
-        """A block's faces the eye can see, those against a neighbor left out; `solo` draws it on its own (the cursor's).
-        `at` is where `surf` sits in screen coordinates."""
-        base, ribbon = self.base(x, z, color), not solo and z == self.row
-        clear = self._shown(x, z, y)
-        seam = rgb(P.LINE) if alpha == 255 else (*rgb(P.LINE), alpha)
-        faces = self.cam.box((x, y, z), (x + 1, y + 1, z + 1), None if solo else lambda n: clear[SIDES.index(n)])
-        for n, poly in faces:
-            if at != (0, 0):
-                poly = [(px - at[0], py - at[1]) for px, py in poly]
-            color = self.face(base, n, y)
-            pygame.draw.polygon(surf, color if alpha == 255 else (*color, alpha), poly)
-            if ribbon and n in (TOP, (0, -1)):
-                band = tint(color, P.TEXT, RIBBON_ALPHA / 255)
-                p0, p1, p2, p3 = poly
-                edge = [(lerp(a[0], b[0], t), lerp(a[1], b[1], t)) for a, b, t in
-                        ((p0, p3, RIBBON_FROM), (p1, p2, RIBBON_FROM), (p1, p2, RIBBON_TO), (p0, p3, RIBBON_TO))]
-                pygame.draw.polygon(surf, band if alpha == 255 else (*band, alpha), edge)
-            if self.detail:
-                pygame.draw.polygon(surf, seam, poly, 1)
-        return bool(faces)
+    def box(self, surf, x, z, bottom, top, color, open=FACES, inset: float = 0.0):
+        """One column's blocks from bottom to top as one tall box in one color, `inset` cells smaller
+        all around: its `open` faces that the eye can see. Nearer columns paint over whatever they hide."""
+        base = self.base(x, z, color)
+        lo, hi = (x + inset, bottom + inset, z + inset), (x + 1 - inset, top + 1 - inset, z + 1 - inset)
+        for n, poly in self.cam.box(lo, hi, open):
+            pygame.draw.polygon(surf, self.face(base, n, top), poly)
 
-    def shadow(self, surf, x, z, ground, y, color, alpha=None):
-        """The square a floating block casts straight down onto what it would land on, and a line up to the block.
-        Mixed into what it covers, or with `alpha`, see-through onto a layer."""
-        at = self.cam.at
-        square = [at(x, ground, z), at(x + 1, ground, z), at(x + 1, ground, z + 1), at(x, ground, z + 1)]
+    def shadow(self, surf, x, z, ground, alpha=None, dark=1.0):
+        """The square a floating block casts straight down onto what it would land on, `dark` as dark as
+        it gets. Mixed into what it covers, or with `alpha`, see-through onto a layer."""
         below = self.blocks.get((x, z, ground - 1))
         under = self.face(self.base(x, z, below), TOP, ground - 1) if below else self.tile(x, z)
-        if alpha is None:
-            fill = tint(under, "#000000", SHADOW_ALPHA / 255)
-            stem = tint(tint(self.base(x, z, color), "#000000", STEM_DARKEN), art_room.CANVAS_BG, 1 - STEM_ALPHA / 255)
-        else:
-            fill = (0, 0, 0, min(alpha, SHADOW_ALPHA))
-            stem = (*tint(self.base(x, z, color), "#000000", STEM_DARKEN), min(alpha, STEM_ALPHA))
-        pygame.draw.polygon(surf, fill, square)
-        if y > ground:
-            pygame.draw.line(surf, stem, at(x + 0.5, ground, z + 0.5), at(x + 0.5, y, z + 0.5), 2)
+        fill = tint(under, "#000000", round(dark * SHADOW_ALPHA) / 255) if alpha is None else (0, 0, 0, min(alpha, SHADOW_ALPHA))
+        pygame.draw.polygon(surf, fill, self._tile_poly(x, z, ground))
 
-    def _shadow_rect(self, x, z, ground, y) -> pygame.Rect:
-        key = ("s", x, z, ground, y)
+    def _shadow_rect(self, x, z, ground) -> pygame.Rect:
+        key = ("s", x, z, ground)
         rects = self.cam.rects
         if key not in rects:
-            rects[key] = bbox([self.cam.at(x + a, ground, z + b) for a in (0, 1) for b in (0, 1)] + [self.cam.at(x + 0.5, y, z + 0.5)])
+            rects[key] = bbox(self._tile_poly(x, z, ground))
         return rects[key]
-
-    def frame_row(self, surf):
-        """An upright frame on the back of the cursor's row, floor to ceiling, wall to wall, so the row reads as one slice."""
-        if self.row is not None:
-            at, z = self.cam.at, self.row + 1
-            ink = tint(rgb(art_room.CANVAS_BG), P.TEXT, FRAME_ALPHA / 255)
-            pygame.draw.polygon(surf, ink, [at(0, 0, z), at(WIDTH, 0, z), at(WIDTH, HEIGHT, z), at(0, HEIGHT, z)], 2)

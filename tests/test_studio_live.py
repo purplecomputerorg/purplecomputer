@@ -123,12 +123,10 @@ def test_try_demos_start_in_the_mode_their_keys_are_for(live):
 
         live.setup("blocks")
         blocks = app.rooms["blocks"]
-        blocks.turn_around()
-        blocks._motion = None
-        blocks._tilt(True)
-        blocks._motion = None
+        blocks._aim(yaw=-108, tilt=60)
+        blocks._look = list(blocks._goal)
         live.demo()
-        assert not blocks._back and not blocks._peek
+        assert blocks._goal == [0, 30, 0]
     run(go())
 
 

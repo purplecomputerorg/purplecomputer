@@ -260,7 +260,7 @@ class ArtRoom(Room):
         self._cursor_x = self._cursor_y = 0
         self._paint_mode = True
         self._last_key_color = DEFAULT_BRUSH_COLOR
-        HINT_PICTURES.update({f"brush:{way}": lambda h, lift=lift: _brush_hint(h, self._last_key_color, lift)
+        HINT_PICTURES.update({f"brush:{way}": lambda g, px, h, lift=lift: _brush_hint(h, self._last_key_color, lift)
                               for way, lift in (("down", 0.0), ("up", 1.0))})
         self._last_key_char = ""
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord

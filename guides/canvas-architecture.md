@@ -78,6 +78,12 @@ never call `invalidate()` itself, or an idle screen redraws forever:
 a full 1366x768 frame costs 1.5 to 3 ms warm on a modern machine and stays
 under a keystroke's worth of time on 2006 hardware, because every glyph and
 emoji is rasterized once and blitted from a cache (`Gfx.text`, `Gfx.emoji`).
+The one exception is a room animating inside itself many times a second, like
+Blocks' falling blocks: `app.repaint(fn)` asks for a frame where only `fn`
+paints, returning the rect it changed, and only that rect goes to the screen.
+Anything drawn over the room (an overlay, a toast, a panel, the hold bar) or a
+full redraw already due turns it back into a whole frame. The boot log's
+frame summary counts these as `<room>:part`.
 
 Animations (hold rings, the Music key-change wave, note flashes) are timers
 that invalidate at their own rate and stop themselves. `Timers.intervals()`

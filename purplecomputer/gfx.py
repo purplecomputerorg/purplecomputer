@@ -241,6 +241,7 @@ class Gfx:
         self.all_caps = False
         self.dirty = True
         self.caret = None             # [rect, pixels without, pixels with, shown, since] for the frame on screen
+        self.patches = []             # room patches waiting to be drawn instead of a whole frame (app.repaint)
         self._fonts = {}
         self._cap_drops = {}
         self._text = _Cache()

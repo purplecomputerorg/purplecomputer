@@ -22,7 +22,7 @@ LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"
 TURN = "\U000F0467"   # nf-md-rotate_right
 MOVE_HINT = f"{LEFT} {UP} {DOWN} {RIGHT} move"
 CLEAN_HINT = f"{LEFT} {UP} {DOWN} {RIGHT} clean"
-PICK_HINT = "Type to pick {hints/rainbow.png}"  # while a tap of Shift waits: Shift+letter picks without painting
+PICK_HINT = "Type a letter: {pick}"  # while a tap of Shift waits: the letter's color becomes the brush ('[A] = ■', color_recipe)
 KID_MATH_REMAP = {"=": "+", "/": "÷", "*": "×"}
 KID_MATH_KEYS = {v: k for k, v in KID_MATH_REMAP.items() if k != "="}  # + is also its own key
 
@@ -818,7 +818,7 @@ def _chord_pad(t: str, px: int) -> int:
     return round(px * 0.2) if t == "+" else 0
 
 
-HINT_PICTURES: dict = {}  # {name} -> fn(height) -> surface, for a picture a room draws itself
+HINT_PICTURES: dict = {}  # {name} -> fn(g, px, height) -> surface, for a picture a room draws itself
 
 
 HINT_SCALE = {"hints/loop.png": 0.85}   # a picture that reads big beside its words
@@ -829,7 +829,7 @@ def hint_picture(g: Gfx, t: str, px: int, h: int | None = None) -> pygame.Surfac
     beside keycaps it's a bit taller than one, in a line of text (h) about the letters' height."""
     h = h or round(keycap_size(g, "X", px)[1] * 1.2 * HINT_SCALE.get(t, 1))
     if t in HINT_PICTURES:
-        return HINT_PICTURES[t](h)
+        return HINT_PICTURES[t](g, px, h)
     return g.image(t, h) if t.endswith(".png") else None
 
 
@@ -929,7 +929,7 @@ def _switch_widths(g: Gfx, px: int, key_name: str, labels: tuple) -> tuple:
 
 def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tuple, active: int) -> pygame.Rect:
     """'[key] One Two' in one pill, the active label on the selection plate; a picture label
-    off the plate is dimmed."""
+    off the plate is dimmed, unless it is the only one."""
     gap = px // 2
     widths, content = _switch_widths(g, px, key_name, labels)
     pill, pad = header_pill(g, px, content, right, cy, False)
@@ -941,7 +941,7 @@ def _draw_switch(g: Gfx, px: int, right: int, cy: int, key_name: str, labels: tu
         elif i == active:
             plate = pygame.Rect(x, pill.y + pad // 2, w, pill.h - pad)
             g.rect(P.PRIMARY, plate, radius=plate.h // 2)
-        else:
+        elif len(labels) > 1:
             pic = _faded(pic)
         if pic:
             g.surface.blit(pic, pic.get_rect(center=(x + w // 2, cy)))

@@ -22,14 +22,14 @@ BUILD, LOOK = "build", "look"
 # and a drop: (how high the falling block is, its key, the waiting bubble's height)), drawn as the room draws them.
 ROWS = {
     BUILD: ("Build", [
-        ("type", ["A", "Z"], ({}, [((1, 1, 0), 255)], (1, 1), 2.0, (1.45, "a", 3.0)), "each letter drops a block"),
+        ("type", ["A", "Z"], ({}, [((1, 1, 0), 255)], (1, 1), 2.3, (1.35, "a", 3.55)), "letters drop blocks"),
         ("move", ["arrows"], ({}, [((0, 1, 0), 70), ((1, 1, 0), 255)], (0.5, 1), 0.5), "move around the floor"),
         ("height", ["hold Shift", "+", UP, DOWN], ({(1, 1, 0): "a"}, [((1, 1, 1), 70), ((1, 1, 2), 255)], (1, 1), 1.6),
          "higher or lower"),
     ]),
     LOOK: ("Look around", [
-        ("turn", ["Tab"], "hints/turn.png", "tap: turn the build"),
-        ("look", ["hold Tab", "+", "arrows"], "hints/look.png", "keep holding, press arrows"),
+        ("turn", ["Tab"], "hints/turn.png", "tap to turn"),
+        ("look", ["hold Tab", "+", "arrows"], "hints/look.png", "hold, press arrows"),
     ]),
 }
 
@@ -73,37 +73,45 @@ class Guide:
                 surf.blit(pic, spot)
 
     def _column(self, g, name, size, lit):
-        """The title, then each row as one unit: its picture, its keys right under it and their words under
-        those. Rows stand further apart than anything inside one, so it's clear what goes together."""
+        """The title, then each row: its keys, its words right under them, and its picture just to their
+        right, the pictures lined up in one column. Rows stand further apart than anything inside one."""
         title, rows = ROWS[name]
         surf = pygame.Surface(size, pygame.SRCALPHA)
-        px = g.vh(1.6)
-        keys_h, words_h, gap = 2 * keycap_size(g, UP, round(px * 0.75))[1], g.line_height(round(px * 0.9)), round(px * 1.5)
-        top = round(px * 1.8)
-        side = min(round(px * 6), (size[1] - top - len(rows) * (keys_h + words_h + gap)) // len(rows))
-        y = top
+        px, gap = g.vh(1.75), g.vh(1.75)
+        small, kpx = round(px * 0.92), round(px * 0.85)      # words, and keys a size under them so pictures get the room
+        with g.drawing_on(pygame.Surface((1, 1))):
+            block = max(_keys(g, kpx, 0, 0, keys) for _, keys, _, _ in rows)
+        side = max(px * 3, min(round(px * 6.5), size[0] - block - gap))
+        key_h = keycap_size(g, "X", kpx)[1]
         with g.drawing_on(surf):
-            g.draw_text(title, px, 0, 0, "sans-bold", P.MUTED, anchor="topleft")
+            y = g.draw_text(title, round(px * 1.25), 0, 0, "mono-bold", P.MUTED, anchor="topleft").bottom + round(gap * 1.2)
             for row, keys, pic, words in rows:
-                layer = pygame.Surface((size[0], side + keys_h + words_h), pygame.SRCALPHA)
+                rise = keycap_size(g, UP, round(kpx * 0.75))[1] + 2 if "arrows" in keys else 0     # Up stands over the rest
+                with g.drawing_on(pygame.Surface((1, 1))):
+                    words_h = g.draw_markup(words, small, 0, 0, "mono", P.MUTED, block)
+                text_h = rise + key_h + gap // 2 + words_h
+                h = max(side, text_h)
+                layer = pygame.Surface((size[0], h), pygame.SRCALPHA)
                 with g.drawing_on(layer):
+                    top = (h - text_h) // 2
+                    _keys(g, kpx, 0, top + rise + key_h // 2, keys)
+                    g.draw_markup(words, small, 0, top + rise + key_h + gap // 2, "mono", P.MUTED, block)
                     picture = g.image(pic, round(side * 0.8)) if isinstance(pic, str) else _scene(side, *pic)
-                    layer.blit(picture, picture.get_rect(midleft=(0, side // 2)))
-                    _keys(g, px, 0, side + keys_h // 2, keys)
-                    g.draw_text(words, round(px * 0.9), 0, side + keys_h, "sans", P.MUTED, anchor="topleft")
+                    layer.blit(picture, picture.get_rect(center=(block + gap + side // 2, h // 2)))
                 layer.set_alpha(LIT if row == lit else QUIET)
                 surf.blit(layer, (0, y))
-                y += layer.get_height() + gap
+                y += h + round(gap * 1.6)
         return surf
 
 
 def _keys(g, px, x, cy, keys) -> int:
-    """A row's keys left to right from x: names, "+", the arrow keys, sticker-colored letters. Returns the right edge."""
+    """A row's keys left to right from x, all on one line centered at cy: names, "+", the arrow keys (their
+    bottom row on that line, Up over it), sticker-colored letters. Returns the right edge."""
     for part in keys:
         if part == "arrows":
-            x = _cluster(g, round(px * 0.75), x, cy) + px // 2
+            x = _cluster(g, round(px * 0.75), x, cy) + px // 3
         elif part == "+":
-            x = g.draw_text("+", px, x, cy, "sans", P.MUTED, anchor="midleft").right + px // 3
+            x = g.draw_text("+", px, x, cy, "mono", P.MUTED, anchor="midleft").right + px // 3
         elif len(part) == 1 and part.isalpha():
             x = draw_key(g, part, px, x, cy, fill=get_key_color(part.lower()), ink=art_room.CANVAS_BG).right + px // 3
         else:
@@ -112,12 +120,12 @@ def _keys(g, px, x, cy, keys) -> int:
 
 
 def _cluster(g, px, x, cy) -> int:
-    """The arrow keys as they sit on the keyboard, Up over Down. Returns their right edge."""
+    """The arrow keys as they sit on the keyboard, Left, Down and Right centered on cy, Up over Down. Returns their right edge."""
     w, h = keycap_size(g, UP, px)
-    gap = max(2, px // 6)
-    draw_key(g, UP, px, x + w + gap, cy - (h + gap) // 2)
+    gap = 2
+    draw_key(g, UP, px, x + w + gap, cy - h - gap)
     for i, key in enumerate((LEFT, DOWN, RIGHT)):
-        draw_key(g, key, px, x + i * (w + gap), cy + (h + gap) // 2)
+        draw_key(g, key, px, x + i * (w + gap), cy)
     return x + 3 * w + 2 * gap
 
 

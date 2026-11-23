@@ -23,7 +23,7 @@
 ]
 #gap
 #room(4, [Blocks])[
-  Every letter stacks a 3D block. #key("Tab") turns the build. Hold #key("Tab") with the arrows to look around.
+  Every letter stacks a 3D block. Arrows move around the floor. Hold #key("Tab") with the arrows to look around.
 ]
 
 #gap

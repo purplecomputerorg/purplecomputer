@@ -689,7 +689,7 @@ class BlocksRoom(Room):
         g.set_clip(None)
 
     def _guide_spots(self) -> dict:
-        return columns(self._cam, self._composed.get_size(), self.code_panel is not None, self.app.g.vw(MIN_W))
+        return columns(self._composed.get_size(), self.code_panel is not None, self.app.g.vw(MIN_W), HOVER + 1, TILTS)
 
     def _lit_row(self):
         """The guide's row for the key held now, if any."""
@@ -826,7 +826,7 @@ class BlocksRoom(Room):
         detailed = len(self._blocks) <= self._turn_detail_limit
         self._built = self._built or shape(self._blocks)
         painter = Painter(cam, self._blocks, detail=detailed, built=self._built)
-        if self._cam is not None:
+        if self._composed is not None:
             self._guide.paint(g, g.surface.subsurface(area), self._guide_spots(), self._lit_row())
         painter.paint_floor(g.surface)
         if detailed:

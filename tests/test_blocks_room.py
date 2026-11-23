@@ -1040,3 +1040,17 @@ def test_in_the_code_line_tab_held_with_an_arrow_looks_around_and_a_tap_still_tu
         await room.handle(ControlAction(action="tab", is_down=False))
         assert room._goal[0] == -90                            # a tap: on to the next side, clockwise
     run(go())
+
+
+def test_the_guide_holds_still_however_the_view_turns_or_tilts():
+    async def go():
+        app, room = _blocks()
+        app._draw()
+        spots = room._guide_spots()
+        assert set(spots) == {"build", "look"}
+        for yaw, tilt in ((18, 30), (45, 15), (-36, 75), (90, 60)):
+            room._aim(yaw=yaw, tilt=tilt)
+            _settle(room)
+            app._draw()
+            assert room._guide_spots() == spots, (yaw, tilt)
+    run(go())

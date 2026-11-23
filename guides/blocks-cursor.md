@@ -71,7 +71,7 @@ The square floor leaves the room's sides empty, and the header alone didn't teac
 - **Quiet on purpose.** No panel or border, half strength, a small muted title and one line of words under each row for the grown-up; the pictures carry it for a kid. It is painted into the ground layer, so any block standing over it covers it.
 - **It answers back.** Holding a row's key brings that row up to full strength: Tab lights the look row the moment it is down, before an arrow, which is when "keep holding, press arrows" matters.
 - **The code line** takes the letters, arrows and Shift, so Build goes; Look stays, and Tab held with the arrows looks around there too. A tap of Tab is decided on release: the code line takes it (a suggested word) if it wants it, else the build turns.
-- **A side too narrow** (`MIN_W`) shows no column.
+- **They hold still.** The columns are placed once per screen size, outside the widest the floor ever gets (turned to a diagonal, at every tilt), so turning or tilting never moves them and the floor never reaches them. A side too narrow for that (`MIN_W`) shows no column.
 
 ## Tried and dropped
 

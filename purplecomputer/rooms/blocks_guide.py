@@ -2,6 +2,9 @@
 how to look around on the right, each row the keys beside what they do. It is painted under the build,
 at half strength, and a row comes up to full while its key is held. guides/blocks-cursor.md"""
 
+import math
+from functools import lru_cache
+
 import pygame
 
 from .. import palette as P
@@ -9,7 +12,7 @@ from ..gfx import rgb
 from ..palette import get_key_color
 from ..ui import DOWN, LEFT, RIGHT, UP, draw_key, keycap_size
 from . import art_room
-from .blocks_view import REST_PITCH, Camera, Painter
+from .blocks_view import DEPTH, REST_PITCH, WIDTH, Camera, Painter
 
 QUIET, LIT = 150, 255          # a row's alpha, and while its key is held
 MIN_W = 13                     # vw: a side narrower than this shows no column
@@ -31,15 +34,26 @@ ROWS = {
 }
 
 
-def columns(cam, size, code: bool, min_w: int) -> dict:
-    """{column: rect} in the layer's pixels, in the sides the floor leaves free: no Build while the code
-    line takes the letters and arrows."""
-    xs = [cam.at(x, y, z)[0] for x in (0, 16) for z in (0, 16) for y in (0, 1)]
+def columns(size, code: bool, min_w: int, top: float, tilts: tuple) -> dict:
+    """{column: rect} in the layer's pixels, in the sides the floor leaves free at every angle it can be
+    seen from, so the columns hold still while the view moves: no Build while the code line takes the
+    letters and arrows."""
     w, h = size
     pad = round(h * 0.03)
-    left, right = round(min(xs)) - 2 * pad, round(max(xs)) + 2 * pad
+    left, right = _floor_span(size, top, tilts)
+    left, right = left - 2 * pad, right + 2 * pad
     spots = {BUILD: pygame.Rect(pad, pad, left - pad, h - 2 * pad), LOOK: pygame.Rect(right, pad, w - right - pad, h - 2 * pad)}
     return {k: r for k, r in spots.items() if r.w >= min_w and not (code and k == BUILD)}
+
+
+@lru_cache(maxsize=4)
+def _floor_span(size, top: float, tilts: tuple) -> tuple:
+    """How far left and right the floor ever reaches on screen: turned to a diagonal, where it is widest,
+    at each tilt the view can stop at."""
+    xs = [Camera(yaw, math.radians(tilt), *size, top=top, fit=yaw).at(x, y, z)[0]
+          for yaw in (0.0, math.pi / 4) for tilt in range(tilts[0], tilts[1] + 1, 15)
+          for x in (0, WIDTH) for z in (0, DEPTH) for y in (0, 1)]
+    return round(min(xs)), round(max(xs))
 
 
 class Guide:

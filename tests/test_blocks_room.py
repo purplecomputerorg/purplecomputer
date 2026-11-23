@@ -12,6 +12,7 @@ reaches the room with 4."""
 
 import math
 
+import random
 import pygame
 
 from purplecomputer.harness import make_app, press, run, type_text
@@ -662,6 +663,54 @@ def test_each_floor_cell_keeps_its_shade_from_every_side():
                 vx, vz = room._view(x, z)
                 spot = tuple(map(round, room._cam.at(vx + 0.5, 0, vz + 0.5)))
                 assert tuple(room._composed.get_at(spot)[:3]) == world.tile(x, z), (side, x, z)
+    run(go())
+
+
+def test_a_frame_of_falling_blocks_paints_only_around_them_and_matches_a_whole_frame(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        room._blocks.update({(x, 3, y): "#ff0000" for x in range(WIDTH) for y in range(3)})
+        room._z = 6
+        room._changed()
+        await type_text(app, "ab")
+        await press(app, "right")
+        await type_text(app, "s")
+        app._draw()
+        for step in (0.3, 0.6, 0.9):
+            now[0] = 100.0 + DROP_S * step
+            app.g.dirty, app.g.patches = False, []
+            room._fall_tick()
+            assert not app.g.dirty and len(app.g.patches) == 1
+            spot = app.g.patches[0]()
+            assert spot and spot.w * spot.h < app.g.surface.get_width() * app.g.surface.get_height() // 4
+            part = pygame.image.tobytes(app.g.surface, "RGB")
+            app._draw()
+            assert part == pygame.image.tobytes(app.g.surface, "RGB"), step
+    run(go())
+
+
+def test_layers_kept_up_piece_by_piece_match_a_fresh_paint():
+    async def go():
+        app, room = _blocks()
+        r = random.Random(3)
+        for _ in range(120):
+            await press(app, r.choice(["a", "s", "a", "backspace", "left", "right", "up", "down"]))
+            while room._falls and r.random() < 0.7:
+                for pos in list(room._falls):
+                    room._falls[pos] = (0.0, room._falls[pos][1])
+                room._fall_tick()
+            app._draw()
+        while room._falls:
+            for pos in list(room._falls):
+                room._falls[pos] = (0.0, room._falls[pos][1])
+            room._fall_tick()
+        app._draw()
+        kept = pygame.image.tobytes(room._composed, "RGB")
+        room._scene = None
+        app._draw()
+        assert kept == pygame.image.tobytes(room._composed, "RGB")
     run(go())
 
 

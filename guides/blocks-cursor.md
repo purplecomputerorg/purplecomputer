@@ -20,7 +20,7 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 - **A wire box is the edges of the faces the eye sees**, so it reads as a cube. One line around the cell's outline read as a flat, odd polygon.
 - **The marks are painted three times the size and scaled down** (`_smooth`): pygame's wide lines have hard, stepped edges, and on the only lines on screen that shows.
 - **Arrowhead over the rows in front** at the lowest point of the line they leave in view, when they hide its end.
-- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size. Where something stands in front, the block is drawn again over it, faint (`GHOST_ALPHA`), so its fall still shows behind a wall.
+- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size, and it repaints only where the falling blocks were and are, plus the cursor if they touch it (`_fall_patch`, through `app.repaint`). Where something stands in front, the block is drawn again over it, faint (`GHOST_ALPHA`), so its fall still shows behind a wall.
 
 While the view turns the cursor is drawn too, in its place among the blocks.
 
@@ -81,3 +81,11 @@ Tried and dropped:
 - **Cross-hatching on the row:** drawn flat on the screen rather than on the faces, so it reads as the blocks' own texture.
 - **Thin solid stripes on the row:** read as scanlines, a rendering glitch rather than a mark.
 - **A dashed line on the row:** read as a selection mark. **A soft band across the row's blocks** was kept for a while, then dropped with the seams.
+
+## Keeping it fast on old laptops
+
+- **A block landing reworks only its column and the four beside it**, whose faces it hides or shows (`_shaped`, `column_shape`), and repaints only around that column.
+- **The cursor moving to another row** repaints only what crosses from behind it to in front of it, or back (`Painter.crossed`), not the whole build.
+- **A run of blocks closed in on every side is never painted**, at rest or turning: in a crowded build that is about half of them.
+- **Falling blocks repaint only around themselves** (above).
+- **The boot log's frame summary** names the room each frame came from, so a slow laptop's log shows where its time goes.

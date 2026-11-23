@@ -39,7 +39,7 @@ from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
-from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox, shape
+from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox, column_shape, joined, shape
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 REST_TILT = round(math.degrees(REST_PITCH))
@@ -69,9 +69,11 @@ SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 # Where typing goes next, by way: one step along an axis, as far as the wall or the ceiling.
 WAYS = {"right": ("x", 1), "left": ("x", -1), "up": ("z", 1), "down": ("z", -1), RISE: ("y", 1), SINK: ("y", -1)}
 TURN_PIC = "hints/turn.png"
-LOOK_HINT = "{hold Tab}+" + "".join(f"{{{a}}}" for a in (LEFT, UP, DOWN, RIGHT)) + " {hints/look.png}"
+LOOK_PIC = "hints/look.png"
+LOOK_HINT = f"{{hold Tab}} + {LEFT} {UP} {DOWN} {RIGHT} {{{LOOK_PIC}}}"
 HINT = "Type to build!"
 SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
+HEIGHT_HINT = f"{{hold Shift}} + {UP} {DOWN} {{hints/up_down.png}}"
 
 
 def turned(x: int, z: int, quarters: int) -> tuple:
@@ -130,6 +132,8 @@ class BlocksRoom(Room):
         self._built = None             # the build's shape for a moving view, until a block changes
         self._scene = self._front = self._composed = None
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
+        self._seen, self._cols = {}, {}  # the landed blocks in view coordinates, and each view column's shape
+        self._fell: list = []          # where the falling blocks were drawn last, in the layers' pixels
         self._falls: dict = {}         # blocks still falling into place, kept out of the layers: (when it was let go, from which level)
         self._hide: dict = {}          # for each of those, (the painter's items, the ones that can stand in front of it on its way)
         self._fall_timer = None
@@ -247,12 +251,13 @@ class BlocksRoom(Room):
 
     def _fall_tick(self):
         now = time.monotonic()
-        for pos, (since, _) in list(self._falls.items()):
-            landed = now - since >= DROP_S
-            if landed:
-                del self._falls[pos]
-                self._hide.pop(pos, None)
-            self._changed(pos, landed)
+        landed = [pos for pos, (since, _) in self._falls.items() if now - since >= DROP_S]
+        for pos in landed:
+            del self._falls[pos]
+            self._hide.pop(pos, None)
+            self._changed(pos)
+        if not landed:
+            self.app.repaint(self._fall_patch)
         if not self._falls:
             self._fall_timer.stop()
             self._fall_timer = None
@@ -429,7 +434,7 @@ class BlocksRoom(Room):
     def _tab_hint(self) -> str:
         """The arrows that look around while Tab is down: at a tilt stop, without the one that has nowhere left to go."""
         stuck = {TILTS[0]: DOWN, TILTS[1]: UP}.get(self._goal[1])
-        return " ".join(a for a in (LEFT, UP, DOWN, RIGHT) if a != stuck) + f" {{{TURN_PIC}}}"
+        return " ".join(a for a in (LEFT, UP, DOWN, RIGHT) if a != stuck) + f" {{{LOOK_PIC}}}"
 
     def _aim(self, yaw=None, tilt=None):
         """Set where the view is headed; it eases there from wherever it is now, even mid-move."""
@@ -585,27 +590,52 @@ class BlocksRoom(Room):
         return {(*self._view(x, z), y): color for (x, z, y), color in self._blocks.items()
                 if falling or (x, z, y) not in self._falls}
 
+    def _shaped(self, fresh: bool) -> tuple:
+        """The landed blocks in view coordinates and their shape: all of it when `fresh`, else only the
+        columns that changed and those beside them, whose faces they hide or show."""
+        if fresh:
+            self._seen, self._cols = self._view_blocks(), {}
+            redo = {k[:2] for k in self._seen}
+        else:
+            for vx, vz in self._dirty:
+                x, z = self._world(vx, vz)
+                for y in range(HEIGHT):
+                    if (x, z, y) in self._blocks and (x, z, y) not in self._falls:
+                        self._seen[(vx, vz, y)] = self._blocks[(x, z, y)]
+                    else:
+                        self._seen.pop((vx, vz, y), None)
+            redo = {(vx + dx, vz + dz) for vx, vz in self._dirty for dx, dz in ((0, 0), *STEPS.values())}
+        for col in redo:
+            self._cols[col] = column_shape(self._seen, *col)
+        return self._seen, joined(self._cols[col] for col in sorted(self._cols))
+
     def _layers(self, size):
-        """Bring the cached layers up to date: everything for a new camera, the scene for a new
-        cursor row, else only around the columns whose blocks changed."""
+        """Bring the cached layers up to date: everything for a new camera, else only around the columns
+        whose blocks changed and what crossed the cursor's row as it moved."""
         cam = resting_camera(self._off(), self._goal[1], *size)
-        row = self._view(self._x, self._z)[1]
+        row, was = self._view(self._x, self._z)[1], self._painter and self._painter.row
         fresh = self._scene is None or cam is not self._cam
-        if not (fresh or self._dirty or row != self._painter.row):
+        if not (fresh or self._dirty or row != was):
             return
-        whole = fresh or row != self._painter.row
-        moved_only = not fresh and not self._dirty
-        self._painter = self._painter.on_row(row) if moved_only else Painter(cam, self._view_blocks(), row=row, quarters=self._side)
+        if fresh or self._dirty:
+            blocks, built = self._shaped(fresh)
+            self._painter = Painter(cam, blocks, row=row, quarters=self._side, built=built)
+        else:
+            self._painter = self._painter.on_row(row)
         if fresh:
             self._cam = cam
             self._land, self._scene, self._composed = (pygame.Surface(size) for _ in range(3))
             self._front = pygame.Surface(size, pygame.SRCALPHA)
-        rects = [cam.column_rect(x, z) for x, z in self._dirty] or [self._scene.get_rect()]
-        dirty = self._scene.get_rect() if fresh else rects[0].unionall(rects[1:])
-        if fresh or self._dirty:
-            self._paint_ground(dirty)
+            rects = [self._scene.get_rect()]
+        else:
+            rects = [cam.column_rect(x, z) for x, z in self._dirty]
+        if rects:
+            self._paint_ground(rects[0].unionall(rects[1:]))
+        if not fresh and was is not None and row != was:
+            rects += self._painter.crossed(was, row)
         self._dirty = set()
-        self._repaint(self._scene.get_rect() if whole else dirty)
+        if rects:
+            self._repaint(rects[0].unionall(rects[1:]))
 
     def _paint_ground(self, rect):
         """The floor and the sun's shadows on it: they change with blocks, never with the cursor."""
@@ -663,13 +693,15 @@ class BlocksRoom(Room):
             g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
             self._draw_moving(g, area, *moving)
             g.surface.set_clip(None)
+        shift = self.app._keyboard_state_machine.shift_active
         self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._tab is False else 1,
                                         self._color, wheel=None if self.code_panel else wheel_chip(self),
-                                        after=(LOOK_HINT, self._tab is True), reserve=self.header_reserve(g))
+                                        chips=((HEIGHT_HINT, shift),), after=(LOOK_HINT, self._tab is True),
+                                        reserve=self.header_reserve(g))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
-            hint = SHIFT_HINT if self.app._keyboard_state_machine.shift_active else HINT if self._tab is None else self._tab_hint()
+            hint = SHIFT_HINT if shift else HINT if self._tab is None else self._tab_hint()
             draw_key_hint(g, hint, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
 
@@ -690,16 +722,40 @@ class BlocksRoom(Room):
                 out.append((*self._view(x, z), y + round((top - y) * left * 4) / 4, y, top, self._blocks[(x, z, y)]))
         return sorted(out, key=lambda f: cam.key(*f[:3]))
 
+    def _fall_patch(self):
+        """A frame of the falls alone, for app.repaint: the layers again where the blocks were and are now,
+        the cursor over them if they touch it, then the blocks. Returns the screen rect it painted."""
+        if self._moving() is not None or self._scene is None or self._dirty:
+            return self.app.invalidate()
+        g, area = self.app.g, pygame.Rect(self._origin, self._composed.get_size())
+        sub = g.surface.subsurface(area)
+        rects = self._fell + [self._cam.run_rect(vx, vz, h, h) for vx, vz, h, *_ in self._falling()]
+        if not rects:
+            return None
+        spot = rects[0].unionall(rects[1:]).clip(sub.get_rect())
+        sub.blit(self._composed, spot, spot)
+        whole = self._cursor_boxes(*self._view(self._x, self._z))[0]
+        if spot.colliderect(whole):
+            self._draw_cursor(g, area)
+            spot = spot.union(whole)
+        self._draw_falls(sub)
+        g.surface.set_clip(spot.move(area.topleft))
+        self._draw_hold_badge(g, area)
+        g.surface.set_clip(None)
+        return spot.move(area.topleft)
+
     def _draw_falls(self, sub):
         """The falling blocks over the layers, each behind what the layers hold in front of it: that
         is found once a fall, and again when the blocks change, so a frame costs the same in any build."""
         cam, painter = self._cam, self._painter
+        self._fell = []
         for vx, vz, h, y, top, color in self._falling():
             pos = (*self._world(vx, vz), y)
             kept = self._hide.get(pos)
             if not kept or kept[0] is not painter.items:
                 kept = self._hide[pos] = painter.items, painter.after(vx, vz, y, cam.run_rect(vx, vz, y, top))
             rect = cam.run_rect(vx, vz, h, h)
+            self._fell.append(rect)
             sub.set_clip(rect)
             painter.box(sub, vx, vz, h, h, color)
             if kept[1]:

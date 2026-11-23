@@ -75,10 +75,31 @@ def shape(blocks: dict) -> tuple:
     the faces with no blocks all along them, the only ones that can show. Floats are the shadows under
     runs with air below them, (x, z, ground); stacks are a column's touching blocks whatever their
     colors, (x, z, bottom, top), for the sun's shadows."""
+    cols: dict = {}
+    for x, z, y in blocks:
+        cols.setdefault((x, z), []).append(y)
+    return joined(column_shape(blocks, x, z, sorted(ys)) for (x, z), ys in sorted(cols.items()))
+
+
+def joined(parts) -> tuple:
+    """Columns' shapes as one build's."""
     runs, floats, stacks = [], [], []
-    for x, z, y in sorted(blocks):
+    for r, f, s in parts:
+        runs += r
+        floats += f
+        stacks += s
+    return runs, floats, stacks
+
+
+def column_shape(blocks: dict, x: int, z: int, ys=None) -> tuple:
+    """shape() of one column, its blocks at heights `ys` (bottom up), or found by looking. Its runs' faces
+    depend on the columns beside it too."""
+    if ys is None:
+        ys = [y for y in range(HEIGHT) if (x, z, y) in blocks]
+    runs, floats, stacks = [], [], []
+    for y in ys:
         color = blocks[(x, z, y)]
-        touching = bool(stacks) and stacks[-1][:2] == [x, z] and stacks[-1][3] == y - 1
+        touching = bool(stacks) and stacks[-1][3] == y - 1
         if touching and runs[-1][4] == color:
             runs[-1][3] = y
         else:
@@ -87,8 +108,9 @@ def shape(blocks: dict) -> tuple:
             stacks[-1][3] = y
             continue
         if y:
-            floats.append((x, z, stacks[-1][3] + 1 if stacks and stacks[-1][:2] == [x, z] else 0))
+            floats.append((x, z, stacks[-1][3] + 1 if stacks else 0))
         stacks.append([x, z, y, y])
+
     def bare(x, z, bottom, top, color):
         levels = range(bottom, top + 1)
         return tuple(n for n in FACES if ((x, z, top + 1) not in blocks if n is TOP else
@@ -228,7 +250,7 @@ class Painter:
         self.flip = quarters % 2      # an odd quarter turn swaps which cells are light, since a side is an even 16 cells
         self.floor = floor or screen_floor()
         runs, floats, self.stacks = built or shape(blocks)
-        items = [(cam.key(*run[:3]), 0, run) for run in runs]
+        items = [(cam.key(*run[:3]), 0, run) for run in runs if run[5]]     # a run closed in on every side never shows
         if detail:
             items += [(cam.key(x, z, ground - 0.5), 1, (x, z, ground)) for x, z, ground in floats]
         items.sort(key=itemgetter(0))
@@ -247,6 +269,11 @@ class Painter:
         other = copy.copy(self)
         other.cam = cam
         return other
+
+    def crossed(self, a, b) -> list:
+        """Where things go from one layer to the other as the cursor's row moves from `a` to `b`."""
+        lo, hi = sorted((a, b))
+        return [self._rect(item) for item in self.items if lo <= item[2][1] < hi]
 
     def _split(self):
         row, items = self.row, self.items

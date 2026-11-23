@@ -22,19 +22,21 @@ class FrameStats:
     def _reset(self, now: float):
         self._since = now
         self._key_at = None
-        self._draw, self._present, self._key = [], [], []
+        self._draw, self._present, self._key, self._rooms = [], [], [], {}
 
     def key(self):
         if self._key_at is None:
             self._key_at = time.monotonic()
 
-    def frame(self, start: float, drawn: float, presented: float):
+    def frame(self, start: float, drawn: float, presented: float, room: str = ""):
         self._draw.append(drawn - start)
+        self._rooms[room] = self._rooms.get(room, 0) + 1
         self._present.append(presented - drawn)
         if self._key_at is not None:
             self._key.append(presented - self._key_at)
             self._key_at = None
         if presented - self._since >= INTERVAL:
-            boot_log.heartbeat(f"frames {len(self._draw)} at {self._g.w}x{self._g.h}: "
+            rooms = " ".join(f"{name or '-'} {n}" for name, n in self._rooms.items())
+            boot_log.heartbeat(f"frames {len(self._draw)} ({rooms}) at {self._g.w}x{self._g.h}: "
                                f"draw {_ms(self._draw)}, present {_ms(self._present)}, key to screen {_ms(self._key)}")
             self._reset(presented)

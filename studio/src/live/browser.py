@@ -203,7 +203,7 @@ def _patch_speech():
         prepared = tts._prepare_text(text)
         if cached := tts._get_cached(prepared, tts.VOICE_NATURAL):
             return cached
-        voice = await purplePiper(prepared)
+        voice = await purplePiper(tts._with_names(prepared))
         if not voice:  # JS null arrives as JsNull, which is falsy
             return None
         fd, wav = tempfile.mkstemp(suffix=".wav")

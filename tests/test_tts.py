@@ -46,6 +46,24 @@ class TestPreparedText:
         assert tts._prepare_text("Ready!") == tts._prepare_text("ready!!!")
 
 
+class TestSpokenNames:
+    @pytest.mark.parametrize("text, spoken", [
+        ("hi cece.", "hi [[sˈiːsiː.]]"), ("cece and mae", "[[sˈiːsiː]] and [[mˈeɪ]]"),
+        ("cece's cat", "cece's cat"), ("ceceface", "ceceface"),
+    ])
+    def test_a_listed_name_becomes_its_phonemes(self, text, spoken):
+        assert tts._with_names(text) == spoken
+
+    def test_every_phoneme_is_one_the_voice_has(self):
+        pytest.importorskip("piper")
+        if tts.find_voice_model() is None:
+            pytest.skip("no English voice model here")
+        voice = tts.load_voice()
+        known = voice.config.phoneme_id_map
+        assert {(name, p) for name, ipa in tts.SPOKEN_NAMES.items() for p in ipa if p not in known} == set()
+        assert voice.phonemize(tts._with_names("say cece, then leah")) == [list("sˈeɪ sˈiːsiː, ðˈɛn lˈiːə")]
+
+
 class TestVoiceClipLookup:
     def test_short_text(self):
         # Just must not raise; clip may or may not exist locally

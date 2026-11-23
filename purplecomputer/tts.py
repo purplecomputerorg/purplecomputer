@@ -100,6 +100,16 @@ SYSTEM_COLORS = [
 ]
 
 
+_NAMES_TEXT = Path(__file__).with_name("names_spoken.txt").read_text(encoding="utf-8")
+SPOKEN_NAMES = dict(line.split("\t") for line in _NAMES_TEXT.splitlines() if not line.startswith("#"))
+
+
+def _with_names(prepared_text: str) -> str:
+    """Names espeak says wrong become Piper raw phonemes; a mark after one goes inside, or Piper drops it."""
+    return re.sub(r"(?<![\w'])([^\W\d_]+)(?![\w'])([.,?!:;]?)",
+                  lambda m: f"[[{SPOKEN_NAMES[m[1]]}{m[2]}]]" if m[1] in SPOKEN_NAMES else m[0], prepared_text)
+
+
 def _fix_pronunciation(text: str) -> str:
     """Replace words Piper mispronounces with phonetic respellings."""
     import re
@@ -255,7 +265,8 @@ _MAX_CACHE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 _SYNTH_SIGNATURES = {
-    VOICE_NATURAL: repr((VOICE_MODEL, VOICE_SPEAKER, VOICE_NOISE, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB)),
+    VOICE_NATURAL: repr((VOICE_MODEL, VOICE_SPEAKER, VOICE_NOISE, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB,
+                         hashlib.sha256(_NAMES_TEXT.encode()).hexdigest()[:12])),
     VOICE_QUICK: repr((FLITE_VOICE, _FLITE_STRETCH, SPEECH_RMS_DB, SPEECH_CEILING_DB)),
 }
 _LANG_ENGINE = "natural:"  # + a language pack's Piper model
@@ -598,7 +609,8 @@ def synthesize_to_file(voice, prepared_text: str, wav_path: str, model: str = VO
     """Shared by runtime speech and the clip scripts so the two can't drift. Serialized: espeak's phonemizer is not thread-safe."""
     config = _make_synth_config(model)
     with _synthesis_lock:
-        audio = list(_synthesize_with_word_gaps(voice, prepared_text, config))
+        text = _with_names(prepared_text) if model == VOICE_MODEL else prepared_text
+        audio = list(_synthesize_with_word_gaps(voice, text, config))
     if not audio:
         return False
     import numpy as np

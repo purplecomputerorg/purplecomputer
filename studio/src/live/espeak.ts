@@ -63,8 +63,24 @@ export async function espeak(base: string, voice: string): Promise<Espeak> {
   return e;
 }
 
-// One phoneme list per sentence, as PiperVoice.phonemize.
+// One phoneme list per sentence, as PiperVoice.phonemize, [[ raw phonemes ]] included (tts._with_names).
 export function sentences(espeak: Espeak, text: string): string[][] {
+  const out: string[][] = [];
+  const parts = text.split(/(\[\[.*?\]\])/);
+  parts.forEach((part, i) => {
+    if (part.startsWith("[[")) {
+      if (!out.length) out.push([]);
+      out[out.length - 1].push(...(parts[i - 1]?.endsWith(" ") ? [" "] : []), ...part.slice(2, -2).trim(), ...(parts[i + 1]?.startsWith(" ") ? [" "] : []));
+    } else {
+      const said = spoken(espeak, part);
+      if (parts[i - 1]?.startsWith("[[") && said.length) out[out.length - 1].push(...said.shift()!);
+      out.push(...said);
+    }
+  });
+  return out.filter((s) => s.length);
+}
+
+function spoken(espeak: Espeak, text: string): string[][] {
   const out: string[][] = [];
   let cur: string[] = [];
   for (const line of (espeak.ccall("phonemize", "string", ["string"], [text]) as string).split("\n").filter(Boolean)) {

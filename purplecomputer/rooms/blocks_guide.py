@@ -25,8 +25,9 @@ ROWS = {
     BUILD: ("Build", [
         ("type", ["A", "Z"], ({}, [((1, 1, 0), 255)], (1, 1), 2.3, (1.35, "a", 3.55)), "letters drop blocks"),
         ("move", ["arrows"], ({}, [((0, 1, 0), 70), ((1, 1, 0), 255)], (0.5, 1), 0.5), "move around the floor"),
-        ("height", ["hold Shift", "+", UP, DOWN], ({}, [((1, 1, 2), 255)], (1, 1), 1.4, None, 2), "raise the floor"),
-        ("ground", ["Enter"], ({(1, 1, 0): "a"}, [((1, 1, 1), 255)], (1, 1), 1.0), "back to the ground"),
+        ("lift", ["Enter"], ({}, [((1, 1, 2), 255)], (1, 1), 1.4, None, 2), "raise the floor"),
+        ("height", ["hold Shift", "+", UP, DOWN], None, "raise or lower it"),
+        ("ground", ["hold Enter"], ({(1, 1, 0): "a"}, [((1, 1, 1), 255)], (1, 1), 1.0), "floor back down"),
     ]),
     LOOK: ("Look around", [
         ("turn", ["Tab"], "hints/turn.png", "tap to turn"),
@@ -82,26 +83,33 @@ class Guide:
         small, kpx = round(px * 0.92), round(px * 0.85)      # words, and keys a size under them so pictures get the room
         with g.drawing_on(pygame.Surface((1, 1))):
             block = max(_keys(g, kpx, 0, 0, keys) for _, keys, _, _ in rows)
-        side = max(px * 3, min(round(px * 6.5), size[0] - block - gap))
+        side = min(round(px * 6.5), size[0] - block - gap)
+        if block > size[0]:
+            return surf         # too narrow for even its keys: nothing rather than cut off
+        if side < px * 3:
+            side = 0            # too narrow for pictures beside the keys: the keys and words alone
         key_h = keycap_size(g, "X", kpx)[1]
         with g.drawing_on(surf):
             y = g.draw_text(title, round(px * 1.25), 0, 0, "mono-bold", P.MUTED, anchor="topleft").bottom + round(gap * 1.2)
-            for row, keys, pic, words in rows:
+            for i, (row, keys, pic, words) in enumerate(rows):
                 rise = keycap_size(g, UP, round(kpx * 0.75))[1] + 2 if "arrows" in keys else 0     # Up stands over the rest
                 with g.drawing_on(pygame.Surface((1, 1))):
                     words_h = g.draw_markup(words, small, 0, 0, "mono", P.MUTED, block)
                 text_h = rise + key_h + gap // 2 + words_h
-                h = max(side, text_h)
+                h = max(side if pic else 0, text_h)
+                pic = pic if side else None
                 layer = pygame.Surface((size[0], h), pygame.SRCALPHA)
                 with g.drawing_on(layer):
                     top = (h - text_h) // 2
                     _keys(g, kpx, 0, top + rise + key_h // 2, keys)
                     g.draw_markup(words, small, 0, top + rise + key_h + gap // 2, "mono", P.MUTED, block)
-                    picture = g.image(pic, round(side * 0.8)) if isinstance(pic, str) else _scene(side, *pic)
-                    layer.blit(picture, picture.get_rect(center=(block + gap + side // 2, h // 2)))
+                    if pic:     # a row without one adds to the row above it
+                        picture = g.image(pic, round(side * 0.8)) if isinstance(pic, str) else _scene(side, *pic)
+                        layer.blit(picture, picture.get_rect(center=(block + gap + side // 2, h // 2)))
                 layer.set_alpha(LIT if row == lit else QUIET)
                 surf.blit(layer, (0, y))
-                y += h + round(gap * 1.6)
+                joins = i + 1 < len(rows) and not rows[i + 1][2]      # a row with no picture belongs to this one
+                y += h + round(gap * (0.7 if joins else 1.6))
         return surf
 
 

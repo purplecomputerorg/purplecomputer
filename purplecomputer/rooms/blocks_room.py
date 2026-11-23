@@ -35,7 +35,7 @@ from .. import color_recipe
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo
-from ..ui import DOWN, LEFT, PICK_HINT, RIGHT, UP, draw_key_hint, draw_mode_switch, hint_row_h
+from ..ui import DOWN, LEFT, PICK_HINT, RIGHT, UP, HeldKey, draw_key_hint, draw_mode_switch, hint_row_h, hold_status
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
@@ -54,7 +54,7 @@ LOOK_BOUNCE = 5.0            # degrees the view springs back off a tilt stop whe
 TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
 HOVER = HEIGHT                # the level the cursor's block waits on, over its column: one over the top, so it never shares a cell
-BUBBLE = 0.62                 # in cells: the radius of the glass bubble the waiting block floats in
+BUBBLE = 1.4                  # the glass bubble's radius, past the farthest corner of the waiting block in it
 CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its cell
 CURSOR_REACH = 2.8            # cells around the cursor's block that it repaints: the arrows' keys reach that far
 DROP_S = 0.16                 # a new block falls into place this long
@@ -73,6 +73,7 @@ KEY_SPAN = (0.85, 1.85, 0.4, 0.1)
 WALL_SPAN = (0.85, 1.05, 0.45, 0.1)    # the same for the flat stop bar lying where a key would, where the edge stops the cursor
 LIFT_HOLD_S, LIFT_FADE_S, LIFT_SLIDE_S = 1.0, 0.4, 0.14   # the lifted floor: how long it stays after Shift moved it, fades, and slides a level
 LIFT_REACH = 2                 # cells the lifted floor reaches each way from the cursor's column
+FLASH_S, FLASH_ALPHA = 0.45, 60   # a wall the bubble knocks into flashes this long, this strong at first
 BUMP, BUMP_S = 0.18, 0.18          # cells the waiting block knocks toward a wall an arrow pushes it into, and for how long   # cells: where each arrow's flat key starts and ends out from the column's middle, its half width, its thickness
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
@@ -90,6 +91,14 @@ def turned(x: int, z: int, quarters: int) -> tuple:
     for _ in range(quarters % 4):
         x, z = WIDTH - 1 - z, x
     return x, z
+
+
+def bubble_radius(cam, x, z, lift: float = 0.0) -> float:
+    """The waiting block's bubble on screen: round, and past every corner of the small block in it at any angle."""
+    mx, my = cam.at(x + 0.5, HOVER + lift + 0.5, z + 0.5)
+    a, b = CURSOR_INSET, 1 - CURSOR_INSET
+    return BUBBLE * max(math.hypot(px - mx, py - my) for px, py in
+                        (cam.at(x + i, HOVER + lift + j, z + k) for i in (a, b) for j in (a, b) for k in (a, b)))
 
 
 @lru_cache(maxsize=4)
@@ -122,6 +131,7 @@ class BlocksRoom(Room):
         self._mix = color_recipe.NO_MIX   # (keycaps, color) of the last chord
         self._stamps = color_recipe.ChordStamps(self._stamp_spot, self._unstamp, self._build)
         self._badge = color_recipe.HoldBadge()
+        self.enter_hold = HeldKey(app, self._to_ground)   # tap Enter: the floor up a level; hold it: back on the ground
         self._mixed = None                # (keycaps, color) of the last block that mixed
         self._last = None             # (pos, key) of the block just dropped
         self._next = None             # where a run up or down the column (or a code run) goes on from
@@ -446,10 +456,31 @@ class BlocksRoom(Room):
             self._bump_timer = self.app.timers.every(1 / 60, self._bump_tick)
 
     def _bump_tick(self):
-        if time.monotonic() - self._bump[3] >= BUMP_S:
+        if time.monotonic() - self._bump[3] >= FLASH_S:
             self._bump = None
             self._bump_timer.stop()
         self.app.invalidate()
+
+    def _draw_wall_flash(self, sub):
+        """The whole wall the bubble just knocked into, flashing and fading: the floor's edge from the ground
+        to the ceiling, or the ceiling over the whole floor, so it's plain where the edge is."""
+        if self._bump is None:
+            return
+        dx, dz, dy, since = self._bump
+        fade = 1 - (time.monotonic() - since) / FLASH_S
+        if fade <= 0 or dy < 0:
+            return
+        if dy:
+            corners = [(0, HEIGHT, 0), (WIDTH, HEIGHT, 0), (WIDTH, HEIGHT, DEPTH), (0, HEIGHT, DEPTH)]
+        else:
+            x0, x1 = (WIDTH, WIDTH) if dx > 0 else (0, 0) if dx < 0 else (0, WIDTH)
+            z0, z1 = (DEPTH, DEPTH) if dz > 0 else (0, 0) if dz < 0 else (0, DEPTH)
+            corners = [(x0, 0, z0), (x1, 0, z1), (x1, HEIGHT, z1), (x0, HEIGHT, z0)]
+        poly = [self._cam.at(*c) for c in corners]
+        layer = pygame.Surface(sub.get_size(), pygame.SRCALPHA)
+        pygame.draw.polygon(layer, (*rgb(P.TEXT), round(FLASH_ALPHA * fade)), poly)
+        pygame.draw.polygon(layer, (*rgb(P.TEXT), round(3 * FLASH_ALPHA * fade)), poly, 2)
+        sub.blit(layer, (0, 0))
 
     def _nudge(self) -> tuple:
         """(x, z, height) the waiting block is off its spot as it knocks against a wall, in view coordinates."""
@@ -546,6 +577,10 @@ class BlocksRoom(Room):
             return self._space(action)
         if isinstance(action, ControlAction) and action.action == "tab":
             return await self._tab_key(action)
+        if self.code_panel is None and isinstance(action, ControlAction) and action.action == "enter":
+            return self._enter(action)
+        if getattr(action, "is_down", True):
+            self.enter_hold.other_key()        # another key while Enter is down: no hold
         self._lay_pending()
         if self.code_panel is not None and not (self._tab is not None and isinstance(action, NavigationAction)):
             result = await self.code_panel.handle(action)
@@ -610,19 +645,32 @@ class BlocksRoom(Room):
         if name == "space":
             self._lay(RISE)
             self._build()
-        elif name == "enter":
-            self.echo.flush()
-            self._to_ground()
         elif name == "backspace":
             self.echo.flush()
             self._erase()
 
+    def _enter(self, action):
+        """A tap of Enter lifts the floor a level; held, Enter puts it back on the ground."""
+        if self.enter_hold.fired:
+            if not action.is_down:
+                self.enter_hold.up()
+        elif action.is_down and not action.is_repeat:
+            self.echo.flush()
+            self.enter_hold.down()
+        elif not action.is_down and self.enter_hold.up():
+            self._step_height(1)
+        self.app.invalidate()
+
     def _to_ground(self):
-        """Enter, like a typewriter's return: the height goes back to the ground, so blocks land on what the
-        column holds again. On the ground already, the bubble knocks down against it."""
+        """Enter held: the height goes back to the ground, so blocks land on what the column holds again.
+        On the ground already, the bubble knocks down against it."""
         if self._hover == 0 and not self._next:
             return self._knock(0, 0, -1)
         self._hover, self._next = 0, None
+
+    def hold_progress(self):
+        held = self.enter_hold.progress()
+        return None if held is None else hold_status(held, "Enter", DOWN, "put the floor back down")
 
     def _navigate(self, action):
         if self._tab is not None:
@@ -723,6 +771,8 @@ class BlocksRoom(Room):
 
     def _lit_row(self):
         """The guide's row for the key held now, if any."""
+        if self.enter_hold.progress() is not None:
+            return "ground"
         return "height" if self.app._keyboard_state_machine.shift_active else "look" if self._tab is not None else None
 
     def _repaint(self, rect):
@@ -768,6 +818,7 @@ class BlocksRoom(Room):
             g.surface.blit(self._composed, area)
             self._draw_cursor(g, area)
             self._draw_falls(g.surface.subsurface(area))
+            self._draw_wall_flash(g.surface.subsurface(area))
             self._draw_hold_badge(g, area)
         else:
             g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
@@ -834,7 +885,7 @@ class BlocksRoom(Room):
             if not kept or kept[0] is not painter.items:
                 kept = self._hide[pos] = painter.items, painter.after(vx, vz, y, cam.run_rect(vx, vz, y, top))
             rect = cam.run_rect(vx, vz, y, h)       # down to its spot, where its shadow darkens as it comes
-            cut = round(cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5)[1] + BUBBLE * cam.cell(vx, HOVER, vz))
+            cut = round(cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5)[1] + bubble_radius(cam, vx, vz))
             rect = rect.clip(pygame.Rect(rect.x, cut, rect.w, max(0, rect.bottom - cut)))   # blocks come out from under the bubble: none over it
             self._fell.append(rect)
             sub.set_clip(rect)
@@ -988,7 +1039,7 @@ class BlocksRoom(Room):
         def draw(layer, big):
             cam = big.cam
             center = cam.at(x + ox + 0.5, HOVER + oy + 0.5, z + oz + 0.5)
-            r, unit = BUBBLE * cam.cell(x, HOVER, z), cam.zoom
+            r, unit = bubble_radius(cam, x + ox, z + oz, oy), cam.zoom
             pygame.draw.circle(layer, (*rgb(P.TEXT), 34), center, r)
             if bright:
                 big.box(layer, x + ox, z + oz, HOVER + oy, HOVER + oy, self._color, inset=CURSOR_INSET)

@@ -114,18 +114,22 @@ def test_the_arrows_move_across_the_floor_up_away_and_down_toward():
     run(go())
 
 
-def test_enter_puts_the_height_back_on_the_ground_and_on_the_ground_knocks():
+def test_a_tap_of_enter_lifts_the_floor_and_holding_it_puts_it_back_on_the_ground():
     async def go():
         app, room = _blocks()
         await type_text(app, "ab")
-        for _ in range(3):
-            await press(app, "up", shift_held=True)
-        assert room._cursor_y() == 5
-        await press(app, "enter")
-        assert room._hover == 0 and room._cursor_y() == 2 and len(room._blocks) == 2     # back onto the column's top
+        for _ in range(2):
+            await press(app, "enter")
+        assert room._cursor_y() == 4 and len(room._blocks) == 2          # a tap: the floor up a level, no block
+        await room.handle(ControlAction(action="enter", is_down=True))
+        assert room.hold_progress() is not None and room._lit_row() == "ground"
+        room.enter_hold.hold._fire_hold()                                 # held long enough
+        await room.handle(ControlAction(action="enter", is_down=False))
+        assert room._hover == 0 and room._cursor_y() == 2                 # back on what the column holds
         await press(app, "right")
-        await press(app, "enter")
-        assert room._bump is not None and room._bump[2] == -1 and not room._blocks.get((6, 5, 0))   # nothing to lower: a knock
+        await room.handle(ControlAction(action="enter", is_down=True))
+        room.enter_hold.hold._fire_hold()
+        assert room._bump is not None and room._bump[2] == -1             # on the ground already: a knock
     run(go())
 
 
@@ -606,7 +610,7 @@ def test_each_arrow_s_flat_key_lies_the_way_that_arrow_moves_the_cursor_clear_of
             app._draw()
             cam, (vx, vz) = room._cam, room._view(room._x, room._z)
             keys = {glyph: (lo, hi) for glyph, lo, hi in room._arrow_keys(cam, vx, vz)}
-            middle, bubble = cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5), blocks_room.BUBBLE * cam.cell(vx, HOVER, vz)
+            middle, bubble = cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5), blocks_room.bubble_radius(cam, vx, vz)
             spots = []
             for way, (dx, dz) in blocks_room.STEPS.items():
                 lo, hi = keys[blocks_room.ARROW_KEYS[way]]
@@ -675,8 +679,13 @@ def test_at_a_wall_the_key_that_way_is_a_curb_and_pushing_into_it_knocks_the_wai
         now[0] += blocks_room.BUMP_S / 2
         ox, oz, oy = room._nudge()
         assert ox > 0.1 and oz == oy == 0                                 # it knocks toward the wall
+        quiet = room._composed.copy()
         app._draw()
-        now[0] += blocks_room.BUMP_S
+        vx, vz = room._view(room._x, room._z)
+        edge = tuple(map(round, room._cam.at(WIDTH, HEIGHT / 2, 2)))
+        shown = app.g.surface.get_at((edge[0] + room._origin[0] - 2, edge[1] + room._origin[1]))[:3]
+        assert shown != quiet.get_at((edge[0] - 2, edge[1]))[:3]          # the right wall flashes
+        now[0] += blocks_room.FLASH_S
         room._bump_tick()
         assert room._bump is None and room._nudge() == (0.0, 0.0, 0.0)
     run(go())

@@ -22,7 +22,7 @@ LEFT, UP, DOWN, RIGHT = "󰜱󰜷󰜮󰜴"
 TURN = "\U000F0467"   # nf-md-rotate_right
 MOVE_HINT = f"{LEFT} {UP} {DOWN} {RIGHT} move"
 CLEAN_HINT = f"{LEFT} {UP} {DOWN} {RIGHT} clean"
-PICK_HINT = "Type to pick {hints/rainbow.png}"  # while a tap of Shift waits: Shift+letter picks without painting
+PICK_HINT = "Type a letter: {pick}"  # while a tap of Shift waits: the letter's color becomes the brush ('[A] = ■', color_recipe)
 KID_MATH_REMAP = {"=": "+", "/": "÷", "*": "×"}
 KID_MATH_KEYS = {v: k for k, v in KID_MATH_REMAP.items() if k != "="}  # + is also its own key
 
@@ -806,7 +806,7 @@ def _chord_pad(t: str, px: int) -> int:
     return round(px * 0.2) if t == "+" else 0
 
 
-HINT_PICTURES: dict = {}  # {name} -> fn(height) -> surface, for a picture a room draws itself
+HINT_PICTURES: dict = {}  # {name} -> fn(g, px, height) -> surface, for a picture a room draws itself
 
 
 HINT_SCALE = {"hints/loop.png": 0.85}   # a picture that reads big beside its words
@@ -817,7 +817,7 @@ def hint_picture(g: Gfx, t: str, px: int, h: int | None = None) -> pygame.Surfac
     beside keycaps it's a bit taller than one, in a line of text (h) about the letters' height."""
     h = h or round(keycap_size(g, "X", px)[1] * 1.2 * HINT_SCALE.get(t, 1))
     if t in HINT_PICTURES:
-        return HINT_PICTURES[t](h)
+        return HINT_PICTURES[t](g, px, h)
     return g.image(t, h) if t.endswith(".png") else None
 
 

@@ -19,11 +19,11 @@ MIN_W = 13                     # vw: a side narrower than this shows no column
 BUILD, LOOK = "build", "look"
 # Each row: (name, keys, picture, words). Keys are names, "+", "arrows" (the four, as on the keyboard),
 # and "hold X"; a picture is an image name or a little scene: (blocks, wire boxes, cell it centers on, height,
-# a drop: (how high the falling block is, its key, the waiting bubble's height), and a lifted floor's height),
+# a drop: (how high the falling block is, its key), and a lifted floor's height),
 # drawn as the room draws them.
 ROWS = {
     BUILD: ("Build", [
-        ("type", ["A", "Z"], ({}, [((1, 1, 0), 255)], (1, 1), 2.3, (1.35, "a", 3.55)), "letters drop blocks"),
+        ("type", ["A", "Z"], ({}, [], (1, 1), 1.4, (1.3, "a")), "letters drop blocks"),
         ("move", ["arrows"], ({}, [((0, 1, 0), 70), ((1, 1, 0), 255)], (0.5, 1), 0.5), "move around the floor"),
         ("lift", ["Enter"], ({}, [((1, 1, 2), 255)], (1, 1), 1.4, None, 2), "raise the floor"),
         ("height", ["hold Shift", "+", UP, DOWN], None, "raise or lower it"),
@@ -141,7 +141,7 @@ def _cluster(g, px, x, cy) -> int:
 def _scene(side, blocks, boxes, focus, lift, drop=None, glass=None) -> pygame.Surface:
     """A few cells of a build seen as the room sees it, on a patch of floor, `side` square: drawn twice
     the size and scaled down, so its edges are smooth. Block colors are keys' sticker colors. A drop adds
-    the waiting bubble, the line down from it, and a block on its way down with a short fading trail; glass,
+    a block on its way down with a streak fading up behind it and its shadow on the spot it lands; glass,
     a patch of lifted floor at that height, as Shift shows it."""
     big = 2 * side
     cam = Camera(0.55, REST_PITCH + 0.12, big, big, fit=0.55)
@@ -164,20 +164,14 @@ def _scene(side, blocks, boxes, focus, lift, drop=None, glass=None) -> pygame.Su
         pygame.draw.polygon(layer, (*rgb(P.TEXT), 190), [cam.at(a, glass, b) for a, b in ((0, 0), (3, 0), (3, 3), (0, 3))], line)
         surf.blit(layer, (0, 0))
     for (x, z, y), alpha in boxes:
-        if drop:
-            painter.shadow(surf, x, z, y, alpha=90)
         for _, poly in cam.box((x, y, z), (x + 1, y + 1, z + 1)):
             pygame.draw.polygon(surf, (*rgb(P.TEXT), alpha), poly, line)
-    if drop:
-        h, key, up = drop
-        (x, z), low = focus, boxes[0][0][2] + 1
-        pygame.draw.line(surf, (*rgb(P.TEXT), 150), cam.at(x + 0.5, low, z + 0.5), cam.at(x + 0.5, up, z + 0.5), max(1, line // 2))
-        center, r = cam.at(x + 0.5, up + 0.5, z + 0.5), 0.62 * cam.cell(x, up, z)
-        pygame.draw.circle(surf, (*rgb(P.TEXT), 34), center, r)
-        pygame.draw.circle(surf, (*rgb(P.TEXT), 200), center, r, line)
-        for lift_by, alpha in ((0.3, 80), (0, 255)):
+    if drop:            # its shadow dark on the spot it lands, and a streak fading up behind it
+        (h, key), (x, z) = drop, focus
+        painter.shadow(surf, x, z, 0, alpha=140)
+        for k in range(6, -1, -1):
             layer = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-            painter.box(layer, x, z, h + lift_by, h + lift_by, get_key_color(key))
-            layer.set_alpha(alpha)
+            painter.box(layer, x, z, h + 0.28 * k, h + 0.28 * k, get_key_color(key))
+            layer.set_alpha(round(255 if k == 0 else 70 * (1 - k / 7)))
             surf.blit(layer, (0, 0))
     return pygame.transform.smoothscale(surf, (side, side))

@@ -327,7 +327,7 @@ class Painter:
             area = shadows[0][1].unionall([rect for _, rect in shadows[1:]]).clip(area)
             layer = pygame.Surface(area.size, pygame.SRCALPHA)
             for poly, _ in shadows:
-                pygame.draw.polygon(layer, (*SUN_INK, 255), [(px - area.x, py - area.y) for px, py in poly])
+                pygame.draw.polygon(layer, (*SUN_INK, 255), [(round(px) - area.x, round(py) - area.y) for px, py in poly])   # whole pixels first: a patch's offset must not move an edge
             layer.set_alpha(SUN_ALPHA)
             surf.blit(layer, area.topleft)
 
@@ -362,12 +362,12 @@ class Painter:
         for n, poly in self.cam.box(lo, hi, open):
             pygame.draw.polygon(surf, self.face(base, n, top), poly)
 
-    def shadow(self, surf, x, z, ground, alpha=None):
-        """The square a floating block casts straight down onto what it would land on.
-        Mixed into what it covers, or with `alpha`, see-through onto a layer."""
+    def shadow(self, surf, x, z, ground, alpha=None, dark=1.0):
+        """The square a floating block casts straight down onto what it would land on, `dark` as dark as
+        it gets. Mixed into what it covers, or with `alpha`, see-through onto a layer."""
         below = self.blocks.get((x, z, ground - 1))
         under = self.face(self.base(x, z, below), TOP, ground - 1) if below else self.tile(x, z)
-        fill = tint(under, "#000000", SHADOW_ALPHA / 255) if alpha is None else (0, 0, 0, min(alpha, SHADOW_ALPHA))
+        fill = tint(under, "#000000", round(dark * SHADOW_ALPHA) / 255) if alpha is None else (0, 0, 0, min(alpha, SHADOW_ALPHA))
         pygame.draw.polygon(surf, fill, self._tile_poly(x, z, ground))
 
     def _shadow_rect(self, x, z, ground) -> pygame.Rect:

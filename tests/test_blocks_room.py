@@ -409,7 +409,7 @@ def test_a_new_block_falls_to_its_spot_from_the_cursor_s_block(monkeypatch):
         room._fall_tick()
         app._draw()
         assert not room._falls and not room._hide and room._fall_timer is None and room._view_blocks() == {(5, 5, 0): color}
-        assert _on_screen(app, room, 5.5, 1, 5.5) in _shades(room, 5, 5, 0, color)
+        assert _on_screen(app, room, 5.5, 0.5, 5) in _shades(room, 5, 5, 0, color)      # its front: the next spot's shadow is on its top
         await press(app, "a")
         room._next = (5, 5, 1, True)                                # onto a block: mixed in, nothing falls
         await press(app, "b")
@@ -640,7 +640,7 @@ def test_each_arrow_s_flat_key_lies_the_way_that_arrow_moves_the_cursor_clear_of
             app._draw()
             cam, (vx, vz) = room._cam, room._view(room._x, room._z)
             keys = {glyph: (lo, hi) for glyph, lo, hi in room._arrow_keys(cam, vx, vz)}
-            box = cam.run_rect(vx, vz, HOVER, HOVER).inflate(-4, -4)
+            middle, bubble = cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5), blocks_room.BUBBLE * cam.cell(vx, HOVER, vz)
             spots = []
             for way, (dx, dz) in blocks_room.STEPS.items():
                 lo, hi = keys[blocks_room.ARROW_KEYS[way]]
@@ -648,7 +648,7 @@ def test_each_arrow_s_flat_key_lies_the_way_that_arrow_moves_the_cursor_clear_of
                 assert ox * dz - oz * dx == 0 and ox * dx + oz * dz > 1      # out from the column the arrow's way
                 assert HOVER <= hi[1] <= HOVER + 1 and (hi[1] > HOVER + 0.5) == (cam.away(dx, dz) > 0)
                 spot = cam.at((lo[0] + hi[0]) / 2, hi[1], (lo[2] + hi[2]) / 2)
-                assert not box.collidepoint(spot), (yaw, tilt, way)           # the arrow on it is clear of the box
+                assert math.dist(spot, middle) > bubble, (yaw, tilt, way)       # the arrow on it is clear of the bubble
                 spots.append(spot)
             assert all(math.dist(a, b) > 12 for i, a in enumerate(spots) for b in spots[i + 1:]), (yaw, tilt)
     run(go())
@@ -716,19 +716,19 @@ def test_at_a_wall_the_key_that_way_is_a_curb_and_pushing_into_it_knocks_the_wai
     run(go())
 
 
-def test_at_the_top_level_glass_lies_over_the_box_going_higher_knocks_it_and_a_full_tower_wraps_right(monkeypatch):
+def test_at_the_top_level_glass_lies_at_the_ceiling_going_higher_knocks_and_a_full_tower_wraps_right(monkeypatch):
     async def go():
         app, room = _blocks()
         now = [100.0]
         monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
         vx, vz = room._view(room._x, room._z)
-        panes = lambda: [lo for glyph, lo, hi in room._arrow_keys(room._cam, vx, vz) if glyph is None and lo[1] > HOVER + 1]  # noqa: E731
+        panes = lambda: [lo for glyph, lo, hi in room._arrow_keys(room._cam, vx, vz) if glyph is None and lo[1] > HEIGHT - 0.1]  # noqa: E731
         app._draw()
         assert not panes()
-        room._hover = HOVER
+        room._hover = HEIGHT - 1
         assert len(panes()) == 1
         await press(app, "up", shift_held=True)
-        assert room._hover == HOVER and room._nudge() == (0.0, 0.0, 0.0) and room._bump is not None
+        assert room._hover == HEIGHT - 1 and room._nudge() == (0.0, 0.0, 0.0) and room._bump is not None
         now[0] += blocks_room.BUMP_S / 2
         assert room._nudge()[2] > 0.1                                    # up, into the glass
         now[0] += blocks_room.BUMP_S
@@ -1001,4 +1001,42 @@ def test_the_colors_chip_hides_while_the_code_panel_types_backslash():
         room.open_code_panel()
         app._draw()
         assert room.code_panel is not None and room.bar_row is None
+    run(go())
+
+
+def test_the_guide_sits_beside_the_floor_and_a_held_key_lights_its_row():
+    async def go():
+        app, room = _blocks()
+        app._draw()
+        spots = room._guide_spots()
+        assert set(spots) == {"build", "look"} and spots["build"].right < spots["look"].x
+        look = spots["look"]
+        quiet = pygame.image.tobytes(room._composed.subsurface(look), "RGB")
+        _hold_tab(room)
+        app._draw()
+        assert pygame.image.tobytes(room._composed.subsurface(look), "RGB") != quiet     # held: its row comes up
+        room._tab = None
+        app._draw()
+        assert pygame.image.tobytes(room._composed.subsurface(look), "RGB") == quiet
+        room.open_code_panel()
+        app._draw()
+        assert set(room._guide_spots()) == {"look"}            # the code line takes the letters and arrows
+    run(go())
+
+
+def test_in_the_code_line_tab_held_with_an_arrow_looks_around_and_a_tap_still_turns():
+    async def go():
+        app, room = _blocks()
+        room.open_code_panel()
+        field = room.code_panel.field
+        field.set("up 3")
+        await room.handle(ControlAction(action="tab", is_down=True))
+        await press(app, "right")
+        await room.handle(ControlAction(action="tab", is_down=False))
+        assert room._goal[0] == LOOKS["right"][1] and field.value == "up 3" and field.cursor == 4
+        _settle(room)
+        field.set("")                                          # nothing for Tab to accept
+        await room.handle(ControlAction(action="tab", is_down=True))
+        await room.handle(ControlAction(action="tab", is_down=False))
+        assert room._goal[0] == -90                            # a tap: on to the next side, clockwise
     run(go())

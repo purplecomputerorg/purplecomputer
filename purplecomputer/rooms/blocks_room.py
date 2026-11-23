@@ -34,11 +34,12 @@ from .. import color_recipe
 from ..color_wheel import chip as wheel_chip, open_on as open_color_wheel
 from ..gfx import mix, rgb
 from ..panels import CodePanel, Echo
-from ..ui import DOWN, LEFT, MOVE_HINT, PICK_HINT, RIGHT, UP, draw_key_hint, draw_mode_switch, hint_row_h
+from ..ui import DOWN, LEFT, PICK_HINT, RIGHT, UP, draw_key_hint, draw_mode_switch, hint_row_h
 from .base import Room
 from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
+from .blocks_guide import MIN_W, Guide, columns
 from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, TOP, WIDTH, Camera, Painter, bbox, column_shape, joined, shape
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
@@ -51,14 +52,18 @@ LOOK_PULL, LOOK_SPEED, LOOK_NEAR = 10.0, 240.0, 0.5   # the view closes this sha
 LOOK_BOUNCE = 5.0            # degrees the view springs back off a tilt stop when an arrow pushes it past
 TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
-HOVER = HEIGHT - 1            # the level the cursor's block waits on, over its column: the top one
+HOVER = HEIGHT                # the level the cursor's block waits on, over its column: one over the top, so it never shares a cell
+BUBBLE = 0.62                 # in cells: the radius of the glass bubble the waiting block floats in
 CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its cell
 CURSOR_REACH = 2.8            # cells around the cursor's block that it repaints: the arrows' keys reach that far
 DROP_S = 0.16                 # a new block falls into place this long
 GHOST_ALPHA = 90              # a block falling behind others shows through them this faintly
 # The arrow down onto the landing spot, as (up the column from its tip, across) points: a head taller than
 # it is wide on a stub of shaft, since a squat triangle alone reads as pointing sideways as easily as down.
-ARROW = ((0, 0), (0.62, -0.3), (0.62, -0.1), (1.15, -0.1), (1.15, 0.1), (0.62, 0.1), (0.62, 0.3))
+HEAD = (0.36, 0.14)          # the line's arrowhead: how long in levels, and how wide each side in cells
+FALL_SHADOW = 0.3            # how dark a falling block's shadow on its spot starts, of a landed float's
+LINE_ALPHA = 170             # the line down the column: faint, so the waiting block and the spot lead
+SPOT_SHADOW = 100            # the shadow the waiting block casts on the spot it lands in
 SMOOTH = 3                    # the cursor's marks are painted this many times the size and scaled down: pygame's wide lines come out stepped
 CLEAR = (0, 0, 0, 0)
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -73,10 +78,8 @@ OLD_FLOOR = (30, 12)          # the floor's width and depth before it was square
 WAYS = {"right": ("x", 1), "left": ("x", -1), "up": ("z", 1), "down": ("z", -1), RISE: ("y", 1), SINK: ("y", -1)}
 TURN_PIC = "hints/turn.png"
 LOOK_PIC = "hints/look.png"
-LOOK_HINT = f"{{hold Tab}} + {LEFT} {UP} {DOWN} {RIGHT} {{{LOOK_PIC}}}"
 HINT = "Type to build!"
 SHIFT_HINT = f"{PICK_HINT}   {UP} {DOWN} {{hints/up_down.png}}"
-HEIGHT_HINT = f"{{hold Shift}} + {UP} {DOWN} {{hints/up_down.png}}"
 
 
 def turned(x: int, z: int, quarters: int) -> tuple:
@@ -89,7 +92,7 @@ def turned(x: int, z: int, quarters: int) -> tuple:
 @lru_cache(maxsize=4)
 def resting_camera(yaw: float, tilt: float, w: int, h: int) -> Camera:
     """The camera for a view at rest, in degrees: `yaw` is how far the floor sits off its side's straight-on view."""
-    return Camera(math.radians(yaw), math.radians(tilt), w, h, fit=math.radians(yaw))
+    return Camera(math.radians(yaw), math.radians(tilt), w, h, top=HOVER + 1, fit=math.radians(yaw))
 
 
 class BlocksRoom(Room):
@@ -135,7 +138,8 @@ class BlocksRoom(Room):
         self._built = None             # the build's shape for a moving view, until a block changes
         self._scene = self._front = self._composed = None
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
-        self._seen, self._cols = {}, {}  # the landed blocks in view coordinates, and each view column's shape
+        self._seen, self._cols = {}, {}
+        self._guide, self._guide_lit = Guide(), None   # the guide beside the floor, and its row lit when the layers were painted  # the landed blocks in view coordinates, and each view column's shape
         self._bump = self._bump_timer = None   # (dx, dz, dy, when) while the waiting block knocks against a wall or the ceiling
         self._fell: list = []          # where the falling blocks were drawn last, in the layers' pixels
         self._falls: dict = {}         # blocks still falling into place, kept out of the layers: (when it was let go, from which level)
@@ -174,7 +178,7 @@ class BlocksRoom(Room):
         self.app.invalidate()
 
     def arrow_hint(self) -> str:
-        return MOVE_HINT
+        return ""       # the guide beside the floor shows the arrows
 
     def cursor_fraction(self, vp):
         if self._cam is None:
@@ -250,7 +254,7 @@ class BlocksRoom(Room):
 
     def _drop(self, pos) -> bool:
         """A new block falls to its spot from as high as its column is clear, the cursor's block at most."""
-        top = min((h for h in self._column() if h > pos[2]), default=HEIGHT) - 1
+        top = min((h for h in self._column() if h > pos[2]), default=HOVER + 1) - 1
         if top > pos[2] and pos not in self._falls:
             self._falls[pos] = (time.monotonic(), top)
             self._fall_timer = self._fall_timer or self.app.timers.every(1 / 60, self._fall_tick)
@@ -510,10 +514,10 @@ class BlocksRoom(Room):
             self._stamps.clear()
         if self.code_panel is None and isinstance(action, ControlAction) and action.action == "space":
             return self._space(action)
-        if self.code_panel is None and isinstance(action, ControlAction) and action.action == "tab":
-            return self._tab_key(action)
+        if isinstance(action, ControlAction) and action.action == "tab":
+            return await self._tab_key(action)
         self._lay_pending()
-        if self.code_panel is not None:
+        if self.code_panel is not None and not (self._tab is not None and isinstance(action, NavigationAction)):
             result = await self.code_panel.handle(action)
             if result == "tab_fallthrough":
                 self.turn()
@@ -536,12 +540,14 @@ class BlocksRoom(Room):
         elif not action.is_down:
             self._lay_pending()
 
-    def _tab_key(self, action):
-        """Tab held with the arrows looks around; let go with no arrow pressed, it turns the build a quarter."""
+    async def _tab_key(self, action):
+        """Tab held with the arrows looks around, in the code line too; let go with no arrow pressed, it's a
+        tap: the code line takes the word it suggests, if it has one, else the build turns a quarter."""
         if action.is_down and not action.is_repeat:
             self._tab = False
         elif not action.is_down:
-            if self._tab is False:
+            if self._tab is False and (self.code_panel is None or
+                                       await self.code_panel.handle(ControlAction(action="tab")) == "tab_fallthrough"):
                 self.turn()
             self._tab = None
         self.app.invalidate()
@@ -649,7 +655,8 @@ class BlocksRoom(Room):
         cam = resting_camera(self._off(), self._goal[1], *size)
         row, was = self._view(self._x, self._z)[1], self._painter and self._painter.row
         fresh = self._scene is None or cam is not self._cam
-        if not (fresh or self._dirty or row != was):
+        lit, self._guide_lit = self._lit_row(), self._lit_row() if fresh else self._guide_lit
+        if not (fresh or self._dirty or row != was or lit != self._guide_lit):
             return
         if fresh or self._dirty:
             blocks, built = self._shaped(fresh)
@@ -662,7 +669,8 @@ class BlocksRoom(Room):
             self._front = pygame.Surface(size, pygame.SRCALPHA)
             rects = [self._scene.get_rect()]
         else:
-            rects = [cam.column_rect(x, z) for x, z in self._dirty]
+            rects = [cam.column_rect(x, z) for x, z in self._dirty] + (list(self._guide_spots().values()) if lit != self._guide_lit else [])
+        self._guide_lit = lit
         if rects:
             self._paint_ground(rects[0].unionall(rects[1:]))
         if not fresh and was is not None and row != was:
@@ -676,8 +684,16 @@ class BlocksRoom(Room):
         g = self._land
         g.set_clip(rect)
         g.blit(self._painter.floor_picture(g.get_size()), rect, rect)
+        self._guide.paint(self.app.g, g, self._guide_spots(), self._guide_lit, rect)
         self._painter.paint_sun(g, rect)
         g.set_clip(None)
+
+    def _guide_spots(self) -> dict:
+        return columns(self._cam, self._composed.get_size(), self.code_panel is not None, self.app.g.vw(MIN_W))
+
+    def _lit_row(self):
+        """The guide's row for the key held now, if any."""
+        return "height" if self.app._keyboard_state_machine.shift_active else "look" if self._tab is not None else None
 
     def _repaint(self, rect):
         """Repaint `rect` of the layers: the scene (the ground, the cursor's row and the rows behind
@@ -730,7 +746,6 @@ class BlocksRoom(Room):
         shift = self.app._keyboard_state_machine.shift_active
         self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._tab is False else 1,
                                         self._color, wheel=None if self.code_panel else wheel_chip(self),
-                                        chips=((HEIGHT_HINT, shift),), after=(LOOK_HINT, self._tab is True),
                                         reserve=self.header_reserve(g))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
@@ -763,7 +778,7 @@ class BlocksRoom(Room):
             return self.app.invalidate()
         g, area = self.app.g, pygame.Rect(self._origin, self._composed.get_size())
         sub = g.surface.subsurface(area)
-        rects = self._fell + [self._cam.run_rect(vx, vz, h, h) for vx, vz, h, *_ in self._falling()]
+        rects = self._fell + [self._cam.run_rect(vx, vz, y, h) for vx, vz, h, y, *_ in self._falling()]
         if not rects:
             return None
         spot = rects[0].unionall(rects[1:]).clip(sub.get_rect())
@@ -788,9 +803,10 @@ class BlocksRoom(Room):
             kept = self._hide.get(pos)
             if not kept or kept[0] is not painter.items:
                 kept = self._hide[pos] = painter.items, painter.after(vx, vz, y, cam.run_rect(vx, vz, y, top))
-            rect = cam.run_rect(vx, vz, h, h)
+            rect = cam.run_rect(vx, vz, y, h)       # down to its spot, where its shadow darkens as it comes
             self._fell.append(rect)
             sub.set_clip(rect)
+            painter.shadow(sub, vx, vz, y, dark=FALL_SHADOW + (1 - FALL_SHADOW) * (1 - (h - y) / max(1, top - y)))
             painter.box(sub, vx, vz, h, h, color)
             if kept[1]:
                 painter.paint(sub, kept[1], rect)
@@ -806,10 +822,12 @@ class BlocksRoom(Room):
         on, so both ends land on those pictures, the cursor's marks painted in their place among the
         blocks. A frame over budget drops shadows for builds this big from then on."""
         start = time.monotonic()
-        cam = Camera(math.radians(turn), math.radians(tilt), area.w, area.h, area.topleft, fit=math.radians(fit))
+        cam = Camera(math.radians(turn), math.radians(tilt), area.w, area.h, area.topleft, top=HOVER + 1, fit=math.radians(fit))
         detailed = len(self._blocks) <= self._turn_detail_limit
         self._built = self._built or shape(self._blocks)
         painter = Painter(cam, self._blocks, detail=detailed, built=self._built)
+        if self._cam is not None:
+            self._guide.paint(g, g.surface.subsurface(area), self._guide_spots(), self._lit_row())
         painter.paint_floor(g.surface)
         if detailed:
             painter.paint_sun(g.surface, g.surface.get_clip())
@@ -871,8 +889,9 @@ class BlocksRoom(Room):
             surf.blit(pygame.transform.smoothscale(layer, rect.size), rect)
 
     def _drop_marks(self, surf, painter, x, z, y):
-        """The spot the next block lands in as a wire box, with its shadow square if it floats, and
-        the line down to it through the column's free cells, ending in an arrowhead."""
+        """The spot the next block lands in as a wire box with the waiting block's shadow in it (and its own
+        square on the ground if it floats), and a faint line down to it through the column's free cells,
+        ending in a small arrowhead."""
         if y >= HOVER:
             return
         ground, taken = self._ground(y), set(self._column())
@@ -881,14 +900,14 @@ class BlocksRoom(Room):
             cam, unit = big.cam, big.cam.zoom
             if ground < y:
                 big.shadow(layer, x, z, ground)
+            big.shadow(layer, x, z, y, alpha=SPOT_SHADOW)
             self._wire(layer, cam, x, z, y, 2 * unit, 2 * unit)
-            width = max(2 * unit, round(cam.cell(x, y, z)) // 14)
-            spans = [[cam.at(x + 0.5, h + end, z + 0.5) for end in (0, 1)] for h in range(y + 1, HOVER) if h not in taken]
-            for color, w in ((rgb(art_room.CANVAS_BG), width + 2 * unit), (rgb(P.TEXT), width)):
-                for a, b in spans:
-                    pygame.draw.line(layer, color, a, b, w)
+            width = max(unit, round(cam.cell(x, y, z)) // 22)
+            for h in range(y + 1, HOVER):
+                if h not in taken:
+                    pygame.draw.line(layer, (*rgb(P.TEXT), LINE_ALPHA), cam.at(x + 0.5, h, z + 0.5), cam.at(x + 0.5, h + 1, z + 0.5), width)
             self._arrowhead(layer, cam, x, z, y + 1)
-        pad = round(painter.cam.cell(x, y, z) * ARROW[1][0]) + 6
+        pad = round(painter.cam.cell(x, y, z) * 0.5) + 6
         self._smooth(surf, painter, painter.cam.run_rect(x, z, ground, HOVER).inflate(2 * pad, 2 * pad), draw)
 
     def _cut(self, vx, vz, y):
@@ -902,14 +921,22 @@ class BlocksRoom(Room):
             return next((h for h in (y + 1 + i / 16 for i in range(1, 16 * (HOVER - y - 1))) if not hidden(h)), None)
 
     def _hover_marks(self, surf, painter, x, z, bright: bool = True):
-        """The block waiting over the column, in its wire box."""
+        """The small block waiting over the column in a glass bubble, so it never reads as a block already laid.
+        Its blink shows the bubble empty."""
         ox, oz, oy = self._nudge()
 
         def draw(layer, big):
             cam = big.cam
+            center = cam.at(x + ox + 0.5, HOVER + oy + 0.5, z + oz + 0.5)
+            r, unit = BUBBLE * cam.cell(x, HOVER, z), cam.zoom
+            pygame.draw.circle(layer, (*rgb(P.TEXT), 34), center, r)
             if bright:
                 big.box(layer, x + ox, z + oz, HOVER + oy, HOVER + oy, self._color, inset=CURSOR_INSET)
-            self._wire(layer, cam, x + ox, z + oz, HOVER + oy, max(2 * cam.zoom, round(cam.cell(x, HOVER, z)) // 12), 3 * cam.zoom)
+            pygame.draw.circle(layer, (*rgb(art_room.CANVAS_BG), 140), center, r, 4 * unit)
+            pygame.draw.circle(layer, (*rgb(P.TEXT), 200), center, r - unit, 2 * unit)
+            glint = pygame.Rect(0, 0, 1.3 * r, 1.3 * r)
+            glint.center = center
+            pygame.draw.arc(layer, (255, 255, 255, 150), glint, 1.9, 2.7, 2 * unit)
         reach = 16 + round(painter.cam.cell(x, HOVER, z) * BUMP)
         self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(2 * reach, 2 * reach), draw)
 
@@ -918,7 +945,7 @@ class BlocksRoom(Room):
         the way that arrow moves the cursor. One going away sits level with the box's top and one coming
         toward with its bottom, the rest in between, so the box hides none of them. Where the edge stops
         the cursor, a thin glass wall stands against that side of the box instead, with no glyph, and at
-        the top level a glass pane lies over it."""
+        the top level a glass pane lies at the ceiling."""
         keys = []
         for way, (dx, dz) in STEPS.items():
             for _ in range(-self._side % 4 if world else 0):
@@ -929,9 +956,9 @@ class BlocksRoom(Room):
             xs = sorted((x + 0.5 + dx * near - dz * half, x + 0.5 + dx * far + dz * half))
             zs = sorted((z + 0.5 + dz * near + dx * half, z + 0.5 + dz * far - dx * half))
             keys.append((None if wall else ARROW_KEYS[way], (xs[0], HOVER - thick if wall else h - thick, zs[0]), (xs[1], h, zs[1])))
-        if self._cursor_y() == HEIGHT - 1:      # nothing goes higher: glass over the box, as the walls are
-            near, _, half, thick = WALL_SPAN
-            keys.append((None, (x + 0.5 - half, HOVER + 1 + thick, z + 0.5 - half), (x + 0.5 + half, HOVER + 1 + thick + near - 0.5, z + 0.5 + half)))
+        if self._cursor_y() == HEIGHT - 1:      # nothing goes higher: glass at the ceiling, under the bubble, as the walls are
+            _, _, half, _ = WALL_SPAN
+            keys.append((None, (x + 0.5 - half, HEIGHT - 0.04, z + 0.5 - half), (x + 0.5 + half, HEIGHT + 0.04, z + 0.5 + half)))
         return sorted(keys, key=lambda k: cam.key(k[1][0], k[1][2], 0))
 
     def _draw_arrow_keys(self, g, surf, painter, x, z, world: bool = False, origin=(0, 0)):
@@ -968,14 +995,13 @@ class BlocksRoom(Room):
                     pygame.draw.circle(surf, color, corner, w // 2)
 
     def _arrowhead(self, surf, cam, x, z, h):
-        """An arrow pointing down the column's middle line, its tip at height h. It is as wide as
-        ARROW says in cells, and as long in levels, though never so squat that it stops reading as down."""
-        (px, py), (qx, qy), wide = cam.at(x + 0.5, h, z + 0.5), cam.at(x + 0.5, h + 1, z + 0.5), max(22 * cam.zoom, cam.cell(x, h, z))
-        level = math.hypot(qx - px, qy - py) or 1.0
-        ux, uy, long = (qx - px) / level, (qy - py) / level, max(level, 0.7 * wide)
-        arrow = [(px + ux * a * long - uy * c * wide, py + uy * a * long + ux * c * wide) for a, c in ARROW]
-        pygame.draw.polygon(surf, rgb(P.TEXT), arrow)
-        pygame.draw.polygon(surf, rgb(art_room.CANVAS_BG), arrow, 2 * cam.zoom)
+        """A small arrowhead on the column's middle line, its tip at height h, pointing down it."""
+        (px, py), (qx, qy) = cam.at(x + 0.5, h, z + 0.5), cam.at(x + 0.5, h + HEAD[0], z + 0.5)
+        level, wide = math.hypot(qx - px, qy - py) or 1.0, HEAD[1] * cam.cell(x, h, z)
+        ux, uy = (qx - px) / level, (qy - py) / level
+        head = [(px, py), (qx - uy * wide, qy + ux * wide), (qx + uy * wide, qy - ux * wide)]
+        pygame.draw.polygon(surf, rgb(art_room.CANVAS_BG), head, 2 * cam.zoom)
+        pygame.draw.polygon(surf, rgb(P.TEXT), head)
 
     def _ground(self, y: int) -> int:
         """The level the cursor's block would rest on below height y."""

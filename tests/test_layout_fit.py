@@ -63,7 +63,7 @@ def test_header_pills_and_arrow_hint_never_overlap(size, monkeypatch):
             pills.clear()
             app._draw()
             row = sorted(pills, key=lambda r: r.x)
-            assert row and row[-1].right == app.room.header_row.right, room
+            assert row and (row[-1].right == app.room.header_row.right or not app.arrow_chip_hint()), room   # the arrow chip ends the row
             for a, b in zip(row, row[1:]):
                 assert a.right <= b.left, (room, a, b)
     run(go())

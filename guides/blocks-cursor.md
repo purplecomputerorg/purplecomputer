@@ -13,15 +13,15 @@ Blocks is one color more often than not (a kid holds one key), drawn small enoug
 
 ## What the cursor draws
 
-- **Waiting block** on the top level over the column: a small block in the brush color inside a wire box, each wire white over a dark one so it reads over any color. The small block blinks; the edge stays. Nothing can stand in front of it.
+- **Waiting block** one level over the top of the grid (`HOVER`), so it never shares a cell with a block and nothing stands in front of it: a small block in the brush color floating in a glass bubble (`BUBBLE`), so it never reads as a block already laid. The small block blinks; the bubble stays.
 - **The four arrow keys lie flat** around the waiting block, thin slabs of faint glass in the build's perspective, each out from it the way that arrow moves the cursor, with its arrow upright on it as printed on the real key (`_arrow_keys`, `KEY_SPAN`). Lying flat, the key going away reads as away, never as up. A key going away sits level with the box's top and one coming toward level with its bottom, the sides in between, so the box hides none of them.
-- **At the edge, the key that way becomes a thin glass wall** standing against that side of the box, a little taller and wider than it, with no arrow (`WALL_SPAN`). Pushing an arrow into it knocks the waiting block toward the wall and back (`_knock`, `BUMP`), so a press that goes nowhere still answers. The ceiling works the same way: at the top level a glass pane lies over the box, and Shift with Up there, knocks the box up into it; Shift with Down at the floor knocks it down.
-- **Line** from the waiting block down the column's free cells, ending in a bold arrow down onto the landing spot: a head taller than it is wide, on a stub of shaft. Dashed, the line read as clutter; a squat triangle alone at its end read as pointing sideways as easily as down.
-- **Landing spot**, a thinner wire box, with the **shadow square** every floating block gets when it floats.
+- **At the edge, the key that way becomes a thin glass wall** standing against that side of the box, a little taller and wider than it, with no arrow (`WALL_SPAN`). Pushing an arrow into it knocks the waiting block toward the wall and back (`_knock`, `BUMP`), so a press that goes nowhere still answers. The ceiling works the same way: when the cursor is on the top level a glass pane lies at the ceiling, between it and the bubble, and Shift with Up there knocks the bubble up against it; Shift with Down at the floor knocks it down.
+- **Line** from the waiting block down the column's free cells: a faint hairline (`LINE_ALPHA`) with a small arrowhead where it lands (`HEAD`), so the bubble and the spot lead and the line only joins them. A bold line with a tall arrowhead was nearly as loud as the waiting block; dashed, it read as clutter.
+- **Landing spot**, a thinner wire box with the waiting block's soft shadow in it (`SPOT_SHADOW`), the way something held over a spot darkens it, and the **shadow square** every floating block gets when it floats.
 - **A wire box is the edges of the faces the eye sees**, so it reads as a cube. One line around the cell's outline read as a flat, odd polygon.
 - **The marks are painted three times the size and scaled down** (`_smooth`): pygame's wide lines have hard, stepped edges, and on the only lines on screen that shows.
 - **Arrowhead over the rows in front** at the lowest point of the line they leave in view, when they hide its end.
-- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size, and it repaints only where the falling blocks were and are, plus the cursor if they touch it (`_fall_patch`, through `app.repaint`). Where something stands in front, the block is drawn again over it, faint (`GHOST_ALPHA`), so its fall still shows behind a wall.
+- **A new block falls** from the waiting block to its spot in `DROP_S`, speeding up, so the eye goes down the column to where it lands. A block under another falls from just under that one. A falling block stays out of the cached layers until it lands: each frame it is drawn over them, then what stands in front of it is drawn over it, a short list found once a fall (`_draw_falls`). So a frame of a fall costs the same in a build of any size, and it repaints only where the falling blocks were and are, plus the cursor if they touch it (`_fall_patch`, through `app.repaint`). Where something stands in front, the block is drawn again over it, faint (`GHOST_ALPHA`), so its fall still shows behind a wall. Its shadow lies on its spot from the start and darkens as it comes down (`FALL_SHADOW`), so the hover, the fall and the landing read as one drop.
 
 While the view turns the cursor is drawn too, in its place among the blocks.
 
@@ -29,7 +29,7 @@ While the view turns the cursor is drawn too, in its place among the blocks.
 
 One view can't tell "farther back" from "higher up": both go up the screen. So the kid turns the build to see it from another side.
 
-- **A tap of Tab** turns the build to its next side, straight on: a quarter of the way around, clockwise seen from above, and back to the resting tilt, so a tap always lands on a standard view however far it was looked around, as its header picture shows. Beside it, a chip shows Tab held with the four arrows and a 360 picture, lit while Tab is looking around.
+- **A tap of Tab** turns the build to its next side, straight on: a quarter of the way around, clockwise seen from above, and back to the resting tilt, so a tap always lands on a standard view however far it was looked around, as its header picture shows.
 - **The view is the viewer's, not the build's.** History doesn't keep it: Time Travel steps through builds in whatever view is up, and Tab still turns while it does. Clearing the room faces the front again.
 - **History from the old 30 by 12 floor** says no size; a step that doesn't keeps its middle on today's middle (`OLD_FLOOR`), the same shift for every step, so scrubbing an old build doesn't slide it around. Only blocks within 7 columns of the old floor's left or right end fall past today's walls.
 - **Tab held with the arrows** looks around: Left and Right turn the floor a step at a time to any angle, its near edge going the arrow's way, and Up and Down tilt the view from the side to nearly straight down. The footer shows this while Tab is down.
@@ -64,8 +64,18 @@ Tried and dropped:
 - **Enter that first only turned typing upward, then walked the cursor up.** Two meanings on one key, and building up took a second key that nobody remembered.
 - **A tap of Tab turning the build 18 degrees.** Fine for looking, but five taps to see the next side.
 
+## The guide beside the floor
+
+The square floor leaves the room's sides empty, and the header alone didn't teach the 3D keys: a grown-up trying it understood that Tab turns, but not that Tab is held while the arrows are pressed, and never noticed Shift. So the header keeps only the color wheel, the brush and Tab, and the sides show two columns of pictures (`blocks_guide.py`): **Build** on the left (two sticker-colored letters with a block dropping from the bubble to its spot, a faint copy above it for the motion, the arrow keys in their keyboard shape with the cursor moving a tile, Shift with Up and Down with a raised cursor box) and **Look around** on the right (Tab with the turn picture, Tab held plus the arrows with the sphere).
+
+- **Quiet on purpose.** No panel or border, half strength, a small muted title and one line of words under each row for the grown-up; the pictures carry it for a kid. It is painted into the ground layer, so any block standing over it covers it.
+- **It answers back.** Holding a row's key brings that row up to full strength: Tab lights the look row the moment it is down, before an arrow, which is when "keep holding, press arrows" matters.
+- **The code line** takes the letters, arrows and Shift, so Build goes; Look stays, and Tab held with the arrows looks around there too. A tap of Tab is decided on release: the code line takes it (a suggested word) if it wants it, else the build turns.
+- **A side too narrow** (`MIN_W`) shows no column.
+
 ## Tried and dropped
 
+- **Every key in the header:** chips for hold Shift with Up and Down, hold Tab with the four arrows, and the arrows' own move chip. Rows of small arrows blurred into one another, and a grown-up still missed that Tab is held while the arrows are pressed.
 - **A cursor on the landing spot** (a bold edge and small block where the next block goes): it jumps far up and down the screen from one key to the next over uneven towers. **Gliding it there** in 150 ms still read as jumpy.
 - **A round window cut in the rows in front** wherever they hid the landing spot: a hole in a wall confused more than it showed.
 - **Upright keycaps around the waiting block**, out from it the way each arrow moves it on screen: drawn flat on the screen, the Up key above the box read as up, and the Down key sat on the line.

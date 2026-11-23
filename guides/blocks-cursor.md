@@ -47,6 +47,7 @@ Tried and dropped: **a round platter under the floor, turning a quarter at a tim
 
 ## The keys
 
+- **On the ground a block drops onto the column's highest block**, as something let go from the bubble would, never into a gap under a floating block; only a lifted floor puts it into a gap, where the glass floor shows it. Filling the lowest gap first made it look as if the block fell through the floating one.
 - **Enter puts the height back on the ground** (`_to_ground`), like a typewriter's return, so the way back from a lifted floor is the biggest key; on the ground already, the bubble knocks down against it. Enter used to drop a block too, which Space and every letter already do.
 
 The aim is keys nobody has to think about. Height comes from typing, so the arrows are free for the floor.

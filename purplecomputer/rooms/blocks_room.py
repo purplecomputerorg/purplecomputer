@@ -7,9 +7,10 @@ height without building, onto blocks too (typing there mixes into them), and
 that height stays put as the cursor moves, for building sideways.
 Enter puts the height back on the ground, like a typewriter's return. A letter
 on a full tower starts the column to its right.
-Every block goes in the first free spot at or above the cursor's height, so
-a line climbs over whatever is in its way and a stack passes floating
-blocks; only the code line keeps the height it reached when it moves on.
+On the ground a block drops onto the column's highest block, never into a gap
+under one; on a lifted floor it goes in the first free spot at or above it, so
+a line climbs over whatever is in its way. Only the code line keeps the height
+it reached when it moves on.
 Backspace takes blocks off the column top down from the cursor, then carries
 on into the column to its left. Holding one letter while pressing another
 mixes the two colors. Backslash
@@ -229,10 +230,10 @@ class BlocksRoom(Room):
         return [y for y in ys if (self._x, self._z, y) not in self._blocks]
 
     def _cursor_y(self) -> int:
-        """The first free level at or above the chosen height, or on from where
-        a run left off, the way it goes. Never above the top level: a full
-        column puts it on the top block. A run already going through blocks
-        mixes into them, as Art paints over its own lines, rather than climbing."""
+        """Where the next block lands. On the ground, it drops from the bubble onto the column's highest block,
+        as a dropped block would, never into a gap under one; on a lifted floor, the first free level at or above
+        it; or on from where a run left off, the way it goes. Never above the top level: a full column puts it
+        on the top block. A run already going through blocks mixes into them, as Art paints over its own lines."""
         run = []
         if self._next and self._next[:2] == (self._x, self._z):
             _, _, y, inside = self._next
@@ -241,7 +242,8 @@ class BlocksRoom(Room):
             if self._dir == SINK:
                 return next(iter(self._free(range(y, -1, -1))), y)
             run = self._free(range(y, HEIGHT))
-        return next(iter(run or self._free(range(self._hover, HEIGHT))), HEIGHT - 1)
+        start = self._hover or max(self._column(), default=-1) + 1
+        return next(iter(run or self._free(range(start, HEIGHT))), HEIGHT - 1)
 
     def _place(self, y=None):
         """A block at height y (the cursor's by default), paint-mixed into one already there."""

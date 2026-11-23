@@ -158,11 +158,12 @@ def test_shift_up_steps_onto_blocks_in_the_way_and_typing_mixes_into_them():
     async def go():
         app, room = _blocks()
         room._blocks[(5, 5, 2)] = room._blocks[(5, 5, HEIGHT - 1)] = "#ff0000"
-        for y in range(1, HEIGHT):
-            await press(app, "up", shift_held=True)
+        assert room._cursor_y() == HEIGHT - 1                      # on the ground the drop lands on the highest block
+        for y in range(HEIGHT - 2, 1, -1):
+            await press(app, "down", shift_held=True)
             assert room._cursor_y() == y
         await press(app, "a")
-        assert len(room._blocks) == 2 and room._blocks[(5, 5, HEIGHT - 1)] != "#ff0000"
+        assert len(room._blocks) == 2 and room._blocks[(5, 5, 2)] != "#ff0000"
     run(go())
 
 
@@ -227,14 +228,14 @@ def test_backspace_steps_over_empty_columns_and_stops_at_the_edge():
     run(go())
 
 
-def test_stacking_up_to_a_floating_block_passes_it():
+def test_on_the_ground_a_letter_drops_onto_a_floating_block_not_into_the_gap_under_it():
     async def go():
         app, room = _blocks()
         room._blocks[(5, 5, 2)] = get_key_color("b")
-        await type_text(app, "gg")
         assert room._cursor_y() == 3
-        await press(app, "g")
-        assert room._blocks[(5, 5, 2)] == get_key_color("b") and (5, 5, 3) in room._blocks
+        await type_text(app, "gg")
+        assert room._blocks[(5, 5, 2)] == get_key_color("b") and {(5, 5, 3), (5, 5, 4)} <= set(room._blocks)
+        assert (5, 5, 0) not in room._blocks
     run(go())
 
 
@@ -379,10 +380,10 @@ def test_a_new_block_falls_to_its_spot_from_the_cursor_s_block(monkeypatch):
         room._next = (5, 5, 1, True)                                # onto a block: mixed in, nothing falls
         await press(app, "b")
         assert list(room._falls) == [(5, 5, 1)]
-        room._blocks[(8, 8, 3)] = "#ff0000"                         # under a block: from just under it
-        room._x, room._z, room._next = 8, 8, None
+        room._blocks[(8, 8, 3)] = "#ff0000"                         # a floor lifted under a block: from just under it
+        room._x, room._z, room._next, room._hover = 8, 8, None, 1
         await press(app, "a")
-        assert room._falls[(8, 8, 0)][1] == 2
+        assert room._falls[(8, 8, 1)][1] == 2
         room.restore_timeline_state(room.timeline_state())
         assert not room._falls and not room._hide
     run(go())

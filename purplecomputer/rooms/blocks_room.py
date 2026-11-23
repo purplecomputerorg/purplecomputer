@@ -70,6 +70,8 @@ STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 ARROW_KEYS = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
 KEY_SPAN = (0.85, 1.85, 0.4, 0.1)
 WALL_SPAN = (0.85, 1.05, 0.45, 0.1)    # the same for the flat stop bar lying where a key would, where the edge stops the cursor
+LIFT_HOLD_S, LIFT_FADE_S, LIFT_SLIDE_S = 1.0, 0.4, 0.14   # the lifted floor: how long it stays after Shift moved it, fades, and slides a level
+LIFT_REACH = 2                 # cells the lifted floor reaches each way from the cursor's column
 BUMP, BUMP_S = 0.18, 0.18          # cells the waiting block knocks toward a wall an arrow pushes it into, and for how long   # cells: where each arrow's flat key starts and ends out from the column's middle, its half width, its thickness
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
@@ -140,6 +142,7 @@ class BlocksRoom(Room):
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
         self._seen, self._cols = {}, {}
         self._guide, self._guide_lit = Guide(), None   # the guide beside the floor, and its row lit when the layers were painted  # the landed blocks in view coordinates, and each view column's shape
+        self._lift = self._lift_timer = None   # (height from, height to, when) Shift last moved the height
         self._bump = self._bump_timer = None   # (dx, dz, dy, when) while the waiting block knocks against a wall or the ceiling
         self._fell: list = []          # where the falling blocks were drawn last, in the layers' pixels
         self._falls: dict = {}         # blocks still falling into place, kept out of the layers: (when it was let go, from which level)
@@ -357,9 +360,30 @@ class BlocksRoom(Room):
         if not 0 <= y < HEIGHT:
             self._knock(0, 0, rise)
             return False
+        self._lift = (self._cursor_y(), y, time.monotonic())
         self._hover = y
         self._next = (self._x, self._z, y, True)
+        self._lift_timer = self._lift_timer or self.app.timers.every(1 / 30, self._lift_tick)
         return True
+
+    def _lift_tick(self):
+        if time.monotonic() - self._lift[2] > LIFT_HOLD_S + LIFT_FADE_S:
+            self._lift_timer.stop()
+            self._lift_timer = None
+        self.app.invalidate()
+
+    def _lifted(self) -> tuple:
+        """(how strong, at what height) the lifted floor shows: a glass floor at the height the next block
+        lands, only while it would float there, full while Shift is held and fading a moment after it moved."""
+        y, now = self._cursor_y(), time.monotonic()
+        if y == 0 or self._ground(y) >= y or (self._x, self._z, y) in self._blocks:
+            return 0.0, y
+        since = now - self._lift[2] if self._lift else math.inf
+        strength = 1.0 if self.app._keyboard_state_machine.shift_active else min(1.0, max(0.0, 1 - (since - LIFT_HOLD_S) / LIFT_FADE_S))
+        if self._lift and self._lift[1] == y and since < LIFT_SLIDE_S:
+            t = since / LIFT_SLIDE_S
+            y = self._lift[0] + (y - self._lift[0]) * (1 - (1 - t) ** 2)
+        return strength, y
 
     def _erase(self):
         """Backspace: the highest block at or below the cursor goes, and the cursor
@@ -854,7 +878,30 @@ class BlocksRoom(Room):
         """Layer pixels the cursor can touch, and those its waiting block can."""
         cam, layer = self._cam, self._composed.get_rect()
         over = self._square(cam, vx, vz, HOVER + 0.5, round(CURSOR_REACH * cam.cell(vx, HOVER, vz)))
-        return over.union(cam.column_rect(vx, vz)).clip(layer), over.clip(layer)
+        whole = over.union(cam.column_rect(vx, vz))
+        strength, h = self._lifted()
+        if strength:
+            whole = whole.union(self._lift_rect(cam, vx, vz, h))
+        return whole.clip(layer), over.clip(layer)
+
+    def _lift_rect(self, cam, x, z, h) -> pygame.Rect:
+        r = LIFT_REACH
+        return bbox([cam.at(x + a, h, z + b) for a in (-r, r + 1) for b in (-r, r + 1)]).inflate(8, 8)
+
+    def _lifted_floor(self, surf, painter, x, z, strength, h):
+        """A patch of glass floor at height h around the column: a light checker with a clear edge."""
+        r = LIFT_REACH
+
+        def draw(layer, big):
+            cam, ink = big.cam, rgb(P.TEXT)
+            for dx in range(-r, r + 1):
+                for dz in range(-r, r + 1):
+                    edge = 0.6 if max(abs(dx), abs(dz)) == r else 1.0
+                    tile = [cam.at(x + dx + a, h, z + dz + b) for a, b in ((0, 0), (1, 0), (1, 1), (0, 1))]
+                    pygame.draw.polygon(layer, (*ink, round((55 if (x + dx + z + dz) % 2 else 30) * edge * strength)), tile)
+            rim = [cam.at(x + a, h, z + b) for a, b in ((-r, -r), (r + 1, -r), (r + 1, r + 1), (-r, r + 1))]
+            pygame.draw.polygon(layer, (*ink, round(170 * strength)), rim, 2 * cam.zoom)
+        self._smooth(surf, painter, self._lift_rect(painter.cam, x, z, h), draw)
 
     def _square(self, cam, x, z, h, reach: int) -> pygame.Rect:
         """The screen square reaching `reach` pixels each way from the column's middle at height h."""
@@ -871,9 +918,13 @@ class BlocksRoom(Room):
         whole, over = self._cursor_boxes(vx, vz)
         cut = self._cut(vx, vz, y)
 
+        strength, lift = self._lifted()
+
         def paint(clip, bright):
             sub.set_clip(clip)
             sub.blit(self._scene, clip, clip)
+            if strength:
+                self._lifted_floor(sub, painter, vx, vz, strength, lift)
             self._drop_marks(sub, painter, vx, vz, y)
             sub.blit(self._front, clip, clip)
             if cut:

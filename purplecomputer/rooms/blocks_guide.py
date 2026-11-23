@@ -19,13 +19,13 @@ MIN_W = 13                     # vw: a side narrower than this shows no column
 BUILD, LOOK = "build", "look"
 # Each row: (name, keys, picture, words). Keys are names, "+", "arrows" (the four, as on the keyboard),
 # and "hold X"; a picture is an image name or a little scene: (blocks, wire boxes, cell it centers on, height,
-# and a drop: (how high the falling block is, its key, the waiting bubble's height)), drawn as the room draws them.
+# a drop: (how high the falling block is, its key, the waiting bubble's height), and a lifted floor's height),
+# drawn as the room draws them.
 ROWS = {
     BUILD: ("Build", [
         ("type", ["A", "Z"], ({}, [((1, 1, 0), 255)], (1, 1), 2.3, (1.35, "a", 3.55)), "letters drop blocks"),
         ("move", ["arrows"], ({}, [((0, 1, 0), 70), ((1, 1, 0), 255)], (0.5, 1), 0.5), "move around the floor"),
-        ("height", ["hold Shift", "+", UP, DOWN], ({(1, 1, 0): "a"}, [((1, 1, 1), 70), ((1, 1, 2), 255)], (1, 1), 1.6),
-         "higher or lower"),
+        ("height", ["hold Shift", "+", UP, DOWN], ({}, [((1, 1, 2), 255)], (1, 1), 1.4, None, 2), "raise the floor"),
     ]),
     LOOK: ("Look around", [
         ("turn", ["Tab"], "hints/turn.png", "tap to turn"),
@@ -129,14 +129,15 @@ def _cluster(g, px, x, cy) -> int:
     return x + 3 * w + 2 * gap
 
 
-def _scene(side, blocks, boxes, focus, lift, drop=None) -> pygame.Surface:
+def _scene(side, blocks, boxes, focus, lift, drop=None, glass=None) -> pygame.Surface:
     """A few cells of a build seen as the room sees it, on a patch of floor, `side` square: drawn twice
     the size and scaled down, so its edges are smooth. Block colors are keys' sticker colors. A drop adds
-    the waiting bubble, the line down from it, and a block on its way down with a short fading trail."""
+    the waiting bubble, the line down from it, and a block on its way down with a short fading trail; glass,
+    a patch of lifted floor at that height, as Shift shows it."""
     big = 2 * side
     cam = Camera(0.55, REST_PITCH + 0.12, big, big, fit=0.55)
     (fx, fy) = cam.at(focus[0] + 0.5, lift, focus[1] + 0.5)
-    zoom = 4 if drop else 6     # a drop is taller: the bubble over it has to fit
+    zoom = 4 if drop or glass else 6     # taller scenes: the bubble over a drop, the ground under a lifted floor
     cam = cam.zoomed(zoom, (fx - big / zoom / 2, fy - big / zoom / 2))
     surf = pygame.Surface((big, big), pygame.SRCALPHA)
     painter = Painter(cam, {p: get_key_color(k) for p, k in blocks.items()}, hazy=False)
@@ -145,6 +146,14 @@ def _scene(side, blocks, boxes, focus, lift, drop=None) -> pygame.Surface:
             pygame.draw.polygon(surf, painter.tile(x, z), painter._tile_poly(x, z))
     painter.paint(surf, painter.items)
     line = max(2, big // 60)
+    if glass:
+        layer = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+        for x in range(3):
+            for z in range(3):
+                tile = [cam.at(x + a, glass, z + b) for a, b in ((0, 0), (1, 0), (1, 1), (0, 1))]
+                pygame.draw.polygon(layer, (*rgb(P.TEXT), 70 if (x + z) % 2 else 40), tile)
+        pygame.draw.polygon(layer, (*rgb(P.TEXT), 190), [cam.at(a, glass, b) for a, b in ((0, 0), (3, 0), (3, 3), (0, 3))], line)
+        surf.blit(layer, (0, 0))
     for (x, z, y), alpha in boxes:
         if drop:
             painter.shadow(surf, x, z, y, alpha=90)

@@ -1069,3 +1069,27 @@ def test_the_guide_holds_still_however_the_view_turns_or_tilts():
             app._draw()
             assert room._guide_spots() == spots, (yaw, tilt)
     run(go())
+
+
+def test_the_lifted_floor_shows_while_a_block_would_float_and_fades_after_shift(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        app._draw()
+        assert room._lifted()[0] == 0                                     # on the ground: no lifted floor
+        for _ in range(3):
+            await press(app, "up", shift_held=True)
+        now[0] += blocks_room.LIFT_SLIDE_S / 2
+        strength, h = room._lifted()
+        assert strength == 1 and 2 < h < 3                                # it slides up to its new height
+        now[0] += blocks_room.LIFT_SLIDE_S / 2
+        assert room._lifted() == (1.0, 3)
+        app._draw()
+        now[0] += blocks_room.LIFT_HOLD_S + blocks_room.LIFT_FADE_S
+        assert room._lifted()[0] == 0                                     # a moment after Shift: gone
+        app._keyboard_state_machine._shift_held = True
+        assert room._lifted()[0] == 1                                     # Shift down again brings it back
+        room._blocks.update({(room._x, room._z, y): "#ff0000" for y in range(3)})
+        assert room._lifted()[0] == 0                                     # a block there would not float
+    run(go())

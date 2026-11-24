@@ -38,6 +38,8 @@ usage() {
     echo "  --main           Flash the newest build from main"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
     echo "  --ignore-denylist  Flash drives even if their serial is in $(denylist_path)"
+    echo "  --allow-usb2     Flash a drive linked at USB 2 speed (otherwise refused, since"
+    echo "                   it usually means a USB 3 drive isn't pushed all the way in)"
     echo "  --no-settle      Skip the post-flash QEMU boot-settle (first real boot will be slow)"
     echo "  --settle-only    Skip flashing; just boot-settle and eject an already-flashed drive"
     echo "  --no-udev-gate   Skip udev stop/start (caller manages the gate; used by flash-all)"
@@ -484,6 +486,10 @@ main() {
                 export PURPLE_IGNORE_DENYLIST=1
                 shift
                 ;;
+            --allow-usb2)
+                export PURPLE_ALLOW_USB2=1
+                shift
+                ;;
             --settle-only)
                 SETTLE_ONLY=true
                 shift
@@ -527,6 +533,7 @@ main() {
 
     find_whitelisted_drives
     select_drive
+    require_usb3 "$TARGET_DEV" || exit 1
 
     # Post-eject drives linger in /dev as media-less nodes until re-plugged.
     # Catch this here so we fail with a useful message instead of a cryptic

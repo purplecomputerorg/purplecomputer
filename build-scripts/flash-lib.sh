@@ -397,6 +397,23 @@ usb_port_control() {
     port_control_path "$port"
 }
 
+# Refuse drives linked below USB 3: a USB 3 stick that comes up at 480 Mbps is
+# almost always not pushed all the way in. --allow-usb2 sets PURPLE_ALLOW_USB2=1.
+require_usb3() {
+    [[ "${PURPLE_ALLOW_USB2:-}" == "1" ]] && return 0
+    local dev usbdir speed slow=()
+    for dev in "$@"; do
+        usbdir="$(usb_device_dir "$dev")"
+        speed="$(cat "$usbdir/speed" 2>/dev/null)" || continue
+        (( ${speed%.*} < 5000 )) && slow+=("$(drive_tag "$dev") at $speed Mbps")
+    done
+    (( ${#slow[@]} )) || return 0
+    log_error "Running at USB 2 speed instead of USB 3:"
+    printf '  %s\n' "${slow[@]}" >&2
+    log_error "Unplug each one and push it back in all the way, then run again. Pass --allow-usb2 for drives that are USB 2 only."
+    return 1
+}
+
 # --- Physical socket labels --------------------------------------------------
 # Map of hub socket to a human label ("top row 3"), written by label-ports.sh
 # (just label-ports). Lets failure reports point at a stick by where it sits

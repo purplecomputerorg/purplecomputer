@@ -138,7 +138,7 @@ def code(on):
 
 
 def demo(letters=False):
-    """The room in the mode its Try demo's keys are for, whatever Tab left it in; letters: Music's Letters, saying sounds."""
+    """The room in the mode its Try demo's keys are for, whatever the visitor left it in; letters: Music's Letters, saying sounds."""
     room = _app.room
     if _app.active_room == "art":
         room._set_paint_mode(True)
@@ -148,7 +148,7 @@ def demo(letters=False):
             room._toggle_letters()
             room._stop_letter()  # the switch's sample "A" would sound like the demo's first letter
     elif _app.active_room == "blocks":
-        room.face_front()
+        room.home()
     _app.invalidate()
 
 

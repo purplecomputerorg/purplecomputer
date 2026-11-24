@@ -514,6 +514,12 @@ class BlocksRoom(Room):
         """Back to the front and the resting tilt, the short way around."""
         self._aim(yaw=360.0 * round(self._goal[0] / 360), tilt=REST_TILT)
 
+    def home(self):
+        """The cursor over the floor's middle, on the ground, seen from the front: where Studio's Try demo builds."""
+        self._x, self._z = WIDTH // 2, DEPTH // 2
+        self._hover, self._next = 0, None
+        self.face_front()
+
     def turn(self):
         """A tap of Tab, here or in Time Travel: on to the floor's next side, straight on and at the
         resting tilt, so a tap always lands on a standard view however far the view was looked around."""

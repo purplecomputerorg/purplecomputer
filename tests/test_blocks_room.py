@@ -1068,3 +1068,15 @@ def test_the_lifted_floor_shows_while_a_block_would_float_and_fades_after_shift(
         room._blocks.update({(room._x, room._z, y): "#ff0000" for y in range(3)})
         assert room._lifted()[0] == 0                                     # a block there would not float
     run(go())
+
+
+def test_home_puts_the_cursor_in_the_middle_on_the_ground_from_the_front():
+    async def go():
+        app, room = _blocks()
+        room._step_height(2)
+        room.turn()
+        room.home()
+        assert (room._x, room._z, room._hover, room._side) == (WIDTH // 2, DEPTH // 2, 0, 0)
+        await press(app, "a")
+        assert (WIDTH // 2, DEPTH // 2, 0) in room._blocks
+    run(go())

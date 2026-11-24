@@ -38,7 +38,10 @@ const labelled = (onclick: () => void, ...after: Node[]) => {
 };
 const demoKeys = [0, 1].map((i) => labelled(() => demo(stage.live.place.room, i)));
 const codeKey = labelled(() => { stage.showKeys(["escape", "space"], 0); code(); }, keycaps("Esc", "Space"));
-const trayKeys = h("div", { class: "demo-keys", hidden: true }, ...demoKeys.map((d) => d.key), codeKey.key);
+// Blocks' camera: a tap of Tab turns the build to its next side, as on the laptop. It stops a demo,
+// whose arrows would go the turned way.
+const spinKey = labelled(() => { playing++; stage.laptop.type("tab"); }, keycaps("Tab"));
+const trayKeys = h("div", { class: "demo-keys", hidden: true }, ...demoKeys.map((d) => d.key), spinKey.key, codeKey.key);
 const showKeys = () => {
   const room = stage.live.place.room;
   const ds = DEMOS[room] ?? [];
@@ -47,9 +50,11 @@ const showKeys = () => {
     const d = ds[i];
     label.replaceChildren(...d ? [`${ready ? "▶ " : ""}${d.label}`, ...d.typed ? [" ", h("code", {}, d.typed)] : []] : []);
   });
+  spinKey.key.hidden = room !== "blocks" || !!stage.live.place.code;
+  spinKey.label.textContent = "Spin around";
   codeKey.key.hidden = !EXAMPLES[room];
   codeKey.label.textContent = stage.live.place.code ? "Close code" : "Try code";
-  [...demoKeys, codeKey].forEach(({ key }) => key.disabled = !ready);
+  [...demoKeys, spinKey, codeKey].forEach(({ key }) => key.disabled = !ready);
   trayKeys.hidden = !ds.length && codeKey.key.hidden;
 };
 const moved = () => {
@@ -91,7 +96,6 @@ const TIPS: Record<Room | "letters", Tip[]> = {
   ],
   play: [{ text: "Press Tab so Purple says it", key: "tab" }],
   blocks: [
-    { text: "Press Tab to spin around", key: "tab" },
     { text: "Press an arrow to move, then type more", key: "right" },
   ],
 };
@@ -126,17 +130,19 @@ addEventListener(KEY_EVENT, (e) => {
 });
 
 const repeat = (n: number, key: string): string[] => Array(Math.abs(n)).fill(key);
-// Row by row from the front, snaking, with as many letters in each column as it stands high.
-const pyramid = (): string[] => [
-  "left", "left", "down", "down",
-  ...[0, 1, 2, 3, 4].flatMap((row) => [
-    ...[0, 1, 2, 3, 4].flatMap((i) => {
-      const col = row % 2 ? 4 - i : i;
-      return [..."cfr".slice(0, 3 - Math.max(Math.abs(col - 2), Math.abs(row - 2))), ...(i < 4 ? [row % 2 ? "left" : "right"] : [])];
+// Row by row from the front, snaking, with as many letters in each column as it stands high: a keyboard
+// row a level, from the bottom row up to the numbers. It starts from the floor's middle (Purple's demo puts the cursor there).
+const LEVELS = "cfr1";
+const pyramid = (): string[] => {
+  const n = LEVELS.length, size = 2 * n - 1, rows = [...Array(size).keys()];
+  return [...repeat(n - 1, "left"), ...repeat(n - 1, "down"), ...rows.flatMap((row) => [
+    ...rows.flatMap((i) => {
+      const col = row % 2 ? size - 1 - i : i;
+      return [...LEVELS.slice(0, n - Math.max(Math.abs(col - n + 1), Math.abs(row - n + 1))), ...(i < size - 1 ? [row % 2 ? "left" : "right"] : [])];
     }),
-    ...(row < 4 ? ["up"] : []),
-  ]),
-];
+    ...(row < size - 1 ? ["up"] : []),
+  ])];
+};
 const line = (text: string): string[] => [...text.toLowerCase()].map((c) => c === " " ? "space" : c).concat("enter");
 const TYPE_MS = 120;
 
@@ -171,8 +177,7 @@ const DEMOS: Partial<Record<Room, Demo[]>> = {
     { label: "Spell cat", keys: () => "_ c _ a _ t _ _ space".split(" "), ms: 500, letters: true },
   ],
   play: ["red + blue", "say cat + cat x 5"].map((typed) => ({ label: "Type", typed, keys: () => line(typed), ms: TYPE_MS })),
-  // A pyramid, five by five and three high: each letter lands on top of the column, a keyboard row a level.
-  blocks: [{ label: "Build a pyramid", keys: pyramid, ms: 90 }],
+  blocks: [{ label: "Build a pyramid", keys: pyramid, ms: 70 }],
 };
 
 // What's playing; a new one, typing, or another room stops it.

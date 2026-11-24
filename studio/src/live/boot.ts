@@ -61,7 +61,7 @@ export interface LivePurple {
   key(char: string): Promise<void>;
   // Opens the room's code line (or closes it), without the Esc menu.
   code(on: boolean): Promise<void>;
-  // Puts the room in the mode its Try demo plays in: Art painting, Music on its instrument, Blocks from the front.
+  // Puts the room in the mode its Try demo plays in: Art painting, Music on its instrument, Blocks from the front with the cursor in the middle, on the ground.
   demo(letters?: boolean): Promise<void>;
   // Stops Purple's speech and sounds.
   hush(): Promise<void>;

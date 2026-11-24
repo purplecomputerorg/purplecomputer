@@ -27,8 +27,6 @@ _defaults = {
     "volume_level": None,        # Last volume anyone set (0-100), restored on restart; None until then
     "volume_lock": None,         # Parent ceiling: None = no limit, 0-100 = loudest the kid can pick (0 = Silent Mode, keys disabled)
     "parent_pin": None,          # Optional 4-digit PIN gating the parent menu; None = no PIN
-    "kid_letters": False,        # Use the recorded kid-voice clips for A-Z letter names (gated behind the secret menu)
-    "secret_unlocked": False,    # Family secret menu revealed via the Ctrl+codeword gesture
     "voice": "natural",          # Which synthesizer speaks: "natural" (Piper) or "quick" (flite)
     "language": "en",            # Interface language code (a language pack), "en" = English
     "second_language": None,     # Language Play shows and says beside typed words; None = off
@@ -247,27 +245,6 @@ def set_volume_lock(level: int | None) -> None:
     settings["volume_lock"] = level
     save_settings(settings)
 
-
-def get_kid_letters() -> bool:
-    """Whether the recorded kid-voice clips are used for A-Z letter names."""
-    return load_settings()["kid_letters"]
-
-
-def set_kid_letters(enabled: bool) -> None:
-    settings = load_settings()
-    settings["kid_letters"] = enabled
-    save_settings(settings)
-
-
-def get_secret_unlocked() -> bool:
-    """Whether the family secret menu has been unlocked."""
-    return load_settings()["secret_unlocked"]
-
-
-def set_secret_unlocked(enabled: bool) -> None:
-    settings = load_settings()
-    settings["secret_unlocked"] = enabled
-    save_settings(settings)
 
 
 def get_parent_pin() -> str | None:

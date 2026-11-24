@@ -1,4 +1,4 @@
-"""Saved pictures, reproducible from the Secret Menu.
+"""Saved pictures, painted into Art from the library.
 
 Pictures are stored as ordered (x, y, color_key) paint ops, where color_key is
 an Art room key or a "#rrggbb" hex color. For the doodle, order matters:

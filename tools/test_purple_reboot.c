@@ -314,7 +314,7 @@ static int test_wait_exits_alternate_screen(void) {
     char *argv[] = {"purple-reboot", "--wait", NULL};
     run_main(2, argv);
     ASSERT(find_write_containing(STDOUT_FILENO, "\033[?1049l"),
-           "should exit Textual's alternate screen buffer");
+           "should exit the terminal's alternate screen buffer");
     return 1;
 }
 
@@ -363,7 +363,7 @@ static int test_fallback_writes_to_stdout(void) {
     char *argv[] = {"purple-reboot", NULL};
     run_main(1, argv);
     ASSERT(find_write_containing(STDOUT_FILENO, "installed successfully"),
-           "should write failure message to stdout (Alacritty)");
+           "should write failure message to stdout");
     ASSERT(find_write_containing(STDOUT_FILENO, "power button"),
            "stdout message should say to use power button");
     return 1;

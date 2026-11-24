@@ -227,27 +227,17 @@ static void try_sysrq(char key) {
     }
 }
 
-/* Show reboot-failed message via every available channel.
- *
- * The user might be looking at:
- *   (a) Alacritty on tty1 (X11) — if it's still alive, stdout works
- *   (b) The X11 root window (purple) — if Alacritty died
- *   (c) A text VT — unlikely but possible
- *
- * Strategy: write to stdout first (covers case a, the most common),
- * then try to switch to tty2 and write there (covers case b).
- * SIGPIPE is already ignored so stdout writes are safe even if
- * Alacritty is dead. */
+/* Show reboot-failed message via every available channel: stdout (a
+ * terminal when run by hand), then tty2, switching to it so the message is
+ * on screen once the Purple window is gone. SIGPIPE is ignored, so stdout
+ * writes are safe even if nothing is reading. */
 static void show_reboot_failed(void) {
     int fd;
 
-    /* 1. Write to stdout (Alacritty PTY, if still alive).
-     *    This is the most likely way the user will see the message:
-     *    they just pressed Enter, Alacritty is probably still up. */
+    /* 1. Write to stdout. */
     pr_write(STDOUT_FILENO, FAIL_MSG, strlen(FAIL_MSG));
 
-    /* 2. Try to switch to tty2 and write there too.
-     *    If stdout failed (Alacritty dead), this is the fallback.
+    /* 2. Switch to tty2 and write there too.
      *    Try multiple device paths for the VT switch ioctl. */
     int switched = 0;
     static const char *console_paths[] = {
@@ -285,12 +275,8 @@ int purple_reboot_main(int argc, char **argv) {
 #endif
     timed_out = 0;
 
-    /* Ignore terminal signals. After execv from the Python app, the evdev
-     * grab is released and keypresses flow through X → Alacritty → pty.
-     * Without these, USB removal kills us: Alacritty SIGBUSes on dead
-     * overlayfs → pty master closes → kernel sends SIGHUP → we die before
-     * reaching reboot(). Ctrl+\ (SIGQUIT) and Ctrl+C (SIGINT) from the
-     * pty would also kill us. */
+    /* Ignore terminal signals: after USB removal the session dies around
+     * us, and a hangup or Ctrl+C/Ctrl+\ must not kill us before reboot(). */
     pr_signal(SIGHUP, SIG_IGN);
     pr_signal(SIGPIPE, SIG_IGN);
     pr_signal(SIGQUIT, SIG_IGN);

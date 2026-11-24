@@ -21,7 +21,7 @@ from ..gfx import FONT_DIR, mix
 from ..audio import VOLUME_TOP, adjacent_volume, lock_badge, volume_badge, volume_step
 from ..tts import VOICE_NAMES, VOICE_NATURAL, VOICE_QUICK, natural_voice_available
 from ..constants import (
-    DISK_BY_LABEL_DIR, PAYLOAD_DIR, SUPPORT_EMAIL, USB_LABELS,
+    DISK_BY_LABEL_DIR, PAYLOAD_DIR, REBOOT_BIN, SUPPORT_EMAIL, USB_LABELS,
     is_debug, is_live_boot, is_usb_cached, is_usb_needed, is_usb_present, is_usb_reinserted,
 )
 from ..input import KeyCode, PowerButtonEvent, RawKeyEvent
@@ -781,7 +781,6 @@ def _build_eta_curve():
 
 
 _ETA_CURVE, _ETA_TOTAL_SECS = _build_eta_curve()
-_REBOOT_BIN = '/run/purple-reboot-mount/purple-reboot'
 _SENTINEL = Path('/run/purple-install-complete')
 
 
@@ -913,7 +912,7 @@ class InstallProgressScreen(FullScreen):
         self.app.call_from_thread(self._on_install_complete, _SENTINEL.exists() or proc.poll() == 0)
 
     def _on_install_complete(self, success: bool):
-        if success and os.path.isfile(_REBOOT_BIN):
+        if success and os.path.isfile(REBOOT_BIN):
             self._phase = "done"
             self.app.push(InstallDoneScreen(self.app))
             return
@@ -1125,7 +1124,7 @@ class InstallDoneScreen(FullScreen):
     def _reboot(self):
         if self.app._evdev_reader:
             self.app._evdev_reader.release_grab()
-        os.execv(_REBOOT_BIN, [_REBOOT_BIN])
+        os.execv(REBOOT_BIN, [REBOOT_BIN])
 
 
 # ---------------------------------------------------------------------------

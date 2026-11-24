@@ -177,6 +177,9 @@ class ShutdownConfirmScreen(AsleepBot):
     def _cancel(self):
         get_power_manager().record_activity()
         self.close()
+        # Lid-closed sleep only shows on the lid transition, so restore it here
+        if self.app._lid_close_time is not None:
+            self.app._show_sleep_screen()
 
     async def handle(self, action):
         self._cancel()

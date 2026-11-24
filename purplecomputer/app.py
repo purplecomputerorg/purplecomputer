@@ -1535,20 +1535,24 @@ class PurpleApp:
         from .rooms.sleep_screen import SleepScreen
         self.push(SleepScreen(self))
 
+    def _close_overlays(self, classes):
+        for o in list(self._overlays):
+            if isinstance(o, classes):
+                o.close()
+
     def _show_shutdown_confirm(self):
-        if self._is_sleep_or_bye_active():
+        from .rooms.sleep_screen import ByeScreen, ShutdownConfirmScreen, SleepScreen
+        if self._bye_screen_active or self.has_overlay((ShutdownConfirmScreen, ByeScreen)):
             return
+        self._close_overlays(SleepScreen)
         self._silence_music()
-        from .rooms.sleep_screen import ShutdownConfirmScreen
         self.push(ShutdownConfirmScreen(self))
 
     def _show_bye_screen(self):
         if self._bye_screen_active:
             return
         from .rooms.sleep_screen import ByeScreen, ShutdownConfirmScreen, SleepScreen
-        for o in list(self._overlays):
-            if isinstance(o, (SleepScreen, ShutdownConfirmScreen)):
-                o.close()
+        self._close_overlays((SleepScreen, ShutdownConfirmScreen))
         if self._evdev_reader:
             self._evdev_reader.release_grab()
         self._silence_music()

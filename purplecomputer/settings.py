@@ -83,8 +83,7 @@ def load_settings() -> dict:
             data = shared if key in SHARED else own
             if key in data:
                 settings[key] = data[key]
-        if shared.get("silent_mode") and settings["volume_lock"] is None:
-            settings["volume_lock"] = 0
+        settings["volume_lock"] = _legacy_lock(shared, settings["volume_lock"])
         if settings["volume_level"] is not None:
             settings["volume_level"] = snap_volume(settings["volume_level"])
         if settings["volume_lock"] is not None:
@@ -107,6 +106,19 @@ def save_settings(settings: dict) -> bool:
         return True
     except Exception:
         return False
+
+
+def _legacy_lock(data: dict, lock):
+    return 0 if data.get("silent_mode") and lock is None else lock
+
+
+def adopt(path: Path):
+    """Another Purple's settings, PIN included, over this one's (a v1 laptop's, before this Key updates it)."""
+    old = _read(path)
+    known = {k: v for k, v in old.items() if k in _defaults}
+    if (lock := _legacy_lock(old, known.get("volume_lock"))) is not None:
+        known["volume_lock"] = lock
+    save_settings(load_settings() | known)
 
 
 

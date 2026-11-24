@@ -33,6 +33,7 @@ from .sleep_screen import FullScreen
 from ..kids import KidsScreen, computer_name, many, write_computer_name
 from .. import old_install
 from ..old_install import PAYLOAD_PATH
+from ..settings import adopt as adopt_settings
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
 CREDITS = "Credits: purplecomputer.org/licenses"
@@ -474,10 +475,18 @@ class InstallConfirmScreen(Picker):
         await super().handle(action)
 
 
-class ReinstallConfirmScreen(InstallConfirmScreen):
-    DESCRIPTION = ("Purple is already set up on this laptop.\n"
-                   "Installing can keep your kid's work\nand settings, or start fresh.")
-    OPTIONS = [("keep", "Install and keep everything"), (False, "No, go back"), ("fresh", "Install and start fresh")]
+class _UpdateScreen(InstallConfirmScreen):
+    title = "Update Purple Computer"
+    KEEPS = ""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.DESCRIPTION = f"{old_install.key_has()}\n{self.KEEPS}"
+
+
+class ReinstallConfirmScreen(_UpdateScreen):
+    KEEPS = "Updating keeps your kid's work\nand settings."
+    OPTIONS = [("keep", "Update and keep everything"), (False, "No, go back"), ("fresh", "Update and start fresh")]
     dim_values = {"fresh"}
     default_selected = 0
 
@@ -490,16 +499,30 @@ class ReinstallConfirmScreen(InstallConfirmScreen):
 
 class InstallOverScreen(ReinstallConfirmScreen):
     """After the live welcome screen, on a laptop that already has Purple."""
-    title = "Install this Key's Purple?"
-    OPTIONS = [("keep", "Install and keep everything"), ("fresh", "Install and start fresh"), (False, "Just play, don't install right now")]
+    title = "Update Purple on this laptop?"
+    OPTIONS = [("keep", "Update and keep everything"), ("fresh", "Update and start fresh"),
+               (False, "Just play for now", "What's made now won't be kept when you update")]
     default_selected = 2
     gap_before = {False}
+
+
+class EmptyUpdateScreen(_UpdateScreen):
+    """A laptop whose Purple has settings but no work (v1): the Key's work comes over whole."""
+    KEEPS = "Updating keeps its settings and PIN."
+    OPTIONS = [(True, "Update"), (False, "No, go back")]
+    default_selected = 0
+
+
+class EmptyInstallOverScreen(EmptyUpdateScreen):
+    title = InstallOverScreen.title
+    OPTIONS = [(True, "Update"), (False, "Just play for now")]
+    default_selected = 1
 
 
 class StartFreshConfirmScreen(InstallConfirmScreen):
     title = "Start Fresh"
     DESCRIPTION = f"[bold {P.DANGER}]This erases everything your kid\nsaved on this laptop.[/]"
-    OPTIONS = [(True, "Erase and install"), (False, "Go back")]
+    OPTIONS = [(True, "Erase and update"), (False, "Go back")]
 
 
 class UnreadableReinstallScreen(InstallConfirmScreen):
@@ -879,15 +902,17 @@ class InstallProgressScreen(FullScreen):
         self.app.invalidate()
 
     # --- install subprocess (thread; UI updates hop back to the loop) ---
-    def _run_install_thread(self):
+    def install_env(self) -> dict:
         from ..settings import SETTINGS_FILE
-        proc = subprocess.Popen(
-            ["sudo", "-E", "bash", "/cdrom/purple/install.sh"], stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
-            env={**os.environ, "PURPLE_PAYLOAD_DIR": PAYLOAD_DIR, "PURPLE_COMPUTER_NAME": self._computer_name,
-                 "PURPLE_LIVE_AUDIO_OK": "1" if self.app.audio_ok is True else "0",
-                 "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE),
-                 "PURPLE_LIVE_CONFIG": str(SETTINGS_FILE.parent),  # copied into the installed system
-                 **({"PURPLE_KEEP_DIR": _KEEP_DIR} if self._keep else {})})
+        return {**os.environ, "PURPLE_PAYLOAD_DIR": PAYLOAD_DIR, "PURPLE_COMPUTER_NAME": self._computer_name,
+                "PURPLE_LIVE_AUDIO_OK": "1" if self.app.audio_ok is True else "0",
+                "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE),
+                "PURPLE_LIVE_CONFIG": str(SETTINGS_FILE.parent),  # copied into the installed system
+                **({"PURPLE_KEEP_DIR": str(old_install.KEEP_DIR)} if self._keep else {})}
+
+    def _run_install_thread(self):
+        proc = subprocess.Popen(["sudo", "-E", "bash", "/cdrom/purple/install.sh"], stderr=subprocess.PIPE,
+                                stdout=subprocess.DEVNULL, env=self.install_env())
         buf = b""
 
         def emit(line: bytes):
@@ -1213,16 +1238,17 @@ class TerminalScreen(FullScreen):
 # ---------------------------------------------------------------------------
 # Menu
 # ---------------------------------------------------------------------------
-_KEEP_DIR = "/run/purple-keep"
-_CONFIRM_SCREENS = {None: InstallConfirmScreen, "found": ReinstallConfirmScreen, "unreadable": UnreadableReinstallScreen}
+_CONFIRM_SCREENS = {None: InstallConfirmScreen, "found": ReinstallConfirmScreen, "empty": EmptyUpdateScreen,
+                    "unreadable": UnreadableReinstallScreen}
+POPUP_SCREENS = {"found": InstallOverScreen, "empty": EmptyInstallOverScreen}
 
 
 def _boot_mode_hint() -> str:
     from .. import key_save
     if not is_live_boot():
         return "Installed on this computer."
-    if old_install.known()[0] == "found":
-        return "Running from USB.\nPurple is also on this laptop.\nInstall to update it."
+    if old_install.known()[0] in old_install.UPDATES:
+        return "Running from USB.\nPurple is also on this laptop.\nThis Key can update it."
     if key_save.active() and is_usb_cached():
         if is_usb_reinserted():
             return "Running from USB. Not yet installed.\nUSB was unplugged: restart to save again.\nInstall to keep it without the USB."
@@ -1236,6 +1262,11 @@ def _boot_mode_hint() -> str:
     if is_usb_needed():
         return "Running from USB. Not yet installed.\nKeep the USB in while you play.\nInstall to keep it without the USB."
     return "Running from USB. Not yet installed.\n\nInstall to keep it without the USB."
+
+
+def _install_label(available: bool) -> str:
+    verb = "Update Purple" if old_install.known()[0] in old_install.UPDATES else "Install"
+    return f"{verb} on this Computer" if available else f"{verb} (Reinsert USB)"
 
 
 def _find_usb_device():
@@ -1280,7 +1311,7 @@ def _get_menu_items(app) -> list:
     from ..settings import get_all_caps, get_littles_mode, get_parent_pin, get_voice, get_volume_lock
     items = [("menu-help", "Help & Share What They Made")]
     if is_live_boot():
-        items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
+        items.append(("menu-install", _install_label(_is_usb_payload_available())))
     else:
         items.append(("menu-rename", _rename_label(app)))
     items.append(("menu-kids", _kids_label()))
@@ -1348,7 +1379,7 @@ class ParentMenu(Overlay):
 
     def _disabled(self, item_id) -> bool:
         if item_id == "menu-install":
-            return self.items[[i for i, _ in self.items].index(item_id)][1] != "Install on this Computer"
+            return self.items[[i for i, _ in self.items].index(item_id)][1] == _install_label(False)
         return item_id == "menu-volume" and self.app.audio_ok is False or item_id == "menu-kids" and _kids_need_install()
 
     def _refresh_install_item(self):
@@ -1364,7 +1395,7 @@ class ParentMenu(Overlay):
             available = False
         if os.environ.get("PURPLE_FAKE_USB", "") in ("caching", "cached"):
             available = True
-        label = "Install on this Computer" if available else "Install (Reinsert USB)"
+        label = _install_label(available)
         for i, (item_id, old) in enumerate(self.items):
             if item_id == "menu-install" and old != label:
                 self.items[i] = (item_id, label)
@@ -1528,6 +1559,8 @@ class ParentMenu(Overlay):
 
             def on_confirm(choice):
                 if choice:
+                    if old == "empty":
+                        adopt_settings(old_install.KEEP_DIR / "config/settings.json")
                     write_computer_name(name or "", "")  # the live settings come over whole, name included
                     self.close()
                     self.app._timeline_flush()  # the installer copies the live history

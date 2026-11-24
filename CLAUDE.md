@@ -158,6 +158,8 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 4. Success screen: "Press ENTER to restart"
 5. The app shows "All done" and on Enter `execv`s into `/run/purple-reboot-mount/purple-reboot` (static binary on tmpfs)
 
+On a laptop that already has Purple this is an update (keep, start fresh, or v1 settings only): every permutation is in `guides/updating-purple.md`.
+
 **Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Backstop: the static `purple-reboot --poweroff 8` on its own tmpfs (staged every boot by `purple-stage-reboot`) powers off if systemctl hasn't, even after the live USB is pulled. Logged to `/tmp/purple-power.log`.
 
 **Post-install reboot:** `purple-reboot` static binary on its own `exec,suid` tmpfs (Ubuntu's `/run` is `nosuid,noexec`). Ignores pty signals so it survives the session dying after USB removal. Calls `reboot(2)` directly.

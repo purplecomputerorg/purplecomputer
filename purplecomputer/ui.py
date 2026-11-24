@@ -531,8 +531,11 @@ class Picker(Dialog):
         self.selected = self.default_selected
         self._first = 0  # the top row shown when they don't all fit
 
+    def _row_height(self, g: Gfx, opt) -> int:
+        return g.em(4.2) if len(opt) == 3 else g.em(1.9)
+
     def option_height(self, g: Gfx) -> int:
-        return g.em(4.2) if any(len(o) == 3 for o in self.options) else g.em(1.9)
+        return max(self._row_height(g, o) for o in self.options) if self.options else g.em(1.9)
 
     def _desc_height(self, g: Gfx) -> int:
         return g.markup_size(self.DESCRIPTION, g.em(0.92), "mono", self.inner_width(g))[1] + g.em(0.8) if self.DESCRIPTION else 0
@@ -546,7 +549,9 @@ class Picker(Dialog):
         return g.em(0.9) * sum(o[0] in self.gap_before for o in self.options)
 
     def body_height(self, g: Gfx) -> int:
-        return self._desc_height(g) + self._shown(g) * (self.option_height(g) + g.em(0.3)) + self._gaps(g)
+        n = self._shown(g)
+        rows = sum(self._row_height(g, o) for o in self.options) if n == len(self.options) else n * self.option_height(g)
+        return self._desc_height(g) + rows + n * g.em(0.3) + self._gaps(g)
 
     def draw_body(self, g: Gfx, rect: pygame.Rect):
         """Rows in the Parent Menu's idiom: plain mono, the chosen one on
@@ -555,11 +560,12 @@ class Picker(Dialog):
         px = g.em(0.98)
         if self.DESCRIPTION:
             y += g.draw_markup(self.DESCRIPTION, g.em(0.92), rect.x, y, "mono", P.MUTED, rect.w, "center", P.SURFACE) + g.em(0.8)
-        oh, n = self.option_height(g), self._shown(g)
+        n = self._shown(g)
         self._first = min(max(self._first, self.selected - n + 1), self.selected, len(self.options) - n)
         last = self._first + n - 1
         for i, opt in enumerate(self.options[self._first:last + 1], self._first):
             y += g.em(0.9) if opt[0] in self.gap_before and i > self._first else 0
+            oh = self._row_height(g, opt)
             box = pygame.Rect(rect.x, y, rect.w, oh)
             on = i == self.selected
             if on:

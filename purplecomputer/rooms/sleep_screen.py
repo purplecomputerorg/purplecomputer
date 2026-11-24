@@ -198,7 +198,8 @@ class LiveBootSplash(FullScreen):
     _NOTES = [(ICON_KEYBOARD, "Purple is keyboard only, on purpose. Kids explore by typing."),
               (ICON_USB, "You're running from the Purple Key, so you'll need it to start Purple again."),
               (ICON_HARDDISK, "To install Purple and keep it, hold Esc to open the Parent Menu.")]
-    _INSTALLED_NOTE = (ICON_HARDDISK, "Purple is already on this laptop, with your kid's work.")
+    _UPDATE_NOTES = {"found": (ICON_HARDDISK, "This Key can update the Purple on this laptop, keeping your kid's work."),
+                     "empty": (ICON_HARDDISK, "This Key can update the Purple on this laptop.")}
     _AUDIO_WARNING = (ICON_VOLUME_OFF, "Sound is not working on this computer. Plug in a USB audio adapter, "
                                        "or open the Parent Menu to see Support info.")
     hint = "Press any key to start"
@@ -211,7 +212,7 @@ class LiveBootSplash(FullScreen):
             return round(u * n)
 
         px, icon_w, gap, pad = em(1.0), em(2.4), em(1.0), em(1.6)
-        notes = self._NOTES[:-1] + [self._INSTALLED_NOTE if self._installed else self._NOTES[-1]] \
+        notes = self._NOTES[:-1] + [self._UPDATE_NOTES.get(self._old_purple, self._NOTES[-1])] \
             + ([self._AUDIO_WARNING] if self.status else [])
         sizes = [g.markup_size(text, px, "sans", min(g.vw(90), em(42)) - icon_w - 2 * pad) for _, text in notes]
         card = pygame.Rect(0, 0, icon_w + max(w for w, _ in sizes) + 2 * pad, sum(h for _, h in sizes) + gap * (len(notes) - 1) + 2 * pad)
@@ -233,20 +234,20 @@ class LiveBootSplash(FullScreen):
 
     tick_s = 0.25
 
-    _installed = False
+    _old_purple = None
 
     def tick(self):
         warn = self._AUDIO_WARNING if self.app.audio_ok is False else ""
-        installed = old_install.known()[0] == "found"
-        if (warn, installed) != (self.status, self._installed):
-            self.status, self._installed = warn, installed
+        old = old_install.known()[0]
+        if (warn, old) != (self.status, self._old_purple):
+            self.status, self._old_purple = warn, old
             self.app.invalidate()
 
     async def handle(self, action):
         self.close()
-        if old_install.known()[0] == "found":
-            from .parent_menu import InstallOverScreen
-            self.app.push(InstallOverScreen(self.app),
+        from .parent_menu import POPUP_SCREENS
+        if screen := POPUP_SCREENS.get(old_install.known()[0]):
+            self.app.push(screen(self.app),
                           on_close=lambda choice: choice and self.app.with_parent_pin(lambda: _install(self.app, choice)))
 
 

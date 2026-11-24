@@ -4,7 +4,8 @@ import pytest
 
 from purplecomputer import ui
 from purplecomputer.harness import make_app, run
-from purplecomputer.rooms.parent_menu import LanguageScreen, ParentVolumeModal, SecondLanguageScreen
+from purplecomputer.rooms.parent_menu import (EmptyInstallOverScreen, InstallOverScreen, LanguageScreen, ParentVolumeModal,
+                                              ReinstallConfirmScreen, SecondLanguageScreen)
 from purplecomputer.ui import Confirm
 
 
@@ -46,6 +47,7 @@ def _body_bottom_and_hint_top(app, dialog):
 
 @pytest.mark.parametrize("size", [(1366, 768), (1024, 768), (1280, 800), (1920, 1080)])
 @pytest.mark.parametrize("make", [SecondLanguageScreen, LanguageScreen, ParentVolumeModal,
+                                  InstallOverScreen, EmptyInstallOverScreen, ReinstallConfirmScreen,
                                   lambda app: Confirm(app, "Erase everything?", "This cannot be undone, and every saved drawing goes away too.")])
 def test_hint_never_overlaps_body(size, make):
     async def go():
@@ -55,4 +57,15 @@ def test_hint_never_overlaps_body(size, make):
             dialog.selected = len(dialog.options) - 1
         bottom, hint_top = _body_bottom_and_hint_top(app, dialog)
         assert bottom <= hint_top
+    run(go())
+
+
+def test_a_note_under_one_option_leaves_the_others_one_line_tall():
+    async def go():
+        app = make_app()
+        dialog, g = InstallOverScreen(app), app.g
+        plain, noted = (dialog._row_height(g, o) for o in dialog.options[1:])
+        assert plain == ui.Picker(app, [(1, "a")]).option_height(g) < noted
+        rows = dialog.body_height(g) - dialog._desc_height(g) - dialog._gaps(g)
+        assert rows == 2 * plain + noted + 3 * g.em(0.3)
     run(go())

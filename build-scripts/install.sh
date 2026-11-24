@@ -257,6 +257,7 @@ save_old_purple() {
     if [ -f "$mnt/opt/purple/computer_name.txt" ]; then
         cp "$mnt/opt/purple/computer_name.txt" "$keep/" 2>/dev/null || rc=2
     fi
+    cp "$mnt/etc/purple-version" "$keep/" 2>/dev/null || true
     umount "$mnt" 2>/dev/null || true
     [ "$rc" -eq 0 ] || rm -rf "$keep"
     return $rc
@@ -269,7 +270,9 @@ probe() {
     target=$(find_target) || exit 0
     save_old_purple "$(part_prefix "$target")2" "$KEEP_DIR" || rc=$?
     case $rc in
-        0) echo "[PURPLE-FOUND] $(for f in config/computer_name.txt .purple/computer_name.txt computer_name.txt; do
+        0) local work=EMPTY
+           [ -n "$(find "$KEEP_DIR/config" \( -path '*/saves/*.json' -o -path '*/timeline/*.jsonl' \) -print -quit 2>/dev/null)" ] && work=FOUND
+           echo "[PURPLE-$work] $(for f in config/computer_name.txt .purple/computer_name.txt computer_name.txt; do
                [ -s "$KEEP_DIR/$f" ] && { cat "$KEEP_DIR/$f"; break; }; done)" ;;
         2) echo "[PURPLE-FOUND-UNREADABLE]" ;;
     esac
@@ -831,6 +834,11 @@ main() {
                 fi
                 if [ -n "$PURPLE_LIVE_CONFIG" ] && [ -d "$PURPLE_LIVE_CONFIG/saves" ]; then
                     carry_over "$PURPLE_LIVE_CONFIG/saves" "Saved work from the Purple Key"
+                fi
+                # The name typed at install wins over the earlier one, which may sit in either place.
+                rm -f /mnt/root/home/purple/.purple/computer_name.txt /mnt/root/home/purple/.config/purple/computer_name.txt
+                if [ -n "$PURPLE_LIVE_CONFIG" ] && [ -f "$PURPLE_LIVE_CONFIG/computer_name.txt" ]; then
+                    carry_over "$PURPLE_LIVE_CONFIG/computer_name.txt" "Computer name"
                 fi
             elif [ -n "$PURPLE_LIVE_CONFIG" ] && [ -d "$PURPLE_LIVE_CONFIG" ]; then
                 carry_over "$PURPLE_LIVE_CONFIG/." "Live settings, history and saves"

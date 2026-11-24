@@ -59,7 +59,7 @@ def build_export() -> dict:
         {"file": pitch_filename(n, o), "note": n, "octave": o} for n, o in reachable_pitches()
     ]
     grid_pitches = {
-        f"{row},{col}": "{}{}".format(*pitch_for(row, col, FRIENDLY_KEYS[DEFAULT_ROOT_INDEX], 0))
+        f"{row},{col}": "{}{}".format(*pitch_for(row, col, FRIENDLY_KEYS[DEFAULT_ROOT_INDEX]))
         for row in range(3) for col in range(10)
     }
     ledger = json.loads(PACK_FORMATS_PATH.read_text())

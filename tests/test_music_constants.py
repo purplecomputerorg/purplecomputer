@@ -3,7 +3,7 @@
 import math
 from purplecomputer.music_constants import (
     NOTE_FREQUENCIES, NOTE_NAMES, INSTRUMENTS, PERCUSSION_NAMES, GRID_KEYS,
-    pitch_for, pitch_filename, FRIENDLY_KEYS, DEFAULT_ROOT_INDEX,
+    pitch_for, pitch_filename, reachable_pitches, FRIENDLY_KEYS, DEFAULT_ROOT_INDEX,
 )
 
 # Standard A440 tuning reference frequencies across octaves
@@ -78,27 +78,25 @@ def test_pitch_for_default_c_major():
     """Default state (root=C, shift=0) plays a C-major scale at singing range."""
     c_root = FRIENDLY_KEYS[DEFAULT_ROOT_INDEX]
     assert c_root == 0
-    assert pitch_for(0, 0, c_root, 0) == ('C', 4)   # Q (middle C)
-    assert pitch_for(0, 7, c_root, 0) == ('C', 5)   # I (octave up)
-    assert pitch_for(0, 9, c_root, 0) == ('E', 5)   # P (top)
-    assert pitch_for(1, 0, c_root, 0) == ('C', 3)   # A
-    assert pitch_for(2, 0, c_root, 0) == ('C', 2)   # Z (lowest)
+    assert pitch_for(0, 0, c_root) == ('C', 4)   # Q (middle C)
+    assert pitch_for(0, 7, c_root) == ('C', 5)   # I (octave up)
+    assert pitch_for(0, 9, c_root) == ('E', 5)   # P (top)
+    assert pitch_for(1, 0, c_root) == ('C', 3)   # A
+    assert pitch_for(2, 0, c_root) == ('C', 2)   # Z (lowest)
 
 
 def test_pitch_for_d_major_shift():
     """Shifting root to D (semitone 2) plays a D-major scale."""
     d_root = 2
-    assert pitch_for(0, 0, d_root, 0) == ('D', 4)
-    assert pitch_for(0, 2, d_root, 0) == ('F#', 4)
-    assert pitch_for(0, 7, d_root, 0) == ('D', 5)
+    assert pitch_for(0, 0, d_root) == ('D', 4)
+    assert pitch_for(0, 2, d_root) == ('F#', 4)
+    assert pitch_for(0, 7, d_root) == ('D', 5)
 
 
-def test_pitch_for_octave_shift():
-    """Octave shift adjusts every cell by ±12 semitones."""
-    g_root = 7
-    assert pitch_for(0, 0, g_root, +1) == ('G', 5)
-    assert pitch_for(0, 0, g_root, -1) == ('G', 3)
-    assert pitch_for(2, 0, g_root, -1) == ('G', 1)
+def test_reachable_pitches_span_every_key():
+    pitches = reachable_pitches()
+    assert len(pitches) == 44
+    assert (pitches[0], pitches[-1]) == (('C', 2), ('D', 6))   # Z in C, P in B♭
 
 
 def test_pitch_filename_shell_safe():

@@ -236,68 +236,13 @@
   ],
   "pitches": [
    {
-    "file": "c1",
-    "note": "C",
-    "octave": 1
-   },
-   {
-    "file": "d1",
-    "note": "D",
-    "octave": 1
-   },
-   {
-    "file": "e1",
-    "note": "E",
-    "octave": 1
-   },
-   {
-    "file": "f1",
-    "note": "F",
-    "octave": 1
-   },
-   {
-    "file": "fs1",
-    "note": "F#",
-    "octave": 1
-   },
-   {
-    "file": "g1",
-    "note": "G",
-    "octave": 1
-   },
-   {
-    "file": "a1",
-    "note": "A",
-    "octave": 1
-   },
-   {
-    "file": "as1",
-    "note": "A#",
-    "octave": 1
-   },
-   {
-    "file": "b1",
-    "note": "B",
-    "octave": 1
-   },
-   {
     "file": "c2",
     "note": "C",
     "octave": 2
    },
    {
-    "file": "cs2",
-    "note": "C#",
-    "octave": 2
-   },
-   {
     "file": "d2",
     "note": "D",
-    "octave": 2
-   },
-   {
-    "file": "ds2",
-    "note": "D#",
     "octave": 2
    },
    {
@@ -506,64 +451,9 @@
     "octave": 6
    },
    {
-    "file": "cs6",
-    "note": "C#",
-    "octave": 6
-   },
-   {
     "file": "d6",
     "note": "D",
     "octave": 6
-   },
-   {
-    "file": "ds6",
-    "note": "D#",
-    "octave": 6
-   },
-   {
-    "file": "e6",
-    "note": "E",
-    "octave": 6
-   },
-   {
-    "file": "f6",
-    "note": "F",
-    "octave": 6
-   },
-   {
-    "file": "fs6",
-    "note": "F#",
-    "octave": 6
-   },
-   {
-    "file": "g6",
-    "note": "G",
-    "octave": 6
-   },
-   {
-    "file": "a6",
-    "note": "A",
-    "octave": 6
-   },
-   {
-    "file": "as6",
-    "note": "A#",
-    "octave": 6
-   },
-   {
-    "file": "b6",
-    "note": "B",
-    "octave": 6
-   },
-   {
-    "file": "c7",
-    "note": "C",
-    "octave": 7
-   },
-   {
-    "file": "d7",
-    "note": "D",
-    "octave": 7
    }
   ],
   "grid_pitches": {

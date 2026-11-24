@@ -64,9 +64,8 @@ NOTE_NAMES = {
 
 # --- Chromatic / key-shift support -----------------------------------------
 #
-# The grid plays a major scale starting from a chosen root note. The kid can
-# shift root note (Left/Right) and octave (Up/Down) at runtime. Pre-rendered
-# samples cover every reachable pitch.
+# The grid plays a major scale starting from a chosen root note, which
+# Left/Right shift. Pre-rendered samples cover every reachable pitch.
 
 CHROMATIC_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#',
                          'G', 'G#', 'A', 'A#', 'B']
@@ -76,7 +75,7 @@ MAJOR_SCALE_SEMITONES = [0, 2, 4, 5, 7, 9, 11]
 
 # Five "no wrong notes" keys cycled by Left/Right, ordered around the circle
 # of fifths and centered on C: B♭ (10) ← F (5) ← C (0) → G (7) → D (2). Each
-# Right step adds a sharp (brighter), each Left step adds a flat (warmer).
+# Right step adds a sharp, each Left step a flat.
 FRIENDLY_KEYS = [10, 5, 0, 7, 2]
 # Display names that respect circle-of-fifths convention: flat-side keys use
 # flat names (B♭, not A♯), sharp-side keys use sharp names. CHROMATIC_NOTE_NAMES
@@ -96,29 +95,17 @@ def pitch_filename(note_name: str, octave: int) -> str:
     return note_name.lower().replace('#', 's') + str(octave)
 
 
-def pitch_for(row: int, col: int, root: int, octave_shift: int) -> tuple[str, int]:
-    """Return (note_name, octave) for the cell at (row, col) given current state.
-
-    row: 0=top (Q-P), 1=middle (A-;), 2=bottom (Z-/)
-    col: 0..9 (scale degree, with col 7..9 wrapping into next octave)
-    root: 0..11 semitone index (0=C, 7=G default)
-    octave_shift: integer offset applied to all rows (typically -1, 0, +1)
-    """
-    row_octave = ROW_OCTAVE_BASE[row] + octave_shift
-    deg = col
-    semitone_offset = MAJOR_SCALE_SEMITONES[deg % 7] + 12 * (deg // 7)
-    abs_st = root + 12 * row_octave + semitone_offset
+def pitch_for(row: int, col: int, root: int) -> tuple[str, int]:
+    """(note_name, octave) of the cell at (row, col): row 0 is Q-P, 2 is Z-/; col is the scale
+    degree, 7..9 wrapping into the next octave; root is a semitone index, 0=C."""
+    abs_st = root + 12 * ROW_OCTAVE_BASE[row] + MAJOR_SCALE_SEMITONES[col % 7] + 12 * (col // 7)
     return CHROMATIC_NOTE_NAMES[abs_st % 12], abs_st // 12
 
 
 def reachable_pitches() -> list[tuple[str, int]]:
-    """Every (note_name, octave) the grid can play across the friendly keys
-    and octave shifts; the set of samples an instrument needs."""
-    seen = {
-        pitch_for(row, col, root, shift)
-        for row in (0, 1, 2) for col in range(10)
-        for root in FRIENDLY_KEYS for shift in (-1, 0, 1)
-    }
+    """Every (note_name, octave) the grid can play across the friendly keys;
+    the set of samples an instrument needs."""
+    seen = {pitch_for(row, col, root) for row in (0, 1, 2) for col in range(10) for root in FRIENDLY_KEYS}
     return sorted(seen, key=lambda p: (p[1], CHROMATIC_NOTE_NAMES.index(p[0])))
 
 

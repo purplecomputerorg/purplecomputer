@@ -28,9 +28,9 @@ const CHROMATIC = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "
 const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
 const ROW_OCTAVE_BASE = [4, 3, 2];
 
-// music_constants.pitch_for with the default root (C) and no octave shift.
-export function pitchFor(row: number, col: number, root = 0, octaveShift = 0): { note: string; octave: number } {
-  const semis = root + 12 * (ROW_OCTAVE_BASE[row] + octaveShift) + MAJOR_SCALE[col % 7] + 12 * Math.floor(col / 7);
+// music_constants.pitch_for, the root defaulting to C.
+export function pitchFor(row: number, col: number, root = 0): { note: string; octave: number } {
+  const semis = root + 12 * ROW_OCTAVE_BASE[row] + MAJOR_SCALE[col % 7] + 12 * Math.floor(col / 7);
   return { note: CHROMATIC[semis % 12], octave: Math.floor(semis / 12) };
 }
 

@@ -122,7 +122,7 @@ def key_label(root_index: int) -> str:
 def note_name(col: int, root_index: int) -> str:
     """A column's note as a reader expects it in that key: F♯ in G and D, B♭ in F and B♭."""
     root = FRIENDLY_KEYS[root_index]
-    note = pitch_for(0, col, root, 0)[0]
+    note = pitch_for(0, col, root)[0]
     return SHARP_TO_FLAT.get(note, note) if root in FLAT_KEYS else note.replace("#", "♯")
 
 
@@ -286,7 +286,7 @@ class MusicRoom(Room):
         rc = _KEY_TO_RC.get(key)
         if rc is None:
             return None
-        note, octave = pitch_for(rc[0], rc[1], FRIENDLY_KEYS[self.root_index], 0)
+        note, octave = pitch_for(rc[0], rc[1], FRIENDLY_KEYS[self.root_index])
         return pitch_filename(note, octave)
 
     def play_sound_with_instrument(self, key: str, instrument_index: int, volume_scale: float = 1.0):

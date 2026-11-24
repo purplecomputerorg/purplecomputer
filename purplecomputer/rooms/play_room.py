@@ -15,6 +15,7 @@ from ..gfx import is_emoji, mix, rgb, strip_markup
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..palette import get_key_color
 from ..play_eval import SimpleEvaluator, _escape_markup, pair_speakables, parse_speech_trigger
+from ..quake import Quake, is_quake
 from ..ui import DOWN, MATH_OPERATORS, UP, HintRotator, TextField
 from .base import Room
 
@@ -327,6 +328,8 @@ class PlayRoom(Room):
         self._timeline_seq += 1
         self._timeline_entries = self._timeline_entries[-TIMELINE_MAX_ENTRIES:]
         self.app.timeline_capture_now("play")
+        if is_quake(text):
+            self.app.push(Quake(self.app))
 
     def _submit_line(self, input_text: str, allow_speak: bool = True):
         force_speak, eval_text = parse_speech_trigger(input_text)

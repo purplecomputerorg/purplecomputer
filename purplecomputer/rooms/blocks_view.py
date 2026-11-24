@@ -244,8 +244,8 @@ class Camera:
 
 class Painter:
     """One camera and one set of blocks {(x, z, y): color}, as its `shape` (worked out here unless
-    `built` passes it), sorted far to near once. `row` is the cursor's row: it splits the build into
-    that row and those behind it, and the rows in front, so the cursor can be drawn between them.
+    `built` passes it), sorted far to near once. `row` is the cursor's row: `paint_part` picks out the
+    rows in front of it, so the cursor can be drawn behind them.
     Without `detail`, floating blocks cast no shadow."""
 
     def __init__(self, cam: Camera, blocks: dict, row=None, hazy: bool = True, detail: bool = True, floor=None, built=None,
@@ -258,31 +258,19 @@ class Painter:
         if detail:
             items += [(cam.key(x, z, ground - 0.5), 1, (x, z, ground)) for x, z, ground in floats]
         items.sort(key=itemgetter(0))
-        self.items, self._sun = items, None
-        self._split()
+        self.items, self._sun, self._rects = items, None, [None]    # each item's rect, found once and shared by on_row's copies
 
     def on_row(self, row) -> "Painter":
         """The same blocks, already sorted, with the cursor on another row."""
         other = copy.copy(self)
         other.row = row
-        other._split()
         return other
 
     def on(self, cam: Camera) -> "Painter":
         """The same blocks through another camera, for the few things painted one at a time."""
         other = copy.copy(self)
-        other.cam = cam
+        other.cam, other._rects = cam, [None]
         return other
-
-    def crossed(self, a, b) -> list:
-        """Where things go from one layer to the other as the cursor's row moves from `a` to `b`."""
-        lo, hi = sorted((a, b))
-        return [self._rect(item) for item in self.items if lo <= item[2][1] < hi]
-
-    def _split(self):
-        row, items = self.row, self.items
-        self.back = items if row is None else [i for i in items if i[2][1] >= row]
-        self.in_front = [] if row is None else [i for i in items if i[2][1] < row]
 
     # ------------------------------------------------------------ colors
     def base(self, x, z, color) -> tuple:
@@ -321,15 +309,17 @@ class Painter:
 
     def paint_sun(self, surf, clip=None):
         """Each run of blocks' shadow on the floor, away from the light, in one see-through layer so overlaps don't darken twice."""
-        area = clip or surf.get_rect()
-        shadows = [s for s in self._sun_shadows() if s[1].colliderect(area)]
+        clip = clip or surf.get_rect()
+        shadows = [s for s in self._sun_shadows() if s[1].colliderect(clip)]
         if shadows:
-            area = shadows[0][1].unionall([rect for _, rect in shadows[1:]]).clip(area)
+            # The layer holds each shadow whole: a polygon cut by its edge fills that edge differently, a seam where a patch was repainted.
+            area = shadows[0][1].unionall([rect for _, rect in shadows[1:]])
             layer = pygame.Surface(area.size, pygame.SRCALPHA)
             for poly, _ in shadows:
                 pygame.draw.polygon(layer, (*SUN_INK, 255), [(round(px) - area.x, round(py) - area.y) for px, py in poly])   # whole pixels first: a patch's offset must not move an edge
             layer.set_alpha(SUN_ALPHA)
-            surf.blit(layer, area.topleft)
+            spot = area.clip(clip)
+            surf.blit(layer, spot, spot.move(-area.x, -area.y))
 
     def _sun_shadows(self) -> list:
         """(polygon, rect) of each stack's shadow, the camera remembering each one's."""
@@ -343,7 +333,22 @@ class Painter:
             clip = None
         for item in items:
             if clip is None or self._rect(item).colliderect(clip):
-                (self.shadow if item[1] else self.box)(surf, *item[2])
+                self._draw(surf, item)
+
+    def paint_part(self, surf, clip, in_front: bool = False):
+        """paint(self.items, clip), found by pygame in one call; with `in_front`, only the rows in front of the cursor's."""
+        for item in self.touching(clip):
+            if not in_front or item[2][1] < self.row:
+                self._draw(surf, item)
+
+    def touching(self, rect, start: int = 0) -> list:
+        """The items from `start` on whose rects touch `rect`, in paint order."""
+        if self._rects[0] is None:
+            self._rects[0] = [self._rect(item) for item in self.items]
+        return [self.items[i] for i in rect.collidelistall(self._rects[0]) if i >= start]
+
+    def _draw(self, surf, item):
+        (self.shadow if item[1] else self.box)(surf, *item[2])
 
     def _rect(self, item) -> pygame.Rect:
         _, kind, d = item
@@ -351,8 +356,7 @@ class Painter:
 
     def after(self, x, z, y, rect) -> list:
         """The items painted after a block at (x, z, y) that touch `rect`: all that can stand in front of it there."""
-        start = bisect.bisect_right(self.items, (self.cam.key(x, z, y), 2))
-        return [item for item in self.items[start:] if self._rect(item).colliderect(rect)]
+        return self.touching(rect, bisect.bisect_right(self.items, (self.cam.key(x, z, y), 2)))
 
     def box(self, surf, x, z, bottom, top, color, open=FACES, inset: float = 0.0):
         """One column's blocks from bottom to top as one tall box in one color, `inset` cells smaller

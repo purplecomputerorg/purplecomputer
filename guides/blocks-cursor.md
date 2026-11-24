@@ -105,7 +105,9 @@ The square floor leaves the room's sides empty, and the header alone didn't teac
 ## Keeping it fast on old laptops
 
 - **A block landing reworks only its column and the four beside it**, whose faces it hides or shows (`_shaped`, `column_shape`), and repaints only around that column.
-- **The cursor moving to another row** repaints only what crosses from behind it to in front of it, or back (`Painter.crossed`), not the whole build.
+- **The cursor moving** repaints nothing of the build: rows paint far to near, so the cached picture is the same whatever row the cursor is on, and only the patch around the cursor is split into the rows behind it and in front (`_split`). Its bubble and arrow keys are kept as pictures until the camera, column, color or a knock changes them (`_smooth`'s `keep`).
+- **Every cache answers to a fresh paint:** `tests/test_blocks_layers.py` walks random keys, rows, walls, turns, falls and sizes and checks the screen against one painted with every cache dropped. A new cache or partial repaint belongs in that walk.
+- **A turn's shadows drop for big builds** once a moving frame goes over `TURN_FRAME_BUDGET_S`, timed without the build's shape, which is worked out once a build, not a frame.
 - **A run of blocks closed in on every side is never painted**, at rest or turning: in a crowded build that is about half of them.
 - **Falling blocks repaint only around themselves** (above).
 - **The boot log's frame summary** names the room each frame came from, so a slow laptop's log shows where its time goes.

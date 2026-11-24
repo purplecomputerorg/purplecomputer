@@ -110,10 +110,10 @@ def resting_camera(yaw: float, tilt: float, w: int, h: int) -> Camera:
 class BlocksRoom(Room):
     """Blocks live in a dict keyed by world (x, z, y), y up. Drawing and the
     arrows work in view coordinates, which are world (x, z) turned to the
-    side that faces the viewer most. The floor and blocks paint (blocks_view) into two cached
-    layers split at the cursor's row: the rows from the cursor's back, then the
-    cursor's marks, then the rows in front of it, which hide them like any block. A
-    block's change repaints only around its column; the cursor changing rows, the
+    side that faces the viewer most. The floor and blocks paint (blocks_view) into one cached
+    picture; around the cursor only, they are split at its row: the rows from the cursor's back,
+    then the cursor's marks, then the rows in front of it, which hide them like any block. A
+    block's change repaints only around its column, the cursor moving only around itself; the
     room turning or tilting repaints all."""
 
     name, label, icon = "blocks", "Blocks", ICON_CUBE
@@ -149,7 +149,9 @@ class BlocksRoom(Room):
         self._origin = (0, 0)
         self._cam = self._painter = self._floor = None
         self._built = None             # the build's shape for a moving view, until a block changes
-        self._scene = self._front = self._composed = None
+        self._scene = self._front = self._land = self._composed = None   # _scene: the composite once painted, None to repaint all
+        self._split_at = None          # the rect `_split` last painted, until the layers change
+        self._smoothed: dict = {}      # the cursor's marks last painted, by kind: (what they depend on, picture)
         self._dirty: set = set()       # view columns whose blocks changed since the last paint
         self._seen, self._cols = {}, {}
         self._guide, self._guide_lit = Guide(), None   # the guide beside the floor, and its row lit when the layers were painted  # the landed blocks in view coordinates, and each view column's shape
@@ -234,7 +236,7 @@ class BlocksRoom(Room):
 
     # ---------------------------------------------------------------- blocks
     def _column(self) -> list:
-        return [y for (x, z, y) in self._blocks if (x, z) == (self._x, self._z)]
+        return [y for y in range(HEIGHT) if (self._x, self._z, y) in self._blocks]
 
     def _free(self, ys) -> list:
         return [y for y in ys if (self._x, self._z, y) not in self._blocks]
@@ -735,13 +737,15 @@ class BlocksRoom(Room):
 
     def _layers(self, size):
         """Bring the cached layers up to date: everything for a new camera, else only around the columns
-        whose blocks changed and what crossed the cursor's row as it moved."""
+        whose blocks changed. The cursor's row changes only how the build splits around it, which
+        `_split` paints where the cursor is."""
         cam = resting_camera(self._off(), self._goal[1], *size)
         row, was = self._view(self._x, self._z)[1], self._painter and self._painter.row
         fresh = self._scene is None or cam is not self._cam
         lit, self._guide_lit = self._lit_row(), self._lit_row() if fresh else self._guide_lit
         if not (fresh or self._dirty or row != was or lit != self._guide_lit):
             return
+        self._split_at = None
         if fresh or self._dirty:
             blocks, built = self._shaped(fresh)
             self._painter = Painter(cam, blocks, row=row, quarters=self._side, built=built)
@@ -749,19 +753,19 @@ class BlocksRoom(Room):
             self._painter = self._painter.on_row(row)
         if fresh:
             self._cam = cam
-            self._land, self._scene, self._composed = (pygame.Surface(size) for _ in range(3))
-            self._front = pygame.Surface(size, pygame.SRCALPHA)
+            if self._composed is None or self._composed.get_size() != size:
+                self._land, self._composed = pygame.Surface(size), pygame.Surface(size)
+                self._front = pygame.Surface(size, pygame.SRCALPHA)
+            self._scene = self._composed
             rects = [self._scene.get_rect()]
         else:
             rects = [cam.column_rect(x, z) for x, z in self._dirty] + (list(self._guide_spots().values()) if lit != self._guide_lit else [])
         self._guide_lit = lit
-        if rects:
-            self._paint_ground(rects[0].unionall(rects[1:]))
-        if not fresh and was is not None and row != was:
-            rects += self._painter.crossed(was, row)
         self._dirty = set()
         if rects:
-            self._repaint(rects[0].unionall(rects[1:]))
+            rect = rects[0].unionall(rects[1:])
+            self._paint_ground(rect)
+            self._repaint(rect)
 
     def _paint_ground(self, rect):
         """The floor and the sun's shadows on it: they change with blocks, never with the cursor."""
@@ -782,20 +786,26 @@ class BlocksRoom(Room):
         return "height" if self.app._keyboard_state_machine.shift_active else "look" if self._tab is not None else None
 
     def _repaint(self, rect):
-        """Repaint `rect` of the layers: the scene (the ground, the cursor's row and the rows behind
-        it) and the rows in front, then their composite."""
-        p, rect = self._painter, rect.clip(self._composed.get_rect())
-        s, f = self._scene, self._front
-        s.set_clip(rect)
-        s.blit(self._land, rect, rect)
-        p.paint(s, p.back, rect)
-        s.set_clip(None)
+        """Repaint `rect` of the composite: the ground, then every block far to near."""
+        p, c, rect = self._painter, self._composed, rect.clip(self._composed.get_rect())
+        c.set_clip(rect)
+        c.blit(self._land, rect, rect)
+        p.paint_part(c, rect)
+        c.set_clip(None)
+
+    def _split(self, rect):
+        """The rows in front of the cursor's row, under `rect` only, for the cursor to go behind: it goes over
+        the composite, then these over it. They are opaque and the composite's last paint where they cover
+        it, so the composite stands in for the rows behind. Kept until the cursor moves or the layers change."""
+        key = tuple(rect)
+        if self._split_at == key:
+            return
+        self._split_at = key
+        f, rect = self._front, rect.clip(self._composed.get_rect())
         f.set_clip(rect)
         f.fill(CLEAR, rect)
-        p.paint(f, p.in_front, rect)
+        self._painter.paint_part(f, rect, in_front=True)
         f.set_clip(None)
-        self._composed.blit(s, rect, rect)
-        self._composed.blit(f, rect, rect)
 
     def paper(self, g, size, on_screen=False):
         """The build for printing, on a pale floor (the screen's floor on screen), nothing see-through and no cursor."""
@@ -911,10 +921,10 @@ class BlocksRoom(Room):
         `turn` degrees around, looking `tilt` degrees down and sized as from `fit` degrees off straight
         on, so both ends land on those pictures, the cursor's marks painted in their place among the
         blocks. A frame over budget drops shadows for builds this big from then on."""
+        self._built = self._built or shape(self._blocks)     # once a build, not a frame: kept out of the budget
         start = time.monotonic()
         cam = Camera(math.radians(turn), math.radians(tilt), area.w, area.h, area.topleft, top=HOVER + 1, fit=math.radians(fit))
         detailed = len(self._blocks) <= self._turn_detail_limit
-        self._built = self._built or shape(self._blocks)
         painter = Painter(cam, self._blocks, detail=detailed, built=self._built)
         if self._composed is not None:
             self._guide.paint(g, g.surface.subsurface(area), self._guide_spots(), self._lit_row())
@@ -978,6 +988,7 @@ class BlocksRoom(Room):
         vx, vz = self._view(self._x, self._z)
         y = self._cursor_y()
         whole, over = self._cursor_boxes(vx, vz)
+        self._split(whole)
         cut = self._cut(vx, vz, y)
 
         strength, lift = self._lifted()
@@ -997,13 +1008,23 @@ class BlocksRoom(Room):
             self._draw_arrow_keys(g, sub, painter, vx, vz, origin=area.topleft)
         g.draw_caret(over.move(area.topleft), lambda: paint(whole, True), lambda: paint(over, False))
 
-    def _smooth(self, surf, painter, rect, draw):
-        """Paint with `draw(layer, painter)` SMOOTH times the size and scale it down onto `rect` of `surf`."""
+    def _smooth(self, surf, painter, rect, draw, keep=None):
+        """Paint with `draw(layer, painter)` SMOOTH times the size and scale it down onto `rect` of `surf`.
+        With `keep`, (a name, then everything else `draw` reads), the picture is reused while none of it changes."""
         rect = rect.clip(surf.get_clip())
-        if rect.w and rect.h:
+        if not (rect.w and rect.h):
+            return
+        deps = keep and (painter.cam, tuple(rect), keep[1:], P.TEXT, art_room.CANVAS_BG)
+        kept = self._smoothed.get(keep[0]) if keep else None
+        if kept and kept[0] == deps:
+            pic = kept[1]
+        else:
             layer = pygame.Surface((rect.w * SMOOTH, rect.h * SMOOTH), pygame.SRCALPHA)
             draw(layer, painter.on(painter.cam.zoomed(SMOOTH, rect.topleft)))
-            surf.blit(pygame.transform.smoothscale(layer, rect.size), rect)
+            pic = pygame.transform.smoothscale(layer, rect.size)
+            if keep:
+                self._smoothed[keep[0]] = deps, pic
+        surf.blit(pic, rect)
 
     def _drop_marks(self, surf, painter, x, z, y):
         """The spot the next block lands in as a wire box with the waiting block's shadow in it (and its own
@@ -1055,7 +1076,8 @@ class BlocksRoom(Room):
             glint.center = center
             pygame.draw.arc(layer, (255, 255, 255, 150), glint, 1.9, 2.7, 2 * unit)
         reach = 16 + round(painter.cam.cell(x, HOVER, z) * BUMP)
-        self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(2 * reach, 2 * reach), draw)
+        self._smooth(surf, painter, painter.cam.run_rect(x, z, HOVER, HOVER).inflate(2 * reach, 2 * reach), draw,
+                     keep=(("hover", bright), x, z, ox, oz, oy, self._color))
 
     def _arrow_keys(self, cam, x, z, world: bool = False) -> list:
         """(glyph, lo, hi) of each arrow's key, far to near: a thin slab lying flat out from the waiting block
@@ -1089,7 +1111,8 @@ class BlocksRoom(Room):
                     pygame.draw.polygon(layer, top if n is TOP else side, poly)
                 face = [c.at(px, hi[1], pz) for px, pz in ((lo[0], lo[2]), (hi[0], lo[2]), (hi[0], hi[2]), (lo[0], hi[2]))]
                 pygame.draw.polygon(layer, edge, face, c.zoom)
-        self._smooth(surf, painter, self._square(cam, x, z, HOVER + 0.5, round(cell * (KEY_SPAN[1] + 0.9))), draw)
+        self._smooth(surf, painter, self._square(cam, x, z, HOVER + 0.5, round(cell * (KEY_SPAN[1] + 0.9))), draw,
+                     keep=("keys", x, z, world, self._side))
         px = max(g.vh(1.3), round(cell * 0.34))
         for glyph, lo, hi in (k for k in keys if k[0]):
             kx, ky = cam.at((lo[0] + hi[0]) / 2, hi[1], (lo[2] + hi[2]) / 2)

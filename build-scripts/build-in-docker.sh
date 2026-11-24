@@ -120,10 +120,36 @@ running_builds() {
 stop_builds() {
     local ids
     ids="$(running_builds)"
-    [ -n "$ids" ] || { log_info "No build is running."; return 0; }
-    log_info "Stopping the running build (cleanup can take a minute)..."
-    docker stop -t 120 $ids >/dev/null
-    log_info "Stopped. The next build starts clean."
+    if [ -n "$ids" ]; then
+        log_info "Stopping the running build (cleanup can take a minute)..."
+        docker stop -t 120 $ids >/dev/null
+    else
+        log_info "No build is running."
+    fi
+    release_build_resources
+    log_info "Stopped. ISOs, golden images, the Ubuntu ISO and the Docker image are kept; the next build starts clean."
+}
+
+# Frees whatever a killed build still holds (mounts, kpartx maps, loop devices,
+# half-written .part files). Only call with no build running.
+release_build_resources() {
+    local m loop
+    for _ in 1 2 3; do
+        for m in $(mount | awk -v b="$INSTALLER_BASE" 'index($3, b) == 1 { print $3 }' | sort -r); do
+            log_info "  Unmounting $m"
+            sudo umount -l "$m" 2>/dev/null || true
+        done
+    done
+    for loop in $(sudo losetup -a | grep -E "$INSTALLER_BASE|purple-os\.img|\(deleted\)" | cut -d: -f1); do
+        log_info "  Releasing $loop"
+        sudo kpartx -d "$loop" 2>/dev/null || true
+        sudo losetup -d "$loop" 2>/dev/null || true
+    done
+    sudo find "$INSTALLER_BASE" -name '*.part' -print -delete | sed 's/^/  Removed partial /'
+    if mount | grep -q "$INSTALLER_BASE" || sudo losetup -a | grep -qE "$INSTALLER_BASE|purple-os\.img"; then
+        echo "Some build resources are still held; a reboot frees them." >&2
+        return 1
+    fi
 }
 
 # What each running build is doing and when its stages should finish (build-eta.sh).

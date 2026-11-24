@@ -1,3 +1,5 @@
+Note: Purple is source available, **not open source**: see below.
+
 This file is AI-generated with a [human](https://github.com/tavinathanson) heavily involved. Human involvement varies across this repo; see [DISCLOSURE.md](/docs/DISCLOSURE.md). That is about how the code and docs get written; for what's in the product, see [Does Purple use AI?](#does-purple-use-ai) below.
 
 # Purple Computer

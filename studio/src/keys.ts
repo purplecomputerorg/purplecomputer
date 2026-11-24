@@ -7,6 +7,9 @@ export function browserKey(e: KeyboardEvent): string | null {
   return [...e.key].length === 1 ? e.key.toLowerCase() : null;
 }
 
+// A chord, "tab+up": the keys before the last are held while it's pressed. "+" alone is the key itself.
+export const chordKeys = (key: string): string[] => key.length > 1 ? key.split("+") : [key];
+
 // Every key Purple gets, from any source, is announced so the pretend keyboard can press it.
 export const KEY_EVENT = "purple-key";
 export const announceKey = (key: string) => dispatchEvent(new CustomEvent(KEY_EVENT, { detail: key }));

@@ -3,7 +3,7 @@
 // every key the screen gets presses down here, so the stickers and the screen visibly match.
 // On a phone the keys are small but still tappable; a few big keys for the room (the tray) sit below,
 // and a button under them opens and closes the phone's own keyboard, whose typing goes to the screen the same way.
-import { KEY_EVENT, MODIFIER_EVENT } from "../keys";
+import { chordKeys, KEY_EVENT, MODIFIER_EVENT } from "../keys";
 import { h } from "./dom";
 import { hasSticker, sticker, stickerColors } from "./stickers";
 
@@ -181,7 +181,7 @@ export class Laptop {
   }
 
   press(key: string): void {
-    for (const el of this.keys.get(SHIFTED[key] ?? key) ?? []) {
+    for (const el of chordKeys(key).flatMap((k) => this.keys.get(SHIFTED[k] ?? k) ?? [])) {
       el.classList.remove("down");
       void el.offsetWidth;
       el.classList.add("down");

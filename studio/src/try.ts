@@ -38,9 +38,7 @@ const labelled = (onclick: () => void, ...after: Node[]) => {
 };
 const demoKeys = [0, 1].map((i) => labelled(() => demo(stage.live.place.room, i)));
 const codeKey = labelled(() => { stage.showKeys(["escape", "space"], 0); code(); }, keycaps("Esc", "Space"));
-// Blocks' camera: a tap of Tab turns the build to its next side, as on the laptop. It stops a demo,
-// whose arrows would go the turned way.
-const spinKey = labelled(() => { playing++; stage.laptop.type("tab"); }, keycaps("Tab"));
+const spinKey = labelled(() => play(tour(), 130, () => {}), keycaps("Tab"));
 const trayKeys = h("div", { class: "demo-keys", hidden: true }, ...demoKeys.map((d) => d.key), spinKey.key, codeKey.key);
 const showKeys = () => {
   const room = stage.live.place.room;
@@ -132,7 +130,7 @@ addEventListener(KEY_EVENT, (e) => {
 const repeat = (n: number, key: string): string[] => Array(Math.abs(n)).fill(key);
 // Row by row from the front, snaking, with as many letters in each column as it stands high: a keyboard
 // row a level, from the bottom row up to the numbers. It starts from the floor's middle (Purple's demo puts the cursor there).
-const LEVELS = "cfr1";
+const LEVELS = "cfr";
 const pyramid = (): string[] => {
   const n = LEVELS.length, size = 2 * n - 1, rows = [...Array(size).keys()];
   return [...repeat(n - 1, "left"), ...repeat(n - 1, "down"), ...rows.flatMap((row) => [
@@ -143,6 +141,10 @@ const pyramid = (): string[] => {
     ...(row < size - 1 ? ["up"] : []),
   ])];
 };
+// Blocks' camera, Tab held with the arrows: up to look down on the build and halfway around, down low
+// for the other half, then back to the front at the resting tilt.
+const look = (n: number, arrow: string): string[] => repeat(n, `tab+${arrow}`);
+const tour = (): string[] => [...look(3, "up"), "_", ...look(10, "right"), "_", ...look(4, "down"), "_", ...look(10, "right"), ...look(1, "up")];
 const line = (text: string): string[] => [...text.toLowerCase()].map((c) => c === " " ? "space" : c).concat("enter");
 const TYPE_MS = 120;
 

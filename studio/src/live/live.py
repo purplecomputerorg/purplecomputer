@@ -12,6 +12,7 @@ from pathlib import Path
 
 from purplecomputer import content, i18n
 from purplecomputer.app import PurpleApp
+from purplecomputer.keyboard import ControlAction
 from purplecomputer.press import press
 from purplecomputer.loop_station import IDLE
 from purplecomputer.pack_manager import check_pack
@@ -122,8 +123,13 @@ def _try(family):
 
 async def key(name):
     """A key from the Studio page (typed there, or tapped on the pretend keyboard): a character,
-    or space, enter, backspace, escape, tab, or an arrow."""
-    await press(_app, name)
+    or space, enter, backspace, escape, tab, or an arrow; or a chord like "tab+up", Tab held for the arrow."""
+    *held, last = name.split("+") if len(name) > 1 else [name]
+    for k in held:
+        await _app._dispatch_keyboard_action(ControlAction(action=k, is_down=True))
+    await press(_app, last)
+    for k in reversed(held):
+        await _app._dispatch_keyboard_action(ControlAction(action=k, is_down=False))
 
 
 def code(on):

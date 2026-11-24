@@ -122,7 +122,7 @@ def test_a_tap_of_enter_lifts_the_floor_and_holding_it_puts_it_back_on_the_groun
             await press(app, "enter")
         assert room._cursor_y() == 4 and len(room._blocks) == 2          # a tap: the floor up a level, no block
         await room.handle(ControlAction(action="enter", is_down=True))
-        assert room.hold_progress() is not None and room._lit_row() == "ground"
+        assert room.hold_progress() is not None and room._lit_row() == "lift"
         room.enter_hold.hold._fire_hold()                                 # held long enough
         await room.handle(ControlAction(action="enter", is_down=False))
         assert room._hover == 0 and room._cursor_y() == 2                 # back on what the column holds

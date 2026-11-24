@@ -19,15 +19,17 @@ MIN_W = 13                     # vw: a side narrower than this shows no column
 BUILD, LOOK = "build", "look"
 # Each row: (name, keys, picture, words). Keys are names, "+", "arrows" (the four, as on the keyboard),
 # and "hold X"; a picture is an image name or a little scene: (blocks, wire boxes, cell it centers on, height,
-# a drop: (how high the falling block is, its key), and a lifted floor's height),
-# drawn as the room draws them.
+# a drop: (how high the falling block is, its key), a lifted floor's height, and an arrow: (from, to) points),
+# drawn as the room draws them. Rows sharing a name are one group: they light together, and a row without
+# words or a picture leaves them to the next.
 ROWS = {
     BUILD: ("Build", [
-        ("type", ["A", "Z"], ({}, [], (1, 1), 1.4, (1.3, "a")), "letters drop blocks"),
-        ("move", ["arrows"], ({}, [((0, 1, 0), 70), ((1, 1, 0), 255)], (0.5, 1), 0.5), "move around the floor"),
-        ("lift", ["Enter"], ({}, [((1, 1, 2), 255)], (1, 1), 1.4, None, 2), "raise the floor"),
-        ("height", ["hold Shift", "+", UP, DOWN], None, "raise or lower it"),
-        ("ground", ["hold Enter"], ({(1, 1, 0): "a"}, [((1, 1, 1), 255)], (1, 1), 1.0), "floor back down"),
+        ("type", ["A", "Z"], ({}, [], (1, 1), 1.5, (1.0, "a")), "letters drop blocks"),
+        ("move", ["arrows"], ({}, [((0, 1, 0), 70), ((1, 1, 0), 255)], (0.5, 1), 0.5, None, None,
+                  ((0.2, 0, 0.5), (1.9, 0, 0.5))), "move around the floor"),
+        ("lift", ["Enter"], ({}, [((1, 1, 2), 255)], (1.6, 0.7), 1.5, None, 2, ((3.2, 0.2, -0.1), (3.2, 1.9, -0.1))), ""),
+        ("lift", ["hold Shift", "+", UP, DOWN], None, "raise the floor"),
+        ("lift", ["hold Enter"], None, "back down"),
     ]),
     LOOK: ("Look around", [
         ("turn", ["Tab"], "hints/turn.png", "tap to turn"),
@@ -94,21 +96,22 @@ class Guide:
             for i, (row, keys, pic, words) in enumerate(rows):
                 rise = keycap_size(g, UP, round(kpx * 0.75))[1] + 2 if "arrows" in keys else 0     # Up stands over the rest
                 with g.drawing_on(pygame.Surface((1, 1))):
-                    words_h = g.draw_markup(words, small, 0, 0, "mono", P.MUTED, block)
-                text_h = rise + key_h + gap // 2 + words_h
+                    under = gap // 2 + g.draw_markup(words, small, 0, 0, "mono", P.MUTED, block) if words else 0
+                text_h = rise + key_h + under
                 h = max(side if pic else 0, text_h)
                 pic = pic if side else None
                 layer = pygame.Surface((size[0], h), pygame.SRCALPHA)
                 with g.drawing_on(layer):
                     top = (h - text_h) // 2
                     _keys(g, kpx, 0, top + rise + key_h // 2, keys)
-                    g.draw_markup(words, small, 0, top + rise + key_h + gap // 2, "mono", P.MUTED, block)
+                    if words:
+                        g.draw_markup(words, small, 0, top + rise + key_h + gap // 2, "mono", P.MUTED, block)
                     if pic:     # a row without one adds to the row above it
                         picture = g.image(pic, round(side * 0.8)) if isinstance(pic, str) else _scene(side, *pic)
                         layer.blit(picture, picture.get_rect(center=(block + gap + side // 2, h // 2)))
                 layer.set_alpha(LIT if row == lit else QUIET)
                 surf.blit(layer, (0, y))
-                joins = i + 1 < len(rows) and not rows[i + 1][2]      # a row with no picture belongs to this one
+                joins = i + 1 < len(rows) and rows[i + 1][0] == row
                 y += h + round(gap * (0.7 if joins else 1.6))
         return surf
 
@@ -138,21 +141,18 @@ def _cluster(g, px, x, cy) -> int:
     return x + 3 * w + 2 * gap
 
 
-def _scene(side, blocks, boxes, focus, lift, drop=None, glass=None) -> pygame.Surface:
-    """A few cells of a build seen as the room sees it, on a patch of floor, `side` square: drawn twice
+def _scene(side, blocks, boxes, focus, lift, drop=None, glass=None, arrow=None) -> pygame.Surface:
+    """A few cells of a build seen as the room sees it, `side` square: drawn twice
     the size and scaled down, so its edges are smooth. Block colors are keys' sticker colors. A drop adds
-    a block on its way down with a streak fading up behind it and its shadow on the spot it lands; glass,
-    a patch of lifted floor at that height, as Shift shows it."""
+    a block on its way down, echoes fading up behind it and its shadow where it lands; glass,
+    a patch of lifted floor at that height, as Shift shows it; an arrow, which way the cursor goes."""
     big = 2 * side
     cam = Camera(0.55, REST_PITCH + 0.12, big, big, fit=0.55)
     (fx, fy) = cam.at(focus[0] + 0.5, lift, focus[1] + 0.5)
-    zoom = 4 if drop or glass else 6     # taller scenes: the bubble over a drop, the ground under a lifted floor
+    zoom = 7 if drop else 4.5 if glass else 6
     cam = cam.zoomed(zoom, (fx - big / zoom / 2, fy - big / zoom / 2))
     surf = pygame.Surface((big, big), pygame.SRCALPHA)
     painter = Painter(cam, {p: get_key_color(k) for p, k in blocks.items()}, hazy=False)
-    for x in range(3):
-        for z in range(3):
-            pygame.draw.polygon(surf, painter.tile(x, z), painter._tile_poly(x, z))
     painter.paint(surf, painter.items)
     line = max(2, big // 60)
     if glass:
@@ -166,12 +166,21 @@ def _scene(side, blocks, boxes, focus, lift, drop=None, glass=None) -> pygame.Su
     for (x, z, y), alpha in boxes:
         for _, poly in cam.box((x, y, z), (x + 1, y + 1, z + 1)):
             pygame.draw.polygon(surf, (*rgb(P.TEXT), alpha), poly, line)
-    if drop:            # its shadow dark on the spot it lands, and a streak fading up behind it
+    if drop:            # its shadow dark on the spot it lands, and two fading echoes above it
         (h, key), (x, z) = drop, focus
-        painter.shadow(surf, x, z, 0, alpha=140)
-        for k in range(6, -1, -1):
+        painter.shadow(surf, x, z, 0, alpha=160)
+        for k, alpha in ((2, 35), (1, 80), (0, 255)):
             layer = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-            painter.box(layer, x, z, h + 0.28 * k, h + 0.28 * k, get_key_color(key))
-            layer.set_alpha(round(255 if k == 0 else 70 * (1 - k / 7)))
+            painter.box(layer, x, z, h + 0.45 * k, h + 0.45 * k, get_key_color(key))
+            layer.set_alpha(alpha)
             surf.blit(layer, (0, 0))
+    if arrow:
+        _arrow(surf, *(pygame.Vector2(cam.at(*p)) for p in arrow), line)
     return pygame.transform.smoothscale(surf, (side, side))
+
+
+def _arrow(surf, a, b, line):
+    ink = (*rgb(P.TEXT), 220)
+    back = (a - b).normalize() * line * 5
+    pygame.draw.line(surf, ink, a, b - back / 2, round(line * 1.5))
+    pygame.draw.polygon(surf, ink, [b, b + back.rotate(30), b + back.rotate(-30)])

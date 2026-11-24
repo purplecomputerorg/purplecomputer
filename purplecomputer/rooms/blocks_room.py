@@ -781,9 +781,9 @@ class BlocksRoom(Room):
 
     def _lit_row(self):
         """The guide's row for the key held now, if any."""
-        if self.enter_hold.progress() is not None:
-            return "ground"
-        return "height" if self.app._keyboard_state_machine.shift_active else "look" if self._tab is not None else None
+        if self.enter_hold.progress() is not None or self.app._keyboard_state_machine.shift_active:
+            return "lift"
+        return "look" if self._tab is not None else None
 
     def _repaint(self, rect):
         """Repaint `rect` of the composite: the ground, then every block far to near."""

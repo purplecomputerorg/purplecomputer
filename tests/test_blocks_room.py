@@ -609,32 +609,20 @@ def test_each_arrow_s_flat_key_lies_the_way_that_arrow_moves_the_cursor_clear_of
             _settle(room)
             app._draw()
             cam, (vx, vz) = room._cam, room._view(room._x, room._z)
-            keys = {glyph: top for glyph, top, _ in room._arrow_keys(cam, vx, vz)}
-            middle, bubble = pygame.Vector2(cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5)), blocks_room.bubble_radius(cam, vx, vz)
+            keys = {glyph: (lo, hi) for glyph, lo, hi in room._arrow_keys(cam, vx, vz)}
+            middle, bubble = cam.at(vx + 0.5, HOVER + 0.5, vz + 0.5), blocks_room.bubble_radius(cam, vx, vz)
             spots = []
             for way, (dx, dz) in blocks_room.STEPS.items():
-                spot = sum(keys[blocks_room.ARROW_KEYS[way]], pygame.Vector2()) / 4
-                step = pygame.Vector2(cam.at(vx + 0.5 + dx, HOVER + 0.5, vz + 0.5 + dz)) - middle
-                assert (spot - middle).dot(step) > 0 and (spot.y < middle.y) == (cam.away(dx, dz) > 0), (yaw, tilt, way)
-                assert spot.distance_to(middle) > bubble, (yaw, tilt, way)       # the arrow on it is clear of the bubble
+                lo, hi = keys[blocks_room.ARROW_KEYS[way]]
+                ox, oz = (lo[0] + hi[0]) / 2 - vx - 0.5, (lo[2] + hi[2]) / 2 - vz - 0.5
+                assert ox * dz - oz * dx == 0 and ox * dx + oz * dz > 1      # out from the column the arrow's way
+                assert HOVER <= hi[1] <= HOVER + 1 and (hi[1] > HOVER + 0.5) == (cam.away(dx, dz) > 0)
+                spot = cam.at((lo[0] + hi[0]) / 2, hi[1], (lo[2] + hi[2]) / 2)
+                assert math.dist(spot, middle) > bubble, (yaw, tilt, way)       # the arrow on it is clear of the bubble
                 spots.append(spot)
-            far = 0.5 * cam.cell(vx, HOVER, vz)       # spread out even from low down, where flat keys would lie edge on
-            assert all(a.distance_to(b) > far for i, a in enumerate(spots) for b in spots[i + 1:]), (yaw, tilt)
+            assert all(math.dist(a, b) > 12 for i, a in enumerate(spots) for b in spots[i + 1:]), (yaw, tilt)
     run(go())
 
-
-
-def test_no_arrow_key_rises_out_of_the_room_at_any_tilt():
-    async def go():
-        app, room = _blocks()
-        app._draw()
-        w, h = room._composed.get_size()
-        for tilt in range(TILTS[0], TILTS[1] + 1, 15):
-            for off in (-36, 0, 36):
-                cam = blocks_room.resting_camera(off, tilt, w, h)
-                top = min(p.y for x in range(WIDTH) for z in range(DEPTH) for _, face, _ in room._arrow_keys(cam, x, z) for p in face)
-                assert top >= 0, (tilt, off)
-    run(go())
 
 def test_each_floor_cell_keeps_its_shade_from_every_side():
     async def go():

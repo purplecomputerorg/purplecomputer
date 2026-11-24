@@ -41,7 +41,7 @@ from . import art_room
 from .art_room import ARROW_HOLD_REPEAT_THRESHOLD, HOLD_ACCEL_MULTIPLIER, brush_for_key, onto_grid
 from .blocks_code import WORDS, BlocksCodeRunner
 from .blocks_guide import MIN_W, Guide, columns
-from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, WIDTH, Camera, Painter, bbox, column_shape, joined, shape
+from .blocks_view import DEPTH, HEIGHT, PAPER_FLOOR, REST_PITCH, TOP, WIDTH, Camera, Painter, bbox, column_shape, joined, shape
 
 ICON_CUBE = "\U000F01A7"     # nf-md-cube_outline
 REST_TILT = round(math.degrees(REST_PITCH))
@@ -54,7 +54,6 @@ LOOK_BOUNCE = 5.0            # degrees the view springs back off a tilt stop whe
 TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
 HOVER = HEIGHT                # the level the cursor's block waits on, over its column: one over the top, so it never shares a cell
-ROOF = HOVER + 2.3            # the height the view fits on screen: over the ceiling, room for the far arrow key from high up
 BUBBLE = 1.4                  # the glass bubble's radius, past the farthest corner of the waiting block in it
 CURSOR_INSET = 0.24           # in cells: the cursor's small block sits this far inside its cell
 CURSOR_REACH = 2.8            # cells around the cursor's block that it repaints: the arrows' keys reach that far
@@ -70,14 +69,12 @@ SMOOTH = 3                    # the cursor's marks are painted this many times t
 CLEAR = (0, 0, 0, 0)
 STEPS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 ARROW_KEYS = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
-KEY_SPAN = (0.85, 1.85, 0.4, 0.1)   # cells: where each arrow's flat key starts and ends out from the column's middle, its half width, its thickness
+KEY_SPAN = (0.85, 1.85, 0.4, 0.1)
 WALL_SPAN = (0.85, 1.05, 0.45, 0.1)    # the same for the flat stop bar lying where a key would, where the edge stops the cursor
-KEY_GROW = 0.4                 # how much bigger the arrows get once their slabs have faded
-KEY_FADE = (math.sin(math.radians(17)), math.sin(REST_PITCH))   # the keys' slabs fade out as the view drops from the second sine to the first: edge on, only their arrows stay
 LIFT_HOLD_S, LIFT_FADE_S, LIFT_SLIDE_S = 1.0, 0.4, 0.14   # the lifted floor: how long it stays after Shift moved it, fades, and slides a level
 LIFT_REACH = 2                 # cells the lifted floor reaches each way from the cursor's column
 FLASH_S, FLASH_ALPHA = 0.45, 60   # a wall the bubble knocks into flashes this long, this strong at first
-BUMP, BUMP_S = 0.18, 0.18          # cells the waiting block knocks toward a wall an arrow pushes it into, and for how long
+BUMP, BUMP_S = 0.18, 0.18          # cells the waiting block knocks toward a wall an arrow pushes it into, and for how long   # cells: where each arrow's flat key starts and ends out from the column's middle, its half width, its thickness
 RISE, SINK = "rise", "sink"
 SIZE = {"x": WIDTH, "z": DEPTH, "y": HEIGHT}
 OLD_FLOOR = (30, 12)          # the floor's width and depth before it was square: history saved then doesn't say
@@ -107,7 +104,7 @@ def bubble_radius(cam, x, z, lift: float = 0.0) -> float:
 @lru_cache(maxsize=4)
 def resting_camera(yaw: float, tilt: float, w: int, h: int) -> Camera:
     """The camera for a view at rest, in degrees: `yaw` is how far the floor sits off its side's straight-on view."""
-    return Camera(math.radians(yaw), math.radians(tilt), w, h, top=ROOF, fit=math.radians(yaw))
+    return Camera(math.radians(yaw), math.radians(tilt), w, h, top=HOVER + 1, fit=math.radians(yaw))
 
 
 class BlocksRoom(Room):
@@ -780,7 +777,7 @@ class BlocksRoom(Room):
         g.set_clip(None)
 
     def _guide_spots(self) -> dict:
-        return columns(self._composed.get_size(), self.code_panel is not None, self.app.g.vw(MIN_W), ROOF, TILTS)
+        return columns(self._composed.get_size(), self.code_panel is not None, self.app.g.vw(MIN_W), HOVER + 1, TILTS)
 
     def _lit_row(self):
         """The guide's row for the key held now, if any."""
@@ -926,7 +923,7 @@ class BlocksRoom(Room):
         blocks. A frame over budget drops shadows for builds this big from then on."""
         self._built = self._built or shape(self._blocks)     # once a build, not a frame: kept out of the budget
         start = time.monotonic()
-        cam = Camera(math.radians(turn), math.radians(tilt), area.w, area.h, area.topleft, top=ROOF, fit=math.radians(fit))
+        cam = Camera(math.radians(turn), math.radians(tilt), area.w, area.h, area.topleft, top=HOVER + 1, fit=math.radians(fit))
         detailed = len(self._blocks) <= self._turn_detail_limit
         painter = Painter(cam, self._blocks, detail=detailed, built=self._built)
         if self._composed is not None:
@@ -1008,7 +1005,7 @@ class BlocksRoom(Room):
                              lambda layer, big: self._arrowhead(layer, big.cam, vx, vz, cut))
             self._hover_marks(sub, painter, vx, vz, bright)
             sub.set_clip(None)
-            self._draw_arrow_keys(g, sub, painter, vx, vz)
+            self._draw_arrow_keys(g, sub, painter, vx, vz, origin=area.topleft)
         g.draw_caret(over.move(area.topleft), lambda: paint(whole, True), lambda: paint(over, False))
 
     def _smooth(self, surf, painter, rect, draw, keep=None):
@@ -1083,55 +1080,44 @@ class BlocksRoom(Room):
                      keep=(("hover", bright), x, z, ox, oz, oy, self._color))
 
     def _arrow_keys(self, cam, x, z, world: bool = False) -> list:
-        """(glyph, top, sides) of each arrow's key as screen polygons, far to near: a thin slab lying flat out
-        from the waiting block the way that arrow moves the cursor. One going away sits level with the box's top and one coming toward with
-        its bottom, the rest in between, so the box hides none of them. Where the edge stops the cursor, a
-        short bright bar lies flat in the key's place instead, with no glyph: a stop line."""
-        down = -cam.f[1]
-        mid, cell = pygame.Vector2(cam.at(x + 0.5, HOVER + 0.5, z + 0.5)), cam.cell(x, HOVER, z)
-
-        def at(px, pz, up):
-            return mid + cell * pygame.Vector2(px * cam.r[0] + pz * cam.r[2], -cam.away(px, pz) * down - up * math.sqrt(1 - down * down))
+        """(glyph, lo, hi) of each arrow's key, far to near: a thin slab lying flat out from the waiting block
+        the way that arrow moves the cursor. One going away sits level with the box's top and one coming
+        toward with its bottom, the rest in between, so the box hides none of them. Where the edge stops
+        the cursor, a short bright bar lies flat in the key's place instead, with no glyph: a stop line."""
         keys = []
         for way, (dx, dz) in STEPS.items():
             for _ in range(-self._side % 4 if world else 0):
                 dx, dz = -dz, dx
             wall = not (0 <= x + dx < WIDTH and 0 <= z + dz < DEPTH)
             near, far, half, thick = WALL_SPAN if wall else KEY_SPAN
-            up = 0.5 * cam.away(dx, dz)
-            foot = [(dx * t - dz * s, dz * t + dx * s) for t, s in ((near, -half), (near, half), (far, half), (far, -half))]
-            top, bottom = ([at(px, pz, h) for px, pz in foot] for h in (up, up - thick))
-            sides = [(top[i], top[i - 1], bottom[i - 1], bottom[i]) for i in range(4)]
-            keys.append((cam.away(dx, dz), None if wall else ARROW_KEYS[way], top, sides))
-        return [k[1:] for k in sorted(keys, key=lambda k: -k[0])]
+            h = HOVER + 0.5 + 0.5 * cam.away(dx, dz)
+            xs = sorted((x + 0.5 + dx * near - dz * half, x + 0.5 + dx * far + dz * half))
+            zs = sorted((z + 0.5 + dz * near + dx * half, z + 0.5 + dz * far - dx * half))
+            keys.append((None if wall else ARROW_KEYS[way], (xs[0], h - thick, zs[0]), (xs[1], h, zs[1])))
+        return sorted(keys, key=lambda k: cam.key(k[1][0], k[1][2], 0))
 
-    def _draw_arrow_keys(self, g, surf, painter, x, z, world: bool = False):
+    def _draw_arrow_keys(self, g, surf, painter, x, z, world: bool = False, origin=(0, 0)):
         """Each arrow's key lying flat beside the waiting block in faint glass, its arrow upright on it as
-        printed on the real key. From low down the slabs turn edge on and fade, leaving the arrows."""
-        cam, cell = painter.cam, painter.cam.cell(x, HOVER, z)
-        lo, hi = KEY_FADE
-        fade = min(1.0, max(0.0, (-cam.f[1] - lo) / (hi - lo)))
+        printed on the real key. `origin` is where `surf` sits on the screen."""
+        cam = painter.cam
+        keys, cell = self._arrow_keys(cam, x, z, world), cam.cell(x, HOVER, z)
 
         def draw(layer, big):
-            for glyph, top, sides in self._arrow_keys(big.cam, x, z, world):
-                k = fade if glyph else 1.0
-                face, side = ((*rgb(P.TEXT), 64), (*mix(P.TEXT, art_room.CANVAS_BG, 0.45), 200)) if glyph else \
+            c, edge = big.cam, (*rgb(P.TEXT), 150)
+            for glyph, lo, hi in keys:
+                top, side = ((*rgb(P.TEXT), 64), (*mix(P.TEXT, art_room.CANVAS_BG, 0.45), 200)) if glyph else \
                     ((*rgb(P.TEXT), 210), (*mix(P.TEXT, art_room.CANVAS_BG, 0.3), 240))
-                for poly in sides:      # the top covers the ones facing away
-                    pygame.draw.polygon(layer, (*side[:3], round(side[3] * k)), poly)
-                pygame.draw.polygon(layer, (*face[:3], round(face[3] * k)), top)
-                pygame.draw.polygon(layer, (*rgb(P.TEXT), round(150 * k)), top, big.cam.zoom)
+                for n, poly in c.box(lo, hi):
+                    pygame.draw.polygon(layer, top if n is TOP else side, poly)
+                face = [c.at(px, hi[1], pz) for px, pz in ((lo[0], lo[2]), (hi[0], lo[2]), (hi[0], hi[2]), (lo[0], hi[2]))]
+                pygame.draw.polygon(layer, edge, face, c.zoom)
         self._smooth(surf, painter, self._square(cam, x, z, HOVER + 0.5, round(cell * (KEY_SPAN[1] + 0.9))), draw,
                      keep=("keys", x, z, world, self._side))
-        px = round(max(g.vh(1.3), cell * 0.34) * (1 + KEY_GROW * (1 - fade)))
-        mid = pygame.Vector2(cam.at(x + 0.5, HOVER + 0.5, z + 0.5))
-        clear = bubble_radius(cam, x, z) + px * 0.7
-        with g.drawing_on(surf):
-            for glyph, top, _ in self._arrow_keys(cam, x, z, world):
-                out = sum(top, pygame.Vector2()) / 4 - mid
-                kx, ky = mid + (out.normalize() * clear if 0 < out.length() < clear else out)
-                for color, d in ((art_room.CANVAS_BG, 1), (P.TEXT, 0)) if glyph else ():     # a soft shadow, so it reads on any color
-                    g.draw_text(glyph, px, round(kx) + d, round(ky) + d, "mono-bold", color, anchor="center")
+        px = max(g.vh(1.3), round(cell * 0.34))
+        for glyph, lo, hi in (k for k in keys if k[0]):
+            kx, ky = cam.at((lo[0] + hi[0]) / 2, hi[1], (lo[2] + hi[2]) / 2)
+            for color, d in ((art_room.CANVAS_BG, 1), (P.TEXT, 0)):     # a soft shadow, so it reads on any color
+                g.draw_text(glyph, px, round(kx) + origin[0] + d, round(ky) + origin[1] + d, "mono-bold", color, anchor="center")
 
     def _wire(self, surf, cam, x, z, y, width, casing):
         """The cell as a wire box: the edges of the faces the eye sees, each a light line with a

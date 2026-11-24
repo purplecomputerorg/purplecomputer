@@ -26,6 +26,7 @@ while [ $# -gt 0 ]; do
         --force) FORCE_BUILD=1 ;;
         --ref) BUILD_REF="$2"; shift ;;
         --stop) STOP=1 ;;
+        --status) STATUS=1 ;;
         *) START_STEP="$1" ;;
     esac
     shift
@@ -125,6 +126,18 @@ stop_builds() {
     log_info "Stopped. The next build starts clean."
 }
 
+# What each running build is doing and when its stages should finish (build-eta.sh).
+show_status() {
+    local id dir
+    for id in $(running_builds); do
+        dir="$(docker inspect -f "{{ index .Config.Labels \"$BUILD_LABEL\" }}" "$id")"
+        echo "Build in $dir:"
+        cat "$dir/build/build-status" 2>/dev/null || echo "  (no stage reached yet)"
+    done
+    [ -n "$(running_builds)" ] || { log_info "No build is running. Last one:"; cat "$BUILD_DIR/build-status" 2>/dev/null; }
+    return 0
+}
+
 refuse_if_already_running() {
     [ -z "$(running_builds "$HOST_INSTALLER_DIR")" ] && return 0
     echo "A build is already running in $HOST_INSTALLER_DIR. Stop it first: just build-stop" >&2
@@ -135,6 +148,10 @@ main() {
     cd "$SCRIPT_DIR"
     if [ "${STOP:-0}" = "1" ]; then
         stop_builds
+        return
+    fi
+    if [ "${STATUS:-0}" = "1" ]; then
+        show_status
         return
     fi
 
@@ -179,6 +196,7 @@ main() {
         -v "$BUILD_CTX:/build" \
         -v "$PROJECT_DIR:/purple-src" \
         -v "$HOST_INSTALLER_DIR:$INSTALLER_BASE" \
+        -v /etc/localtime:/etc/localtime:ro \
         -e "PURPLE_VERSION=${PURPLE_VERSION}" \
         -e "PURPLE_COMMIT=${PURPLE_COMMIT}" \
         -e "FAST_BUILD=${FAST_BUILD}" \

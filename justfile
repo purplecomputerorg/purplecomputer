@@ -270,6 +270,10 @@ build *args:
 build-stop:
     ./build-scripts/build-in-docker.sh --stop
 
+# What the running build is doing, and when its ISOs and Pi image should be ready.
+build-status:
+    ./build-scripts/build-in-docker.sh --status
+
 # Build the Raspberry Pi card image (Pi 4, 400, 5, 500): /opt/purple-installer/output/purple-pi-<date>-<commit>.img.xz
 build-pi *args:
     ./build-scripts/build-in-docker.sh --pi {{args}}

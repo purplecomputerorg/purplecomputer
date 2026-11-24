@@ -9,6 +9,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
+source "$SCRIPT_DIR/build-eta.sh"
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -63,7 +64,8 @@ main() {
     cd "$SCRIPT_DIR"
 
     if [ "${PURPLE_PI:-0}" = "1" ]; then
-        build_pi
+        timed_stage pi build_pi
+        finish_eta
         return
     fi
 
@@ -75,28 +77,29 @@ main() {
 
     if [ "$START_STEP" -le 0 ]; then
         log_step "0/1: Building root filesystem, squashfs, and golden image..."
-        ./00-build-golden-image.sh
+        timed_stage x86 ./00-build-golden-image.sh
         echo
         # 32-bit CPU payload (Debian i386, install-only). Skipped on fast builds.
         if [ "${FAST_BUILD:-0}" != "1" ]; then
             log_step "0b/1: Building i386 golden image..."
-            PURPLE_ARCH=i386 ./00-build-golden-image.sh
+            PURPLE_ARCH=i386 timed_stage i386 ./00-build-golden-image.sh
             echo
         fi
     fi
 
     if [ "$START_STEP" -le 1 ]; then
         log_step "1/1: Remastering ISO (replace squashfs, inject install hook)..."
-        ./01-remaster-iso.sh
+        timed_stage remaster ./01-remaster-iso.sh
         echo
     fi
 
     # Last, and allowed to fail: the ISOs are what USBs and the download need.
     if pi_in_full_build; then
-        ( build_pi ) || echo "WARNING: the Raspberry Pi image failed; the ISOs are fine. Retry with: just build-pi"
+        ( timed_stage pi build_pi ) || echo "WARNING: the Raspberry Pi image failed; the ISOs are fine. Retry with: just build-pi"
         echo
     fi
 
+    finish_eta
     print_banner
     log_done "Build complete!"
     log_done "ISO ready at: $OUTPUT_DIR/"

@@ -12,10 +12,11 @@ from ..gfx import rgb
 from ..palette import get_key_color
 from ..ui import DOWN, LEFT, RIGHT, UP, draw_key, keycap_size
 from . import art_room
-from .blocks_view import DEPTH, REST_PITCH, WIDTH, Camera, Painter
+from .blocks_view import DEPTH, HEIGHT, REST_PITCH, WIDTH, Camera, Painter
 
 QUIET, LIT = 150, 255          # a row's alpha, and while its key is held
 MIN_W = 13                     # vw: a side narrower than this shows no column
+REACH = 1.7                    # cells on screen from the cursor's middle to the right edge of its bubble and keys
 BUILD, LOOK = "build", "look"
 # Each row: (name, keys, picture, words). Keys are names, "+", "arrows" (the four, as on the keyboard),
 # and "hold X"; a picture is an image name or a little scene: (blocks, wire boxes, cell it centers on, height,
@@ -41,23 +42,25 @@ ROWS = {
 def columns(size, code: bool, min_w: int, top: float, tilts: tuple) -> dict:
     """{column: rect} in the layer's pixels, in the sides the floor leaves free at every angle it can be
     seen from, so the columns hold still while the view moves: no Build while the code line takes the
-    letters and arrows."""
+    letters and arrows. Look stands clear of the cursor too where that leaves it room; Build doesn't, so
+    its wider keys keep room for their pictures."""
     w, h = size
     pad = round(h * 0.03)
-    left, right = _floor_span(size, top, tilts)
-    left, right = left - 2 * pad, right + 2 * pad
+    left, right, cursor = _span(size, top, tilts)
+    left, right = left - 2 * pad, cursor if w - cursor - pad >= min_w else right + 2 * pad
     spots = {BUILD: pygame.Rect(pad, pad, left - pad, h - 2 * pad), LOOK: pygame.Rect(right, pad, w - right - pad, h - 2 * pad)}
     return {k: r for k, r in spots.items() if r.w >= min_w and not (code and k == BUILD)}
 
 
 @lru_cache(maxsize=4)
-def _floor_span(size, top: float, tilts: tuple) -> tuple:
-    """How far left and right the floor ever reaches on screen: turned to a diagonal, where it is widest,
-    at each tilt the view can stop at."""
-    xs = [Camera(yaw, math.radians(tilt), *size, top=top, fit=yaw).at(x, y, z)[0]
-          for yaw in (0.0, math.pi / 4) for tilt in range(tilts[0], tilts[1] + 1, 15)
-          for x in (0, WIDTH) for z in (0, DEPTH) for y in (0, 1)]
-    return round(min(xs)), round(max(xs))
+def _span(size, top: float, tilts: tuple) -> tuple:
+    """How far left and right the floor, and right the cursor waiting over it, ever reach on screen:
+    turned to a diagonal, where it is widest, at each tilt the view can stop at."""
+    cams = [Camera(yaw, math.radians(tilt), *size, top=top, fit=yaw)
+            for yaw in (0.0, math.pi / 4) for tilt in range(tilts[0], tilts[1] + 1, 15)]
+    floor = [c.at(x, y, z)[0] for c in cams for x in (0, WIDTH) for z in (0, DEPTH) for y in (0, 1)]
+    cursor = [c.at(x + 0.5, HEIGHT + 0.5, z + 0.5)[0] + REACH * c.cell(x, HEIGHT, z) for c in cams for x in range(WIDTH) for z in range(DEPTH)]
+    return round(min(floor)), round(max(floor)), round(max(cursor))
 
 
 class Guide:

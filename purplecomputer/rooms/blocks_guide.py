@@ -180,7 +180,9 @@ def _scene(side, blocks, boxes, focus, lift, drop=None, glass=None, arrow=None) 
 
 
 def _arrow(surf, a, b, line):
-    ink = (*rgb(P.TEXT), 220)
-    back = (a - b).normalize() * line * 5
-    pygame.draw.line(surf, ink, a, b - back / 2, round(line * 1.5))
-    pygame.draw.polygon(surf, ink, [b, b + back.rotate(30), b + back.rotate(-30)])
+    """One solid shape: a shaft `line` * 2 wide, and a head twice as wide as long."""
+    d = (b - a).normalize()
+    n, w, head = d.rotate(90), line, line * 4.5
+    neck = b - d * head
+    pts = [a + n * w, neck + n * w, neck + n * head, b, neck - n * head, neck - n * w, a - n * w]
+    pygame.draw.polygon(surf, (*rgb(P.TEXT), 200), pts)

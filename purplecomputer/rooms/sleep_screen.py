@@ -198,7 +198,7 @@ class LiveBootSplash(FullScreen):
     _NOTES = [(ICON_KEYBOARD, "Purple is keyboard only, on purpose. Kids explore by typing."),
               (ICON_USB, "You're running from the Purple Key, so you'll need it to start Purple again."),
               (ICON_HARDDISK, "To install Purple and keep it, hold Esc to open the Parent Menu.")]
-    _INSTALLED_NOTE = (ICON_HARDDISK, "Purple is already on this laptop, with your kid's work. To update it, hold Esc.")
+    _INSTALLED_NOTE = (ICON_HARDDISK, "Purple is already on this laptop, with your kid's work.")
     _AUDIO_WARNING = (ICON_VOLUME_OFF, "Sound is not working on this computer. Plug in a USB audio adapter, "
                                        "or open the Parent Menu to see Support info.")
     hint = "Press any key to start"
@@ -244,6 +244,17 @@ class LiveBootSplash(FullScreen):
 
     async def handle(self, action):
         self.close()
+        if old_install.known()[0] == "found":
+            from .parent_menu import InstallOverScreen
+            self.app.push(InstallOverScreen(self.app),
+                          on_close=lambda choice: choice and self.app.with_parent_pin(lambda: _install(self.app, choice)))
+
+
+def _install(app, choice):
+    from .parent_menu import ParentMenu
+    menu = ParentMenu(app)
+    app.push(menu, on_close=app._on_parent_menu_dismissed)
+    menu._install_to_disk(choice)
 
 
 def first_boot_power_cycle_needed(audio_ok) -> bool:

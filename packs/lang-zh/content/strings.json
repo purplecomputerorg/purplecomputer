@@ -249,7 +249,6 @@
   "Yes, install": "是，安装",
   "Purple is already set up on this laptop.\nInstalling can keep your kid's work\nand settings, or start fresh.": "这台电脑上已经装了 Purple。\n安装时可以保留孩子的作品\n和设置，也可以重新开始。",
   "Install and keep everything": "安装并保留所有内容",
-  "Start fresh instead": "改为重新开始",
   "Start Fresh": "重新开始",
   "[bold {0}]This erases everything your kid\nsaved on this laptop.[/]": "[bold {0}]这会删除孩子在这台电脑上\n保存的所有内容。[/]",
   "Erase and install": "删除并安装",
@@ -416,5 +415,9 @@
   "Second Language": "第二语言",
   "Play shows and says words in this language too": "“玩”里也会显示并说出这个语言的词",
   "Language: {0}": "语言：{0}",
-  "Second Language: {0}": "第二语言：{0}"
+  "Second Language: {0}": "第二语言：{0}",
+  "Install this Key's Purple?": "安装这个 Key 上的 Purple？",
+  "Install and start fresh": "安装并重新开始",
+  "Purple is already on this laptop, with your kid's work.": "这台电脑上已经装了 Purple，里面有孩子的作品。",
+  "Just play, don't install right now": "先直接玩，暂时不安装"
 }

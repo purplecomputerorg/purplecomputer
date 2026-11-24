@@ -523,6 +523,7 @@ class Picker(Dialog):
     default_selected = 0
     escape_value = None
     dim_values: set = set()  # options drawn quietly until selected (a destructive alternative)
+    gap_before: set = set()  # options set apart from the ones above them
 
     def __init__(self, app, options=None):
         super().__init__(app)
@@ -541,8 +542,11 @@ class Picker(Dialog):
         step = self.option_height(g) + g.em(0.3)
         return max(1, min(len(self.options), (self.body_limit(g) - self._desc_height(g)) // step))
 
+    def _gaps(self, g: Gfx) -> int:
+        return g.em(0.9) * sum(o[0] in self.gap_before for o in self.options)
+
     def body_height(self, g: Gfx) -> int:
-        return self._desc_height(g) + self._shown(g) * (self.option_height(g) + g.em(0.3))
+        return self._desc_height(g) + self._shown(g) * (self.option_height(g) + g.em(0.3)) + self._gaps(g)
 
     def draw_body(self, g: Gfx, rect: pygame.Rect):
         """Rows in the Parent Menu's idiom: plain mono, the chosen one on
@@ -555,6 +559,7 @@ class Picker(Dialog):
         self._first = min(max(self._first, self.selected - n + 1), self.selected, len(self.options) - n)
         last = self._first + n - 1
         for i, opt in enumerate(self.options[self._first:last + 1], self._first):
+            y += g.em(0.9) if opt[0] in self.gap_before and i > self._first else 0
             box = pygame.Rect(rect.x, y, rect.w, oh)
             on = i == self.selected
             if on:

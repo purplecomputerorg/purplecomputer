@@ -243,7 +243,6 @@
   "Yes, install": "Sí, instalar",
   "Purple is already set up on this laptop.\nInstalling can keep your kid's work\nand settings, or start fresh.": "Purple ya está instalado en esta laptop.\nAl instalar puedes conservar el trabajo\ny los ajustes de tu hijo, o empezar de cero.",
   "Install and keep everything": "Instalar y conservar todo",
-  "Start fresh instead": "Mejor empezar de cero",
   "Start Fresh": "Empezar de cero",
   "[bold {0}]This erases everything your kid\nsaved on this laptop.[/]": "[bold {0}]Esto borra todo lo que tu hijo\nguardó en esta laptop.[/]",
   "Erase and install": "Borrar e instalar",
@@ -391,5 +390,9 @@
   "Second Language": "Segundo idioma",
   "Play shows and says words in this language too": "Juega también muestra y dice palabras en este idioma",
   "Language: {0}": "Idioma: {0}",
-  "Second Language: {0}": "Segundo idioma: {0}"
+  "Second Language: {0}": "Segundo idioma: {0}",
+  "Install this Key's Purple?": "¿Instalar el Purple de esta llave?",
+  "Install and start fresh": "Instalar y empezar de cero",
+  "Purple is already on this laptop, with your kid's work.": "Purple ya está en esta laptop, con el trabajo de tu hijo.",
+  "Just play, don't install right now": "Solo jugar, no instalar por ahora"
 }

@@ -477,7 +477,7 @@ class InstallConfirmScreen(Picker):
 class ReinstallConfirmScreen(InstallConfirmScreen):
     DESCRIPTION = ("Purple is already set up on this laptop.\n"
                    "Installing can keep your kid's work\nand settings, or start fresh.")
-    OPTIONS = [("keep", "Install and keep everything"), (False, "No, go back"), ("fresh", "Start fresh instead")]
+    OPTIONS = [("keep", "Install and keep everything"), (False, "No, go back"), ("fresh", "Install and start fresh")]
     dim_values = {"fresh"}
     default_selected = 0
 
@@ -486,6 +486,14 @@ class ReinstallConfirmScreen(InstallConfirmScreen):
             self.app.push(StartFreshConfirmScreen(self.app), on_close=lambda ok: ok and self.close(True))
         else:
             self.close(value)
+
+
+class InstallOverScreen(ReinstallConfirmScreen):
+    """After the live welcome screen, on a laptop that already has Purple."""
+    title = "Install this Key's Purple?"
+    OPTIONS = [("keep", "Install and keep everything"), ("fresh", "Install and start fresh"), (False, "Just play, don't install right now")]
+    default_selected = 2
+    gap_before = {False}
 
 
 class StartFreshConfirmScreen(InstallConfirmScreen):
@@ -1504,14 +1512,15 @@ class ParentMenu(Overlay):
         self.app.push(VoiceScreen(self.app), on_close=apply)
 
 
-    def _install_to_disk(self):
+    def _install_to_disk(self, picked=None):
+        """picked: keep or fresh, when the parent already chose on InstallOverScreen."""
         if self._probing:
             return
         self._probing = True
-        threading.Thread(target=lambda: self.app.call_from_thread(self._ask_install, *old_install.probe()),
+        threading.Thread(target=lambda: self.app.call_from_thread(self._ask_install, *old_install.probe(), picked),
                          daemon=True).start()
 
-    def _ask_install(self, old, old_name):
+    def _ask_install(self, old, old_name, picked=None):
         self._probing = False
 
         def on_name(name):
@@ -1524,6 +1533,8 @@ class ParentMenu(Overlay):
                     self.close()
                     self.app._timeline_flush()  # the installer copies the live history
                     self.app.push(InstallProgressScreen(self.app, computer_name=name or "", keep=choice == "keep"))
+            if picked:
+                return on_confirm(picked)
             self.app.push(_CONFIRM_SCREENS[old](self.app), on_close=on_confirm)
         live_name = computer_name("")
         initial = old_name or ("" if live_name == DEFAULT_COMPUTER_NAME else live_name)

@@ -19,3 +19,31 @@ def test_parent_menu_hint_names_the_installed_purple(monkeypatch):
     assert "Purple is also on this laptop" in parent_menu._boot_mode_hint()
     monkeypatch.setattr(old_install, "_result", old_install.NONE)
     assert "also on this laptop" not in parent_menu._boot_mode_hint()
+
+
+def test_the_welcome_screen_offers_to_install_over_the_laptops_purple(monkeypatch):
+    import asyncio
+    from purplecomputer.harness import make_app, press, run
+    from purplecomputer.rooms.sleep_screen import LiveBootSplash
+    monkeypatch.setattr(old_install, "_result", ("found", "Sam's Computer"))
+    installs = []
+    monkeypatch.setattr(parent_menu, "InstallProgressScreen", lambda app, **k: installs.append(k) or parent_menu.Overlay(app))
+
+    async def go():
+        app = make_app()
+        app.push(LiveBootSplash(app))
+        await press(app, "space")
+        assert isinstance(app.top, parent_menu.InstallOverScreen) and app.top.options[app.top.selected][1] == "Just play, don't install right now"
+        await press(app, "enter")
+        assert not isinstance(app.top, parent_menu.InstallOverScreen)
+        app.push(LiveBootSplash(app))
+        await press(app, "space")
+        app.top.close("keep")
+        for _ in range(200):
+            if isinstance(app.top, parent_menu.ComputerNameScreen):
+                break
+            await asyncio.sleep(0.01)
+        assert app.top._name == "Sam's Computer"
+        app.top.close("Sam's Computer")
+        assert installs == [{"computer_name": "Sam's Computer", "keep": True}]
+    run(go())

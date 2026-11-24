@@ -192,8 +192,8 @@ class Camera:
         return min(DEPTH - 1, max(0, round(back)))
 
     def cell(self, x, y, z) -> float:
-        """A cell's width on screen there."""
-        (ax, ay), (bx, by) = self.at(x, y, z), self.at(x + 1, y, z)
+        """A cell's width on screen there, measured across the screen so it holds steady as the view turns."""
+        (ax, ay), (bx, by) = self.at(x, y, z), self.at(x + self.r[0], y, z + self.r[2])
         return math.hypot(bx - ax, by - ay)
 
     def box(self, lo, hi, open=FACES) -> list:

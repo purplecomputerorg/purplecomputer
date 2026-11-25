@@ -51,6 +51,8 @@ REST_TILT = round(math.degrees(REST_PITCH))
 LOOKS = {"left": (0, -18), "right": (0, 18), "up": (1, 15), "down": (1, -15)}
 TILTS = (15, 75)             # degrees down the view looks, from the side to nearly straight down: the eye stays over every block and in front of every row
 LOOK_PULL, LOOK_SPEED, LOOK_NEAR = 10.0, 240.0, 0.5   # the view closes this share of the way to its goal a second, at most this many degrees a second, and lands within this
+HELD_LOOK_S = 0.25           # a held arrow's view keeps moving this long past its last repeat, however slow the frames:
+                             # landing between repeats would build the resting picture, the slowest frame there is
 LOOK_BOUNCE = 5.0            # degrees the view springs back off a tilt stop when an arrow pushes it past
 TURN_DETAIL_BLOCKS = 600     # blocks; past this the moving view drops shadows
 TURN_FRAME_BUDGET_S = 0.012  # a detailed moving frame slower than this lowers that limit to its block count
@@ -144,11 +146,12 @@ class BlocksRoom(Room):
         self._goal = [0.0, float(REST_TILT), 0.0]
         self._look = list(self._goal)
         self._look_timer = self._looked = None
+        self._held_until = 0.0         # time.monotonic() a held arrow keeps the view moving until
         self._tab = None              # while Tab is down: whether an arrow has looked around with it
         self._turn_detail_limit = TURN_DETAIL_BLOCKS
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
-        self._origin = (0, 0)
+        self._area = pygame.Rect(0, 0, 0, 0)    # where the floor's picture is on screen
         self._cam = self._painter = self._floor = None
         self._built = None             # the build's shape for a moving view, until a block changes
         self._scene = self._front = self._land = self._composed = None   # _scene: the composite once painted, None to repaint all
@@ -204,6 +207,10 @@ class BlocksRoom(Room):
         vx, vz = self._view(self._x, self._z)
         x, y = self._cam.at(vx + 0.5, 0, vz + 0.5)
         return (self._origin[0] + x - vp.x) / vp.w, (self._origin[1] + y - vp.y) / vp.h
+
+    @property
+    def _origin(self) -> tuple:
+        return self._area.topleft
 
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
@@ -537,7 +544,10 @@ class BlocksRoom(Room):
             if not held and self._look == self._goal:       # at a stop: it springs back off it, the way that still goes
                 self._look[1] -= math.copysign(LOOK_BOUNCE, step)
                 self._aim()
-        elif not (held and abs(self._goal[axis] - self._look[axis]) > abs(step) / 4):
+            return
+        if held:
+            self._held_until = time.monotonic() + HELD_LOOK_S
+        if not (held and abs(self._goal[axis] - self._look[axis]) > abs(step) / 4):
             self._aim(**{"tilt" if axis else "yaw": self._goal[axis] + step})
 
     def _tab_hint(self) -> str:
@@ -564,21 +574,34 @@ class BlocksRoom(Room):
         now = time.monotonic()
         dt, self._looked = now - self._looked, now
         perf_trace.note(look_dt=perf_trace.ms(dt))
+        was = list(self._look)
         for axis, goal in enumerate(self._goal):
             gap = goal - self._look[axis]
             step = min(abs(gap) * min(1.0, LOOK_PULL * dt), LOOK_SPEED * dt)
             self._look[axis] = goal if abs(gap) - step < LOOK_NEAR else self._look[axis] + math.copysign(step, gap)
-        if self._look == self._goal:
+        if self._look == self._goal and now >= self._held_until:
             self._look_timer.stop()
             self._look_timer = None
             turns = 360.0 * (self._goal[0] // 360)      # the same view, without the turns behind it
             self._goal[0] -= turns
             self._look[0] -= turns
-        self.app.invalidate()
+            self.app.invalidate()
+        elif self._look != was:
+            self.app.repaint(self._move_patch)
 
     def _moving(self):
-        """(turn, tilt, fit) in degrees while the view is on its way to its goal, else None."""
-        return None if self._look == self._goal else tuple(self._look)
+        """(turn, tilt, fit) in degrees while the view is on its way to its goal or a held arrow keeps it going, else None."""
+        return None if self._look == self._goal and time.monotonic() >= self._held_until else tuple(self._look)
+
+    def _move_patch(self):
+        """A moving frame of the floor's picture alone, for app.repaint: the rest of the screen stays as it was."""
+        moving = self._moving()
+        if moving is None:
+            return self.app.invalidate()
+        self.app.g.rect(P.SURFACE, self._area)
+        self._draw_moving(self.app.g, self._area, *moving, perf_trace.laps())
+        self._note_frame()
+        return self._area
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
@@ -834,7 +857,7 @@ class BlocksRoom(Room):
         chrome_h = hint_row_h(g)
         foot_h = 0 if self.app.viewport_panel() is not None else chrome_h + gap
         area = pygame.Rect(inner.x, inner.y + chrome_h + gap, inner.w, inner.h - chrome_h - gap - foot_h)
-        self._origin = area.topleft
+        self._area = area
         moving = self._moving()
         lap = perf_trace.laps()
         if moving is None:
@@ -847,9 +870,7 @@ class BlocksRoom(Room):
             self._draw_wall_flash(g.surface.subsurface(area))
             self._draw_hold_badge(g, area)
         else:
-            g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
             self._draw_moving(g, area, *moving, lap)
-            g.surface.set_clip(None)
         shift = self.app._keyboard_state_machine.shift_active
         self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._held_tab() is False else 1,
                                         self._color, wheel=None if self.code_panel else wheel_chip(self),
@@ -861,6 +882,9 @@ class BlocksRoom(Room):
             draw_key_hint(g, hint, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
         lap("chrome")
+        self._note_frame()
+
+    def _note_frame(self):
         perf_trace.note(blocks=len(self._blocks), view=[round(v, 1) for v in self._look])
 
     def _draw_hold_badge(self, g, area):
@@ -885,7 +909,7 @@ class BlocksRoom(Room):
         the cursor over them if they touch it, then the blocks. Returns the screen rect it painted."""
         if self._moving() is not None or self._scene is None or self._dirty:
             return self.app.invalidate()
-        g, area = self.app.g, pygame.Rect(self._origin, self._composed.get_size())
+        g, area = self.app.g, self._area
         sub = g.surface.subsurface(area)
         rects = self._fell + [self._cam.run_rect(vx, vz, y, h) for vx, vz, h, y, *_ in self._falling()]
         if not rects:
@@ -933,6 +957,7 @@ class BlocksRoom(Room):
         `turn` degrees around, looking `tilt` degrees down and sized as from `fit` degrees off straight
         on, so both ends land on those pictures, the cursor's marks painted in their place among the
         blocks. A frame over budget drops shadows for builds this big from then on."""
+        g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
         self._built = self._built or shape(self._blocks)     # once a build, not a frame: kept out of the budget
         lap("shape")
         start = time.monotonic()
@@ -960,6 +985,7 @@ class BlocksRoom(Room):
         lap("hover_marks")
         self._draw_arrow_keys(g, g.surface, painter, x, z, world=True)
         lap("arrow_keys")
+        g.surface.set_clip(None)
         perf_trace.note(items=len(items), detailed=detailed)
         if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
             self._turn_detail_limit = len(self._blocks) - 1

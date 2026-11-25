@@ -459,7 +459,7 @@ def test_a_build_is_painted_as_tall_boxes_with_only_the_faces_that_can_show():
 
 def _settle(room):
     """The view lands where it is headed, as its timer would bring it."""
-    room._look = list(room._goal)
+    room._look, room._held_until = list(room._goal), 0.0
     if room._look_timer:
         room._look_tick()
 
@@ -523,6 +523,38 @@ def test_a_held_turn_keeps_the_view_just_moving_and_a_press_mid_turn_carries_on(
         assert room._goal[0] == 3 * step
     run(go())
 
+
+
+def test_a_held_arrow_keeps_the_view_moving_between_repeats_and_lands_once_let_go(monkeypatch):
+    async def go():
+        app, room = _blocks()
+        now = [100.0]
+        monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
+        await _hold_tab(app)
+        await press(app, "right", is_repeat=True)
+        now[0] += 0.1                                  # a frame slow enough to land the view before the next repeat
+        room._look_tick()
+        assert room._look == room._goal and room._moving() is not None
+        now[0] += blocks_room.HELD_LOOK_S
+        room._look_tick()
+        assert room._moving() is None and room._look_timer is None
+    run(go())
+
+
+def test_a_moving_frame_redraws_only_the_floors_picture_until_the_view_lands():
+    async def go():
+        app, room = _blocks()
+        room._aim(yaw=90)
+        room._look[0] = 30.0
+        app._draw()
+        assert room._move_patch() == room._area
+        room._look[0] = room._goal[0]
+        room._look_timer.stop()
+        room._look_timer = None
+        app.g.dirty = False
+        room._move_patch()
+        assert app.g.dirty                              # landed: the whole screen, with the resting picture
+    run(go())
 
 def test_the_view_eases_to_where_it_is_headed_then_its_timer_stops(monkeypatch):
     async def go():

@@ -66,6 +66,10 @@ def _from_scratch(app, room) -> bytes:
 def _matches_scratch(app, room, why=""):
     app._draw()
     kept, kept_layer = _screen(app), pygame.image.tobytes(room._composed, "RGB") if room._moving() is None else None
+    if kept_layer is None:          # moving: a frame of the floor's picture alone matches the whole screen's
+        app.g.surface.fill((0, 0, 0), room._area)
+        room._move_patch()
+        assert _screen(app) == kept, why
     assert kept == _from_scratch(app, room), why
     if kept_layer is not None:
         assert kept_layer == pygame.image.tobytes(room._composed, "RGB"), why

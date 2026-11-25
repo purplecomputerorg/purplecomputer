@@ -28,6 +28,7 @@ from functools import lru_cache
 
 import pygame
 
+from .. import boot_log, perf_trace
 from .. import palette as P
 from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ..palette import DEFAULT_BRUSH_COLOR
@@ -562,6 +563,7 @@ class BlocksRoom(Room):
     def _look_tick(self):
         now = time.monotonic()
         dt, self._looked = now - self._looked, now
+        perf_trace.note(look_dt=perf_trace.ms(dt))
         for axis, goal in enumerate(self._goal):
             gap = goal - self._look[axis]
             step = min(abs(gap) * min(1.0, LOOK_PULL * dt), LOOK_SPEED * dt)
@@ -830,16 +832,19 @@ class BlocksRoom(Room):
         area = pygame.Rect(inner.x, inner.y + chrome_h + gap, inner.w, inner.h - chrome_h - gap - foot_h)
         self._origin = area.topleft
         moving = self._moving()
+        lap = perf_trace.laps()
         if moving is None:
             self._layers(area.size)
+            lap("layers")
             g.surface.blit(self._composed, area)
             self._draw_cursor(g, area)
+            lap("cursor")
             self._draw_falls(g.surface.subsurface(area))
             self._draw_wall_flash(g.surface.subsurface(area))
             self._draw_hold_badge(g, area)
         else:
             g.surface.set_clip(area)      # a corner can swing a little past the fit on its way
-            self._draw_moving(g, area, *moving)
+            self._draw_moving(g, area, *moving, lap)
             g.surface.set_clip(None)
         shift = self.app._keyboard_state_machine.shift_active
         self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._tab is False else 1,
@@ -851,6 +856,8 @@ class BlocksRoom(Room):
             hint = SHIFT_HINT if shift else HINT if self._tab is None else self._tab_hint()
             draw_key_hint(g, hint, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
+        lap("chrome")
+        perf_trace.note(blocks=len(self._blocks), view=[round(v, 1) for v in self._look])
 
     def _draw_hold_badge(self, g, area):
         if self._last and self.app._panel is None:
@@ -917,30 +924,43 @@ class BlocksRoom(Room):
                 sub.blit(ghost, rect)
         sub.set_clip(None)
 
-    def _draw_moving(self, g, area, turn, tilt, fit):
+    def _draw_moving(self, g, area, turn, tilt, fit, lap):
         """One frame of the view moving: the world through the same camera as the resting views, turned
         `turn` degrees around, looking `tilt` degrees down and sized as from `fit` degrees off straight
         on, so both ends land on those pictures, the cursor's marks painted in their place among the
         blocks. A frame over budget drops shadows for builds this big from then on."""
         self._built = self._built or shape(self._blocks)     # once a build, not a frame: kept out of the budget
+        lap("shape")
         start = time.monotonic()
         cam = Camera(math.radians(turn), math.radians(tilt), area.w, area.h, area.topleft, top=ROOF, fit=math.radians(fit))
         detailed = len(self._blocks) <= self._turn_detail_limit
         painter = Painter(cam, self._blocks, detail=detailed, built=self._built)
+        lap("camera")
         if self._composed is not None:
             self._guide.paint(g, g.surface.subsurface(area), self._guide_spots(), self._lit_row())
+        lap("guide")
         painter.paint_floor(g.surface)
+        lap("floor")
         if detailed:
             painter.paint_sun(g.surface, g.surface.get_clip())
+        lap("sun")
         x, z, items = self._x, self._z, painter.items
         behind = sum(1 for i in items if i[0][:2] <= cam.key(x, z, 0)[:2])     # sorted far to near: these come first
         painter.paint(g.surface, items[:behind])
+        lap("behind")
         self._drop_marks(g.surface, painter, x, z, self._cursor_y())
+        lap("drop_marks")
         painter.paint(g.surface, items[behind:])
+        lap("front")
         self._hover_marks(g.surface, painter, x, z)
+        lap("hover_marks")
         self._draw_arrow_keys(g, g.surface, painter, x, z, world=True)
+        lap("arrow_keys")
+        perf_trace.note(items=len(items), detailed=detailed)
         if detailed and time.monotonic() - start > TURN_FRAME_BUDGET_S:
             self._turn_detail_limit = len(self._blocks) - 1
+            boot_log.heartbeat(f"blocks: a moving frame took {(time.monotonic() - start) * 1000:.0f}ms, "
+                               f"so turns drop shadows past {self._turn_detail_limit} blocks")
 
     # ---------------------------------------------------------------- cursor
     # The cursor is its column: a small block in the brush color waits in a wire box on the top

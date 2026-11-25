@@ -1356,6 +1356,7 @@ class ParentMenu(Overlay):
         self._usb_remount_attempted = False
         self._probing = False
         self._timer = None
+        self._typed = ""
 
     def on_open(self):
         if is_live_boot():
@@ -1428,6 +1429,15 @@ class ParentMenu(Overlay):
                 self._activate()
             elif key == "escape":
                 self.close()
+        elif isinstance(action, CharacterAction):
+            self._secret_word(action.char.lower())
+
+    def _secret_word(self, ch: str):
+        from .admin_menu import AdminMenu, WORDS
+        self._typed = (self._typed + ch)[-max(map(len, WORDS)):]
+        if any(self._typed.endswith(w) for w in WORDS):
+            self._typed = ""
+            self.app.push(AdminMenu(self.app), on_close=lambda result: result == "recording" and self.close())
 
     def _activate(self):
         item_id = self.items[self.selected][0]

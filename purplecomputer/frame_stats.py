@@ -3,7 +3,7 @@ summarized every 30s while frames are drawn (an idle screen logs nothing)."""
 
 import time
 
-from . import boot_log
+from . import boot_log, perf_trace
 
 INTERVAL = 30.0
 
@@ -29,6 +29,7 @@ class FrameStats:
             self._key_at = time.monotonic()
 
     def frame(self, start: float, drawn: float, presented: float, room: str = ""):
+        perf_trace.frame(start, drawn, presented, room)
         self._draw.append(drawn - start)
         self._rooms[room] = self._rooms.get(room, 0) + 1
         self._present.append(presented - drawn)

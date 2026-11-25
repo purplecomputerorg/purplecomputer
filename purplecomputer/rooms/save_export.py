@@ -75,10 +75,12 @@ def export_saves(dest: Path, export_for) -> int:
     return copied
 
 
-class SaveExportScreen(Dialog):
-    title = "Copy Saved Work to USB"
+class UsbCopyScreen(Dialog):
+    """Finds a USB drive, mounts it if it isn't, and runs copy(folder) on a worker thread, which
+    returns the lines to show when it's done."""
     hint = "{Enter} close"
     width_pct = 50
+    working = "Copying..."
 
     def __init__(self, app):
         super().__init__(app)
@@ -86,13 +88,50 @@ class SaveExportScreen(Dialog):
         self.done = False
 
     def on_open(self):
-        threading.Thread(target=self._work, daemon=True, name="save-export").start()
+        threading.Thread(target=self._work, daemon=True, name="usb-copy").start()
 
     def _say(self, *lines, done=False):
         def apply():
             self.body_lines, self.done = list(lines), done
             self.app.invalidate()
         self.app.call_from_thread(apply)
+
+    def copy(self, dest: Path) -> tuple:
+        raise NotImplementedError
+
+    def failed(self, mnt, e) -> tuple:
+        return "Couldn't copy to that USB drive.", "", f"(Technical: {e})"
+
+    def _work(self):
+        dev, mounted = find_stick()
+        if dev is None:
+            return self._say("Plug in a USB drive, then try again.", "",
+                             "(Technical: no FAT, exFAT or NTFS USB drive found.)", done=True)
+        self._say(self.working)
+        mnt = mounted or MOUNT
+        try:
+            if not mounted:
+                subprocess.run(["sudo", "mkdir", "-p", MOUNT], check=True, timeout=10)
+                subprocess.run(["sudo", "mount", "-o", f"uid={os.getuid()},gid={os.getgid()},nosuid,nodev", dev, MOUNT],
+                               check=True, capture_output=True, timeout=30)
+            lines = self.copy(Path(mnt))
+            os.sync()
+        except (OSError, subprocess.SubprocessError, pygame.error) as e:
+            lines = self.failed(mnt, e)
+        finally:
+            if not mounted:
+                subprocess.run(["sudo", "umount", MOUNT], capture_output=True, timeout=30)
+        self._say(*lines, done=True)
+
+    async def handle(self, action):
+        from ..keyboard import ControlAction
+        if self.done and isinstance(action, ControlAction) and action.is_down and action.action in ("enter", "escape"):
+            self.close()
+
+
+class SaveExportScreen(UsbCopyScreen):
+    title = "Copy Saved Work to USB"
+    working = "Copying pictures..."
 
     def _export(self, save):
         """(the save's printed page, its text), made on the UI thread (pygame text and rooms are not thread-safe)."""
@@ -110,35 +149,14 @@ class SaveExportScreen(Dialog):
         done.wait(30)
         return out[0] if out else (None, "")
 
-    def _work(self):
-        dev, mounted = find_stick()
-        if dev is None:
-            return self._say("Plug in a USB drive, then try again.", "",
-                             "(Technical: no FAT, exFAT or NTFS USB drive found.)", done=True)
-        self._say("Copying pictures...")
-        mnt = mounted or MOUNT
-        try:
-            if not mounted:
-                subprocess.run(["sudo", "mkdir", "-p", MOUNT], check=True, timeout=10)
-                subprocess.run(["sudo", "mount", "-o", f"uid={os.getuid()},gid={os.getgid()},nosuid,nodev", dev, MOUNT],
-                               check=True, capture_output=True, timeout=30)
-            copied = export_saves(Path(mnt), self._export)
-            os.sync()
-        except (OSError, subprocess.SubprocessError, pygame.error) as e:
-            if _nearly_full(mnt):  # pygame.image.save reports a full drive as a plain pygame.error
-                return self._say("The USB drive is full.", "", "The pictures that fit were copied.",
-                                 "You can unplug the USB drive now.", done=True)
-            return self._say("Couldn't copy to that USB drive.", "", f"(Technical: {e})", done=True)
-        finally:
-            if not mounted:
-                subprocess.run(["sudo", "umount", MOUNT], capture_output=True, timeout=30)
-        if copied:
-            self._say(f"Copied {copied} picture{'s' if copied != 1 else ''}.", "",
-                      f'They are in the "{FOLDER}" folder.', "You can unplug the USB drive now.", done=True)
-        else:
-            self._say("Nothing new to copy.", "", "Saved work you haven't copied yet goes over next time.", done=True)
+    def failed(self, mnt, e) -> tuple:
+        if _nearly_full(mnt):  # pygame.image.save reports a full drive as a plain pygame.error
+            return "The USB drive is full.", "", "The pictures that fit were copied.", "You can unplug the USB drive now."
+        return super().failed(mnt, e)
 
-    async def handle(self, action):
-        from ..keyboard import ControlAction
-        if self.done and isinstance(action, ControlAction) and action.is_down and action.action in ("enter", "escape"):
-            self.close()
+    def copy(self, dest: Path) -> tuple:
+        copied = export_saves(dest, self._export)
+        if copied:
+            return (f"Copied {copied} picture{'s' if copied != 1 else ''}.", "",
+                    f'They are in the "{FOLDER}" folder.', "You can unplug the USB drive now.")
+        return "Nothing new to copy.", "", "Saved work you haven't copied yet goes over next time."

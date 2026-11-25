@@ -46,10 +46,12 @@ COMMANDS = {
     "switches.txt": "ls -la /var/log/purple; findmnt /var/log; cat /run/purple-admin-start; sudo -n journalctl -b -u purple-x11 --no-pager | grep -i admin",
 }
 # How a process of its own reaches the screen, as (arguments, environment): SDL's own way (X shared memory), then
-# through the GPU's OpenGL (the session's is software), not waiting for the refresh, then X drawing with no SDL.
+# through the GPU's OpenGL (the session's is software), not waiting for the refresh, then X drawing with no SDL,
+# then our own pixels shared with X with no SDL.
 _GPU = {"LIBGL_ALWAYS_SOFTWARE": "0", "vblank_mode": "0"}
 ALONE = {"Alone": ((), {}), "Alone GL": ((), {"SDL_FRAMEBUFFER_ACCELERATION": "opengl", **_GPU}),
-         "Alone GLES": ((), {"SDL_FRAMEBUFFER_ACCELERATION": "opengles2", **_GPU}), "X alone": (("x",), {})}
+         "Alone GLES": ((), {"SDL_FRAMEBUFFER_ACCELERATION": "opengles2", **_GPU}), "X alone": (("x",), {}),
+         "X shm": (("shm",), {})}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 

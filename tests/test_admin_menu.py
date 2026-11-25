@@ -85,7 +85,7 @@ def test_next_start_switch_and_speed_test(tmp_path, monkeypatch):
         menu._on_confirm("speed")
         tests = json.loads((tmp_path / "screen-tests.jsonl").read_text())["tests"]
         assert tests["Alone GL"]["full"]["wall"]["p50"] == 3.0 and set(tests["Inside"]) == {"1px", "full"}
-        assert [e.get("SDL_FRAMEBUFFER_ACCELERATION") for e in envs] == [None, "opengl", "opengles2", None]
+        assert [e.get("SDL_FRAMEBUFFER_ACCELERATION") for e in envs] == [None, "opengl", "opengles2", None, None]
         assert envs[1]["LIBGL_ALWAYS_SOFTWARE"] == "0"
         assert "Alone GL: 1px 1.0, full 3.0 ms (cpu 0.9, 2.5)" in app.top.DESCRIPTION
     run(go())

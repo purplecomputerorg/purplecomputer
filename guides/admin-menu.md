@@ -23,7 +23,8 @@ Type `admin` (or `tavi`) while the Parent Menu is open. It ships on every ISO an
   inside Purple and again in a process of its own (`purplecomputer/screen_test.py`, `ALONE` in `admin_menu.py`): SDL's
   own way (X shared memory), then through the GPU's OpenGL and OpenGL ES (the session's GL is software:
   `LIBGL_ALWAYS_SOFTWARE`), then `X alone`, the X server filling rectangles with no SDL, plus a bare round trip
-  (`sync`). Both slow: X or the GPU. Only inside slow: Purple's own threads. A GL way much faster than `Alone`: Purple
+  (`sync`), then `X shm`, pixels from shared memory (MIT-SHM) sent with no SDL: fast while `Alone` is slow means
+  Purple could send its own frames instead of SDL. Both slow: X or the GPU. Only inside slow: Purple's own threads. A GL way much faster than `Alone`: Purple
   could present that way. `X alone` fills slow but `sync` quick: X's own drawing (glamor) is slow. `cpu` far under
   the time: the call waits on X. `batch`: ms per X fill when 60 go before one wait; near 0, the time is a wait per
   round trip that drawing the next frame meanwhile would hide. Each test also samples, every 2ms, the kernel function

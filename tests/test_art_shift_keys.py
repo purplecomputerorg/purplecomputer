@@ -6,6 +6,7 @@
 
 import time
 
+from purplecomputer.constants import STICKY_SHIFT_GRACE
 from purplecomputer.harness import make_app, run
 from purplecomputer.keyboard import CharacterAction
 from purplecomputer.palette import GRAYSCALE, get_key_color
@@ -73,7 +74,7 @@ def test_paint_mode_hint_while_sticky_shift_waits():
         keys = canvas.app._keyboard_state_machine
         keys._sticky_shift_active, keys._sticky_shift_time = True, time.time()
         assert canvas._hint_key() == "pick"
-        keys._sticky_shift_time -= keys.STICKY_SHIFT_GRACE + 1
+        keys._sticky_shift_time -= STICKY_SHIFT_GRACE + 1
         assert canvas._hint_key() == "paint", "an expired tap of Shift no longer picks, so the hint goes back"
     run(_test())
 

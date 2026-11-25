@@ -16,10 +16,10 @@ See guides/keyboard-architecture.md for architecture details.
 
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL, MASH_GAP
+from .constants import SUPPORT_EMAIL, MASH_GAP, STICKY_SHIFT_GRACE
 
 
 # ============================================================================
@@ -286,114 +286,6 @@ class InputFloodGuard:
 
 
 # ============================================================================
-# Shift Strategies
-# ============================================================================
-
-
-class ShiftState:
-    """
-    Unified shift state tracking.
-
-    Supports multiple shift strategies that can be used together:
-    1. Sticky shift: Toggle on, stays on for grace period or until used
-    2. Regular shift: Physical shift key held (from hardware layer)
-    """
-
-    def __init__(
-        self,
-        sticky_grace_period: float = 8.0,
-    ):
-        # Sticky shift state
-        self.sticky_active: bool = False
-        self.sticky_activated_at: float = 0.0
-        self.sticky_grace_period: float = sticky_grace_period
-
-        # Physical shift (from hardware layer)
-        self.physical_shift_held: bool = False
-
-    def should_shift(self) -> bool:
-        """Check if next character should be shifted."""
-        # Physical shift always works
-        if self.physical_shift_held:
-            return True
-
-        # Sticky shift with grace period
-        if self.sticky_active:
-            elapsed = time.time() - self.sticky_activated_at
-            if elapsed <= self.sticky_grace_period:
-                return True
-            else:
-                # Grace period expired
-                self.sticky_active = False
-
-        return False
-
-    def toggle_sticky(self) -> bool:
-        """Toggle sticky shift. Returns new state."""
-        self.sticky_active = not self.sticky_active
-        if self.sticky_active:
-            self.sticky_activated_at = time.time()
-        return self.sticky_active
-
-    def consume_sticky(self) -> None:
-        """Consume sticky shift after using it for one character."""
-        self.sticky_active = False
-
-    def reset(self) -> None:
-        """Reset all shift state."""
-        self.sticky_active = False
-        self.sticky_activated_at = 0.0
-        self.physical_shift_held = False
-
-
-# ============================================================================
-# Long-Hold Detection
-# ============================================================================
-
-@dataclass
-class HoldState:
-    """
-    Tracks key holds for triggering actions (like Escape for parent mode).
-    """
-    key: Optional[str] = None
-    start_time: float = 0.0
-    triggered: bool = False
-    threshold: float = 1.0  # seconds
-
-    def start(self, key: str) -> None:
-        """Start tracking a key hold."""
-        if key != self.key:
-            self.key = key
-            self.start_time = time.time()
-            self.triggered = False
-
-    def check(self, key: str) -> bool:
-        """
-        Check if hold threshold reached for given key.
-        Returns True if threshold reached (only once per hold).
-        """
-        if key != self.key:
-            self.reset()
-            return False
-
-        if self.triggered:
-            return False  # Already triggered this hold
-
-        elapsed = time.time() - self.start_time
-        if elapsed >= self.threshold:
-            self.triggered = True
-            return True
-
-        return False
-
-    def reset(self) -> None:
-        """Reset hold tracking."""
-        self.key = None
-        self.start_time = 0.0
-        self.triggered = False
-
-
-# ============================================================================
 # Hold-or-Tap Detection
 # ============================================================================
 
@@ -492,85 +384,6 @@ class HoldOrTap:
 class KeyboardMode(Enum):
     """Keyboard operation mode. Currently only evdev is supported."""
     LINUX_EVDEV = "linux_evdev"  # Full hardware access via evdev
-
-
-@dataclass
-class KeyboardState:
-    """
-    Unified keyboard state for Purple Computer.
-
-    Combines all keyboard tracking in one place:
-    - Shift strategies
-    - Caps lock
-    - Long-hold detection
-
-    Requires evdev (Linux) for proper keyboard handling.
-    """
-    shift: ShiftState = field(default_factory=ShiftState)
-    escape_hold: HoldState = field(default_factory=lambda: HoldState(threshold=1.0))
-    mode: KeyboardMode = KeyboardMode.LINUX_EVDEV
-
-    def process_char(self, char: str, apply_shift: bool = True) -> str:
-        """
-        Process a character through shift strategies.
-
-        Args:
-            char: The raw character typed
-            apply_shift: Whether to apply shift transformations
-
-        Returns:
-            The processed character (possibly shifted)
-        """
-        if not apply_shift or not char:
-            return char
-
-        # Check if we should shift this character
-        if self.shift.should_shift() and char in SHIFT_MAP:
-            self.shift.consume_sticky()  # Use up sticky shift
-            return SHIFT_MAP[char]
-
-        return char
-
-    def handle_sticky_shift_press(self) -> bool:
-        """Handle sticky shift toggle key. Returns new sticky state."""
-        return self.shift.toggle_sticky()
-
-    def handle_escape_press(self) -> bool:
-        """
-        Handle escape key press for long-hold detection.
-        Returns True if long-hold threshold reached (parent mode).
-        """
-        self.escape_hold.start("escape")
-        return False  # Will return True on repeat when threshold reached
-
-    def handle_escape_repeat(self) -> bool:
-        """Handle escape key repeat. Returns True if threshold reached."""
-        return self.escape_hold.check("escape")
-
-    def handle_escape_release(self) -> None:
-        """Handle escape key release."""
-        self.escape_hold.reset()
-
-
-# ============================================================================
-# Factory Functions
-# ============================================================================
-
-def create_keyboard_state(
-    sticky_grace_period: float = 8.0,
-    escape_hold_threshold: float = 1.0,
-) -> KeyboardState:
-    """
-    Create a new KeyboardState with custom timing parameters.
-
-    Args:
-        sticky_grace_period: How long sticky shift stays active (seconds)
-        escape_hold_threshold: How long to hold Escape for parent mode (seconds)
-    """
-    state = KeyboardState()
-    state.shift.sticky_grace_period = sticky_grace_period
-    state.escape_hold.threshold = escape_hold_threshold
-    return state
 
 
 def detect_keyboard_mode() -> KeyboardMode:
@@ -725,7 +538,6 @@ class KeyboardStateMachine:
 
     # Timing thresholds
     ESCAPE_HOLD_THRESHOLD = 1.0  # seconds for parent mode
-    STICKY_SHIFT_GRACE = 8.0     # seconds sticky shift stays active
     BACKSLASH_HOLD_THRESHOLD = 3.0  # seconds for backslash parent menu
 
     def __init__(self, edit_keys: bool = False):
@@ -1089,7 +901,7 @@ class KeyboardStateMachine:
     @property
     def sticky_shift(self) -> bool:
         """A tap of Shift is waiting to shift the next character."""
-        return self._sticky_shift_active and time.time() - self._sticky_shift_time <= self.STICKY_SHIFT_GRACE
+        return self._sticky_shift_active and time.time() - self._sticky_shift_time <= STICKY_SHIFT_GRACE
 
     @property
     def shift_active(self) -> bool:

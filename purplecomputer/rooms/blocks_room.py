@@ -593,7 +593,7 @@ class BlocksRoom(Room):
         if getattr(action, "is_down", True):
             self.enter_hold.other_key()        # another key while Enter is down: no hold
         self._lay_pending()
-        if self.code_panel is not None and not (self._tab is not None and isinstance(action, NavigationAction)):
+        if self.code_panel is not None and not (self._held_tab() is not None and isinstance(action, NavigationAction)):
             result = await self.code_panel.handle(action)
             if result == "tab_fallthrough":
                 self.turn()
@@ -627,6 +627,10 @@ class BlocksRoom(Room):
                 self.turn()
             self._tab = None
         self.app.invalidate()
+
+    def _held_tab(self):
+        """`_tab` while the keyboard says Tab is down, else None: another screen may have taken its release."""
+        return self._tab if self.app._keyboard_state_machine.tab_held else None
 
     def _lay_pending(self):
         if self._space_pending:
@@ -684,7 +688,7 @@ class BlocksRoom(Room):
         return None if held is None else hold_status(held, "Enter", DOWN, "put the floor back down")
 
     def _navigate(self, action):
-        if self._tab is not None:
+        if self._held_tab() is not None:
             self._tab = True
             self.echo.flush()
             self.look_around(action.direction, action.is_repeat)
@@ -786,7 +790,7 @@ class BlocksRoom(Room):
         """The guide's row for the key held now, if any."""
         if self.enter_hold.progress() is not None or self.app._keyboard_state_machine.shift_active:
             return "lift"
-        return "look" if self._tab is not None else None
+        return "look" if self._held_tab() is not None else None
 
     def _repaint(self, rect):
         """Repaint `rect` of the composite: the ground, then every block far to near."""
@@ -847,13 +851,13 @@ class BlocksRoom(Room):
             self._draw_moving(g, area, *moving, lap)
             g.surface.set_clip(None)
         shift = self.app._keyboard_state_machine.shift_active
-        self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._tab is False else 1,
+        self.bar_row = draw_mode_switch(g, self.header_band(g, rect), (TURN_PIC,), 0 if self._held_tab() is False else 1,
                                         self._color, wheel=None if self.code_panel else wheel_chip(self),
                                         reserve=self.header_reserve(g))
         self.bar_foot = None
         if foot_h and self.app._panel is None:
             foot = self.bar_foot = pygame.Rect(inner.x, inner.bottom - chrome_h, inner.w, chrome_h)
-            hint = SHIFT_HINT if shift else HINT if self._tab is None else self._tab_hint()
+            hint = SHIFT_HINT if shift else HINT if self._held_tab() is None else self._tab_hint()
             draw_key_hint(g, hint, g.vh(1.9), foot.x, foot.centery)
             color_recipe.draw_foot_right(g, foot, self.app._code_panel_enabled, color_recipe.hint_row(self._key, self._mixed))
         lap("chrome")

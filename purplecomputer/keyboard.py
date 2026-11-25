@@ -875,6 +875,10 @@ class KeyboardStateMachine:
         return self._space_held
 
     @property
+    def tab_held(self) -> bool:
+        return KeyCode.KEY_TAB in self._pressed
+
+    @property
     def held_char(self) -> str | None:
         """The character key most recently pressed, while it is still down."""
         return self._held_char

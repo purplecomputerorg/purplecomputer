@@ -6,12 +6,15 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
+import traceback
 from pathlib import Path
 
 DIR = Path(os.environ.get("PURPLE_PERF_DIR", "/tmp/purple-perf"))
 FRAMES = DIR / "frames.jsonl"
 SECONDS = 600   # a forgotten recording stops itself: /tmp is RAM
+THREADS_EVERY = 1.0   # seconds between samples of each thread's CPU time and where it is
 _HERE = Path(__file__).resolve().parents[1]
 SAMPLER = next((p for p in (_HERE / "scripts" / "log-performance.py", _HERE / "scripts" / "on-device" / "log-performance.py")
                 if p.exists()), None)
@@ -19,6 +22,7 @@ SAMPLER = next((p for p in (_HERE / "scripts" / "log-performance.py", _HERE / "s
 _out = None
 _until = 0.0
 _last = None    # when the frame before reached the screen
+_threads_at = 0.0
 _note: dict = {}
 
 
@@ -46,7 +50,7 @@ def start(info: dict):
     DIR.mkdir(parents=True, exist_ok=True)
     sampler("start")    # it clears the folder's old samples, then returns while its sampler runs on
     _out, _until, _last = open(FRAMES, "w"), time.monotonic() + SECONDS, None
-    _write({"started": time.strftime("%Y-%m-%d %H:%M:%S"), **info})
+    _write({"started": time.strftime("%Y-%m-%d %H:%M:%S"), "ticks_per_s": os.sysconf("SC_CLK_TCK"), **info})
 
 
 def stop():
@@ -89,13 +93,34 @@ def laps():
     return lap
 
 
+def threads() -> dict:
+    """Each of this process's threads, as "name#id": [CPU ticks so far, its innermost Python frames]."""
+    live, frames = threading.enumerate(), sys._current_frames()
+    py = {t.native_id: (t.name, frames.get(t.ident)) for t in live}
+    out = {}
+    for task in os.scandir("/proc/self/task"):
+        try:
+            with open(f"{task.path}/stat") as f:
+                stat = f.read()
+        except OSError:
+            continue
+        tid, fields = int(task.name), stat[stat.rindex(")") + 2:].split()
+        name, where = py.get(tid, (stat[stat.index("(") + 1:stat.rindex(")")], None))
+        stack = [f"{f.filename.rsplit('/', 1)[-1]}:{f.lineno} {f.name}" for f in traceback.extract_stack(where)[-3:]] if where else []
+        out[f"{name}#{tid}"] = [int(fields[11]) + int(fields[12]), stack]
+    return out
+
+
 def frame(start: float, drawn: float, presented: float, room: str):
-    global _last
+    global _last, _threads_at
     if _out is None:
         return
     gap = ms(presented - _last) if _last is not None else None
     _write({"t": round(presented, 4), "room": room, "draw": ms(drawn - start), "present": ms(presented - drawn), "gap": gap, **_note})
     _note.clear()
     _last = presented
+    if presented - _threads_at >= THREADS_EVERY:
+        _threads_at = presented
+        _write({"t": round(presented, 4), "threads": threads()})
     if presented > _until:
         stop()

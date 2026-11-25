@@ -37,7 +37,8 @@ def test_admin_word_records_a_blocks_turn(tmp_path, monkeypatch):
         now = time.monotonic()
         app._frame_stats.frame(start, now, now, "blocks")
         perf_trace.stop()
-        header, rec = [json.loads(line) for line in (tmp_path / "frames.jsonl").read_text().splitlines()]
+        header, rec, threads = [json.loads(line) for line in (tmp_path / "frames.jsonl").read_text().splitlines()]
+        assert header["ticks_per_s"] > 0 and any(name.startswith("MainThread#") for name in threads["threads"])
         assert header["room"] == "blocks" and header["size"] == [app.g.w, app.g.h]
         assert {"camera", "floor", "sun", "behind", "front", "arrow_keys", "chrome"} <= set(rec["phases"])
         assert rec["room"] == "blocks" and rec["detailed"] and rec["view"][0] == -40.0
@@ -56,4 +57,28 @@ def test_copy_logs_writes_a_folder_on_the_drive(tmp_path, monkeypatch):
         assert (folder / "hello.txt").read_text() == "hi\n"
         assert json.loads((folder / "app.json").read_text())["size"] == [app.g.w, app.g.h]
         assert "unplug" in lines[-1]
+    run(go())
+
+
+def test_next_start_switch_and_speed_test(tmp_path, monkeypatch):
+    _record_to(tmp_path, monkeypatch)
+    monkeypatch.setattr(admin_menu, "NEXT_START", tmp_path / "next")
+    monkeypatch.setattr(admin_menu, "THIS_START", tmp_path / "now")
+    (tmp_path / "now").write_text("noaccel\n")
+    alone = '{"1px": {"wall": {"p50": 1.0}, "cpu": {"p50": 0.9}}, "full": {"wall": {"p50": 3.0}, "cpu": {"p50": 2.5}}}'
+    monkeypatch.setattr(admin_menu, "_run", lambda cmd, **kw: alone if "screen_test" in str(cmd) else "")
+
+    async def go():
+        app = make_app()
+        menu = admin_menu.AdminMenu(app)
+        app.push(menu)
+        assert "GPU Acceleration is off this start" in menu.DESCRIPTION
+        menu._on_confirm("noaccel")
+        assert (tmp_path / "next").read_text() == "noaccel\n" and ("noaccel", "Next Start: GPU Acceleration Off") in menu.options
+        menu._on_confirm("noaccel")
+        assert (tmp_path / "next").read_text() == ""
+        menu._on_confirm("speed")
+        test = json.loads((tmp_path / "screen-tests.jsonl").read_text())
+        assert test["alone"]["full"]["wall"]["p50"] == 3.0 and set(test["inside"]) == {"1px", "full"}
+        assert "Alone full: 3.0ms (cpu 2.5ms)" in app.top.DESCRIPTION
     run(go())

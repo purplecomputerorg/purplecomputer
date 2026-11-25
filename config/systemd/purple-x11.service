@@ -39,6 +39,8 @@ Environment=SDL_AUDIODRIVER=pulseaudio
 # Wait for a real GPU to report a connected display (see the script header)
 ExecStartPre=/usr/local/bin/purple-wait-display
 ExecStartPre=-+/usr/local/bin/purple-backlight-max
+# The admin menu's next-start switches, e.g. Xorg without glamor (purplecomputer/rooms/admin_menu.py)
+ExecStartPre=-+/usr/local/bin/purple-admin-boot
 # Clean stale X lock files from previous crashes
 ExecStartPre=-/bin/rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 ExecStart=/usr/bin/startx /home/purple/.xinitrc -- vt1

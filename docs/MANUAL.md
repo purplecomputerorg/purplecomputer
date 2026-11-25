@@ -104,7 +104,7 @@ The installed Purple Computer uses X11 with a deliberately minimal graphics conf
 │                    X.Org Server                         │
 │              (modesetting driver only)                  │
 ├─────────────────────────────────────────────────────────┤
-│        Mesa + Glamor (OpenGL acceleration)              │
+│   Glamor (X's GPU drawing) + picom compositor (GL)      │
 ├─────────────────────────────────────────────────────────┤
 │              Linux DRM/KMS (kernel)                     │
 │         (i915, amdgpu, nouveau, etc.)                   │

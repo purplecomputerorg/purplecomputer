@@ -25,6 +25,9 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 # SDL minimizes a fullscreen window that loses focus, so the parent terminal's
 # xterm left Purple iconified behind a black root window when it closed.
 os.environ.setdefault("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
+# SDL on X11 otherwise presents through OpenGL, which the session's software GL makes 25ms a frame on a
+# Celeron; its own shared memory path takes 0.1ms (HP Stream, guides/intel-display-tuning.md).
+os.environ.setdefault("SDL_FRAMEBUFFER_ACCELERATION", "0")
 import pygame  # noqa: E402
 
 from . import i18n, palette as P

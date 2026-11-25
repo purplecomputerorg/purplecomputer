@@ -55,6 +55,8 @@ Two things that matter in `config/picom/picom.conf`:
 
 Purple draws with software SDL into a plain X window, so the session never needs a GPU driver to work; xinitrc keeps `LIBGL_ALWAYS_SOFTWARE=1` for everything except picom, which gets hardware GL with a guarded fallback (glx, then xrender, then uncomposited). The terminal UI used to decide Alacritty's GL mode at startup with a `purple-gl-probe` script; it went away with Alacritty, and its history is in this guide's git log.
 
+SDL 2 on X11 presents a window's surface through an OpenGL texture unless `SDL_FRAMEBUFFER_ACCELERATION` is `0`, and with software GL that is llvmpipe uploading the whole window every frame: 25ms for even a 1-pixel update, 35ms full, on the HP Stream's Celeron N3060, compositor or not, glamor or not. `gfx.py` sets it to `0`, so SDL sends frames through MIT-SHM: 0.1ms for 1 pixel, 7 to 10ms full. Hardware GL through SDL was 1 to 2ms and 9ms full, not worth depending on a GPU driver for. The admin menu's Screen Speed Test times each way (`guides/admin-menu.md`).
+
 ## Why PSR/FBC Stay Disabled (kept, even though they're not the fix)
 
 Disabled on every `boot=casper` line in `build-scripts/01-remaster-iso.sh` via `i915.enable_psr=0 i915.enable_fbc=0`. Intel-only params, a safe no-op on AMD/NVIDIA. We keep them off as defense-in-depth (they are genuinely buggy partial-update sources on this hardware) and because Purple gets ~no battery benefit from them anyway:

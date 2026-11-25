@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import traceback
+from collections import Counter
 from pathlib import Path
 
 import pygame
@@ -40,6 +41,8 @@ COMMANDS = {
     "processes.txt": "ps aux --sort=-%cpu; ps -eLo pid,tid,pcpu,comm --sort=-pcpu | head -40",
     "thermal.txt": "grep . /sys/class/thermal/thermal_zone*/type /sys/class/thermal/thermal_zone*/temp 2>/dev/null",
     "uname.txt": "uname -a; cat /proc/cmdline",
+    "i915.txt": "sudo -n sh -c 'for f in /sys/kernel/debug/dri/*/i915_drrs_status /sys/kernel/debug/dri/*/i915_display_info "
+                "/sys/kernel/debug/dri/*/i915_fbc_status /sys/kernel/debug/dri/*/i915_edp_psr_status; do echo \"== $f\"; cat \"$f\"; done'",
     "switches.txt": "ls -la /var/log/purple; findmnt /var/log; cat /run/purple-admin-start; sudo -n journalctl -b -u purple-x11 --no-pager | grep -i admin",
 }
 # How a process of its own reaches the screen, as (arguments, environment): SDL's own way (X shared memory), then
@@ -101,12 +104,40 @@ def _alone(g, args, env: dict) -> dict:
         return {"error": out[-500:]}
 
 
+def _watched(fn, tasks: list):
+    """(fn(), where X's threads were meanwhile): each "thread state wchan" sampled every 2ms, as % of samples."""
+    seen, rounds, done = Counter(), [0], threading.Event()
+
+    def sample():
+        while not done.wait(0.002):
+            rounds[0] += 1
+            for t in tasks:
+                try:
+                    with open(f"{t}/comm") as c, open(f"{t}/stat") as st, open(f"{t}/wchan") as w:
+                        seen[f"{c.read().strip()} {st.read().rsplit(')', 1)[1].split()[0]} {w.read() or '-'}"] += 1
+                except OSError:
+                    pass
+    watcher = threading.Thread(target=sample, daemon=True, name="x-waits")
+    watcher.start()
+    try:
+        return fn(), {k: round(100 * n / max(1, rounds[0])) for k, n in seen.most_common(8)}
+    finally:
+        done.set()
+        watcher.join()
+
+
 def speed_test(app) -> list:
     """Times the screen inside Purple and alone; its lines to show. Blocks the UI for several seconds:
     nothing else should draw while it times the screen."""
     g = app.g
-    tests = {"Inside": screen_test.time_presents(g.surface, g.present)} | {name: _alone(g, *way) for name, way in ALONE.items()}
-    result = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), **app_info(app), "tests": tests}
+    xorg = _run(["pgrep", "-xo", "Xorg"]).strip()
+    tasks = glob.glob(f"/proc/{xorg}/task/*") if xorg.isdigit() else []
+    runs = {"Inside": lambda: screen_test.time_presents(g.surface, g.present)} | {
+        name: (lambda way=way: _alone(g, *way)) for name, way in ALONE.items()}
+    watched = {name: _watched(run, tasks) for name, run in runs.items()}
+    tests = {name: r for name, (r, _) in watched.items()}
+    result = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), **app_info(app), "tests": tests,
+              "xorg_waits": {name: w for name, (_, w) in watched.items()}}
     perf_trace.DIR.mkdir(parents=True, exist_ok=True)
     with open(perf_trace.DIR / "screen-tests.jsonl", "a") as f:
         f.write(json.dumps(result) + "\n")
@@ -114,7 +145,7 @@ def speed_test(app) -> list:
     app.invalidate()
     return [f"{name}: failed" if "error" in r else
             f"{name}: 1px {r['1px']['wall']['p50']:.1f}, full {r['full']['wall']['p50']:.1f} ms (cpu {r['1px']['cpu']['p50']:.1f}, {r['full']['cpu']['p50']:.1f})"
-            + (f", sync {r['sync']['wall']['p50']:.1f}" if "sync" in r else "")
+            + (f", sync {r['sync']['wall']['p50']:.1f}, batch {r['batch']:.1f}" if "sync" in r else "")
             for name, r in tests.items()]
 
 

@@ -35,8 +35,10 @@ def time_presents(surface, present) -> dict:
 
 
 def x_fills(w: int, h: int) -> dict:
-    """X drawing alone, no SDL: a window's rectangles filled by the X server, each waited for, and a bare
-    round trip. Slow fills but a quick `sync`: X's drawing (glamor, on the GPU) is what's slow."""
+    """X drawing alone, no SDL: a window's rectangles filled by the X server, each waited for, a bare round
+    trip (`sync`), and `batch`: ms per fill when 60 go before one wait. Slow fills but a quick `sync`: X's
+    drawing is slow. A quick `batch`: the time is a wait per round trip, which drawing the next frame
+    meanwhile would hide."""
     x = ctypes.CDLL("libX11.so.6")
     P, U = ctypes.c_void_p, ctypes.c_ulong
     for name, res, args in (("XOpenDisplay", P, [P]), ("XDefaultScreen", ctypes.c_int, [P]), ("XRootWindow", U, [P, ctypes.c_int]),
@@ -64,7 +66,12 @@ def x_fills(w: int, h: int) -> dict:
 
     def fill(rw, rh):
         return lambda i: (x.XSetForeground(d, gc, i * 0x040404), x.XFillRectangle(d, win, gc, 0, 0, rw, rh))
-    return {"1px": timed(fill(1, 1)), "full": timed(fill(w, h)), "sync": timed(lambda i: None)}
+    start = time.perf_counter()
+    for i in range(FRAMES):
+        fill(1, 1)(i)
+    x.XSync(d, 0)
+    batch = (time.perf_counter() - start) / FRAMES     # each fill when only the last is waited for
+    return {"1px": timed(fill(1, 1)), "full": timed(fill(w, h)), "sync": timed(lambda i: None), "batch": round(batch * 1000, 2)}
 
 
 def main():

@@ -25,7 +25,9 @@ Type `admin` (or `tavi`) while the Parent Menu is open. It ships on every ISO an
   `LIBGL_ALWAYS_SOFTWARE`), then `X alone`, the X server filling rectangles with no SDL, plus a bare round trip
   (`sync`). Both slow: X or the GPU. Only inside slow: Purple's own threads. A GL way much faster than `Alone`: Purple
   could present that way. `X alone` fills slow but `sync` quick: X's own drawing (glamor) is slow. `cpu` far under
-  the time: the call waits on X. Results show on screen and append to `/tmp/purple-perf/screen-tests.jsonl`.
+  the time: the call waits on X. `batch`: ms per X fill when 60 go before one wait; near 0, the time is a wait per
+  round trip that drawing the next frame meanwhile would hide. Each test also samples, every 2ms, the kernel function
+  each Xorg thread waits in (`xorg_waits` in the JSON: `thread state wchan` as % of samples), which names the wait. Results show on screen and append to `/tmp/purple-perf/screen-tests.jsonl`.
 - **Compositor** stops picom or starts it again (`purple-start-compositor`), right away, until the next start.
 - **Next Start: GPU Acceleration** puts `AccelMethod none` in Xorg's config (no glamor) for the next start only.
   That start runs without the compositor: picom's glx needs glamor, and without it freezes the screen.

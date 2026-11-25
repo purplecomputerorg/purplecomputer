@@ -555,8 +555,14 @@ class BlocksRoom(Room):
         stuck = {TILTS[0]: DOWN, TILTS[1]: UP}.get(self._goal[1])
         return " ".join(a for a in (LEFT, UP, DOWN, RIGHT) if a != stuck) + f" {{{LOOK_PIC}}}"
 
+    def redraws_itself(self, action) -> bool:
+        """A held arrow looking around: only the moving floor's picture changes (`_aim`)."""
+        return (isinstance(action, NavigationAction) and action.is_repeat and self._held_tab() is not None
+                and self._moving() is not None)
+
     def _aim(self, yaw=None, tilt=None):
         """Set where the view is headed; it eases there from wherever it is now, even mid-move."""
+        hint = self._moving() is not None and self._tab_hint()
         if yaw is not None:
             side = self._side
             self._goal[0] = float(yaw)
@@ -568,7 +574,10 @@ class BlocksRoom(Room):
         if self._look != self._goal and self._look_timer is None:
             self._looked = time.monotonic()
             self._look_timer = self.app.timers.every(1 / 60, self._look_tick)
-        self.app.invalidate()
+        if hint == self._tab_hint():        # already moving, the footer the same
+            self.app.repaint(self._move_patch)
+        else:
+            self.app.invalidate()
 
     def _look_tick(self):
         now = time.monotonic()
@@ -630,7 +639,8 @@ class BlocksRoom(Room):
             self._navigate(action)
         elif isinstance(action, CharacterAction):
             self._character(action)
-        self.app.invalidate()
+        if not self.redraws_itself(action):
+            self.app.invalidate()
 
     def _space(self, action):
         """Space's block waits for release or the next key."""
@@ -1067,14 +1077,15 @@ class BlocksRoom(Room):
         rect = rect.clip(surf.get_clip())
         if not (rect.w and rect.h):
             return
-        deps = keep and (painter.cam, tuple(rect), keep[1:], P.TEXT, art_room.CANVAS_BG)
+        by = 1 if self._moving() is not None else SMOOTH      # a moving view's edges go by too fast to see, at a third of a frame's cost
+        deps = keep and (painter.cam, tuple(rect), by, keep[1:], P.TEXT, art_room.CANVAS_BG)
         kept = self._smoothed.get(keep[0]) if keep else None
         if kept and kept[0] == deps:
             pic = kept[1]
         else:
-            layer = pygame.Surface((rect.w * SMOOTH, rect.h * SMOOTH), pygame.SRCALPHA)
-            draw(layer, painter.on(painter.cam.zoomed(SMOOTH, rect.topleft)))
-            pic = pygame.transform.smoothscale(layer, rect.size)
+            layer = pygame.Surface((rect.w * by, rect.h * by), pygame.SRCALPHA)
+            draw(layer, painter.on(painter.cam.zoomed(by, rect.topleft)))
+            pic = layer if by == 1 else pygame.transform.smoothscale(layer, rect.size)
             if keep:
                 self._smoothed[keep[0]] = deps, pic
         surf.blit(pic, rect)

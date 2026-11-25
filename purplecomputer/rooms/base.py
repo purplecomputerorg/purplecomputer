@@ -75,6 +75,10 @@ class Room:
     def arrow_hint(self) -> str:
         return ""
 
+    def redraws_itself(self, action) -> bool:
+        """True when the key changes only what the room repaints on its own, so the whole screen needn't be."""
+        return False
+
     def hold_progress(self):
         return None
 

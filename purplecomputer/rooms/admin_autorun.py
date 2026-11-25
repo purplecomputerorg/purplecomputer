@@ -85,6 +85,10 @@ class AutoRun(Overlay):
         self.status = "starting"
         self.task = None
 
+    @property
+    def covers_room(self):
+        return bool(self.status)
+
     def on_open(self):
         self.task = asyncio.get_running_loop().create_task(self._run())
 

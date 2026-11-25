@@ -417,7 +417,7 @@ class PurpleApp:
     def repaint(self, fn):
         """Redraw only what `fn()` paints, the screen rect it returns, instead of the whole screen: for a room
         animating inside itself. Anything drawn over the room, or a full redraw already due, redraws it all."""
-        if (self.g.dirty or self._overlays or self._toasts or self._panel is not None or self.viewport_panel()
+        if (self.g.dirty or any(o.covers_room for o in self._overlays) or self._toasts or self._panel is not None or self.viewport_panel()
                 or self.hold_progress() or self._hold_nudge or self._save_flash_at is not None):
             return self.invalidate()
         self.g.patches.append(fn)
@@ -647,7 +647,9 @@ class PurpleApp:
     async def _dispatch_action(self, action):
         self._frame_stats.key()
         self._record_user_activity()
-        self.invalidate()
+        if (self._overlays or self._panel is not None or self._time_travel is not None or self._littles_mode
+                or not self.room.redraws_itself(action)):
+            self.invalidate()
         if isinstance(action, NavigationAction):
             self._light_arrow(action.direction)
         if isinstance(action, RoomAction):

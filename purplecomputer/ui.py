@@ -424,6 +424,7 @@ class Overlay:
     """A screen stacked over the rooms. The top overlay owns every key."""
 
     scrim = True
+    covers_room = True      # False while it draws nothing: a room may then repaint just itself (app.repaint)
 
     def __init__(self, app):
         self.app = app
@@ -1208,6 +1209,8 @@ class HeldKey:
         self.on_hold()
 
     def _stop(self):
+        if self._down_at is None and self._ring is None:
+            return
         self._down_at = None
         if self._ring:
             self._ring.stop()

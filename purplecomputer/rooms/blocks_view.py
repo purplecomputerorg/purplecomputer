@@ -291,9 +291,10 @@ class Painter:
         for n, poly in cam.box((0, -SLAB, 0), (WIDTH, 0, DEPTH), FACES[1:]):
             pygame.draw.polygon(surf, rgb(slab_front if n == (0, -1) else slab_side), poly)
         pygame.draw.polygon(surf, rgb(tile), [cam.at(0, 0, 0), cam.at(WIDTH, 0, 0), cam.at(WIDTH, 0, DEPTH), cam.at(0, 0, DEPTH)])
+        at, alt = cam.at, rgb(alt)
         for x in range(WIDTH):
             for z in range((1 + x + self.flip) % 2, DEPTH, 2):
-                pygame.draw.polygon(surf, rgb(alt), self._tile_poly(x, z))
+                pygame.draw.polygon(surf, alt, (at(x, 0, z), at(x + 1, 0, z), at(x + 1, 0, z + 1), at(x, 0, z + 1)))
 
     def floor_picture(self, size) -> pygame.Surface:
         """The floor on its ground color, painted once per camera and checkerboard."""

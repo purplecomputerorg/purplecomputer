@@ -82,7 +82,9 @@ The one exception is a room animating inside itself many times a second, like
 Blocks' falling blocks and turning view: `app.repaint(fn)` asks for a frame where only `fn`
 paints, returning the rect it changed, and only that rect goes to the screen.
 Anything drawn over the room (an overlay, a toast, a panel, the hold bar) or a
-full redraw already due turns it back into a whole frame. The boot log's
+full redraw already due turns it back into a whole frame; an overlay drawing nothing
+(`covers_room` False) doesn't. A key normally redraws the whole screen; a room's
+`redraws_itself(action)` says when it repaints all that key changes on its own. The boot log's
 frame summary counts these as `<room>:part`.
 
 Animations (hold rings, the Music key-change wave, note flashes) are timers

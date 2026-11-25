@@ -531,8 +531,13 @@ def test_a_held_arrow_keeps_the_view_moving_between_repeats_and_lands_once_let_g
         now = [100.0]
         monkeypatch.setattr(blocks_room.time, "monotonic", lambda: now[0])
         await _hold_tab(app)
+        await press(app, "right")
+        app._draw()
+        app.g.dirty = False
+        room._look[0] = room._goal[0] - 1
         await press(app, "right", is_repeat=True)
-        now[0] += 0.1                                  # a frame slow enough to land the view before the next repeat
+        assert not app.g.dirty and app.g.patches       # only the moving floor's picture, not the whole screen
+        now[0] += 0.2                                  # a frame slow enough to land the view before the next repeat
         room._look_tick()
         assert room._look == room._goal and room._moving() is not None
         now[0] += blocks_room.HELD_LOOK_S

@@ -110,6 +110,7 @@ The square floor leaves the room's sides empty, and the header alone didn't teac
 - **A turn's shadows drop for big builds** once a moving frame goes over `TURN_FRAME_BUDGET_S`, timed without the build's shape, which is worked out once a build, not a frame.
 - **A run of blocks closed in on every side is never painted**, at rest or turning: in a crowded build that is about half of them.
 - **Falling blocks repaint only around themselves** (above).
-- **A moving view repaints only the floor's picture** between key presses (`_move_patch`, through `app.repaint`): the header, footer and frame stay as they were, and only that rect goes to the screen.
+- **A moving view repaints only the floor's picture** (`_move_patch`, through `app.repaint`), held arrows' repeats included (`redraws_itself`): the header, footer and frame stay as they were, and only that rect goes to the screen.
+- **A moving view's marks aren't smoothed** (`_smooth`): drawn at the screen's size, not three times it and scaled down, a third of their cost on a Celeron. Their edges go by too fast to see; at rest they're smooth again.
 - **A held arrow keeps the view moving** for `HELD_LOOK_S` past its last repeat. On a slow laptop a frame can outlast the time between repeats, so the view would land between them, and landing builds the resting picture, the slowest frame there is (100ms at 850 blocks on a Celeron N3060).
 - **The boot log's frame summary** names the room each frame came from, so a slow laptop's log shows where its time goes.

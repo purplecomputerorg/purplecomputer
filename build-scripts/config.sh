@@ -82,6 +82,18 @@ planned_iso_names() {
     if pi_in_full_build; then echo "$(basename "$(planned_build_stem "$PURPLE_COMMIT" purple-pi)").img.xz  (Raspberry Pi card image)"; fi
 }
 
+# The source commit baked into an ISO: the .commit sidecar, or for older
+# builds the hash inside a build-* version stamp.
+iso_commit() {
+    local c v
+    c="$(tr -d '[:space:]' 2>/dev/null < "$1.commit" || true)"
+    v="$(tr -d '[:space:]' 2>/dev/null < "$1.version" || true)"
+    if [[ -z "$c" || "$c" == unknown ]]; then
+        [[ "$v" =~ ^build-([0-9a-f]+)- ]] && c="${BASH_REMATCH[1]}" || c=""
+    fi
+    echo "$c"
+}
+
 # Stem of an existing build of git commit <hash> that already has every variant
 # the current settings would produce, or nothing. Lets a build skip itself.
 existing_build_for_hash() {
@@ -89,7 +101,7 @@ existing_build_for_hash() {
     # Date-stamped names, so the last glob match is the newest build.
     for vf in "$OUTPUT_DIR"/purple-installer-*.iso.version; do
         [ -f "$vf" ] || continue
-        [[ "$(tr -d '[:space:]' < "$vf")" == build-"$hash"-* ]] || continue
+        [ "$(iso_commit "${vf%.version}")" = "$hash" ] || continue
         stem="${vf%.iso.version}"
         stem="${stem%.with-backup}"
         stem="${stem%.debug}"

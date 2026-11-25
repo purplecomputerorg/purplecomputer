@@ -671,18 +671,6 @@ eject_drive() {
 # the edge. Every helper succeeds with empty output when nothing matches, so
 # callers under set -e get their friendly no-ISO errors instead of a die.
 
-# The source commit baked into an ISO: the .commit sidecar, or for older
-# builds the hash inside a build-* version stamp.
-iso_commit() {
-    local c v
-    c="$(tr -d '[:space:]' 2>/dev/null < "$1.commit" || true)"
-    v="$(tr -d '[:space:]' 2>/dev/null < "$1.version" || true)"
-    if [[ -z "$c" || "$c" == unknown ]]; then
-        [[ "$v" =~ ^build-([0-9a-f]+)- ]] && c="${BASH_REMATCH[1]}" || c=""
-    fi
-    echo "$c"
-}
-
 # stdin: ISO paths; keeps the ones built from commit $1 (all of them when $1
 # is empty). Sidecars hold short hashes, so a full hash matches by prefix.
 built_from_commit() {

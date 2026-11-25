@@ -42,9 +42,11 @@ COMMANDS = {
     "uname.txt": "uname -a; cat /proc/cmdline",
     "switches.txt": "ls -la /var/log/purple; findmnt /var/log; cat /run/purple-admin-start; sudo -n journalctl -b -u purple-x11 --no-pager | grep -i admin",
 }
-# How a process of its own reaches the screen: SDL's own way (X shared memory), then through OpenGL, not waiting for the refresh.
-ALONE = {"Alone": {}, "Alone GL": {"SDL_FRAMEBUFFER_ACCELERATION": "opengl", "vblank_mode": "0"},
-         "Alone GLES": {"SDL_FRAMEBUFFER_ACCELERATION": "opengles2", "vblank_mode": "0"}}
+# How a process of its own reaches the screen, as (arguments, environment): SDL's own way (X shared memory), then
+# through the GPU's OpenGL (the session's is software), not waiting for the refresh, then X drawing with no SDL.
+_GPU = {"LIBGL_ALWAYS_SOFTWARE": "0", "vblank_mode": "0"}
+ALONE = {"Alone": ((), {}), "Alone GL": ((), {"SDL_FRAMEBUFFER_ACCELERATION": "opengl", **_GPU}),
+         "Alone GLES": ((), {"SDL_FRAMEBUFFER_ACCELERATION": "opengles2", **_GPU}), "X alone": (("x",), {})}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -90,12 +92,12 @@ def _set_next_start(switches: set):
     os.sync()   # a restart right after, or the power button, must not lose it
 
 
-def _alone(g, env: dict) -> dict:
-    out = _run([sys.executable, "-m", "purplecomputer.screen_test", str(g.w), str(g.h)],
+def _alone(g, args, env: dict) -> dict:
+    out = _run([sys.executable, "-m", "purplecomputer.screen_test", str(g.w), str(g.h), *args],
                cwd=Path(screen_test.__file__).parents[1], env={**os.environ, **env})
-    try:
-        return json.loads(out.strip().splitlines()[-1])
-    except (ValueError, IndexError):
+    try:     # Mesa may print notes after it
+        return json.loads(next(line for line in reversed(out.splitlines()) if line.startswith("{")))
+    except (ValueError, StopIteration):
         return {"error": out[-500:]}
 
 
@@ -103,7 +105,7 @@ def speed_test(app) -> list:
     """Times the screen inside Purple and alone; its lines to show. Blocks the UI for several seconds:
     nothing else should draw while it times the screen."""
     g = app.g
-    tests = {"Inside": screen_test.time_presents(g.surface, g.present)} | {name: _alone(g, env) for name, env in ALONE.items()}
+    tests = {"Inside": screen_test.time_presents(g.surface, g.present)} | {name: _alone(g, *way) for name, way in ALONE.items()}
     result = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), **app_info(app), "tests": tests}
     perf_trace.DIR.mkdir(parents=True, exist_ok=True)
     with open(perf_trace.DIR / "screen-tests.jsonl", "a") as f:
@@ -112,6 +114,7 @@ def speed_test(app) -> list:
     app.invalidate()
     return [f"{name}: failed" if "error" in r else
             f"{name}: 1px {r['1px']['wall']['p50']:.1f}, full {r['full']['wall']['p50']:.1f} ms (cpu {r['1px']['cpu']['p50']:.1f}, {r['full']['cpu']['p50']:.1f})"
+            + (f", sync {r['sync']['wall']['p50']:.1f}" if "sync" in r else "")
             for name, r in tests.items()]
 
 
@@ -130,7 +133,7 @@ class AdminMenu(Picker):
     def _rows(self) -> list:
         nxt, now = _switches(NEXT_START), _switches(THIS_START)
         self.DESCRIPTION = (f"Recording stops by itself after {perf_trace.SECONDS // 60} minutes."
-                            + "".join(f"\n{label} is off this start." for s, label in SWITCHES.items() if s in now))
+                            + "".join(f"\n{label} is {'off' if s in now else 'on'} this start." for s, label in SWITCHES.items()))
         return ([("auto", "Run All Tests"),
                  ("record", "Stop Recording" if perf_trace.active() else "Record Performance"),
                  ("speed", "Screen Speed Test"),
@@ -160,7 +163,7 @@ class LogExportScreen(UsbCopyScreen):
     def __init__(self, app, summary=()):
         super().__init__(app)
         self._info, self.lead = app_info(app), (*summary, "") if summary else ()
-        self.width_pct = 65 if summary else self.width_pct
+        self.width_pct = 85 if summary else self.width_pct
 
     def copy(self, dest: Path) -> tuple:
         out = dest / FOLDER / time.strftime("%Y-%m-%d %H.%M.%S")
@@ -176,5 +179,5 @@ class LogExportScreen(UsbCopyScreen):
         (out / "device.txt").write_text(f"{diagnostics.get_version_label()}\n\n{diagnostics.collect_device_info()}\n")
         (out / "threads.txt").write_text(_threads_text())
         (out / "app.json").write_text(json.dumps({**self._info, "recording": perf_trace.active()}, indent=2))
-        size = sum(p.stat().st_size for p in out.rglob("*") if p.is_file()) >> 20
-        return (f'Copied to "{FOLDER}/{out.name}" ({size} MB).', "", "You can unplug the USB drive now.")
+        size = sum(p.stat().st_size for p in out.rglob("*") if p.is_file()) / 1e6
+        return (f'Copied to "{FOLDER}/{out.name}" ({size:.1f} MB).', "", "You can unplug the USB drive now.")

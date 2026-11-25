@@ -20,14 +20,18 @@ Type `admin` (or `tavi`) while the Parent Menu is open. It ships on every ISO an
     far (difference two lines for its share), and its innermost three Python frames.
   - `log-performance`'s once a second samples beside it: CPU per core and process, frequency, temperature, pressure stalls.
 - **Screen Speed Test** freezes the screen for several seconds while it times 60 one-pixel updates and 60 full ones,
-  inside Purple and again in a process of its own (`purplecomputer/screen_test.py`), three ways: SDL's own (X shared
-  memory), then through OpenGL and OpenGL ES (`ALONE` in `admin_menu.py`). Both slow: X or the GPU. Only inside slow:
-  Purple's own threads. A GL way much faster than `Alone`: Purple could present that way. `cpu` far under the time:
-  the call waits on X. Results show on screen and append to `/tmp/purple-perf/screen-tests.jsonl`.
+  inside Purple and again in a process of its own (`purplecomputer/screen_test.py`, `ALONE` in `admin_menu.py`): SDL's
+  own way (X shared memory), then through the GPU's OpenGL and OpenGL ES (the session's GL is software:
+  `LIBGL_ALWAYS_SOFTWARE`), then `X alone`, the X server filling rectangles with no SDL, plus a bare round trip
+  (`sync`). Both slow: X or the GPU. Only inside slow: Purple's own threads. A GL way much faster than `Alone`: Purple
+  could present that way. `X alone` fills slow but `sync` quick: X's own drawing (glamor) is slow. `cpu` far under
+  the time: the call waits on X. Results show on screen and append to `/tmp/purple-perf/screen-tests.jsonl`.
 - **Compositor** stops picom or starts it again (`purple-start-compositor`), right away, until the next start.
 - **Next Start: GPU Acceleration** puts `AccelMethod none` in Xorg's config (no glamor) for the next start only.
-  The switch is kept in `/var/log/purple/admin-next-start`, on the Purple Key's `writable` partition (or an installed
-  system's disk), and synced at once so a restart or the power button right after keeps it. `switches.txt` in the
+  The switch is kept in `/var/log/purple/admin-next-start` and synced at once. Installed, that's the disk. On a Purple
+  Key it's the `writable` partition, but each live start gets a new `install-logs-<date>.N/log` folder there, so the
+  boot script mounts the partition and takes the newest earlier start's switch. The menu's top line says whether
+  each switch is on or off this start; the row is what the next start gets, so it reads On again after it's taken. `switches.txt` in the
   copied logs shows whether it was taken. `scripts/purple-admin-boot.sh` takes it before X starts and undoes it on the start
   after, so a switch that stops X starting is gone after one more restart. Add a switch to `SWITCHES` in
   `purplecomputer/rooms/admin_menu.py` and give it a line in that script.

@@ -69,7 +69,7 @@ def test_next_start_switch_and_speed_test(tmp_path, monkeypatch):
     monkeypatch.setattr(admin_menu, "NEXT_START", tmp_path / "next")
     monkeypatch.setattr(admin_menu, "THIS_START", tmp_path / "now")
     (tmp_path / "now").write_text("noaccel\n")
-    alone = '{"1px": {"wall": {"p50": 1.0}, "cpu": {"p50": 0.9}}, "full": {"wall": {"p50": 3.0}, "cpu": {"p50": 2.5}}}'
+    alone = '{"1px": {"wall": {"p50": 1.0}, "cpu": {"p50": 0.9}}, "full": {"wall": {"p50": 3.0}, "cpu": {"p50": 2.5}}}\nATTENTION: default value of option vblank_mode overridden by environment.\n'
     envs = []
     monkeypatch.setattr(admin_menu, "_run", lambda cmd, **kw: envs.append(kw["env"]) or alone if "screen_test" in str(cmd) else "")
 
@@ -85,7 +85,8 @@ def test_next_start_switch_and_speed_test(tmp_path, monkeypatch):
         menu._on_confirm("speed")
         tests = json.loads((tmp_path / "screen-tests.jsonl").read_text())["tests"]
         assert tests["Alone GL"]["full"]["wall"]["p50"] == 3.0 and set(tests["Inside"]) == {"1px", "full"}
-        assert [e.get("SDL_FRAMEBUFFER_ACCELERATION") for e in envs] == [None, "opengl", "opengles2"]
+        assert [e.get("SDL_FRAMEBUFFER_ACCELERATION") for e in envs] == [None, "opengl", "opengles2", None]
+        assert envs[1]["LIBGL_ALWAYS_SOFTWARE"] == "0"
         assert "Alone GL: 1px 1.0, full 3.0 ms (cpu 0.9, 2.5)" in app.top.DESCRIPTION
     run(go())
 

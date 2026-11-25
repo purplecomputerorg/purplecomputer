@@ -4,6 +4,7 @@ a process of its own with nothing else in it, in the same kind of fullscreen win
 first is slow, Purple's own threads hold it up; if both are, the X server or the GPU does. `cpu` is
 the calling thread's own CPU time: far under `wall`, the call is waiting, not working."""
 
+import ctypes
 import json
 import sys
 import time
@@ -33,9 +34,45 @@ def time_presents(surface, present) -> dict:
     return out
 
 
+def x_fills(w: int, h: int) -> dict:
+    """X drawing alone, no SDL: a window's rectangles filled by the X server, each waited for, and a bare
+    round trip. Slow fills but a quick `sync`: X's drawing (glamor, on the GPU) is what's slow."""
+    x = ctypes.CDLL("libX11.so.6")
+    P, U = ctypes.c_void_p, ctypes.c_ulong
+    for name, res, args in (("XOpenDisplay", P, [P]), ("XDefaultScreen", ctypes.c_int, [P]), ("XRootWindow", U, [P, ctypes.c_int]),
+                            ("XCreateSimpleWindow", U, [P, U, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, U, U]),
+                            ("XMapRaised", ctypes.c_int, [P, U]), ("XSync", ctypes.c_int, [P, ctypes.c_int]),
+                            ("XDefaultGC", P, [P, ctypes.c_int]), ("XSetForeground", ctypes.c_int, [P, P, U]),
+                            ("XFillRectangle", ctypes.c_int, [P, U, P, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint])):
+        getattr(x, name).restype, getattr(x, name).argtypes = res, args
+    d = x.XOpenDisplay(None)
+    screen = x.XDefaultScreen(d)
+    win, gc = x.XCreateSimpleWindow(d, x.XRootWindow(d, screen), 0, 0, w, h, 0, 0, 0), x.XDefaultGC(d, screen)
+    x.XMapRaised(d, win)
+    x.XSync(d, 0)
+    time.sleep(0.5)
+
+    def timed(fill):
+        wall, cpu = [], []
+        for i in range(FRAMES):
+            c, t = time.thread_time(), time.perf_counter()
+            fill(i)
+            x.XSync(d, 0)
+            wall.append(time.perf_counter() - t)
+            cpu.append(time.thread_time() - c)
+        return {"wall": _ms(wall), "cpu": _ms(cpu)}
+
+    def fill(rw, rh):
+        return lambda i: (x.XSetForeground(d, gc, i * 0x040404), x.XFillRectangle(d, win, gc, 0, 0, rw, rh))
+    return {"1px": timed(fill(1, 1)), "full": timed(fill(w, h)), "sync": timed(lambda i: None)}
+
+
 def main():
+    w, h = int(sys.argv[1]), int(sys.argv[2])
+    if sys.argv[3:] == ["x"]:
+        return print(json.dumps(x_fills(w, h)))
     pygame.display.init()
-    screen = pygame.display.set_mode((int(sys.argv[1]), int(sys.argv[2])), pygame.FULLSCREEN)
+    screen = pygame.display.set_mode((w, h), pygame.FULLSCREEN)
     pygame.mouse.set_visible(False)
     print(json.dumps(time_presents(screen, lambda r: pygame.display.update(r) if r else pygame.display.flip())))
 

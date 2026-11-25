@@ -28,6 +28,7 @@ Type `admin` (or `tavi`) while the Parent Menu is open. It ships on every ISO an
   the time: the call waits on X. Results show on screen and append to `/tmp/purple-perf/screen-tests.jsonl`.
 - **Compositor** stops picom or starts it again (`purple-start-compositor`), right away, until the next start.
 - **Next Start: GPU Acceleration** puts `AccelMethod none` in Xorg's config (no glamor) for the next start only.
+  That start runs without the compositor: picom's glx needs glamor, and without it freezes the screen.
   The switch is kept in `/var/log/purple/admin-next-start` and synced at once. Installed, that's the disk. On a Purple
   Key it's the `writable` partition, but each live start gets a new `install-logs-<date>.N/log` folder there, so the
   boot script mounts the partition and takes the newest earlier start's switch. The menu's top line says whether

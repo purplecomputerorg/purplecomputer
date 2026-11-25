@@ -19,6 +19,9 @@ case "$(uname -m)" in i?86) echo "32-bit image has no hardware GL; continuing un
 # Raspberry Pi: picom's glx aborts on v3d and xrender costs a full-screen software
 # copy per frame, the one thing a Pi can't spare (Pi 400 bench, 2026-10-02)
 case "$(uname -m)" in aarch64) echo "Raspberry Pi: no compositor, it costs a frame copy; continuing uncomposited"; exit 0;; esac
+# The admin menu's GPU acceleration switch (purple-admin-boot) takes glamor away, and with it hardware GL:
+# picom's glx would land on llvmpipe and freeze the screen, as with no render node below.
+grep -qsx noaccel /run/purple-admin-start && { echo "GPU acceleration is off this start; continuing uncomposited"; exit 0; }
 [ -f "$CONF" ] || CONF=/dev/null
 
 # Idempotent: a Purple restart re-execs xinitrc, but picom survives (it's

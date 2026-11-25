@@ -81,6 +81,7 @@ class UsbCopyScreen(Dialog):
     hint = "{Enter} close"
     width_pct = 50
     working = "Copying..."
+    lead: tuple = ()        # lines over the outcome, whatever it is
 
     def __init__(self, app):
         super().__init__(app)
@@ -92,7 +93,7 @@ class UsbCopyScreen(Dialog):
 
     def _say(self, *lines, done=False):
         def apply():
-            self.body_lines, self.done = list(lines), done
+            self.body_lines, self.done = [*self.lead, *lines] if done else list(lines), done
             self.app.invalidate()
         self.app.call_from_thread(apply)
 

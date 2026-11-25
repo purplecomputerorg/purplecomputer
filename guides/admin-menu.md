@@ -2,6 +2,13 @@
 
 Type `admin` (or `tavi`) while the Parent Menu is open. It ships on every ISO and is invisible until typed.
 
+- **Run All Tests** does the rest of this list with no one at the keys, in about two minutes, then copies the logs. It
+  times the screen with the compositor on, then off (and puts it back), then records Blocks turning a quarter four
+  times, looking around with Tab and left held for 4 seconds, and tilting up and down, at 100, 400 and 850 blocks
+  (`BUILDS` and `MOVES` in `purplecomputer/rooms/admin_autorun.py`). Each build is a copy of the room swapped in and
+  out, so the kid's build and its Time Travel never see it; every recorded frame carries the move as `step`. One line
+  per build (frames a second per move, median draw and present) and the speed tests show on screen and land in
+  `/tmp/purple-perf/autorun.txt`. Escape stops it; what it got is still copied.
 - **Record Performance** closes the menus and records for 10 minutes or until **Stop Recording**:
   - `/tmp/purple-perf/frames.jsonl`: a header (screen size, bit depth, KMS or SDL driver, compositor, this start's
     switches, pygame and SDL versions, CPU ticks per second), then one line per frame: `room` (`blocks:part` is a
@@ -13,12 +20,15 @@ Type `admin` (or `tavi`) while the Parent Menu is open. It ships on every ISO an
     far (difference two lines for its share), and its innermost three Python frames.
   - `log-performance`'s once a second samples beside it: CPU per core and process, frequency, temperature, pressure stalls.
 - **Screen Speed Test** freezes the screen for several seconds while it times 60 one-pixel updates and 60 full ones,
-  inside Purple and again in a process of its own (`purplecomputer/screen_test.py`). Both slow: X or the GPU. Only
-  inside slow: Purple's own threads. Results show on screen and append to `/tmp/purple-perf/screen-tests.jsonl`.
+  inside Purple and again in a process of its own (`purplecomputer/screen_test.py`), three ways: SDL's own (X shared
+  memory), then through OpenGL and OpenGL ES (`ALONE` in `admin_menu.py`). Both slow: X or the GPU. Only inside slow:
+  Purple's own threads. A GL way much faster than `Alone`: Purple could present that way. `cpu` far under the time:
+  the call waits on X. Results show on screen and append to `/tmp/purple-perf/screen-tests.jsonl`.
 - **Compositor** stops picom or starts it again (`purple-start-compositor`), right away, until the next start.
 - **Next Start: GPU Acceleration** puts `AccelMethod none` in Xorg's config (no glamor) for the next start only.
-  The switch is kept in `/var/log/purple/admin-next-start`, so it needs a Purple Key whose `/var/log` is its writable
-  partition, or an installed system. `scripts/purple-admin-boot.sh` takes it before X starts and undoes it on the start
+  The switch is kept in `/var/log/purple/admin-next-start`, on the Purple Key's `writable` partition (or an installed
+  system's disk), and synced at once so a restart or the power button right after keeps it. `switches.txt` in the
+  copied logs shows whether it was taken. `scripts/purple-admin-boot.sh` takes it before X starts and undoes it on the start
   after, so a switch that stops X starting is gone after one more restart. Add a switch to `SWITCHES` in
   `purplecomputer/rooms/admin_menu.py` and give it a line in that script.
 - **Copy Logs to USB** writes `Purple Logs/<date time>/` on any FAT, exFAT or NTFS drive (the Purple Key's `PURPLEUSB`

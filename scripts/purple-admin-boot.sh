@@ -9,7 +9,7 @@ NOW=/run/purple-admin-start
 XCONF=/usr/share/X11/xorg.conf.d/10-modesetting.conf
 TAG="# purple-admin"
 
-[ -f "$NEXT" ] && mv -f "$NEXT" "$NOW"
+[ -f "$NEXT" ] && mv -f "$NEXT" "$NOW" && sync
 sed -i "/$TAG\$/d" "$XCONF"
 grep -qx noaccel "$NOW" 2>/dev/null &&
     sed -i "/Driver     \"modesetting\"/a\\    Option     \"AccelMethod\" \"none\"  $TAG" "$XCONF"

@@ -4,6 +4,7 @@ every log, the recording and a snapshot of the machine to a USB drive. guides/ad
 
 import glob
 import json
+import os
 import re
 import subprocess
 import sys
@@ -39,7 +40,11 @@ COMMANDS = {
     "processes.txt": "ps aux --sort=-%cpu; ps -eLo pid,tid,pcpu,comm --sort=-pcpu | head -40",
     "thermal.txt": "grep . /sys/class/thermal/thermal_zone*/type /sys/class/thermal/thermal_zone*/temp 2>/dev/null",
     "uname.txt": "uname -a; cat /proc/cmdline",
+    "switches.txt": "ls -la /var/log/purple; findmnt /var/log; cat /run/purple-admin-start; sudo -n journalctl -b -u purple-x11 --no-pager | grep -i admin",
 }
+# How a process of its own reaches the screen: SDL's own way (X shared memory), then through OpenGL, not waiting for the refresh.
+ALONE = {"Alone": {}, "Alone GL": {"SDL_FRAMEBUFFER_ACCELERATION": "opengl", "vblank_mode": "0"},
+         "Alone GLES": {"SDL_FRAMEBUFFER_ACCELERATION": "opengles2", "vblank_mode": "0"}}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -64,6 +69,11 @@ def compositor_on() -> bool:
     return bool(_run(["pgrep", "-x", "picom"]).strip())
 
 
+def toggle_compositor():
+    _run(["pkill", "-x", "picom"] if compositor_on() else ["purple-start-compositor"])
+    boot_log.heartbeat(f"admin: compositor {'on' if compositor_on() else 'off'}")
+
+
 def _switches(path: Path) -> set:
     try:
         return set(path.read_text().split())
@@ -77,6 +87,32 @@ def _set_next_start(switches: set):
         NEXT_START.write_text(text)
     except OSError:     # the log partition's folder may be root's
         subprocess.run(["sudo", "-n", "tee", str(NEXT_START)], input=text, capture_output=True, text=True, timeout=10)
+    os.sync()   # a restart right after, or the power button, must not lose it
+
+
+def _alone(g, env: dict) -> dict:
+    out = _run([sys.executable, "-m", "purplecomputer.screen_test", str(g.w), str(g.h)],
+               cwd=Path(screen_test.__file__).parents[1], env={**os.environ, **env})
+    try:
+        return json.loads(out.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return {"error": out[-500:]}
+
+
+def speed_test(app) -> list:
+    """Times the screen inside Purple and alone; its lines to show. Blocks the UI for several seconds:
+    nothing else should draw while it times the screen."""
+    g = app.g
+    tests = {"Inside": screen_test.time_presents(g.surface, g.present)} | {name: _alone(g, env) for name, env in ALONE.items()}
+    result = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), **app_info(app), "tests": tests}
+    perf_trace.DIR.mkdir(parents=True, exist_ok=True)
+    with open(perf_trace.DIR / "screen-tests.jsonl", "a") as f:
+        f.write(json.dumps(result) + "\n")
+    boot_log.heartbeat(f"admin: screen test {json.dumps(result)}")
+    app.invalidate()
+    return [f"{name}: failed" if "error" in r else
+            f"{name}: 1px {r['1px']['wall']['p50']:.1f}, full {r['full']['wall']['p50']:.1f} ms (cpu {r['1px']['cpu']['p50']:.1f}, {r['full']['cpu']['p50']:.1f})"
+            for name, r in tests.items()]
 
 
 def _threads_text() -> str:
@@ -95,53 +131,36 @@ class AdminMenu(Picker):
         nxt, now = _switches(NEXT_START), _switches(THIS_START)
         self.DESCRIPTION = (f"Recording stops by itself after {perf_trace.SECONDS // 60} minutes."
                             + "".join(f"\n{label} is off this start." for s, label in SWITCHES.items() if s in now))
-        return ([("record", "Stop Recording" if perf_trace.active() else "Record Performance"),
+        return ([("auto", "Run All Tests"),
+                 ("record", "Stop Recording" if perf_trace.active() else "Record Performance"),
                  ("speed", "Screen Speed Test"),
                  ("compositor", f"Compositor: {'On' if compositor_on() else 'Off'}")]
                 + [(s, f"Next Start: {label} {'Off' if s in nxt else 'On'}") for s, label in SWITCHES.items()]
                 + [("copy", "Copy Logs to USB")])
 
     def _on_confirm(self, value):
-        if value == "record" and not perf_trace.active():
-            perf_trace.start(app_info(self.app))
-            return self.close("recording")
-        actions = {"record": perf_trace.stop, "speed": self._speed_test, "compositor": self._toggle_compositor,
+        if value == "auto" or (value == "record" and not perf_trace.active()):
+            from .admin_autorun import AutoRun
+            self.close("leave")
+            return self.app.push(AutoRun(self.app)) if value == "auto" else perf_trace.start(app_info(self.app))
+        actions = {"record": perf_trace.stop, "speed": self._speed_test, "compositor": toggle_compositor,
                    "copy": lambda: self.app.push(LogExportScreen(self.app))}
         actions.get(value, lambda: _set_next_start(_switches(NEXT_START) ^ {value}))()
         self.options = self._rows()
         self.app.invalidate()
 
-    def _toggle_compositor(self):
-        _run(["pkill", "-x", "picom"] if compositor_on() else ["purple-start-compositor"])
-        boot_log.heartbeat(f"admin: compositor {'on' if compositor_on() else 'off'}")
-
     def _speed_test(self):
-        """Blocks the UI for several seconds: nothing else should draw while it times the screen."""
-        g = self.app.g
-        inside = screen_test.time_presents(g.surface, g.present)
-        alone = _run([sys.executable, "-m", "purplecomputer.screen_test", str(g.w), str(g.h)], cwd=Path(screen_test.__file__).parents[1])
-        try:
-            alone = json.loads(alone.strip().splitlines()[-1])
-        except (ValueError, IndexError):
-            alone = {"error": alone[-500:]}
-        result = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), **app_info(self.app), "inside": inside, "alone": alone}
-        perf_trace.DIR.mkdir(parents=True, exist_ok=True)
-        with open(perf_trace.DIR / "screen-tests.jsonl", "a") as f:
-            f.write(json.dumps(result) + "\n")
-        boot_log.heartbeat(f"admin: screen test {json.dumps(result)}")
-        self.app.invalidate()
-        rows = [f"{where} {kind}: {r[kind]['wall']['p50']}ms (cpu {r[kind]['cpu']['p50']}ms)"
-                for where, r in (("Inside", inside), ("Alone", alone)) if "error" not in r for kind in ("1px", "full")]
-        self.app.push(Notice(self.app, "Screen Speed Test", "\n".join(rows or [str(alone)[:200]])))
+        self.app.push(Notice(self.app, "Screen Speed Test", "\n".join(speed_test(self.app))))
 
 
 class LogExportScreen(UsbCopyScreen):
     title = "Copy Logs to USB"
     working = "Copying logs..."
 
-    def __init__(self, app):
+    def __init__(self, app, summary=()):
         super().__init__(app)
-        self._info = app_info(app)
+        self._info, self.lead = app_info(app), (*summary, "") if summary else ()
+        self.width_pct = 65 if summary else self.width_pct
 
     def copy(self, dest: Path) -> tuple:
         out = dest / FOLDER / time.strftime("%Y-%m-%d %H.%M.%S")

@@ -24,6 +24,7 @@ _until = 0.0
 _last = None    # when the frame before reached the screen
 _threads_at = 0.0
 _note: dict = {}
+_step: dict = {}
 
 
 def ms(seconds: float) -> float:
@@ -50,6 +51,7 @@ def start(info: dict):
     DIR.mkdir(parents=True, exist_ok=True)
     sampler("start")    # it clears the folder's old samples, then returns while its sampler runs on
     _out, _until, _last = open(FRAMES, "w"), time.monotonic() + SECONDS, None
+    _step.clear()
     _write({"started": time.strftime("%Y-%m-%d %H:%M:%S"), "ticks_per_s": os.sysconf("SC_CLK_TCK"), **info})
 
 
@@ -74,6 +76,12 @@ def note(**fields):
     """Fields for the frame being drawn now."""
     if _out is not None:
         _note.update(fields)
+
+
+def step(**fields):
+    """Fields for every frame from now on: what a scripted run is doing."""
+    _step.clear()
+    _step.update(fields)
 
 
 def _skip(name: str):
@@ -116,7 +124,7 @@ def frame(start: float, drawn: float, presented: float, room: str):
     if _out is None:
         return
     gap = ms(presented - _last) if _last is not None else None
-    _write({"t": round(presented, 4), "room": room, "draw": ms(drawn - start), "present": ms(presented - drawn), "gap": gap, **_note})
+    _write({"t": round(presented, 4), "room": room, "draw": ms(drawn - start), "present": ms(presented - drawn), "gap": gap, **_step, **_note})
     _note.clear()
     _last = presented
     if presented - _threads_at >= THREADS_EVERY:

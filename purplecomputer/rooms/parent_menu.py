@@ -1437,7 +1437,7 @@ class ParentMenu(Overlay):
         self._typed = (self._typed + ch)[-max(map(len, WORDS)):]
         if any(self._typed.endswith(w) for w in WORDS):
             self._typed = ""
-            self.app.push(AdminMenu(self.app), on_close=lambda result: result == "recording" and self.close())
+            self.app.push(AdminMenu(self.app), on_close=lambda result: result == "leave" and self.close())
 
     def _activate(self):
         item_id = self.items[self.selected][0]

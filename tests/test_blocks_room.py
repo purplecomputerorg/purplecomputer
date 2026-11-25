@@ -1160,3 +1160,16 @@ def test_arrows_move_again_when_time_travel_took_the_release_of_tab(monkeypatch,
         await press(app, "right")
         assert (room._x, room._z) == (6, 5)
     run(go())
+
+
+def test_printing_shows_the_build_from_where_the_view_is_looking():
+    async def go():
+        app, room = _blocks()
+        await type_text(app, "rgb")
+        at_rest = pygame.image.tobytes(room.paper(app.g, (400, 300)), "RGB")
+        room.look_around("left")
+        room.look_around("up")
+        assert pygame.image.tobytes(room.paper(app.g, (400, 300)), "RGB") != at_rest
+        room.face_front()
+        assert pygame.image.tobytes(room.paper(app.g, (400, 300)), "RGB") == at_rest
+    run(go())

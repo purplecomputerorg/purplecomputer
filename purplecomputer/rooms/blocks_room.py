@@ -838,11 +838,13 @@ class BlocksRoom(Room):
         f.set_clip(None)
 
     def paper(self, g, size, on_screen=False):
-        """The build for printing, on a pale floor (the screen's floor on screen), nothing see-through and no cursor."""
+        """The build for printing as it's seen now, on a pale floor (the screen's floor on screen), nothing see-through and no cursor."""
         if not self._blocks:
             return None
         top = 1 + max(y for _, _, y in self._blocks)    # fit the build, not the empty air over it
-        painter = Painter(Camera(0.0, REST_PITCH, *size, top=top), self._view_blocks(falling=True), hazy=False,
+        off = math.radians(self._off())
+        cam = Camera(off, math.radians(self._goal[1]), *size, top=top, fit=off)
+        painter = Painter(cam, self._view_blocks(falling=True), hazy=False,
                           floor=None if on_screen else PAPER_FLOOR, quarters=self._side)
         s = pygame.Surface(size)
         s.fill(rgb(painter.floor[0]))

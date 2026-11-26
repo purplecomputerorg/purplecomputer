@@ -79,6 +79,18 @@ def accordion():
     return svg("".join(out))
 
 
+def synth():
+    """A little box with two knobs and a wave over a short keyboard."""
+    out = [f'<rect x="4" y="16" width="120" height="96" rx="14" fill="{V1}"/>']
+    for cx in (28, 60):
+        out.append(f'<circle cx="{cx}" cy="44" r="13" fill="{P6}"/>')
+        out.append(stick(cx, 44, cx + 6, 35, D, 5))
+    out.append(stroke("M80 44 q6 -14 12 0 t12 0 t12 0", P6, 6))
+    out.append(f'<rect x="14" y="68" width="100" height="34" rx="6" fill="{P6}"/>')
+    out += [stick(x, 70, x, 100, D, 5) for x in (39, 64, 89)]
+    return svg("".join(out))
+
+
 def glockenspiel():
     out = [f'<path d="M6 22 L122 40 L122 104 L6 122 Z" fill="{P3}"/>']
     for i in range(5):
@@ -353,7 +365,7 @@ def render(draw, folder):
 
 
 if __name__ == "__main__":
-    for draw in (marimba, ukulele, accordion, glockenspiel):
+    for draw in (marimba, ukulele, accordion, glockenspiel, synth):
         render(draw, OUT)
     for draw in (names, sounds):
         render(draw, LETTERS)

@@ -146,14 +146,14 @@ class TestLoader:
         assert any("sounds/fast.wav: expected 22050 Hz" in p for p in problems)
 
     def test_pack_instruments_follow_the_built_ins(self, packs):
-        assert instruments() == INSTRUMENTS + [("kitchen", "Kitchen")]
+        assert instruments() == INSTRUMENTS + [("kitchen", "Kitchen"), ("synth", "Synth")]
 
     def test_pack_instrument_with_a_built_in_id_replaces_it(self, tmp_path, monkeypatch):
         make_pack(tmp_path, instrument="marimba")
         cm = ContentManager(packs_dir=tmp_path)
         cm.load_all()
         monkeypatch.setattr(content_mod, "_content", cm)
-        assert instruments() == [("marimba", "Marimba"), *INSTRUMENTS[1:]]
+        assert instruments() == [("marimba", "Marimba"), *INSTRUMENTS[1:], ("synth", "Synth")]
         assert cm.instrument_dir("marimba") == tmp_path / "the-tests-pack" / "content" / "marimba"
 
     def test_instrument_json_without_samples_is_not_listed(self, tmp_path):

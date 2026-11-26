@@ -68,6 +68,17 @@ class SoundBank:
             return {p.stem: s for p in paths if (s := _load(p)) is not None}
         return self._get(("instrument", instrument_id), load)
 
+    def synth(self, stem: str, freq: float, setting: tuple):
+        """A Synth note, made the first time it's played on these dials; turning a dial forgets the old ones."""
+        key = ("synth", setting)
+        self._cache = {k: v for k, v in self._cache.items() if not (isinstance(k, tuple) and k[0] == "synth" and k != key)}
+        notes = self._get(key, dict)
+        if stem not in notes and (init := pygame.mixer.get_init()):
+            from .dial_synth import render
+            notes[stem] = pygame.mixer.Sound(buffer=render(freq, setting, init[0], init[2]))
+            notes[stem].set_volume(SAMPLE_VOLUME)
+        return notes.get(stem)
+
     def percussion(self) -> dict:
         """Keyed by digit."""
         return self._get("percussion", lambda: _load_dir(core_sounds(), [k for k in ALL_KEYS if k.isdigit()]))

@@ -34,12 +34,19 @@ def test_synth_comes_after_the_other_instruments():
 
 
 def test_the_picture_shows_every_dial():
-    base = dial_synth.picture(dial_synth.DEFAULT)
+    base = dial_synth.picture(dial_synth.DEFAULT, 262)
     assert max(map(abs, base)) <= 1.0
     for key in dial_synth.KEYS:
-        assert dial_synth.picture(dial_synth.turn(dial_synth.DEFAULT, key)) != base
-    short, long_ = (dial_synth.picture((2, 2, n, 0)) for n in (0, 4))
+        assert dial_synth.picture(dial_synth.turn(dial_synth.DEFAULT, key), 262) != base
+    short, long_ = (dial_synth.picture((2, 2, n, 0), 262) for n in (0, 4))
     assert max(map(abs, short[-50:])) < max(map(abs, long_[-50:]))
+
+
+def test_a_higher_note_draws_its_waves_closer_together():
+    def crossings(freq):
+        line = dial_synth.picture((0, 2, 4, 0), freq)
+        return sum(a < 0 <= b for a, b in zip(line, line[1:]))
+    assert crossings(65.4) < crossings(262) < crossings(659)
 
 
 def test_in_synth_1_to_4_turn_dials_off_the_song_and_the_rest_do_nothing(monkeypatch):

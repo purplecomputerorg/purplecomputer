@@ -19,10 +19,12 @@ PEAK = (0.55, 0.32, 0.4)   # sine, square, saw: about equally loud
 TABLE = 2048
 FADE_S = 0.02
 ATTACK_S = 0.006
-PICTURE_HZ = 262       # the picture is of middle C,
+SINE_OVERTONE = 0.15
+LOWEST_HZ = 65.4       # the grid's lowest note, Z in C, draws
+PICTURE_CYCLES = 3     # this many waves across the picture, a higher note more, closer together,
+PICTURE_SPREAD = 0.67  # about 14 at its highest: far fewer than to scale, so each one shows,
 PICTURE_FADE = (0.12, 0.25, 0.45, 0.8, 1.6)   # fading over this much of its width for each Long,
-PICTURE_CYCLES = 6     # its waves drawn this many to the picture, not to scale,
-PICTURE_WOBBLE = 10    # and its wobble drawn bigger than it is
+PICTURE_WOBBLE = 1.7   # and its wobble drawn bigger than it is
 
 
 @functools.cache
@@ -50,9 +52,12 @@ def turn(dials: tuple, key: str) -> tuple:
 
 
 def _partials(shape: int, bright: int, freq: float) -> list[tuple[int, float]]:
-    """(harmonic, amplitude) of a sine, square or saw, rolled off above the Bright cutoff."""
-    top = 1 if shape == 0 else max(1, min(60, int(19000 / freq)))
-    return [(n, (1 if shape == 0 else 1 / n) * (-1 if shape == 2 and n % 2 == 0 else 1)
+    """(harmonic, amplitude) of a sine, square or saw, rolled off above the Bright cutoff. A pure sine has
+    nothing for the cutoff to take away, so Bright gives it a few overtones of its own instead."""
+    if shape == 0:
+        return [(1, 1.0)] + [(n, SINE_OVERTONE * bright / n ** 2) for n in (2, 3, 4) if n * freq < 19000]
+    top = max(1, min(60, int(19000 / freq)))
+    return [(n, 1 / n * (-1 if shape == 2 and n % 2 == 0 else 1)
              / math.sqrt(1 + (n * freq / CUTOFF_HZ[bright]) ** 4))
             for n in range(1, top + 1) if not (shape == 1 and n % 2 == 0)]
 
@@ -64,12 +69,14 @@ def _cycle(np, shape: int, bright: int, freq: float):
     return wave / (np.abs(wave).max() or 1)
 
 
-@functools.cache
-def picture(dials: tuple, points: int = 300) -> tuple:
-    """The note as a line from -1 to 1 to draw, every dial showing in it: its wave's shape and sharpness,
-    how soon it fades and how much it wobbles. Plain math, so drawing never waits on numpy."""
+@functools.lru_cache(maxsize=64)
+def picture(dials: tuple, freq: float, points: int = 400) -> tuple:
+    """A note as a line from -1 to 1 to draw, every dial showing in it: its wave's shape and sharpness,
+    how soon it fades and how much it wobbles, and its pitch as how close together its waves are.
+    Plain math, so drawing never waits on numpy."""
     shape, bright, long_, wobble = dials
-    parts = _partials(shape, bright, PICTURE_HZ)
+    parts = _partials(shape, bright, freq)
+    waves = PICTURE_CYCLES * (freq / LOWEST_HZ) ** PICTURE_SPREAD
 
     def wave(cycles):
         return sum(a * math.sin(2 * math.pi * n * cycles) for n, a in parts)
@@ -77,7 +84,7 @@ def picture(dials: tuple, points: int = 300) -> tuple:
     line = []
     for i in range(points):
         x = i / (points - 1)
-        cycles = PICTURE_CYCLES * x + WOBBLE[wobble] * PICTURE_WOBBLE * math.sin(2 * math.pi * 2.5 * x)
+        cycles = waves * (x + WOBBLE[wobble] * PICTURE_WOBBLE * math.sin(2 * math.pi * 2.5 * x))
         line.append(wave(cycles) / peak * math.exp(-x / PICTURE_FADE[long_]))
     return tuple(line)
 

@@ -24,7 +24,7 @@ from ..music_constants import (
     ALL_KEYS, COLOR_KEYCAP, COLORS, DEFAULT_ROOT_INDEX, FRIENDLY_KEY_NAMES, FRIENDLY_KEYS, GRID_KEYS,
     INSTRUMENT_ALIASES, PERCUSSION, instruments, note_frequency, pitch_filename, pitch_for,
 )
-from ..palette import KEY_COLORS, text_color_for
+from ..palette import KEY_COLORS, luminance, text_color_for
 from .. import paper
 from ..gfx import is_one_emoji, mix, rgb
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel
@@ -1353,19 +1353,22 @@ class MusicRoom(Room):
         h = ys[1] - ys[0]
         for dial, key in enumerate(dial_synth.KEYS):
             cx = (xs[dial] + xs[dial + 1]) // 2
-            knob = _dial(round(h * 0.92), dial, self.synth[dial])
-            g.surface.blit(knob, knob.get_rect(center=(cx, ys[0] + round(h * 0.4))))
-            g.draw_text(key, round(letter_px * 0.75), cx, ys[1] - round(h * 0.1), "mono-bold", P.TEXT, anchor="center")
+            knob = _dial(round(h * 0.84), dial, self.synth[dial])
+            g.surface.blit(knob, knob.get_rect(center=(cx, ys[0] + round(h * 0.37))))
+            g.draw_text(key, round(letter_px * 0.75), cx, ys[0] + round(h * 0.78), "mono-bold", P.TEXT, anchor="center")
         self._draw_wave(g, pygame.Rect(xs[4], ys[0], xs[10] - xs[4], h).inflate(-h // 5, -h // 5))
 
     def _draw_wave(self, g, rect):
         """The note the dials make, in the color of the last key played, redrawn as a dial turns."""
         g.rect(P.BG, rect, radius=rect.h // 5)
-        line = dial_synth.picture(self.synth)
+        pitch = self._pitch_for_key(self._last_note)
+        line = dial_synth.picture(self.synth, note_frequency(*pitch) if pitch else dial_synth.LOWEST_HZ * 4)
         pad, amp = rect.h // 4, rect.h * 0.36
         step = (rect.w - 2 * pad) / (len(line) - 1)
         pts = [(rect.x + pad + i * step, rect.centery - y * amp) for i, y in enumerate(line)]
-        pygame.draw.lines(g.surface, rgb(KEY_COLORS.get(self._last_note.lower(), P.ACCENT)), False, pts, max(3, rect.h // 14))
+        ink = KEY_COLORS.get(self._last_note.lower(), P.ACCENT)
+        ink = mix(ink, "#ffffff", 0.4) if luminance(ink) < 0.12 else ink   # the darkest keys would vanish on the dark ground
+        pygame.draw.lines(g.surface, rgb(ink), False, pts, max(3, rect.h // 14))
 
     @staticmethod
     def _strip_px(size) -> int:

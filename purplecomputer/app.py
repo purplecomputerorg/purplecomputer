@@ -136,6 +136,7 @@ class PurpleApp:
         self._hold_nudge = None
         self._hold_nudge_timer = None
         self._overlays: list[Overlay] = []
+        self.partial_redraws = False    # animations redraw only their part of the screen: off until measured (guides/admin-menu.md)
         self._family_rooms: dict = {}  # room key -> its FamilyRoom, kept running while hidden
         self._littles_mode = None
         self._code_panel_enabled = True
@@ -414,14 +415,54 @@ class PurpleApp:
         self.g.dirty = True
         self._wake_loop()
 
-    def repaint(self, fn):
+    def repaint(self, fn, over=None):
         """Redraw only what `fn()` paints, the screen rect it returns, instead of the whole screen: for a room
-        animating inside itself. Anything drawn over the room, or a full redraw already due, redraws it all."""
-        if (self.g.dirty or any(o.covers_room for o in self._overlays) or self._toasts or self._panel is not None or self.viewport_panel()
-                or self.hold_progress() or self._hold_nudge or self._save_flash_at is not None):
+        animating inside itself, or `over` it (an overlay, or "hold" for the hold bar). Anything else drawn over
+        it, or a full redraw already due, redraws it all."""
+        if (self.g.dirty or any(o.covers_room for o in self._overlays if o is not over) or self._toasts
+                or self._save_flash_at is not None or (over != "hold" and (self.hold_progress() or self._hold_nudge
+                                                                           or self._panel is not None or self.viewport_panel()))):
             return self.invalidate()
         self.g.patches.append(fn)
         self._wake_loop()
+
+    def animate(self, fn, over=None):
+        """An animation's next frame: `repaint(fn, over)` while partial redraws are on, else the whole screen."""
+        if self.partial_redraws:
+            return self.repaint(fn, over)
+        self.invalidate()
+
+    def room_patch(self):
+        """The room's part of the screen alone, for repaint: all an animation inside the room changes."""
+        g, vp = self.g, self._viewport_rect()
+        content = self.content_rect(vp)
+        g.surface.set_clip(content.clip(self._frame_rect(vp).inflate(-4, -4)))
+        g.rect(P.SURFACE, content)
+        self.room.draw(g, content)
+        self._draw_arrow_chip()
+        g.surface.set_clip(None)
+        return content
+
+    def _hold_bar(self):
+        """(strip, progress, label) of the hold bar while it shows: over the open panel, or the room's whole footer
+        (at least the bar's own height, so it is one size in every room), down to the frame's border so it sits
+        centered between its line and the border."""
+        hold = self.hold_progress()
+        bar = ((hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1]) if hold and hold[0] > HOLD_QUIET else \
+            (0, self._hold_nudge) if self._hold_nudge and not hold else None
+        if not bar:
+            return None
+        vp = self._viewport_rect()
+        top = self.content_rect(vp).bottom if self.viewport_panel() else vp.bottom - max(self.room.footer_h(self.g), self.g.em(HOLD_BAR_EM))
+        return pygame.Rect(vp.x, top, vp.w, self._frame_rect(vp).inflate(-4, -4).bottom - top), *bar
+
+    def hold_bar_patch(self):
+        """The hold bar alone, for repaint, as it fills."""
+        bar = self._hold_bar()
+        if bar is None:
+            return None
+        draw_hold_bar(self.g, *bar)
+        return bar[0]
 
     def call_from_thread(self, fn, *args):
         self.timers.call_from_thread(fn, *args)
@@ -1885,15 +1926,8 @@ class PurpleApp:
             panel.draw(g, pygame.Rect(vp.x, content.bottom, vp.w, panel.height(g)))
             if content.w < vp.w:
                 panel.draw_side(g, pygame.Rect(content.right, content.y, vp.right - content.right, content.h))
-        hold = self.hold_progress()
-        bar = ((hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1]) if hold and hold[0] > HOLD_QUIET else \
-            (0, self._hold_nudge) if self._hold_nudge and not hold else None
-        if bar:
-            # over the open panel, or the room's whole footer (at least the bar's own height, so it is one size in every
-            # room), down to the frame's border so it sits centered between its line and the border
-            top = content.bottom if self.viewport_panel() else vp.bottom - max(self.room.footer_h(g), g.em(HOLD_BAR_EM))
-            strip = pygame.Rect(vp.x, top, vp.w, frame.inflate(-4, -4).bottom - top)
-            draw_hold_bar(g, strip, *bar)
+        if bar := self._hold_bar():
+            draw_hold_bar(g, *bar)
         self._draw_save_flash(frame)
         g.surface.set_clip(None)
         if self._panel is not None and self.viewport_panel() is None:

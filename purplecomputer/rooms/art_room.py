@@ -490,7 +490,8 @@ class ArtRoom(Room):
         if self._lift == target:
             self._lift_timer.stop()
             self._lift_timer = None
-        self.app.invalidate()
+            return self.app.invalidate()
+        self.app.animate(self.app.room_patch)
 
     def set_code_mode(self, on: bool):
         self._code_mode = on
@@ -645,7 +646,8 @@ class ArtRoom(Room):
             self._fade_next_line()      # still held: on to the next line straight away
             if self._fade is None:
                 self._stop_fade()
-        self.app.invalidate()
+            return self.app.invalidate()
+        self.app.animate(self.app.room_patch)
 
     def _stop_fade(self):
         """Letting go mid-fade brings the line back."""

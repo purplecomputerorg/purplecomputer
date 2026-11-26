@@ -2,13 +2,17 @@
 
 Type `admin` (or `tavi`) while the Parent Menu is open. It ships on every ISO and is invisible until typed.
 
-- **Run All Tests** does the rest of this list with no one at the keys, in about two minutes, then copies the logs. It
+- **Run All Tests** does the rest of this list with no one at the keys, in about three minutes, then copies the logs. It
   times the screen with the compositor on, then off (and puts it back), then records Blocks turning a quarter four
   times, looking around with Tab and left held for 4 seconds, and tilting up and down, at 100, 400 and 850 blocks
-  (`BUILDS` and `MOVES` in `purplecomputer/rooms/admin_autorun.py`). Each build is a copy of the room swapped in and
-  out, so the kid's build and its Time Travel never see it; every recorded frame carries the move as `step`. One line
-  per build (frames a second per move, median draw and present) and the speed tests show on screen and land in
-  `/tmp/purple-perf/autorun.txt`. Escape stops it; what it got is still copied.
+  (`BUILDS` and `MOVES` in `purplecomputer/rooms/admin_autorun.py`). Then the animations (`ANIMATIONS`): Enter held
+  in Blocks, Music changing key, Art's pen lifting and a line fading, and the first family room a parent turned on,
+  each first as kids get it, then with `app.partial_redraws` on, where an animation redraws only its part of the
+  screen (`app.animate`). That switch is off for kids until these numbers say to turn it on. Each room is a copy
+  swapped in and out, so the kid's own and its Time Travel never see it; every recorded frame carries the move as
+  `step`, and an animation's `partial` too. One line per build (frames a second per move, median draw and present),
+  one per animation (median draw + present, whole screen then partial) and the speed tests show on screen and land
+  in `/tmp/purple-perf/autorun.txt`. Escape stops it; what it got is still copied.
 - **Record Performance** closes the menus and records for 10 minutes or until **Stop Recording**:
   - `/tmp/purple-perf/frames.jsonl`: a header (screen size, bit depth, KMS or SDL driver, compositor, this start's
     switches, pygame and SDL versions, CPU ticks per second), then one line per frame: `room` (`blocks:part` is a

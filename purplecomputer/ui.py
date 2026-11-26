@@ -1187,7 +1187,7 @@ class HeldKey:
     def down(self):
         self._down_at = time.monotonic()
         self.hold.on_down(self.app.timers.after, self._fired)
-        self._ring = self.app.timers.every(1 / 30, self.app.invalidate)
+        self._ring = self.app.timers.every(1 / 30, lambda: self.app.animate(self.app.hold_bar_patch, "hold"))
 
     def up(self) -> bool:
         """True for a tap."""

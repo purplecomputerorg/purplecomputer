@@ -1,19 +1,26 @@
 """Admin menu's Run All Tests: screen speed tests with the compositor on and off, then a recording
-of Blocks turning and looking around builds of several sizes, on a copy of the room so the kid's
-build is never touched, then everything is copied to a USB drive. guides/admin-menu.md"""
+of Blocks turning and looking around builds of several sizes, then of the animations (a hold, a
+Music key change, Art's pen and fade, a family room) drawn as kids get them and with partial
+redraws, each on a copy of the room so the kid's own is never touched, then everything is copied
+to a USB drive. guides/admin-menu.md"""
 
 import asyncio
 import json
 import statistics
 import time
+from contextlib import asynccontextmanager
 
 from .. import boot_log, perf_trace
+from ..constants import HOLD_OR_TAP_THRESHOLD
 from ..palette import KEY_COLORS
 from ..ui import Overlay, draw_label
+from .art_room import COLS, LINE_FADE_S, ROWS
 from .blocks_view import DEPTH, HEIGHT, WIDTH
+from .music_room import FRIENDLY_KEYS, PITCH_TRANSITION_DURATION
 
 BUILDS = (100, 400, 850)    # blocks
 KEY_REPEAT_S = 1 / 30       # a held arrow's repeats, as the kernel sends them
+FAMILY_S = 5                # seconds a family room runs, each way
 SUMMARY = "autorun.txt"
 
 
@@ -24,6 +31,13 @@ def city(n: int) -> dict:
     colors = list(KEY_COLORS.values())
     spots = [(x, z, y) for x, z in cells for y in range(HEIGHT) if y < 2 + (x * 7 + z * 13) % (HEIGHT - 2)]
     return {"floor": [WIDTH, DEPTH]} | {f"b:{x},{z},{y}": colors[(x + z + y) % len(colors)] for x, z, y in spots[:n]}
+
+
+def painting(rows: int = 4) -> dict:
+    """An Art timeline state of `rows` lines painted across, the cursor at the end of the last."""
+    colors = list(KEY_COLORS.values())
+    return {f"c:{x},{y}": [" ", colors[(x + y) % len(colors)], colors[(x + y) % len(colors)], 1]
+            for x in range(COLS) for y in range(rows)} | {"cursor": [COLS - 1, rows - 1], "paint": True, "grid": [COLS, ROWS]}
 
 
 async def _settle(room, timeout=6.0):
@@ -59,20 +73,55 @@ async def _tilts(room):
 MOVES = {"turn": _turns, "look": _looks, "tilt": _tilts}
 
 
+async def _enter_hold(room):
+    for _ in range(2):
+        room.enter_hold.down()
+        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
+        room.enter_hold.up()
+        await asyncio.sleep(0.5)
+
+
+async def _key_changes(room):
+    for _ in range(4):
+        room.set_key((room.root_index + 1) % len(FRIENDLY_KEYS))
+        await asyncio.sleep(PITCH_TRANSITION_DURATION + 0.4)
+
+
+async def _pen_and_fade(room):
+    for down in (True, False, True, False):
+        room._set_pen(down)
+        await asyncio.sleep(0.5)
+    room._fade_next_line()
+    await asyncio.sleep(LINE_FADE_S + 0.5)
+
+
+# name: (room, its timeline state, what to do in it)
+ANIMATIONS = {"hold": ("blocks", city(100), _enter_hold), "music key": ("music", {}, _key_changes),
+              "art pen and fade": ("art", painting(), _pen_and_fade)}
+
+
+def _fps(frames):    # from the typical gap, not the span: the pauses between moves draw nothing
+    return 1000 / max(1e-3, statistics.median(f["gap"] for f in frames if f.get("gap") is not None))
+
+
+def _med(key, frames):
+    return round(statistics.median(f[key] for f in frames), 1)
+
+
 def summarize(path) -> list:
-    """A line per build: frames a second while each move goes, and its frames' median draw and present."""
-    runs: dict = {}
+    """A line per build: frames a second while each move goes, and its frames' median draw and present. Then
+    a line per animation: its frames' median draw and present, as kids get them and with partial redraws."""
+    builds, anims = {}, {}
     for rec in map(json.loads, path.read_text().splitlines()):
-        if "step" in rec and "blocks" in rec:
-            runs.setdefault(rec["blocks"], {}).setdefault(rec["step"], []).append(rec)
-
-    def fps(fr):    # from the typical gap, not the span: the pauses between moves draw nothing
-        return 1000 / max(1e-3, statistics.median(f["gap"] for f in fr if f.get("gap") is not None))
-
-    def med(key, steps):
-        return round(statistics.median(f[key] for fr in steps.values() for f in fr))
-    return [f"{n} blocks: " + ", ".join(f"{step} {fps(fr):.1f}" for step, fr in steps.items()) +
-            f" fps (draw {med('draw', steps)}, present {med('present', steps)} ms)" for n, steps in runs.items()]
+        if rec.get("step") in MOVES and "blocks" in rec:
+            builds.setdefault(rec["blocks"], {}).setdefault(rec["step"], []).append(rec)
+        elif "step" in rec and "partial" in rec:
+            anims.setdefault(rec["step"], {}).setdefault(rec["partial"], []).append(rec)
+    lines = [f"{n} blocks: " + ", ".join(f"{step} {_fps(fr):.1f}" for step, fr in steps.items()) +
+             f" fps (draw {_med('draw', sum(steps.values(), [])):.0f}, present {_med('present', sum(steps.values(), [])):.0f} ms)"
+             for n, steps in builds.items()]
+    return lines + [f"{name}: " + ", ".join(f"{'partial' if on else 'whole'} {_med('draw', fr)} + {_med('present', fr)} ms"
+                                             for on, fr in sorted(ways.items())) for name, ways in anims.items()]
 
 
 class AutoRun(Overlay):
@@ -117,6 +166,7 @@ class AutoRun(Overlay):
             perf_trace.start({**app_info(self.app), "autorun": True})
             for n in BUILDS:
                 await self._blocks(n)
+            await self._animations()
             perf_trace.stop()
             lines += summarize(perf_trace.FRAMES)
         except asyncio.CancelledError:
@@ -125,6 +175,7 @@ class AutoRun(Overlay):
             lines.append(f"Failed: {e!r}")
         finally:
             perf_trace.stop()
+            self.app.partial_redraws = False
             if compositor_on() != compositor:
                 toggle_compositor()
             perf_trace.DIR.mkdir(parents=True, exist_ok=True)
@@ -134,28 +185,60 @@ class AutoRun(Overlay):
         self.app.push(LogExportScreen(self.app, lines))
 
     async def _blocks(self, n):
-        """Swaps a copy of Blocks holding n blocks in for the room, then puts everything back as it was."""
         await self._say(f"building {n} blocks")
-        app, real, was, panel = self.app, self.app.rooms["blocks"], self.app.active_room, self.app._panel
-        if app._time_travel is not None:
-            app._cancel_time_travel()
-        app._timeline_flush()
-        if was != "blocks":
-            app.room.on_leave()
-        room = app.rooms["blocks"] = type(real)(app)
-        room.restore_timeline_state(city(n))
-        app.active_room, app._panel = "blocks", None
-        room.on_enter()
-        try:
+        async with self._room("blocks", city(n)) as room:
             await self._say("")
             for name, move in MOVES.items():
                 perf_trace.step(step=name)
                 await move(room)
             perf_trace.step()
+
+    async def _animations(self):
+        """Each animation as kids get it, then with partial redraws."""
+        from ..room_picker import family_rooms
+        for name, (room_name, state, play) in ANIMATIONS.items():
+            await self._say(name)
+            async with self._room(room_name, state) as room:
+                await self._say("")
+                for partial in (False, True):
+                    self.app.partial_redraws = partial
+                    perf_trace.step(step=name, partial=partial)
+                    await play(room)
+                    perf_trace.step()
+        for family in family_rooms()[:1]:
+            await self._say(f"family room {family.title}")
+            for partial in (False, True):
+                self.app.partial_redraws = partial
+                self.app.open_family_room(family.name)
+                await self._say("")
+                perf_trace.step(step="family room", partial=partial)
+                await asyncio.sleep(FAMILY_S)
+                perf_trace.step()
+                if self.app.family_room:
+                    self.app.family_room.close()
+        self.app.partial_redraws = False
+
+    @asynccontextmanager
+    async def _room(self, name, state):
+        """A copy of the room `name` holding `state` in its place, then everything put back as it was."""
+        app, real, was, panel = self.app, self.app.rooms[name], self.app.active_room, self.app._panel
+        if app._time_travel is not None:
+            app._cancel_time_travel()
+        app._timeline_flush()
+        if was != name:
+            app.room.on_leave()
+        room = app.rooms[name] = type(real)(app)
+        room.restore_timeline_state(state)
+        app.active_room, app._panel = name, None
+        room.on_enter()
+        try:
+            yield room
         finally:
-            if room._look_timer is not None:
-                room._look_timer.stop()
-            app._timeline_pending.pop("blocks", None)
-            app.rooms["blocks"], app.active_room, app._panel = real, was, panel
+            room.on_leave()
+            for timer in ("_look_timer", "_transition_timer", "_lift_timer"):
+                if getattr(room, timer, None) is not None:
+                    getattr(room, timer).stop()
+            app._timeline_pending.pop(name, None)
+            app.rooms[name], app.active_room, app._panel = real, was, panel
             app.room.on_enter()
             app.invalidate()

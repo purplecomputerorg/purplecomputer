@@ -886,3 +886,20 @@ def test_a_letter_reads_on_its_floor_light_or_dark():
     inks = [s[5] for s in purple._scene() if s[0] == "text"]
     assert inks == ["#2a1845", "#f4eefb", "on_primary", "text"]
     purple.grid.clear()
+
+
+def test_a_new_scene_can_redraw_only_the_rooms_view(pack):
+    pack("snake", SNAKE)
+
+    async def go():
+        app = make_app()
+        app.partial_redraws = True
+        room = _open(app, "snake")
+        await until(lambda: room.scene)
+        app._draw()
+        whole = pygame.image.tobytes(app.g.surface, "RGB")
+        vp = room._view_patch()
+        app.g.surface.fill((0, 0, 0), vp)
+        assert room._view_patch() == vp and pygame.image.tobytes(app.g.surface, "RGB") == whole
+        room.close()
+    run(go())

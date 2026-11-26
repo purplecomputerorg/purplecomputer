@@ -88,7 +88,10 @@ full redraw already due turns it back into a whole frame; an overlay drawing not
 frame summary counts these as `<room>:part`.
 
 Animations (hold rings, the Music key-change wave, note flashes) are timers
-that invalidate at their own rate and stop themselves. `Timers.intervals()`
+that invalidate at their own rate and stop themselves. The hold bar, Music's key change,
+Art's pen and fade and a family room's new scene go through `app.animate(patch)`: the whole
+screen for kids, or only their part while `app.partial_redraws` is on, which Run All Tests
+measures both ways (`guides/admin-menu.md`). `Timers.intervals()`
 lists what is armed; `tests/test_performance.py` asserts nothing under one
 second ticks while idle in Play.
 

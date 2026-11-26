@@ -423,7 +423,15 @@ class FamilyRoom(Overlay):
                 return
             self._last_flash = time.monotonic()
         self.scene, self._surface, self._thumb = scene, surface, thumb
-        self.app.invalidate()
+        self.app.animate(self._view_patch, over=self)
+
+    def _view_patch(self):
+        """The room's view alone, for app.repaint: all a new scene changes."""
+        vp = self.app._viewport_rect()
+        if self.fault or self._surface is None or self._surface.get_size() != vp.size:
+            return self.app.invalidate()
+        self._draw_view(self.app.g, vp)
+        return vp
 
     def _render(self, scene: list, size) -> pygame.Surface:
         """The scene drawn once, at the viewport's size; every frame after just copies it."""
@@ -635,14 +643,22 @@ class FamilyRoom(Overlay):
         elif self.scene:
             if self._surface is None or self._surface.get_size() != vp.size:
                 self._surface = self._render(self.scene, vp.size)
-            g.surface.blit(self._surface, vp.topleft)
+            self._draw_view(g, vp)
         elif self._hint and not self._hint.active:
             g.draw_text("Getting ready...", int(vp.h * 0.06), vp.centerx, vp.centery, "mono", P.MUTED, anchor="center")
-        if self._resting and not self.fault:
-            px = int(vp.h * 0.05)
-            g.draw_text("Resting. Press a key to keep going", px, vp.centerx, vp.bottom - px * 2.2, "mono", P.MUTED,
-                        anchor="midtop", bg=P.SURFACE, pad=px // 3)
+        if self._resting and not self.fault and not self.scene:
+            self._draw_resting(g, vp)
         app._draw_footer(frame)
+
+    def _draw_view(self, g, vp):
+        g.surface.blit(self._surface, vp.topleft)
+        if self._resting:
+            self._draw_resting(g, vp)
+
+    def _draw_resting(self, g, vp):
+        px = int(vp.h * 0.05)
+        g.draw_text("Resting. Press a key to keep going", px, vp.centerx, vp.bottom - px * 2.2, "mono", P.MUTED,
+                    anchor="midtop", bg=P.SURFACE, pad=px // 3)
 
     def _draw_fault(self, g, vp):
         px = int(vp.h * 0.06)

@@ -113,11 +113,19 @@ def test_run_all_tests_times_blocks_on_a_copy_and_puts_the_kids_build_back(tmp_p
             await asyncio.sleep(0.01)
     monkeypatch.setattr(admin_autorun, "MOVES", {"turn": turn_and_draw})
 
+    async def change_key(room):
+        seen.append((room is not music, app.partial_redraws))
+        for _ in range(2):
+            start = time.monotonic()
+            app._draw()
+            app._frame_stats.frame(start, time.monotonic(), time.monotonic(), "music")
+    monkeypatch.setattr(admin_autorun, "ANIMATIONS", {"music key": ("music", {}, change_key)})
+
     async def go():
-        nonlocal app, kid
+        nonlocal app, kid, music
         app = make_app()
         app.action_switch_room("blocks")
-        kid = app.rooms["blocks"]
+        kid, music = app.rooms["blocks"], app.rooms["music"]
         kid.restore_timeline_state({"floor": [WIDTH, DEPTH], "b:3,3,0": "#FFFFFF"})
         app.action_parent_menu()
         await type_text(app, "admin")
@@ -125,12 +133,13 @@ def test_run_all_tests_times_blocks_on_a_copy_and_puts_the_kids_build_back(tmp_p
         run_all = app.top
         assert isinstance(run_all, admin_autorun.AutoRun)
         await run_all.task
-        assert seen == [(True, 40)] and picom == [True]
-        assert app.rooms["blocks"] is kid and list(kid._blocks) == [(3, 3, 0)] and app.room is kid
+        assert seen == [(True, 40), (True, False), (True, True)] and picom == [True] and not app.partial_redraws
+        assert app.rooms["blocks"] is kid and list(kid._blocks) == [(3, 3, 0)] and app.room is kid and app.rooms["music"] is music
         assert copied[0][:2] == ["Compositor on:", "Inside: 1px 25.0ms"] and copied[0][2] == "Compositor off:"
-        assert copied[0][-1].startswith("40 blocks: turn ") and "fps (draw" in copied[0][-1]
+        assert copied[0][-2].startswith("40 blocks: turn ") and "fps (draw" in copied[0][-2]
+        assert copied[0][-1].startswith("music key: whole ") and ", partial " in copied[0][-1]
         assert (tmp_path / admin_autorun.SUMMARY).read_text().splitlines() == copied[0]
-    app = kid = None
+    app = kid = music = None
     run(go())
 
 

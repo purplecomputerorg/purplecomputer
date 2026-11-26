@@ -411,7 +411,8 @@ class MusicRoom(Room):
         if self._transition is None and self._transition_timer:
             self._transition_timer.stop()
             self._transition_timer = None
-        self.app.invalidate()
+            return self.app.invalidate()
+        self.app.animate(self.app.room_patch)
 
     def _transition_state_for_col(self, col: int):
         t = self._transition

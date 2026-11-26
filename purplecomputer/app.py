@@ -1952,6 +1952,8 @@ class PurpleApp:
             panel.draw(g, pygame.Rect(vp.x, content.bottom, vp.w, panel.height(g)))
             if content.w < vp.w:
                 panel.draw_side(g, pygame.Rect(content.right, content.y, vp.right - content.right, content.h))
+        if bar := self._hold_bar():
+            draw_hold_bar(g, *bar)
         self._draw_save_flash(frame)
         g.surface.set_clip(None)
         if self._panel is not None and self.viewport_panel() is None:
@@ -1960,8 +1962,6 @@ class PurpleApp:
             self._draw_footer(frame)
         for o in self._overlays:
             o.draw(g)
-        if bar := self._hold_bar():  # after overlays: the room picker's scrim would hide it
-            draw_hold_bar(g, *bar)
         self._draw_toasts()
 
     def arrow_chip_hint(self) -> str:

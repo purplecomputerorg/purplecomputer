@@ -14,8 +14,8 @@ from .paper import can_print
 from .rooms.family_room import room_icon
 from .library import ICON_OPEN, ICON_SAVE
 from .panels import ICON_TIME_TRAVEL
-from .ui import (BACK, DOWN, KEEP, KEY_RE, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_key_hint, draw_scrim,
-                 key_cap, key_hint_width)
+from .ui import (BACK, DOWN, KEEP, KEY_RE, LEFT, RIGHT, UP, Dialog, Overlay, Picker, arrow_keys_size, draw_arrow_keys, draw_fill_pill, draw_key_hint,
+                 draw_scrim, key_cap, key_hint_width)
 
 ICON_PRINTER = "\U000F042A"  # nf-md-printer
 KEYS = {"volume": "v", "clear": "c", "time_travel": "t", "save": "s", "open": "o", "print": "p",
@@ -364,11 +364,19 @@ class RoomPicker(Overlay):
                          (hint, em(0.85), "mono", P.MUTED)], on)
 
     def _draw_footer(self, g, cx, y):
-        px = g.em(0.9)
-        label = f"{{Esc}} {BACK}        Hold {{Esc}} for Parent Menu        Arrows move"
-        x = cx - (key_hint_width(g, label, px) + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
-        x = draw_key_hint(g, label, px, x, y).right + g.em(0.9)
-        draw_arrow_keys(g, px, x, y, color=P.ACCENT)
+        """Back, the Parent Menu hold (a filling pill while Esc is held, in the hint's place), then the arrows."""
+        px, gap = g.em(0.9), "        "
+        parts = [f"{{Esc}} {BACK}{gap}", "Hold {Esc} for Parent Menu", f"{gap}Arrows move"]
+        widths = [key_hint_width(g, t, px) for t in parts]
+        x = cx - (sum(widths) + g.em(0.9) + arrow_keys_size(g, px)[0]) // 2
+        hold = self.app.hold_progress()
+        for i, (text, w) in enumerate(zip(parts, widths)):
+            if i == 1 and hold and hold[0] > 0:
+                draw_fill_pill(g, pygame.Rect(x, y - round(px * 1.2), w, round(px * 2.4)), *hold[:2])
+            else:
+                draw_key_hint(g, text, px, x, y)
+            x += w
+        draw_arrow_keys(g, px, x + g.em(0.9), y, color=P.ACCENT)
 
 
 class VolumeModal(Dialog):

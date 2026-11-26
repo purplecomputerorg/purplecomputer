@@ -208,16 +208,19 @@ def test_a_grownup_hold_shows_its_bar_only_after_a_kids_press_and_leaves_no_hint
     run(go())
 
 
-def test_the_grownup_bar_shows_over_the_room_picker():
+def test_the_esc_menu_fills_its_parent_menu_hint_while_esc_is_held(monkeypatch):
+    from purplecomputer import room_picker
     from purplecomputer.harness import make_app, run
-    from purplecomputer import palette as P
+    filled = []
+    monkeypatch.setattr(room_picker, "draw_fill_pill", lambda g, pill, progress, label: filled.append(label))
 
     async def go():
         app = make_app()
         app._show_room_picker()
         await app._handle_raw_key_event(RawKeyEvent(keycode=KeyCode.KEY_ESC, is_down=True, timestamp=time.monotonic()))
+        app._draw()
+        assert filled == [], "no fill during a kid's press"
         app._keyboard_state_machine._escape_press_time -= 2.25
         app._draw()
-        strip = app._hold_bar()[0]
-        assert tuple(app.g.surface.get_at((strip.x + 2, strip.centery)))[:3] == P.rgb(P.SURFACE)[:3]
+        assert filled and filled[-1].endswith("Parent Menu")
     run(go())

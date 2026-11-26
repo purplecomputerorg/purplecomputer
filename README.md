@@ -180,7 +180,7 @@ Every room is kept across restarts. **Time Travel** rewinds a room to any earlie
 
 ### Parent Menu
 
-Hold Esc for a second (behind an optional PIN): install, name the computer, **Kid Profiles** (each kid gets their own computer name, settings, saves and Time Travel), **Rooms** (turn rooms on and off, and **Littles Mode**: one activity, no menus), code and Music options, **Purple Packs**, ALL CAPS, Sound (with a volume limit, 0 is Silent Mode), Voice, Display, Copy Saved Work to USB, Open Terminal, Support Info and Shut Down.
+Hold Esc for 3 seconds (behind an optional PIN): install, name the computer, **Kid Profiles** (each kid gets their own computer name, settings, saves and Time Travel), **Rooms** (turn rooms on and off, and **Littles Mode**: one activity, no menus), code and Music options, **Purple Packs**, ALL CAPS, Sound (with a volume limit, 0 is Silent Mode), Voice, Display, Copy Saved Work to USB, Open Terminal, Support Info and Shut Down.
 
 ---
 

@@ -4,7 +4,7 @@
 // ── Front: the Parent Menu ──
 #header()
 
-#intro[*Hold* #key("Esc") for a second to open the Parent Menu.]
+#intro[*Hold* #key("Esc") for 3 seconds to open the Parent Menu.]
 #gap
 
 #tiles(cols: 2,

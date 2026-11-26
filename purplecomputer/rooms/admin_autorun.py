@@ -11,7 +11,7 @@ import time
 from contextlib import asynccontextmanager
 
 from .. import boot_log, perf_trace
-from ..constants import HOLD_OR_TAP_THRESHOLD
+from ..constants import KID_HOLD_S
 from ..palette import KEY_COLORS
 from ..ui import Overlay, draw_label
 from .art_room import COLS, LINE_FADE_S, ROWS
@@ -76,7 +76,7 @@ MOVES = {"turn": _turns, "look": _looks, "tilt": _tilts}
 async def _enter_hold(room):
     for _ in range(2):
         room.enter_hold.down()
-        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
+        await asyncio.sleep(KID_HOLD_S + 0.3)
         room.enter_hold.up()
         await asyncio.sleep(0.5)
 

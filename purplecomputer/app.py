@@ -22,7 +22,7 @@ from .frame_stats import FrameStats
 from . import palette as P
 from . import printing, stay_awake
 from .constants import (
-    CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
+    CANVAS_COLS, CANVAS_ROWS, GROWNUP_HOLD_S, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
     ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_COMPUTER, ICON_MENU,
     ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, STICKY_SHIFT_GRACE,
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
@@ -40,7 +40,7 @@ from .palette import ASDF_ROW, QWERTY_ROW, ZXCV_ROW, get_key_color
 from .timeline import RoomTimeline
 from .audio import VOLUME_TOP, adjacent_volume, effective_volume, snap_volume, volume_badge, volume_step
 from .color_recipe import draw_color_cap
-from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_BAR_EM, HOLD_NUDGE_SECONDS, HOLD_QUIET, KID_MATH_REMAP, Overlay, Timers, Toast, draw_arrow_chip, draw_hold_bar,
+from .ui import (CANCELLED, DOWN, LEFT, RIGHT, UP, HOLD_BAR_EM, HOLD_NUDGE_SECONDS, KID_MATH_REMAP, Overlay, Timers, Toast, draw_arrow_chip, draw_hold_bar,
                  draw_key, draw_keycap, draw_label, draw_level)
 
 PRINTER_CHECK_S = 2.0  # one stat of the setup script's status file
@@ -49,7 +49,6 @@ PRINTER_NEWS = {printing.NONE: "Printer unplugged", printing.SETTING_UP: "Gettin
 ARROW_GLYPHS = {"left": LEFT, "up": UP, "down": DOWN, "right": RIGHT}
 ARROW_LIT_S = 0.35            # outlasts the 250ms key-repeat delay, so a held arrow stays lit
 _EDIT_KEYS = {"home", "end", "page_up", "page_down"}
-BACKSLASH_HOLD = 3.0
 LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
 CARET_BLINK_S = 0.53          # the classic terminal half-second
 FRAME_S = 1 / 60
@@ -448,7 +447,7 @@ class PurpleApp:
         (at least the bar's own height, so it is one size in every room), down to the frame's border so it sits
         centered between its line and the border."""
         hold = self.hold_progress()
-        bar = ((hold[0] - HOLD_QUIET) / (1 - HOLD_QUIET), hold[1]) if hold and hold[0] > HOLD_QUIET else \
+        bar = hold[:2] if hold and hold[0] > 0 else \
             (0, self._hold_nudge) if self._hold_nudge and not hold else None
         if not bar:
             return None
@@ -644,7 +643,7 @@ class PurpleApp:
             self.release_key(key)
         sm = self._keyboard_state_machine
         if sm.backslash_held and self._backslash_hold_timer is None:
-            self._backslash_hold_timer = self.timers.after(BACKSLASH_HOLD, self._check_backslash_hold)
+            self._backslash_hold_timer = self.timers.after(GROWNUP_HOLD_S, self._check_backslash_hold)
         elif not sm.backslash_held and self._backslash_hold_timer is not None:
             self._backslash_hold_timer.stop()
             self._backslash_hold_timer = None
@@ -670,7 +669,7 @@ class PurpleApp:
     async def _dispatch_keyboard_action(self, action):
         before = self.hold_progress()
         await self._dispatch_action(action)
-        if before and before[0] > HOLD_QUIET and self.hold_progress() is None and \
+        if before and before[0] > 0 and self.hold_progress() is None and \
                 isinstance(action, ControlAction) and action.action in ("space", "enter", "tab", "backspace") and not action.is_down:
             self._show_hold_nudge(before[2])
 
@@ -773,7 +772,7 @@ class PurpleApp:
     def _start_escape_hold_timer(self):
         self._cancel_escape_hold_timer()
         self._escape_down_at = time.monotonic()
-        self._escape_hold_timer = self.timers.after(ESCAPE_HOLD_THRESHOLD, self._check_escape_hold)
+        self._escape_hold_timer = self.timers.after(GROWNUP_HOLD_S, self._check_escape_hold)
 
     def _cancel_escape_hold_timer(self):
         if self._escape_hold_timer:

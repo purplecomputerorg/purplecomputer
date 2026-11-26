@@ -127,7 +127,7 @@ sudo ./test-boot.sh --interactive
 3. Login prompt appears (or Purple if X11 starts successfully in the VM)
 4. Internal disk is never touched (the QEMU target disk stays empty)
 
-To test the install path interactively, boot normally, open the parent menu (hold Escape 1 second, PIN-gated), and select "Install on this Computer". Verify the confirmation screen appears ("Everything on this computer will be erased"), with "No, go back" selected by default.
+To test the install path interactively, boot normally, open the parent menu (hold Escape 3 seconds, PIN-gated), and select "Install on this Computer". Verify the confirmation screen appears ("Everything on this computer will be erased"), with "No, go back" selected by default.
 
 ### Manual QEMU
 

@@ -5,7 +5,7 @@ including cancellation."""
 
 import asyncio
 
-from purplecomputer.constants import HOLD_OR_TAP_THRESHOLD
+from purplecomputer.constants import KID_HOLD_S
 from purplecomputer.harness import make_app, run as _run
 from purplecomputer.keyboard import ControlAction, NavigationAction
 from purplecomputer.playback.player import PlaybackPlayer
@@ -114,7 +114,7 @@ def test_space_is_immediate():
         assert canvas._pen_down
         await canvas.handle(NavigationAction(direction='right', space_held=True))
         assert (6, 5) in canvas._painted_positions
-        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
+        await asyncio.sleep(KID_HOLD_S + 0.3)
         assert canvas.code_panel is None
         await canvas.handle(_space(is_down=False))
         assert not canvas._pen_down
@@ -130,7 +130,7 @@ def test_holding_space_while_moving_paints_until_release():
         await canvas.handle(_space())
         await canvas.handle(NavigationAction(direction='right', space_held=True))
         assert canvas._pen_down and {(5, 5), (6, 5)} <= canvas._painted_positions
-        await asyncio.sleep(HOLD_OR_TAP_THRESHOLD + 0.3)
+        await asyncio.sleep(KID_HOLD_S + 0.3)
         assert canvas.code_panel is None
         await canvas.handle(_space(is_down=False))
         assert not canvas._pen_down

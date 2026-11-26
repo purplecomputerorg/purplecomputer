@@ -56,7 +56,7 @@ class PressKey(PlaybackAction):
         hold_duration: How long to hold the key. IMPORTANT: control keys only
             emit a release when this is > 0, and tap-vs-hold features
             (instrument switch, note labels, code panel) split at
-            HOLD_OR_TAP_THRESHOLD (0.8s). Use ~0.1 for a tap, >= 1.0 for a hold.
+            KID_HOLD_S (1.2s). Use ~0.1 for a tap, >= 1.5 for a hold.
         pause_after: Pause after the key press
         is_repeat: Mark as a key-repeat event (drives hold-to-accelerate
             behaviors like Art's fast erase after 8 consecutive repeats)

@@ -7,6 +7,7 @@ import time
 
 import pygame
 
+from purplecomputer.constants import GROWNUP_HOLD_S
 from purplecomputer.harness import press
 
 # A key, or (key, seconds held). Room picker digits are the kid rooms in order: 1 Art, 2 Music, 3 Play.
@@ -20,7 +21,7 @@ def play_word(word: str) -> list:
 
 ART_FIRST_PICTURE = ["escape", "1", "escape", "o", "enter"]  # Art, Open, the first tile: a pack picture when nothing is saved
 PICTURE_COLORS = ["#ff0000", "#00aaff"]  # the fixture pack's picture (studio/scripts/fixture-packs.ts)
-PARENT_MENU = [("escape", 1.5)]
+PARENT_MENU = [("escape", GROWNUP_HOLD_S + 0.5)]
 
 
 def to_menu_item(downs: int) -> list:

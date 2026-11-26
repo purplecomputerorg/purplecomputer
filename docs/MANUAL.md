@@ -168,7 +168,7 @@ This ensures kids can't accidentally click around or get confused by trackpad ge
 
 #### Parent Menu
 
-Hold Escape for ~1 second to open the Parent Menu. Alternatively, hold the backslash key (`\`) for 3 seconds, which works on all keyboards including Macs where Escape may be unreliable.
+Hold Escape for 3 seconds, without pressing any other key, to open the Parent Menu. Alternatively, hold the backslash key (`\`) for 3 seconds, which works on all keyboards including Macs where Escape may be unreliable.
 
 Navigation uses explicit key handling (no focus system):
 
@@ -631,7 +631,7 @@ echo "xrandr --output HDMI-1 --mode 1920x1080" >> ~/.xprofile
 
 **Can't open parent menu**
 
-Hold Escape for 1 second. If Escape doesn't work (e.g., Touch Bar Macs), try the backtick key (`` ` ``, top-left corner) which acts as an Escape alias. As a last resort, hold the backslash key (`\`) for 3 seconds.
+Hold Escape for 3 seconds. If Escape doesn't work (e.g., Touch Bar Macs), try the backtick key (`` ` ``, top-left corner) which acts as an Escape alias. As a last resort, hold the backslash key (`\`) for 3 seconds.
 
 ---
 

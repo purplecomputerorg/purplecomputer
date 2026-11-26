@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL, MASH_GAP, STICKY_SHIFT_GRACE
+from .constants import GROWNUP_HOLD_S, SUPPORT_EMAIL, MASH_GAP, STICKY_SHIFT_GRACE
 
 
 # ============================================================================
@@ -536,10 +536,6 @@ class KeyboardStateMachine:
         await reader.start()
     """
 
-    # Timing thresholds
-    ESCAPE_HOLD_THRESHOLD = 1.0  # seconds for parent mode
-    BACKSLASH_HOLD_THRESHOLD = 3.0  # seconds for backslash parent menu
-
     def __init__(self, edit_keys: bool = False):
         # Key press state: keycode -> timestamp
         self._pressed: dict[int, float] = {}
@@ -607,6 +603,7 @@ class KeyboardStateMachine:
         # Track pressed state (only on fresh press, not repeat)
         if not is_repeat:
             self._pressed[keycode] = timestamp
+            self._interrupt_grownup_holds(keycode)
 
         # Ctrl and Cmd are consumed silently here (no action emitted): they carry
         # no app function of their own, only the held-state stamped onto actions
@@ -635,13 +632,12 @@ class KeyboardStateMachine:
         if keycode == KeyCode.KEY_ESC:
             if not is_repeat:
                 self._escape_hold_triggered = False
-                self._escape_press_time = time.time()  # Use wall clock for consistent timing
+                self._escape_press_time = self._grownup_hold_start(keycode, timestamp)
             actions.append(ControlAction(action='escape', is_down=True, is_repeat=is_repeat))
             return actions
 
-        # Track backslash hold for parent menu (3s hold)
         if keycode == KeyCode.KEY_BACKSLASH and not is_repeat:
-            self._backslash_press_time = time.time()
+            self._backslash_press_time = self._grownup_hold_start(keycode, timestamp)
             self._backslash_hold_triggered = False
 
         # Handle Space
@@ -838,36 +834,28 @@ class KeyboardStateMachine:
 
         return char
 
-    def check_escape_hold(self, threshold: float | None = None) -> bool:
-        """
-        Check if Escape is currently held past threshold.
-        Call this periodically (e.g., every 100ms) while Escape is pressed.
-        Returns True once when threshold is first reached.
+    def _interrupt_grownup_holds(self, keycode: int) -> None:
+        """A grown-up hold is one key alone: another key going down means a leaning hand or mashing."""
+        if keycode != KeyCode.KEY_ESC:
+            self._escape_press_time = None
+        if keycode != KeyCode.KEY_BACKSLASH:
+            self._backslash_press_time = None
 
-        Args:
-            threshold: Custom threshold in seconds. If None, uses default (1.0s).
-                       Custom thresholds don't set the triggered flag, allowing
-                       multiple thresholds to be checked independently.
-        """
-        # Use dedicated escape press time (set with time.time() for consistency)
-        if self._escape_press_time is None:
+    def _grownup_hold_start(self, keycode: int, timestamp: float) -> float | None:
+        """Now, unless another key landed just before (a hand coming down). An old stuck key never blocks it."""
+        landing = any(k != keycode and timestamp - t < MASH_GAP for k, t in self._pressed.items())
+        return None if landing else time.time()
+
+    @staticmethod
+    def _held_long_enough(since: float | None) -> bool:
+        return since is not None and time.time() - since >= GROWNUP_HOLD_S
+
+    def check_escape_hold(self) -> bool:
+        """Escape held alone for GROWNUP_HOLD_S. Returns True once per press."""
+        if self._escape_hold_triggered or not self._held_long_enough(self._escape_press_time):
             return False
-
-        elapsed = time.time() - self._escape_press_time
-
-        # Custom threshold: just check elapsed time (no triggered flag)
-        if threshold is not None:
-            return elapsed >= threshold
-
-        # Default threshold: use triggered flag to fire only once
-        if self._escape_hold_triggered:
-            return False  # Already triggered
-
-        if elapsed >= self.ESCAPE_HOLD_THRESHOLD:
-            self._escape_hold_triggered = True
-            return True
-
-        return False
+        self._escape_hold_triggered = True
+        return True
 
     @property
     def space_held(self) -> bool:
@@ -889,13 +877,11 @@ class KeyboardStateMachine:
         return self._backslash_press_time is not None
 
     def check_backslash_hold(self) -> bool:
-        """Check if backslash is held past threshold. Returns True once."""
-        if self._backslash_press_time is None or self._backslash_hold_triggered:
+        """Backslash held alone for GROWNUP_HOLD_S. Returns True once per press."""
+        if self._backslash_hold_triggered or not self._held_long_enough(self._backslash_press_time):
             return False
-        if time.time() - self._backslash_press_time >= self.BACKSLASH_HOLD_THRESHOLD:
-            self._backslash_hold_triggered = True
-            return True
-        return False
+        self._backslash_hold_triggered = True
+        return True
 
     @property
     def shift_held(self) -> bool:

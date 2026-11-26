@@ -20,7 +20,7 @@ ICON_SAVE = "\U000F0193"  # nf-md-content_save
 ICON_OPEN = "\U000F0770"  # nf-md-folder_open
 ICON_HOME = "\U000F02DC"  # nf-md-home
 COLS, ROWS_SHOWN = 4, 2
-DELETE_HOLD_S = 1.2
+DELETE_HOLD_S = 2.0   # deleting a save can't be undone, so it is the slowest kid hold
 FILL_BUDGET_S = 0.03  # drawing new pictures stops for the frame after this, so Open shows at once and fills in
 LABEL_CHARS = 14
 

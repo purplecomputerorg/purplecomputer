@@ -36,8 +36,8 @@ OLD_ART_GRID = (56, 24)
 # =============================================================================
 
 STICKY_SHIFT_GRACE = 8.0     # How long sticky shift stays active (seconds)
-ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
-HOLD_OR_TAP_THRESHOLD = 0.8  # Space/Enter hold threshold for code panel / loop mode (seconds)
+GROWNUP_HOLD_S = 3.0         # Esc or \ alone, to the Parent Menu: no bar, so only length keeps out a kid's slow press (seconds)
+KID_HOLD_S = 1.2             # a kid's hold with a bar (Music loop and clear, Blocks floor): longer than a slow press of Enter (seconds)
 MASH_GAP = 0.4              # A key pressed while another is held mixes into its square, unless a third key went down this recently: then it's mashing (seconds)
 
 # Volume 1 to 10 (0 is Sound Off), about 5.4 dB apart under pactl's cubic

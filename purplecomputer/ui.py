@@ -13,7 +13,7 @@ import pygame
 
 from . import i18n
 from . import palette as P
-from .constants import HOLD_OR_TAP_THRESHOLD, ICON_ROBOT
+from .constants import KID_HOLD_S, ICON_ROBOT
 from .gfx import Gfx, mix, rgb
 from .keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 
@@ -1162,7 +1162,7 @@ def draw_level(g: Gfx, px: int, cx: int, cy: int, icon: str, filled: int, steps:
     return icon_r.union(g.draw_text(label, px, meter.right + px, cy, "mono-bold", ink, anchor="midleft"))
 
 
-HOLD_QUIET = 0.35  # of a hold: before this, nothing shows, so a tap never flashes the bar
+HOLD_QUIET_S = 0.3  # before this, nothing shows, so a tap never flashes the bar
 HOLD_BAR_EM = 3.9  # the strip the hold bar covers, at least: the same size bar in every room
 HOLD_NUDGE_SECONDS = 1.5
 
@@ -1177,7 +1177,7 @@ class HeldKey:
 
     def __init__(self, app, on_hold):
         self.app, self.on_hold = app, on_hold
-        self.hold = HoldOrTap(HOLD_OR_TAP_THRESHOLD)
+        self.hold = HoldOrTap(KID_HOLD_S)
         self._down_at = self._ring = None
 
     @property
@@ -1199,10 +1199,11 @@ class HeldKey:
         self._stop()
 
     def progress(self):
-        """How far toward a hold, while one is pending, else None."""
+        """How far the bar has filled while a hold is pending (0 until HOLD_QUIET_S), else None."""
         if self._down_at is None or not self.hold.is_pending:
             return None
-        return min(1.0, (time.monotonic() - self._down_at) / self.hold.hold_seconds)
+        shown = time.monotonic() - self._down_at - HOLD_QUIET_S
+        return min(1.0, max(0.0, shown / (self.hold.hold_seconds - HOLD_QUIET_S)))
 
     def _fired(self):
         self._stop()

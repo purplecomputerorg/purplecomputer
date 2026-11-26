@@ -112,7 +112,7 @@ HANDOFF = """{who}
 
 The Purple Pack ("{summary}") is on a USB drive you just plugged into the kid's Purple Computer: a laptop for
 kids with only a keyboard, no mouse. The card that came with it says: to add things from a USB drive, plug
-it in and follow the screen; hold Esc for a couple of seconds for the grown-up menu.
+it in and follow the screen; hold Esc for 3 seconds for the grown-up menu.
 
 Get what's on the drive onto Purple and ready for the kid, then look around the grown-up menu for anything
 about it. Call done when the kid could use it. """ + FAIR

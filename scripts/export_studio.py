@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from purplecomputer import synth  # noqa: E402
+from purplecomputer import dial_synth, synth  # noqa: E402
 from purplecomputer import palette as P  # noqa: E402
 from purplecomputer.constants import ART_COLS, ART_ROWS, CANVAS_COLS, CANVAS_ROWS  # noqa: E402
 from purplecomputer.music_constants import (  # noqa: E402
@@ -83,6 +83,7 @@ def build_export() -> dict:
             "grid_rows": [[k.lower() for k in row] for row in GRID_KEYS[1:]],
             "percussion_row": [k for k in GRID_KEYS[0]],
             "instruments": [d for d, _ in INSTRUMENTS],
+            "synth": dial_synth.ID,
             "pitches": pitches,
             "grid_pitches": grid_pitches,
             "sample_volume": SAMPLE_VOLUME,

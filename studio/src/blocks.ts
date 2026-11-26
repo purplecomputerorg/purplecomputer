@@ -4,7 +4,7 @@
 import * as Blockly from "blockly";
 import { Order, pythonGenerator as py } from "blockly/python";
 import { PURPLE } from "@sdk";
-import { INSTRUMENTS } from "@sdk/purple/sounds";
+import { NOTE_INSTRUMENTS } from "@sdk/purple/sounds";
 import { draft } from "./state";
 
 const lit = (s: string) => JSON.stringify(s);
@@ -79,7 +79,7 @@ const value = (type: string, text: string, args: Arg[], output: string | string[
 const wrap = (type: string, text: string, args: Arg[], style: string) =>
   ({ ...statement(type, `${text} %${args.length + 1} %${args.length + 2}`, [...args, ...DO], style), inputsInline: false });
 
-const instruments = (): [string, string][] => [...INSTRUMENTS, ...draft.instruments.map((i) => i.name)].map((n) => [n, n]);
+const instruments = (): [string, string][] => [...NOTE_INSTRUMENTS, ...draft.instruments.map((i) => i.name)].map((n) => [n, n]);
 const drums = (): [string, string][] => [...DRUMS.map((d): [string, string] => [`🥁 ${d}`, d]),
   ...draft.roomFiles.filter((f) => f.kind === "sounds").map((f): [string, string] => [`🎤 ${f.name}`, f.name])];
 

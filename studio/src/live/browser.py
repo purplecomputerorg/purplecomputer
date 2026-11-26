@@ -121,7 +121,9 @@ _patch_emoji()
 # Purple's sounds play through the page's Web Audio (studio/src/live/sound.ts) instead of SDL's mixer:
 # the browser decodes them off Python's thread. pygame.mixer keeps its names, as Purple uses them.
 def _patch_mixer():
+    import io
     import itertools
+    import wave
     from pathlib import Path
     import pygame
     import pygame.mixer
@@ -148,11 +150,20 @@ def _patch_mixer():
         def stop(self):
             purpleSound.end(self.id)
 
+    def wav(frames):
+        """Raw frames in the mixer's format (the Synth's notes) as a WAV, which the browser decodes."""
+        out = io.BytesIO()
+        with wave.open(out, "wb") as w:
+            rate, size, channels = pygame.mixer.get_init()
+            w.setnchannels(channels), w.setsampwidth(abs(size) // 8), w.setframerate(rate)
+            w.writeframes(frames)
+        return out.getvalue()
+
     class Sound:
-        def __init__(self, file):
-            path, self.id, self.volume = Path(file), next(ids), 1.0
-            data = path.read_bytes()
-            purpleSound.load(self.id, to_js(data) if data else url(path))
+        def __init__(self, file=None, buffer=None):
+            self.id, self.volume = next(ids), 1.0
+            data = wav(buffer) if buffer is not None else Path(file).read_bytes()
+            purpleSound.load(self.id, to_js(data) if data else url(Path(file)))
 
         def __del__(self):
             purpleSound.drop(self.id)

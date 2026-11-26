@@ -31,11 +31,12 @@ Each cell displays its key character and can be colored. A note key also shows i
 
 ## Other Controls
 
-- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments); in Letters, letter names ("bee") or letter sounds ("b", clips from [Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds) in `packs/core-sounds/content/letter-sounds/`). In Notes, hold Enter to loop the song (below); in Letters a hold is a tap.
+- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel, then pack instruments, then the Synth); in Letters, letter names ("bee") or letter sounds ("b", clips from [Open Letter Sounds](https://github.com/purplecomputerorg/openlettersounds) in `packs/core-sounds/content/letter-sounds/`). In Notes, hold Enter to loop the song (below); in Letters a hold is a tap.
 - **Tab**: switch between Notes and Letters, which says each pressed letter aloud.
+- **Synth** (the last instrument, `dial_synth.py`): its notes are made as they play, from four dials that take the place of 1 to 4: sound (smooth, square or buzzy wave), bright, long and wobble. A tap steps a dial round and plays the last note again. 5 to 0 become one picture of the note, its waves closer together the higher it is, and play nothing. The dials are kept with the room. Family rooms play it at its starting dials.
 - **Held Shift + a note's letter** (A to G): plays that note on the middle row (`NOTE_ROW`), whose first seven keys are one octave from the key's root, so Shift+F plays F♯ in G; it is that key pressed, so it lights, colors and goes on the tape. With Shift every other key is quiet; code's `notes ccggaag` plays by name the same way, to the end of its line, and Shift echoes into code as `notes c`. While Shift is held (a tap of it doesn't count, so a stray one can't) the grid gives way to those seven notes alone, big and centered in a row of their own so they don't read as keys, each lighting in its key's color as it plays, with "hold Shift + a letter plays its note" under them. Notes only; the parent menu's Features turns it off (`music_note_names`), and Littles Mode leaves it off.
 - **Left/Right**: shift the musical key (B♭ / F / C / G / D); not in Letters, which has no key to show.
-- **Space**: in Notes, plays the tape back; in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop plays, starts it over.
+- **Space**: in Notes, plays the tape back, and again stops it; in Letters, says the word the typed letters end with (shown under the grid with its picture); while a loop plays, starts it over.
 
 ## Code
 

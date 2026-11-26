@@ -68,7 +68,7 @@ ALL_CAPS names at the very top of the file, each set to plain words, numbers, co
 | `clear()` | Empties the screen: the middle, the lines, the top line, and the grid. |
 | `background("#2a1845")` | The room's color: # and six letters or numbers, or a theme color (below). |
 | `say(text)` | Purple says it out loud. Everything said in one key or timer is spoken in order; the next key's `say` cuts off anything still being said, unless it says the same words again, which then just carry on. Notes, drums, and sounds play at the same time as speech. A `say` with its words written right in it, like `say("Hello!")`, speaks in Purple's room voice; words built while the room runs, like `say(name)` or `say(f"{n} stars")`, speak in Purple's everyday voice. |
-| `play("C4", "marimba")` | A note from C2 to C6, sharps like `"F#4"`. Instruments: marimba, ukulele, accordion, glockenspiel, or one made in this pack. |
+| `play("C4", "marimba")` | A note from C2 to C6, sharps like `"F#4"`. Instruments: marimba, ukulele, accordion, glockenspiel, synth, or one made in this pack. A Purple from before synth plays marimba for it. |
 | `drum("snare")` | kick, snare, hi-hat, clap, cowbell, woodblock, triangle, tambourine, bongo, gong, or one of the pack's own sounds. |
 | `sound("meow")` | One of the pack's own sounds. |
 | `ask("Your name?")` | Waits for your kid to type an answer and press Enter, then gives back what they typed. Timers wait too. |

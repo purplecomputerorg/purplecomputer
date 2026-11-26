@@ -1,7 +1,7 @@
 // The rules editor: each rule is a row, "When this happens" then the things to do, built with buttons
 // and dropdowns. Each edit changes the rules in place and calls onEdit; the room's Python is generated.
 import { roomTitle } from "@sdk/pack";
-import { INSTRUMENTS, parseNote } from "@sdk/purple/sounds";
+import { NOTE_INSTRUMENTS, parseNote } from "@sdk/purple/sounds";
 import { normalizeKey } from "../examples";
 import { ACTIONS, BACKGROUNDS, DRUMS, WHENS, type Action, type Rule, type Thing } from "../rules";
 import { draft } from "../state";
@@ -64,7 +64,7 @@ export function drumIn(value: string, onPick: (v: string) => void, orNone = fals
   return el;
 }
 
-const instruments = (): Options => [...INSTRUMENTS, ...draft.instruments.map((i) => i.name)].map((n) => [n, n]);
+const instruments = (): Options => [...NOTE_INSTRUMENTS, ...draft.instruments.map((i) => i.name)].map((n) => [n, n]);
 
 export function rulesForm(rules: Rule[], onEdit: () => void): HTMLElement {
   const box = h("div", { class: "rules" });

@@ -1,4 +1,4 @@
-import { INSTRUMENTS } from "@sdk/purple/sounds";
+import { NOTE_INSTRUMENTS } from "@sdk/purple/sounds";
 import { BASES, BASE_NAMES, defaults, type BaseName, type Params } from "@sdk/purple/synth";
 import { playGridKey } from "../sounds";
 import { changed, draft, freeName, isTheirs, mine, titleOf, withSample, type Instrument } from "../state";
@@ -26,12 +26,12 @@ const SOUNDS: { title: string; icon?: string; blurb: string; base: BaseName; par
 // Sounds made from the same Purple instrument share a color.
 export const SWATCH: Record<BaseName, string> = { glockenspiel: "#f2c94c", ukulele: "#e8875b", marimba: "#5fb3a1", accordion: "#7b8fe0" };
 
-const taken = (n: string, except?: Instrument) => (INSTRUMENTS as readonly string[]).includes(n) || draft.instruments.some((i) => i !== except && i.name === n);
+const taken = (n: string, except?: Instrument) => NOTE_INSTRUMENTS.includes(n) || draft.instruments.some((i) => i !== except && i.name === n);
 
 // Trying a sound replaces the last one tried, unless it was changed or added.
 function tryOut(title: string, base: BaseName, params: Params, icon?: string) {
   const others = draft.instruments.filter(isTheirs);
-  const name = freeName(title, (n) => (INSTRUMENTS as readonly string[]).includes(n) || others.some((i) => i.name === n));
+  const name = freeName(title, (n) => NOTE_INSTRUMENTS.includes(n) || others.some((i) => i.name === n));
   const n = name.match(/-(\d+)$/)?.[1];
   draft.instruments = withSample(draft.instruments, { name, title: n && !title.endsWith(n) ? `${title} ${n}` : title, base, params: { ...defaults(base), ...params }, icon });
   changed();

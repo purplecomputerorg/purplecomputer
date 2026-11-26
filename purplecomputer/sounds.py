@@ -9,7 +9,7 @@ import pygame
 
 from .content import BUNDLED_PACKS
 from .mixer import mixer_generation, mixer_ready_for_play
-from .music_constants import ALL_KEYS, PERCUSSION
+from .music_constants import ALL_KEYS, PERCUSSION, note_frequency, pitch_filename
 
 # Every grid key can have a recording; the ones that can't be a file name are spelled out.
 CLIP_NAMES = {k: {";": "semicolon", ",": "comma", ".": "period", "/": "slash"}.get(k, k.lower()) for k in ALL_KEYS}
@@ -25,13 +25,18 @@ def find_sound(base: Path, name: str):
     return next((p for ext in (".ogg", ".wav") if (p := base / f"{name}{ext}").exists()), None)
 
 
-def _load(path) -> pygame.mixer.Sound | None:
+def _sound(make) -> pygame.mixer.Sound | None:
+    """A sound the mixer can't take is skipped, so its key goes quiet instead of stopping the room."""
     try:
-        s = pygame.mixer.Sound(str(path))
+        s = make()
         s.set_volume(SAMPLE_VOLUME)
         return s
     except pygame.error:
         return None
+
+
+def _load(path) -> pygame.mixer.Sound | None:
+    return _sound(lambda: pygame.mixer.Sound(str(path)))
 
 
 def _load_dir(base: Path, names) -> dict:
@@ -68,6 +73,14 @@ class SoundBank:
             return {p.stem: s for p in paths if (s := _load(p)) is not None}
         return self._get(("instrument", instrument_id), load)
 
+    def note(self, instrument_id: str, note: str, octave: int, dials: tuple | None = None):
+        """A note on any instrument, Music's or a family room's: the Synth makes it on `dials`, or where they start."""
+        from . import dial_synth
+        stem = pitch_filename(note, octave)
+        if instrument_id == dial_synth.ID:
+            return self.synth(stem, note_frequency(note, octave), dials or dial_synth.DEFAULT)
+        return self.instrument(instrument_id).get(stem)
+
     def synth(self, stem: str, freq: float, setting: tuple):
         """A Synth note, made the first time it's played on these dials; turning a dial forgets the old ones."""
         key = ("synth", setting)
@@ -75,8 +88,7 @@ class SoundBank:
         notes = self._get(key, dict)
         if stem not in notes and (init := pygame.mixer.get_init()):
             from .dial_synth import render
-            notes[stem] = pygame.mixer.Sound(buffer=render(freq, setting, init[0], init[2]))
-            notes[stem].set_volume(SAMPLE_VOLUME)
+            notes[stem] = _sound(lambda: pygame.mixer.Sound(buffer=render(freq, setting, init[0], init[2])))
         return notes.get(stem)
 
     def percussion(self) -> dict:

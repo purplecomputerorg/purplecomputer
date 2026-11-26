@@ -234,6 +234,7 @@
    "accordion",
    "glockenspiel"
   ],
+  "synth": "synth",
   "pitches": [
    {
     "file": "c2",

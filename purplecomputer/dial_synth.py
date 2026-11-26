@@ -1,6 +1,8 @@
 """The Synth instrument: each note is made when it's played, from four dials that 1 to 4 turn.
-numpy loads lazily: it's slow to import, and the i686 build has none."""
+numpy makes it fast and loads lazily, since it's slow to import; without it (the i686 build, and Purple
+in Studio's browser) plain Python makes the same note."""
 
+import array
 import functools
 import importlib
 import importlib.util
@@ -28,14 +30,15 @@ PICTURE_WOBBLE = 1.7   # and its wobble drawn bigger than it is
 
 
 @functools.cache
-def available() -> bool:
+def _has_numpy() -> bool:
     return importlib.util.find_spec("numpy") is not None
 
 
 @functools.cache
 def warm():
     """numpy loads in the background once the Synth is picked, so its first note isn't late."""
-    threading.Thread(target=importlib.import_module, args=("numpy",), daemon=True, name="synth-warm").start()
+    if _has_numpy():
+        threading.Thread(target=importlib.import_module, args=("numpy",), daemon=True, name="synth-warm").start()
 
 
 def setting(saved) -> tuple:
@@ -89,12 +92,20 @@ def picture(dials: tuple, freq: float, points: int = 400) -> tuple:
     return tuple(line)
 
 
-def render(freq: float, setting: tuple, rate: int, channels: int) -> bytes:
+def render(freq: float, dials: tuple, rate: int, channels: int) -> bytes:
     """A note as signed 16-bit frames for the mixer."""
+    return (_render_numpy if _has_numpy() else _render_plain)(freq, dials, rate, channels)
+
+
+def _frames(rate: int, decay: float) -> int:
+    return int(rate * min(3.0, 0.05 + decay * 5))
+
+
+def _render_numpy(freq: float, dials: tuple, rate: int, channels: int) -> bytes:
     import numpy as np
-    shape, bright, long_, wobble = setting
+    shape, bright, long_, wobble = dials
     decay = DECAY_S[long_]
-    t = np.arange(int(rate * min(3.0, 0.05 + decay * 5))) / rate
+    t = np.arange(_frames(rate, decay)) / rate
     w = 2 * math.pi * WOBBLE_HZ
     cycles = freq * (t - WOBBLE[wobble] / w * (np.cos(w * t) - 1))
     table = _cycle(np, shape, bright, freq)
@@ -104,3 +115,30 @@ def render(freq: float, setting: tuple, rate: int, channels: int) -> bytes:
     env[tail] *= 0.5 * (1 + np.cos(math.pi * (t[tail] - t[-1] + FADE_S) / FADE_S))
     frames = (wave * env * PEAK[shape] * 32767).astype(np.int16)
     return np.repeat(frames, channels).tobytes()
+
+
+def _render_plain(freq: float, dials: tuple, rate: int, channels: int) -> bytes:
+    """_render_numpy a sample at a time: a sine table looked up by index, the decay as a running product."""
+    shape, bright, long_, wobble = dials
+    decay, w = DECAY_S[long_], 2 * math.pi * WOBBLE_HZ
+    depth, n = WOBBLE[wobble] / w, _frames(rate, decay)
+    sines = [math.sin(2 * math.pi * i / TABLE) for i in range(TABLE)]
+    parts = _partials(shape, bright, freq)
+    table = [sum(a * sines[k * i % TABLE] for k, a in parts) for i in range(TABLE)]
+    gain = PEAK[shape] * 32767 / (max(map(abs, table)) or 1)
+    table = [v * gain for v in table + table[:1]]
+    tail_from, step, cos = (n - 1) / rate - FADE_S, math.exp(-1 / (rate * decay)), math.cos
+    mono, env = array.array("h", bytes(2 * n)), 1.0
+    for i in range(n):
+        t = i / rate
+        c = freq * (t - depth * (cos(w * t) - 1)) % 1 * TABLE
+        j = int(c)
+        a = env * min(1.0, t / ATTACK_S)
+        if t > tail_from:
+            a *= 0.5 * (1 + cos(math.pi * (t - tail_from) / FADE_S))
+        mono[i] = int((table[j] + (table[j + 1] - table[j]) * (c - j)) * a)
+        env *= step
+    frames = array.array("h", bytes(2 * n * channels))
+    for ch in range(channels):
+        frames[ch::channels] = mono
+    return frames.tobytes()

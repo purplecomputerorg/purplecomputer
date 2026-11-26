@@ -24,7 +24,7 @@ from .. import tts
 from ..audio import play_safe
 from ..content import png_size
 from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
-from ..music_constants import instruments, pitch_filename
+from ..music_constants import instruments
 from ..timeline import state_dir
 from ..roomkit.limits import (KEEP_MAX_BYTES, MAX_REPLY_CHARS, MAX_SHAPES, MAX_SOUNDS, MAX_WAKE_S, MIN_WAKE_S,
                                START_TIMEOUT_S, STEP_TIMEOUT_S, sealed)
@@ -574,7 +574,7 @@ class FamilyRoom(Overlay):
         if kind == "note" and (m := _NOTE.match(args[0])):
             wanted = args[1].lower() if len(args) > 1 else ""
             inst = next((i for i, n in instruments() if wanted in (i.lower(), n.lower())), instruments()[0][0])
-            if clip := self.sounds.instrument(inst).get(pitch_filename(m[1].upper() + m[2], int(m[3]))):
+            if clip := self.sounds.note(inst, m[1].upper() + m[2], int(m[3])):
                 play_safe(clip)
         elif kind == "drum" and (clip := self.sounds.drum(args[0])):
             play_safe(clip)

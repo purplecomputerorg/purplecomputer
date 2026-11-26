@@ -605,6 +605,24 @@ def test_a_room_plays_its_packs_own_sounds(pack, monkeypatch):
     run(go())
 
 
+def test_a_room_plays_the_synth_at_its_starting_dials(pack, monkeypatch):
+    from purplecomputer import dial_synth
+    pack("beep", 'from purple import *\ndef on_key(key):\n    play("C4", "synth")\n')
+    played, made = [], []
+    monkeypatch.setattr(family_room, "play_safe", played.append)
+    monkeypatch.setattr(family_room.SoundBank, "synth", lambda self, stem, freq, dials: made.append((stem, round(freq), dials)) or "beep")
+
+    async def go():
+        app = make_app()
+        room = _open(app, "beep")
+        await until(lambda: not room._busy)
+        await press(app, "a")
+        await until(lambda: played)
+        assert played == ["beep"] and made == [("c4", 262, dial_synth.DEFAULT)]
+        room.close()
+    run(go())
+
+
 def test_everything_one_key_says_is_spoken_in_order(pack, monkeypatch):
     pack("chatty", 'from purple import *\ndef on_key(key):\n    say("A pair!")\n    say("Go again.")\n')
     spoken = []

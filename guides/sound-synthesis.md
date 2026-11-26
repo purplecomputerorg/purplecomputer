@@ -137,6 +137,11 @@ Two more generators remain for comparison only (not in the shipped set):
 Samples for every instrument and pitch are pre-rendered by `generate_sounds.py`;
 the kid switches instruments live rather than editing code.
 
+The **Synth** after them is the exception: `purplecomputer/dial_synth.py` makes each note when it's
+first played, a sine, square or saw wave from its partials, rolled off by the Bright dial, with an
+exponential decay (Long) and vibrato (Wobble). numpy makes a note in a few milliseconds; without it
+(the i686 build, and Purple in Studio's browser) plain Python makes the identical note in tens.
+
 ## Other Instruments Considered
 
 | Instrument | Character | Why/Why Not |

@@ -12,6 +12,26 @@ def test_a_note_is_stereo_16_bit_and_never_clips():
         assert abs(int(frames[-1])) < 50   # it fades out, so it ends without a click
 
 
+def test_without_numpy_plain_python_makes_the_same_note(monkeypatch):
+    for dials, freq in (((0, 4, 2, 3), 65.4), ((1, 2, 1, 1), 261.6), ((2, 4, 4, 3), 659.3)):
+        fast = dial_synth.render(freq, dials, 44100, 2)
+        monkeypatch.setattr(dial_synth, "_has_numpy", lambda: False)
+        assert dial_synth.render(freq, dials, 44100, 2) == fast
+        monkeypatch.undo()
+
+
+def test_a_note_the_mixer_refuses_is_skipped_not_raised(monkeypatch):
+    import pygame
+    from purplecomputer import sounds
+
+    def refuse(*_, **__):
+        raise pygame.error("no")
+    monkeypatch.setattr(sounds, "mixer_ready_for_play", lambda: True)
+    monkeypatch.setattr(sounds.pygame.mixer, "get_init", lambda: (44100, -16, 2))
+    monkeypatch.setattr(sounds.pygame.mixer, "Sound", refuse)
+    assert sounds.SoundBank().note("synth", "C", 4) is None
+
+
 def test_long_makes_the_note_longer():
     lengths = [len(dial_synth.render(440, (0, 2, n, 0), 44100, 1)) for n in range(5)]
     assert lengths == sorted(lengths) and lengths[0] < lengths[-1]

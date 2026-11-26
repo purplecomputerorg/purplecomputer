@@ -121,7 +121,7 @@ def instruments() -> list[tuple[str, str]]:
     from .content import get_content
     from . import dial_synth
     extra = {i.id: (i.id, i.name) for i in get_content().instruments}
-    synth = [(dial_synth.ID, dial_synth.NAME)] if dial_synth.available() and dial_synth.ID not in extra else []
+    synth = [] if dial_synth.ID in extra else [(dial_synth.ID, dial_synth.NAME)]
     return [extra.pop(i, (i, n)) for i, n in INSTRUMENTS] + list(extra.values()) + synth
 
 

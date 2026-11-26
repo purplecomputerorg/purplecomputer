@@ -22,7 +22,7 @@ from ..mixer import warm_mixer
 from ..speech_filter import is_clean
 from ..music_constants import (
     ALL_KEYS, COLOR_KEYCAP, COLORS, DEFAULT_ROOT_INDEX, FRIENDLY_KEY_NAMES, FRIENDLY_KEYS, GRID_KEYS,
-    INSTRUMENT_ALIASES, PERCUSSION, instruments, note_frequency, pitch_filename, pitch_for,
+    INSTRUMENT_ALIASES, PERCUSSION, instruments, note_frequency, pitch_for,
 )
 from ..palette import KEY_COLORS, luminance, text_color_for
 from .. import paper
@@ -384,11 +384,7 @@ class MusicRoom(Room):
 
     def _note_sound(self, key: str, instrument_id: str):
         pitch = self._pitch_for_key(key)
-        if pitch is None:
-            return None
-        if instrument_id == dial_synth.ID:
-            return self.sounds.synth(pitch_filename(*pitch), note_frequency(*pitch), self.synth)
-        return self.sounds.instrument(instrument_id).get(pitch_filename(*pitch))
+        return None if pitch is None else self.sounds.note(instrument_id, *pitch, self.synth)
 
     def play_sound_with_instrument(self, key: str, instrument_index: int, volume_scale: float = 1.0):
         if self.app._effective_volume() == 0:

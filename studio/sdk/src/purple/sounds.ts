@@ -14,7 +14,10 @@ export function voiceClipFilename(text: string): string {
   return text.trim().toLowerCase().replaceAll(" ", "_") + ".wav";
 }
 
+// The four sampled instruments a pack instrument can be built on; rooms can also play the Synth, which
+// Purple makes as it plays (dial_synth.py), and a Purple from before it plays the first of these instead.
 export const INSTRUMENTS: readonly string[] = music.instruments;
+export const NOTE_INSTRUMENTS: readonly string[] = [...music.instruments, music.synth];
 export const GRID_ROWS: string[][] = music.grid_rows;
 export const PERCUSSION_ROW: string[] = music.percussion_row;
 export const SAMPLE_VOLUME: number = music.sample_volume;

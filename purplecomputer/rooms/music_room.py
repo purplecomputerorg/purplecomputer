@@ -1113,9 +1113,15 @@ class MusicRoom(Room):
         space = "" if self.letters_mode else STOP_HINT if self._replaying() else TAPE_HINT if tune \
             else LAST_SONG_HINT if self._last_song else ""
         erase = ERASE_HINT if tune else CLEAR_HINT if space else ""
-        hint = "   ".join(h for h in (space, self._hint_text(), erase) if h)
-        if hint:
-            draw_key_hint(g, hint, px, (left + right) // 2, cy, anchor="center")
+        rest = "   ".join(h for h in (self._hint_text(), erase) if h)
+        # Space's hint keeps the room of its widest, so the row holds still as replay starts and stops
+        slot = max(key_hint_width(g, h, px) for h in ((TAPE_HINT, STOP_HINT) if space in (TAPE_HINT, STOP_HINT) else (space,)))
+        gap = key_hint_width(g, "   ", px) if space and rest else 0
+        x = (left + right) // 2 - (slot + gap + key_hint_width(g, rest, px)) // 2
+        if space:
+            draw_key_hint(g, space, px, x, cy)
+        if rest:
+            draw_key_hint(g, rest, px, x + slot + gap, cy)
 
     def _tape_parts(self) -> tuple:
         """(letters, rest before each, underline from) for the Letters tape: a rest is 1 where a new word starts."""

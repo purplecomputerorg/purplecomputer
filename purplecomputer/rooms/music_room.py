@@ -148,6 +148,19 @@ def _wiggle(s, u, c, wobble, color, ink, tile):
     pygame.draw.lines(s, color, False, pts, max(2, round(u * 0.035)))
 
 
+@lru_cache(maxsize=8)
+def _wave(w: int, h: int, line: tuple, ink: tuple) -> pygame.Surface:
+    """The Synth's note as a thin line, drawn big and scaled down so it's smooth."""
+    k = 3
+    big = pygame.Surface((w * k, h * k), pygame.SRCALPHA)
+    big.fill((*ink, 0))
+    pad, amp, width = h * k // 4, h * k * 0.36, max(k * 2, round(h * k / 30))
+    step = (w * k - 2 * pad) / (len(line) - 1)
+    pts = [(pad + i * step, h * k / 2 - y * amp) for i, y in enumerate(line)]
+    pygame.draw.lines(big, ink, False, pts, width)
+    return pygame.transform.smoothscale(big, (w, h))
+
+
 _DIAL_PICTURES = (_shape, _sun, _dots, _wiggle)
 
 
@@ -1378,12 +1391,10 @@ class MusicRoom(Room):
         g.rect(P.BG, rect, radius=rect.h // 5)
         pitch = self._pitch_for_key(self._last_note)
         line = dial_synth.picture(self.synth, note_frequency(*pitch) if pitch else dial_synth.LOWEST_HZ * 4)
-        pad, amp = rect.h // 4, rect.h * 0.36
-        step = (rect.w - 2 * pad) / (len(line) - 1)
-        pts = [(rect.x + pad + i * step, rect.centery - y * amp) for i, y in enumerate(line)]
         ink = KEY_COLORS.get(self._last_note.lower(), P.ACCENT)
         ink = mix(ink, "#ffffff", 0.4) if luminance(ink) < 0.12 else ink   # the darkest keys would vanish on the dark ground
-        pygame.draw.lines(g.surface, rgb(ink), False, pts, max(3, rect.h // 14))
+        wave = _wave(rect.w, rect.h, line, rgb(mix(ink, P.BG, 0.25)))
+        g.surface.blit(wave, rect)
 
     @staticmethod
     def _strip_px(size) -> int:

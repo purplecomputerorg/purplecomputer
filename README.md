@@ -170,9 +170,10 @@ choose sounds cat                 # Music: Letters, saying c a t by their sounds
 green repeat 4 right 1 up 1       # Blocks: stairs
 right hello                       # Blocks: a block per letter
 red up 3 blue right 2             # Blocks: a new color as you go
+move right 3 red up 4             # Blocks: a tower three over
 ```
 
-`repeat N` repeats the rest of the line, commas split it into steps, and misspellings are fixed and shown.
+`repeat N` repeats the rest of the line, commas split it into steps, and misspellings are fixed and shown. In Art and Blocks, `move` (or `jump`) goes without painting or building until the end of the line, a comma, or a color after a way.
 
 ### Saving, Time Travel and printing
 

@@ -1178,3 +1178,31 @@ def test_printing_shows_the_build_from_where_the_view_is_looking():
         room.face_front()
         assert pygame.image.tobytes(room.paper(app.g, (400, 300)), "RGB") == at_rest
     run(go())
+
+
+def _code_blocks(*lines) -> set:
+    async def go():
+        app, room = _blocks()
+        for line in lines:
+            await room.run_code([line])
+        return set(room._blocks)
+    return run(go())
+
+
+def _tower(x, height, y0=0) -> set:
+    return {(x, 5, y) for y in range(y0, y0 + height)}
+
+
+def test_code_move_goes_like_the_arrows_building_nothing():
+    assert _code_blocks("move right 3") == _code_blocks("jump right 3") == _code_blocks("move right 3 up 4") == set()
+    assert _code_blocks("right 2") == {(5, 5, 0), (6, 5, 0)}
+
+
+def test_code_move_ends_at_a_color_or_a_comma_and_letters_still_build():
+    assert _code_blocks("move right 3 red up 4") == _code_blocks("move right 3, up 4") == _tower(8, 4)
+    assert _code_blocks("move right 3 hi") == {(8, 5, 0), (9, 5, 0)}
+
+
+def test_code_move_up_keeps_its_height_and_across_lands_on_the_ground():
+    assert _code_blocks("move up 2, red right 2") == {(5, 5, 2), (6, 5, 2)}
+    assert _code_blocks("repeat 3 up 3, move right 2") == _tower(5, 3) | _tower(7, 3) | _tower(9, 3)

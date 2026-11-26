@@ -28,7 +28,7 @@
 #gap
 #panel(title: [Art])[
   #examples(first: 1.05in, gutter: 4pt,
-    art("brush up right 3 ujmmm"),
+    art("move right 3 ujmmm"),
     art("red repeat 4 forward 4 turn"),
     art("write repeat 3 hello"),
   )

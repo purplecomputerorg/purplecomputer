@@ -106,6 +106,14 @@ Argument ordering (free-order motion args)
   preserves "down hello" = write "hello" downward; "down 5 hello" moves
   down 5, then writes "hello").
 
+  Move words (`move`, `jump`; _mark_moves): every plan from a move word
+  on goes without painting or building, until a later plan brings its
+  own color or the clause ends. A color before the first way only picks
+  the color ("move red right 3"). Letters still paint or build. Art lifts
+  its brush for the move and puts it back as it was; Blocks lands a
+  sideways move on the column's top, as the arrows do, unless the move
+  also went up or down.
+
   Why this is DRY: color handling previously lived in three places (a
   leading peel in _resolve, a trailing-color regex group copy-pasted into
   every motion handler, and a per-direction text handler). The tokenizer

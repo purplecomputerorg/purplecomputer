@@ -4,6 +4,7 @@ moving paints until release. Also covers demo playback's pen handling,
 including cancellation."""
 
 import asyncio
+import pytest
 
 from purplecomputer.constants import KID_HOLD_S
 from purplecomputer.harness import make_app, run as _run
@@ -339,4 +340,31 @@ def test_code_cursor_shows_the_code_brush():
         canvas.open_code_panel()
         await asyncio.sleep(0.2)
         assert canvas._code_brush_down and canvas._lift == 0.0
+    _run(_test())
+
+
+@pytest.mark.parametrize("line, painted", [
+    ("move right 3", set()),
+    ("jump right 3", set()),
+    ("move right 3 up 2", set()),
+    ("move right 3 red up 2", {(8, 5), (8, 4)}),
+    ("move right 3, up 2", {(8, 5), (8, 4)}),
+    ("move right 3 hi", {(8, 5), (9, 5)}),
+    ("brush up right 3 red up 2", {(8, 5), (8, 4)}),
+])
+def test_move_goes_without_painting_to_the_end_of_the_line_or_a_color(line, painted):
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code([line])
+        assert canvas._painted_positions == painted
+    _run(_test())
+
+
+def test_move_puts_the_brush_back_as_it_was():
+    async def _test():
+        app, canvas = _code_art()
+        await canvas.run_code(["move red right 3"])
+        assert canvas._code_brush_down and not canvas._painted_positions
+        await canvas.run_code(["brush up", "move right 2"])
+        assert not canvas._code_brush_down
     _run(_test())

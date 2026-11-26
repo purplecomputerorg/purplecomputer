@@ -363,9 +363,9 @@ class BlocksRoom(Room):
         self.build()
         return True
 
-    def skip(self):
+    def skip(self, keep_height: bool = True):
         self._dir = self._code_dir
-        self._advance(self._cursor_y(), keep_height=True)
+        self._advance(self._cursor_y(), keep_height=keep_height)
 
     def _chord_color(self, held_key: str, char: str) -> bool:
         """A key pressed while another color key is down: the brush becomes the

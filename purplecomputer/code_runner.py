@@ -529,7 +529,7 @@ class MusicCodeRunner:
 _COMMAND_VOCAB = [
     'turn', 'forward', 'go', 'move', 'walk', 'step', 'paint', 'write',
     'color', 'lift', 'brush', 'pen', 'left', 'right', 'up', 'down', 'spin', 'face',
-    'rotate', 'repeat', 'back', 'backward',
+    'rotate', 'repeat', 'back', 'backward', 'jump',
 ]
 _TURN_VOCAB = ['left', 'right', 'up', 'down', 'back', 'backward', 'around']
 _DIRECTION_VOCAB = ['left', 'right', 'up', 'down']
@@ -544,7 +544,7 @@ _OPPOSITE = {'right': 'left', 'left': 'right', 'up': 'down', 'down': 'up'}
 # take a direction argument. back/backward additionally move opposite the
 # heading; every other verb moves along it.
 _VERB_TURN = {
-    'forward': None, 'go': None, 'move': None, 'walk': None, 'step': None,
+    'forward': None, 'go': None, 'move': None, 'jump': None, 'walk': None, 'step': None,
     'back': None, 'backward': None,
     'left': 'left', 'right': 'right', 'up': 'up', 'down': 'down',
     'spin': 'spin', 'rotate': 'spin',
@@ -552,6 +552,24 @@ _VERB_TURN = {
 # Translate verbs move one step when given no distance and no text; rotation
 # (spin/rotate) and turn/face only move when a distance is supplied.
 _DEFAULT_MOVE_VERBS = frozenset(_VERB_TURN) - {'spin', 'rotate'}
+# Go without painting or building, to the end of the line or until a color after a way.
+MOVE_WORDS = frozenset({'move', 'jump'})
+
+
+def _mark_moves(plans: list[dict]) -> list[dict]:
+    """Set each plan's 'lift': on from a move word until a later plan brings a color.
+    A move word that only leads the next way ("move red right 3") is folded into it."""
+    lifting = False
+    for plan in plans:
+        lifting = plan['verb'] in MOVE_WORDS or (lifting and not plan['color'])
+        plan['lift'] = lifting
+    kept = []
+    for plan, after in zip(plans, plans[1:] + [None]):
+        if after and plan['verb'] in MOVE_WORDS and plan['dist'] is None and not plan['leftover']:
+            after['color'] = after['color'] or plan['color']
+            continue
+        kept.append(plan)
+    return kept
 
 
 class ArtCodeRunner:
@@ -576,6 +594,8 @@ class ArtCodeRunner:
     ]
     # Brush moves that stand on their own anywhere in a line: "right 2 brush up right 2".
     _BRUSH_WORDS = re.compile(r'\b((?:brush|pen)\s*(?:up|down)|lift)\b', re.I)
+
+    _moving = False
 
     def __init__(self, canvas):
         self.canvas = canvas
@@ -797,7 +817,7 @@ class ArtCodeRunner:
         for plan in plans:
             parts = sorted(plan.pop('_leftover'), key=lambda x: x[0])
             plan['leftover'] = ' '.join(p for _, p in parts)
-        return plans
+        return _mark_moves(plans)
 
     def _tokenize_motion(self, words: list[str]) -> list[tuple]:
         """Tokenize words into anchor / number / color / text tokens.
@@ -858,6 +878,7 @@ class ArtCodeRunner:
             if distance is None and not leftover and verb in _DEFAULT_MOVE_VERBS:
                 distance = 1
 
+            self._set_moving(plan['lift'])
             if plan['color']:
                 self._apply_color(plan['color'])
             if direction:
@@ -870,9 +891,13 @@ class ArtCodeRunner:
             if leftover:
                 await self._emit_text(leftover, paint=self._letters_paint)
             await asyncio.sleep(0.05)
+        self._set_moving(False)
+
+    def _set_moving(self, on: bool) -> None:
+        self._moving = on
 
     def _stroke_action(self) -> str:
-        return "paint" if self._paint_on else "move"
+        return "paint" if self._paint_on and not self._moving else "move"
 
     @property
     def _letters_paint(self) -> bool:

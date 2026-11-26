@@ -76,7 +76,8 @@ _GLOSS_FACE = "sans-italic"
 GUIDE = {
     'art': [
         ("Colors", [(COLORS, "")]),
-        ("Move", [("right 5", RIGHT), ("up 3 blue", f"{UP} in blue")]),
+        ("Draw", [("right 5", RIGHT), ("up 3 blue", f"{UP} in blue")]),
+        ("Move", [("move right 3", "no paint")]),
         ("Turn", [("turn", TURN), ("forward 6", "where it points")]),
         ("Again", [("repeat 4 right 2 up 2", "")]),
         ("Letters", [("write hi", "")]),
@@ -92,6 +93,7 @@ GUIDE = {
     'blocks': [
         ("Colors", [(COLORS, "")]),
         ("Build", [("right 5", f"a row {RIGHT}"), ("up 4 blue", f"a blue tower {UP}"), ("back 3", "away from you"), ("front 3", "toward you")]),
+        ("Move", [("move right 3", "over, no blocks")]),
         ("Letters", [("right hi", "a block per letter")]),
         ("Again", [("repeat 4 right 1 up 1", "stairs")]),
     ],
@@ -103,11 +105,14 @@ _COLOR_TOPIC = ("Colors", [(ALL_COLORS, ""), ("color mint", "switch colors"), ("
 _AGAIN_ROWS = [("repeat 3 right 2, up 1", "both, each time"), ("repeat right 1", "with no number: twice")]
 TOPICS = {
     'art': [
-        ("right left up down", "Move", [("right 5", f"{RIGHT} five steps"), ("left 5", f"{LEFT} five steps"), ("up 3", f"{UP} three steps"),
+        ("right left up down", "Draw", [("right 5", f"{RIGHT} five steps"), ("left 5", f"{LEFT} five steps"), ("up 3", f"{UP} three steps"),
                                         ("down 3", f"{DOWN} three steps"), ("right", "one step"), ("up 3 blue", f"{UP} in blue"),
                                         ("red right 5 blue down 3", "keep going"),
                                         ("red right 5, blue down 3", "commas and ; work too")]),
-        ("turn spin rotate face forward go move walk step back backward around", "Turn and go",
+        ("move jump", "Move", [("move right 3", "no paint"), ("move right 3 up 2", "both, no paint"), ("move right 3, up 2", "then paint"),
+                               ("move right 3 red up 2", "a color paints again"), ("move right 3 hi", "letters paint anyway"),
+                               ("jump right 3", "same as move")]),
+        ("turn spin rotate face forward go walk step back backward around", "Turn and go",
          [("forward 6", "the way it points"), ("turn left", ""), ("turn right", ""), ("turn around", ""), ("turn", "a turn to the right"),
           ("face up", "point up"), ("back 3", "go backwards"), ("go 4", "same as forward")]),
         ("brush pen lift penup pendown", "Brush", [("brush up", "move without painting"), ("brush down", "paint again"),
@@ -140,12 +145,15 @@ TOPICS = {
          [("right 5", f"a row {RIGHT}"), ("left 5", f"a row {LEFT}"), ("up 4", f"a tower {UP}"), ("down 2", f"{DOWN} again"),
           ("back 3", "away from you"), ("front 3", "toward you"), ("forward 3", "keep going that way"), ("up 4 blue", "a blue tower"),
           ("red up 3 blue right 2", "keep building"), ("red up 3, blue right 2", "commas and ; work too")]),
+        ("move jump", "Move", [("move right 3", "over, no blocks"), ("move up 2", "higher, no blocks"), ("move right 3 up 4", "both, no blocks"),
+                               ("move right 3, up 4", "then a tower"), ("move right 3 red up 4", "a color builds again"),
+                               ("jump right 3", "same as move")]),
         ("repeat", "Again", [("repeat 4 right 1 up 1", "stairs")] + _AGAIN_ROWS),
         (COLORS, "Colors", [(ALL_COLORS, ""), ("red up 5", "a red tower"), ("dark blue", "or light, bright, pale, neon"),
                             ("red up 3 blue right 2", "a new color as you go")]),
     ],
 }
-_TAKES_A_WAY = {"turn", "face", "brush", "pen"}
+_TAKES_A_WAY = {"turn", "face", "brush", "pen", "move", "jump"}
 # An example led by one of these sets the mode itself.
 _SWITCHES = {'art': set(_MODE_WORDS), 'music': set(MusicCodeRunner._KEYWORD_VOCAB) - {'fast', 'slow'} | {'key'}}
 _ART_WORDS = set(_COMMAND_VOCAB + _TURN_VOCAB)

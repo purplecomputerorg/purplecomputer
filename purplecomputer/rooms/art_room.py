@@ -184,12 +184,14 @@ def _brush_hint(h: int, color: str, lift: float) -> pygame.Surface:
 class _RoomBrushRunner(ArtCodeRunner):
     """The brush lives on the room, so `brush up` holds across lines and shows on
     the cursor; `_paint_on` is Paint (not Letters) with that brush down. A color
-    puts the brush down unless its own line lifted it: `brush up red right 3`.
+    puts the brush down unless its own line lifted it and nothing moved since: `brush up red right 3`.
+    `move` lifts it to the end of the line, then puts it back as it was.
     Letters always paint and put it down: `brush up right 5 hi`. Moves paint
     whenever the brush is down, switching to Paint as a color does, so a line
     draws the same from either mode; only bare letters follow the mode."""
 
     _lifted_this_line = False
+    _brush_before = True
 
     @property
     def _paint_on(self) -> bool:
@@ -204,11 +206,19 @@ class _RoomBrushRunner(ArtCodeRunner):
         return self._painting
 
     async def _emit_text(self, text: str, paint: bool) -> None:
-        if paint:
+        if paint and not self._moving:
             self.canvas.set_code_brush(True)
         await super()._emit_text(text, paint)
 
+    def _set_moving(self, on: bool) -> None:
+        if on != self._moving:
+            if on:
+                self._brush_before = self.canvas._code_brush_down
+            self.canvas.set_code_brush(not on and self._brush_before)
+        super()._set_moving(on)
+
     def _stroke_action(self) -> str:
+        self._lifted_this_line = False
         if not self.canvas._code_brush_down:
             return "move"
         self._enter_paint()
@@ -234,7 +244,7 @@ class _RoomBrushRunner(ArtCodeRunner):
 
     def _apply_color(self, hex_color: str) -> None:
         super()._apply_color(hex_color)
-        if not self._lifted_this_line:
+        if not (self._lifted_this_line or self._moving):
             self.canvas.set_code_brush(True)
 
 

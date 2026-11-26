@@ -2,11 +2,13 @@
 `red up 5` stacks a tower, `blue right 6` lays a row, `hello` builds
 the letters, each in its own color, and `repeat 4 right 1 up 1` makes
 stairs. Like typing, every block lands at the cursor, which then moves on
-that way, so lines run on from where the last one ended."""
+that way, so lines run on from where the last one ended. `move right 3` goes
+like the arrows, building nothing, to the end of the line or the next color:
+`move right 3 red up 4` is a tower three over."""
 
 import asyncio
 
-from ..code_runner import ArtCodeRunner
+from ..code_runner import MOVE_WORDS, ArtCodeRunner
 
 # Code words to the room's ways; up and down are height, back and front depth.
 WAYS = {"right": "right", "left": "left", "back": "up", "front": "down", "up": "rise", "down": "sink"}
@@ -26,7 +28,7 @@ class BlocksCodeRunner(ArtCodeRunner):
         tokens, i = [], 0
         while i < len(words):
             w = words[i].lower()
-            if w in WAYS or w in KEEP_GOING:
+            if w in WAYS or w in KEEP_GOING or w in MOVE_WORDS:
                 tokens.append(("anchor", (w, WAYS.get(w))))
             elif w.isdigit():
                 tokens.append(("number", min(int(w), MAX_COUNT)))
@@ -40,15 +42,18 @@ class BlocksCodeRunner(ArtCodeRunner):
         return tokens
 
     async def _execute_motion_plans(self, plans: list[dict]) -> None:
-        room = self.canvas
+        room, high = self.canvas, False
         for plan in plans:
             if plan["color"]:
                 self._apply_color(plan["color"])
             if plan["dir"]:
                 room.set_way(plan["dir"])
+            # Moved across, the next block drops onto that column as after the arrows; moved up or down, it stays there.
+            high = plan["lift"] and (high or plan["dir"] in ("rise", "sink"))
             count = plan["dist"] or (0 if plan["leftover"] else 1)
+            step = (lambda: room.skip(keep_height=high)) if plan["lift"] else room.build
             for _ in range(count):
-                room.build()
+                step()
                 await asyncio.sleep(BLOCK_S)
             if plan["leftover"]:
                 await self._emit_text(plan["leftover"], paint=True)

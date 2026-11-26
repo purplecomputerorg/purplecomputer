@@ -141,6 +141,14 @@ def test_a_printed_job_says_nothing_and_resets_the_heals(monkeypatch):
     assert told == [] and printing._heals == 0 and not cups.did("cancel")
 
 
+@pytest.mark.parametrize("state, printed", [("completed", True), ("aborted", False)])
+def test_the_end_of_a_job_is_told(monkeypatch, state, printed):
+    monkeypatch.setattr(printing, "_run", FakeCups(look(state)).run)
+    ended = []
+    run(printing._watch("7", printing.state_stamp(), lambda text: None, ended.append))
+    assert ended == [printed]
+
+
 def test_a_slow_job_says_so_once_then_prints(monkeypatch):
     working = [look(moved=i // 10) for i in range(40)]
     told, _ = watch(monkeypatch, *working, look("completed"))

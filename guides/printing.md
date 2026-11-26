@@ -109,7 +109,8 @@ unplugged says it didn't print, without a rebuild.
   the card and writes the page to `print.png` next to the screenshots (later
   pages of a Write print as `print2.png`, `print3.png`, ...). The app also
   shows the pages full-screen until a key (arrows turn pages); the test VM's
-  `run` turns this pretend printer on.
+  `run` turns this pretend printer on. Its Printer check report is too long for
+  one photo, so after a test page the screen asks for a video and pages itself.
 - `tests/test_printing.py` covers the card, the pages and the pacing;
   `tests/test_print_healing.py` the watcher's clocks and what it does;
   `tests/test_printer_setup.py` the setup script, heal path included, against a
@@ -123,11 +124,16 @@ unplugged says it didn't print, without a rebuild.
 
 ## On real hardware
 
-For a family: Parent Menu, Support Info, Printer check. It opens with what to
-do next, then a report sized for one photo (the USB printer's IDs, Purple's
-setup state and log, the queue, recent jobs, the `print:` log lines); arrows
-scroll the rest for a video. Enter prints a test page through the same path as
-a kid's print, so self-healing and paper or ink messages show up there.
+For a family: Parent Menu, Support Info, Printer check. What to tell them is
+"press Enter and do what the top says." Enter prints a test page through the
+same path as a kid's print, so self-healing and paper or ink messages show up
+there. The top line says to wait while the job runs (at most 2 minutes), then
+whether it printed, and asks for a photo unless it did. The report below puts
+job status first (the queue's state and alerts, recent jobs, the `print:` log
+lines), then the USB printer's IDs and Purple's setup state and log. Its text
+shrinks to fit one photo; when even the smallest size doesn't fit, the top asks
+for a video of a stated length instead, and the report turns a page every 5
+seconds, over and over, until an arrow key takes over.
 
 From the Parent Menu terminal, `printer-test` shows what Purple set up and the
 last jobs; `printer-test help` lists the rest: print a test circle, rebuild the

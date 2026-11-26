@@ -88,9 +88,9 @@ def why_not():
     return WHY_NOT.get(now)
 
 
-def advice(support_email: str) -> str:
+def advice() -> str:
     """What Printer check says first: where printing stands and what to do next."""
-    now, model = status(), _state().get("model") or "The printer"
+    now, model = status(), (printer() or _state()).get("model") or "The printer"
     if now == READY:
         return f"{model} is ready. Press Enter to print a test page."
     if now == SETTING_UP:
@@ -99,7 +99,7 @@ def advice(support_email: str) -> str:
         return "No printer found. Plug the printer into this computer with its USB cable and turn it on."
     if why_not() != WHY_NOT[BROKEN]:
         return why_not() + "."
-    return f"{model} doesn't print yet. Please send a photo of this screen to {support_email}."
+    return f"{model} doesn't print yet."
 
 
 def printer():
@@ -170,11 +170,12 @@ async def _run(*argv, check=True, timeout=30) -> str:
     return out.decode(errors="replace")
 
 
-async def print_pages(surfaces, landscape: bool, notify) -> bool:
-    """Send the pages as one job; notify(text) tells the screen what happened.
-    Returns whether they were sent."""
+async def print_pages(surfaces, landscape: bool, notify, ended=lambda printed: None) -> bool:
+    """Send the pages as one job; notify(text) tells the screen what happened, and
+    ended(printed) when the job is over. Returns whether they were sent."""
     global _last_at, _count
     if printer() is None or ready_in():
+        ended(False)
         return False
     _last_at, _count = time.monotonic(), _count + 1
     import pygame
@@ -183,6 +184,7 @@ async def print_pages(surfaces, landscape: bool, notify) -> bool:
         for i, surface in enumerate(surfaces):
             pygame.image.save(surface, os.path.join(folder, f"print{i + 1 if i else ''}.png"))
         notify("Printing!")
+        ended(True)
         return True
     stamp, paths = state_stamp(), []
     try:
@@ -196,6 +198,7 @@ async def print_pages(surfaces, landscape: bool, notify) -> bool:
     except Exception as e:
         boot_log.heartbeat(f"print: failed to send ({e})")
         await _give_up(None, notify, heal=True)
+        ended(False)
         return False
     finally:
         for path in paths:
@@ -203,7 +206,7 @@ async def print_pages(surfaces, landscape: bool, notify) -> bool:
     boot_log.heartbeat(f"print: {len(surfaces)} page(s) sent as job {job}")
     notify("Printing!")
     if job:
-        asyncio.ensure_future(_watch(job, stamp, notify))
+        asyncio.ensure_future(_watch(job, stamp, notify, ended))
     return True
 
 
@@ -285,7 +288,7 @@ class _Clocks:
         return trouble or (STILL_WORKING if slow else None)
 
 
-async def _watch(job, stamp, notify):
+async def _watch(job, stamp, notify, ended=lambda printed: None):
     """Follow a sent job until it's over, saying once per problem what's wrong."""
     global _heals
     clocks, said, seen = _Clocks(_now()), set(), None
@@ -309,6 +312,7 @@ async def _watch(job, stamp, notify):
         _heals = 0
     else:
         await _give_up(job, notify, heal=verdict == STUCK)
+    ended(verdict == COMPLETED)
 
 
 async def _give_up(job, notify, heal: bool):

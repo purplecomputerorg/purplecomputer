@@ -212,11 +212,11 @@ def test_lp_output_gives_the_job_number():
 
 
 def test_printer_check_says_what_to_do_next():
-    assert printing.advice("help@x").startswith("No printer found")
+    assert printing.advice().startswith("No printer found")
     _write(**READY)
-    assert printing.advice("help@x") == "Brother HL-L2420DW is ready. Press Enter to print a test page."
+    assert printing.advice() == "Brother HL-L2420DW is ready. Press Enter to print a test page."
     _write(ready=False, model="Canon TS3520", via="no driver for this model")
-    assert printing.advice("help@x") == "Canon TS3520 doesn't print yet. Please send a photo of this screen to help@x."
+    assert printing.advice() == "Canon TS3520 doesn't print yet."
 
 
 @pytest.mark.parametrize("ready", [True, False])
@@ -236,7 +236,43 @@ def test_printer_check_prints_a_test_page_and_says_how_it_went(ready, lp_calls, 
         assert len(lp_calls) == ready
         assert page.heard == ["Printing!" if ready else "Plug in a printer with its USB cable"]
         assert f"Test page: {page.heard[0]}" in page.lines and "USB printers:" in page.lines
+        assert page.headline()[0] == (support_info.WAITING if ready else printing.advice())
+        await press(app, "enter")
+        assert len(lp_calls) == ready  # a second Enter while it prints does nothing
     run(go())
+
+
+def test_printer_check_says_when_to_take_the_photo(monkeypatch):
+    from purplecomputer.rooms import support_info
+    monkeypatch.setattr(support_info.PrinterCheckScreen, "on_open", lambda self: None)
+    _write(**READY)
+    photo = "Take a photo" + support_info.SEND
+
+    async def go():
+        app = make_app()
+        page = support_info.PrinterCheckScreen(app)
+        assert page.headline() == (printing.advice(), None)
+        page.waiting = app.timers.after(support_info.WAIT_CAP_S, lambda: page._ended(False))
+        assert page.headline() == (support_info.WAITING, None)
+        page._ended(True)
+        assert page.headline() == (support_info.PRINTED, support_info.NO_CIRCLE + photo)
+        page.heard = ["Printing!", "The printer needs paper"]
+        page._ended(False)
+        assert page.headline() == ("The printer needs paper", photo)
+        page.heard = ["Printing!"]
+        assert page.headline() == (support_info.NOT_YET, photo)
+        assert not app.timers.active
+    run(go())
+
+
+def test_printer_check_fits_the_queue_into_a_photo():
+    from purplecomputer.diagnostics import _queue_summary
+    lpstat = ("printer purple now printing purple-3.  enabled since Thu\n\tWaiting for printer to finish.\n"
+              "\tForm mounted:\n\tAlerts: media-empty-error\n\tForms allowed:\n\t\t(none)\n\tBanner required\n")
+    assert _queue_summary(lpstat).splitlines() == [
+        "printer purple now printing purple-3.  enabled since Thu", "\tWaiting for printer to finish.",
+        "\tAlerts: media-empty-error"]
+    assert _queue_summary("printer purple is idle.\n\tForm mounted:\n\tAlerts: none\n").splitlines()[1] == "\tAlerts: none"
 
 
 def _play_paper(size, ems=None, monkeypatch=None):

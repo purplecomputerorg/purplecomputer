@@ -210,22 +210,39 @@ def _usb_printers() -> list:
     return out or ["  (none)"]
 
 
+def _queue_summary(lpstat_l: str) -> str:
+    """The queue's state, its status message and its alerts, without lpstat's fixed settings."""
+    lines = lpstat_l.splitlines()
+    message = [ln for ln in lines[1:2] if ":" not in ln and ln.strip() != "Banner required"]
+    return "\n".join(lines[:1] + message + [ln for ln in lines if "Alerts:" in ln])
+
+
+def _pretend_printer_info() -> str:
+    """The pretend printer's report: too long for one photo, so Printer check shows its video paging."""
+    ladder = [f"[12:00:{i:02d}] pretend driver {i} of 40: not this one" for i in range(1, 41)]
+    return "\n".join(["Queue:", "  printer purple is idle.", "    Alerts: none", "",
+                      "USB printers:", "  Pretend Printer [0000:0000] port 1-1, IPP-over-USB: yes", "",
+                      "Setup log:", *_indented("\n".join(ladder))])
+
+
 def collect_printer_info() -> str:
     """Everything support needs about printing, most useful first, for Printer check."""
     from . import boot_log, printing
+    if printing.FAKE:
+        return _pretend_printer_info()
     boot = _read(boot_log._BOOT_LOG_TMP, "")
     return "\n".join([
+        "Queue:", *_indented(_queue_summary(_run("lpstat", "-l", "-p", printing.QUEUE))),
+        "",
+        "Recent jobs:", *_indented(_run("lpstat", "-W", "all", "-o", printing.QUEUE), 3),
+        "",
+        "Print log:", *_indented("\n".join(ln for ln in boot.splitlines() if "print:" in ln), 8),
+        "",
         "USB printers:", *_usb_printers(),
         "",
         "Purple's setup:", *_indented(_read(printing.STATE, "(nothing plugged in)")),
         "",
         "Setup log:", *_indented(_read("/tmp/purple-printer.log", ""), 15),
-        "",
-        "Queue:", *_indented(_run("lpstat", "-l", "-p", printing.QUEUE), 8),
-        "",
-        "Recent jobs:", *_indented(_run("lpstat", "-W", "all", "-o", printing.QUEUE), 5),
-        "",
-        "Print log:", *_indented("\n".join(ln for ln in boot.splitlines() if "print:" in ln), 12),
     ])
 
 

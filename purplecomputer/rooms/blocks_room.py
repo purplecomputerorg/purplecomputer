@@ -673,7 +673,7 @@ class BlocksRoom(Room):
 
     def _character(self, action):
         char = UNSHIFT_MAP.get(action.char, action.char) if action.with_shift else action.char
-        if open_color_wheel(self, char):
+        if open_color_wheel(self, char, is_repeat=action.is_repeat):
             return
         chord = bool(action.char_held) and not action.with_shift and self._chord_color(action.char_held, char)
         if not (chord or self._set_color(char, hold=action.is_repeat)) or action.with_shift:

@@ -210,3 +210,19 @@ def test_backslash_again_closes_the_bar_and_keeps_the_color():
             await press(app, "\\")
             assert app.top is None and room.brush_color == picked
     run(go())
+
+
+def test_holding_backslash_opens_the_bar_once_without_flicker():
+    async def go():
+        for name in ("art", "blocks"):
+            app, room = _room(name)
+            await press(app, "\\")
+            for _ in range(6):
+                await press(app, "\\", is_repeat=True)
+                assert isinstance(app.top, ColorBar), "a key repeat neither closes nor reopens the bar"
+            await press(app, "\\")
+            assert app.top is None
+            for _ in range(3):
+                await press(app, "\\", is_repeat=True)
+                assert app.top is None, "still held after closing: the repeat doesn't reopen it"
+    run(go())

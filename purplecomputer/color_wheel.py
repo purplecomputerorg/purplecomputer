@@ -85,12 +85,13 @@ def chip(room) -> str | None:
     return "ready" if can_open(room) else None
 
 
-def open_on(room, char: str = OPEN_KEY, on_close=None) -> bool:
-    """Backslash opens the bar over the room; True when it did. on_close gets
-    the color kept, or None on Esc."""
+def open_on(room, char: str = OPEN_KEY, on_close=None, is_repeat: bool = False) -> bool:
+    """Backslash opens the bar over the room; True when it did, or swallowed a held one's
+    repeat (which would otherwise flicker the bar shut and open). on_close gets the color kept, or None on Esc."""
     if char != OPEN_KEY or not can_open(room):
         return False
-    room.app.push(ColorBar(room.app, room), on_close=on_close)
+    if not is_repeat:
+        room.app.push(ColorBar(room.app, room), on_close=on_close)
     return True
 
 
@@ -144,7 +145,7 @@ class ColorBar(Overlay):
         if isinstance(action, NavigationAction):
             self._move([action.direction, *(action.other_arrows_held or ())])
             return
-        if not getattr(action, "is_down", True) or not isinstance(action, (CharacterAction, ControlAction)):
+        if not isinstance(action, (CharacterAction, ControlAction)) or not getattr(action, "is_down", True) or action.is_repeat:
             return
         kept = None
         if isinstance(action, ControlAction) and action.action == "escape":

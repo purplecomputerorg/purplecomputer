@@ -808,7 +808,7 @@ class ArtRoom(Room):
             direction = action.arrow_held or "right"
             if self._paint_mode and action.with_shift and char in UNSHIFT_MAP:
                 char = UNSHIFT_MAP[char]
-            if open_color_wheel(self, char):
+            if open_color_wheel(self, char, is_repeat=action.is_repeat):
                 return
             if not self._paint_mode:
                 self.type_char(char)

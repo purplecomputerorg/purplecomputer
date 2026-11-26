@@ -141,10 +141,12 @@ const pyramid = (): string[] => {
     ...(row < size - 1 ? ["up"] : []),
   ])];
 };
-// Blocks' camera, Tab held with the arrows: up to look down on the build and halfway around, down low
-// for the other half, then back to the front at the resting tilt.
-const look = (n: number, arrow: string): string[] => repeat(n, `tab+${arrow}`);
-const tour = (): string[] => [...look(3, "up"), "_", ...look(10, "right"), "_", ...look(4, "down"), "_", ...look(10, "right"), ...look(1, "up")];
+// Blocks' camera, Tab held with the arrows, once around in quarters: rising to look down on the build,
+// sweeping down low, staying low, then back up to the resting tilt at the front. Each token is a turn
+// step, then a tilt step with u or d, so the view tilts while it turns instead of only spinning.
+const TOUR = "ru ru ru r r rd rd rd rd r r r r r r ru r r r r";
+const ARROW: Record<string, string> = { r: "right", u: "up", d: "down" };
+const tour = (): string[] => TOUR.split(" ").flatMap((t) => [...t].map((c) => `tab+${ARROW[c]}`));
 const line = (text: string): string[] => [...text.toLowerCase()].map((c) => c === " " ? "space" : c).concat("enter");
 const TYPE_MS = 120;
 

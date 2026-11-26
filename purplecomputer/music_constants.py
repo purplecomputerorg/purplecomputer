@@ -116,11 +116,13 @@ def note_frequency(note_name: str, octave: int) -> float:
 
 
 def instruments() -> list[tuple[str, str]]:
-    """Built-in instruments plus those from installed packs, as (id, display
+    """Built-in instruments, those from installed packs, then the Synth, as (id, display
     name). A pack instrument with a built-in id replaces it, like emoji do."""
     from .content import get_content
+    from . import dial_synth
     extra = {i.id: (i.id, i.name) for i in get_content().instruments}
-    return [extra.pop(i, (i, n)) for i, n in INSTRUMENTS] + list(extra.values())
+    synth = [(dial_synth.ID, dial_synth.NAME)] if dial_synth.available() and dial_synth.ID not in extra else []
+    return [extra.pop(i, (i, n)) for i, n in INSTRUMENTS] + list(extra.values()) + synth
 
 
 # Percussion display names for number row cells

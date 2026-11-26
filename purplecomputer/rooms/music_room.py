@@ -5,11 +5,13 @@ In Letters, a real word typed shows under the grid and Space says it."""
 
 import asyncio
 import math
+import random
 import time
 from functools import lru_cache
 
 import pygame
 
+from .. import dial_synth
 from .. import palette as P
 from ..audio import play_safe
 from ..code_runner import MusicCodeRunner
@@ -21,7 +23,7 @@ from ..mixer import warm_mixer
 from ..speech_filter import is_clean
 from ..music_constants import (
     ALL_KEYS, COLOR_KEYCAP, COLORS, DEFAULT_ROOT_INDEX, FRIENDLY_KEY_NAMES, FRIENDLY_KEYS, GRID_KEYS,
-    INSTRUMENT_ALIASES, PERCUSSION, instruments, pitch_filename, pitch_for,
+    INSTRUMENT_ALIASES, PERCUSSION, instruments, note_frequency, pitch_filename, pitch_for,
 )
 from ..palette import KEY_COLORS, text_color_for
 from .. import paper
@@ -72,6 +74,92 @@ def _rest_clock(r: int, left: float, track: tuple, ink: tuple) -> pygame.Surface
             pygame.draw.lines(s, ink, False, [(c + rad * math.sin(2 * math.pi * left * i / n),
                                                c - rad * math.cos(2 * math.pi * left * i / n)) for i in range(n + 1)], w)
     return _smooth(2 * r + 2, ink, paint)
+
+
+DIAL_COLORS = ("#c79be8", "#f0c94a", "#8ee0c0", "#8cc8ea", "#ec9bd0")   # sound, bright, long, wobble, surprise
+
+
+@lru_cache(maxsize=64)
+def _dial(d: int, dial: int, value: int) -> pygame.Surface:
+    """A Synth dial: a knob whose picture shows what it does, its positions as dots round it, the ones it's up to lit."""
+    n = 0 if dial == dial_synth.SURPRISE else dial_synth.DIALS[dial][1]
+    color, ink, tile = rgb(DIAL_COLORS[dial]), rgb(P.ON_PRIMARY), rgb(P.TILE)
+
+    def at(c, a, r):
+        return c + math.cos(a) * r, c + math.sin(a) * r
+
+    def angle(i):
+        return math.radians(-225 + 270 * i / (n - 1))
+
+    def paint(s, k, c):
+        u = d * k
+        for i in range(n):
+            pygame.draw.circle(s, color if i <= value else rgb(P.LINE), at(c, angle(i), u * 0.44), u * (0.045 if i <= value else 0.03))
+        pygame.draw.circle(s, tile, (c, c), u * 0.34)
+        pygame.draw.circle(s, rgb(P.LINE), (c, c), u * 0.34, width=max(1, round(u * 0.012)))
+        _DIAL_PICTURES[dial](s, u, c, value, color, ink, tile)
+        if n:
+            pygame.draw.circle(s, rgb(P.TEXT), at(c, angle(value), u * 0.27), u * 0.035)
+    return _smooth(d, tile, paint)
+
+
+def _face(s, u, c, shape, color, ink, tile):
+    """Smooth, beepy or buzzy: a round, square or pointy face singing it."""
+    r = u * 0.17
+    if shape == 0:
+        pygame.draw.circle(s, color, (c, c), r)
+    elif shape == 1:
+        pygame.draw.rect(s, color, pygame.Rect(c - r, c - r, 2 * r, 2 * r), border_radius=round(r * 0.25))
+    else:
+        pygame.draw.polygon(s, color, [(c - r * 1.1, c + r * 0.8), (c, c - r * 1.2), (c + r * 1.1, c + r * 0.8)])
+    eye_y = c + (r * 0.15 if shape == 2 else -r * 0.05)
+    for side in (-1, 1):
+        pygame.draw.circle(s, ink, (c + side * r * 0.36, eye_y), u * 0.02)
+    mouth_y = c + r * (0.5 if shape == 2 else 0.4)
+    if shape == 0:
+        pygame.draw.ellipse(s, ink, pygame.Rect(c - r * 0.18, mouth_y - r * 0.2, r * 0.36, r * 0.5))
+    elif shape == 1:
+        pygame.draw.rect(s, ink, pygame.Rect(c - r * 0.4, mouth_y - r * 0.08, r * 0.8, r * 0.2))
+    else:
+        pygame.draw.lines(s, ink, False, [(c - r * 0.4, mouth_y), (c - r * 0.13, mouth_y - r * 0.15),
+                                          (c + r * 0.13, mouth_y), (c + r * 0.4, mouth_y - r * 0.15)], max(1, round(u * 0.018)))
+
+
+def _sun(s, u, c, bright, color, ink, tile):
+    """Dark to bright: a moon, then a sun that grows and gains rays."""
+    if bright == 0:
+        pygame.draw.circle(s, (190, 190, 230), (c, c), u * 0.13)
+        pygame.draw.circle(s, tile, (c + u * 0.07, c - u * 0.04), u * 0.11)
+        return
+    r = u * (0.07 + 0.02 * bright)
+    for i in range(2 * bright):
+        a = 2 * math.pi * i / (2 * bright)
+        pygame.draw.line(s, color, (c + math.cos(a) * (r + u * 0.03), c + math.sin(a) * (r + u * 0.03)),
+                         (c + math.cos(a) * (r + u * 0.07), c + math.sin(a) * (r + u * 0.07)), max(1, round(u * 0.022)))
+    pygame.draw.circle(s, color, (c, c), r)
+
+
+def _bar(s, u, c, long_, color, ink, tile):
+    """Short to long: a bar that stretches."""
+    half, h = u * (0.04 + 0.05 * long_), u * 0.07
+    pygame.draw.rect(s, color, pygame.Rect(c - half, c - h / 2, 2 * half, h), border_radius=round(h / 2))
+
+
+def _wiggle(s, u, c, wobble, color, ink, tile):
+    """Steady to wobbly: a line that waves more."""
+    pts = [(c + x * u * 0.01, c + math.sin(x / 2.6) * wobble * u * 0.03) for x in range(-20, 21)]
+    pygame.draw.lines(s, color, False, pts, max(2, round(u * 0.035)))
+
+
+def _dice(s, u, c, _value, color, ink, tile):
+    """Surprise: a die."""
+    h = u * 0.15
+    pygame.draw.rect(s, color, pygame.Rect(c - h, c - h, 2 * h, 2 * h), border_radius=round(h * 0.45))
+    for dx, dy in ((-1, -1), (1, 1), (0, 0), (1, -1), (-1, 1)):
+        pygame.draw.circle(s, ink, (c + dx * h * 0.5, c + dy * h * 0.5), u * 0.024)
+
+
+_DIAL_PICTURES = (_face, _sun, _bar, _wiggle, _dice)
 
 
 def drum_picture(key: str) -> str:
@@ -142,6 +230,8 @@ class MusicRoom(Room):
         super().__init__(app)
         self.color_state = {k: -1 for k in ALL_KEYS}
         self.instrument_index = 0
+        self.synth = dial_synth.DEFAULT
+        self._last_note = "A"     # the Synth plays it again when a dial turns
         self.root_index = DEFAULT_ROOT_INDEX
         self.letters_mode = False
         self.say_sounds = False
@@ -187,6 +277,7 @@ class MusicRoom(Room):
             self._warmed = True
             import threading
             threading.Thread(target=warm_mixer, daemon=True, name="mixer-warm").start()
+        self._warm_synth()
         self._sync_panels()
 
     def on_leave(self):
@@ -215,7 +306,8 @@ class MusicRoom(Room):
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
         state = {f"k:{k}": v for k, v in self.color_state.items() if v != -1}
-        state.update(instrument=self.instrument_index, root=self.root_index, letters=self.letters_mode, sounds=self.say_sounds)
+        state.update(instrument=self.instrument_index, root=self.root_index, letters=self.letters_mode, sounds=self.say_sounds,
+                     synth=list(self.synth))
         return state | self._tape_state()
 
     def _tape_state(self) -> dict:
@@ -235,6 +327,7 @@ class MusicRoom(Room):
         self.root_index = int(state.get("root", DEFAULT_ROOT_INDEX))
         self.letters_mode = bool(state.get("letters", False))
         self.say_sounds = bool(state.get("sounds", False))
+        self.synth = dial_synth.setting(state.get("synth"))
         self.color_state = {k: -1 for k in ALL_KEYS}
         for key, val in state.items():
             if key.startswith("k:") and key[2:] in self.color_state:
@@ -282,12 +375,17 @@ class MusicRoom(Room):
             self._play_tape(paint=False)
 
     # ---------------------------------------------------------------- sounds
-    def _pitch_stem_for_key(self, key: str):
+    def _pitch_for_key(self, key: str):
         rc = _KEY_TO_RC.get(key)
-        if rc is None:
+        return None if rc is None else pitch_for(rc[0], rc[1], FRIENDLY_KEYS[self.root_index])
+
+    def _note_sound(self, key: str, instrument_id: str):
+        pitch = self._pitch_for_key(key)
+        if pitch is None:
             return None
-        note, octave = pitch_for(rc[0], rc[1], FRIENDLY_KEYS[self.root_index])
-        return pitch_filename(note, octave)
+        if instrument_id == dial_synth.ID:
+            return self.sounds.synth(pitch_filename(*pitch), note_frequency(*pitch), self.synth)
+        return self.sounds.instrument(instrument_id).get(pitch_filename(*pitch))
 
     def play_sound_with_instrument(self, key: str, instrument_index: int, volume_scale: float = 1.0):
         if self.app._effective_volume() == 0:
@@ -295,8 +393,7 @@ class MusicRoom(Room):
         if key.isdigit():
             sound = self.sounds.percussion().get(key)
         else:
-            stem = self._pitch_stem_for_key(key)
-            sound = self.sounds.instrument(self._instrument(instrument_index)[0]).get(stem) if stem else None
+            sound = self._note_sound(key, self._instrument(instrument_index)[0])
         if sound is not None:
             ch = play_safe(sound)
             if ch is not None and volume_scale != 1.0:
@@ -507,6 +604,8 @@ class MusicRoom(Room):
         """A key sounding, by hand, the tape or a loop: its color moves on the same either way."""
         if paint:
             self.next_color(key)
+        if not key.isdigit():
+            self._last_note = key
         self._play_key(key, mode)
         if self.app.active_room == self.name:
             self.app.set_legend(KEY_COLORS.get(key.lower()), fade=True)
@@ -697,6 +796,7 @@ class MusicRoom(Room):
             self.announce(f"Letter {'sounds' if self.say_sounds else 'names'}", LETTER_PICTURES[self.say_sounds])
             self.play_letter("A")
         else:
+            self._warm_synth()
             self.announce(self._instrument_label(self.instrument_index))
             self.play_sound_with_instrument("A", self.instrument_index)
 
@@ -833,12 +933,27 @@ class MusicRoom(Room):
                 return
             if self.letters_mode and self._letters_mash_drop(time.monotonic()):
                 return
+            if lookup.isdigit() and self._synth_on():
+                return self._turn_dial(lookup)
             mode = self._current_mode()
             self.loop.record_event(lookup, mode)
             self._hit(lookup, mode)
             if mode == MODE_MUSIC and self.loop.state != LOOPING:
                 self._tape_add(lookup, time.monotonic(), echo[1])
             self._echo_key(echo[0], echo[1] or lookup.lower())
+
+    def _synth_on(self) -> bool:
+        return not self.letters_mode and self._instrument(self.instrument_index)[0] == dial_synth.ID
+
+    def _warm_synth(self):
+        if self._synth_on():
+            dial_synth.warm()
+
+    def _turn_dial(self, digit: str):
+        """The Synth's number keys turn its dials, and the last note plays again so the change is heard."""
+        self.synth = dial_synth.turn(self.synth, *dial_synth.dial_for_key(digit), random)
+        self.play_sound_with_instrument(self._last_note, self.instrument_index)
+        self.app.invalidate()
 
     def _echo_key(self, way: str, ch: str):
         """Code for a key played: `notes c` for one played by name, which `notes` keeps to the end of its
@@ -1206,10 +1321,15 @@ class MusicRoom(Room):
         ys = [round(top + i * size) for i in range(5)]
         letter_px = max(12, int(size * 0.3))
         named = not on_paper and self._shift_notes()   # Shift down: just the notes it plays, apart from the keys
+        dials = not named and not on_paper and self._synth_on()
         if named:
             self._draw_note_names(g, xs, ys, letter_px)
+        elif dials:
+            self._draw_dials(g, xs, ys, letter_px)
         for row_idx, row in enumerate(() if named else GRID_KEYS):
             melodic = row_idx >= 1
+            if dials and not melodic:
+                continue
             for col_idx, key in enumerate(row):
                 bg = self.get_color(key)
                 note = note_name(col_idx, self._transition_state_for_col(col_idx)[0]) if melodic else None
@@ -1238,6 +1358,18 @@ class MusicRoom(Room):
         if not on_paper and self.code_panel is None:   # the code is its own composition
             gap = round(size * 0.06)
             self._draw_tape(g, pygame.Rect(xs[0], ys[4] + gap, xs[10] - xs[0], round(size * NOTE_STRIP) - gap), size)
+
+    def _draw_dials(self, g, xs, ys, letter_px):
+        """The Synth's number row: a dial over each pair of keys, the keys that turn it either side."""
+        for dial in range(dial_synth.SURPRISE + 1):
+            left, right = xs[2 * dial], xs[2 * dial + 2]
+            span = pygame.Rect(left, ys[0], right - left, ys[1] - ys[0])
+            value = self.synth[dial] if dial < dial_synth.SURPRISE else 0
+            knob = _dial(round(min(span.h * 1.15, span.w * 0.55)), dial, value)
+            g.surface.blit(knob, knob.get_rect(center=span.center))
+            for i, x in enumerate((left + span.w // 10, right - span.w // 10)):
+                key = GRID_KEYS[0][2 * dial + i]
+                g.draw_text(key, round(letter_px * 0.8), x, span.centery, "mono-bold", P.MUTED, anchor="center")
 
     @staticmethod
     def _strip_px(size) -> int:

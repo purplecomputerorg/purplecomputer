@@ -1025,9 +1025,11 @@ class PowerButtonReader:
     """
 
     def __init__(self, callback: Callable[[PowerButtonEvent], Awaitable[None]],
-                 hold_seconds: float = 3):
+                 hold_seconds: float = 3, on_down: Optional[Callable[[], None]] = None):
         self._callback = callback
-        self._hold_seconds = hold_seconds
+        self._on_down = on_down
+        self.hold_seconds = hold_seconds
+        self.held_since: Optional[float] = None  # time.time() of a press still short of a hold
         self._devices: list = []  # All power button evdev devices
         self._running = False
         self._tasks: list[asyncio.Task] = []
@@ -1169,6 +1171,7 @@ class PowerButtonReader:
             self._tasks.append(asyncio.create_task(self._read_loop(dev)))
 
     def _cancel_hold_task(self) -> None:
+        self.held_since = None
         if self._hold_task and not self._hold_task.done():
             self._hold_task.cancel()
         self._hold_task = None
@@ -1176,8 +1179,9 @@ class PowerButtonReader:
     async def _hold_timer(self) -> None:
         """Wait for hold threshold, then emit hold event."""
         try:
-            await asyncio.sleep(self._hold_seconds)
+            await asyncio.sleep(self.hold_seconds)
             # Held long enough: emit hold
+            self.held_since = None
             if self._press_time is not None:
                 await self._callback(PowerButtonEvent(
                     action="hold",
@@ -1214,6 +1218,9 @@ class PowerButtonReader:
                         self._press_time = event.timestamp()
                         self._cancel_hold_task()
                         self._hold_task = asyncio.create_task(self._hold_timer())
+                        self.held_since = time.time()
+                        if self._on_down:
+                            self._on_down()
                     elif event.value == 0:  # release
                         if self._hold_task and not self._hold_task.done():
                             # Released before hold threshold: tap

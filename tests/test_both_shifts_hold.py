@@ -8,6 +8,7 @@ escape/backtick may not work reliably (e.g., some Mac laptops).
 
 import sys
 from pathlib import Path
+import time
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -182,3 +183,26 @@ class TestGrownupHoldsAreOneKeyAlone:
         sm.process(key_down(KeyCode.KEY_A, 0.0))   # its release never arrived
         sm.process(esc_down(30.0))
         assert _after_hold(sm, sm.check_escape_hold, sm._escape_press_time) is True
+
+
+def test_a_grownup_hold_shows_its_bar_only_after_a_kids_press_and_leaves_no_hint():
+    import asyncio
+    from types import SimpleNamespace
+    from purplecomputer.harness import make_app, run
+
+    async def go():
+        app = make_app()
+        await app._handle_raw_key_event(RawKeyEvent(keycode=KeyCode.KEY_ESC, is_down=True, timestamp=time.monotonic()))
+        assert app.hold_progress()[0] == 0 and app._hold_bar() is None, "no bar during a kid's press"
+        app._keyboard_state_machine._escape_press_time -= 2.25
+        fraction, label, _ = app.hold_progress()
+        assert 0.4 < fraction < 0.6 and label.endswith("Parent Menu") and app._hold_bar() is not None
+        assert app._grownup_ring is not None
+        await app._handle_raw_key_event(RawKeyEvent(keycode=KeyCode.KEY_ESC, is_down=False, timestamp=time.monotonic()))
+        await asyncio.sleep(0.1)
+        assert app.hold_progress() is None and app._hold_nudge is None and app._grownup_ring is None
+
+        app._power_button_reader = SimpleNamespace(held_since=time.time() - 2.25, hold_seconds=3)
+        fraction, label, _ = app.hold_progress()
+        assert label.endswith("Turning off") and 0.4 < fraction < 0.6
+    run(go())

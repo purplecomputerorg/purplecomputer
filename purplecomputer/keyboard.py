@@ -857,6 +857,12 @@ class KeyboardStateMachine:
         self._escape_hold_triggered = True
         return True
 
+    def grownup_hold_since(self) -> float | None:
+        """time.time() an Esc or backslash hold began, while it is held alone and hasn't fired."""
+        if not self._escape_hold_triggered and self._escape_press_time is not None:
+            return self._escape_press_time
+        return self._backslash_press_time if not self._backslash_hold_triggered else None
+
     @property
     def space_held(self) -> bool:
         """Check if space is currently held."""

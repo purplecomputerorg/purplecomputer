@@ -22,7 +22,7 @@ from .frame_stats import FrameStats
 from . import palette as P
 from . import printing, stay_awake
 from .constants import (
-    CANVAS_COLS, CANVAS_ROWS, GROWNUP_HOLD_S, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
+    CANVAS_COLS, CANVAS_ROWS, GROWNUP_HOLD_S, ICON_GROWNUPS, ICON_POWER, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
     ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_COMPUTER, ICON_MENU,
     ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, STICKY_SHIFT_GRACE,
     UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
@@ -50,6 +50,7 @@ ARROW_GLYPHS = {"left": LEFT, "up": UP, "down": DOWN, "right": RIGHT}
 ARROW_LIT_S = 0.35            # outlasts the 250ms key-repeat delay, so a held arrow stays lit
 _EDIT_KEYS = {"home", "end", "page_up", "page_down"}
 LETTER_HOLD = 0.5             # a letter held this long shows the mix badge
+GROWNUP_BAR_AFTER_S = 1.5     # a grown-up hold's bar waits past a kid's press, then shows a parent it's working
 CARET_BLINK_S = 0.53          # the classic terminal half-second
 FRAME_S = 1 / 60
 IDLE_POLL_S = 0.1             # an idle screen still answers window events (the parent terminal closing) this fast
@@ -147,7 +148,7 @@ class PurpleApp:
         self._escape_pressed_on = None  # the overlay on top when Esc went down
         self._escape_hold_timer = None
         self._escape_down_at = None
-        self._backslash_hold_timer = None
+        self._backslash_hold_timer = self._grownup_ring = None
         self._lit_arrow = self._lit_arrow_timer = None
         self._held_char = self.held_letter = self._letter_hold_timer = None
         self._sticky_shift_timer = None
@@ -288,7 +289,7 @@ class PurpleApp:
         await self._evdev_reader.start()
         try:
             self._power_button_reader = PowerButtonReader(callback=self._handle_power_button_event,
-                                                          hold_seconds=POWER_HOLD_SHUTDOWN)
+                                                          hold_seconds=POWER_HOLD_SHUTDOWN, on_down=self._watch_grownup_hold)
             await self._power_button_reader.start()
             for dev in self._power_button_reader._devices:
                 _power_log(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
@@ -649,6 +650,7 @@ class PurpleApp:
             self._backslash_hold_timer = None
         if sm.held_char != self._held_char:
             self._track_letter_hold(sm.held_char)
+        self._watch_grownup_hold()
 
     def release_key(self, key: str):
         if self.top:
@@ -669,7 +671,7 @@ class PurpleApp:
     async def _dispatch_keyboard_action(self, action):
         before = self.hold_progress()
         await self._dispatch_action(action)
-        if before and before[0] > 0 and self.hold_progress() is None and \
+        if before and before[0] > 0 and before[2] and self.hold_progress() is None and \
                 isinstance(action, ControlAction) and action.action in ("space", "enter", "tab", "backspace") and not action.is_down:
             self._show_hold_nudge(before[2])
 
@@ -797,9 +799,32 @@ class PurpleApp:
             self.action_parent_menu()
 
     def hold_progress(self):
-        """(fraction, label) for the room's hold gesture in flight, else None.
-        The Esc hold (Parent Menu) shows nothing on purpose: no affordance for kids."""
-        return self.room.hold_progress()
+        """(fraction, label, hint) for the hold gesture in flight, else None."""
+        return self._grownup_hold() or self.room.hold_progress()
+
+    def _grownup_hold(self):
+        """Esc or backslash held alone, or the power button: its bar fills only after GROWNUP_BAR_AFTER_S,
+        and letting go early leaves no hint, so kids aren't taught it."""
+        power = self._power_button_reader
+        for since, total, label in ((self._keyboard_state_machine.grownup_hold_since(), GROWNUP_HOLD_S, f"{ICON_GROWNUPS} Parent Menu"),
+                                    (power and power.held_since, power and power.hold_seconds, f"{ICON_POWER} Turning off")):
+            if since is not None:
+                shown = (time.time() - since - GROWNUP_BAR_AFTER_S) / (total - GROWNUP_BAR_AFTER_S)
+                return min(1.0, max(0.0, shown)), label, None
+        return None
+
+    def _watch_grownup_hold(self):
+        if self._grownup_ring is None and self._grownup_hold():
+            self._grownup_ring = self.timers.every(1 / 30, self._tick_grownup_hold)
+
+    def _tick_grownup_hold(self):
+        if hold := self._grownup_hold():
+            if hold[0] > 0:
+                self.animate(self.hold_bar_patch, "hold")
+            return
+        self._grownup_ring.stop()
+        self._grownup_ring = None
+        self.invalidate()
 
     # ------------------------------------------------------------------ room picker / parent menu
     def _show_room_picker(self):

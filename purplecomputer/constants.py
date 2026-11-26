@@ -68,6 +68,8 @@ ICON_COMPUTER = "\U000F0379"  # nf-md-monitor (this computer, title bar)
 ICON_LAPTOP = "\U000F0322"    # nf-md-laptop (lid status lines)
 ICON_PLUG = "\U000F06A5"      # nf-md-power_plug (plugged in)
 ICON_HOURGLASS = "\U000F051F" # nf-md-timer_sand (countdowns)
+ICON_GROWNUPS = "\U000F0B49"  # nf-md-account_supervisor (the Parent Menu hold)
+ICON_POWER = "\U000F0425"     # nf-md-power (the power button hold)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)

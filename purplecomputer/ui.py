@@ -511,6 +511,7 @@ class Dialog(Overlay):
 
 
 LOOP, KEEP, BACK = "{hints/loop.png}", "{hints/keep.png}", "{hints/go_back.png}"  # keep and back always go together
+STOP = "{hints/stop.png}"
 
 
 class Picker(Dialog):

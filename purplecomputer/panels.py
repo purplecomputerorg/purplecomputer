@@ -24,7 +24,7 @@ from .palette import get_key_color
 from .timeline import SESSION_GAP_S
 from . import color_wheel
 from .gfx import rgb
-from .ui import (AUTO, BACK, CODE_KEYS, DOWN, KEEP, LEFT, LOOP, RIGHT, TURN, UP, TextField, draw_bar, draw_key_hint, draw_marked, key_hint_width,
+from .ui import (AUTO, BACK, CODE_KEYS, DOWN, KEEP, LEFT, LOOP, RIGHT, STOP, TURN, UP, TextField, draw_bar, draw_key_hint, draw_marked, key_hint_width,
                  keycap_size, marked_width)
 
 ROOM_KEYWORDS = {
@@ -678,10 +678,10 @@ class LoopPanel:
     def draw(self, g, rect):
         if self.loop.state == RECORDING:
             left = self.loop.recording_left()
-            draw_status_row(g, rect, "● Recording", P.DANGER, f"{{Space}} {LOOP}   {{Esc}} {{hints/stop.png}}",
+            draw_status_row(g, rect, "● Recording", P.DANGER, f"{{Space}} {LOOP}   {{Esc}} {STOP}",
                             1 - left / self.loop.loop_duration, f"{math.ceil(left)}s")
         elif self.loop.state == LOOPING:
-            draw_status_row(g, rect, f"{LOOP} Looping", P.PRIMARY, "{Esc} {hints/stop.png}",
+            draw_status_row(g, rect, f"{LOOP} Looping", P.PRIMARY, f"{{Esc}} {STOP}",
                             self.loop.loop_progress())
 
 

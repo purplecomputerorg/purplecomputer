@@ -29,7 +29,7 @@ from .. import paper
 from ..gfx import is_one_emoji, mix, rgb
 from ..panels import FOOTER_EM, CodePanel, Echo, LoopPanel
 from ..sounds import SoundBank
-from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, key_hint_width,
+from ..ui import (ABC_PICTURE, CODE_HINT, LOOP, STOP, KID_MATH_KEYS, KID_MATH_REMAP, LEFT, RIGHT, draw_key_hint, key_hint_width,
                   draw_lone_stepper, draw_mode_switch, draw_status_row, HeldKey, hold_status, status_row_h)
 from .base import Room
 
@@ -178,7 +178,7 @@ REST_STEPS = 20               # the tape fades and its clock empties in this man
 NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the middle octave
 SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
 TAPE_HINT = "{Space} replay it"
-STOP_HINT = "{Space} stop"
+STOP_HINT = f"{{Space}} {STOP} stop"
 LAST_SONG_HINT = "{Space} last song"
 RECORD_S = 10.0               # hold Enter with no song to loop: it records this long, then loops what was played
 CLEAR_HINT = "{Backspace} clear"

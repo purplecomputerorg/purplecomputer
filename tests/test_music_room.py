@@ -377,6 +377,33 @@ def test_space_plays_the_tape_back_moving_its_colors_on_but_not_the_tape(monkeyp
     run(go())
 
 
+def test_space_stops_a_replay_and_plays_it_again_once_stopped(monkeypatch):
+    import asyncio
+    from purplecomputer.harness import press
+    from purplecomputer.rooms import music_room
+    monkeypatch.setattr(music_room, "TUNE_GAP_MAX_S", 0.2)
+
+    async def go():
+        app = make_app(room="music")
+        room = app.room
+        played = []
+        monkeypatch.setattr(room, "play_sound_with_instrument", lambda key, instrument, volume_scale=1.0: played.append(key))
+        for key in "qwe":
+            await type_text(app, key)
+            await asyncio.sleep(0.15)
+        played.clear()
+        await press(app, "space")
+        await asyncio.sleep(0.05)
+        assert room._replaying()
+        await press(app, "space")
+        assert not room._replaying() and room._tape_task is None
+        await asyncio.sleep(0.5)
+        assert played == ["Q"], "it stopped after the first note"
+        await press(app, "space")
+        assert room._replaying()
+    run(go())
+
+
 def test_the_letters_tape_underlines_the_word_dims_as_the_rest_grows_and_clears_with_it(monkeypatch):
     import asyncio
     import time

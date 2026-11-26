@@ -178,6 +178,7 @@ REST_STEPS = 20               # the tape fades and its clock empties in this man
 NOTE_ROW = 2                  # Shift plays a note by name on this grid row, the middle octave
 SONG_REST_S = 20.0            # this long without a sound, and the Notes tape clears (still in Time Travel)
 TAPE_HINT = "{Space} replay it"
+STOP_HINT = "{Space} stop"
 LAST_SONG_HINT = "{Space} last song"
 RECORD_S = 10.0               # hold Enter with no song to loop: it records this long, then loops what was played
 CLEAR_HINT = "{Backspace} clear"
@@ -804,8 +805,11 @@ class MusicRoom(Room):
         held = self._typed_at if self.letters_mode else self._tape
         return (WORD_REST_S if self.letters_mode else SONG_REST_S), REST_STEPS, self._active_at if held else None
 
+    def _replaying(self) -> bool:
+        return self._tape_task is not None and not self._tape_task.done()
+
     def _sounding(self) -> bool:
-        return (self._tape_task is not None and not self._tape_task.done()) or self.loop.state != IDLE
+        return self._replaying() or self.loop.state != IDLE
 
     def _busy(self):
         """Something just sounded or changed on the tape: its clock starts over."""
@@ -868,7 +872,11 @@ class MusicRoom(Room):
 
     async def handle(self, action):
         if self._tape_task is not None and getattr(action, "is_down", True) and not getattr(action, "is_repeat", False):
-            self._stop_tape()   # Space starts it over; any other key just stops it
+            replaying = self._replaying()
+            self._stop_tape()   # any key stops it, and Space only stops it, the way a player's Space does
+            if replaying and self.code_panel is None and isinstance(action, ControlAction) and action.action == "space":
+                self.app.invalidate()
+                return
         if self.code_panel is not None:
             result = await self.code_panel.handle(action)
             if result == "tab_fallthrough":
@@ -1102,7 +1110,8 @@ class MusicRoom(Room):
         if self.app._littles_mode:
             return
         tune = self._tune()
-        space = "" if self.letters_mode else TAPE_HINT if tune else LAST_SONG_HINT if self._last_song else ""
+        space = "" if self.letters_mode else STOP_HINT if self._replaying() else TAPE_HINT if tune \
+            else LAST_SONG_HINT if self._last_song else ""
         erase = ERASE_HINT if tune else CLEAR_HINT if space else ""
         hint = "   ".join(h for h in (space, self._hint_text(), erase) if h)
         if hint:

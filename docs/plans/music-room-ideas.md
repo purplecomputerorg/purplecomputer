@@ -2,7 +2,7 @@
 
 Current thinking on extending Music Room to stay fun and interesting across a wide age range, from toddlers banging on keys to older kids who are genuinely into music.
 
-**Status: Active.** Several ideas below have since shipped: looping is the loop station (`loop_station.py`: holding Enter loops the tape, or records first when there is nothing to loop), and multiple instruments cycle with Enter (`INSTRUMENTS` in `music_constants.py`). Chords, held-number beats and progressive hints are still unbuilt.
+**Status: Active.** Several ideas below have since shipped: looping is the loop station (`loop_station.py`: holding Enter loops the tape, or records first when there is nothing to loop), and multiple instruments cycle with Enter (`INSTRUMENTS` in `music_constants.py`), ending on the dial Synth (`dial_synth.py`). Chords, held-number beats and progressive hints are still unbuilt.
 
 ## What Works Now
 
@@ -68,12 +68,6 @@ Music Room already shows hint text at the bottom ("Try pressing letters and numb
 - After replaying: hints about looping, if looping is implemented
 
 Not a tutorial. Just a whisper at the right moment. Young kids can't read it. Older kids glance down and get a nudge toward the next thing to try. Parents watching over their shoulder see it too.
-
-### Multiple Instruments
-
-Swapping the instrument sound (marimba, piano, music box, synth pad) via some discoverable key (F-keys, or a key combo). This multiplies the sonic palette, especially powerful when combined with looping: layer a synth pad chord, then a marimba melody, then a percussion beat.
-
-This is lower priority than the above ideas because it adds the most implementation complexity (generating new sound sets) for depth that mostly only matters once looping exists.
 
 ## What We're Not Building
 

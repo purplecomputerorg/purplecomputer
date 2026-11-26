@@ -218,7 +218,7 @@ def _queue_summary(lpstat_l: str) -> str:
 
 
 def _pretend_printer_info() -> str:
-    """The pretend printer's report: too long for one photo, so Printer check shows its video paging."""
+    """The pretend printer's report: too long for one photo, so Printer check shows its video scroll."""
     ladder = [f"[12:00:{i:02d}] pretend driver {i} of 40: not this one" for i in range(1, 41)]
     return "\n".join(["Queue:", "  printer purple is idle.", "    Alerts: none", "",
                       "USB printers:", "  Pretend Printer [0000:0000] port 1-1, IPP-over-USB: yes", "",

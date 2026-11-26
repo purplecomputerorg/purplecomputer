@@ -110,7 +110,7 @@ unplugged says it didn't print, without a rebuild.
   pages of a Write print as `print2.png`, `print3.png`, ...). The app also
   shows the pages full-screen until a key (arrows turn pages); the test VM's
   `run` turns this pretend printer on. Its Printer check report is too long for
-  one photo, so after a test page the screen asks for a video and pages itself.
+  one photo, so after a test page the screen asks for a video and scrolls itself, looping until an arrow key takes over.
 - `tests/test_printing.py` covers the card, the pages and the pacing;
   `tests/test_print_healing.py` the watcher's clocks and what it does;
   `tests/test_printer_setup.py` the setup script, heal path included, against a

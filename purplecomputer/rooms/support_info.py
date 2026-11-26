@@ -5,6 +5,7 @@ laid out for a photo or a scrolling video sent to support."""
 
 import textwrap
 import threading
+import time
 
 import pygame
 
@@ -60,15 +61,19 @@ class _ScrollablePage(Dialog):
                 break
         self.rows = max(1, rect.h // lh)
         self.fits = len(self.lines) <= self.rows
-        y = rect.y
-        for line in self.lines[self.offset:self.offset + self.rows]:
+        start = int(self.offset)
+        y = rect.y - round((self.offset - start) * lh)  # a fractional offset is partway through a line
+        clip = g.surface.get_clip()
+        g.surface.set_clip(rect.clip(clip))
+        for line in self.lines[start:start + self.rows + 1]:
             g.draw_text(line or " ", px, rect.x, y, "mono", P.TEXT)
             y += lh
+        g.surface.set_clip(clip)
 
     async def handle(self, action):
         if isinstance(action, NavigationAction) and action.direction in ("up", "down"):
             step = -SCROLL_LINES if action.direction == "up" else SCROLL_LINES
-            self.offset = max(0, min(max(0, len(self.lines) - 5), self.offset + step))
+            self.offset = max(0, min(max(0, len(self.lines) - 5), int(self.offset) + step))
             self.app.invalidate()
         elif isinstance(action, ControlAction) and action.is_down and action.action == "escape":
             self.close()
@@ -127,14 +132,15 @@ WAIT_CAP_S = 120  # longest the screen asks to wait before a photo, whatever the
 WAITING = "Printing a test page. Please wait, don't take a photo yet."
 PRINTED = "The printer finished the test page."
 NOT_YET = "The test page hasn't printed yet."
-PAGE_S = 5  # each page's time on screen while it pages itself for a video
+SCROLL_LPS = 2  # lines a second while it scrolls itself for a video
+REST_S = 2  # held at the top and at the bottom before it moves on
 SEND = " of this screen and send it to " + SUPPORT_EMAIL
 NO_CIRCLE = "Didn't get a page with a purple circle? "
 
 
 class PrinterCheckScreen(_ScrollablePage):
     """Tells the parent what to do at the top: press Enter, wait, or take the photo now.
-    A report too long for one photo asks for a video and pages itself."""
+    A report too long for one photo asks for a video and scrolls itself."""
     title = "Printer check"
     hint = f"{{Enter}} print a test page   {UP} {DOWN} scroll   {{Esc}} back"
     text_vh = (2.1, 1.9, 1.75, 1.6)  # shrinks so one photo holds the whole report
@@ -143,7 +149,8 @@ class PrinterCheckScreen(_ScrollablePage):
         self.heard = []  # what the test page did, newest last
         self.printed = None  # None while no test page has ended
         self.waiting = None  # the cap's timer while a test page is on its way
-        self.pager = None  # turns the pages for a video
+        self.pager = None  # scrolls the report for a video
+        self.since = 0.0  # when the pager started
         self.scrolled = False  # the arrows took over from the pager
         super().__init__(app)
 
@@ -183,8 +190,14 @@ class PrinterCheckScreen(_ScrollablePage):
     def send(self) -> str:
         if self.fits:
             return "Take a photo" + SEND
-        pages = -(-(len(self.lines) - 1) // max(1, self.rows - 1))
-        return f"Record a {pages * PAGE_S}-second video" + SEND
+        seconds = 5 * -(-self._cycle_s() // 5)
+        return f"Record a {seconds:.0f}-second video" + SEND + ". It keeps looping, so start recording any time."
+
+    def _travel(self) -> int:
+        return max(0, len(self.lines) - self.rows)
+
+    def _cycle_s(self) -> float:
+        return 2 * REST_S + self._travel() / SCROLL_LPS
 
     def _hear(self, text: str):
         self.heard.append(text)
@@ -215,16 +228,16 @@ class PrinterCheckScreen(_ScrollablePage):
 
     def _page_for_video(self, wanted: bool):
         if wanted and not self.pager:
-            self.pager = self.app.timers.every(PAGE_S, self._next_page)
+            self.since = time.monotonic()
+            self.pager = self.app.timers.every(1 / 30, self._scroll)
         elif self.pager and not wanted:
             self.pager.stop()
             self.pager = None
 
-    def _next_page(self):
-        """Over and over from the top, so a video started at any moment gets every page."""
-        self.offset += self.rows - 1  # one line repeats, so no line falls between two frames
-        if self.offset >= len(self.lines) - 1:
-            self.offset = 0
+    def _scroll(self, now: float | None = None):
+        """Over and over from the top, so a video started at any moment gets every line."""
+        t = ((now or time.monotonic()) - self.since) % self._cycle_s()
+        self.offset = max(0.0, min(self._travel(), (t - REST_S) * SCROLL_LPS))
         self.app.invalidate()
 
     async def handle(self, action):

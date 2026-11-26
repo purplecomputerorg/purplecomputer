@@ -66,17 +66,20 @@ def test_printer_check_shrinks_its_report_to_fit_one_photo(monkeypatch):
     run(go())
 
 
-def test_a_report_too_long_for_a_photo_asks_for_a_video_and_turns_its_pages(monkeypatch):
+def test_a_report_too_long_for_a_photo_asks_for_a_video_and_scrolls_itself(monkeypatch):
+    from purplecomputer.rooms.support_info import REST_S, SCROLL_LPS
     async def go():
         page, drawn = _printer_check(80, monkeypatch)
         assert "line 79" not in drawn and page.pager
-        pages = -(-79 // (page.rows - 1))
-        assert page.headline()[1].startswith(f"Record a {pages * 5}-second video")
-        seen = set()
-        for _ in range(pages):
-            seen.update(page.lines[page.offset:page.offset + page.rows])
-            page._next_page()
-        assert len(seen) == 80 and page.offset == 0
+        cycle = 2 * REST_S + (80 - page.rows) / SCROLL_LPS
+        assert page.headline()[1].startswith(f"Record a {5 * -(-cycle // 5):.0f}-second video")
+        seen, offsets = set(), []
+        for i in range(int(cycle * 10) + 1):
+            page._scroll(page.since + i / 10)
+            offsets.append(page.offset)
+            seen.update(page.lines[int(page.offset):int(page.offset) + page.rows])
+        assert len(seen) == 80 and offsets == sorted(offsets[:-1]) + [0.0]
+        assert any(o % 1 for o in offsets)  # moves partway through lines, not a line at a time
         await press(page.app, "down")
         page.draw(page.app.g)
         assert not page.pager  # the arrows take over

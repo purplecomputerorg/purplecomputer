@@ -68,7 +68,7 @@ def nearest(centers: list, x: float) -> int:
 
 def draw_card(g, r, icon, label, lines=(), selected=False, dim=False, lit=False, badge=""):
     """Glyph above name, short lines beneath. Selected is filled, lit is outlined and shaded, dim is quiet.
-    Rows sit where they would on a room card, scaled to this card's height; a wide card puts the glyph beside them."""
+    Rows sit a fixed em apart, centered as one stack, so a shorter card never crowds them; a wide card puts the glyph beside them."""
     em = g.em
     if selected:
         g.rect(P.PRIMARY, r, radius=em(0.6))
@@ -82,15 +82,18 @@ def draw_card(g, r, icon, label, lines=(), selected=False, dim=False, lit=False,
                                                  for t in lines]
     if r.w > 2 * r.h:
         return _draw_beside(g, r, icon, ink, rows, selected)
-    at = lambda v: r.y + round(em(v) * r.h / em(CARD_H))
+    ys = [0.0, 2.0]
+    for text, *_ in rows[1:2]:
+        ys.append(ys[-1] + (2.1 if KEY_RE.search(text) else 1.6))
+    at = lambda v: r.centery - em(ys[-1]) // 2 + em(v)
     if icon == "colors":
         dot = color_wheel.disc(round(em(1.75)))
-        g.surface.blit(dot, dot.get_rect(center=(r.centerx, at(2.0))))
+        g.surface.blit(dot, dot.get_rect(center=(r.centerx, at(0))))
     else:
-        g.draw_text(icon, em(1.75), r.centerx, at(2.0), "nerd", ink, anchor="center")
+        g.draw_text(icon, em(1.75), r.centerx, at(0), "nerd", ink, anchor="center")
     if badge:
         g.draw_text(badge, em(1.1), r.right - em(1.0), r.y + em(1.0), "nerd", fg if selected else P.ACCENT, anchor="center")
-    for (text, px, face, color), y in zip(rows, (4.1, 5.9)):
+    for (text, px, face, color), y in zip(rows, ys[1:]):
         _draw_part(g, text, px, face, color, r.centerx, at(y), "center", selected)
 
 

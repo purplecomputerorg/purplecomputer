@@ -206,3 +206,18 @@ def test_a_grownup_hold_shows_its_bar_only_after_a_kids_press_and_leaves_no_hint
         fraction, label, _ = app.hold_progress()
         assert label.endswith("Turning off") and 0.4 < fraction < 0.6
     run(go())
+
+
+def test_the_grownup_bar_shows_over_the_room_picker():
+    from purplecomputer.harness import make_app, run
+    from purplecomputer import palette as P
+
+    async def go():
+        app = make_app()
+        app._show_room_picker()
+        await app._handle_raw_key_event(RawKeyEvent(keycode=KeyCode.KEY_ESC, is_down=True, timestamp=time.monotonic()))
+        app._keyboard_state_machine._escape_press_time -= 2.25
+        app._draw()
+        strip = app._hold_bar()[0]
+        assert tuple(app.g.surface.get_at((strip.x + 2, strip.centery)))[:3] == P.rgb(P.SURFACE)[:3]
+    run(go())

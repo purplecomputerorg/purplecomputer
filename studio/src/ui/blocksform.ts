@@ -7,7 +7,7 @@ import { isEmoji, openEmojiPicker } from "./emojipicker";
 import { sticker } from "./stickers";
 import { WIDER } from "./view";
 
-export { BLOCK_STARTERS, blocksSource, WHOLE_ROOM_BLOCKS } from "../blocks";
+export { BLOCK_STARTERS, blocksSource } from "../blocks";
 
 const KEY_ROWS = ["1234567890", "qwertyuiop", "asdfghjkl;", "zxcvbnm,./"];
 const MORE_KEYS: [string, string][] = [["space", "Space"], ["enter", "Enter"], ["up", "↑"], ["down", "↓"], ["left", "←"], ["right", "→"]];
@@ -159,29 +159,7 @@ const zoom = (by: number) => (ws: Blockly.WorkspaceSvg) => {
 };
 
 let current: Blockly.WorkspaceSvg | null = null;
-let shown: Blockly.WorkspaceSvg | null = null;
-
 const purpleTheme = () => Blockly.registry.getObject(Blockly.registry.Type.THEME, "purple") as Blockly.Theme;
-
-// Blocks to look at, not change: as tall as their box, cut off on the right like the Python beside them.
-export function blocksPicture(workspace: object): HTMLElement {
-  defineBlocks();
-  addPatterns();
-  const div = h("div", {});
-  requestAnimationFrame(() => {
-    shown?.dispose();
-    shown = Blockly.inject(div, { renderer: "zelos", theme: purpleTheme(), media: "blockly/", sounds: false,
-      move: { scrollbars: false, drag: false, wheel: false }, zoom: { controls: false, wheel: false, maxScale: 0.8, minScale: 0.2 } });
-    Blockly.serialization.workspaces.load(workspace, shown);
-    const ws = shown;
-    void Blockly.renderManagement.finishQueuedRenders().then(() => {
-      const box = ws.getBlocksBoundingBox();
-      ws.setScale(Math.min(0.8, (div.clientHeight - 16) / (box.bottom - box.top)));
-      ws.translate(8 - box.left * ws.scale, 8 - box.top * ws.scale);
-    });
-  });
-  return div;
-}
 
 // The editor for made.workspace, saving each change into it and handing back the Python.
 export function blocksForm(made: { workspace: object }, onEdit: (source: string) => void): HTMLElement {

@@ -23,7 +23,7 @@ import type { View } from "./view";
 
 type FormMade = Exclude<Made, { kind: "blocks" }>;
 const sourceOf = (made: FormMade) => (made.kind === "rules" ? rulesSource(made.rules) : templateSource(made));
-// Blockly comes in only when a room made of blocks opens.
+// Blocks aren't offered any more, but a room made from them still opens in them, and only then does Blockly load.
 const blocks = () => import("./blocksform");
 const href = (name: string) => `#rooms/${encodeURIComponent(name)}`;
 // A room name nothing else uses; a try being replaced doesn't count.
@@ -83,11 +83,9 @@ function list(): View {
       h("div", { class: "pick featured write-own" }, purpleEmoji(IDEA, "pick-icon"),
         h("div", {},
           h("b", {}, "Make any room you can imagine"),
-          h("p", {}, "Any game or toy. Purple comes with the pieces every room needs, so a whole room can be a few lines of Python, written by you or with an AI helper, or a few blocks snapped together."),
+          h("p", {}, "Any game or toy. Purple comes with the pieces every room needs, so a whole room can be a few lines of Python, written by you or with an AI helper."),
           h("ul", {}, ...["Key presses and timers", "Emoji, pictures, text", "Notes, drums, sounds", "Talking out loud", "Remembering for next time"].map((t) => h("li", {}, t))),
-          h("div", { class: "row" },
-            h("button", { class: "btn", onclick: startPython }, "Start with Python"),
-            h("button", { class: "btn", onclick: startBlocks }, "Start with blocks"))),
+          h("div", { class: "row" }, h("button", { class: "btn", onclick: startPython }, "Start with Python"))),
         wholeRoom()),
       h("h3", {}, "Or start from one of these"),
       h("div", { class: "cards big" }, ...starters.slice(0, FEATURED).map((s) => choice(s, s.go))),
@@ -112,19 +110,9 @@ const WHOLE_ROOM = [
 ];
 
 const startPython = () => tryRoom("my-room", null);
-const startBlocks = () => void blocks().then((m) => {
-  const workspace = m.BLOCK_STARTERS[0].workspace();
-  tryRoom("my-room", { kind: "blocks", workspace }, m.blocksSource(workspace));
-});
 
-// A whole room, as Python and as the same room in blocks, which draw once Blockly has loaded. Each starts a room that way.
-function wholeRoom(): HTMLElement {
-  const picture = h("div", { class: "blocks-picture" });
-  void blocks().then((m) => picture.replaceChildren(m.blocksPicture(m.WHOLE_ROOM_BLOCKS())));
-  return h("figure", {}, h("figcaption", {}, "A whole room: every key puts a dog on the screen"),
-    h("div", { class: "whole-room" }, ...([["Python", h("pre", {}, ...WHOLE_ROOM), startPython], ["Blocks", picture, startBlocks]] as const).map(([label, pane, go]) =>
-      h("button", { type: "button", title: `Start with ${label.toLowerCase()}`, onclick: go }, pane, h("span", {}, label)))));
-}
+const wholeRoom = () => h("figure", {}, h("figcaption", {}, "A whole room: every key puts a dog on the screen"),
+  h("button", { type: "button", class: "whole-room", title: "Start with Python", onclick: startPython }, h("pre", {}, ...WHOLE_ROOM)));
 
 // The starters' order on the Rooms page: the liveliest first, and the first FEATURED of them shown big.
 const ORDER = ["story", "explore", "memory", "beats", "garden", "picture-quiz", "picture-keyboard", "snake"];

@@ -760,12 +760,8 @@ h3 + .cards { margin-top: 0; }
 .write-own figcaption { font-size: 11px; font-weight: 600; color: var(--purple); margin: 0 0 4px 2px; }
 .write-own pre { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--tui-bg); color: #e8defa; font: 12.5px/1.55 var(--mono); }
 .write-own .call { color: #c39cf0; font-weight: 700; }
-.whole-room { display: flex; gap: 8px; }
-.whole-room > button { display: grid; gap: 3px; justify-items: center; padding: 0; border: none; background: none; font: 600 11px var(--sans); color: var(--purple); cursor: pointer; }
-.whole-room > button:hover :is(pre, .blocks-picture) { border-color: var(--purple); box-shadow: 0 2px 8px rgba(92, 45, 145, 0.15); }
-.whole-room pre { width: 160px; height: 137px; box-sizing: border-box; overflow: hidden; }
-.blocks-picture { width: 180px; height: 137px; box-sizing: border-box; border-radius: 10px; overflow: hidden; background: #fff; border: 1px solid var(--border); pointer-events: none; }
-.blocks-picture > div { width: 100%; height: 100%; }
+.whole-room { display: block; padding: 0; border: none; background: none; text-align: left; cursor: pointer; }
+.whole-room:hover pre { box-shadow: 0 2px 8px rgba(92, 45, 145, 0.15); }
 @container pane (width < 720px) { .write-own figure { display: none; } }
 @container pane (width < 560px) {
   .write-own { grid-template-columns: 1fr; padding: 14px 16px; }

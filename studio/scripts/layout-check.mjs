@@ -37,7 +37,7 @@ const scenes = ["#pictures", "#words", "#keys", "#instruments", "#colors", "#roo
 await go("#rooms");
 const starters = await p.$$eval(".cards .pick", (els) => els.length);
 for (let i = 0; i < starters; i++) scenes.push({ name: `starter${i}`, open: async () => { await go("#rooms"); await click(".cards .pick", i); await sleep(1500); } });
-for (const label of ["Start with Python", "Start with blocks"]) scenes.push({ name: label, open: async () => { await go("#rooms"); await click(".write-own .btn", label); await sleep(2500); } });
+scenes.push({ name: "Start with Python", open: async () => { await go("#rooms"); await click(".write-own .btn", "Start with Python"); await sleep(2500); } });
 
 // Runs in the page: elements past their card's or the pane's edge, and boxes that cut off what's inside them.
 function audit() {

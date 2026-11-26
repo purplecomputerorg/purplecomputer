@@ -498,13 +498,7 @@ export function blocksSource(state: object): string {
 const workspace = (vars: string[], ...tops: BJ[]): object =>
   ({ blocks: { languageVersion: 0, blocks: tops }, variables: vars.map((name) => ({ name, id: name })) });
 
-// The Rooms page's whole room, in blocks: every key puts a dog on the screen.
-export const WHOLE_ROOM_BLOCKS = () => workspace([], on("purple_on_key", { WHICH: "any" }, {},
-  b("purple_put", { SIZE: "1" }, { THING: thing("🐶"), SQUARE: b("purple_random_square", { WHERE: "empty" }) }),
-  b("purple_drum", { DRUM: "bongo" }),
-  b("purple_say", {}, { TEXT: pressed() })));
-
-// The same starters as a Python room's, in the same order: Flowers first, where "Start with blocks" opens.
+// The same starters as a Python room's, in the same order.
 const keySquare = (key: BJ) => b("purple_key_spot", {}, { KEY: key });
 const potAt = () => b("purple_put", { SIZE: "8" }, { THING: b("purple_pot_color"), SQUARE: square(9, 2) });
 export const BLOCK_STARTERS: { icon: string; label: string; workspace: () => object }[] = [

@@ -1,5 +1,3 @@
-import random
-
 import numpy as np
 
 from purplecomputer import dial_synth
@@ -19,12 +17,10 @@ def test_long_makes_the_note_longer():
     assert lengths == sorted(lengths) and lengths[0] < lengths[-1]
 
 
-def test_dials_stop_at_their_ends_and_surprise_rolls_them_all():
-    assert dial_synth.turn((0, 0, 0, 0), *dial_synth.dial_for_key("1"), random) == (0, 0, 0, 0)
-    assert dial_synth.turn((2, 4, 4, 3), *dial_synth.dial_for_key("8"), random) == (2, 4, 4, 3)
-    assert dial_synth.turn((0, 0, 0, 0), *dial_synth.dial_for_key("4"), random) == (0, 1, 0, 0)
-    rolled = {dial_synth.turn(dial_synth.DEFAULT, *dial_synth.dial_for_key("0"), random.Random(seed)) for seed in range(20)}
-    assert len(rolled) > 1
+def test_each_dial_steps_round_and_back_to_its_start():
+    assert dial_synth.turn((0, 0, 0, 0), "2") == (0, 1, 0, 0)
+    assert dial_synth.turn((2, 4, 4, 3), "1") == (0, 4, 4, 3)
+    assert dial_synth.turn((2, 4, 4, 3), "4") == (2, 4, 4, 0)
 
 
 def test_a_save_with_odd_dials_starts_them_over():
@@ -37,7 +33,16 @@ def test_synth_comes_after_the_other_instruments():
     assert instruments()[-1] == (dial_synth.ID, dial_synth.NAME)
 
 
-def test_in_synth_the_number_keys_turn_dials_and_stay_off_the_song(monkeypatch):
+def test_the_picture_shows_every_dial():
+    base = dial_synth.picture(dial_synth.DEFAULT)
+    assert max(map(abs, base)) <= 1.0
+    for key in dial_synth.KEYS:
+        assert dial_synth.picture(dial_synth.turn(dial_synth.DEFAULT, key)) != base
+    short, long_ = (dial_synth.picture((2, 2, n, 0)) for n in (0, 4))
+    assert max(map(abs, short[-50:])) < max(map(abs, long_[-50:]))
+
+
+def test_in_synth_1_to_4_turn_dials_off_the_song_and_the_rest_do_nothing(monkeypatch):
     played = []
 
     async def go():
@@ -45,7 +50,7 @@ def test_in_synth_the_number_keys_turn_dials_and_stay_off_the_song(monkeypatch):
         room = app.room
         monkeypatch.setattr(room, "play_sound_with_instrument", lambda key, i, scale=1.0: played.append(key))
         room.instrument_index = len(instruments()) - 1
-        await type_text(app, "g4")
+        await type_text(app, "g27")
         assert room.synth == (0, 3, 1, 0)
         assert played == ["G", "G"]   # the dial plays the last note again
         assert [k for k, *_ in room._tape] == ["G"]

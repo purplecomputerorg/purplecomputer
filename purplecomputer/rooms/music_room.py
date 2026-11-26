@@ -5,7 +5,6 @@ In Letters, a real word typed shows under the grid and Space says it."""
 
 import asyncio
 import math
-import random
 import time
 from functools import lru_cache
 
@@ -76,13 +75,14 @@ def _rest_clock(r: int, left: float, track: tuple, ink: tuple) -> pygame.Surface
     return _smooth(2 * r + 2, ink, paint)
 
 
-DIAL_COLORS = ("#c79be8", "#f0c94a", "#8ee0c0", "#8cc8ea", "#ec9bd0")   # sound, bright, long, wobble, surprise
+DIAL_COLORS = ("#c79be8", "#f0c94a", "#8ee0c0", "#8cc8ea")   # sound, bright, long, wobble
 
 
 @lru_cache(maxsize=64)
 def _dial(d: int, dial: int, value: int) -> pygame.Surface:
-    """A Synth dial: a knob whose picture shows what it does, its positions as dots round it, the ones it's up to lit."""
-    n = 0 if dial == dial_synth.SURPRISE else dial_synth.DIALS[dial][1]
+    """A Synth dial like a volume knob: a track round it that fills up to where it's turned, a tick for each
+    position, a notch on the knob pointing at it, and a picture of what it does in the middle."""
+    n = dial_synth.DIALS[dial][1]
     color, ink, tile = rgb(DIAL_COLORS[dial]), rgb(P.ON_PRIMARY), rgb(P.TILE)
 
     def at(c, a, r):
@@ -91,38 +91,35 @@ def _dial(d: int, dial: int, value: int) -> pygame.Surface:
     def angle(i):
         return math.radians(-225 + 270 * i / (n - 1))
 
+    def arc(s, c, r, upto, ink_, w):
+        steps = max(2, round(upto * 12))
+        pts = [at(c, angle(upto * j / steps), r) for j in range(steps + 1)]
+        pygame.draw.lines(s, ink_, False, pts, w)
+        for p in (pts[0], pts[-1]):
+            pygame.draw.circle(s, ink_, p, w / 2)
+
     def paint(s, k, c):
         u = d * k
+        w = round(u * 0.07)
+        arc(s, c, u * 0.415, n - 1, rgb(mix(P.LINE, P.TILE, 0.45)), w)
+        arc(s, c, u * 0.415, value, color, w)
         for i in range(n):
-            pygame.draw.circle(s, color if i <= value else rgb(P.LINE), at(c, angle(i), u * 0.44), u * (0.045 if i <= value else 0.03))
-        pygame.draw.circle(s, tile, (c, c), u * 0.34)
+            pygame.draw.line(s, color if i <= value else rgb(P.LINE), at(c, angle(i), u * 0.46), at(c, angle(i), u * 0.5),
+                             round(u * 0.025))
+        pygame.draw.circle(s, rgb(P.FIELD), (c, c), u * 0.34)
         pygame.draw.circle(s, rgb(P.LINE), (c, c), u * 0.34, width=max(1, round(u * 0.012)))
-        _DIAL_PICTURES[dial](s, u, c, value, color, ink, tile)
-        if n:
-            pygame.draw.circle(s, rgb(P.TEXT), at(c, angle(value), u * 0.27), u * 0.035)
+        _DIAL_PICTURES[dial](s, u, c, value, color, ink, rgb(P.FIELD))
+        pygame.draw.line(s, rgb(P.TEXT), at(c, angle(value), u * 0.25), at(c, angle(value), u * 0.33), round(u * 0.045))
     return _smooth(d, tile, paint)
 
 
-def _face(s, u, c, shape, color, ink, tile):
-    """Smooth, beepy or buzzy: a round, square or pointy face singing it."""
-    r = u * 0.17
-    if shape == 0:
-        pygame.draw.circle(s, color, (c, c), r)
-    elif shape == 1:
-        pygame.draw.rect(s, color, pygame.Rect(c - r, c - r, 2 * r, 2 * r), border_radius=round(r * 0.25))
-    else:
-        pygame.draw.polygon(s, color, [(c - r * 1.1, c + r * 0.8), (c, c - r * 1.2), (c + r * 1.1, c + r * 0.8)])
-    eye_y = c + (r * 0.15 if shape == 2 else -r * 0.05)
-    for side in (-1, 1):
-        pygame.draw.circle(s, ink, (c + side * r * 0.36, eye_y), u * 0.02)
-    mouth_y = c + r * (0.5 if shape == 2 else 0.4)
-    if shape == 0:
-        pygame.draw.ellipse(s, ink, pygame.Rect(c - r * 0.18, mouth_y - r * 0.2, r * 0.36, r * 0.5))
-    elif shape == 1:
-        pygame.draw.rect(s, ink, pygame.Rect(c - r * 0.4, mouth_y - r * 0.08, r * 0.8, r * 0.2))
-    else:
-        pygame.draw.lines(s, ink, False, [(c - r * 0.4, mouth_y), (c - r * 0.13, mouth_y - r * 0.15),
-                                          (c + r * 0.13, mouth_y), (c + r * 0.4, mouth_y - r * 0.15)], max(1, round(u * 0.018)))
+def _shape(s, u, c, shape, color, ink, tile):
+    """Smooth, square or buzzy: two waves of it."""
+    def y(x):
+        f = x % 1
+        return (math.sin(2 * math.pi * f), 1 if f < 0.5 else -1, 1 - 2 * f)[shape]
+    pts = [(c - u * 0.2 + i * u * 0.005, c - y(i / 40) * u * 0.08) for i in range(81)]
+    pygame.draw.lines(s, color, False, pts, max(2, round(u * 0.035)))
 
 
 def _sun(s, u, c, bright, color, ink, tile):
@@ -139,27 +136,19 @@ def _sun(s, u, c, bright, color, ink, tile):
     pygame.draw.circle(s, color, (c, c), r)
 
 
-def _bar(s, u, c, long_, color, ink, tile):
-    """Short to long: a bar that stretches."""
-    half, h = u * (0.04 + 0.05 * long_), u * 0.07
-    pygame.draw.rect(s, color, pygame.Rect(c - half, c - h / 2, 2 * half, h), border_radius=round(h / 2))
+def _dots(s, u, c, long_, color, ink, tile):
+    """Short to long: one dot more for each step."""
+    for i in range(long_ + 1):
+        pygame.draw.circle(s, color, (c + (i - long_ / 2) * u * 0.085, c), u * 0.032)
 
 
 def _wiggle(s, u, c, wobble, color, ink, tile):
-    """Steady to wobbly: a line that waves more."""
-    pts = [(c + x * u * 0.01, c + math.sin(x / 2.6) * wobble * u * 0.03) for x in range(-20, 21)]
+    """A little wobble to a lot: a line that waves more and faster."""
+    pts = [(c + x * u * 0.01, c + math.sin(x / (3.2 - 0.5 * wobble)) * (0.5 + wobble) * u * 0.022) for x in range(-20, 21)]
     pygame.draw.lines(s, color, False, pts, max(2, round(u * 0.035)))
 
 
-def _dice(s, u, c, _value, color, ink, tile):
-    """Surprise: a die."""
-    h = u * 0.15
-    pygame.draw.rect(s, color, pygame.Rect(c - h, c - h, 2 * h, 2 * h), border_radius=round(h * 0.45))
-    for dx, dy in ((-1, -1), (1, 1), (0, 0), (1, -1), (-1, 1)):
-        pygame.draw.circle(s, ink, (c + dx * h * 0.5, c + dy * h * 0.5), u * 0.024)
-
-
-_DIAL_PICTURES = (_face, _sun, _bar, _wiggle, _dice)
+_DIAL_PICTURES = (_shape, _sun, _dots, _wiggle)
 
 
 def drum_picture(key: str) -> str:
@@ -933,8 +922,8 @@ class MusicRoom(Room):
                 return
             if self.letters_mode and self._letters_mash_drop(time.monotonic()):
                 return
-            if lookup.isdigit() and self._synth_on():
-                return self._turn_dial(lookup)
+            if lookup.isdigit() and self._synth_on():   # 1 to 4 turn the dials; the rest of the row is the note's picture
+                return self._turn_dial(lookup) if lookup in dial_synth.KEYS else None
             mode = self._current_mode()
             self.loop.record_event(lookup, mode)
             self._hit(lookup, mode)
@@ -950,8 +939,8 @@ class MusicRoom(Room):
             dial_synth.warm()
 
     def _turn_dial(self, digit: str):
-        """The Synth's number keys turn its dials, and the last note plays again so the change is heard."""
-        self.synth = dial_synth.turn(self.synth, *dial_synth.dial_for_key(digit), random)
+        """1 to 4 turn the Synth's dials, and the last note plays again so the change is heard."""
+        self.synth = dial_synth.turn(self.synth, digit)
         self.play_sound_with_instrument(self._last_note, self.instrument_index)
         self.app.invalidate()
 
@@ -1328,9 +1317,9 @@ class MusicRoom(Room):
             self._draw_dials(g, xs, ys, letter_px)
         for row_idx, row in enumerate(() if named else GRID_KEYS):
             melodic = row_idx >= 1
-            if dials and not melodic:
-                continue
             for col_idx, key in enumerate(row):
+                if dials and not melodic:
+                    continue
                 bg = self.get_color(key)
                 note = note_name(col_idx, self._transition_state_for_col(col_idx)[0]) if melodic else None
                 tile = pygame.Rect(xs[col_idx], ys[row_idx], xs[col_idx + 1] - xs[col_idx], ys[row_idx + 1] - ys[row_idx])
@@ -1360,16 +1349,23 @@ class MusicRoom(Room):
             self._draw_tape(g, pygame.Rect(xs[0], ys[4] + gap, xs[10] - xs[0], round(size * NOTE_STRIP) - gap), size)
 
     def _draw_dials(self, g, xs, ys, letter_px):
-        """The Synth's number row: a dial over each pair of keys, the keys that turn it either side."""
-        for dial in range(dial_synth.SURPRISE + 1):
-            left, right = xs[2 * dial], xs[2 * dial + 2]
-            span = pygame.Rect(left, ys[0], right - left, ys[1] - ys[0])
-            value = self.synth[dial] if dial < dial_synth.SURPRISE else 0
-            knob = _dial(round(min(span.h * 1.15, span.w * 0.55)), dial, value)
-            g.surface.blit(knob, knob.get_rect(center=span.center))
-            for i, x in enumerate((left + span.w // 10, right - span.w // 10)):
-                key = GRID_KEYS[0][2 * dial + i]
-                g.draw_text(key, round(letter_px * 0.8), x, span.centery, "mono-bold", P.MUTED, anchor="center")
+        """The Synth's dials, each in the place of the number key that turns it, that number under it."""
+        h = ys[1] - ys[0]
+        for dial, key in enumerate(dial_synth.KEYS):
+            cx = (xs[dial] + xs[dial + 1]) // 2
+            knob = _dial(round(h * 0.92), dial, self.synth[dial])
+            g.surface.blit(knob, knob.get_rect(center=(cx, ys[0] + round(h * 0.4))))
+            g.draw_text(key, round(letter_px * 0.75), cx, ys[1] - round(h * 0.1), "mono-bold", P.TEXT, anchor="center")
+        self._draw_wave(g, pygame.Rect(xs[4], ys[0], xs[10] - xs[4], h).inflate(-h // 5, -h // 5))
+
+    def _draw_wave(self, g, rect):
+        """The note the dials make, in the color of the last key played, redrawn as a dial turns."""
+        g.rect(P.BG, rect, radius=rect.h // 5)
+        line = dial_synth.picture(self.synth)
+        pad, amp = rect.h // 4, rect.h * 0.36
+        step = (rect.w - 2 * pad) / (len(line) - 1)
+        pts = [(rect.x + pad + i * step, rect.centery - y * amp) for i, y in enumerate(line)]
+        pygame.draw.lines(g.surface, rgb(KEY_COLORS.get(self._last_note.lower(), P.ACCENT)), False, pts, max(3, rect.h // 14))
 
     @staticmethod
     def _strip_px(size) -> int:

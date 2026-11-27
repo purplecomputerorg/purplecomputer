@@ -19,9 +19,10 @@ from .code_runner import _COMMAND_VOCAB, _MODE_WORDS, _TURN_VOCAB, MusicCodeRunn
 from .content import get_content
 from .keyboard import CharacterAction, ControlAction, NavigationAction
 from .loop_station import LOOPING, RECORDING
-from .music_constants import GRID_KEYS
+from .music_constants import GRID_KEYS, PERCUSSION
 from .palette import get_key_color
 from .timeline import SESSION_GAP_S
+from .toy import DRUMS
 from . import color_wheel
 from .gfx import rgb
 from .ui import (AUTO, BACK, CODE_KEYS, DOWN, KEEP, LEFT, LOOP, RIGHT, STOP, TURN, UP, TextField, draw_bar, draw_key_hint, draw_marked, key_hint_width,
@@ -34,6 +35,7 @@ ROOM_KEYWORDS = {
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step', 'turn', 'color',
             'paint', 'write', 'lift', 'brush', 'pen', 'penup', 'pendown', 'repeat', 'colors', 'wheel'],
     'blocks': ['left', 'right', 'up', 'down', 'back', 'front', 'forward', 'go', 'repeat', 'color', 'colors', 'wheel'],
+    'play': ['say', 'drum', 'play', 'space', 'enter'],
 }
 # Enter on a line ending in one of these opens the color wheel, which writes the color picked in its place.
 WHEEL_WORDS = ('color', 'colors', 'wheel')
@@ -67,6 +69,13 @@ RECIPES = {
         ("green repeat 4 right 1 up 1", "#48D370", ["...##", "..##.", ".##..", "##..."]),
         ("right hello", "", ["hello"]),
     ],
+    # A toy's picture is its emoji.
+    'play': [
+        ("a: cow, say moo, drum cowbell", "", "🐮"),
+        ("s: pig, say oink", "", "🐷"),
+        ("space: red, drum kick, blue, drum snare, purple", "", "🥁"),
+        ("d: 2 + 3 eggs, say 2 + 3", "", "🥚"),
+    ],
 }
 # The side column: words to use, a section at a time, each an example and a
 # few words on what it does. COLORS lists the color words in their colors,
@@ -96,6 +105,13 @@ GUIDE = {
         ("Move", [("move right 3", "over, no blocks")]),
         ("Letters", [("right hi", "a block per letter")]),
         ("Again", [("repeat 4 right 1 up 1", "stairs")]),
+    ],
+    'play': [
+        ("Keys", [("a: cow", "press A for a cow"), ("space: 3 cats", ""), ("cow", "right now")]),
+        ("Say", [("say moo", "out loud")]),
+        ("Drums", [("drum gong", "")]),
+        ("More than one", [("cow, say moo", "one, then the next")]),
+        ("Try it", [("play", "Esc comes back")]),
     ],
 }
 # What the side column shows instead while the code holds one of a topic's
@@ -152,6 +168,11 @@ TOPICS = {
         (COLORS, "Colors", [(ALL_COLORS, ""), ("red up 5", "a red tower"), ("dark blue", "or light, bright, pale, neon"),
                             ("red up 3 blue right 2", "a new color as you go")]),
     ],
+    'play': [
+        ("say", "Say", [("say moo", "out loud"), ("say 2 + 3", "says five"), ("a: cow, say moo", "on the A key")]),
+        ("drum drums " + " ".join(DRUMS), "Drums", [("drum " + d, "") for d in PERCUSSION.values()]),
+        ("play", "Try it", [("play", "your toy, on the whole screen"), ("a: cat", "puts a cat on A first")]),
+    ],
 }
 _TAKES_A_WAY = {"turn", "face", "brush", "pen", "move", "jump"}
 # An example led by one of these sets the mode itself.
@@ -207,12 +228,14 @@ HUES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'brown']
 MORE_COLORS = ['periwinkle', 'mint', 'gold', 'coral', 'sky', 'lime', 'turquoise', 'lavender', 'peach',
                'bubblegum', 'lemon', 'tangerine', 'silver', 'orchid', 'lilac', 'ruby', 'emerald', 'aqua']
 SEPARATORS = ",.;|"           # they split a code line, so an echo leaves them out
+ECHO_NOTES = {'play': "What you just typed.  {Enter} puts it on Space"}
 ECHO_MAX = 40
 ECHO_STALE_S = 30.0       # older than this, code opens empty instead of holding the echo
 TYPE_IN_S = 0.5           # how long the echoed line takes to type itself in
 _INSTRUMENT_NAMES = ['marimba', 'accordion', 'ukulele', 'uke', 'glockenspiel', 'piano']
 _VOICE_NAMES = ['names', 'sounds']   # what choose picks in Letters
 _INSTRUMENT_PREFIX = re.compile(r'.*\b(?:choose|select|use|play|instrument)\s+\S*$', re.IGNORECASE)
+_DRUM_PREFIX = re.compile(r'.*\bdrum\s+\S*$', re.IGNORECASE)
 _DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
 _MAX_CONTEXT_RESULTS = 7
 ICON_STAR = "\U000F04CE"  # nf-md-star
@@ -228,7 +251,7 @@ SCRUB_REST_S = 0.6        # a held arrow rests this long on each landmark
 def keyword_autocomplete(room: str, letters=lambda: False):
     """`letters` says whether Music is in Letters, where choose picks names or sounds, not an instrument."""
     keywords = set(ROOM_KEYWORDS[room])
-    color_aware, instrument_aware = room == 'art', room == 'music'
+    color_aware, instrument_aware, drum_aware = room == 'art', room == 'music', room == 'play'
 
     def fn(last_word: str, full_text: str = "") -> list:
         if color_aware and re.match(r'.*\bcolor\s+\S*$', full_text, re.IGNORECASE):
@@ -246,6 +269,8 @@ def keyword_autocomplete(room: str, letters=lambda: False):
             if last_word in names:
                 return [(last_word, "", "")]
             return [(n, "", "") for n in sorted(n for n in names if n.startswith(last_word))[:_MAX_CONTEXT_RESULTS]]
+        if drum_aware and _DRUM_PREFIX.match(full_text):
+            return [(n, "", "") for n in sorted(n for n in PERCUSSION.values() if n.startswith(last_word))[:_MAX_CONTEXT_RESULTS]]
         if last_word in keywords:
             return [(last_word, "", "")]
         return [(kw, "", "") for kw in sorted(kw for kw in keywords if kw.startswith(last_word))[:_MAX_CONTEXT_RESULTS]]
@@ -366,7 +391,7 @@ class CodePanel:
         self.field = TextField(keyword_autocomplete(room, in_letters), validator=lambda w: w.lower() in keywords, context_autocomplete=True,
                                tints=color_spans if room != 'music' else None)
         self.field.remember(prefill)
-        self.note = (prefill, "You just did this!  {Enter} again")
+        self.note = (prefill, ECHO_NOTES.get(room, "You just did this!  {Enter} again"))
         self._typed = 0
         self._typer = app.timers.every(TYPE_IN_S / max(1, len(prefill)), self._type_in) if prefill else None
         self.recipes = RECIPES[room]
@@ -549,7 +574,7 @@ class CodePanel:
             g.rect(P.ACCENT if picked else P.LINE, card, width=3 if picked else 1, radius=g.em(0.4))
             pad, px = g.em(0.55), g.em(0.78)
             side = card.h - 2 * pad
-            wide = min(cw * 2 // 5, side * max(map(len, rows)) // len(rows))
+            wide = side if isinstance(rows, str) else min(cw * 2 // 5, side * max(map(len, rows)) // len(rows))
             pic = pygame.Rect(card.x + pad, card.y + pad, max(side, wide), side)
             draw_picture(g, rows, color, pic)
             tx = pic.right + pad
@@ -646,8 +671,14 @@ def _colors_markup(more: list) -> str:
     return " ".join(hues + [light, "[dim]...[/]"])
 
 
-def draw_picture(g, rows: list, color: str, rect: pygame.Rect):
-    """A recipe's picture, centered in `rect`: '#' cells in `color`, '-' a quiet key, letters in their key colors."""
+def draw_picture(g, rows, color: str, rect: pygame.Rect):
+    """A recipe's picture, centered in `rect`: '#' cells in `color`, '-' a quiet key, letters in their key colors;
+    or rows as one string, emoji drawn as they are."""
+    if isinstance(rows, str):
+        px = rect.h * 3 // 5
+        w, h = g.markup_size(rows, px, "mono-bold")
+        g.draw_markup(rows, px, rect.centerx - w // 2, rect.centery - h // 2, "mono-bold")
+        return
     cell = max(1, min(rect.w // max(len(r) for r in rows), rect.h // len(rows)))
     ox = rect.x + (rect.w - cell * max(len(r) for r in rows)) // 2
     oy = rect.y + (rect.h - cell * len(rows)) // 2

@@ -21,12 +21,12 @@ def test_arrows_cross_between_rooms_tools_and_volume():
     run(go())
 
 
-def test_play_has_no_code_or_colors_tools():
+def test_play_has_code_but_no_colors_tool():
     async def go():
         app = make_app()
         app.action_switch_room("play")
         app._show_room_picker()
-        assert app.top.tools == ["time_travel", "save", "open", "clear"]
+        assert app.top.tools == ["code", "time_travel", "save", "open", "clear"]
     run(go())
 
 

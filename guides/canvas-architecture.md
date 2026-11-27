@@ -142,12 +142,14 @@ The Enter hold (loop station) and Music's Backspace hold (clear the tape) show a
 early leaves a "Hold Enter longer to ..." hint up for a moment; the Esc hold for
 the Parent Menu shows nothing. Space never holds for anything: holding it in Art
 and Blocks keeps painting or building while the arrows move. Code opens with Esc + Space,
-held together or the Esc menu then its Code card, in Music, Art and Blocks (rooms with
+held together or the Esc menu then its Code card, in Music, Art, Blocks and Play (rooms with
 `has_code_panel`). Their code panel opens holding `panels.Echo`'s
 code for the newest stroke drawn or played by hand, and ↓ steps into
 `panels.RECIPES`, finished programs drawn as small pictures. A panel with
 `side_width` also gets a column beside the room: the code panel puts
 `panels.GUIDE` there, the words of each room with one example apiece.
+Play's panel builds a toy (`toy.py`): a Play line with a key in front waits for that key,
+read back from Play's code lines, and `play` opens `toy.ToyScreen` to press them.
 
 ## Overlays
 

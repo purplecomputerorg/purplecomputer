@@ -11,12 +11,15 @@ from .. import palette as P
 from ..constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ..content import get_content, is_word_picture
 from .. import paper
+from .. import toy
 from ..gfx import is_emoji, mix, rgb, strip_markup
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..palette import get_key_color
+from ..panels import CodePanel, Echo
+from ..sounds import SoundBank
 from ..play_eval import SimpleEvaluator, _escape_markup, pair_speakables, parse_speech_trigger
 from ..quake import Quake, is_quake
-from ..ui import DOWN, MATH_OPERATORS, UP, HintRotator, TextField
+from ..ui import DOWN, MATH_OPERATORS, UP, HintRotator, TextField, draw_key_hint, keycap_size
 from .base import Room
 
 PAPER_EMS = 32  # the printed page's width in screen ems, so it prints the same on every screen
@@ -246,6 +249,7 @@ class Entry:
 
 class PlayRoom(Room):
     name, label, icon = "play", "Play", ICON_CHAT
+    has_code_panel = True
 
     def __init__(self, app):
         super().__init__(app)
@@ -257,6 +261,9 @@ class PlayRoom(Room):
         self._timeline_entries: list = []
         self._timeline_seq = 0
         self.code_panel = None
+        self.correction = None
+        self.echo = Echo()               # the last line typed, put on Space when code opens
+        self.sounds = SoundBank()
 
     # ---------------------------------------------------------------- lifecycle
     def on_enter(self):
@@ -269,8 +276,39 @@ class PlayRoom(Room):
     def cursor_fraction(self, vp):
         return (0.07, 0.9)
 
+    # ---------------------------------------------------------------- code panel: a toy
+    def open_code_panel(self):
+        if self.code_panel is None and self.app._code_panel_enabled:
+            self.code_panel = CodePanel(self.app, "play", self.echo.take())
+            self.app.set_panel(self.code_panel)
+
+    def close_code_panel(self):
+        if self.code_panel is not None:
+            self.code_panel = None
+            self.app.set_panel(None)
+
     async def run_code(self, lines):
-        pass
+        """A line with a key joins the toy, which is read from the code lines; `play` plays it; any other runs now."""
+        for line in lines:
+            if toy.is_play_word(line):
+                self.app.push(toy.ToyScreen(self.app, self))
+            elif toy.label(line)[0] is None:
+                await self._run_now(line)
+        self.app.invalidate()
+
+    async def _run_now(self, line: str):
+        todo = toy.steps(line)
+        if all(kind == "play" for kind, _ in todo):
+            self.submit(line)   # just as Play runs it, commas and all
+        else:
+            await toy.run_steps(todo, self._show_step, self.sounds)
+
+    def _show_step(self, kind: str, text: str):
+        if kind == "play":
+            self.submit(text)
+        else:
+            self._add_entries(self.step_entries(kind, text))
+        self.app.invalidate()
 
     # ---------------------------------------------------------------- timeline
     def timeline_state(self) -> dict:
@@ -292,35 +330,33 @@ class PlayRoom(Room):
         self.app.invalidate()
 
     # ---------------------------------------------------------------- evaluation
-    def _add(self, kind: str, markup: str) -> Entry:
-        e = Entry(kind, markup)
-        self.history.append(e)
+    def _add_entries(self, entries: list):
+        self.history += entries
         del self.history[:-MAX_HISTORY]
         self.scroll = 0
-        return e
 
-    def _display_result(self, result: str) -> Entry:
+    def _result_entries(self, result: str) -> list:
+        """One answer row, or for mixed colors the colors and then their mix (on one row when it fits)."""
         if "COLOR_RESULT:" not in result:
-            return self._add("answer", result)
+            return [Entry("answer", result)]
         parts = result.split()
         i = next(i for i, p in enumerate(parts) if p.startswith("COLOR_RESULT:"))
         before, after = " ".join(parts[:i]) or None, " ".join(parts[i + 1:]) or None
         data = self.evaluator._parse_color_result(parts[i])
         if not data:
-            return self._add("answer", result)
+            return [Entry("answer", result)]
         hex_color, _, components = data
         is_modified = len(components) == 1 and components[0].upper() != hex_color.upper()
         box = f"[on {hex_color}]   [/]"
         if len(components) <= 1 and not is_modified:
-            return self._add("answer", " ".join(filter(None, [before, box, after])))
+            return [Entry("answer", " ".join(filter(None, [before, box, after])))]
         comps = " ".join(f"[on {c}]   [/]" for c in components)
         input_line = " ".join(filter(None, [before, comps, after]))
         result_line = " ".join(filter(None, [before, box, after]))
         combined = f"{input_line} → {result_line}"
         if self.evaluator._estimate_visual_width(combined) <= 80:
-            return self._add("answer", combined)
-        self._add("answer", input_line)
-        return self._add("answer", result_line)
+            return [Entry("answer", combined)]
+        return [Entry("answer", input_line), Entry("answer", result_line)]
 
     def submit(self, text: str):
         self._submit_line(text)
@@ -332,45 +368,49 @@ class PlayRoom(Room):
             self.app.push(Quake(self.app))
 
     def _submit_line(self, input_text: str, allow_speak: bool = True):
+        eval_text = parse_speech_trigger(input_text)[1]
+        if eval_text:
+            self._add_entries([Entry("ask", eval_text)])
+        self._add_entries(self.answer(input_text, allow_speak))
+        self.field.remember(input_text)
+        if self.correction:
+            self.field.set_correction(*self.correction)
+        self.app.invalidate()
+
+    def answer(self, input_text: str, allow_speak: bool = True) -> list:
+        """The rows a Play line answers with, said out loud when it asks to be; a toy's keys show these too.
+        Leaves the typo fix to offer in self.correction."""
         force_speak, eval_text = parse_speech_trigger(input_text)
         force_speak = force_speak and allow_speak
-        if eval_text:
-            self._add("ask", eval_text)
         from ..code_runner import PlayCodeRunner, is_repeat_line
-        runner = PlayCodeRunner(self.evaluator)
         if is_repeat_line(eval_text):
+            runner = PlayCodeRunner(self.evaluator)
             results = runner.run([eval_text])
-            entries = [self._display_result(r) for r in results]
-            if runner.corrections:
-                self.field.set_correction(*runner.corrections[0])
-            self.field.remember(input_text)
+            groups = [self._result_entries(r) for r in results]
+            self.correction = runner.corrections[0] if runner.corrections else None
             if force_speak and results:
-                self._speak_sequence(runner.pairs, entries)
-            return
+                self._speak_sequence(runner.pairs, [rows[-1] for rows in groups])
+            return [e for rows in groups for e in rows]
         if asked := asked_meaning(eval_text):
             picture, result = asked
-            if picture:
-                self._add("answer", picture)
-            entry = self._add("answer", _escape_markup(result))
+            entries = [Entry("answer", picture)] * bool(picture) + [Entry("answer", _escape_markup(result))]
         else:
             result = self.evaluator.evaluate(eval_text)
-            entry = self._display_result(result) if result else None
+            entries = self._result_entries(result) if result else []
         echo, echo_spoken = echo_markup(eval_text)
-        if echo:
-            self._add("answer", echo)
-        self.field.remember(input_text)
-        correction = self.evaluator._last_math_correction
-        if not correction:
+        self.correction = self.evaluator._last_math_correction
+        if not self.correction:
             c = self.evaluator.content.pop_correction()
-            if c and c[0] in eval_text.lower():
-                correction = c
-        if correction:
-            self.field.set_correction(correction[0], correction[1])
+            self.correction = c if c and c[0] in eval_text.lower() else None
         from ..tts import _dbg
         _dbg(f"submit raw={input_text!r} force_speak={force_speak} result_len={len(result or '')}")
         if force_speak:
-            self._speak(result if asked else self.evaluator._make_speakable(eval_text, result), entry, echo_spoken)
-        self.app.invalidate()
+            self._speak(result if asked else self.evaluator._make_speakable(eval_text, result), entries[-1] if entries else None, echo_spoken)
+        return entries + [Entry("answer", echo)] * bool(echo)
+
+    def step_entries(self, kind: str, text: str) -> list:
+        """What one toy step shows: a Play line's answer, or the drum it played."""
+        return self.answer(text) if kind == "play" else [Entry("answer", f"🥁 {text}")]
 
     # ---------------------------------------------------------------- speech
     def _set_speech(self, entry, state: str):
@@ -415,6 +455,10 @@ class PlayRoom(Room):
 
     # ---------------------------------------------------------------- input
     async def handle(self, action):
+        if self.code_panel is not None:
+            if await self.code_panel.handle(action) == "close":
+                self.close_code_panel()
+            return
         f = self.field
         if isinstance(action, NavigationAction):
             if action.direction == "up":
@@ -440,6 +484,8 @@ class PlayRoom(Room):
                 if text:
                     f.clear()
                     self.submit(text)
+                    self.echo.reset()
+                    self.echo.word(f"space: {text}")
                 elif f.last_command:
                     f.set(f.last_command)
                 self.hints.advance()
@@ -465,9 +511,19 @@ class PlayRoom(Room):
         pad = em(1.6)
         x = rect.x + pad
         width = rect.w - 2 * pad
+        top_limit = self.header_band(g, rect).bottom + em(0.5)
+        if self.code_panel is None:
+            base = self._draw_typing(g, rect, x, width)
+        else:
+            top_limit = self._draw_toy(g, x, top_limit, width, rect.bottom)
+            base = rect.bottom - em(0.6)
+        self._draw_history(g, rect, x, width, top_limit, base)
+
+    def _draw_typing(self, g, rect, x, width) -> int:
+        """The Type line and its hints; returns where the history above it ends."""
+        em = g.em
         line_px, sub_px = em(1.35), em(0.95)
-        sub_h = g.line_height(sub_px, "mono")
-        bottom = rect.bottom - em(1.0) - sub_h
+        bottom = rect.bottom - em(1.0) - g.line_height(sub_px, "mono")
         talks = bool(speech_marks(self.field.value))
         ideas = self.hints.current(hold=bool(self.field.value))
         box = self.field.draw_boxed(g, x, bottom - em(0.9) - round(line_px * 1.9), width, line_px, "Type",
@@ -475,8 +531,30 @@ class PlayRoom(Room):
         picks = self._picks_markup()
         self.field.draw_sub(g, box.x + round(line_px * 0.55), bottom, sub_px, "{Enter} go" if self.field.value.strip() else "",
                             "{Tab} quiet" if talks else "{Tab} say it", hint=(picks, "") if picks else None)
-        top_limit = self.header_band(g, rect).bottom + em(0.5)
-        base = box.y - em(1)
+        return box.y - em(1)
+
+    def _draw_toy(self, g, x, y, width, bottom) -> int:
+        """The toy's keys, a row each, in up to half the room; returns where the history below them starts."""
+        keys = toy.toy_from(self.app.code_lines(self.name))
+        if not keys:
+            return y
+        em, px = g.em, g.em(0.95)
+        r = g.draw_text("Your toy", px, x, y, "mono-bold", P.ACCENT)
+        g.draw_text("play  tries it", px, r.right + em(1.2), y, "mono", P.MUTED)
+        y = r.bottom + em(0.5)
+        row_h = keycap_size(g, "X", px)[1] + em(0.35)
+        fits = max(1, (bottom - y) // 2 // row_h)
+        rows = list(keys.items())
+        for k, does in rows[:fits - 1] + rows[-1:] if len(rows) > fits else rows:
+            draw_key_hint(g, f"{toy.keycap(k)}  {re.sub('[{}]', '', does)}", px, x, y + row_h // 2, color=P.TEXT)
+            y += row_h
+        if len(rows) > fits:
+            g.draw_text(f"and {len(rows) - fits} more", round(px * 0.85), x, y, "mono", P.MUTED)
+            y += row_h
+        return y + em(0.6)
+
+    def _draw_history(self, g, rect, x, width, top_limit, base):
+        em = g.em
         viewport = base - top_limit
         rows = [(e, self._entry_height(g, e, width), self._gap_above(g, e)) for e in self.history]
         total = sum(h + gap for _, h, gap in rows)
@@ -562,6 +640,20 @@ class PlayRoom(Room):
                 g.draw_markup(part, self._answer_px(g, e), x, y, "mono-bold", text, width,
                               dim_to=ground, line_gap=self._row_gap(g), tr=False)
             y += self._part_height(g, e, part, width) + self._row_gap(g)
+
+    def draw_centered(self, g, entries: list, stage):
+        """Answers stacked in the middle of `stage`, each row centered: a toy's key, playing."""
+        rows = [(e, self._entry_height(g, e, stage.w), self._shown_width(g, e, stage.w)) for e in entries]
+        y = stage.centery - (sum(h for _, h, _ in rows) + self._gap_above(g, entries[0]) * (len(rows) - 1)) // 2
+        for e, h, w in rows:
+            self._draw_entry(g, e, stage.centerx - w // 2, y, w)
+            y += h + self._gap_above(g, e)
+
+    def _shown_width(self, g, e, width) -> int:
+        """How wide an answer draws when it may take up to `width`."""
+        return min(width, max((abacus_width(g, p[0]) if isinstance(p, tuple)
+                               else g.markup_size(p, self._answer_px(g, e), "mono-bold", width, self._row_gap(g), tr=False)[0]
+                               for p in answer_parts(e.markup)), default=0))
 
     def _entry_width(self, g, e) -> int:
         """The width an entry can't wrap below: its widest abacus."""

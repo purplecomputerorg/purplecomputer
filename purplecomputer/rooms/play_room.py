@@ -540,7 +540,7 @@ class PlayRoom(Room):
             return y
         em, px = g.em, g.em(0.95)
         r = g.draw_text("Your toy", px, x, y, "mono-bold", P.ACCENT)
-        g.draw_text("play  tries it", px, r.right + em(1.2), y, "mono", P.MUTED)
+        g.draw_text("type play to try it", px, r.right + em(1.2), y, "mono", P.MUTED)
         y = r.bottom + em(0.5)
         row_h = keycap_size(g, "X", px)[1] + em(0.35)
         fits = max(1, (bottom - y) // 2 // row_h)
@@ -561,7 +561,7 @@ class PlayRoom(Room):
         self.scroll = min(self.scroll, max(0, total - viewport))
         clip_bottom = base + em(0.5)
         y = base + self.scroll
-        g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, clip_bottom - rect.y))
+        g.surface.set_clip(pygame.Rect(rect.x, top_limit, rect.w, clip_bottom - top_limit))
         for e, h, gap in reversed(rows):
             y -= h
             if y + h < top_limit:

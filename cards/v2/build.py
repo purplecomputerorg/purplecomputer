@@ -4,10 +4,12 @@
                                       # plus all.pdf and all-pad.pdf with every card in order,
                                       # and print-sheets.pdf for FedEx Office (see print_sheets)
   python cards/v2/build.py rooms      # just one card
+  python cards/v2/build.py welcome    # the landscape welcome card -> cards/v2/out/welcome.pdf
   python cards/v2/build.py --png      # also write PNG previews to /tmp/screenshots
 
 Needs the `typst`, `qrcode` and `pymupdf` pip packages. Fonts come from the app's own
-font folder (Figtree, IBM Plex Mono) plus Sora in cards/v2/fonts, the landing site's headline font.
+font folder (Figtree, IBM Plex Mono) plus Sora in cards/v2/fonts, the landing site's headline font, and Glacial Indifference
+for the welcome card, standing in for the Canva original's Nourd.
 Room results on the cards (ex("..."), art("..."), blocks("...") in a .typ) are drawn by the app itself, see room_results.py.
 """
 
@@ -25,7 +27,10 @@ ROOT = HERE.parents[1]
 FONTS = ROOT / "purplecomputer" / "fonts"
 OUT = HERE / "out"
 CARDS = ("start", "rooms", "code", "grown-ups")
-QRS = {"help-qr.svg": "https://purplecomputer.org/help", "studio-qr.svg": "https://studio.purplecomputer.org/"}
+# The landscape welcome card on top of the box; built alongside, but not part of the set or its print sheets
+WELCOME = "welcome"
+QRS = {"help-qr.svg": "https://purplecomputer.org/help", "studio-qr.svg": "https://studio.purplecomputer.org/",
+       "fridge-qr.svg": "https://purplecomputer.org/fridge"}
 QR_COLOR = "#3b1a5c"
 
 sys.path.insert(0, str(HERE.parent))
@@ -103,7 +108,7 @@ def print_sheets() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cards", nargs="*", default=CARDS)
+    ap.add_argument("cards", nargs="*", default=(*CARDS, WELCOME))
     ap.add_argument("--png", nargs="?", const="/tmp/screenshots", help="write PNG previews here")
     args = ap.parse_args()
     OUT.mkdir(exist_ok=True)

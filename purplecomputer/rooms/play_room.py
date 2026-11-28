@@ -11,7 +11,7 @@ from .. import palette as P
 from ..constants import ICON_CHAT, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ..content import get_content, is_word_picture
 from .. import paper
-from .. import toy
+from .. import play_keys
 from ..gfx import is_emoji, mix, rgb, strip_markup
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..palette import get_key_color
@@ -276,7 +276,7 @@ class PlayRoom(Room):
     def cursor_fraction(self, vp):
         return (0.07, 0.9)
 
-    # ---------------------------------------------------------------- code panel: a toy
+    # ---------------------------------------------------------------- code panel: keys
     def open_code_panel(self):
         if self.code_panel is None and self.app._code_panel_enabled:
             self.code_panel = CodePanel(self.app, "play", self.echo.take())
@@ -288,20 +288,21 @@ class PlayRoom(Room):
             self.app.set_panel(None)
 
     async def run_code(self, lines):
-        """A line with a key joins the toy, which is read from the code lines; `play` plays it; any other runs now."""
+        """A line with a key waits for it (the keys are read from the code lines); any other runs now."""
         for line in lines:
-            if toy.is_play_word(line):
-                self.app.push(toy.ToyScreen(self.app, self))
-            elif toy.label(line)[0] is None:
+            if play_keys.label(line)[0] is None:
                 await self._run_now(line)
         self.app.invalidate()
 
+    def try_card(self):
+        return "Try my keys" if play_keys.keys_from(self.app.code_lines(self.name)) else None
+
     async def _run_now(self, line: str):
-        todo = toy.steps(line)
+        todo = play_keys.steps(line)
         if all(kind == "play" for kind, _ in todo):
             self.submit(line)   # just as Play runs it, commas and all
         else:
-            await toy.run_steps(todo, self._show_step, self.sounds)
+            await play_keys.run_steps(todo, self._show_step, self.sounds)
 
     def _show_step(self, kind: str, text: str):
         if kind == "play":
@@ -378,7 +379,7 @@ class PlayRoom(Room):
         self.app.invalidate()
 
     def answer(self, input_text: str, allow_speak: bool = True) -> list:
-        """The rows a Play line answers with, said out loud when it asks to be; a toy's keys show these too.
+        """The rows a Play line answers with, said out loud when it asks to be; the keys show these too.
         Leaves the typo fix to offer in self.correction."""
         force_speak, eval_text = parse_speech_trigger(input_text)
         force_speak = force_speak and allow_speak
@@ -409,7 +410,7 @@ class PlayRoom(Room):
         return entries + [Entry("answer", echo)] * bool(echo)
 
     def step_entries(self, kind: str, text: str) -> list:
-        """What one toy step shows: a Play line's answer, or the drum it played."""
+        """What one step on a key shows: a Play line's answer, or the drum it played."""
         return self.answer(text) if kind == "play" else [Entry("answer", f"🥁 {text}")]
 
     # ---------------------------------------------------------------- speech
@@ -456,8 +457,11 @@ class PlayRoom(Room):
     # ---------------------------------------------------------------- input
     async def handle(self, action):
         if self.code_panel is not None:
-            if await self.code_panel.handle(action) == "close":
+            result = await self.code_panel.handle(action)
+            if result == "close":
                 self.close_code_panel()
+            elif result == "try":
+                self.app.push(play_keys.KeysScreen(self.app, self))
             return
         f = self.field
         if isinstance(action, NavigationAction):
@@ -515,7 +519,7 @@ class PlayRoom(Room):
         if self.code_panel is None:
             base = self._draw_typing(g, rect, x, width)
         else:
-            top_limit = self._draw_toy(g, x, top_limit, width, rect.bottom)
+            top_limit = self._draw_keys(g, x, top_limit, width, rect.bottom)
             base = rect.bottom - em(0.6)
         self._draw_history(g, rect, x, width, top_limit, base)
 
@@ -533,42 +537,53 @@ class PlayRoom(Room):
                             "{Tab} quiet" if talks else "{Tab} say it", hint=(picks, "") if picks else None)
         return box.y - em(1)
 
-    def _draw_toy(self, g, x, y, width, bottom) -> int:
-        """The toy's keys, a row each, in up to half the room; returns where the history below them starts."""
-        keys = toy.toy_from(self.app.code_lines(self.name))
+    def _draw_keys(self, g, x, y, width, bottom) -> int:
+        """The keys, a row each, in up to half the room; returns where the history below them starts."""
+        keys = play_keys.keys_from(self.app.code_lines(self.name))
         if not keys:
             return y
-        em, px = g.em, g.em(0.95)
-        r = g.draw_text("Your toy", px, x, y, "mono-bold", P.ACCENT)
-        g.draw_text("type play to try it", px, r.right + em(1.2), y, "mono", P.MUTED)
-        y = r.bottom + em(0.5)
+        em, px, inset = g.em, g.em(0.95), g.em(0.9)
+        title_h = g.line_height(px, "mono-bold") + em(0.5)
         row_h = keycap_size(g, "X", px)[1] + em(0.35)
-        fits = max(1, (bottom - y) // 2 // row_h)
+        fits = max(1, (bottom - y - title_h - 2 * inset) // 2 // row_h)
         rows = list(keys.items())
-        for k, does in rows[:fits - 1] + rows[-1:] if len(rows) > fits else rows:
-            draw_key_hint(g, f"{toy.keycap(k)}  {re.sub('[{}]', '', does)}", px, x, y + row_h // 2, color=P.TEXT)
+        shown = rows[:fits - 1] + rows[-1:] if len(rows) > fits else rows
+        more = len(rows) - len(shown)
+        box = pygame.Rect(x - inset, y, width + inset, title_h + row_h * (len(shown) + bool(more)) + 2 * inset)
+        g.rect(P.SURFACE, box, radius=em(0.6))
+        g.rect(P.LINE, box, width=1, radius=em(0.6))
+        y += inset
+        r = g.draw_text("Your keys", px, x, y, "mono-bold", P.ACCENT)
+        draw_key_hint(g, f"{{{DOWN}}} Try my keys", round(px * 0.85), r.right + em(1.2), r.centery, color=P.MUTED)
+        y += title_h
+        text_x = x + max(keycap_size(g, play_keys.keycap(k)[1:-1], px)[0] for k, _ in shown) + em(1)
+        for k, does in shown:
+            draw_key_hint(g, play_keys.keycap(k), px, x, y + row_h // 2, color=P.TEXT)
+            g.draw_text(re.sub('[{}]', '', does), px, text_x, y + row_h // 2, "mono", P.TEXT, anchor="midleft")
             y += row_h
-        if len(rows) > fits:
-            g.draw_text(f"and {len(rows) - fits} more", round(px * 0.85), x, y, "mono", P.MUTED)
-            y += row_h
-        return y + em(0.6)
+        if more:
+            g.draw_text(f"and {more} more", round(px * 0.85), x, y, "mono", P.MUTED)
+        return box.bottom + em(1.2)
 
     def _draw_history(self, g, rect, x, width, top_limit, base):
+        """Newest at base, up to top_limit; an ask and its answers show only when they all fit there."""
         em = g.em
         viewport = base - top_limit
         rows = [(e, self._entry_height(g, e, width), self._gap_above(g, e)) for e in self.history]
         total = sum(h + gap for _, h, gap in rows)
         self.scroll = min(self.scroll, max(0, total - viewport))
         clip_bottom = base + em(0.5)
-        y = base + self.scroll
+        tops, y = [], base + self.scroll
+        for _, h, gap in reversed(rows):
+            tops.append(y - h)
+            y -= h + gap
+        tops.reverse()
+        first = next((i for i, e in enumerate(self.history)
+                      if tops[i] >= top_limit and (i == 0 or e.kind == "ask")), len(rows) - 1)
         g.surface.set_clip(pygame.Rect(rect.x, top_limit, rect.w, clip_bottom - top_limit))
-        for e, h, gap in reversed(rows):
-            y -= h
-            if y + h < top_limit:
-                break
-            if y < clip_bottom:
-                self._draw_entry(g, e, x, y, width)
-            y -= gap
+        for (e, _, _), top in list(zip(rows, tops))[first:]:
+            if top < clip_bottom:
+                self._draw_entry(g, e, x, top, width)
         g.surface.set_clip(None)
         if total > viewport:
             w = em(0.7)
@@ -642,7 +657,7 @@ class PlayRoom(Room):
             y += self._part_height(g, e, part, width) + self._row_gap(g)
 
     def draw_centered(self, g, entries: list, stage):
-        """Answers stacked in the middle of `stage`, each row centered: a toy's key, playing."""
+        """Answers stacked in the middle of `stage`, each row centered: a key, playing."""
         rows = [(e, self._entry_height(g, e, stage.w), self._shown_width(g, e, stage.w)) for e in entries]
         y = stage.centery - (sum(h for _, h, _ in rows) + self._gap_above(g, entries[0]) * (len(rows) - 1)) // 2
         for e, h, w in rows:

@@ -148,8 +148,9 @@ code for the newest stroke drawn or played by hand, and ↓ steps into
 `panels.RECIPES`, finished programs drawn as small pictures. A panel with
 `side_width` also gets a column beside the room: the code panel puts
 `panels.GUIDE` there, the words of each room with one example apiece.
-Play's panel builds a toy (`toy.py`): a Play line with a key in front waits for that key,
-read back from Play's code lines, and `play` opens `toy.ToyScreen` to press them.
+Play's panel puts things on keys (`play_keys.py`): a Play line with a key in front waits for that key,
+read back from Play's code lines. A room's `try_card()` adds a card first in the row; Play's opens
+`play_keys.KeysScreen` to press them.
 
 ## Overlays
 

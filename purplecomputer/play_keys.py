@@ -1,5 +1,5 @@
-"""Play's code panel makes a toy: a Play line with a key in front runs when that key is pressed.
-A toy is read from Play's code lines, so saves and Time Travel keep it. docs/plans/play-toy-builder.md"""
+"""Play's code panel puts things on keys: a Play line with a key in front runs when that key is pressed.
+The keys are read from Play's code lines, so saves and Time Travel keep them. docs/plans/play-keys.md"""
 
 import asyncio
 import re
@@ -58,22 +58,18 @@ def _step(part: str) -> list:
     return [("drum", DEFAULT_DRUM)] + _step(rest.strip())
 
 
-def toy_from(lines: list) -> dict:
+def keys_from(lines: list) -> dict:
     """key -> what it does, from code lines: a key typed again keeps its place and takes the newer line."""
-    toy = {}
+    keys = {}
     for line in lines:
         key, rest = label(line)
         if key:
-            toy[key] = rest
-    return toy
+            keys[key] = rest
+    return keys
 
 
 def keycap(key: str) -> str:
     return f"{{{key.upper() if len(key) == 1 else key.title()}}}"
-
-
-def is_play_word(line: str) -> bool:
-    return line.strip().lower().rstrip("!") == "play"
 
 
 async def run_steps(todo: list, show, sounds):
@@ -86,15 +82,15 @@ async def run_steps(todo: list, show, sounds):
         show(kind, text)
 
 
-class ToyScreen(Overlay):
-    """The toy, playing: a key shows what Play shows for its line, big. Esc goes back to the code."""
+class KeysScreen(Overlay):
+    """The keys, live: a key shows what Play shows for its line, big. Esc goes back to the code."""
 
     scrim = False
 
     def __init__(self, app, room):
         super().__init__(app)
         self.room = room
-        self.toy = toy_from(app.code_lines(room.name))
+        self.keys = keys_from(app.code_lines(room.name))
         self.entries: list = []
         self._task = None
 
@@ -112,11 +108,11 @@ class ToyScreen(Overlay):
                 self.close()
             return
         key = ((FamilyRoom._key_event(action) or {}).get("key") or "").lower()
-        if key not in self.toy:
+        if key not in self.keys:
             return
         self._stop()
         self.entries = []
-        self._task = asyncio.create_task(run_steps(steps(self.toy[key]), self._show, self.room.sounds))
+        self._task = asyncio.create_task(run_steps(steps(self.keys[key]), self._show, self.room.sounds))
 
     def _show(self, kind: str, text: str):
         self.entries += self.room.step_entries(kind, text)
@@ -127,7 +123,7 @@ class ToyScreen(Overlay):
         g.fill(P.BG)
         vp = app._viewport_rect()
         frame = app._frame_rect(vp)
-        app._draw_title(frame, f"{self.room.icon} My toy")
+        app._draw_title(frame, f"{self.room.icon} My keys")
         g.rect(P.SURFACE, frame, radius=g.em(0.6))
         g.rect(P.LINE, frame, width=1, radius=g.em(0.6))
         keys_y = vp.bottom - g.em(2.2)
@@ -138,15 +134,15 @@ class ToyScreen(Overlay):
             with g.drawing_on(g.surface, em=g.em(1.8)):
                 self.room.draw_centered(g, self.entries, stage)
         else:
-            words = "Press a key" if self.toy else "No keys yet. Esc, then type  a: cat"
+            words = "Press a key" if self.keys else "No keys yet. Esc, then type  a: cat"
             g.draw_text(words, g.em(1.6), stage.centerx, stage.centery, "mono", P.MUTED, anchor="center")
         app._draw_footer(frame)
 
     def _draw_keys(self, g, vp, y):
-        """The toy's keys along the bottom, each with the start of what it does, as many as fit."""
+        """The keys along the bottom, each with the start of what it does, as many as fit."""
         px, room = g.em(0.95), vp.w - g.em(3)
         back = "{Esc} back to code"
-        shown = [f"{keycap(k)} {re.sub('[{}]', '', self.toy[k])[:14]}" for k in self.toy]
+        shown = [f"{keycap(k)} {re.sub('[{}]', '', self.keys[k])[:14]}" for k in self.keys]
         while shown and key_hint_width(g, "   ".join(shown + [back]), px) > room:
             shown = [s.split(" ", 1)[0] for s in shown] if " " in "".join(shown) else shown[:-1]
         draw_key_hint(g, "   ".join(shown + [back]), px, vp.centerx, y, color=P.MUTED, anchor="center")

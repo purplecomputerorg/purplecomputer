@@ -22,7 +22,7 @@ from .loop_station import LOOPING, RECORDING
 from .music_constants import GRID_KEYS, PERCUSSION
 from .palette import get_key_color
 from .timeline import SESSION_GAP_S
-from .toy import DRUMS
+from .play_keys import DRUMS
 from . import color_wheel
 from .gfx import rgb
 from .ui import (AUTO, BACK, CODE_KEYS, DOWN, KEEP, LEFT, LOOP, RIGHT, STOP, TURN, UP, TextField, draw_bar, draw_key_hint, draw_marked, key_hint_width,
@@ -35,7 +35,7 @@ ROOM_KEYWORDS = {
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step', 'turn', 'color',
             'paint', 'write', 'lift', 'brush', 'pen', 'penup', 'pendown', 'repeat', 'colors', 'wheel'],
     'blocks': ['left', 'right', 'up', 'down', 'back', 'front', 'forward', 'go', 'repeat', 'color', 'colors', 'wheel'],
-    'play': ['say', 'drum', 'play', 'space', 'enter'],
+    'play': ['say', 'drum', 'space', 'enter'],
 }
 # Enter on a line ending in one of these opens the color wheel, which writes the color picked in its place.
 WHEEL_WORDS = ('color', 'colors', 'wheel')
@@ -69,11 +69,11 @@ RECIPES = {
         ("green repeat 4 right 1 up 1", "#48D370", ["...##", "..##.", ".##..", "##..."]),
         ("right hello", "", ["hello"]),
     ],
-    # A toy's picture is its emoji.
+    # A key's picture is its emoji.
     'play': [
         ("a: cow, say moo, drum cowbell", "", "🐮"),
         ("s: pig, say oink", "", "🐷"),
-        ("space: red, drum kick, blue, drum snare, purple", "", "🥁"),
+        ("space: red, drum kick, blue", "", "🥁"),
         ("d: 2 + 3 eggs, say 2 + 3", "", "🥚"),
     ],
 }
@@ -111,7 +111,6 @@ GUIDE = {
         ("Say", [("say moo", "out loud")]),
         ("Drums", [("drum gong", "")]),
         ("More than one", [("cow, say moo", "one, then the next")]),
-        ("Try it", [("play", "Esc comes back")]),
     ],
 }
 # What the side column shows instead while the code holds one of a topic's
@@ -171,7 +170,6 @@ TOPICS = {
     'play': [
         ("say", "Say", [("say moo", "out loud"), ("say 2 + 3", "says five"), ("a: cow, say moo", "on the A key")]),
         ("drum drums " + " ".join(DRUMS), "Drums", [("drum " + d, "") for d in PERCUSSION.values()]),
-        ("play", "Try it", [("play", "your toy, on the whole screen"), ("a: cat", "puts a cat on A first")]),
     ],
 }
 _TAKES_A_WAY = {"turn", "face", "brush", "pen", "move", "jump"}
@@ -381,6 +379,7 @@ class CodePanel:
 
     kind = "code"
     CLOSE = -1   # self.card on the Close button
+    TRY = -2     # self.card on the room's try card
 
     def __init__(self, app, room: str, prefill: str = ""):
         self.app = app
@@ -425,12 +424,12 @@ class CodePanel:
                 self._pick(action.direction)
             elif action.direction in ("left", "right"):
                 f.jump(1 if action.direction == "right" else -1)
-            elif action.direction == "down" and not self._back and self.recipes:
-                self._choose(0)
+            elif action.direction == "down" and not self._back and len(self._stops()) > 1:
+                self._choose(self._stops()[1])
             else:
                 self._recall(1 if action.direction == "up" else -1)
             return None
-        closing, from_card, self.card = self.card == self.CLOSE, self.card is not None, None
+        picked, from_card, self.card = self.card, self.card is not None, None
         if isinstance(action, ControlAction):
             if not action.is_down:
                 return None
@@ -439,8 +438,8 @@ class CodePanel:
             if action.action == "enter":
                 if action.is_repeat:
                     return None
-                if closing:
-                    return "close"
+                if picked in (self.CLOSE, self.TRY):
+                    return "close" if picked == self.CLOSE else "try"
                 text = f.value.strip()
                 if not text:
                     f.set(f.last_command)
@@ -494,9 +493,17 @@ class CodePanel:
             head = [*head, name]
         self.field.set(" ".join(head) + " " if head else "")
 
+    def _try_card(self) -> str | None:
+        return self.app.rooms[self.room].try_card()
+
+    def _stops(self) -> list:
+        """Where ← → go in the cards row, left to right."""
+        return [self.CLOSE] + ([self.TRY] if self._try_card() else []) + list(range(len(self.recipes)))
+
     def _choose(self, i: int):
         self.card = i
-        self.field.set(self._shown(self.recipes[i][0]))
+        if i >= 0:
+            self.field.set(self._shown(self.recipes[i][0]))
 
     def _shown(self, code: str) -> str:
         """An example as it would run from here: led by the word that puts keys back, when its letters need that."""
@@ -508,11 +515,9 @@ class CodePanel:
         if direction == "up":
             self.card = None
         elif direction in ("left", "right"):
-            i = max(self.CLOSE, min(len(self.recipes) - 1, self.card + (1 if direction == "right" else -1)))
-            if i == self.CLOSE:
-                self.card = i
-            else:
-                self._choose(i)
+            stops = self._stops()
+            at = stops.index(self.card) if self.card in stops else 0
+            self._choose(stops[max(0, min(len(stops) - 1, at + (1 if direction == "right" else -1)))])
 
     def _recall(self, step: int):
         """↑/↓ through the code typed in this room, which a save or Time Travel brings back with it."""
@@ -528,7 +533,7 @@ class CodePanel:
     def _sub(self) -> str | None:
         """The key hint under the line when the cards or a note own it, else None."""
         if self.card is not None:
-            enter = "{Enter} close" if self.card == self.CLOSE else "{Enter} run it"
+            enter = {self.CLOSE: "{Enter} close", self.TRY: "{Enter} try them"}.get(self.card, "{Enter} run it")
             return f"{i18n.translate(enter)}   {{{LEFT}}}{{{RIGHT}}} {i18n.translate('pick')}   {{{UP}}} {i18n.translate('back')}"
         v = self.field.value
         if v and self.note[0].startswith(v) and self.field.selected in (None, (0, len(v))):
@@ -561,14 +566,16 @@ class CodePanel:
         draw_key_hint(g, CODE_KEYS, key_px, rect.centerx, rect.centery + g.em(0.55), color=P.MUTED, anchor="center")
 
     def _draw_cards(self, g, area):
-        n = len(self.recipes)
+        cards = [(i, self._shown(code), color, rows) for i, (code, color, rows) in enumerate(self.recipes)]
+        if label := self._try_card():
+            cards.insert(0, (self.TRY, f"[bold]{label}[/]", "", "⌨️"))
+        n = len(cards)
         if not n:
             return
         gap = g.em(0.6)
         cw = (area.w - (n - 1) * gap) // n
-        for i, (code, color, rows) in enumerate(self.recipes):
-            code = self._shown(code)
-            card = pygame.Rect(area.x + i * (cw + gap), area.y, cw, area.h)
+        for slot, (i, code, color, rows) in enumerate(cards):
+            card = pygame.Rect(area.x + slot * (cw + gap), area.y, cw, area.h)
             picked = i == self.card
             g.rect(P.FIELD, card, radius=g.em(0.4))
             g.rect(P.ACCENT if picked else P.LINE, card, width=3 if picked else 1, radius=g.em(0.4))

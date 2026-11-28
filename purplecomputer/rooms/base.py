@@ -31,6 +31,10 @@ class Room:
         pic = picture and self.app.g.image(picture, self.app.g.vh(3.4))
         self._toast = self.app.notify(text, picture=pic, replaces=self._toast)
 
+    def try_card(self) -> str | None:
+        """The words on a code panel card, first in the row, that tries what the code made; None for no card."""
+        return None
+
     def on_enter(self):
         pass
 

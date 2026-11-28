@@ -1,10 +1,10 @@
-"""Play's code panel builds a toy: reading the keys and steps forgivingly, and playing them."""
+"""Play's code panel puts things on keys: reading the keys and steps forgivingly, and trying them."""
 
 import asyncio
 
 import pytest
 
-from purplecomputer import toy, tts
+from purplecomputer import play_keys, tts
 from purplecomputer.harness import make_app, press, run, type_text
 from purplecomputer.panels import RECIPES
 
@@ -23,39 +23,39 @@ from purplecomputer.panels import RECIPES
     ("on space: 3 cats", "space", "3 cats"),
 ])
 def test_a_line_with_a_key_waits_for_it(line, key, rest):
-    assert toy.label(line) == (key, rest)
+    assert play_keys.label(line) == (key, rest)
 
 
 @pytest.mark.parametrize("line", ["a cow", "1 star", "i like cats", "cow", "3 cats", "hello: cat", "a:", "red + blue",
                                   "2 - 1", "when", "space"])
 def test_a_line_play_already_reads_runs_now(line):
-    assert toy.label(line) == (None, line)
+    assert play_keys.label(line) == (None, line)
 
 
 @pytest.mark.parametrize("text, want", [
     ("cow", [("play", "cow")]),
     ("cow, say moo, drum cowbell", [("play", "cow"), ("play", "say moo"), ("drum", "cowbell")]),
     ("cow say moo drum cowbell", [("play", "cow"), ("play", "say moo"), ("drum", "cowbell")]),
-    ("drum", [("drum", toy.DEFAULT_DRUM)]),
+    ("drum", [("drum", play_keys.DEFAULT_DRUM)]),
     ("drum hat; drum bell", [("drum", "hi-hat"), ("drum", "cowbell")]),
-    ("drum cat", [("drum", toy.DEFAULT_DRUM), ("play", "cat")]),
+    ("drum cat", [("drum", play_keys.DEFAULT_DRUM), ("play", "cat")]),
     ("drum gong 3 cats", [("drum", "gong"), ("play", "3 cats")]),
     ("3 drums", [("play", "3 drums")]),
     ("", []),
 ])
 def test_steps_split_at_commas_and_at_say_or_drum(text, want):
-    assert toy.steps(text) == want
+    assert play_keys.steps(text) == want
 
 
 def test_a_key_typed_again_keeps_its_place_and_takes_the_newer_line():
-    lines = ["a: cow", "cow", "s: pig", "a: dog", "play"]
-    assert toy.toy_from(lines) == {"a": "dog", "s": "pig"}
+    lines = ["a: cow", "cow", "s: pig", "a: dog"]
+    assert play_keys.keys_from(lines) == {"a": "dog", "s": "pig"}
 
 
 @pytest.mark.parametrize("code", [code for code, _, _ in RECIPES["play"]])
 def test_every_recipe_puts_something_on_a_key(code):
-    key, rest = toy.label(code)
-    assert key and toy.steps(rest)
+    key, rest = play_keys.label(code)
+    assert key and play_keys.steps(rest)
 
 
 async def _play():
@@ -69,18 +69,18 @@ def _shown(entries):
     return [e.markup for e in entries if e.kind == "answer"]
 
 
-def test_a_line_with_a_key_joins_the_toy_and_shows_nothing_yet():
+def test_a_line_with_a_key_waits_and_shows_nothing_yet():
     async def go():
         app, room = await _play()
         await type_text(app, "a: cow", enter=True)
         await asyncio.sleep(0)
         assert room.history == []
-        assert toy.toy_from(app.code_lines("play")) == {"a": "cow"}
+        assert play_keys.keys_from(app.code_lines("play")) == {"a": "cow"}
     run(go())
 
 
 def test_a_line_without_a_key_runs_now_with_its_drums(monkeypatch):
-    monkeypatch.setattr(toy, "STEP_S", 0)
+    monkeypatch.setattr(play_keys, "STEP_S", 0)
 
     async def go():
         app, room = await _play()
@@ -91,17 +91,20 @@ def test_a_line_without_a_key_runs_now_with_its_drums(monkeypatch):
     run(go())
 
 
-def test_play_opens_the_toy_and_a_key_shows_its_steps(monkeypatch):
-    monkeypatch.setattr(toy, "STEP_S", 0)
+def test_the_try_card_opens_the_keys_and_a_key_shows_its_steps(monkeypatch):
+    monkeypatch.setattr(play_keys, "STEP_S", 0)
     said = []
     monkeypatch.setattr(tts, "speak_many", lambda texts, **_: said.append(texts) or True)
 
     async def go():
         app, room = await _play()
+        assert room.try_card() is None
         await type_text(app, "a: cat, say hi, drum kick", enter=True)
-        await type_text(app, "play", enter=True)
+        await press(app, "down")
+        assert room.code_panel.card == room.code_panel.TRY
+        await press(app, "enter")
         screen = app.top
-        assert isinstance(screen, toy.ToyScreen)
+        assert isinstance(screen, play_keys.KeysScreen)
         await press(app, "a")
         await screen._task
         assert _shown(screen.entries) == ["🐱", "👋", "🥁 kick"]

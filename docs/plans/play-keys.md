@@ -1,8 +1,8 @@
-Status: Active. Step 1 is built (`purplecomputer/toy.py`, Play's code panel); steps 2 and 3 wait on how kids use it.
+Status: Active. Step 1 is built (`purplecomputer/play_keys.py`, Play's code panel); steps 2 and 3 wait on how kids use it.
 
-# Play's code panel builds a toy
+# Play's code panel puts things on keys
 
-Play is the one room without a code panel. Its panel could let a kid make a small toy: a key does something they wrote in Play. This uses Purple's own language, so it adds no second way of thinking about code (the reason Studio stopped offering blocks, and the reason PUR-159 parked Python on Purple).
+Play is the one room without a code panel. Its panel lets a kid put things on keys: a key does something they wrote in Play. This uses Purple's own language, so it adds no second way of thinking about code (the reason Studio stopped offering blocks, and the reason PUR-159 parked Python on Purple).
 
 ## The idea in one line
 
@@ -19,10 +19,10 @@ space: red, drum kick, blue, drum snare, purple, say purple!
 Art, Music and Blocks open their panel on the code for what the kid just did by hand (`panels.Echo`), offer finished programs with Down (`panels.RECIPES`), and list the room's words in a side column (`panels.GUIDE`). Play's version:
 
 - **Echo:** the last Play line with a key in front, e.g. `space: 3 cats`.
-- **Recipes:** small finished toys (`a: cow, say moo` / `s: pig, say oink`; `any key: drum bongo, random emoji`; `1: 1 star, say 1`).
+- **Recipes:** small finished keys (`a: cow, say moo` / `s: pig, say oink`; `any key: drum bongo, random emoji`; `1: 1 star, say 1`).
 - **Guide:** Keys, Show, Say and sounds, More than one.
-- **Above the code line:** the toy so far, one card per key showing its steps. Typing a key again replaces its card.
-- **Trying it:** `play` turns the screen into the toy, Esc goes back. Rules never run while Play is the typing room, so typing never stops working.
+- **Above the code line:** "Your keys", a framed box with a row per key. Typing a key again replaces its row.
+- **Trying it:** a "Try my keys" card, first in the cards row (Down, then Enter), opens a screen where the keys are live; Esc goes back. Keys never run while Play is the typing room, so typing never stops working. A typed word (`play`) was tried first and dropped: kids shouldn't need to remember a word to try what they made.
 
 ## Words
 
@@ -38,28 +38,28 @@ Art, Music and Blocks open their panel on the code for what the kid just did by 
 | `random animal` | a surprise from a category | |
 | `fast` / `slow` | step speed in a sequence | Music's words |
 | `tune asdf` | plays Music's keys | Music's runner |
-| `start:` / `every 3:` | when the toy opens / a timer | |
-| `save my farm` | keeps the toy in the Esc menu | |
+| `start:` / `every 3:` | when the keys screen opens / a timer | |
+| `save my farm` | keeps the keys in the Esc menu | |
 
 ## Forgiving like the rest of Purple
 
-Nothing errors. A line shows what it became: a key card, or a result shown now.
+Nothing errors. A line shows what it became: a key row, or a result shown now.
 
 - **The colon is optional** when the label can't mean anything else in Play: `s pig say oink`, `space cow`, `start say hi`, `every 3 random animal`, `any key drum`. `space`, `start` and `enter` are not emoji words.
-- **`a`, `i` and digits need the colon**, since `a cow` and `1 star` already mean something in Play. Without it they run now, the kid sees no A card, and the guide's `a: cow` shows the fix.
+- **`a`, `i` and digits need the colon**, since `a cow` and `1 star` already mean something in Play. Without it they run now, the kid sees no A row, and the guide's `a: cow` shows the fix.
 - **`when`, `press` and `on` are allowed, never required:** `when a cow`, `press a cow`, `on 1: 1 star` all mean the key. `=` and `->` work like the colon; `-` doesn't, since `2 - 1` is Play's math.
 - **Commas are optional too:** `say`, `drum`, `tune`, `random`, `fast` and `slow` start a new step, as Art's keywords do (`_COMMAND_STARTS` in `code_runner.py`). Same tradeoff as Art's `write`: `say I hit the drum` splits at `drum`.
 
-These cases are pinned in `tests/test_toy.py`.
+These cases are pinned in `tests/test_play_keys.py`.
 
 ## Order
 
-1. Key labels, no label, emoji/colors/math, `say`, `drum`, commas, the toy screen. All reuse.
+1. Key labels, no label, emoji/colors/math, `say`, `drum`, commas, the try screen. All reuse.
 2. `any key`, `random`, `fast`/`slow`, `tune`.
 3. `start`, `every N`, `save`. `every` animates an idle screen (against the canvas rule), and `save` touches the room picker and saves: both need design first.
 
 ## Open questions
 
-- Do kids want to make toys, or only play them? A small version on a few kids answers this before step 2.
+- Do kids want to make keys, or only press them? A small version on a few kids answers this before step 2.
 - `any key` and a key's own rule: both run (as sketched) or the key wins?
-- What `save` adds: the toy already lives in Play's code lines, so saves and Time Travel keep it; `save` would only be a name in the Esc menu.
+- What `save` adds: the keys already live in Play's code lines, so saves and Time Travel keep it; `save` would only be a name in the Esc menu.

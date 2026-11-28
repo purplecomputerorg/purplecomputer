@@ -51,9 +51,10 @@
   ([Loop like a DJ.], [In *Music*, *hold* #key("Enter") to record a tune, then play along with it.]),
   ([Colors mix like paint.], [Hold two letters in *Art* or *Blocks*: #sticker("F", "#E6CE55") + #sticker("V", "#4C7FE5", ink: white) makes green. #key("\\") opens the color menu.]),
   ([Letter sounds.], [In *Music*, press #key("Tab") and keys say their letters. #key("Enter") switches between letter names and sounds. Type #mono("cat"), then #key("Space") to hear the word.]),
-  ([Rewind anything.], [Press #key("Esc") #key("T") for *Time Travel*, then hold #key("←") to watch the room go backward. #key("Enter") restores to that moment.]),
+  ([Rewind anything.], [Press #key("Esc") #key("T") for *Time Travel*, then hold #key("←") to watch it go backward. #key("Enter") restores.]),
   ([Write code.], [In *Art*, *Music* or *Blocks*, tap #key("Esc"), then press #key("Space"). If you just drew something, you'll see the code for drawing it again.]),
   ([Made for little hands.], [Tap #key("Shift"), then a letter, for a capital. No need to hold two keys. Typos are okay: #typed("2 plsu 3") or #typed("2++3") still makes 5.]),
+  ([Show off your creations:], [#text(fill: purple)[purplecomputer.org/fridge]]),
 )
 
 

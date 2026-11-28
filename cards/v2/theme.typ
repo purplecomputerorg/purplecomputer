@@ -72,10 +72,11 @@
 )
 
 // A badge beside its content, centered on a one-line body; every numbered row goes through here
-// Top-aligned, the badge is raised to center on the body's first 9pt line
+// Top-aligned, the body drops so its first 9pt line centers on the badge; raising the badge instead
+// would poke it out of the padding above
 #let numbered(n, color: purple, r: 6.2pt, valign: horizon, body) = grid(
   columns: (2 * r, 1fr), column-gutter: r + 1pt, align: (center + valign, left + valign),
-  if valign == top { move(dy: 3.1pt - r, badge(n, color: color, r: r)) } else { badge(n, color: color, r: r) }, body,
+  badge(n, color: color, r: r), if valign == top { pad(top: r - 3.1pt, body) } else { body },
 )
 #let steps(color: purple, spacing: 9pt, r: 6.2pt, valign: horizon, ..items) = stack(
   spacing: spacing,
@@ -192,9 +193,11 @@
 // Titled tips. One column is a single ruled list, title then text on a line. More columns are
 // small cards, title above text, each row as tall as its tallest card.
 #let tip-title(t) = text(font: "Sora", weight: "semibold", size: 9pt, fill: purple.darken(8%), t)
+// A title ending in a period stands apart from its tip; one without runs on into it as a sentence
+#let tip-gap(t) = if t.has("text") and not t.text.ends-with(".") [ ] else [ #h(2pt) ]
 #let tiles(cols: 1, gutter: 6pt, pad: 9pt, title: none, ..items) = if cols == 1 {
   panel(title: title, ruled(pad: pad, ..items.pos().map(((t, body, ..icon)) =>
-    (grid(columns: (1fr, auto), column-gutter: 6pt, align: horizon, [#tip-title(t) #h(2pt) #body], ..icon),))))
+    (grid(columns: (1fr, auto), column-gutter: 6pt, align: horizon, [#tip-title(t)#tip-gap(t)#body], ..icon),))))
 } else { layout(size => {
   let w = (size.width - gutter * (cols - 1)) / cols
   let tile((t, body, ..icon), tall) = block(
